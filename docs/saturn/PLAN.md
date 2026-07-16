@@ -266,6 +266,11 @@ growth directly reduces texture residency.
 
 ### Phase 0: provenance and reproducible bring-up
 
+Status as of 2026-07-16: the provenance baseline, libyaul 0.3.1 submodule pin,
+isolated hello-disc source, and Saturn Makefile are present. The local checkout
+does not yet have a configured YAUL SDK, so ISO production and emulator/hardware
+evidence remain open.
+
 Deliver:
 
 - explicit license or written permission for any PSX-specific code reuse;

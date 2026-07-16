@@ -64,11 +64,17 @@ rewrite, or closely port unlicensed PSX-specific source.
 | Pinned commit | `6012f79f237773378c8014e70d8998ad95a38d98` |
 | Version | `0.3.1` |
 | License | MIT |
-| Intended reuse mode | Pinned dependency plus pattern-only study where a custom SM64 renderer is required |
-| Files/areas inspected | `LICENSE`, `VERSION`, DRAM-cart C/header, VDP1/VDP2 APIs, DMA, dual-CPU, CD block, fixed-point and libmic3d render/types areas |
+| Intended reuse mode | Git submodule dependency plus pattern-only study where a custom SM64 renderer is required |
+| Repository destination | `third_party/libyaul` at the exact pinned commit |
+| Files/areas inspected | `LICENSE`, `VERSION`, `README.md`, `yaul.env.in`, `Makefile`, `env.mk`, `libyaul/build/build.pre.mk`, `libyaul/build/build.post.bin.mk`, `libyaul/build/build.post.iso-cue.mk`, `libyaul/kernel/dbgio/dbgio.h`, `libyaul/kernel/dbgio/dbgio.c`, DRAM-cart C/header, VDP1/VDP2 APIs, DMA, dual-CPU, CD block, fixed-point and libmic3d render/types areas |
 
 The project intends to preserve libyaul's MIT license and attribution as
 recorded in the repository-level `THIRD_PARTY_LICENSES.md`.
+
+The hello-disc Makefiles use the installed build-fragment interface documented
+by the pinned MIT-licensed libyaul source. `src/port/saturn/hello/main.c` is an
+original bring-up program written against the public dbgio and VDP2 APIs; it is
+not copied from `libyaul-examples`.
 
 The first renderer will use libyaul's hardware APIs but will not use libmic3d
 as a drop-in scene renderer. The inspected mesh/pipeline assumptions do not
@@ -109,6 +115,12 @@ provenance text. It copies no implementation source from the PSX port,
 libyaul-examples, Sega manuals, or other external repositories. The libyaul MIT
 text is reproduced in `THIRD_PARTY_LICENSES.md` in preparation for a future
 pinned dependency.
+
+The following dependency/hello-target commit adds libyaul as a gitlink at the
+recorded revision and introduces original Makefiles and hello-screen code. The
+Makefile variables and dbgio/VDP2 calls are derived from libyaul's public,
+MIT-licensed build and API contracts. No source from the unlicensed examples or
+PSX fork is copied.
 
 ## Required update points
 

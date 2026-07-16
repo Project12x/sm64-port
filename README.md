@@ -7,6 +7,27 @@
 This repo does not include all assets necessary for compiling the game.
 A prior copy of the game is required to extract the assets.
 
+## Sega Saturn target (experimental)
+
+The `saturn/bootstrap` work adds a pinned libyaul dependency and an isolated
+hello-disc target. It does not yet compile or run SM64 game code.
+
+Initialize the dependency and validate its revision:
+
+```sh
+git submodule update --init third_party/libyaul
+make -f Makefile.saturn.mk check
+```
+
+After installing the matching YAUL toolchain and SDK, build with:
+
+```sh
+make -f Makefile.saturn.mk hello
+```
+
+See [`docs/saturn/BUILDING.md`](docs/saturn/BUILDING.md) for the reproducible
+setup and [`docs/saturn/PLAN.md`](docs/saturn/PLAN.md) for the gated port plan.
+
 ## Building native executables
 
 ### Linux

@@ -21,8 +21,9 @@ remain applicable and require a separate release audit.
 - Repository: <https://github.com/yaul-org/libyaul>
 - Pinned commit: `6012f79f237773378c8014e70d8998ad95a38d98`
 - SPDX identifier: `MIT`
-- Status: planned external dependency; no libyaul source is added by the
-  bootstrap documentation commit.
+- Repository path: `third_party/libyaul` (Git submodule/gitlink).
+- Status: pinned external dependency. The parent repository records the exact
+  commit while libyaul source remains in its upstream repository.
 
 The upstream license text at the pinned revision is:
 
