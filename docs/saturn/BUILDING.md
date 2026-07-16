@@ -33,19 +33,48 @@ make -f Makefile.saturn.mk check
 ## Host environment
 
 Libyaul 0.3.1 expects a Unix-like shell and rejects paths containing spaces.
-On Windows, use the MSYS2 MinGW 64-bit shell. The official libyaul README at
-the pinned commit documents the YAUL package repository and toolchain setup.
+The 2026-07-16 proof build used the MSYS2 MSYS shell, not the MinGW shell,
+because the cross compiler and disc tools are Unix-hosted programs. Required
+host packages were `base-devel`, `gcc`, `texinfo`, `wget`, and `xorriso`.
+
+Do not currently follow the Windows package-feed stanza in libyaul's README.
+During the proof build, its HTTP MinGW feed returned HTTP 403, the HTTPS host
+did not have a matching certificate, and its historical toolchain release
+asset was no longer available. Do not disable TLS verification or install an
+unsigned replacement.
+
+The verified fallback was a workspace-local, source-built SH compiler using
+the permissively licensed `andwn/sh-gcc-toolchain` recipe pinned through
+Marsdev:
+
+- Marsdev commit: `3318d3f39823154b24ce48bfa5d8fe6e3f6cde3f` (MIT);
+- `sh-gcc-toolchain` commit:
+  `e5d330c1528758da70bb9e41a3927c648d28a77b` (zlib license in its README);
+- GCC 14.3.0 and binutils 2.44, with the recipe's SHA-256 checks;
+- target `sh-elf`, configured for big-endian SH-2 (`--with-endian=big
+  --with-cpu=m2`); and
+- freestanding C/C++ compiler only; newlib and hosted C++ are not needed by
+  this target.
+
+Current MSYS2 headers required a host-only generated-config workaround while
+building GCC: the generated `gcc/auto-host.h` incorrectly recorded
+`fgets_unlocked` and `fputs_unlocked` as declared even though MSYS2 exposes
+them only under `__GNU_VISIBLE`. The proof build set both generated
+`HAVE_DECL_*` values to `0`, invoking GCC's own fallback declarations. This
+was a temporary patch to the GPL build tool in an ignored work directory; no
+GCC source enters this repository. A one-command toolchain bootstrap remains
+open work. On Linux or a Docker-capable host, the official MIT-licensed
+`yaul-org/libyaul-docker` image is the preferred next reproducibility check.
 
 Required environment variables are defined by libyaul's `yaul.env.in`:
 
 - `YAUL_INSTALL_ROOT`: absolute toolchain/SDK installation path;
-- `YAUL_ARCH_SH_PREFIX`: SH-2 target prefix, normally `sh2eb-elf`;
-- `YAUL_PROG_SH_PREFIX`: executable prefix, empty when it matches the target
-  prefix;
+- `YAUL_ARCH_SH_PREFIX`: compiler target prefix (`sh-elf` in the proof build);
+- `YAUL_PROG_SH_PREFIX`: executable prefix (`sh-elf` in the proof build);
 - `YAUL_ARCH_M68K_PREFIX`: SCSP 68K target prefix, normally `m68keb-elf`;
-- `YAUL_BUILD_ROOT`: absolute path to this repository's
-  `third_party/libyaul`; and
-- `YAUL_BUILD`: libyaul's build-directory name, normally `build`.
+- `YAUL_BUILD_ROOT`: absolute path under which libyaul may place build output;
+  this need not be the source checkout; and
+- `YAUL_BUILD`: libyaul's build-directory name.
 
 Copy the pinned template rather than inventing a different environment layout:
 
@@ -65,9 +94,9 @@ source .yaul.env
 
 ## Installing the pinned libyaul build
 
-Install the SH-2/M68K toolchains first using the official libyaul setup. Then
-build and install the SDK libraries and disc tools from the pinned submodule,
-not from a floating checkout:
+Install an SH-2 compiler first, then build and install the SDK libraries and
+disc tools from the pinned submodule, not from a floating checkout. The hello
+target does not use the M68K compiler; later SCSP sound-driver work will.
 
 ```sh
 make -C third_party/libyaul install-release
@@ -85,6 +114,7 @@ From the repository root:
 
 ```sh
 make -f Makefile.saturn.mk hello
+make -f Makefile.saturn.mk verify-hello
 ```
 
 Expected outputs:
@@ -104,6 +134,13 @@ libyaul 0.3.1 / 6012f79
 Phase 0: hello-disc bring-up
 ```
 
+The target exports `SOURCE_DATE_EPOCH=1784160000` (2026-07-16 00:00:00 UTC)
+and routes libyaul's ISO call through `tools/saturn/xorrisofs-reproducible`.
+That small wrapper pins both the volume timestamp and every ISO node timestamp;
+`SOURCE_DATE_EPOCH` alone leaves copied-file modification times intact.
+Together they make otherwise identical clean ISO builds byte-for-byte stable.
+Set `SATURN_XORRISOFS_REAL` if `xorrisofs` is not available on `PATH`.
+
 Clean only this target with:
 
 ```sh
@@ -117,7 +154,13 @@ is recorded:
 
 1. `make -f Makefile.saturn.mk check` confirms the pinned commit and version.
 2. A clean MSYS2 shell builds the CUE/ISO using the documented command.
-3. The CUE boots and shows the expected text in two Saturn emulators.
-4. The same image boots on retail Saturn hardware.
+3. `make -f Makefile.saturn.mk verify-hello` confirms an ELF32, big-endian,
+   SH-2 executable with entry point `0x06004000`.
+4. The CUE boots and shows the expected text in two Saturn emulators.
+5. The same image boots on retail Saturn hardware.
 
-Emulator success is development evidence; retail hardware remains authoritative.
+Steps 1-3 and one Yabause HLE emulator run passed on 2026-07-16; see
+[`evidence/hello-disc-2026-07-16.md`](evidence/hello-disc-2026-07-16.md) and
+[`evidence/yabause-hle-2026-07-16.md`](evidence/yabause-hle-2026-07-16.md).
+The second-emulator and retail-hardware runs remain open. Emulator success is
+development evidence; retail hardware remains authoritative.

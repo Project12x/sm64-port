@@ -5,7 +5,7 @@ HELLO_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hello
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all check check-libyaul check-sdk hello clean
+.PHONY: all check check-libyaul check-sdk hello verify-hello clean
 
 all: hello
 
@@ -53,6 +53,9 @@ check-sdk:
 
 hello: check-libyaul check-sdk
 	$(MAKE) -C "$(HELLO_DIR)"
+
+verify-hello: check-libyaul check-sdk
+	$(MAKE) -C "$(HELLO_DIR)" verify
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean

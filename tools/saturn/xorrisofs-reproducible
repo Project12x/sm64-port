@@ -1,0 +1,14 @@
+#!/bin/sh
+
+set -eu
+
+XORRISOFS_REAL=${SATURN_XORRISOFS_REAL:-$(command -v xorrisofs || true)}
+if [ -z "${XORRISOFS_REAL}" ] || [ ! -x "${XORRISOFS_REAL}" ]; then
+    printf '%s\n' 'xorrisofs-reproducible: xorrisofs was not found' >&2
+    exit 127
+fi
+
+exec "${XORRISOFS_REAL}" \
+    --modification-date=2026071600000000 \
+    --set_all_file_dates 2026071600000000 \
+    "$@"

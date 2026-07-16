@@ -267,9 +267,13 @@ growth directly reduces texture residency.
 ### Phase 0: provenance and reproducible bring-up
 
 Status as of 2026-07-16: the provenance baseline, libyaul 0.3.1 submodule pin,
-isolated hello-disc source, and Saturn Makefile are present. The local checkout
-does not yet have a configured YAUL SDK, so ISO production and emulator/hardware
-evidence remain open.
+isolated hello-disc source, and Saturn Makefile are present. A source-built
+GCC 14.3.0/binutils 2.44 SH-2 toolchain and the pinned libyaul produced a CUE
+and ISO from a clean target build; the executable header and artifact hashes
+are recorded in `evidence/hello-disc-2026-07-16.md`. Yabause 0.9.15 also
+reached the expected hello screen for 600 frames using its explicitly
+lower-confidence HLE BIOS. A portable one-command toolchain bootstrap, a
+second BIOS-backed emulator run, and retail-hardware execution remain open.
 
 Deliver:
 
@@ -365,7 +369,7 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 ## Initial issue backlog
 
 1. Obtain explicit reuse terms for original `malucard/sm64-psx` changes.
-2. Add a libyaul-pinned hello-disc target.
+2. Add a libyaul-pinned hello-disc target. **Done; execution gates remain.**
 3. Add mandatory 4 MiB cartridge detection and full-memory test.
 4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry.
 5. Add a VDP1 primitive and transparency torture disc.

@@ -97,6 +97,60 @@ Do not copy example code unless its applicable license or an explicit grant is
 identified and recorded here. No example code was copied into this bootstrap
 change.
 
+### andwn/marsdev and andwn/sh-gcc-toolchain
+
+| Field | Record |
+|---|---|
+| Repositories | <https://github.com/andwn/marsdev>, <https://github.com/andwn/sh-gcc-toolchain> |
+| Pinned commits | Marsdev `3318d3f39823154b24ce48bfa5d8fe6e3f6cde3f`; SH toolchain `e5d330c1528758da70bb9e41a3927c648d28a77b` |
+| Licenses | Marsdev: MIT; SH toolchain: zlib license embedded in `README.md` |
+| Role | Checksum-verified source recipe for a workspace-local SH-2 cross compiler |
+| Reuse mode | Build-tool dependency and close use of the documented recipe; no source vendored |
+| Files inspected | Marsdev `LICENSE`, `README.md`, `Makefile`, `.gitmodules`; SH toolchain `README.md`, `Makefile` |
+| Versions selected | GCC 14.3.0, binutils 2.44, target `sh-elf`, big-endian SH-2, without newlib |
+
+The recipe downloads GCC, binutils, and GCC prerequisites with recorded
+SHA-256 values. Those GPL/LGPL build inputs and the GPL `xorriso` host utility
+are tools only: none of their source is copied or linked into port code. A
+temporary change to GCC's generated `auto-host.h` was required for current
+MSYS2 headers; it stayed under the ignored workspace build directory.
+The original `tools/saturn/xorrisofs-reproducible` wrapper uses xorriso's
+documented `SOURCE_DATE_EPOCH`, `--modification-date`, and
+`--set_all_file_dates` contracts to remove current-time and copied-file
+metadata from the ISO; no xorriso source is reused.
+
+### yaul-org/libyaul-docker and libyaul-packages
+
+| Field | Record |
+|---|---|
+| Repositories | <https://github.com/yaul-org/libyaul-docker>, <https://github.com/yaul-org/libyaul-packages> |
+| Pinned commits | Docker `e0b4c2d63f1a39f213a67c6ca31e6bc582976de6`; packages `6b2ca3b7f31cbf50b18a577e86d7c9ca324e5f62` |
+| Licenses | MIT |
+| Role | Official installation/package-feed research |
+| Reuse mode | Pattern-only at this checkpoint; not vendored or copied |
+| Files inspected | Docker `LICENSE`, `README.md`, `Dockerfile`; package repository `LICENSE`, package recipes and repository configuration |
+
+The maintained package endpoint found in these sources is Linux-oriented.
+The older MinGW feed documented by libyaul was unavailable during the
+2026-07-16 bootstrap, so it was not bypassed or replaced with unverified
+binaries.
+
+### Emulator references
+
+| Source | License/status | Use |
+|---|---|---|
+| `Yabause/yabause` / Libretro Yabause | GPL-2.0; Libretro Windows core 0.9.15 tested | First development emulator; tool only |
+| `FCare/Kronos` / Libretro Kronos | GPL-2.0; official release/core researched | Candidate BIOS-backed second development emulator; tool only |
+| Mednafen Saturn documentation | Official emulator documentation; BIOS required | Compatibility/performance caveats and future test procedure |
+
+No emulator source, binary, or BIOS is included. The 2026-07-16 Yabause HLE
+smoke result is recorded in `evidence/yabause-hle-2026-07-16.md`. The Kronos
+branch of `libretro/yabause` at
+`6709c1dd0e26094f005b19c6e473c30809718b78` was inspected to understand its
+firmware gate: it requires a real BIOS file to exist before its optional HLE
+path. That GPL source informed tool operation only and was not copied. Emulator
+results remain separate from retail-hardware evidence.
+
 ### Sega hardware documentation
 
 | Reference | Use |

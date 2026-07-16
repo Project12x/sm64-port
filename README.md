@@ -23,6 +23,7 @@ After installing the matching YAUL toolchain and SDK, build with:
 
 ```sh
 make -f Makefile.saturn.mk hello
+make -f Makefile.saturn.mk verify-hello
 ```
 
 See [`docs/saturn/BUILDING.md`](docs/saturn/BUILDING.md) for the reproducible
