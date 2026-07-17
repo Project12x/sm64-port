@@ -3,6 +3,19 @@ param(
     [string]$DockerImage = $(if ($env:YAUL_DOCKER_IMAGE) { $env:YAUL_DOCKER_IMAGE } else { "ijacquez/yaul:1.0.15" })
 )
 
+$HostPython = $env:SATURN_HOST_PYTHON
+if (-not $HostPython) {
+    foreach ($candidate in @('python3', 'python', 'py')) {
+        if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+            $HostPython = $candidate
+            break
+        }
+    }
+}
+if (-not $HostPython) {
+    throw "Python 3 is required for the host-side Saturn tool regression. Set SATURN_HOST_PYTHON and retry."
+}
+
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 
@@ -28,8 +41,11 @@ $dockerArgs = @(
     "--env", "SILENT=1",
     $DockerImage,
     "/bin/bash", "-lc",
-    "set -eu; git config --global --add safe.directory /work; git submodule update --init third_party/libyaul; make -C third_party/libyaul install-release install-tools; make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest verify-tools"
+    "set -eu; git config --global --add safe.directory /work; git submodule update --init third_party/libyaul; make -C third_party/libyaul install-release install-tools; make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest"
 )
 
 & docker @dockerArgs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& $HostPython (Join-Path $root "tools/saturn/test_tools.py")
 exit $LASTEXITCODE

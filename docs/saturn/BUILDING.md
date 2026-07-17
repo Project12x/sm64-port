@@ -79,9 +79,9 @@ Required environment variables are defined by libyaul's `yaul.env.in`:
 ## Portable bootstrap command
 
 On a Docker-capable host, the repository provides one command that installs the
-pinned libyaul submodule, builds/verifies both discs, and runs the host-side
-classifier/telemetry regression suite inside the official Yaul container
-layout:
+pinned libyaul submodule, builds/verifies both discs in the official Yaul
+container layout, then runs the host-side classifier/telemetry regression
+suite:
 
 ```sh
 make -f Makefile.saturn.mk bootstrap
@@ -97,7 +97,9 @@ Docker commit. Set `YAUL_DOCKER_IMAGE` to an
 immutable digest in CI or in a lab notebook when byte-for-byte toolchain
 provenance is required. The image is only the host environment; the script
 still installs and checks this repository's libyaul commit `6012f79` before
-building both targets.
+building both targets. The host-side Python regression runs after the
+container exits because the pinned Yaul image does not include Python. Set
+`SATURN_HOST_PYTHON` when the host Python executable is not discoverable.
 
 Docker is optional. The existing MSYS2/source-built workflow below remains the
 fallback when Docker is unavailable or when the host needs a locally inspected

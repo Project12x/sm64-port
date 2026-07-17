@@ -3,11 +3,24 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 IMAGE=${YAUL_DOCKER_IMAGE:-ijacquez/yaul:1.0.15}
+HOST_PYTHON=${SATURN_HOST_PYTHON:-}
 
 if ! command -v docker >/dev/null 2>&1; then
     printf '%s\n' 'Docker is required for the portable Saturn bootstrap.' >&2
     printf '%s\n' 'Install Docker Desktop or run this script from a Linux host with Docker.' >&2
     exit 1
+fi
+
+if [ -z "$HOST_PYTHON" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+        HOST_PYTHON=python3
+    elif command -v python >/dev/null 2>&1; then
+        HOST_PYTHON=python
+    else
+        printf '%s\n' 'Python 3 is required for the host-side Saturn tool regression.' >&2
+        printf '%s\n' 'Set SATURN_HOST_PYTHON to a Python 3 executable and retry.' >&2
+        exit 1
+    fi
 fi
 
 printf 'Pulling Yaul development image: %s\n' "$IMAGE"
@@ -32,5 +45,7 @@ docker run --rm -i \
         git config --global --add safe.directory /work
         git submodule update --init third_party/libyaul
         make -C third_party/libyaul install-release install-tools
-        make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest verify-tools
+        make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest
     '
+
+"$HOST_PYTHON" "$ROOT/tools/saturn/test_tools.py"
