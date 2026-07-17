@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "source": {
+    "source_root": "src",
+    "files_with_triangle_macros": 1,
+    "gsSP1Triangle": 2,
+    "gsSP2Triangles": 2,
+    "gsSP1Quadrangle": 0,
+    "static_triangles": 6
+  }
+}
