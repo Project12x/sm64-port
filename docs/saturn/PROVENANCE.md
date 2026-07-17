@@ -169,15 +169,18 @@ results remain separate from retail-hardware evidence.
 | License | GPL-3.0-or-later (`LICENSE.txt`, `README.md`) |
 | Role | Saturn FPS-engine prior art for DMA scheduling, fixed-point world organization, and VDP2 setup |
 | Files inspected | `DMA.C`, `DMA.H`, `SCL_FUNC.C`, `INITMAIN.C`, `MEMCPY.S`, `LINK.S`, `README.md`, `LICENSE.txt` |
-| Reuse mode | Pattern-only / behavior study; no source copied or linked |
+| Reuse mode | Pattern-only currently; direct adaptation is permitted only in an explicitly GPL-3.0-or-later component with preserved notices |
 
 The engine demonstrates a queued DMA abstraction that chooses CPU copying or a
 Saturn-side transfer based on address ranges, waits for completion, and keeps
 the queue interrupt-safe. Its `SCL_FUNC.C`/`INITMAIN.C` code also shows a
 hand-managed VDP2 register and frame-display path. These are useful review
 inputs for the SM64 renderer and DMA scheduler, but the GPL terms are not
-compatible with copying the implementation into this repository. The current
-Yaul-based implementation remains a clean-room design using public Yaul APIs.
+would require the derived component to retain GPL-3.0-or-later licensing and
+corresponding-source obligations. The project owner has authorized GPL use in
+principle; no SlaveDriver source is copied or linked at the current revision,
+and the Yaul-based implementation remains a clean-room design using public
+Yaul APIs.
 
 ### Sega hardware documentation
 
