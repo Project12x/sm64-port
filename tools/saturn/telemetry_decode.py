@@ -21,6 +21,8 @@ EXT_BASE_ADDRESS = BASE_ADDRESS + BLOCK_BYTES
 EXT_WORD_COUNT = 14
 EXT_BLOCK_BYTES = EXT_WORD_COUNT * 4
 MAGIC = 0x53415430
+EXPECTED_CART_ID = 0x5C
+EXPECTED_CART_BYTES = 0x00400000
 STATUS_NAMES = {
     0: "cart_present",
     1: "cart_pass",
@@ -109,7 +111,14 @@ def decode(data: list[int], require_complete: bool) -> dict[str, Any]:
         ]
         decoded["extended"] = dict(zip(EXT_FIELD_NAMES, ext_words, strict=True))
         decoded["extended"]["base_address"] = f"0x{EXT_BASE_ADDRESS:08X}"
-    decoded["ok"] = bool(flags["complete"] and flags["cart_pass"] and flags["dma_pass"] and flags["vdp1_pass"])
+    decoded["ok"] = bool(
+        flags["complete"]
+        and flags["cart_pass"]
+        and flags["dma_pass"]
+        and flags["vdp1_pass"]
+        and decoded["cart_id"] == EXPECTED_CART_ID
+        and decoded["cart_bytes"] == EXPECTED_CART_BYTES
+    )
     return decoded
 
 

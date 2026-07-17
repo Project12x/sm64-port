@@ -79,6 +79,15 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(decoded["extended"]["cpu_dmac_pass"], 0)
         self.assertEqual(decoded["extended"]["vdp1_textured_triangle_ticks"], 0)
 
+    def test_wrong_cart_identity_is_not_ok(self) -> None:
+        words = [
+            0x53415430, 1, 1, 0x8000001F, 0x00, 0x400000, 0x400000,
+            0xFFFFFFFF, 0, 0, 10, 20, 30, 40, 4, 15360,
+        ]
+        data = b"".join(word.to_bytes(4, "big") for word in words)
+        decoded = decode(list(data), require_complete=True)
+        self.assertFalse(decoded["ok"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

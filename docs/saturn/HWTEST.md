@@ -48,7 +48,8 @@ python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
 ```
 
 The decoder rejects short reads and bad magic, exposes named status flags, and
-sets `ok` only when the cart, DMA, VDP1, and complete bits are all present.
+sets `ok` only when the cart, DMA, VDP1, and complete bits are all present and
+the decoded cartridge identity is exactly `0x5C` with a 4 MiB mapped size.
 
 For a fully automated emulator capture, use the runner after building
 `ymir-headless`:
