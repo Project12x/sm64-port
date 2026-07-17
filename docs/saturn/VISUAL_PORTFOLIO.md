@@ -56,8 +56,9 @@ SHA-256:
 
 ![SM64 Saturn visible per-probe timing screen in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-bios-visible-probes.png)
 
-The latest diagnostic screen prints the six independent timing slots directly:
-quad/triangle, concave/transparency, and textured/Gouraud. SHA-256:
+The latest diagnostic screen prints the independent timing slots directly:
+quad/triangle, concave/transparency, textured/Gouraud, and the textured
+repeated-vertex triangle. SHA-256:
 `c81511f104b65b2e362edb2676ef039a51b48feed6715d992836e9b822a467a9`.
 
 ### Current post-assertion capture
@@ -81,6 +82,18 @@ SCU-DMA observation. SHA-256:
 A second full-length run reproduced the same visible result; its screenshot
 SHA-256 is
 `c57572a5756f8cd8fc20017b862c9932cb06f7c01ee9f673ebb875f8a89b99b1`.
+
+### Completion bit visible in final status
+
+![Visible complete status in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-complete-visible.png)
+
+The completion flag is now set before the final status line is rendered, so
+the screenshot and the machine-readable WRAM contract agree. This run reports
+`status: 0x80007FEF`; the screenshot SHA-256 is
+`6a7bff930daaf600f87380372bb4d64ee55ec4553167ba8d05945bc0f79084b8`.
+
+See the [capture record](evidence/kronos-complete-visible-2026-07-17.md) and
+[manifest](evidence/reports/hwtest-kronos-complete-visible.manifest.json).
 
 ## Evidence ledger
 

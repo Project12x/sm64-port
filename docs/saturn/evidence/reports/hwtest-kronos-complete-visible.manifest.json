@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "evidence_kind": "retroarch-emulator",
+  "core_name": "Kronos",
+  "frames": 3600,
+  "inputs": {
+    "retroarch": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\retroarch.exe",
+    "core": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\cores\\kronos_libretro.dll",
+    "config": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\retroarch.cfg",
+    "options": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\config\\Kronos\\Kronos.opt",
+    "game": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\build\\saturn\\hwtest\\sm64-saturn-hwtest.cue",
+    "screenshot": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\docs\\saturn\\evidence\\screenshots\\2026-07-17\\hwtest-kronos-complete-visible.png",
+    "bios": "C:\\tmp\\saturn-system\\kronos\\saturn_bios.bin",
+    "iso": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\build\\saturn\\hwtest\\sm64-saturn-hwtest.iso"
+  },
+  "hashes": {
+    "screenshot": "6a7bff930daaf600f87380372bb4d64ee55ec4553167ba8d05945bc0f79084b8",
+    "core": "7b4c82c5611d3f63d451673b92e9dfa72cbf98508bdc573f207b791d47b99d7c",
+    "options": "aaf97685069a583bd582a9bc206348731b02f5e1ca630812689732c6f126bc9c",
+    "game": "c0b93a455ca2e183ce7d3cc247a6f3eb53ec35ee909de70e43d52bd185d83462",
+    "bios": "96e106f740ab448cf89f0dd49dfbac7fe5391cb6bd6e14ad5e3061c13330266f",
+    "iso": "fbe7dde56e1b086d1944793c878423fc6a98e32b1bb6ad303fd71d3a9115b5bc"
+  }
+}

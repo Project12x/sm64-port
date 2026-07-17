@@ -419,11 +419,12 @@ user_init(void)
         dbgio_printf("tex Q/T: %u/%u\n",
             extended_telemetry->vdp1_textured_ticks,
             extended_telemetry->vdp1_textured_triangle_ticks);
+        /* Make the visible status line and the WRAM contract agree. */
+        telemetry->status |= HWTEST_STATUS_COMPLETE;
         dbgio_printf("telemetry: 0x06010000\nstatus: 0x%08X\n", telemetry->status);
         dbgio_flush();
         vdp2_sync();
         vdp2_sync_wait();
-        telemetry->status |= HWTEST_STATUS_COMPLETE;
 
         for (;;) {
         }
