@@ -63,10 +63,11 @@ static bool
 cart_test(void)
 {
         dram_cart_init();
-        telemetry->cart_id = (uint32_t)dram_cart_id_get();
+        const dram_cart_id_t cart_id = dram_cart_id_get();
+        telemetry->cart_id = (uint32_t)cart_id;
         telemetry->cart_bytes = (uint32_t)dram_cart_size_get();
 
-        if (dram_cart_id_get() != DRAM_CART_ID_4MIB ||
+        if (cart_id != DRAM_CART_ID_4MIB ||
             dram_cart_area_get() == NULL) {
                 return false;
         }
