@@ -36,6 +36,7 @@ enum {
         HWTEST_STATUS_CART_PASS = 1U << 1,
         HWTEST_STATUS_DMA_PASS = 1U << 2,
         HWTEST_STATUS_VDP1_PASS = 1U << 3,
+        HWTEST_STATUS_STARTED = 1U << 4,
         HWTEST_STATUS_COMPLETE = 1U << 31
 };
 
@@ -57,6 +58,7 @@ telemetry_init(void)
         telemetry->phase = HWTEST_PHASE;
         telemetry->status = 0;
         telemetry->first_bad_offset = 0xFFFFFFFFUL;
+        telemetry->status |= HWTEST_STATUS_STARTED;
 }
 
 static bool
@@ -204,6 +206,13 @@ user_init(void)
         dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
         dbgio_dev_font_load();
 
+        dbgio_puts("\x1B[H\x1B[2JSM64 SATURN HWTEST\n\n"
+                   "cart test: RUNNING\n"
+                   "telemetry: 0x06010000\n");
+        dbgio_flush();
+        vdp2_sync();
+        vdp2_sync_wait();
+
         const bool cart_ok = cart_test();
         if (cart_ok) {
                 dma_test();
@@ -224,6 +233,8 @@ user_init(void)
             telemetry->vdp1_draw_ticks);
         dbgio_printf("telemetry: 0x06010000\nstatus: 0x%08X\n", telemetry->status);
         dbgio_flush();
+        vdp2_sync();
+        vdp2_sync_wait();
         telemetry->status |= HWTEST_STATUS_COMPLETE;
 
         for (;;) {

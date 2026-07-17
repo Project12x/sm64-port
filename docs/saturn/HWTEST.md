@@ -13,7 +13,7 @@ The block begins at `0x06010000` and contains sixteen big-endian 32-bit words:
 | 0 | `magic` | `0x53415430` (`SAT0`) |
 | 1 | `version` | telemetry schema version, currently `1` |
 | 2 | `phase` | hardware characterization phase, currently `1` |
-| 3 | `status` | bit 0 cart present, bit 1 cart pass, bit 2 DMA pass, bit 3 VDP1 pass, bit 31 complete |
+| 3 | `status` | bit 0 cart present, bit 1 cart pass, bit 2 DMA pass, bit 3 VDP1 pass, bit 4 started, bit 31 complete |
 | 4 | `cart_id` | detected extended-RAM cartridge ID; required value is `0x5C` |
 | 5 | `cart_bytes` | libyaul-reported mapped size |
 | 6 | `test_bytes` | progress through the destructive test |

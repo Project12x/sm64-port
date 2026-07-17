@@ -35,9 +35,9 @@ remained after keeping the detected cartridge ID in a typed local variable.
 
 | Artifact | SHA-256 |
 |---|---|
-| `build/saturn/hwtest/obj/sm64-saturn-hwtest.elf` | `546d386df9b8f43ebd997f9ff2b8e919a96edaa927c782ac3f4d1b0ee1db0a5d` |
-| `build/saturn/hwtest/obj/sm64-saturn-hwtest.bin` | `2980f5e6d31f65247d0d5d27d8b7bbaaf4aa423ceca345ddb0c55917e2ce41d8` |
-| `build/saturn/hwtest/sm64-saturn-hwtest.iso` | `0ea3a852c4beae57245fb2beae5ce615817994718325aa7ca6eb4f6c16edb3f9` |
+| `build/saturn/hwtest/obj/sm64-saturn-hwtest.elf` | `e55e40d97f687dd2829bf74d729f89e7f34c01d2ff59fcb725e4f8d93690111e` |
+| `build/saturn/hwtest/obj/sm64-saturn-hwtest.bin` | `45b3458ecdd76a89b823eda619b4da1016b982e3fdf0438838b9035092e8869b` |
+| `build/saturn/hwtest/sm64-saturn-hwtest.iso` | `fc5bec20537355332ebe9eb2a8eade3e8f78b515265c2fdea554409430b42034` |
 | `build/saturn/hwtest/sm64-saturn-hwtest.cue` | `c0b93a455ca2e183ce7d3cc247a6f3eb53ec35ee909de70e43d52bd185d83462` |
 
 Key ELF fields are `ELF32`, big-endian, Renesas SuperH SH, entry point
