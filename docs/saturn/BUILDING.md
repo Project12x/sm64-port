@@ -79,8 +79,9 @@ Required environment variables are defined by libyaul's `yaul.env.in`:
 ## Portable bootstrap command
 
 On a Docker-capable host, the repository provides one command that installs the
-pinned libyaul submodule and builds/verifies both the hello and hardware-test
-discs inside the official Yaul container layout:
+pinned libyaul submodule, builds/verifies both discs, and runs the host-side
+classifier/telemetry regression suite inside the official Yaul container
+layout:
 
 ```sh
 make -f Makefile.saturn.mk bootstrap
