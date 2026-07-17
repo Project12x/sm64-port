@@ -60,6 +60,15 @@ The latest diagnostic screen prints the six independent timing slots directly:
 quad/triangle, concave/transparency, and textured/Gouraud. SHA-256:
 `c81511f104b65b2e362edb2676ef039a51b48feed6715d992836e9b822a467a9`.
 
+### Current post-assertion capture
+
+![Current SM64 Saturn hardware-test screen in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-current.png)
+
+This fresh 3,600-frame capture uses the current ISO after the telemetry ABI
+assertions were compiled. It still visibly reports cart `0x5C`, cart PASS, and
+all six per-probe timing slots. SHA-256:
+`dad7c344a3a3ec52596bad6aac896e1e58024a70416ccca4fa68e07e7ee83a78`.
+
 ## Evidence ledger
 
 | Capture | Emulator/configuration | What it proves | What it does not prove |
@@ -68,6 +77,7 @@ quad/triangle, concave/transparency, and textured/Gouraud. SHA-256:
 | Hwtest rejection | Yabause HLE, 600 frames | Visible failure path, VDP1 probe, telemetry placement | Retail `0x5C` ID or DRAM timing |
 | Hwtest 4 MiB | Kronos, USA BIOS, 4 MiB addon, 3,600 frames | BIOS-backed cart ID and destructive RAM test in an emulator | Retail bus timing; SCU-DMA discrepancy remains open |
 | BIOS control | Kronos, USA BIOS | Correct BIOS-backed launch configuration | Disc/game execution |
+| Current hwtest | Kronos, USA BIOS, 3,600 frames | Current ISO visual regression and telemetry screen | Retail bus timing; SCU-DMA discrepancy remains open |
 
 See [the build procedure](BUILDING.md), [the hardware-test contract](HWTEST.md),
 and the per-run [Kronos evidence record](evidence/kronos-hwtest-2026-07-17.md).
