@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Classify SM64 triangle pairs for Saturn quad/UV conversion.
+"""Classify SM64 primitives for the six-way Saturn IR conversion plan.
 
 The source scan is intentionally conservative: C display-list macros provide
-triangle topology, while an optional JSON primitive file supplies decoded UVs
-and material identity. No Nintendo assets are required or read by default.
+topology and state inventory, while an optional JSON primitive file supplies
+decoded UVs, material identity, and explicit fallback metadata. No Nintendo
+assets are required or read by default.
 """
 
 from __future__ import annotations
@@ -104,14 +105,44 @@ def shared_uvs_match(first: dict[str, Any], second: dict[str, Any]) -> bool:
     return True
 
 
+REPRESENTATION_NAMES = (
+    "direct_textured_quad",
+    "direct_untextured_triangle",
+    "textured_degenerate_triangle",
+    "split_cropped_surface",
+    "baked_surface",
+    "effect_fallback",
+)
+
+
+def representation_for_primitive(primitive: dict[str, Any]) -> str:
+    """Choose a conservative Saturn IR representation from decoded metadata."""
+    if primitive.get("effect") or primitive.get("effect_fallback"):
+        return "effect_fallback"
+    if not primitive.get("uvs"):
+        return "direct_untextured_triangle"
+    if primitive.get("bake") or primitive.get("uv_transform") == "baked":
+        return "baked_surface"
+    if primitive.get("split") or primitive.get("uv_wrap") not in (None, "clamp"):
+        return "split_cropped_surface"
+    # Until a pair proves it is a legal VDP1 rectangle, arbitrary textured
+    # triangles take the bounded degenerate-texture fallback.
+    return "textured_degenerate_triangle"
+
+
 def classify_primitives(primitives: list[dict[str, Any]]) -> dict[str, Any]:
     reasons: Counter[str] = Counter()
+    representations: Counter[str] = Counter()
     candidates = 0
     direct_quads = 0
+    paired = set[int]()
     for index in range(0, len(primitives) - 1, 2):
         first = primitives[index]
         second = primitives[index + 1]
         candidates += 1
+        if representation_for_primitive(first) == "effect_fallback" or representation_for_primitive(second) == "effect_fallback":
+            reasons["effect_fallback"] += 1
+            continue
         if first.get("material") != second.get("material"):
             reasons["material_mismatch"] += 1
             continue
@@ -137,10 +168,20 @@ def classify_primitives(primitives: list[dict[str, Any]]) -> dict[str, Any]:
             reasons["texture_extent_not_multiple_of_8"] += 1
             continue
         direct_quads += 1
+        paired.update((index, index + 1))
+
+    for index, primitive in enumerate(primitives):
+        if index not in paired:
+            representations[representation_for_primitive(primitive)] += 1
+    if direct_quads:
+        representations["direct_textured_quad"] += direct_quads
     return {
         "triangle_pair_candidates": candidates,
         "direct_textured_quad_candidates": direct_quads,
         "rejection_reasons": dict(sorted(reasons.items())),
+        "representation_counts": {
+            name: representations.get(name, 0) for name in REPRESENTATION_NAMES
+        },
     }
 
 

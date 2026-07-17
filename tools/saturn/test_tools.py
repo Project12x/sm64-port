@@ -46,6 +46,21 @@ class AssetClassifierTests(unittest.TestCase):
         self.assertEqual(report["geometry_macro_counts"]["gsSPVertex"], 1)
         self.assertEqual(report["geometry_macro_counts"]["gsDPSetTextureImage"], 1)
 
+    def test_six_way_representation_counts_are_conservative(self) -> None:
+        primitives = [
+            {"indices": [0, 1, 2], "material": 1},
+            {"indices": [3, 4, 5], "uvs": [[0, 0], [8, 0], [0, 8]], "material": 2},
+            {"indices": [6, 7, 8], "uvs": [[0, 0], [8, 0], [0, 8]], "split": True},
+            {"indices": [9, 10, 11], "uvs": [[0, 0], [8, 0], [0, 8]], "bake": True},
+            {"indices": [12, 13, 14], "uvs": [[0, 0], [8, 0], [0, 8]], "effect": "shadow"},
+        ]
+        counts = classify_primitives(primitives)["representation_counts"]
+        self.assertEqual(counts["direct_untextured_triangle"], 1)
+        self.assertEqual(counts["textured_degenerate_triangle"], 1)
+        self.assertEqual(counts["split_cropped_surface"], 1)
+        self.assertEqual(counts["baked_surface"], 1)
+        self.assertEqual(counts["effect_fallback"], 1)
+
 
 class TelemetryTests(unittest.TestCase):
     def test_complete_pass_status_decodes(self) -> None:

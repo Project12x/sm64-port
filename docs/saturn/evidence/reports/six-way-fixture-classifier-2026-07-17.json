@@ -1,0 +1,20 @@
+{
+  "schema": 2,
+  "fixture": "tools/saturn/fixtures/primitives-six-way.json",
+  "decoded_primitives": {
+    "triangle_pair_candidates": 3,
+    "direct_textured_quad_candidates": 1,
+    "rejection_reasons": {
+      "material_mismatch": 1,
+      "topology_not_quad": 1
+    },
+    "representation_counts": {
+      "direct_textured_quad": 1,
+      "direct_untextured_triangle": 1,
+      "textured_degenerate_triangle": 1,
+      "split_cropped_surface": 1,
+      "baked_surface": 1,
+      "effect_fallback": 1
+    }
+  }
+}

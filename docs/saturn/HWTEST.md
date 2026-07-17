@@ -78,8 +78,10 @@ behavior.
 baserom. For decoded geometry, pass a JSON array of primitives containing
 `indices`, `uvs`, and `material`; the report separates topology, material, UV
 rectangle, and VDP1 eight-pixel extent rejections. This is the first host-side
-slice of the six-way Saturn IR classifier, not yet a renderer or texture
-converter.
+slice of the six-way Saturn IR classifier. Decoded reports also include
+conservative representation counts for direct quads, untextured triangles,
+degenerate textured triangles, split/cropped surfaces, baked surfaces, and
+effect fallbacks; this is not yet a renderer or texture converter.
 
 See the [visual progress portfolio](VISUAL_PORTFOLIO.md) for dated emulator
 captures and explicit evidence boundaries.

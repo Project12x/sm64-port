@@ -381,7 +381,7 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 5. Add a VDP1 primitive and transparency torture disc. **Per-probe solid, repeated-vertex, concave, transparency, textured, and Gouraud submissions now run in Kronos; retail torture results remain.**
 6. Add a static display-list statistics tool. **Initial geometry/UV classifier now reports triangle/quad counts plus vertex, display-list, texture, tile, combine, render-mode, and geometry-mode macro inventory.**
 7. Define the primitive/material/texture Saturn IR.
-8. Implement the quad/triangle/UV classifier with rejection reasons. **Shared-vertex UV consistency and eight-pixel extent checks are now enforced; a checked-in source-scan report is generated, while full decoded-asset coverage remains.**
+8. Implement the quad/triangle/UV classifier with rejection reasons. **Shared-vertex UV consistency, eight-pixel extent checks, and conservative six-way representation counts are now enforced; full decoded-asset coverage remains.**
 9. Implement the PC Saturn-IR reference renderer.
 10. Implement CI4/CI8/RGB1555 conversion, padding, and deduplication.
 11. Generate a Bob-omb Battlefield budget report.

@@ -30,3 +30,9 @@ set.
 This is a tooling smoke test over the checked-in source, not a representative
 SM64 asset census. A real census requires a user-supplied baserom/extraction
 input, which is intentionally not committed or distributed.
+
+The six-way decision rules are exercised with the checked-in fixture
+`tools/saturn/fixtures/primitives-six-way.json`; its expected report is stored
+at `reports/six-way-fixture-classifier-2026-07-17.json`.
+Its SHA-256 is
+`c9b32c297ad99f15d94df7d3a9bac97823f41821aec8ae49aed5962ade0a2f77`.
