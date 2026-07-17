@@ -216,8 +216,10 @@ user_init(void)
         const bool cart_ok = cart_test();
         if (cart_ok) {
                 dma_test();
-                vdp1_test();
         }
+        /* VDP1 is independent of the cartridge; keep that measurement useful
+         * on HLE and on a Saturn without the optional RAM cart. */
+        vdp1_test();
 
         dbgio_puts("\x1B[H\x1B[2JSM64 SATURN HWTEST\n\n");
         dbgio_printf("cart id: 0x%02X (%s)\n",

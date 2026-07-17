@@ -10,7 +10,7 @@ This is BIOS-backed emulator evidence, not retail hardware evidence.
 | BIOS size | 524,288 bytes (512 KiB) |
 | BIOS SHA-256 | `96e106f740ab448cf89f0dd49dfbac7fe5391cb6bd6e14ad5e3061c13330266f` |
 | Emulator | local `ymir-headless` 0.4.0-dev, Release build |
-| Disc | `sm64-saturn-hwtest.cue` / ISO SHA-256 `fc5bec20537355332ebe9eb2a8eade3e8f78b515265c2fdea554409430b42034` |
+| Disc | `sm64-saturn-hwtest.cue` / ISO SHA-256 `1dafe2a65554132e328edffbe57a785f40488d23f97adcc6b71702e4959e5d28` |
 
 ## Session
 

@@ -63,6 +63,11 @@ instead of treating the capture as a passing telemetry report.
 
 ## Host-side classifier
 
+The VDP1 polygon probe runs even when the cartridge gate fails; only the
+cartridge-dependent SCU DMA measurements are skipped. This keeps emulator and
+no-cart captures useful for isolating renderer bring-up from expansion-RAM
+behavior.
+
 `tools/saturn/asset_classifier.py` scans C display-list macros without needing a
 baserom. For decoded geometry, pass a JSON array of primitives containing
 `indices`, `uvs`, and `material`; the report separates topology, material, UV
