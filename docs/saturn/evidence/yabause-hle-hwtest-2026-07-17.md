@@ -27,7 +27,7 @@ status: 0x00000010
 ```
 
 Screenshot SHA-256:
-`ea3ff341585c9440e655069a223cb436694ee4d3bf3b16688612cefacce75b`.
+`e19be1157f3774a9bdd64a056cc33b1c54a4a801905d7173fd456fb74315f6f0`.
 
 The `0x18` status combines the `STARTED` and `VDP1_PASS` bits; the HLE run
 correctly reaches the visible rejection path, independently measures VDP1, and

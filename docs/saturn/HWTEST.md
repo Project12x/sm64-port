@@ -74,3 +74,6 @@ baserom. For decoded geometry, pass a JSON array of primitives containing
 rectangle, and VDP1 eight-pixel extent rejections. This is the first host-side
 slice of the six-way Saturn IR classifier, not yet a renderer or texture
 converter.
+
+See the [visual progress portfolio](VISUAL_PORTFOLIO.md) for dated emulator
+captures and explicit evidence boundaries.
