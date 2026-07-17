@@ -139,11 +139,18 @@ binaries.
 
 | Source | License/status | Use |
 |---|---|---|
+| `Project12x/Ymir` fork of `StrikerX3/Ymir` | GPL-3.0; upstream base `244d5c841e0cb9b0eb1402b39a7742f7f973b1c2`, agent-debug commit `5c30eed01587a0f303ed02c4c7f45166c0eff0db` | Primary automated development emulator; separate process/tool only |
 | `Yabause/yabause` / Libretro Yabause | GPL-2.0; Libretro Windows core 0.9.15 tested | First development emulator; tool only |
 | `FCare/Kronos` / Libretro Kronos | GPL-2.0; official release/core researched | Candidate BIOS-backed second development emulator; tool only |
 | Mednafen Saturn documentation | Official emulator documentation; BIOS required | Compatibility/performance caveats and future test procedure |
 
-No emulator source, binary, or BIOS is included. The 2026-07-16 Yabause HLE
+No emulator source, binary, or BIOS is included. The Project12x Ymir fork keeps
+its modifications inside the GPL-covered emulator and exposes newline-delimited
+JSON-RPC over standard I/O; no Ymir implementation or headers are copied into
+this repository. Its implementation record inspected `apps/ymir-headless/src/*`,
+Ymir's SDL emulator loop, core `Saturn::RunFrame()`/debug-break APIs, and the
+host-CD worker queue. Reuse mode here is an external GPL tool/process, not a
+source dependency. The 2026-07-16 Yabause HLE
 smoke result is recorded in `evidence/yabause-hle-2026-07-16.md`. The Kronos
 branch of `libretro/yabause` at
 `6709c1dd0e26094f005b19c6e473c30809718b78` was inspected to understand its

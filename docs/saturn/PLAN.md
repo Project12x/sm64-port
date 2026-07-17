@@ -266,14 +266,18 @@ growth directly reduces texture residency.
 
 ### Phase 0: provenance and reproducible bring-up
 
-Status as of 2026-07-16: the provenance baseline, libyaul 0.3.1 submodule pin,
+Status as of 2026-07-17: the provenance baseline, libyaul 0.3.1 submodule pin,
 isolated hello-disc source, and Saturn Makefile are present. A source-built
 GCC 14.3.0/binutils 2.44 SH-2 toolchain and the pinned libyaul produced a CUE
 and ISO from a clean target build; the executable header and artifact hashes
 are recorded in `evidence/hello-disc-2026-07-16.md`. Yabause 0.9.15 also
 reached the expected hello screen for 600 frames using its explicitly
-lower-confidence HLE BIOS. A portable one-command toolchain bootstrap, a
-second BIOS-backed emulator run, and retail-hardware execution remain open.
+lower-confidence HLE BIOS. A GPL-contained Project12x Ymir fork now provides
+JSON-RPC stepping, memory/register inspection, continuous execution, pause,
+bounded frame runs, and deterministic stopped events; it remains an external
+tool and has not yet supplied the required BIOS-backed hello-disc evidence. A
+portable one-command toolchain bootstrap, a second BIOS-backed emulator run,
+and retail-hardware execution remain open.
 
 Deliver:
 
