@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Small standard-library regression tests for Saturn host-side tools."""
+
+from __future__ import annotations
+
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+TOOLS = Path(__file__).resolve().parent
+sys.path.insert(0, str(TOOLS))
+
+from asset_classifier import classify_primitives, source_scan  # noqa: E402
+from telemetry_decode import decode  # noqa: E402
+
+
+class AssetClassifierTests(unittest.TestCase):
+    def test_direct_quad_requires_shared_uv_agreement(self) -> None:
+        primitives = [
+            {"indices": [0, 1, 2], "uvs": [[0, 0], [16, 0], [16, 16]], "material": 7},
+            {"indices": [0, 2, 3], "uvs": [[0, 0], [16, 16], [0, 16]], "material": 7},
+        ]
+        report = classify_primitives(primitives)
+        self.assertEqual(report["direct_textured_quad_candidates"], 1)
+
+        primitives[1]["uvs"][1] = [8, 8]
+        report = classify_primitives(primitives)
+        self.assertEqual(report["direct_textured_quad_candidates"], 0)
+        self.assertEqual(report["rejection_reasons"]["shared_uv_mismatch"], 1)
+
+    def test_source_scan_counts_quadrangle_macro(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "display.c").write_text(
+                "gsSP1Triangle(0, 1, 2, 0); gsSP2Triangles(0,1,2,0, 0,2,3,0); "
+                "gsSP1Quadrangle(0,1,2,3,0);\n",
+                encoding="utf-8",
+            )
+            report = source_scan(root)
+        self.assertEqual(report["gsSP1Triangle"], 1)
+        self.assertEqual(report["gsSP2Triangles"], 1)
+        self.assertEqual(report["gsSP1Quadrangle"], 1)
+        self.assertEqual(report["static_triangles"], 3)
+
+
+class TelemetryTests(unittest.TestCase):
+    def test_complete_pass_status_decodes(self) -> None:
+        words = [
+            0x53415430, 1, 1, 0x8000001F, 0x5C, 0x400000, 0x400000,
+            0xFFFFFFFF, 0, 0, 10, 20, 30, 40, 4, 15360,
+        ]
+        data = []
+        for word in words:
+            data.extend(word.to_bytes(4, "big"))
+        decoded = decode(data, require_complete=True)
+        self.assertTrue(decoded["ok"])
+        self.assertTrue(decoded["status_flags"]["complete"])
+        self.assertEqual(decoded["cart_id"], 0x5C)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

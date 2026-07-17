@@ -102,6 +102,13 @@ Docker is optional. The existing MSYS2/source-built workflow below remains the
 fallback when Docker is unavailable or when the host needs a locally inspected
 compiler build.
 
+The host-side classifier and telemetry decoder also have a standard-library-only
+regression check:
+
+```sh
+make -f Makefile.saturn.mk verify-tools
+```
+
 Copy the pinned template rather than inventing a different environment layout:
 
 ```sh

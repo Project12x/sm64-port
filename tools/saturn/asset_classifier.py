@@ -20,7 +20,7 @@ TRIANGLE_RE = re.compile(r"gsSP1Triangle\s*\(\s*([^)]*)\)|gsSP2Triangles\s*\(([^
 
 
 def source_scan(root: Path) -> dict[str, Any]:
-    one = two = 0
+    one = two = quadrangle = 0
     static_triangles = 0
     files = 0
     for path in root.rglob("*"):
@@ -31,7 +31,8 @@ def source_scan(root: Path) -> dict[str, Any]:
         except OSError:
             continue
         matches = list(TRIANGLE_RE.finditer(text))
-        if not matches:
+        quadrangles = re.findall(r"gsSP1Quadrangle\s*\(", text)
+        if not matches and not quadrangles:
             continue
         files += 1
         for match in matches:
@@ -41,11 +42,13 @@ def source_scan(root: Path) -> dict[str, Any]:
             else:
                 two += 1
                 static_triangles += 2
+        quadrangle += len(quadrangles)
     return {
         "source_root": str(root),
         "files_with_triangle_macros": files,
         "gsSP1Triangle": one,
         "gsSP2Triangles": two,
+        "gsSP1Quadrangle": quadrangle,
         "static_triangles": static_triangles,
     }
 
@@ -57,6 +60,24 @@ def uv_is_rectangle(uvs: list[list[float]]) -> bool:
     us = sorted({uv[0] for uv in unique})
     vs = sorted({uv[1] for uv in unique})
     return len(us) == 2 and len(vs) == 2
+
+
+def shared_uvs_match(first: dict[str, Any], second: dict[str, Any]) -> bool:
+    """Require the two triangles to agree on UVs at shared vertices."""
+    first_indices = [int(value) for value in first.get("indices", [])]
+    second_indices = [int(value) for value in second.get("indices", [])]
+    first_uvs = first.get("uvs", [])
+    second_uvs = second.get("uvs", [])
+    if len(first_indices) != len(first_uvs) or len(second_indices) != len(second_uvs):
+        return False
+    first_by_index = dict(zip(first_indices, first_uvs))
+    second_by_index = dict(zip(second_indices, second_uvs))
+    for index in set(first_by_index) & set(second_by_index):
+        left = tuple(round(float(value), 6) for value in first_by_index[index])
+        right = tuple(round(float(value), 6) for value in second_by_index[index])
+        if left != right:
+            return False
+    return True
 
 
 def classify_primitives(primitives: list[dict[str, Any]]) -> dict[str, Any]:
@@ -78,6 +99,9 @@ def classify_primitives(primitives: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         if "uvs" not in first or "uvs" not in second:
             reasons["uv_missing"] += 1
+            continue
+        if not shared_uvs_match(first, second):
+            reasons["shared_uv_mismatch"] += 1
             continue
         uvs = [list(map(float, uv)) for uv in first["uvs"] + second["uvs"]]
         if not uv_is_rectangle(uvs):

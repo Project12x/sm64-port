@@ -379,9 +379,9 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 3. Add mandatory 4 MiB cartridge detection and full-memory test. **Kronos BIOS-backed 0x5C/full-test pass recorded; retail execution gate remains.**
 4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry. **Kronos CPU/VDP1 timings and SCU-DMA result recorded; retail timing characterization remains.**
 5. Add a VDP1 primitive and transparency torture disc. **Basic solid polygon probe passes in HLE/Kronos; torture scenes remain.**
-6. Add a static display-list statistics tool. **Initial geometry/UV classifier entry point added.**
+6. Add a static display-list statistics tool. **Initial geometry/UV classifier entry point added; host regression check now covers triangle/quad counts.**
 7. Define the primitive/material/texture Saturn IR.
-8. Implement the quad/triangle/UV classifier with rejection reasons.
+8. Implement the quad/triangle/UV classifier with rejection reasons. **Shared-vertex UV consistency and eight-pixel extent checks are now enforced; full decoded-asset coverage remains.**
 9. Implement the PC Saturn-IR reference renderer.
 10. Implement CI4/CI8/RGB1555 conversion, padding, and deduplication.
 11. Generate a Bob-omb Battlefield budget report.
