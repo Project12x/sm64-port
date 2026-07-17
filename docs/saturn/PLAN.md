@@ -274,10 +274,11 @@ are recorded in `evidence/hello-disc-2026-07-16.md`. Yabause 0.9.15 also
 reached the expected hello screen for 600 frames using its explicitly
 lower-confidence HLE BIOS. A GPL-contained Project12x Ymir fork now provides
 JSON-RPC stepping, memory/register inspection, continuous execution, pause,
-bounded frame runs, and deterministic stopped events; it remains an external
-tool and has not yet supplied the required BIOS-backed hello-disc evidence. A
-portable one-command toolchain bootstrap, a second BIOS-backed emulator run,
-and retail-hardware execution remain open.
+bounded frame runs, deterministic stopped events, canonical frame hashes, and
+base64 PNG capture; it remains an external tool and has not yet supplied the
+required BIOS-backed hello-disc evidence. A portable one-command toolchain
+bootstrap, a second BIOS-backed emulator run, and retail-hardware execution
+remain open.
 
 Deliver:
 
