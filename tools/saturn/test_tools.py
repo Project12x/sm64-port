@@ -77,6 +77,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertTrue(decoded["status_flags"]["complete"])
         self.assertEqual(decoded["cart_id"], 0x5C)
         self.assertEqual(decoded["extended"]["cpu_dmac_pass"], 0)
+        self.assertEqual(decoded["extended"]["vdp1_textured_triangle_ticks"], 0)
 
 
 if __name__ == "__main__":
