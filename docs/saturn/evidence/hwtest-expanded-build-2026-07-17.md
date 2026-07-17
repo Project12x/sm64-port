@@ -34,5 +34,10 @@ Current artifact hashes:
 The expanded runtime submits solid, repeated-vertex, concave,
 half-transparent, textured RGB1555, and Gouraud VDP1 probes; it also records
 cached/uncached CPU reads and SH-2 CPU-DMAC results in the optional telemetry
-block at `0x06010040`. Emulator and retail execution of this exact new ISO are
-still separate evidence gates.
+block at `0x06010040`. The exact ISO was then run for 3,600 frames in Kronos
+with the USA BIOS and 4 MiB extended-RAM option. The resulting screenshot is
+archived at `screenshots/2026-07-17/hwtest-kronos-bios-4m-expanded.png` with
+SHA-256 `45eacab64f358cac2d1058b7d1b1cd09becd661835729ed99971b67a93cf1d40`.
+The visible result was cart `0x5C`/4 MiB PASS, CPU copy `1280` ticks, SCU DMA
+FAIL (`183` ticks), and VDP1 PASS (`54329` ticks). Retail execution remains
+the authoritative timing and compatibility gate.

@@ -25,13 +25,13 @@ telemetry address, not real cartridge behavior. SHA-256:
 
 ### BIOS-backed 4 MiB cartridge path in Kronos
 
-![SM64 Saturn hardware test in Kronos with 4 MiB cartridge](evidence/screenshots/2026-07-17/hwtest-kronos-bios-4m.png)
+![SM64 Saturn expanded hardware test in Kronos with 4 MiB cartridge](evidence/screenshots/2026-07-17/hwtest-kronos-bios-4m-expanded.png)
 
 Kronos with the user-provided USA BIOS and `4M_extended_ram` reports ID
 `0x5C`, passes the destructive 4 MiB memory test, and passes the VDP1 probe.
 Its SCU-DMA result is currently `FAIL`; retail hardware must decide whether
 that is an emulator limitation or a target-side bug. SHA-256:
-`eda4b034f8a47beb714a3ac1dfc45047226a0a0180a3567d6e4f324314599cea`.
+`45eacab64f358cac2d1058b7d1b1cd09becd661835729ed99971b67a93cf1d40`.
 
 ### BIOS boot control
 
