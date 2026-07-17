@@ -44,6 +44,9 @@ def main() -> int:
     args = parser.parse_args()
     if not 1 <= args.frames <= 3600:
         parser.error("--frames must be between 1 and 3600")
+    for label, path in (("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
+        if not path.is_file():
+            parser.error(f"{label} not found: {path}")
 
     requests = [
         request("exec.run_for", 1, {"frames": args.frames}),
@@ -60,6 +63,8 @@ def main() -> int:
             timeout=args.timeout,
             check=False,
         )
+    except subprocess.TimeoutExpired:
+        parser.error(f"Ymir did not finish within {args.timeout:.1f} seconds")
     except OSError as error:
         parser.error(str(error))
     if completed.returncode != 0:
@@ -71,12 +76,21 @@ def main() -> int:
             messages.append(json.loads(line))
     telemetry_response = response_for(messages, 2)
     telemetry = decode(telemetry_response["result"]["data"], require_complete=True)
+    stopped_reasons = [
+        message.get("params", {}).get("reason")
+        for message in messages
+        if message.get("method") == "instance.stopped"
+    ]
     report = {
         "evidence_kind": "ymir-emulator",
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
         "game": str(args.game),
         "frames": args.frames,
+        "protocol": {
+            "ready": any(message.get("method") == "instance.ready" for message in messages),
+            "stopped_reasons": stopped_reasons,
+        },
         "telemetry": telemetry,
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
