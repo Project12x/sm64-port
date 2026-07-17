@@ -24,5 +24,11 @@ BIOS was handling the disc. This is an emulator boot/CD limitation, not a
 passing or failing cartridge result. The capture runner now supports
 `--allow-invalid` to preserve this raw diagnostic read.
 
+As a control, the same BIOS session and 600-frame protocol sequence were run
+with the previously proven `sm64-saturn-hello.cue`. It stopped at the same
+master PC (`0x060402E4`), returned zero bytes at `0x06004000`, and emitted the
+same CD-block copy diagnostic. The failure is therefore not specific to the
+new hwtest IP header or cartridge code.
+
 Retail Saturn execution with the 4 MiB RAM cartridge remains the authoritative
 gate for cartridge, DMA, and VDP1 measurements.
