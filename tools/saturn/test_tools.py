@@ -34,7 +34,8 @@ class AssetClassifierTests(unittest.TestCase):
             root = Path(directory)
             (root / "display.c").write_text(
                 "gsSP1Triangle(0, 1, 2, 0); gsSP2Triangles(0,1,2,0, 0,2,3,0); "
-                "gsSP1Quadrangle(0,1,2,3,0);\n",
+                "gsSP1Quadrangle(0,1,2,3,0); gsSPVertex(v, 4, 0); "
+                "gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, tex);\n",
                 encoding="utf-8",
             )
             report = source_scan(root)
@@ -42,6 +43,8 @@ class AssetClassifierTests(unittest.TestCase):
         self.assertEqual(report["gsSP2Triangles"], 1)
         self.assertEqual(report["gsSP1Quadrangle"], 1)
         self.assertEqual(report["static_triangles"], 3)
+        self.assertEqual(report["geometry_macro_counts"]["gsSPVertex"], 1)
+        self.assertEqual(report["geometry_macro_counts"]["gsDPSetTextureImage"], 1)
 
 
 class TelemetryTests(unittest.TestCase):

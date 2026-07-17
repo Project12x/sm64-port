@@ -1,11 +1,24 @@
 {
-  "schema": 1,
+  "schema": 2,
   "source": {
     "source_root": "src",
     "files_with_triangle_macros": 1,
+    "files_with_geometry_macros": 1,
     "gsSP1Triangle": 2,
     "gsSP2Triangles": 2,
     "gsSP1Quadrangle": 0,
-    "static_triangles": 6
+    "static_triangles": 6,
+    "geometry_macro_counts": {
+      "gsDPSetRenderMode": 7,
+      "gsDPSetTextureImage": 28,
+      "gsDPSetTile": 4,
+      "gsSP1Triangle": 2,
+      "gsSP2Triangles": 2,
+      "gsSPClearGeometryMode": 4,
+      "gsSPDisplayList": 12,
+      "gsSPSetGeometryMode": 3,
+      "gsSPTexture": 6,
+      "gsSPVertex": 4
+    }
   }
 }

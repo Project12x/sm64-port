@@ -17,12 +17,28 @@ from typing import Any
 
 
 TRIANGLE_RE = re.compile(r"gsSP1Triangle\s*\(\s*([^)]*)\)|gsSP2Triangles\s*\(([^)]*)\)")
+SOURCE_MACROS = {
+    "gsSP1Triangle": r"gsSP1Triangle\s*\(",
+    "gsSP2Triangles": r"gsSP2Triangles\s*\(",
+    "gsSP1Quadrangle": r"gsSP1Quadrangle\s*\(",
+    "gsSPVertex": r"gsSPVertex\s*\(",
+    "gsSPDisplayList": r"gsSPDisplayList\s*\(",
+    "gsSPTexture": r"gsSPTexture\s*\(",
+    "gsDPSetTextureImage": r"gsDPSetTextureImage\s*\(",
+    "gsDPSetTile": r"gsDPSetTile\s*\(",
+    "gsDPSetCombine": r"gsDPSetCombine(?:LERP)?\s*\(",
+    "gsDPSetRenderMode": r"gsDPSetRenderMode\s*\(",
+    "gsSPSetGeometryMode": r"gsSPSetGeometryMode\s*\(",
+    "gsSPClearGeometryMode": r"gsSPClearGeometryMode\s*\(",
+}
 
 
 def source_scan(root: Path) -> dict[str, Any]:
     one = two = quadrangle = 0
     static_triangles = 0
     files = 0
+    triangle_files = 0
+    macro_counts: Counter[str] = Counter()
     for path in root.rglob("*"):
         if path.suffix not in {".c", ".h", ".inc.c"} or not path.is_file():
             continue
@@ -31,10 +47,15 @@ def source_scan(root: Path) -> dict[str, Any]:
         except OSError:
             continue
         matches = list(TRIANGLE_RE.finditer(text))
-        quadrangles = re.findall(r"gsSP1Quadrangle\s*\(", text)
-        if not matches and not quadrangles:
+        macro_matches = {
+            name: len(re.findall(pattern, text))
+            for name, pattern in SOURCE_MACROS.items()
+        }
+        if not any(macro_matches.values()):
             continue
         files += 1
+        if matches or macro_matches["gsSP1Quadrangle"]:
+            triangle_files += 1
         for match in matches:
             if match.group(1) is not None:
                 one += 1
@@ -42,14 +63,17 @@ def source_scan(root: Path) -> dict[str, Any]:
             else:
                 two += 1
                 static_triangles += 2
-        quadrangle += len(quadrangles)
+        quadrangle += macro_matches["gsSP1Quadrangle"]
+        macro_counts.update({name: count for name, count in macro_matches.items() if count})
     return {
         "source_root": str(root),
-        "files_with_triangle_macros": files,
+        "files_with_triangle_macros": triangle_files,
+        "files_with_geometry_macros": files,
         "gsSP1Triangle": one,
         "gsSP2Triangles": two,
         "gsSP1Quadrangle": quadrangle,
         "static_triangles": static_triangles,
+        "geometry_macro_counts": dict(sorted(macro_counts.items())),
     }
 
 
@@ -127,7 +151,7 @@ def main() -> int:
     parser.add_argument("--report", type=Path, help="write JSON report to this path")
     args = parser.parse_args()
 
-    report: dict[str, Any] = {"schema": 1, "source": source_scan(args.root)}
+    report: dict[str, Any] = {"schema": 2, "source": source_scan(args.root)}
     if args.primitives:
         primitives = json.loads(args.primitives.read_text(encoding="utf-8"))
         if not isinstance(primitives, list):

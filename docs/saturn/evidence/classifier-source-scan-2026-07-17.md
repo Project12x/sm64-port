@@ -11,7 +11,7 @@ python tools/saturn/asset_classifier.py \
 
 The report is stored at
 `reports/sm64-src-classifier-2026-07-17.json` with SHA-256
-`77558234613a8b3c04f6f45d00c5eeb03d58537aef902fbca8de6117f6578f31`.
+`ec0a4cfe671c339c1c91c47b66f7d30c005e35417f1074eff409b84bab138539`.
 It found one source file with display-list macros:
 
 | Metric | Count |
@@ -20,6 +20,12 @@ It found one source file with display-list macros:
 | `gsSP2Triangles` | 2 |
 | `gsSP1Quadrangle` | 0 |
 | statically declared triangles | 6 |
+
+The same scan inventories material/geometry state macros: 28 texture-image
+declarations, 4 tile setups, 7 render-mode changes, 6 texture toggles, 4
+vertex loads, and 12 display-list calls. These counts are useful compiler
+inputs, but do not imply that the checked-in source is a complete SM64 asset
+set.
 
 This is a tooling smoke test over the checked-in source, not a representative
 SM64 asset census. A real census requires a user-supplied baserom/extraction
