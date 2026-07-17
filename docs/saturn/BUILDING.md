@@ -76,6 +76,31 @@ Required environment variables are defined by libyaul's `yaul.env.in`:
   this need not be the source checkout; and
 - `YAUL_BUILD`: libyaul's build-directory name.
 
+## Portable bootstrap command
+
+On a Docker-capable host, the repository provides one command that installs the
+pinned libyaul submodule and builds/verifies the hello disc inside the official
+Yaul container layout:
+
+```sh
+make -f Makefile.saturn.mk bootstrap
+```
+
+The wrapper is also directly runnable as
+`tools/saturn/bootstrap-toolchain.sh`, or from Windows PowerShell as
+`pwsh -File tools/saturn/bootstrap-toolchain.ps1`. Both follow the MIT-licensed
+`yaul-org/libyaul-docker` layout at commit
+`e0b4c2d63f1a39f213a67c6ca31e6bc582976de6`, using the published
+`ijacquez/yaul:1.0.4` image by default. Set `YAUL_DOCKER_IMAGE` to an
+immutable digest in CI or in a lab notebook when byte-for-byte toolchain
+provenance is required. The image is only the host environment; the script
+still installs and checks this repository's libyaul commit `6012f79` before
+building.
+
+Docker is optional. The existing MSYS2/source-built workflow below remains the
+fallback when Docker is unavailable or when the host needs a locally inspected
+compiler build.
+
 Copy the pinned template rather than inventing a different environment layout:
 
 ```sh

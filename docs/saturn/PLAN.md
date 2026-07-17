@@ -277,8 +277,9 @@ JSON-RPC stepping, memory/register inspection, continuous execution, pause,
 bounded frame runs, deterministic stopped events, canonical frame hashes, and
 base64 PNG capture; it remains an external tool and has not yet supplied the
 required BIOS-backed hello-disc evidence. A portable one-command toolchain
-bootstrap, a second BIOS-backed emulator run, and retail-hardware execution
-remain open.
+bootstrap wrapper is now present but has not yet been executed in this
+environment; a second BIOS-backed emulator run and retail-hardware execution
+also remain open.
 
 Deliver:
 
@@ -375,10 +376,10 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 
 1. Obtain explicit reuse terms for original `malucard/sm64-psx` changes.
 2. Add a libyaul-pinned hello-disc target. **Done; execution gates remain.**
-3. Add mandatory 4 MiB cartridge detection and full-memory test.
-4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry.
-5. Add a VDP1 primitive and transparency torture disc.
-6. Add a static display-list statistics tool.
+3. Add mandatory 4 MiB cartridge detection and full-memory test. **HW-test target added; retail execution gate remains.**
+4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry. **Initial SCU/VDP1 telemetry added; timing characterization remains.**
+5. Add a VDP1 primitive and transparency torture disc. **Basic solid polygon probe added; torture scenes remain.**
+6. Add a static display-list statistics tool. **Initial geometry/UV classifier entry point added.**
 7. Define the primitive/material/texture Saturn IR.
 8. Implement the quad/triangle/UV classifier with rejection reasons.
 9. Implement the PC Saturn-IR reference renderer.

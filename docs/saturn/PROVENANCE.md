@@ -126,8 +126,8 @@ metadata from the ISO; no xorriso source is reused.
 | Repositories | <https://github.com/yaul-org/libyaul-docker>, <https://github.com/yaul-org/libyaul-packages> |
 | Pinned commits | Docker `e0b4c2d63f1a39f213a67c6ca31e6bc582976de6`; packages `6b2ca3b7f31cbf50b18a577e86d7c9ca324e5f62` |
 | Licenses | MIT |
-| Role | Official installation/package-feed research |
-| Reuse mode | Pattern-only at this checkpoint; not vendored or copied |
+| Role | Official container layout used by the portable bootstrap wrapper |
+| Reuse mode | Close adaptation of the documented Docker invocation; no Dockerfile or package source copied |
 | Files inspected | Docker `LICENSE`, `README.md`, `Dockerfile`; package repository `LICENSE`, package recipes and repository configuration |
 
 The maintained package endpoint found in these sources is Linux-oriented.
@@ -173,11 +173,12 @@ redistributed by this bootstrap change.
 
 ## Bootstrap change declaration
 
-The `saturn/bootstrap` documentation commit contains only original planning and
-provenance text. It copies no implementation source from the PSX port,
-libyaul-examples, Sega manuals, or other external repositories. The libyaul MIT
-text is reproduced in `THIRD_PARTY_LICENSES.md` in preparation for a future
-pinned dependency.
+The Saturn bootstrap and hardware-test changes contain original integration
+code and a small shell wrapper around the documented container workflow. They
+copy no implementation source from the PSX port, libyaul-examples, Sega
+manuals, or the Docker repository. The libyaul MIT text is reproduced in
+`THIRD_PARTY_LICENSES.md`; the hardware-example repository remains
+pattern-only because its pinned revision has no root license file.
 
 The following dependency/hello-target commit adds libyaul as a gitlink at the
 recorded revision and introduces original Makefiles and hello-screen code. The
