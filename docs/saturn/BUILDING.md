@@ -79,8 +79,8 @@ Required environment variables are defined by libyaul's `yaul.env.in`:
 ## Portable bootstrap command
 
 On a Docker-capable host, the repository provides one command that installs the
-pinned libyaul submodule and builds/verifies the hello disc inside the official
-Yaul container layout:
+pinned libyaul submodule and builds/verifies both the hello and hardware-test
+discs inside the official Yaul container layout:
 
 ```sh
 make -f Makefile.saturn.mk bootstrap
@@ -96,7 +96,7 @@ Docker commit. Set `YAUL_DOCKER_IMAGE` to an
 immutable digest in CI or in a lab notebook when byte-for-byte toolchain
 provenance is required. The image is only the host environment; the script
 still installs and checks this repository's libyaul commit `6012f79` before
-building.
+building both targets.
 
 Docker is optional. The existing MSYS2/source-built workflow below remains the
 fallback when Docker is unavailable or when the host needs a locally inspected

@@ -57,6 +57,10 @@ python tools/saturn/capture_hwtest.py \
 The report is labeled `evidence_kind: ymir-emulator`; it is not a substitute
 for a retail Saturn capture.
 
+For emulator bring-up failures (for example, a BIOS/CD-block incompatibility),
+append `--allow-invalid` to preserve the raw 64-byte read and diagnostic error
+instead of treating the capture as a passing telemetry report.
+
 ## Host-side classifier
 
 `tools/saturn/asset_classifier.py` scans C display-list macros without needing a

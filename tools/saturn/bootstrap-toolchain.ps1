@@ -28,7 +28,7 @@ $dockerArgs = @(
     "--env", "SILENT=1",
     $DockerImage,
     "/bin/bash", "-lc",
-    "set -eu; git config --global --add safe.directory /work; git submodule update --init third_party/libyaul; make -C third_party/libyaul install-release install-tools; make -f Makefile.saturn.mk hello verify-hello"
+    "set -eu; git config --global --add safe.directory /work; git submodule update --init third_party/libyaul; make -C third_party/libyaul install-release install-tools; make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest"
 )
 
 & docker @dockerArgs

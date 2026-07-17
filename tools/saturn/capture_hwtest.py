@@ -41,6 +41,11 @@ def main() -> int:
     parser.add_argument("--frames", type=int, default=600, help="bounded frames to execute (1..3600)")
     parser.add_argument("--output", type=Path, default=Path("ymir-hwtest-report.json"))
     parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--allow-invalid",
+        action="store_true",
+        help="write a diagnostic report even when the telemetry magic is absent",
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= 3600:
         parser.error("--frames must be between 1 and 3600")
@@ -60,6 +65,7 @@ def main() -> int:
             input="".join(json.dumps(message) + "\n" for message in requests),
             text=True,
             capture_output=True,
+            cwd=args.game.parent,
             timeout=args.timeout,
             check=False,
         )
@@ -75,7 +81,13 @@ def main() -> int:
         if line.strip():
             messages.append(json.loads(line))
     telemetry_response = response_for(messages, 2)
-    telemetry = decode(telemetry_response["result"]["data"], require_complete=True)
+    raw_data = telemetry_response["result"]["data"]
+    try:
+        telemetry = decode(raw_data, require_complete=True)
+    except ValueError as error:
+        if not args.allow_invalid:
+            raise
+        telemetry = {"decode_error": str(error), "raw_data": raw_data}
     stopped_reasons = [
         message.get("params", {}).get("reason")
         for message in messages
