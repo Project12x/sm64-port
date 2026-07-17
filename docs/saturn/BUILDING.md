@@ -62,9 +62,11 @@ building GCC: the generated `gcc/auto-host.h` incorrectly recorded
 them only under `__GNU_VISIBLE`. The proof build set both generated
 `HAVE_DECL_*` values to `0`, invoking GCC's own fallback declarations. This
 was a temporary patch to the GPL build tool in an ignored work directory; no
-GCC source enters this repository. A one-command toolchain bootstrap remains
-open work. On Linux or a Docker-capable host, the official MIT-licensed
-`yaul-org/libyaul-docker` image is the preferred next reproducibility check.
+GCC source enters this repository. The one-command toolchain bootstrap is now
+present; its container execution still needs to be exercised on a
+Docker-capable host. On Linux or a Docker-capable host, the official
+MIT-licensed `yaul-org/libyaul-docker` image is the preferred reproducibility
+path.
 
 Required environment variables are defined by libyaul's `yaul.env.in`:
 
