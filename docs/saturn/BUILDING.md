@@ -91,7 +91,8 @@ The wrapper is also directly runnable as
 `pwsh -File tools/saturn/bootstrap-toolchain.ps1`. Both follow the MIT-licensed
 `yaul-org/libyaul-docker` layout at commit
 `e0b4c2d63f1a39f213a67c6ca31e6bc582976de6`, using the published
-`ijacquez/yaul:1.0.4` image by default. Set `YAUL_DOCKER_IMAGE` to an
+`ijacquez/yaul:1.0.15` image by default. This tag corresponds to the pinned
+Docker commit. Set `YAUL_DOCKER_IMAGE` to an
 immutable digest in CI or in a lab notebook when byte-for-byte toolchain
 provenance is required. The image is only the host environment; the script
 still installs and checks this repository's libyaul commit `6012f79` before

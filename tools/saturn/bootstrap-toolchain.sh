@@ -2,7 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-IMAGE=${YAUL_DOCKER_IMAGE:-ijacquez/yaul:1.0.4}
+IMAGE=${YAUL_DOCKER_IMAGE:-ijacquez/yaul:1.0.15}
 
 if ! command -v docker >/dev/null 2>&1; then
     printf '%s\n' 'Docker is required for the portable Saturn bootstrap.' >&2

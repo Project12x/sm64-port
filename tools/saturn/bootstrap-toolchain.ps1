@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$DockerImage = $(if ($env:YAUL_DOCKER_IMAGE) { $env:YAUL_DOCKER_IMAGE } else { "ijacquez/yaul:1.0.4" })
+    [string]$DockerImage = $(if ($env:YAUL_DOCKER_IMAGE) { $env:YAUL_DOCKER_IMAGE } else { "ijacquez/yaul:1.0.15" })
 )
 
 $ErrorActionPreference = "Stop"
