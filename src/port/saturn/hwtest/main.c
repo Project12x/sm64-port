@@ -54,6 +54,12 @@ typedef struct hwtest_extended_telemetry {
         uint32_t reserved;
 } __packed __aligned(4) hwtest_extended_telemetry_t;
 
+/* These sizes are part of the external Ymir/retail capture contract. */
+_Static_assert(sizeof(hwtest_telemetry_t) == 64,
+    "base hardware-test telemetry must remain exactly 64 bytes");
+_Static_assert(sizeof(hwtest_extended_telemetry_t) == 56,
+    "extended hardware-test telemetry must remain exactly 56 bytes");
+
 enum {
         HWTEST_STATUS_CART_PRESENT = 1U << 0,
         HWTEST_STATUS_CART_PASS = 1U << 1,
