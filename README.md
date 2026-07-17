@@ -35,6 +35,7 @@ make -f Makefile.saturn.mk hello
 make -f Makefile.saturn.mk verify-hello
 make -f Makefile.saturn.mk hwtest
 make -f Makefile.saturn.mk verify-hwtest
+make -f Makefile.saturn.mk classify-source
 ```
 
 See [`docs/saturn/BUILDING.md`](docs/saturn/BUILDING.md) for setup,
