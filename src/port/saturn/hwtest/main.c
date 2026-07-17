@@ -75,7 +75,7 @@ cart_test(void)
         }
 
         telemetry->status |= HWTEST_STATUS_CART_PRESENT;
-        telemetry->test_bytes = HWTEST_CART_BYTES;
+        telemetry->test_bytes = 0;
 
         volatile uint32_t * const cart = (volatile uint32_t *)dram_cart_area_get();
         for (uint32_t offset = 0; offset < HWTEST_CART_BYTES; offset += HWTEST_WORD_BYTES) {

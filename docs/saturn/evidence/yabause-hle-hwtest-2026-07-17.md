@@ -10,7 +10,7 @@ behavior.
 |---|---|
 | Frontend | RetroArch 1.22.2, Git `69a4f0e` |
 | Core | Libretro Yabause 0.9.15 nightly, core SHA-256 `04b20b371275ad8e29072c6a96f38a66a6f30984f2f279b3e29e53165b01067e` |
-| Disc | `sm64-saturn-hwtest.iso`, SHA-256 `1dafe2a65554132e328edffbe57a785f40488d23f97adcc6b71702e4959e5d28` |
+| Disc | `sm64-saturn-hwtest.iso`, SHA-256 `c6ccfbb0eabfc0ad06704271dde492a186f8ce154e4c017cec14d45baf08fddb` |
 | Run | 600 frames, HLE BIOS, audio disabled for visual smoke testing |
 
 ## Result
