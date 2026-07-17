@@ -1,0 +1,42 @@
+{
+  "schema": 2,
+  "source": {
+    "source_root": ".",
+    "files_with_triangle_macros": 733,
+    "files_with_geometry_macros": 735,
+    "gsSP1Triangle": 3798,
+    "gsSP2Triangles": 29119,
+    "gsSP1Quadrangle": 2,
+    "static_triangles": 62036,
+    "geometry_macro_counts": {
+      "gsDPSetCombine": 4,
+      "gsDPSetRenderMode": 315,
+      "gsDPSetTextureImage": 2287,
+      "gsDPSetTile": 2458,
+      "gsSP1Quadrangle": 2,
+      "gsSP1Triangle": 3798,
+      "gsSP2Triangles": 29119,
+      "gsSPClearGeometryMode": 935,
+      "gsSPDisplayList": 2654,
+      "gsSPSetGeometryMode": 943,
+      "gsSPTexture": 2116,
+      "gsSPVertex": 8580
+    }
+  },
+  "decoded_primitives": {
+    "triangle_pair_candidates": 3,
+    "direct_textured_quad_candidates": 1,
+    "rejection_reasons": {
+      "material_mismatch": 1,
+      "topology_not_quad": 1
+    },
+    "representation_counts": {
+      "direct_textured_quad": 1,
+      "direct_untextured_triangle": 1,
+      "textured_degenerate_triangle": 1,
+      "split_cropped_surface": 1,
+      "baked_surface": 1,
+      "effect_fallback": 1
+    }
+  }
+}

@@ -7,7 +7,7 @@ PYTHON ?= python3
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap check check-libyaul check-sdk hello verify-hello hwtest verify-hwtest verify-tools clean
+.PHONY: all bootstrap check check-libyaul check-sdk hello verify-hello hwtest verify-hwtest verify-tools classify-source clean
 
 all: hello
 
@@ -70,6 +70,13 @@ verify-hwtest: check-libyaul check-sdk
 
 verify-tools:
 	$(PYTHON) "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
+
+classify-source:
+	@mkdir -p "$(SATURN_REPO_ROOT)/docs/saturn/evidence/reports"
+	@cd "$(SATURN_REPO_ROOT)" && $(PYTHON) "tools/saturn/asset_classifier.py" \
+	  --root . \
+	  --primitives "tools/saturn/fixtures/primitives-six-way.json" \
+	  --report "docs/saturn/evidence/reports/asset-classifier-sm64.json"
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean

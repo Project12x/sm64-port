@@ -112,6 +112,13 @@ regression check:
 make -f Makefile.saturn.mk verify-tools
 ```
 
+To regenerate the checked-out SM64 geometry/UV inventory and six-way fixture
+report in one command:
+
+```sh
+make -f Makefile.saturn.mk classify-source
+```
+
 Copy the pinned template rather than inventing a different environment layout:
 
 ```sh
