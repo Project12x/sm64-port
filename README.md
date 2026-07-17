@@ -9,8 +9,10 @@ A prior copy of the game is required to extract the assets.
 
 ## Sega Saturn target (experimental)
 
-The `saturn/bootstrap` work adds a pinned libyaul dependency and an isolated
-hello-disc target. It does not yet compile or run SM64 game code.
+The `saturn/bootstrap` work adds a pinned libyaul dependency, reproducible
+hello and hardware-test discs, DMA/VDP1 measurements, deterministic WRAM
+telemetry, and a host-side geometry/UV classifier. It does not yet compile or
+run SM64 game code.
 
 Initialize the dependency and validate its revision:
 
@@ -19,15 +21,26 @@ git submodule update --init third_party/libyaul
 make -f Makefile.saturn.mk check
 ```
 
-After installing the matching YAUL toolchain and SDK, build with:
+On a Docker-capable host, the portable bootstrap builds and verifies both
+discs in one command, then runs the host-side regression suite:
+
+```sh
+make -f Makefile.saturn.mk bootstrap
+```
+
+After installing the matching YAUL toolchain and SDK locally, build with:
 
 ```sh
 make -f Makefile.saturn.mk hello
 make -f Makefile.saturn.mk verify-hello
+make -f Makefile.saturn.mk hwtest
+make -f Makefile.saturn.mk verify-hwtest
 ```
 
-See [`docs/saturn/BUILDING.md`](docs/saturn/BUILDING.md) for the reproducible
-setup and [`docs/saturn/PLAN.md`](docs/saturn/PLAN.md) for the gated port plan.
+See [`docs/saturn/BUILDING.md`](docs/saturn/BUILDING.md) for setup,
+[`docs/saturn/HWTEST.md`](docs/saturn/HWTEST.md) for telemetry and emulator
+capture, and [`docs/saturn/COMPLETION_AUDIT.md`](docs/saturn/COMPLETION_AUDIT.md)
+for the evidence gates.
 
 ## Building native executables
 
