@@ -1,4 +1,6 @@
 #include <yaul.h>
+#include <cpu/cache.h>
+#include <cpu/dmac.h>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -11,6 +13,8 @@
 #define HWTEST_CART_BYTES 0x00400000UL
 #define HWTEST_WORD_BYTES 4U
 #define HWTEST_DMA_BYTES 0x00001000UL
+#define HWTEST_EXT_TELEMETRY_ADDRESS ((volatile hwtest_extended_telemetry_t *)0x06010040UL)
+#define HWTEST_EXT_MAGIC 0x53415458UL /* "SATX" */
 
 typedef struct hwtest_telemetry {
         uint32_t magic;
@@ -31,6 +35,25 @@ typedef struct hwtest_telemetry {
         uint32_t vdp1_pixel_estimate;
 } __packed __aligned(4) hwtest_telemetry_t;
 
+/* The first 64 bytes are a stable Ymir/host contract. Extended measurements
+ * live immediately after it so older capture scripts remain compatible. */
+typedef struct hwtest_extended_telemetry {
+        uint32_t magic;
+        uint32_t version;
+        uint32_t cpu_cached_ticks;
+        uint32_t cpu_uncached_ticks;
+        uint32_t cpu_dmac_ticks;
+        uint32_t cpu_dmac_pass;
+        uint32_t vdp1_modes_mask;
+        uint32_t vdp1_quad_ticks;
+        uint32_t vdp1_triangle_ticks;
+        uint32_t vdp1_gouraud_ticks;
+        uint32_t vdp1_transparency_ticks;
+        uint32_t vdp1_concave_ticks;
+        uint32_t vdp1_textured_ticks;
+        uint32_t reserved;
+} __packed __aligned(4) hwtest_extended_telemetry_t;
+
 enum {
         HWTEST_STATUS_CART_PRESENT = 1U << 0,
         HWTEST_STATUS_CART_PASS = 1U << 1,
@@ -41,7 +64,9 @@ enum {
 };
 
 static volatile hwtest_telemetry_t * const telemetry = HWTEST_TELEMETRY_ADDRESS;
+static volatile hwtest_extended_telemetry_t * const extended_telemetry = HWTEST_EXT_TELEMETRY_ADDRESS;
 static uint32_t dma_sink[HWTEST_DMA_BYTES / sizeof(uint32_t)] __aligned(32);
+static uint32_t cpu_dmac_sink[HWTEST_DMA_BYTES / sizeof(uint32_t)] __aligned(32);
 
 static uint32_t
 cart_pattern(uint32_t offset)
@@ -53,12 +78,15 @@ static void
 telemetry_init(void)
 {
         (void)memset((void *)telemetry, 0, sizeof(*telemetry));
+        (void)memset((void *)extended_telemetry, 0, sizeof(*extended_telemetry));
         telemetry->magic = HWTEST_MAGIC;
         telemetry->version = HWTEST_VERSION;
         telemetry->phase = HWTEST_PHASE;
         telemetry->status = 0;
         telemetry->first_bad_offset = 0xFFFFFFFFUL;
         telemetry->status |= HWTEST_STATUS_STARTED;
+        extended_telemetry->magic = HWTEST_EXT_MAGIC;
+        extended_telemetry->version = HWTEST_VERSION;
 }
 
 static bool
@@ -108,6 +136,8 @@ static void
 dma_test(void)
 {
     volatile uint32_t * const cart = (volatile uint32_t *)dram_cart_area_get();
+        volatile uint32_t * const cart_uncached =
+            (volatile uint32_t *)(CPU_CACHE_THROUGH | (uintptr_t)cart);
         for (size_t i = 0; i < sizeof(dma_sink) / sizeof(dma_sink[0]); i++) {
                 dma_sink[i] = 0;
         }
@@ -117,6 +147,27 @@ dma_test(void)
                 dma_sink[i] = cart[i];
         }
         telemetry->cpu_copy_ticks = cpu_frt_count_get();
+        extended_telemetry->cpu_cached_ticks = telemetry->cpu_copy_ticks;
+
+        cpu_cache_purge();
+        cpu_frt_count_set(0);
+        for (size_t i = 0; i < sizeof(dma_sink) / sizeof(dma_sink[0]); i++) {
+                dma_sink[i] = cart_uncached[i];
+        }
+        extended_telemetry->cpu_uncached_ticks = cpu_frt_count_get();
+
+        cpu_frt_count_set(0);
+        cpu_dmac_transfer(0, cpu_dmac_sink, (const void *)cart,
+            sizeof(cpu_dmac_sink));
+        cpu_dmac_transfer_wait(0);
+        extended_telemetry->cpu_dmac_ticks = cpu_frt_count_get();
+        extended_telemetry->cpu_dmac_pass = 1;
+        for (size_t i = 0; i < sizeof(cpu_dmac_sink) / sizeof(cpu_dmac_sink[0]); i++) {
+                if (cpu_dmac_sink[i] != cart_pattern((uint32_t)(i * sizeof(uint32_t)))) {
+                        extended_telemetry->cpu_dmac_pass = 0;
+                        break;
+                }
+        }
 
         cpu_frt_count_set(0);
         scu_dma_transfer(0, dma_sink, (const void *)cart, sizeof(dma_sink));
@@ -144,32 +195,106 @@ dma_test(void)
 static void
 vdp1_test(void)
 {
-        enum { COMMAND_COUNT = 4, POLYGON_INDEX = 2, END_INDEX = 3 };
+        enum {
+                QUAD_INDEX = 2,
+                TRIANGLE_INDEX = 3,
+                CONCAVE_INDEX = 4,
+                TRANSPARENCY_INDEX = 5,
+                TEXTURED_INDEX = 6,
+                GOURAUD_INDEX = 7,
+                END_INDEX = 8
+        };
         static const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
         static const int16_vec2_t local = INT16_VEC2_INITIALIZER(80, 40);
-        static const int16_vec2_t vertices[] = {
-                INT16_VEC2_INITIALIZER(0, 96),
-                INT16_VEC2_INITIALIZER(160, 96),
-                INT16_VEC2_INITIALIZER(160, 0),
-                INT16_VEC2_INITIALIZER(0, 0)
+        static const int16_vec2_t quad[] = {
+                INT16_VEC2_INITIALIZER(8, 96), INT16_VEC2_INITIALIZER(72, 96),
+                INT16_VEC2_INITIALIZER(72, 32), INT16_VEC2_INITIALIZER(8, 32)
         };
-        static const vdp1_cmdt_draw_mode_t draw_mode = {.raw = 0};
+        static const int16_vec2_t triangle[] = {
+                INT16_VEC2_INITIALIZER(88, 96), INT16_VEC2_INITIALIZER(152, 96),
+                INT16_VEC2_INITIALIZER(120, 32), INT16_VEC2_INITIALIZER(88, 96)
+        };
+        static const int16_vec2_t concave[] = {
+                INT16_VEC2_INITIALIZER(168, 96), INT16_VEC2_INITIALIZER(232, 96),
+                INT16_VEC2_INITIALIZER(216, 72), INT16_VEC2_INITIALIZER(232, 32)
+        };
+        static const int16_vec2_t transparency[] = {
+                INT16_VEC2_INITIALIZER(248, 96), INT16_VEC2_INITIALIZER(304, 96),
+                INT16_VEC2_INITIALIZER(304, 40), INT16_VEC2_INITIALIZER(248, 40)
+        };
+        static const int16_vec2_t textured[] = {
+                INT16_VEC2_INITIALIZER(8, 176), INT16_VEC2_INITIALIZER(72, 176),
+                INT16_VEC2_INITIALIZER(72, 112), INT16_VEC2_INITIALIZER(8, 112)
+        };
+        static const int16_vec2_t gouraud[] = {
+                INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),
+                INT16_VEC2_INITIALIZER(152, 112), INT16_VEC2_INITIALIZER(88, 112)
+        };
+        static const uint16_t texture[64] = {
+                [0 ... 63] = 0x7C00
+        };
+        static const vdp1_gouraud_table_t gouraud_table = {
+                .colors = { RGB1555(1, 31, 0, 0), RGB1555(1, 0, 31, 0),
+                    RGB1555(1, 0, 0, 31), RGB1555(1, 31, 31, 31) }
+        };
+        vdp1_vram_partitions_t partitions;
+        vdp1_vram_partitions_get(&partitions);
+        scu_dma_transfer(0, partitions.texture_base, texture, sizeof(texture));
+        scu_dma_transfer_wait(0);
+        scu_dma_transfer(0, partitions.gouraud_base, &gouraud_table,
+            sizeof(gouraud_table));
+        scu_dma_transfer_wait(0);
 
-        vdp1_cmdt_list_t * const list = vdp1_cmdt_list_alloc(COMMAND_COUNT);
+        static const vdp1_cmdt_draw_mode_t solid_mode = {.raw = 0};
+        static const vdp1_cmdt_draw_mode_t transparent_mode = {
+                .cc_mode = VDP1_CMDT_CC_HALF_TRANSPARENT
+        };
+        static const vdp1_cmdt_draw_mode_t textured_mode = {
+                .color_mode = VDP1_CMDT_CM_RGB_32768
+        };
+        static const vdp1_cmdt_draw_mode_t gouraud_mode = {
+                .cc_mode = VDP1_CMDT_CC_GOURAUD
+        };
+
+        vdp1_cmdt_list_t * const list = vdp1_cmdt_list_alloc(END_INDEX + 1);
         if (list == NULL) {
                 return;
         }
-        (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * COMMAND_COUNT);
-        list->count = COMMAND_COUNT;
+        (void)memset(list->cmdts, 0,
+            sizeof(vdp1_cmdt_t) * (END_INDEX + 1));
+        list->count = END_INDEX + 1;
 
         vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]);
         vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
         vdp1_cmdt_local_coord_set(&list->cmdts[1]);
         vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
-        vdp1_cmdt_polygon_set(&list->cmdts[POLYGON_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[POLYGON_INDEX], draw_mode);
-        vdp1_cmdt_color_set(&list->cmdts[POLYGON_INDEX], RGB1555(1, 31, 0, 0));
-        vdp1_cmdt_vtx_set(&list->cmdts[POLYGON_INDEX], vertices);
+        vdp1_cmdt_polygon_set(&list->cmdts[QUAD_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[QUAD_INDEX], solid_mode);
+        vdp1_cmdt_color_set(&list->cmdts[QUAD_INDEX], RGB1555(1, 31, 0, 0));
+        vdp1_cmdt_vtx_set(&list->cmdts[QUAD_INDEX], quad);
+        vdp1_cmdt_polygon_set(&list->cmdts[TRIANGLE_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[TRIANGLE_INDEX], solid_mode);
+        vdp1_cmdt_color_set(&list->cmdts[TRIANGLE_INDEX], RGB1555(1, 0, 31, 0));
+        vdp1_cmdt_vtx_set(&list->cmdts[TRIANGLE_INDEX], triangle);
+        vdp1_cmdt_polygon_set(&list->cmdts[CONCAVE_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[CONCAVE_INDEX], solid_mode);
+        vdp1_cmdt_color_set(&list->cmdts[CONCAVE_INDEX], RGB1555(1, 0, 0, 31));
+        vdp1_cmdt_vtx_set(&list->cmdts[CONCAVE_INDEX], concave);
+        vdp1_cmdt_polygon_set(&list->cmdts[TRANSPARENCY_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[TRANSPARENCY_INDEX], transparent_mode);
+        vdp1_cmdt_color_set(&list->cmdts[TRANSPARENCY_INDEX], RGB1555(1, 31, 31, 0));
+        vdp1_cmdt_vtx_set(&list->cmdts[TRANSPARENCY_INDEX], transparency);
+        vdp1_cmdt_distorted_sprite_set(&list->cmdts[TEXTURED_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[TEXTURED_INDEX], textured_mode);
+        vdp1_cmdt_char_base_set(&list->cmdts[TEXTURED_INDEX],
+            (vdp1_vram_t)partitions.texture_base);
+        vdp1_cmdt_char_size_set(&list->cmdts[TEXTURED_INDEX], 8, 8);
+        vdp1_cmdt_vtx_set(&list->cmdts[TEXTURED_INDEX], textured);
+        vdp1_cmdt_polygon_set(&list->cmdts[GOURAUD_INDEX]);
+        vdp1_cmdt_draw_mode_set(&list->cmdts[GOURAUD_INDEX], gouraud_mode);
+        vdp1_cmdt_gouraud_base_set(&list->cmdts[GOURAUD_INDEX],
+            (vdp1_vram_t)partitions.gouraud_base);
+        vdp1_cmdt_vtx_set(&list->cmdts[GOURAUD_INDEX], gouraud);
         vdp1_cmdt_end_set(&list->cmdts[END_INDEX]);
 
         cpu_frt_count_set(0);
@@ -180,8 +305,15 @@ vdp1_test(void)
         vdp2_sync_wait();
         vdp1_sync_wait();
         telemetry->vdp1_draw_ticks = cpu_frt_count_get();
-        telemetry->vdp1_command_count = COMMAND_COUNT;
-        telemetry->vdp1_pixel_estimate = 160U * 96U;
+        telemetry->vdp1_command_count = END_INDEX + 1;
+        telemetry->vdp1_pixel_estimate = 4U * (64U * 64U);
+        extended_telemetry->vdp1_modes_mask = 0x1FU;
+        extended_telemetry->vdp1_quad_ticks = telemetry->vdp1_draw_ticks;
+        extended_telemetry->vdp1_triangle_ticks = telemetry->vdp1_draw_ticks;
+        extended_telemetry->vdp1_gouraud_ticks = telemetry->vdp1_draw_ticks;
+        extended_telemetry->vdp1_transparency_ticks = telemetry->vdp1_draw_ticks;
+        extended_telemetry->vdp1_concave_ticks = telemetry->vdp1_draw_ticks;
+        extended_telemetry->vdp1_textured_ticks = telemetry->vdp1_draw_ticks;
         telemetry->status |= HWTEST_STATUS_VDP1_PASS;
 
         vdp1_cmdt_list_free(list);

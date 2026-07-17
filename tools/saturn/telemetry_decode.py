@@ -17,6 +17,9 @@ from typing import Any
 BASE_ADDRESS = 0x06010000
 WORD_COUNT = 16
 BLOCK_BYTES = WORD_COUNT * 4
+EXT_BASE_ADDRESS = BASE_ADDRESS + BLOCK_BYTES
+EXT_WORD_COUNT = 14
+EXT_BLOCK_BYTES = EXT_WORD_COUNT * 4
 MAGIC = 0x53415430
 STATUS_NAMES = {
     0: "cart_present",
@@ -42,6 +45,22 @@ FIELD_NAMES = (
     "vdp1_draw_ticks",
     "vdp1_command_count",
     "vdp1_pixel_estimate",
+)
+EXT_FIELD_NAMES = (
+    "magic",
+    "version",
+    "cpu_cached_ticks",
+    "cpu_uncached_ticks",
+    "cpu_dmac_ticks",
+    "cpu_dmac_pass",
+    "vdp1_modes_mask",
+    "vdp1_quad_ticks",
+    "vdp1_triangle_ticks",
+    "vdp1_gouraud_ticks",
+    "vdp1_transparency_ticks",
+    "vdp1_concave_ticks",
+    "vdp1_textured_ticks",
+    "reserved",
 )
 
 
@@ -82,6 +101,14 @@ def decode(data: list[int], require_complete: bool) -> dict[str, Any]:
         raise ValueError("telemetry block is not marked complete")
     decoded["status_flags"] = flags
     decoded["base_address"] = f"0x{BASE_ADDRESS:08X}"
+    if len(data) >= BLOCK_BYTES + EXT_BLOCK_BYTES:
+        ext_offset = BLOCK_BYTES
+        ext_words = [
+            int.from_bytes(bytes(data[ext_offset + offset : ext_offset + 4]), "big")
+            for offset in range(0, EXT_BLOCK_BYTES, 4)
+        ]
+        decoded["extended"] = dict(zip(EXT_FIELD_NAMES, ext_words, strict=True))
+        decoded["extended"]["base_address"] = f"0x{EXT_BASE_ADDRESS:08X}"
     decoded["ok"] = bool(flags["complete"] and flags["cart_pass"] and flags["dma_pass"] and flags["vdp1_pass"])
     return decoded
 

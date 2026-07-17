@@ -26,6 +26,12 @@ The block begins at `0x06010000` and contains sixteen big-endian 32-bit words:
 | 14 | `vdp1_command_count` | command-list count used |
 | 15 | `vdp1_pixel_estimate` | conservative filled-pixel estimate |
 
+The extended block begins at `0x06010040` and contains fourteen words: cached
+and uncached CPU-copy ticks, SH-2 CPU-DMAC ticks/pass, a VDP1 mode mask, and
+per-probe timing slots for quad, repeated-vertex triangle, Gouraud,
+transparency, concave, and textured probes. It is optional for older readers;
+the decoder consumes it when a 120-byte read is supplied.
+
 Run the disc paused in Ymir, then read `0x06010000` with `mem.peek`. Emulator
 timings are development evidence only; retail hardware remains authoritative.
 
@@ -34,7 +40,7 @@ headless session can be captured as JSON-lines and decoded directly:
 
 ```sh
 printf '%s\n' '{"jsonrpc":"2.0","method":"exec.pause","id":1}' \
-  '{"jsonrpc":"2.0","method":"mem.peek","params":{"address":"0x06010000","count":64},"id":2}' \
+  '{"jsonrpc":"2.0","method":"mem.peek","params":{"address":"0x06010000","count":120},"id":2}' \
   | ymir-headless --ipl bios.bin --game build/saturn/hwtest/sm64-saturn-hwtest.cue \
   > ymir-session.jsonl
 python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
@@ -58,7 +64,7 @@ The report is labeled `evidence_kind: ymir-emulator`; it is not a substitute
 for a retail Saturn capture.
 
 For emulator bring-up failures (for example, a BIOS/CD-block incompatibility),
-append `--allow-invalid` to preserve the raw 64-byte read and diagnostic error
+append `--allow-invalid` to preserve the raw 120-byte read and diagnostic error
 instead of treating the capture as a passing telemetry report.
 
 ## Host-side classifier

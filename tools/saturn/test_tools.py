@@ -53,10 +53,12 @@ class TelemetryTests(unittest.TestCase):
         data = []
         for word in words:
             data.extend(word.to_bytes(4, "big"))
+        data.extend([0] * 56)
         decoded = decode(data, require_complete=True)
         self.assertTrue(decoded["ok"])
         self.assertTrue(decoded["status_flags"]["complete"])
         self.assertEqual(decoded["cart_id"], 0x5C)
+        self.assertEqual(decoded["extended"]["cpu_dmac_pass"], 0)
 
 
 if __name__ == "__main__":

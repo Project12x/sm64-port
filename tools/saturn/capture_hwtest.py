@@ -55,7 +55,7 @@ def main() -> int:
 
     requests = [
         request("exec.run_for", 1, {"frames": args.frames}),
-        request("mem.peek", 2, {"address": "0x06010000", "count": 64}),
+        request("mem.peek", 2, {"address": "0x06010000", "count": 120}),
         request("instance.shutdown", 3),
     ]
     command = [str(args.ymir), "--ipl", str(args.ipl), "--game", str(args.game)]

@@ -35,10 +35,15 @@ remained after keeping the detected cartridge ID in a typed local variable.
 
 | Artifact | SHA-256 |
 |---|---|
-| `build/saturn/hwtest/obj/sm64-saturn-hwtest.elf` | `b9b1d2690ef8a19a0fb604d746fca48244139daee48ceee3febeda84af47fd58` |
-| `build/saturn/hwtest/obj/sm64-saturn-hwtest.bin` | `91ac599078231caa9cc6cfb3293b57a64fb382a4eaaa1cd3f5e5417b9c8f7c24` |
-| `build/saturn/hwtest/sm64-saturn-hwtest.iso` | `c6ccfbb0eabfc0ad06704271dde492a186f8ce154e4c017cec14d45baf08fddb` |
+| `build/saturn/hwtest/obj/sm64-saturn-hwtest.elf` | `8c835054f319a9e5018b467e48b854cd13db0b591f5f7f9dbd55e62bf3e29b0c` |
+| `build/saturn/hwtest/obj/sm64-saturn-hwtest.bin` | `dfbf3003ed5ebeccf2a6eefe78b763b367c967d0ba0f43d409c2ee8e01562f91` |
+| `build/saturn/hwtest/sm64-saturn-hwtest.iso` | `f96cc450642fac762343f4a78a53c6f70efdebd2a58bf7e174b5285e8fa43925` |
 | `build/saturn/hwtest/sm64-saturn-hwtest.cue` | `c0b93a455ca2e183ce7d3cc247a6f3eb53ec35ee909de70e43d52bd185d83462` |
+
+This rebuild expands the VDP1 probe to submit a solid quad, repeated-vertex
+triangle, concave polygon, half-transparent polygon, RGB1555 textured sprite,
+and Gouraud polygon. Extended timings and mode coverage are written at
+`0x06010040`; the stable first 64-byte telemetry contract is unchanged.
 
 Key ELF fields are `ELF32`, big-endian, Renesas SuperH SH, entry point
 `0x06004000`, flags `0x2, sh2`.
