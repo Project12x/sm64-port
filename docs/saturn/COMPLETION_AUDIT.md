@@ -1,0 +1,26 @@
+# Saturn-port objective evidence matrix
+
+This is the current requirement-by-requirement audit for the Saturn bootstrap,
+hardware test, measurement disc, and host classifier work. Emulator evidence is
+development evidence; a physical Saturn with the specified 4 MiB cartridge is
+the authority for bus legality and final timings.
+
+| Requirement | Current evidence | Status |
+|---|---|---|
+| One-command pinned toolchain bootstrap | [`BUILDING.md`](BUILDING.md), [`bootstrap-toolchain.sh`](../../tools/saturn/bootstrap-toolchain.sh), [`bootstrap-toolchain.ps1`](../../tools/saturn/bootstrap-toolchain.ps1); Yaul Docker layout pinned in [`PROVENANCE.md`](PROVENANCE.md) | Verified by syntax and host-side regression; container execution awaits a Docker-capable host |
+| C/SH-2 Saturn image compilation | [`hwtest-layout-assert-2026-07-17.md`](evidence/hwtest-layout-assert-2026-07-17.md); ELF verifier output at `0x06004000` | Verified locally with pinned `sh-elf-gcc`/Yaul install |
+| Cartridge ID `0x5C` detection | [`src/port/saturn/hwtest/main.c`](../../src/port/saturn/hwtest/main.c) and visible Kronos capture | BIOS-backed emulator verified; retail pending |
+| Destructive 4 MiB mapped-DRAM test | Full write/read pattern and visible PASS/FAIL state in `main.c` | Code/build verified; retail pending |
+| Deterministic WRAM telemetry | Fixed 64-byte `SAT0` block, 56-byte `SATX` block, compile-time size assertions, [`telemetry_decode.py`](../../tools/saturn/telemetry_decode.py) | Code contract verified; valid Ymir execution pending |
+| DMA measurements | CPU copy, cached/uncached reads, CPU-DMAC, SCU cart→WRAM, SCU WRAM→VDP1 fields | BIOS-backed Kronos observation recorded; retail pending |
+| VDP1 measurements | Six isolated probes: quad, repeated-vertex triangle, concave, transparency, textured, Gouraud | BIOS-backed Kronos observation recorded; retail pending |
+| SM64 geometry/UV classifier | [`asset_classifier.py`](../../tools/saturn/asset_classifier.py), six-way fixture/report, 4/4 regression tests | Verified host-side |
+| BIOS-backed evidence | Kronos screenshot and manifest; Ymir path-fixed but currently returns zero telemetry because its BIOS/CD path does not reach the disc | Kronos verified; Ymir execution limitation documented |
+| Retail evidence | [`RETAIL_CAPTURE.md`](RETAIL_CAPTURE.md) handoff with two cold-boot runs, raw 120-byte telemetry, hashes, and manifest schema | Pending physical console/cart access |
+
+## Current conclusion
+
+The software, build, measurement, classifier, and emulator-evidence portions
+are implemented and traceable. The project must not be marked fully complete
+until the retail handoff produces a valid `SAT0`/`SATX` dump with cart ID `0x5C`,
+complete status, and both cold-boot runs.
