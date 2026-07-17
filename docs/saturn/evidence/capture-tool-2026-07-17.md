@@ -11,8 +11,8 @@ A five-frame smoke run completed successfully against the expanded hwtest:
 evidence_kind: retroarch-emulator
 core_name: Kronos
 frames: 5
-screenshot SHA-256: 68acc1581b497b709b197b2e5037e6cbc2ef9b5c318e60b30393df4d5d5b544d
-manifest SHA-256: 0a7c9b64119fd8e5bfb7e741f84aab81178d76ed49d3cdef2760bac4d54025b0
+screenshot SHA-256: aad8fc58631dba8ccb9cf1b4ef5d50968ec6f729f42199beaceb071e524c3199
+manifest SHA-256: 20c5c2c86f50b64d1f3c3483296b042eab917844b9f0bf5bd33e67aa9e5157a3
 ```
 
 The smoke image is not a hardware-result capture; it verifies the helper’s

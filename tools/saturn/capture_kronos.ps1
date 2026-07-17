@@ -40,7 +40,15 @@ $arguments = @(
     '--max-frames-ss-path', $outputPath,
     $Game
 )
-$process = Start-Process -FilePath $RetroArch -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
+$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = [System.IO.Path]::GetFullPath($RetroArch)
+$startInfo.WorkingDirectory = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($Game))
+$startInfo.UseShellExecute = $false
+foreach ($argument in $arguments) {
+    [void]$startInfo.ArgumentList.Add($argument)
+}
+$process = [System.Diagnostics.Process]::Start($startInfo)
+$process.WaitForExit()
 if ($process.ExitCode -ne 0) {
     throw "RetroArch exited with status $($process.ExitCode)."
 }
@@ -76,5 +84,7 @@ $manifestObject = [ordered]@{
     }
     hashes = $hashes
 }
+if ($Bios) { $manifestObject.inputs.bios = [System.IO.Path]::GetFullPath($Bios) }
+if ($Iso) { $manifestObject.inputs.iso = [System.IO.Path]::GetFullPath($Iso) }
 $manifestObject | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 Write-Output ($manifestObject | ConvertTo-Json -Depth 6)
