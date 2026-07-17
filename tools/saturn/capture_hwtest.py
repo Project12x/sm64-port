@@ -53,6 +53,14 @@ def main() -> int:
         if not path.is_file():
             parser.error(f"{label} not found: {path}")
 
+    # The subprocess runs from the cue directory so relative asset paths do
+    # not affect disc loading. Pass absolute paths as well; otherwise a
+    # relative --game value is resolved twice (cue-dir/cue-dir/game).
+    args.ymir = args.ymir.resolve()
+    args.ipl = args.ipl.resolve()
+    args.game = args.game.resolve()
+    args.output = args.output.resolve()
+
     requests = [
         request("exec.run_for", 1, {"frames": args.frames}),
         request("mem.peek", 2, {"address": "0x06010000", "count": 120}),
