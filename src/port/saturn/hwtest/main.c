@@ -103,7 +103,10 @@ cart_test(void)
         telemetry->cart_id = (uint32_t)cart_id;
         telemetry->cart_bytes = (uint32_t)dram_cart_size_get();
 
+        /* Never begin the destructive pass unless the library reports the
+         * complete 4 MiB mapping promised by the cartridge ID. */
         if (cart_id != DRAM_CART_ID_4MIB ||
+            telemetry->cart_bytes != HWTEST_CART_BYTES ||
             dram_cart_area_get() == NULL) {
                 return false;
         }

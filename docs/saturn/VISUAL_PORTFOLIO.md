@@ -107,3 +107,12 @@ See the [capture record](evidence/kronos-complete-visible-2026-07-17.md) and
 
 See [the build procedure](BUILDING.md), [the hardware-test contract](HWTEST.md),
 and the per-run [Kronos evidence record](evidence/kronos-hwtest-2026-07-17.md).
+
+### Exact 4 MiB mapping gate
+
+![Kronos exact 4 MiB mapping-gate capture](evidence/screenshots/2026-07-17/hwtest-kronos-size-gate.png)
+
+After adding the exact mapped-size guard, this BIOS-backed run visibly reports
+`0x5C (4 MiB detected)` and `cart test: PASS`. Screenshot SHA-256:
+`df90384033dfb2dc95e961898c56cddf33672b0f9aefd936845f7de2ff53a0fd`.
+See the [capture record](evidence/kronos-size-gate-2026-07-17.md).

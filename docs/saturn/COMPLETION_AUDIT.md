@@ -10,7 +10,7 @@ the authority for bus legality and final timings.
 | One-command pinned toolchain bootstrap | [`BUILDING.md`](BUILDING.md), [`bootstrap-toolchain.sh`](../../tools/saturn/bootstrap-toolchain.sh), [`bootstrap-toolchain.ps1`](../../tools/saturn/bootstrap-toolchain.ps1); Yaul Docker layout pinned in [`PROVENANCE.md`](PROVENANCE.md) | Verified by syntax and host-side regression; container execution awaits a Docker-capable host |
 | C/SH-2 Saturn image compilation | [`hwtest-layout-assert-2026-07-17.md`](evidence/hwtest-layout-assert-2026-07-17.md); ELF verifier output at `0x06004000` | Verified locally with pinned `sh-elf-gcc`/Yaul install |
 | Cartridge ID `0x5C` detection | [`src/port/saturn/hwtest/main.c`](../../src/port/saturn/hwtest/main.c) and visible Kronos capture | BIOS-backed emulator verified; retail pending |
-| Destructive 4 MiB mapped-DRAM test | Full write/read pattern and visible PASS/FAIL state in `main.c` | Code/build verified; retail pending |
+| Destructive 4 MiB mapped-DRAM test | Exact ID-and-size gate precedes the full write/read pattern and visible PASS/FAIL state in `main.c` | Code/build verified; retail pending |
 | Deterministic WRAM telemetry | Fixed 64-byte `SAT0` block, 56-byte `SATX` block, compile-time size assertions, strict `0x5C`/4 MiB decoder gate in [`telemetry_decode.py`](../../tools/saturn/telemetry_decode.py) | Code contract verified; valid Ymir execution pending |
 | DMA measurements | CPU copy, cached/uncached reads, CPU-DMAC, SCU cart→WRAM, SCU WRAM→VDP1 fields | BIOS-backed Kronos observation recorded; retail pending |
 | VDP1 measurements | Seven isolated probes: solid quad/triangle, concave, transparency, textured quad/triangle, Gouraud | BIOS-backed Kronos observation recorded; retail pending |

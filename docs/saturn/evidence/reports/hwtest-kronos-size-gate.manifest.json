@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "evidence_kind": "retroarch-emulator",
+  "core_name": "Kronos",
+  "frames": 3600,
+  "inputs": {
+    "retroarch": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\retroarch.exe",
+    "core": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\cores\\kronos_libretro.dll",
+    "config": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\retroarch-capture.cfg",
+    "options": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\work\\emulator\\retroarch\\RetroArch-Win64\\config\\Kronos\\Kronos.opt",
+    "game": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\build\\saturn\\hwtest\\sm64-saturn-hwtest.cue",
+    "screenshot": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\docs\\saturn\\evidence\\screenshots\\2026-07-17\\hwtest-kronos-size-gate.png",
+    "bios": "C:\\Users\\estee\\AppData\\Local\\Temp\\Sega Saturn BIOS (USA).bin",
+    "iso": "C:\\Users\\estee\\Documents\\Codex\\2026-07-16\\i-want-to-postulate-a-port\\sm64-port\\build\\saturn\\hwtest\\sm64-saturn-hwtest.iso"
+  },
+  "hashes": {
+    "screenshot": "df90384033dfb2dc95e961898c56cddf33672b0f9aefd936845f7de2ff53a0fd",
+    "core": "7b4c82c5611d3f63d451673b92e9dfa72cbf98508bdc573f207b791d47b99d7c",
+    "options": "aaf97685069a583bd582a9bc206348731b02f5e1ca630812689732c6f126bc9c",
+    "game": "c0b93a455ca2e183ce7d3cc247a6f3eb53ec35ee909de70e43d52bd185d83462",
+    "bios": "96e106f740ab448cf89f0dd49dfbac7fe5391cb6bd6e14ad5e3061c13330266f",
+    "iso": "d36b3a0591d77da499ef73461018e789800d780d88edfe24f1372005a043009b"
+  }
+}
