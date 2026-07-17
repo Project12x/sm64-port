@@ -29,6 +29,20 @@ The block begins at `0x06010000` and contains sixteen big-endian 32-bit words:
 Run the disc paused in Ymir, then read `0x06010000` with `mem.peek`. Emulator
 timings are development evidence only; retail hardware remains authoritative.
 
+Ymir returns the bytes as `result.data` in the JSON-RPC response. A complete
+headless session can be captured as JSON-lines and decoded directly:
+
+```sh
+printf '%s\n' '{"jsonrpc":"2.0","method":"exec.pause","id":1}' \
+  '{"jsonrpc":"2.0","method":"mem.peek","params":{"address":"0x06010000","count":64},"id":2}' \
+  | ymir-headless --ipl bios.bin --game build/saturn/hwtest/sm64-saturn-hwtest.cue \
+  > ymir-session.jsonl
+python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
+```
+
+The decoder rejects short reads and bad magic, exposes named status flags, and
+sets `ok` only when the cart, DMA, VDP1, and complete bits are all present.
+
 ## Host-side classifier
 
 `tools/saturn/asset_classifier.py` scans C display-list macros without needing a
