@@ -390,6 +390,15 @@ user_init(void)
         dbgio_printf("VDP1 polygon: %s (%u ticks)\n",
             (telemetry->status & HWTEST_STATUS_VDP1_PASS) ? "PASS" : "FAIL",
             telemetry->vdp1_draw_ticks);
+        dbgio_printf("probes Q/T: %u/%u\n",
+            extended_telemetry->vdp1_quad_ticks,
+            extended_telemetry->vdp1_triangle_ticks);
+        dbgio_printf("probes C/X: %u/%u\n",
+            extended_telemetry->vdp1_concave_ticks,
+            extended_telemetry->vdp1_transparency_ticks);
+        dbgio_printf("probes Tx/G: %u/%u\n",
+            extended_telemetry->vdp1_textured_ticks,
+            extended_telemetry->vdp1_gouraud_ticks);
         dbgio_printf("telemetry: 0x06010000\nstatus: 0x%08X\n", telemetry->status);
         dbgio_flush();
         vdp2_sync();

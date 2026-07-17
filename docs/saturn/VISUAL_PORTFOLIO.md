@@ -52,6 +52,14 @@ the detailed per-mode timings are stored in the extended WRAM telemetry block.
 SHA-256:
 `1f6bfd46f530028d9e7aca382f897de3f4544e9d96ef4e0c4e805361d89e386c`.
 
+### Visible per-probe timing screen
+
+![SM64 Saturn visible per-probe timing screen in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-bios-visible-probes.png)
+
+The latest diagnostic screen prints the six independent timing slots directly:
+quad/triangle, concave/transparency, and textured/Gouraud. SHA-256:
+`c81511f104b65b2e362edb2676ef039a51b48feed6715d992836e9b822a467a9`.
+
 ## Evidence ledger
 
 | Capture | Emulator/configuration | What it proves | What it does not prove |

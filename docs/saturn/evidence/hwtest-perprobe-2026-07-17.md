@@ -1,5 +1,8 @@
 # Per-probe VDP1 timing capture — 2026-07-17
 
+This record predates the visible timing-screen addition. The newer exact build
+and screenshot are recorded in `hwtest-visible-probes-2026-07-17.md`.
+
 The hardware-test disc now submits each VDP1 primitive mode as its own
 four-command list and records an independent FRT interval in the extended
 telemetry block. The corrected source was rebuilt and verified with the pinned
