@@ -28,8 +28,9 @@ The block begins at `0x06010000` and contains sixteen big-endian 32-bit words:
 
 The extended block begins at `0x06010040` and contains fourteen words: cached
 and uncached CPU-copy ticks, SH-2 CPU-DMAC ticks/pass, a VDP1 mode mask, and
-per-probe timing slots for quad, repeated-vertex triangle, Gouraud,
-transparency, concave, and textured probes. It is optional for older readers;
+per-probe timing slots for solid quad, solid repeated-vertex triangle,
+Gouraud, transparency, concave, textured quad, and textured repeated-vertex
+triangle probes. It is optional for older readers;
 the decoder consumes it when a 120-byte read is supplied.
 
 Run the disc paused in Ymir, then read `0x06010000` with `mem.peek`. Emulator

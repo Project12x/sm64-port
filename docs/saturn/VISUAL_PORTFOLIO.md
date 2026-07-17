@@ -69,6 +69,15 @@ assertions were compiled. It still visibly reports cart `0x5C`, cart PASS, and
 all six per-probe timing slots. SHA-256:
 `dad7c344a3a3ec52596bad6aac896e1e58024a70416ccca4fa68e07e7ee83a78`.
 
+### Textured quad versus repeated-vertex triangle
+
+![Textured quad and triangle probe in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-textured-triangle.png)
+
+The hardware disc now measures the exact textured representation split needed
+for SM64 conversion. This capture reports `tex Q/T: 59687/59688` and a passing
+SCU-DMA observation. SHA-256:
+`752a78a1e3b62c8516d2f932ef323c840c911913cf0a4407a332aa4be5000908`.
+
 ## Evidence ledger
 
 | Capture | Emulator/configuration | What it proves | What it does not prove |

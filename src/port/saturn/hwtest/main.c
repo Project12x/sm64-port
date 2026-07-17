@@ -51,7 +51,7 @@ typedef struct hwtest_extended_telemetry {
         uint32_t vdp1_transparency_ticks;
         uint32_t vdp1_concave_ticks;
         uint32_t vdp1_textured_ticks;
-        uint32_t reserved;
+        uint32_t vdp1_textured_triangle_ticks;
 } __packed __aligned(4) hwtest_extended_telemetry_t;
 
 /* These sizes are part of the external Ymir/retail capture contract. */
@@ -203,6 +203,7 @@ typedef enum vdp1_probe_kind {
         VDP1_PROBE_TRIANGLE,
         VDP1_PROBE_CONCAVE,
         VDP1_PROBE_TRANSPARENCY,
+        VDP1_PROBE_TEXTURED_TRIANGLE,
         VDP1_PROBE_TEXTURED,
         VDP1_PROBE_GOURAUD
 } vdp1_probe_kind_t;
@@ -238,6 +239,10 @@ vdp1_test(void)
         static const int16_vec2_t textured[] = {
                 INT16_VEC2_INITIALIZER(8, 176), INT16_VEC2_INITIALIZER(72, 176),
                 INT16_VEC2_INITIALIZER(72, 112), INT16_VEC2_INITIALIZER(8, 112)
+        };
+        static const int16_vec2_t textured_triangle[] = {
+                INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),
+                INT16_VEC2_INITIALIZER(88, 112), INT16_VEC2_INITIALIZER(88, 112)
         };
         static const int16_vec2_t gouraud[] = {
                 INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),
@@ -275,8 +280,10 @@ vdp1_test(void)
                 { VDP1_PROBE_CONCAVE, solid_mode, RGB1555(1, 0, 0, 31), concave },
                 { VDP1_PROBE_TRANSPARENCY, transparent_mode,
                     RGB1555(1, 31, 31, 0), transparency },
+                { VDP1_PROBE_TEXTURED_TRIANGLE, textured_mode,
+                    RGB1555(1, 31, 31, 31), textured_triangle },
                 { VDP1_PROBE_TEXTURED, textured_mode,
-                    RGB1555(1, 31, 31, 31), textured },
+                    RGB1555(1, 31, 0, 31), textured },
                 { VDP1_PROBE_GOURAUD, gouraud_mode,
                     RGB1555(1, 31, 31, 31), gouraud }
         };
@@ -294,7 +301,8 @@ vdp1_test(void)
                 vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
                 vdp1_cmdt_local_coord_set(&list->cmdts[1]);
                 vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
-                if (probe->kind == VDP1_PROBE_TEXTURED) {
+                if (probe->kind == VDP1_PROBE_TEXTURED ||
+                    probe->kind == VDP1_PROBE_TEXTURED_TRIANGLE) {
                         vdp1_cmdt_distorted_sprite_set(&list->cmdts[2]);
                         vdp1_cmdt_char_base_set(&list->cmdts[2],
                             (vdp1_vram_t)partitions.texture_base);
@@ -336,15 +344,18 @@ vdp1_test(void)
                 case VDP1_PROBE_TEXTURED:
                         extended_telemetry->vdp1_textured_ticks = ticks;
                         break;
+                case VDP1_PROBE_TEXTURED_TRIANGLE:
+                        extended_telemetry->vdp1_textured_triangle_ticks = ticks;
+                        break;
                 case VDP1_PROBE_GOURAUD:
                         extended_telemetry->vdp1_gouraud_ticks = ticks;
                         break;
                 }
         }
         telemetry->vdp1_draw_ticks = total_ticks;
-        telemetry->vdp1_command_count = 6U * list->count;
-        telemetry->vdp1_pixel_estimate = 6U * 64U * 64U;
-        extended_telemetry->vdp1_modes_mask = 0x3FU;
+        telemetry->vdp1_command_count = 7U * list->count;
+        telemetry->vdp1_pixel_estimate = 7U * 64U * 64U;
+        extended_telemetry->vdp1_modes_mask = 0x7FU;
         telemetry->status |= HWTEST_STATUS_VDP1_PASS;
 
         vdp1_cmdt_list_free(list);
@@ -405,6 +416,9 @@ user_init(void)
         dbgio_printf("probes Tx/G: %u/%u\n",
             extended_telemetry->vdp1_textured_ticks,
             extended_telemetry->vdp1_gouraud_ticks);
+        dbgio_printf("tex Q/T: %u/%u\n",
+            extended_telemetry->vdp1_textured_ticks,
+            extended_telemetry->vdp1_textured_triangle_ticks);
         dbgio_printf("telemetry: 0x06010000\nstatus: 0x%08X\n", telemetry->status);
         dbgio_flush();
         vdp2_sync();

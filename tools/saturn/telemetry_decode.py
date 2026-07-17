@@ -60,7 +60,7 @@ EXT_FIELD_NAMES = (
     "vdp1_transparency_ticks",
     "vdp1_concave_ticks",
     "vdp1_textured_ticks",
-    "reserved",
+    "vdp1_textured_triangle_ticks",
 )
 
 
