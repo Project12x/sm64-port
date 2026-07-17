@@ -49,7 +49,8 @@ python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
 
 The cartridge test rejects both an unexpected ID and any mapped size other than
 exactly 4 MiB before it starts writing the destructive pattern. The decoder
-rejects short reads and bad magic, exposes named status flags, and
+rejects short reads, bad base/extended magic, and unsupported version/phase
+values; it exposes named status flags and
 sets `ok` only when the cart, DMA, VDP1, and complete bits are all present and
 the decoded cartridge identity is exactly `0x5C` with a 4 MiB mapped size.
 

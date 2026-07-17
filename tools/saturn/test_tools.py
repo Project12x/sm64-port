@@ -71,7 +71,9 @@ class TelemetryTests(unittest.TestCase):
         data = []
         for word in words:
             data.extend(word.to_bytes(4, "big"))
-        data.extend([0] * 56)
+        data.extend((0x53415458).to_bytes(4, "big"))
+        data.extend((1).to_bytes(4, "big"))
+        data.extend([0] * 48)
         decoded = decode(data, require_complete=True)
         self.assertTrue(decoded["ok"])
         self.assertTrue(decoded["status_flags"]["complete"])
@@ -87,6 +89,18 @@ class TelemetryTests(unittest.TestCase):
         data = b"".join(word.to_bytes(4, "big") for word in words)
         decoded = decode(list(data), require_complete=True)
         self.assertFalse(decoded["ok"])
+
+    def test_bad_extended_magic_is_rejected(self) -> None:
+        words = [
+            0x53415430, 1, 1, 0x8000001F, 0x5C, 0x400000, 0x400000,
+            0xFFFFFFFF, 0, 0, 10, 20, 30, 40, 4, 15360,
+        ]
+        data = bytearray(b"".join(word.to_bytes(4, "big") for word in words))
+        data.extend((0).to_bytes(4, "big"))
+        data.extend((1).to_bytes(4, "big"))
+        data.extend(b"\0" * 48)
+        with self.assertRaisesRegex(ValueError, "extended telemetry magic"):
+            decode(list(data), require_complete=True)
 
 
 if __name__ == "__main__":

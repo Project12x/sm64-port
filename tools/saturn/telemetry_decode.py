@@ -21,6 +21,9 @@ EXT_BASE_ADDRESS = BASE_ADDRESS + BLOCK_BYTES
 EXT_WORD_COUNT = 14
 EXT_BLOCK_BYTES = EXT_WORD_COUNT * 4
 MAGIC = 0x53415430
+EXT_MAGIC = 0x53415458
+EXPECTED_VERSION = 1
+EXPECTED_PHASE = 1
 EXPECTED_CART_ID = 0x5C
 EXPECTED_CART_BYTES = 0x00400000
 STATUS_NAMES = {
@@ -97,6 +100,10 @@ def decode(data: list[int], require_complete: bool) -> dict[str, Any]:
     decoded = dict(zip(FIELD_NAMES, words, strict=True))
     if decoded["magic"] != MAGIC:
         raise ValueError(f"unexpected telemetry magic 0x{decoded['magic']:08X}")
+    if decoded["version"] != EXPECTED_VERSION:
+        raise ValueError(f"unsupported telemetry version {decoded['version']}")
+    if decoded["phase"] != EXPECTED_PHASE:
+        raise ValueError(f"unsupported telemetry phase {decoded['phase']}")
     status = decoded["status"]
     flags = {name: bool(status & (1 << bit)) for bit, name in STATUS_NAMES.items()}
     if require_complete and not flags["complete"]:
@@ -106,10 +113,18 @@ def decode(data: list[int], require_complete: bool) -> dict[str, Any]:
     if len(data) >= BLOCK_BYTES + EXT_BLOCK_BYTES:
         ext_offset = BLOCK_BYTES
         ext_words = [
-            int.from_bytes(bytes(data[ext_offset + offset : ext_offset + 4]), "big")
+            int.from_bytes(bytes(data[ext_offset + offset : ext_offset + offset + 4]), "big")
             for offset in range(0, EXT_BLOCK_BYTES, 4)
         ]
         decoded["extended"] = dict(zip(EXT_FIELD_NAMES, ext_words, strict=True))
+        if decoded["extended"]["magic"] != EXT_MAGIC:
+            raise ValueError(
+                f"unexpected extended telemetry magic 0x{decoded['extended']['magic']:08X}"
+            )
+        if decoded["extended"]["version"] != EXPECTED_VERSION:
+            raise ValueError(
+                f"unsupported extended telemetry version {decoded['extended']['version']}"
+            )
         decoded["extended"]["base_address"] = f"0x{EXT_BASE_ADDRESS:08X}"
     decoded["ok"] = bool(
         flags["complete"]
