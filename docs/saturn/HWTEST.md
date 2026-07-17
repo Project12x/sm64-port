@@ -63,6 +63,22 @@ python tools/saturn/capture_hwtest.py \
 The report is labeled `evidence_kind: ymir-emulator`; it is not a substitute
 for a retail Saturn capture.
 
+For a BIOS-backed Kronos screenshot with an auditable hash manifest:
+
+```powershell
+pwsh -File tools/saturn/capture_kronos.ps1 `
+  -RetroArch path/to/retroarch.exe `
+  -Core path/to/kronos_libretro.dll `
+  -Config path/to/retroarch.cfg `
+  -Options path/to/Kronos.opt `
+  -Game build/saturn/hwtest/sm64-saturn-hwtest.cue `
+  -Output docs/saturn/evidence/screenshots/DATE/hwtest-kronos.png `
+  -Manifest docs/saturn/evidence/DATE-kronos-manifest.json `
+  -Frames 3600 `
+  -Bios path/to/saturn_bios.bin `
+  -Iso build/saturn/hwtest/sm64-saturn-hwtest.iso
+```
+
 For emulator bring-up failures (for example, a BIOS/CD-block incompatibility),
 append `--allow-invalid` to preserve the raw 120-byte read and diagnostic error
 instead of treating the capture as a passing telemetry report.
