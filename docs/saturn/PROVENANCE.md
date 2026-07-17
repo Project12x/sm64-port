@@ -160,6 +160,25 @@ firmware gate: it requires a real BIOS file to exist before its optional HLE
 path. That GPL source informed tool operation only and was not copied. Emulator
 results remain separate from retail-hardware evidence.
 
+### Lobotomy-Software/SlaveDriver-Engine
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/Lobotomy-Software/SlaveDriver-Engine> |
+| Pinned commit inspected | `a8986591557b6e680550d3c23970284d3b38ff8f` |
+| License | GPL-3.0-or-later (`LICENSE.txt`, `README.md`) |
+| Role | Saturn FPS-engine prior art for DMA scheduling, fixed-point world organization, and VDP2 setup |
+| Files inspected | `DMA.C`, `DMA.H`, `SCL_FUNC.C`, `INITMAIN.C`, `MEMCPY.S`, `LINK.S`, `README.md`, `LICENSE.txt` |
+| Reuse mode | Pattern-only / behavior study; no source copied or linked |
+
+The engine demonstrates a queued DMA abstraction that chooses CPU copying or a
+Saturn-side transfer based on address ranges, waits for completion, and keeps
+the queue interrupt-safe. Its `SCL_FUNC.C`/`INITMAIN.C` code also shows a
+hand-managed VDP2 register and frame-display path. These are useful review
+inputs for the SM64 renderer and DMA scheduler, but the GPL terms are not
+compatible with copying the implementation into this repository. The current
+Yaul-based implementation remains a clean-room design using public Yaul APIs.
+
 ### Sega hardware documentation
 
 | Reference | Use |
