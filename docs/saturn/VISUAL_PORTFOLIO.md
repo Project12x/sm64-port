@@ -42,6 +42,16 @@ run. It confirms the BIOS-backed configuration; it is not a game result.
 SHA-256:
 `687167326a799e5629f5f2e9a54a368b9b2e765227b7f808d18c9b01fb9d1cdb`.
 
+### Per-probe VDP1 timing build
+
+![SM64 Saturn per-probe VDP1 timing build in Kronos](evidence/screenshots/2026-07-17/hwtest-kronos-bios-4m-perprobe.png)
+
+This capture is the corrected build where each primitive mode is submitted as
+an independent command list. It visibly confirms the cart and renderer path;
+the detailed per-mode timings are stored in the extended WRAM telemetry block.
+SHA-256:
+`1f6bfd46f530028d9e7aca382f897de3f4544e9d96ef4e0c4e805361d89e386c`.
+
 ## Evidence ledger
 
 | Capture | Emulator/configuration | What it proves | What it does not prove |

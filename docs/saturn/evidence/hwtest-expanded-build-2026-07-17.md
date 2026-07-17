@@ -1,5 +1,8 @@
 # Expanded hwtest build evidence — 2026-07-17
 
+This record covers the first expanded-scene build; the later independent
+per-probe timing build is recorded in `hwtest-perprobe-2026-07-17.md`.
+
 The local pinned MSYS2/Yaul cross-build compiled and verified the expanded
 DMA/VDP1 hardware-test source.
 

@@ -192,18 +192,25 @@ dma_test(void)
         telemetry->status |= HWTEST_STATUS_DMA_PASS;
 }
 
+typedef enum vdp1_probe_kind {
+        VDP1_PROBE_QUAD,
+        VDP1_PROBE_TRIANGLE,
+        VDP1_PROBE_CONCAVE,
+        VDP1_PROBE_TRANSPARENCY,
+        VDP1_PROBE_TEXTURED,
+        VDP1_PROBE_GOURAUD
+} vdp1_probe_kind_t;
+
+typedef struct vdp1_probe {
+        vdp1_probe_kind_t kind;
+        vdp1_cmdt_draw_mode_t draw_mode;
+        rgb1555_t color;
+        const int16_vec2_t *vertices;
+} vdp1_probe_t;
+
 static void
 vdp1_test(void)
 {
-        enum {
-                QUAD_INDEX = 2,
-                TRIANGLE_INDEX = 3,
-                CONCAVE_INDEX = 4,
-                TRANSPARENCY_INDEX = 5,
-                TEXTURED_INDEX = 6,
-                GOURAUD_INDEX = 7,
-                END_INDEX = 8
-        };
         static const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
         static const int16_vec2_t local = INT16_VEC2_INITIALIZER(80, 40);
         static const int16_vec2_t quad[] = {
@@ -256,64 +263,82 @@ vdp1_test(void)
                 .cc_mode = VDP1_CMDT_CC_GOURAUD
         };
 
-        vdp1_cmdt_list_t * const list = vdp1_cmdt_list_alloc(END_INDEX + 1);
+        const vdp1_probe_t probes[] = {
+                { VDP1_PROBE_QUAD, solid_mode, RGB1555(1, 31, 0, 0), quad },
+                { VDP1_PROBE_TRIANGLE, solid_mode, RGB1555(1, 0, 31, 0), triangle },
+                { VDP1_PROBE_CONCAVE, solid_mode, RGB1555(1, 0, 0, 31), concave },
+                { VDP1_PROBE_TRANSPARENCY, transparent_mode,
+                    RGB1555(1, 31, 31, 0), transparency },
+                { VDP1_PROBE_TEXTURED, textured_mode,
+                    RGB1555(1, 31, 31, 31), textured },
+                { VDP1_PROBE_GOURAUD, gouraud_mode,
+                    RGB1555(1, 31, 31, 31), gouraud }
+        };
+
+        vdp1_cmdt_list_t * const list = vdp1_cmdt_list_alloc(4);
         if (list == NULL) {
                 return;
         }
-        (void)memset(list->cmdts, 0,
-            sizeof(vdp1_cmdt_t) * (END_INDEX + 1));
-        list->count = END_INDEX + 1;
+        list->count = 4;
+        uint32_t total_ticks = 0;
+        for (size_t probe_index = 0; probe_index < sizeof(probes) / sizeof(probes[0]); probe_index++) {
+                const vdp1_probe_t * const probe = &probes[probe_index];
+                (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * list->count);
+                vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]);
+                vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
+                vdp1_cmdt_local_coord_set(&list->cmdts[1]);
+                vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
+                if (probe->kind == VDP1_PROBE_TEXTURED) {
+                        vdp1_cmdt_distorted_sprite_set(&list->cmdts[2]);
+                        vdp1_cmdt_char_base_set(&list->cmdts[2],
+                            (vdp1_vram_t)partitions.texture_base);
+                        vdp1_cmdt_char_size_set(&list->cmdts[2], 8, 8);
+                } else {
+                        vdp1_cmdt_polygon_set(&list->cmdts[2]);
+                }
+                vdp1_cmdt_draw_mode_set(&list->cmdts[2], probe->draw_mode);
+                vdp1_cmdt_color_set(&list->cmdts[2], probe->color);
+                if (probe->kind == VDP1_PROBE_GOURAUD) {
+                        vdp1_cmdt_gouraud_base_set(&list->cmdts[2],
+                            (vdp1_vram_t)partitions.gouraud_base);
+                }
+                vdp1_cmdt_vtx_set(&list->cmdts[2], probe->vertices);
+                vdp1_cmdt_end_set(&list->cmdts[3]);
 
-        vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]);
-        vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
-        vdp1_cmdt_local_coord_set(&list->cmdts[1]);
-        vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
-        vdp1_cmdt_polygon_set(&list->cmdts[QUAD_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[QUAD_INDEX], solid_mode);
-        vdp1_cmdt_color_set(&list->cmdts[QUAD_INDEX], RGB1555(1, 31, 0, 0));
-        vdp1_cmdt_vtx_set(&list->cmdts[QUAD_INDEX], quad);
-        vdp1_cmdt_polygon_set(&list->cmdts[TRIANGLE_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[TRIANGLE_INDEX], solid_mode);
-        vdp1_cmdt_color_set(&list->cmdts[TRIANGLE_INDEX], RGB1555(1, 0, 31, 0));
-        vdp1_cmdt_vtx_set(&list->cmdts[TRIANGLE_INDEX], triangle);
-        vdp1_cmdt_polygon_set(&list->cmdts[CONCAVE_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[CONCAVE_INDEX], solid_mode);
-        vdp1_cmdt_color_set(&list->cmdts[CONCAVE_INDEX], RGB1555(1, 0, 0, 31));
-        vdp1_cmdt_vtx_set(&list->cmdts[CONCAVE_INDEX], concave);
-        vdp1_cmdt_polygon_set(&list->cmdts[TRANSPARENCY_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[TRANSPARENCY_INDEX], transparent_mode);
-        vdp1_cmdt_color_set(&list->cmdts[TRANSPARENCY_INDEX], RGB1555(1, 31, 31, 0));
-        vdp1_cmdt_vtx_set(&list->cmdts[TRANSPARENCY_INDEX], transparency);
-        vdp1_cmdt_distorted_sprite_set(&list->cmdts[TEXTURED_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[TEXTURED_INDEX], textured_mode);
-        vdp1_cmdt_char_base_set(&list->cmdts[TEXTURED_INDEX],
-            (vdp1_vram_t)partitions.texture_base);
-        vdp1_cmdt_char_size_set(&list->cmdts[TEXTURED_INDEX], 8, 8);
-        vdp1_cmdt_vtx_set(&list->cmdts[TEXTURED_INDEX], textured);
-        vdp1_cmdt_polygon_set(&list->cmdts[GOURAUD_INDEX]);
-        vdp1_cmdt_draw_mode_set(&list->cmdts[GOURAUD_INDEX], gouraud_mode);
-        vdp1_cmdt_gouraud_base_set(&list->cmdts[GOURAUD_INDEX],
-            (vdp1_vram_t)partitions.gouraud_base);
-        vdp1_cmdt_vtx_set(&list->cmdts[GOURAUD_INDEX], gouraud);
-        vdp1_cmdt_end_set(&list->cmdts[END_INDEX]);
-
-        cpu_frt_count_set(0);
-        vdp1_sync_cmdt_list_put(list, 0);
-        vdp1_sync_render();
-        vdp1_sync();
-        vdp2_sync();
-        vdp2_sync_wait();
-        vdp1_sync_wait();
-        telemetry->vdp1_draw_ticks = cpu_frt_count_get();
-        telemetry->vdp1_command_count = END_INDEX + 1;
-        telemetry->vdp1_pixel_estimate = 4U * (64U * 64U);
-        extended_telemetry->vdp1_modes_mask = 0x1FU;
-        extended_telemetry->vdp1_quad_ticks = telemetry->vdp1_draw_ticks;
-        extended_telemetry->vdp1_triangle_ticks = telemetry->vdp1_draw_ticks;
-        extended_telemetry->vdp1_gouraud_ticks = telemetry->vdp1_draw_ticks;
-        extended_telemetry->vdp1_transparency_ticks = telemetry->vdp1_draw_ticks;
-        extended_telemetry->vdp1_concave_ticks = telemetry->vdp1_draw_ticks;
-        extended_telemetry->vdp1_textured_ticks = telemetry->vdp1_draw_ticks;
+                cpu_frt_count_set(0);
+                vdp1_sync_cmdt_list_put(list, 0);
+                vdp1_sync_render();
+                vdp1_sync();
+                vdp2_sync();
+                vdp2_sync_wait();
+                vdp1_sync_wait();
+                const uint32_t ticks = cpu_frt_count_get();
+                total_ticks += ticks;
+                switch (probe->kind) {
+                case VDP1_PROBE_QUAD:
+                        extended_telemetry->vdp1_quad_ticks = ticks;
+                        break;
+                case VDP1_PROBE_TRIANGLE:
+                        extended_telemetry->vdp1_triangle_ticks = ticks;
+                        break;
+                case VDP1_PROBE_CONCAVE:
+                        extended_telemetry->vdp1_concave_ticks = ticks;
+                        break;
+                case VDP1_PROBE_TRANSPARENCY:
+                        extended_telemetry->vdp1_transparency_ticks = ticks;
+                        break;
+                case VDP1_PROBE_TEXTURED:
+                        extended_telemetry->vdp1_textured_ticks = ticks;
+                        break;
+                case VDP1_PROBE_GOURAUD:
+                        extended_telemetry->vdp1_gouraud_ticks = ticks;
+                        break;
+                }
+        }
+        telemetry->vdp1_draw_ticks = total_ticks;
+        telemetry->vdp1_command_count = 6U * list->count;
+        telemetry->vdp1_pixel_estimate = 6U * 64U * 64U;
+        extended_telemetry->vdp1_modes_mask = 0x3FU;
         telemetry->status |= HWTEST_STATUS_VDP1_PASS;
 
         vdp1_cmdt_list_free(list);
