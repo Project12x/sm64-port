@@ -43,6 +43,20 @@ python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
 The decoder rejects short reads and bad magic, exposes named status flags, and
 sets `ok` only when the cart, DMA, VDP1, and complete bits are all present.
 
+For a fully automated emulator capture, use the runner after building
+`ymir-headless`:
+
+```sh
+python tools/saturn/capture_hwtest.py \
+  --ymir path/to/ymir-headless \
+  --ipl path/to/bios.bin \
+  --game build/saturn/hwtest/sm64-saturn-hwtest.cue \
+  --output ymir-hwtest-report.json
+```
+
+The report is labeled `evidence_kind: ymir-emulator`; it is not a substitute
+for a retail Saturn capture.
+
 ## Host-side classifier
 
 `tools/saturn/asset_classifier.py` scans C display-list macros without needing a
