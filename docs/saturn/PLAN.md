@@ -376,8 +376,8 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 
 1. Obtain explicit reuse terms for original `malucard/sm64-psx` changes.
 2. Add a libyaul-pinned hello-disc target. **Done; execution gates remain.**
-3. Add mandatory 4 MiB cartridge detection and full-memory test. **Kronos BIOS-backed 0x5C/full-test pass recorded; retail execution gate remains.**
-4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry. **Kronos CPU/VDP1 timings and SCU-DMA result recorded; retail timing characterization remains.**
+3. Add mandatory 4 MiB cartridge detection and full-memory test. **Kronos BIOS-backed 0x5C/full-test pass recorded; retail capture handoff is documented and execution gate remains.**
+4. Add cartridge, CD, DMA, and VDP1 benchmark telemetry. **Kronos CPU/VDP1 timings and SCU-DMA result recorded; retail timing characterization and raw telemetry dump remain.**
 5. Add a VDP1 primitive and transparency torture disc. **Per-probe solid, repeated-vertex, concave, transparency, textured, and Gouraud submissions now run in Kronos; retail torture results remain.**
 6. Add a static display-list statistics tool. **Initial geometry/UV classifier now reports triangle/quad counts plus vertex, display-list, texture, tile, combine, render-mode, and geometry-mode macro inventory.**
 7. Define the primitive/material/texture Saturn IR.

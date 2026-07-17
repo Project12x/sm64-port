@@ -101,3 +101,7 @@ effect fallbacks; this is not yet a renderer or texture converter.
 
 See the [visual progress portfolio](VISUAL_PORTFOLIO.md) for dated emulator
 captures and explicit evidence boundaries.
+
+When physical hardware is available, follow the [retail capture handoff](RETAIL_CAPTURE.md)
+so raw telemetry, cold-boot repeats, screenshots, and artifact hashes remain
+auditable.
