@@ -78,6 +78,10 @@ for SM64 conversion. This capture reports `tex Q/T: 59687/59688` and a passing
 SCU-DMA observation. SHA-256:
 `752a78a1e3b62c8516d2f932ef323c840c911913cf0a4407a332aa4be5000908`.
 
+A second full-length run reproduced the same visible result; its screenshot
+SHA-256 is
+`c57572a5756f8cd8fc20017b862c9932cb06f7c01ee9f673ebb875f8a89b99b1`.
+
 ## Evidence ledger
 
 | Capture | Emulator/configuration | What it proves | What it does not prove |

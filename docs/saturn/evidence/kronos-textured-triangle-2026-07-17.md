@@ -28,3 +28,11 @@ WRAM contract remains the machine-readable result.
 
 The full RetroArch/Kronos provenance is in
 `reports/hwtest-kronos-textured-triangle.manifest.json`.
+
+## Full-length repeat
+
+A second independent 3,600-frame run produced the same visible SCU-DMA PASS
+and textured timing result (`59687/59688`). Its screenshot SHA-256 is
+`c57572a5756f8cd8fc20017b862c9932cb06f7c01ee9f673ebb875f8a89b99b1`; its
+manifest SHA-256 is
+`18d1844673f1c488d3562c0c15e427a5b0afb4d1cf79674e59059ff1ba56fc80`.
