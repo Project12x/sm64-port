@@ -25,9 +25,34 @@ def texture_name(args: str) -> str | None:
     return values[-1] if values else None
 
 
+def tile_extent(args: str) -> tuple[int, int] | None:
+    """Decode the common SM64 `(<pixels> - 1) << frac` tile-size form."""
+    dimensions = [int(value) for value in re.findall(r"\(\s*(\d+)\s*-\s*1\s*\)", args)]
+    return (dimensions[0], dimensions[1]) if len(dimensions) >= 2 else None
+
+
+def display_list_macros(body: str):
+    """Yield macro arguments without truncating nested C expressions."""
+    cursor = 0
+    while (match := re.search(r"(gs\w+)\(", body[cursor:])) is not None:
+        macro = match.group(1)
+        start = cursor + match.end()
+        depth, end = 1, start
+        while depth and end < len(body):
+            if body[end] == "(":
+                depth += 1
+            elif body[end] == ")":
+                depth -= 1
+            end += 1
+        if depth:
+            raise ValueError(f"unclosed {macro} macro")
+        yield macro, body[start:end - 1]
+        cursor = end
+
+
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
             name: str, layer: str, out: list[dict[str, object]], texture: str | None = None,
-            stack: tuple[str, ...] = ()) -> str | None:
+            tile: dict[str, object] | None = None, stack: tuple[str, ...] = ()) -> tuple[str | None, dict[str, object] | None]:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
@@ -35,9 +60,16 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
         raise ValueError(f"missing display list {name}")
     cache: list[tuple[int, int, int, int, int] | None] = [None] * 32
     current_texture = texture
-    for macro, args in re.findall(r"(gs\w+)\(([^;]*?)\)", body, re.DOTALL):
+    current_tile = tile
+    for macro, args in display_list_macros(body):
         if macro == "gsDPSetTextureImage":
             current_texture = texture_name(args)
+        elif macro == "gsDPSetTile" and "G_TX_RENDERTILE" in args:
+            current_tile = {"clamp_s": "G_TX_CLAMP" in args, "clamp_t": "G_TX_CLAMP" in args}
+        elif macro == "gsDPSetTileSize":
+            extent = tile_extent(args)
+            if extent is not None:
+                current_tile = {**(current_tile or {}), "width": extent[0], "height": extent[1]}
         elif macro == "gsSPTexture" and "G_OFF" in args:
             current_texture = None
         elif macro == "gsSPVertex":
@@ -67,14 +99,15 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                     "source_display_list": name,
                     "layer": layer,
                     "texture": current_texture,
+                    "tile": current_tile,
                     "positions": [list(cache[index][0:3]) for index in triangle],
                     "uv": [[cache[index][3], cache[index][4]] for index in triangle],
                 })
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                current_texture = flatten(display_lists, vertices, child.group(1), layer, out, current_texture, stack + (name,))
-    return current_texture
+                current_texture, current_tile = flatten(display_lists, vertices, child.group(1), layer, out, current_texture, current_tile, stack + (name,))
+    return current_texture, current_tile
 
 
 def extract(area: Path) -> dict[str, object]:

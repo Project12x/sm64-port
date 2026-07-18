@@ -192,6 +192,7 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(len(bank["texture_indices"]), bank["triangle_count"])
         self.assertEqual(len(bank["uv"]), bank["triangle_count"])
         self.assertIn("inside_09000000", bank["textures"])
+        self.assertTrue(any(tile and tile.get("width") == 32 for tile in bank["tile_state"]))
 
 
 class SaturnMeshIRTests(unittest.TestCase):

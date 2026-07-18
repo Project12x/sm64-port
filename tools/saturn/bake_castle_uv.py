@@ -14,8 +14,11 @@ from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
 
-TILE = 8
-SELECTED = ("inside_09000000", "inside_09005000")
+TILE = 16
+# The fixed lobby camera's first texture proof uses red interior masonry alone.
+# It yields 166 source triangles / 664 tiles (339,968 bytes) and leaves command
+# and texture headroom; the green courtyard material is intentionally deferred.
+SELECTED = ("inside_09005000",)
 ASSETS = {
     "inside_09000000": "textures/inside/inside_castle_textures.00000.rgba16.png",
     "inside_09005000": "textures/inside/inside_castle_textures.05000.rgba16.png",
@@ -43,14 +46,21 @@ def barycentric(x: int, y: int) -> tuple[float, float, float]:
     return c, b, 1.0 - b - c
 
 
-def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]], x: int, y: int) -> int:
+def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]], tile_state: dict[str, object], x: int, y: int) -> int:
     a, b, c = barycentric(x, y)
     if c < 0:
         return 0
-    u = int(a * uv[0][0] + b * uv[1][0] + c * uv[2][0]) // 32
-    v = int(a * uv[0][1] + b * uv[1][1] + c * uv[2][1]) // 32
+    # Match Mario's proven s10.5 truncation, then apply the source display
+    # list's render-tile extent/mode instead of blindly wrapping image bounds.
+    u = int((a * uv[0][0] + b * uv[1][0] + c * uv[2][0]) / 32.0)
+    v = int((a * uv[0][1] + b * uv[1][1] + c * uv[2][1]) / 32.0)
     width, height, pixels, _digest = texture
-    return pixels[(v % height) * width + (u % width)]
+    tile_width, tile_height = int(tile_state["width"]), int(tile_state["height"])
+    u = max(0, min(tile_width - 1, u)) if tile_state["clamp_s"] else u % tile_width
+    v = max(0, min(tile_height - 1, v)) if tile_state["clamp_t"] else v % tile_height
+    if tile_width > width or tile_height > height:
+        raise ValueError("render tile extent exceeds ROM texture dimensions")
+    return pixels[v * width + u]
 
 
 def main() -> None:
@@ -75,12 +85,15 @@ def main() -> None:
         tri = scene["triangles"][index]
         original = [tuple(scene["positions"][vertex]) for vertex in tri]
         original_uv = [tuple(pair) for pair in scene["uv"][index]]
+        tile_state = scene["tile_state"][index]
+        if tile_state is None or "width" not in tile_state or "height" not in tile_state:
+            raise ValueError(f"triangle {index} has no complete Fast3D render-tile state")
         ab, bc, ca = midpoint(original[0], original[1]), midpoint(original[1], original[2]), midpoint(original[2], original[0])
         uab, ubc, uca = midpoint(original_uv[0], original_uv[1]), midpoint(original_uv[1], original_uv[2]), midpoint(original_uv[2], original_uv[0])
         for position_tri, uv_tri in (((original[0], ab, ca), (original_uv[0], uab, uca)), ((ab, original[1], bc), (uab, original_uv[1], ubc)), ((ca, bc, original[2]), (uca, ubc, original_uv[2])), ((ab, bc, ca), (uab, ubc, uca))):
             positions.append(position_tri)
             texture = texture_data[scene["textures"][texture_index]]
-            words.extend(sample(texture, uv_tri, x, y) for y in range(TILE) for x in range(TILE))
+            words.extend(sample(texture, uv_tri, tile_state, x, y) for y in range(TILE) for x in range(TILE))
     lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {TILE}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {"]
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
     lines.append("};")
@@ -91,7 +104,7 @@ def main() -> None:
     for offset in range(0, len(words), TILE * TILE): lines.append("    {" + ", ".join(f"0x{word:04X}" for word in words[offset:offset + TILE * TILE]) + "},")
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(SELECTED), "selected_triangles": sum(value != 0xFFFF for value in starts), "tile": [TILE, TILE], "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + (len(positions)) + (int(scene["triangle_count"]) - sum(value != 0xFFFF for value in starts)) + 1, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(SELECTED), "selected_triangles": sum(value != 0xFFFF for value in starts), "tile": [TILE, TILE], "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + (len(positions)) + (int(scene["triangle_count"]) - sum(value != 0xFFFF for value in starts)) + 1, "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

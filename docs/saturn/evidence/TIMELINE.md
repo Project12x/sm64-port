@@ -441,11 +441,27 @@ visibility, clipping, and Mario-in-room integration remain open.
 
 The bounded local-ROM bake fit the provisional command and texture budgets
 (341 source triangles, 1,364 8×8 tiles, 174,592 texture bytes, and a
-1,603-command estimate), but the target frame paints the lower wall as
-fragmented incorrect tiles. It is rejected and the Gouraud-only root renderer
-is restored. The reusable bake records the actual source UV/material data;
-the failure isolates the remaining issue to static-world tile sampling/mapping
-rather than a fictitious texture or an over-budget submission.
+1,603-command estimate), but the target frame renders the real green-and-blue
+interior brick as visibly coarse per-triangle patches across this camera. It
+is rejected and the Gouraud-only root renderer is restored. The reusable bake
+records the actual source UV/material data; the failure isolates the remaining
+work to camera-aware texture fidelity/coverage, rather than a fictitious
+texture or an over-budget submission.
+
+### M3 neutral: source tile state and camera material selection
+
+![Narrow red-material Castle Area 1 texture diagnostic](screenshots/ymir-m3-castle-area1-red-material-16x16-2026-07-18.png)
+
+The compiler now reads balanced Fast3D macro expressions and retains each
+triangle's 32×32/64×32 render-tile extent plus clamp/wrap state. The original
+green-and-blue image is genuine Castle interior brick, not a conversion
+artifact or an incorrect material selection. A 16×16 bake of only the red
+interior material fits at 339,968 bytes and about 1,075 commands, but in this
+fixed camera it only covers small door/interior details. This is a neutral
+diagnostic rather than an accepted textured-lobby frame. The accepted renderer
+remains the source-root Gouraud frame while the next compiler stage selects
+materials by projected camera coverage and increases only the visible brick
+surfaces' tile resolution.
 
 ## Next visual gates
 

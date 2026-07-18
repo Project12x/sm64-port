@@ -24,6 +24,7 @@ def compile_opaque(area: Path) -> dict[str, object]:
     sources: list[str] = []
     triangle_textures: list[str | None] = []
     triangle_uv: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
+    triangle_tiles: list[dict[str, object] | None] = []
     for triangle in scene["triangles"]:
         if triangle["layer"] != "LAYER_OPAQUE":
             continue
@@ -40,6 +41,7 @@ def compile_opaque(area: Path) -> dict[str, object]:
         sources.append(str(triangle["source_display_list"]))
         triangle_textures.append(None if triangle["texture"] is None else str(triangle["texture"]))
         triangle_uv.append(tuple(tuple(int(value) for value in uv) for uv in triangle["uv"]))
+        triangle_tiles.append(triangle["tile"])
     textures = sorted({texture for texture in triangle_textures if texture is not None})
     texture_indices = [0xFF if texture is None else textures.index(texture) for texture in triangle_textures]
     return {
@@ -56,6 +58,7 @@ def compile_opaque(area: Path) -> dict[str, object]:
         "positions": positions,
         "triangles": triangles,
         "uv": triangle_uv,
+        "tile_state": triangle_tiles,
         "limits": ["No textures", "No alpha/decal layers", "No visibility or clipping"],
     }
 
