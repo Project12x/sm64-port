@@ -11,8 +11,12 @@
 
 #define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
 #define FEATURE_TRIANGLE_COUNT (SM64_RIGHT_EYEBROW_TRIANGLE_COUNT + SM64_LEFT_EYEBROW_TRIANGLE_COUNT + SM64_MUSTACHE_TRIANGLE_COUNT)
-#define SURFACE_COUNT (SM64_FACE_PRIMITIVE_COUNT + FEATURE_TRIANGLE_COUNT)
-#define COMMAND_COUNT (SM64_FACE_PRIMITIVE_COUNT + EYE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT + 3U)
+#define FACE_SURFACE_COUNT SM64_FACE_PRIMITIVE_COUNT
+#define RIGHT_EYE_SURFACE_BASE FACE_SURFACE_COUNT
+#define LEFT_EYE_SURFACE_BASE (RIGHT_EYE_SURFACE_BASE + SM64_RIGHT_EYE_TRIANGLE_COUNT)
+#define FEATURE_SURFACE_BASE (LEFT_EYE_SURFACE_BASE + SM64_LEFT_EYE_TRIANGLE_COUNT)
+#define SURFACE_COUNT (FEATURE_SURFACE_BASE + FEATURE_TRIANGLE_COUNT)
+#define COMMAND_COUNT (SURFACE_COUNT + 3U)
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_PRIMITIVE_COUNT];
 static uint16_t draw_order[SURFACE_COUNT];
@@ -28,6 +32,7 @@ typedef struct view_state {
     uint8_t projection_divisor;
     bool shine_enabled;
     bool auto_rotate;
+    bool animation_enabled;
 } view_state_t;
 
 typedef struct point3 {
@@ -38,8 +43,9 @@ typedef struct point3 {
 
 static point3_t transformed_face[SM64_FACE_VERTEX_COUNT];
 static int16_vec2_t projected_face[SM64_FACE_VERTEX_COUNT];
+static int16_t deformed_face[SM64_FACE_VERTEX_COUNT][3];
 
-static view_state_t view = { 0, 0, 6, true, false };
+static view_state_t view = { 0, 0, 6, true, false, true };
 static fix16_t view_sin_yaw;
 static fix16_t view_cos_yaw;
 static fix16_t view_sin_pitch;
@@ -50,11 +56,16 @@ static uint16_t painter_sort_ticks;
 static uint16_t command_build_ticks;
 static uint16_t gouraud_upload_ticks;
 static uint16_t render_wait_ticks;
+static uint16_t deformation_ticks;
+static uint16_t deformation_frame;
 static vdp1_cmdt_list_t *command_list;
 static bool controls_ready;
 static bool pad_connected;
 static uint16_t pad_down;
 static uint16_t pad_edge;
+
+static void build_vertex_normals(void);
+static void build_lighting_cache(void);
 
 static rgb1555_t
 material_color(uint16_t material, uint8_t intensity)
@@ -72,9 +83,9 @@ build_vertex_normals(void)
     (void)memset(vertex_normals, 0, sizeof(vertex_normals));
     for (uint16_t i = 0; i < SM64_FACE_TRIANGLE_COUNT; i++) {
         const uint16_t *f = sm64_face_triangles[i];
-        const int16_t *a = sm64_face_vertices[f[1]];
-        const int16_t *b = sm64_face_vertices[f[2]];
-        const int16_t *c = sm64_face_vertices[f[3]];
+        const int16_t *a = deformed_face[f[1]];
+        const int16_t *b = deformed_face[f[2]];
+        const int16_t *c = deformed_face[f[3]];
         const int32_t abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
         const int32_t acx = c[0] - a[0], acy = c[1] - a[1], acz = c[2] - a[2];
         const int32_t nx = ((aby * acz) - (abz * acy)) / 128;
@@ -120,9 +131,39 @@ static void
 update_face_transform_cache(void)
 {
     for (uint16_t i = 0; i < SM64_FACE_VERTEX_COUNT; i++) {
-        transformed_face[i] = transform_point(sm64_face_vertices[i]);
+        transformed_face[i] = transform_point(deformed_face[i]);
         projected_face[i] = project_transformed(transformed_face[i]);
     }
+}
+
+static void
+update_face_deformation(void)
+{
+    const uint16_t right_frame = deformation_frame % SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT;
+    const uint16_t left_frame = deformation_frame % SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT;
+    const int32_t right_delta = sm64_right_eyelid_animation[right_frame][2] -
+      sm64_right_eyelid_animation[0][2];
+    const int32_t left_delta = sm64_left_eyelid_animation[left_frame][2] -
+      sm64_left_eyelid_animation[0][2];
+    const uint16_t start = cpu_frt_count_get();
+    for (uint16_t i = 0; i < SM64_FACE_VERTEX_COUNT; i++) {
+        int32_t eyelid_offset = 0;
+        if (view.animation_enabled) {
+            /* The stream is direct GD_ANIM_ROT3S source data (0.1 degree
+             * units); the weights are the original Goddard non-normalized
+             * accumulation values. This first target-side evaluator keeps
+             * the rotation-to-local-displacement scale explicit until full
+             * joint matrices replace it. */
+            eyelid_offset = ((right_delta * sm64_right_eyelid_weights[i]) +
+              (left_delta * sm64_left_eyelid_weights[i])) / (32768 * 24);
+        }
+        deformed_face[i][0] = sm64_face_vertices[i][0];
+        deformed_face[i][1] = (int16_t)(sm64_face_vertices[i][1] - eyelid_offset);
+        deformed_face[i][2] = sm64_face_vertices[i][2];
+    }
+    build_vertex_normals();
+    build_lighting_cache();
+    deformation_ticks = (uint16_t)(cpu_frt_count_get() - start);
 }
 
 static uint8_t
@@ -242,12 +283,18 @@ feature_depth(const int16_t vertices[][3], const uint16_t *f)
 static int
 depth_of(uint16_t surface)
 {
-    if (surface < SM64_FACE_PRIMITIVE_COUNT) {
+    if (surface < FACE_SURFACE_COUNT) {
         const uint16_t *f = sm64_face_primitives[surface];
         return (transformed_face[f[1]].z + transformed_face[f[2]].z +
           transformed_face[f[3]].z + transformed_face[f[4]].z) / 4;
     }
-    surface -= SM64_FACE_PRIMITIVE_COUNT;
+    if (surface < LEFT_EYE_SURFACE_BASE)
+        return feature_depth(sm64_right_eye_vertices,
+          &sm64_right_eye_triangles[surface - RIGHT_EYE_SURFACE_BASE][0]);
+    if (surface < FEATURE_SURFACE_BASE)
+        return feature_depth(sm64_left_eye_vertices,
+          &sm64_left_eye_triangles[surface - LEFT_EYE_SURFACE_BASE][0]);
+    surface -= FEATURE_SURFACE_BASE;
     if (surface < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT)
         return feature_depth(sm64_right_eyebrow_vertices, sm64_right_eyebrow_triangles[surface]);
     surface -= SM64_RIGHT_EYEBROW_TRIANGLE_COUNT;
@@ -285,26 +332,22 @@ sort_for_painter(void)
 }
 
 static void
-draw_eye(vdp1_cmdt_t *cmdts, uint16_t *cursor, const int16_t vertices[][3],
-  const uint16_t triangles[][4], uint16_t triangle_count,
+draw_eye_triangle(vdp1_cmdt_t *cmdt, const int16_t vertices[][3],
+  const uint16_t triangles[][4], uint16_t triangle,
   const uint8_t materials[][3], int16_t offset_x, int16_t offset_y,
   int16_t center_x, int16_t center_y)
 {
     const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768 };
-    for (uint16_t i = 0; i < triangle_count; i++) {
-        const uint16_t *f = triangles[i];
-        const uint8_t *rgb = materials[f[0] & 3U];
-        const int16_vec2_t projected[4] = {
-            project_eye_point(vertices[f[1]], offset_x, offset_y, center_x, center_y), project_eye_point(vertices[f[2]], offset_x, offset_y, center_x, center_y),
-            project_eye_point(vertices[f[3]], offset_x, offset_y, center_x, center_y), project_eye_point(vertices[f[3]], offset_x, offset_y, center_x, center_y)
-        };
-        vdp1_cmdt_t *cmdt = &cmdts[*cursor];
-        vdp1_cmdt_polygon_set(cmdt);
-        vdp1_cmdt_draw_mode_set(cmdt, mode);
-        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
-        vdp1_cmdt_vtx_set(cmdt, projected);
-        (*cursor)++;
-    }
+    const uint16_t *f = triangles[triangle];
+    const uint8_t *rgb = materials[f[0] & 3U];
+    const int16_vec2_t projected[4] = {
+        project_eye_point(vertices[f[1]], offset_x, offset_y, center_x, center_y), project_eye_point(vertices[f[2]], offset_x, offset_y, center_x, center_y),
+        project_eye_point(vertices[f[3]], offset_x, offset_y, center_x, center_y), project_eye_point(vertices[f[3]], offset_x, offset_y, center_x, center_y)
+    };
+    vdp1_cmdt_polygon_set(cmdt);
+    vdp1_cmdt_draw_mode_set(cmdt, mode);
+    vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+    vdp1_cmdt_vtx_set(cmdt, projected);
 }
 
 static void
@@ -356,8 +399,18 @@ draw_source_face(bool shade_dirty)
     for (uint16_t out = 0; out < SURFACE_COUNT; out++) {
         uint16_t source = draw_order[out];
         vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U];
-        if (source >= SM64_FACE_PRIMITIVE_COUNT) {
-            source -= SM64_FACE_PRIMITIVE_COUNT;
+        if (source >= RIGHT_EYE_SURFACE_BASE) {
+            if (source < LEFT_EYE_SURFACE_BASE) {
+                draw_eye_triangle(cmdt, sm64_right_eye_vertices, sm64_right_eye_triangles,
+                  source - RIGHT_EYE_SURFACE_BASE, sm64_right_eye_material_rgb, 5, -4, 179, 128);
+                continue;
+            }
+            if (source < FEATURE_SURFACE_BASE) {
+                draw_eye_triangle(cmdt, sm64_left_eye_vertices, sm64_left_eye_triangles,
+                  source - LEFT_EYE_SURFACE_BASE, sm64_left_eye_material_rgb, -6, -4, 139, 128);
+                continue;
+            }
+            source -= FEATURE_SURFACE_BASE;
             if (source < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) {
                 draw_feature_triangle(cmdt, sm64_right_eyebrow_vertices,
                   sm64_right_eyebrow_triangles, source, RGB1555(1, 0, 0, 0),
@@ -389,14 +442,7 @@ draw_source_face(bool shade_dirty)
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base +
           (source * sizeof(vdp1_gouraud_table_t)));
     }
-    uint16_t cursor = SURFACE_COUNT + 2U;
-    /* Eye surfaces are separate original objects. Scale 2/3 about each source
-     * eye-surface centre, after right (+5,-4) / left (-6,-4) calibration. */
-    draw_eye(list->cmdts, &cursor, sm64_right_eye_vertices, sm64_right_eye_triangles,
-      SM64_RIGHT_EYE_TRIANGLE_COUNT, sm64_right_eye_material_rgb, 5, -4, 179, 128);
-    draw_eye(list->cmdts, &cursor, sm64_left_eye_vertices, sm64_left_eye_triangles,
-      SM64_LEFT_EYE_TRIANGLE_COUNT, sm64_left_eye_material_rgb, -6, -4, 139, 128);
-    vdp1_cmdt_end_set(&list->cmdts[cursor]);
+    vdp1_cmdt_end_set(&list->cmdts[SURFACE_COUNT + 2U]);
     command_build_ticks = (uint16_t)(cpu_frt_count_get() - command_start);
     if (shade_dirty) {
         const uint16_t upload_start = cpu_frt_count_get();
@@ -455,6 +501,8 @@ update_controls(void)
         view.projection_divisor--;
     if ((edge & PERIPHERAL_DIGITAL_B) != 0)
         view.auto_rotate = !view.auto_rotate;
+    if ((edge & PERIPHERAL_DIGITAL_C) != 0)
+        view.animation_enabled = !view.animation_enabled;
     bool shade_dirty = false;
     if ((edge & PERIPHERAL_DIGITAL_A) != 0) {
         view.shine_enabled = !view.shine_enabled;
@@ -483,19 +531,20 @@ update_hud(uint16_t frame)
     const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
     dbgio_printf("\x1B[HSM64 SATURN INTERACTIVE FACE\n"
       "PAD D-PAD CAM L/R ZOOM START RESET\n"
-      "YMIR DEFAULT: WASD Q/E J/K F=RESET\n"
-      "A SHINE:%s  B AUTO-ORBIT:%s\n"
+      "YMIR: WASD Q/E J/K F=RESET  C=ANIM\n"
+      "A SHINE:%s  B ORBIT:%s  C EYELIDS:%s\n"
       "FRAME %u TICKS  ~%u.%u FPS\n"
       "SHADE REBUILD %u TICKS (ON TOGGLE)\n"
       "CMD %u  QUAD %u  TRI %u\n"
-      "SORT %u  BUILD %u  G-UP %u  WAIT %u\n"
+      "DEFORM %u  SORT %u  BUILD %u  G-UP %u  WAIT %u\n"
       "PAD:%s DOWN %04X EDGE %04X   ",
       view.shine_enabled ? "ON " : "OFF",
       view.auto_rotate ? "ON " : "OFF",
+      view.animation_enabled ? "ON " : "OFF",
       frame_ticks, fps_x10 / 10U, fps_x10 % 10U, shade_build_ticks,
       (uint16_t)(COMMAND_COUNT - 3U), (uint16_t)SM64_FACE_QUAD_COUNT,
       (uint16_t)(SM64_FACE_TRIANGLE_COUNT - (SM64_FACE_QUAD_COUNT * 2U)),
-      painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
+      deformation_ticks, painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
       render_wait_ticks,
       pad_connected ? "OK  " : "NONE", pad_down, pad_edge);
     dbgio_flush();
@@ -534,8 +583,7 @@ user_init(void)
         dbgio_flush();
         for (;;) {}
     }
-    build_vertex_normals();
-    build_lighting_cache();
+    update_face_deformation();
     update_view_trig();
     rebuild_gouraud_tables();
     dbgio_puts("SM64 SATURN INTERACTIVE FACE\nINITIALIZING CONTROLS...");
@@ -543,10 +591,13 @@ user_init(void)
     uint16_t frame = 0;
     for (;;) {
         const bool shade_dirty = update_controls();
-        if (shade_dirty)
-            rebuild_gouraud_tables();
+        deformation_frame++;
+        update_face_deformation();
+        /* The face normals and compact VDP1 Gouraud tables follow every pose.
+         * This is deliberately measured rather than assumed free. */
+        rebuild_gouraud_tables();
         cpu_frt_count_set(0);
-        draw_source_face(shade_dirty || frame == 0);
+        draw_source_face(shade_dirty || frame == 0 || view.animation_enabled);
         frame_ticks = cpu_frt_count_get();
         update_hud(frame++);
         /* One controller transaction and one presentation per video frame.

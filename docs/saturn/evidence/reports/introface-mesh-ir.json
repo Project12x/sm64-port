@@ -2275,6 +2275,116 @@
     }
   ],
   "vertex_attributes": {},
+  "pairing_forbidden_triangles": [
+    7,
+    24,
+    25,
+    26,
+    33,
+    34,
+    74,
+    77,
+    78,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    96,
+    97,
+    105,
+    107,
+    139,
+    140,
+    141,
+    238,
+    240,
+    248,
+    249,
+    254,
+    255,
+    256,
+    257,
+    258,
+    259,
+    260,
+    261,
+    262,
+    263,
+    264,
+    265,
+    266,
+    267,
+    268,
+    271,
+    309,
+    317,
+    318,
+    319,
+    334,
+    347,
+    348,
+    349,
+    350,
+    351,
+    352,
+    353,
+    354,
+    355,
+    356,
+    361,
+    370,
+    373,
+    386,
+    392,
+    393,
+    394,
+    395,
+    396,
+    397,
+    398,
+    399,
+    400,
+    401,
+    423,
+    424,
+    425,
+    426,
+    427,
+    428,
+    429,
+    432,
+    433,
+    434,
+    452,
+    453,
+    454,
+    455,
+    480,
+    481,
+    482,
+    483,
+    484,
+    485,
+    486,
+    487,
+    488,
+    489,
+    490,
+    491,
+    492,
+    493,
+    494,
+    495
+  ],
   "deformation": {
     "mode": "goddard_weighted_accumulation",
     "joint_count": 41,
@@ -5400,31 +5510,42 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
         45,
         46,
-        51,
+        47,
         47
       ],
       "source_triangles": [
-        24,
-        26
+        24
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
         48,
         49,
         50,
-        129
+        50
       ],
       "source_triangles": [
-        25,
-        81
+        25
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        47,
+        46,
+        51,
+        51
+      ],
+      "source_triangles": [
+        26
       ]
     },
     {
@@ -6066,17 +6187,29 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        125,
         8,
         46,
-        125,
-        57
+        46
       ],
       "source_triangles": [
-        80,
-        105
+        80
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        50,
+        129,
+        48,
+        48
+      ],
+      "source_triangles": [
+        81
       ]
     },
     {
@@ -6132,31 +6265,29 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        7,
         133,
-        134,
-        8
+        8,
+        7,
+        7
       ],
       "source_triangles": [
-        86,
-        397
+        86
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        8,
         134,
-        423,
-        51
+        51,
+        8,
+        8
       ],
       "source_triangles": [
-        87,
-        396
+        87
       ]
     },
     {
@@ -6186,17 +6317,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        127,
         21,
         97,
-        136,
-        127
+        97
       ],
       "source_triangles": [
-        90,
-        393
+        90
       ]
     },
     {
@@ -6340,6 +6470,19 @@
       ],
       "source_triangles": [
         104
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        57,
+        8,
+        125,
+        125
+      ],
+      "source_triangles": [
+        105
       ]
     },
     {
@@ -6727,31 +6870,42 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
         129,
         196,
-        197,
+        428,
         428
       ],
       "source_triangles": [
-        139,
+        139
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        428,
+        196,
+        197,
+        197
+      ],
+      "source_triangles": [
         140
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        429,
         197,
         387,
-        429,
-        428
+        387
       ],
       "source_triangles": [
-        141,
-        429
+        141
       ]
     },
     {
@@ -7871,17 +8025,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
         246,
         294,
-        400,
+        375,
         375
       ],
       "source_triangles": [
-        240,
-        266
+        240
       ]
     },
     {
@@ -8070,17 +8223,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        385,
         382,
         386,
-        385,
-        388
+        386
       ],
       "source_triangles": [
-        255,
-        355
+        255
       ]
     },
     {
@@ -8110,17 +8262,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        392,
         375,
         391,
-        419,
-        392
+        391
       ],
       "source_triangles": [
-        258,
-        352
+        258
       ]
     },
     {
@@ -8137,17 +8288,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        393,
         395,
         396,
+        394,
         394
       ],
       "source_triangles": [
-        260,
-        350
+        260
       ]
     },
     {
@@ -8164,17 +8314,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        196,
         399,
-        398,
-        197
+        197,
+        196,
+        196
       ],
       "source_triangles": [
-        262,
-        348
+        262
       ]
     },
     {
@@ -8191,17 +8340,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        129,
         338,
-        396,
-        196
+        196,
+        129,
+        129
       ],
       "source_triangles": [
-        264,
-        318
+        264
       ]
     },
     {
@@ -8215,6 +8363,19 @@
       ],
       "source_triangles": [
         265
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        294,
+        400,
+        375,
+        375
+      ],
+      "source_triangles": [
+        266
       ]
     },
     {
@@ -8775,16 +8936,41 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        374,
+        391,
+        400,
+        400
+      ],
+      "source_triangles": [
+        317
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        196,
+        338,
+        396,
+        396
+      ],
+      "source_triangles": [
+        318
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
         265,
         374,
-        391,
+        400,
         400
       ],
       "source_triangles": [
-        317,
         319
       ]
     },
@@ -9065,6 +9251,19 @@
       "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        399,
+        398,
+        197,
+        197
+      ],
+      "source_triangles": [
+        348
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
         395,
         397,
         396,
@@ -9078,6 +9277,19 @@
       "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        393,
+        395,
+        394,
+        394
+      ],
+      "source_triangles": [
+        350
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
         392,
         393,
         375,
@@ -9085,6 +9297,19 @@
       ],
       "source_triangles": [
         351
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        419,
+        392,
+        391,
+        391
+      ],
+      "source_triangles": [
+        352
       ]
     },
     {
@@ -9111,6 +9336,19 @@
       ],
       "source_triangles": [
         354
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        388,
+        382,
+        385,
+        385
+      ],
+      "source_triangles": [
+        355
       ]
     },
     {
@@ -9403,6 +9641,19 @@
       "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        136,
+        127,
+        97,
+        97
+      ],
+      "source_triangles": [
+        393
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
         135,
         136,
         124,
@@ -9423,6 +9674,32 @@
       ],
       "source_triangles": [
         395
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        423,
+        51,
+        134,
+        134
+      ],
+      "source_triangles": [
+        396
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        134,
+        8,
+        133,
+        133
+      ],
+      "source_triangles": [
+        397
       ]
     },
     {
@@ -9452,17 +9729,16 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        48,
+        128,
         130,
         126,
-        128
+        126
       ],
       "source_triangles": [
-        400,
-        455
+        400
       ]
     },
     {
@@ -9676,30 +9952,41 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        48,
         428,
         429,
+        130,
         130
       ],
       "source_triangles": [
-        424,
-        428
+        424
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 1,
       "indices": [
-        83,
         130,
         429,
-        387
+        83,
+        83
       ],
       "source_triangles": [
-        425,
+        425
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        387,
+        83,
+        429,
+        429
+      ],
+      "source_triangles": [
         426
       ]
     },
@@ -9714,6 +10001,32 @@
       ],
       "source_triangles": [
         427
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        130,
+        48,
+        428,
+        428
+      ],
+      "source_triangles": [
+        428
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
+        197,
+        429,
+        428,
+        428
+      ],
+      "source_triangles": [
+        429
       ]
     },
     {
@@ -10033,6 +10346,19 @@
       "representation": "triangle_fallback",
       "material": 1,
       "indices": [
+        48,
+        130,
+        128,
+        128
+      ],
+      "source_triangles": [
+        455
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 1,
+      "indices": [
         349,
         348,
         439,
@@ -10318,114 +10644,210 @@
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
         126,
         127,
-        136,
+        128,
         128
       ],
       "source_triangles": [
-        480,
-        489
+        480
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
-        385,
         398,
         399,
-        388
+        385,
+        385
       ],
       "source_triangles": [
-        481,
+        481
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        388,
+        385,
+        399,
+        399
+      ],
+      "source_triangles": [
         482
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
+        390,
         388,
         399,
-        419,
-        390
+        399
       ],
       "source_triangles": [
-        483,
+        483
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        419,
+        390,
+        399,
+        399
+      ],
+      "source_triangles": [
         484
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
         392,
         419,
         399,
-        393
+        399
       ],
       "source_triangles": [
-        485,
+        485
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        393,
+        392,
+        399,
+        399
+      ],
+      "source_triangles": [
         486
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
+        395,
         393,
         399,
-        397,
-        395
+        399
       ],
       "source_triangles": [
-        487,
+        487
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        397,
+        395,
+        399,
+        399
+      ],
+      "source_triangles": [
         488
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
-        128,
         136,
-        135,
-        423
+        128,
+        127,
+        127
       ],
       "source_triangles": [
-        490,
+        489
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        135,
+        128,
+        136,
+        136
+      ],
+      "source_triangles": [
+        490
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        423,
+        128,
+        135,
+        135
+      ],
+      "source_triangles": [
         491
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
+        134,
         128,
         423,
-        134,
-        133
+        423
       ],
       "source_triangles": [
-        492,
+        492
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        133,
+        128,
+        134,
+        134
+      ],
+      "source_triangles": [
         493
       ]
     },
     {
-      "representation": "quad",
+      "representation": "triangle_fallback",
       "material": 4,
       "indices": [
+        132,
         128,
         133,
-        132,
-        131
+        133
       ],
       "source_triangles": [
-        494,
+        494
+      ]
+    },
+    {
+      "representation": "triangle_fallback",
+      "material": 4,
+      "indices": [
+        131,
+        128,
+        132,
+        132
+      ],
+      "source_triangles": [
         495
       ]
     },
@@ -14646,16 +15068,18 @@
     "deformation_pose_count": 0,
     "deformation_pose_names": [],
     "source_triangle_count": 877,
-    "candidate_count": 206,
-    "quad_count": 156,
-    "standalone_triangle_count": 565,
-    "render_primitive_count": 721,
-    "commands_saved": 156,
+    "candidate_count": 163,
+    "quad_count": 130,
+    "standalone_triangle_count": 617,
+    "render_primitive_count": 747,
+    "commands_saved": 130,
     "rejection_reasons": {
-      "material_mismatch": 114,
-      "normal_divergence": 251,
-      "projection_not_convex": 740
+      "material_mismatch": 88,
+      "normal_divergence": 224,
+      "projection_not_convex": 661,
+      "textured_pairing_not_implemented": 175
     },
+    "pairing_forbidden_triangle_count": 108,
     "deformation_mode": "goddard_weighted_accumulation",
     "deformation_joint_count": 41,
     "deformation_weighted_vertex_count": 320,

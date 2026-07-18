@@ -110,6 +110,7 @@ compile-introface-mesh: check-host-tools
 	  --eyes-input "src/goddard/dynlists/dynlists_mario_eyes.c" \
 	  --features-input "src/goddard/dynlists/dynlists_mario_eyebrows_mustache.c" \
 	  --master-input "src/goddard/dynlists/dynlist_mario_master.c" \
+	  --animation-input "src/goddard/dynlists/anim_group_2.c" \
 	  --output "src/port/saturn/introface/mario_face_mesh.h" \
 	  --quad-report "docs/saturn/evidence/reports/introface-quad-pairing.json" \
 	  --mesh-ir-output "docs/saturn/evidence/reports/introface-mesh-ir.json"

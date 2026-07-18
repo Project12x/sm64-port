@@ -18,6 +18,8 @@
       30
     ]
   },
+  "animated_eyelid_vertex_count": 42,
+  "animated_eyelid_triangle_fallback_count": 108,
   "prior_art": {
     "repository": "https://github.com/Rulesobeyer/Optimized-Tris-to-Quads-Converter",
     "commit": "1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c",
@@ -30,16 +32,18 @@
   "deformation_pose_count": 0,
   "deformation_pose_names": [],
   "source_triangle_count": 877,
-  "candidate_count": 206,
-  "quad_count": 156,
-  "standalone_triangle_count": 565,
-  "render_primitive_count": 721,
-  "commands_saved": 156,
+  "candidate_count": 163,
+  "quad_count": 130,
+  "standalone_triangle_count": 617,
+  "render_primitive_count": 747,
+  "commands_saved": 130,
   "rejection_reasons": {
-    "material_mismatch": 114,
-    "normal_divergence": 251,
-    "projection_not_convex": 740
+    "material_mismatch": 88,
+    "normal_divergence": 224,
+    "projection_not_convex": 661,
+    "textured_pairing_not_implemented": 175
   },
+  "pairing_forbidden_triangle_count": 108,
   "deformation_mode": "goddard_weighted_accumulation",
   "deformation_joint_count": 41,
   "deformation_weighted_vertex_count": 320,

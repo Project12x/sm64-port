@@ -20,7 +20,9 @@ A source document records:
 - optional variable-length Q15 deformation influences and an explicit
   `linear_blend` or `goddard_weighted_accumulation` mode;
 - zero or more fully evaluated deformation poses used only for offline safety
-  validation.
+  validation; and
+- optional `pairing_forbidden_triangles` source-triangle indexes for a known
+  dynamic region whose full pose envelope is not yet available.
 
 Attribute seams must use distinct vertex indices. This follows the
 multi-stream/equivalence lesson from meshoptimizer without copying its code:
@@ -40,6 +42,10 @@ Each primitive retains its original source triangle IDs. A quad is eligible
 only when material, topology, winding, normal alignment, and sampled-camera
 convexity are safe in the base mesh **and every supplied deformation pose**.
 The exact NetworkX matcher then maximizes command savings among the candidates.
+`pairing_forbidden_triangles` is a conservative proof boundary: each listed
+triangle remains a repeated-vertex VDP1 fallback even if its neutral shape
+would merge successfully. It exists to avoid treating an unknown deformation
+envelope as a neutral-pose guarantee.
 
 Validation poses are compiler evidence, not animation data shipped to Saturn.
 Future source adapters should evaluate important animation extrema and feed
@@ -89,6 +95,7 @@ On Windows, use `.venv-saturn-tools/Scripts/python.exe`.
   near-plane clipping remain work for the in-game Mario milestone.
 - Safety is bounded by supplied deformation poses and the documented camera
   sample grid; untested poses can still invalidate a quad.
-- The intro face currently has no validation poses, so its 156 quads prove the
-  neutral camera envelope only. Adding source-derived face motion samples is
-  the next visible step.
+- The intro face currently has no full validation poses. Its eyelid-stream
+  study therefore forces the 108 triangles touching its 42 weighted eyelid
+  vertices to fallbacks, leaving 130 static true quads. Replacing this local
+  safety boundary with source-derived joint-matrix extrema is the next step.

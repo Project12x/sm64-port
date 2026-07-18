@@ -33,6 +33,9 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 | Conservative true-quad compiler | A host-side Saturn render IR preserves all 877 SM64 source triangles but replaces 156 validated pairs with real VDP1 quads. Strict material, winding, normal, and 15-view projected-convexity gates leave 565 face triangles as explicit fallbacks. Total draw commands fall from 1,213 to 1,057 without changing the visible face silhouette, feature occlusion, eyes, or shine. | [quad frame](screenshots/ymir-true-quads-2026-07-18.png), [capture report](ymir-true-quads-2026-07-18.json), [pairing audit](reports/introface-quad-pairing.json), [provenance](../INTROFACE_PROVENANCE.md) |
 | Exact blossom quad matching | Hash-pinned NetworkX 3.6.1 replaces the local pairing heuristic with exact maximum-cardinality, maximum-integer-quality matching. It proves that 156 is the maximum among 206 safe candidates and improves three pairing records without changing command count. The resulting capture changes only nose shading: 610 color pixels and zero foreground-mask pixels versus the heuristic build. | [exact frame](screenshots/ymir-exact-quads-2026-07-18.png), [capture report](ymir-exact-quads-2026-07-18.json), [pairing audit](reports/introface-quad-pairing.json), [provenance](../INTROFACE_PROVENANCE.md) |
 | Reusable mesh IR v1 | The 440-vertex face now enters the same versioned compiler interface intended for animated actors. The audit artifact preserves 877 source triangle IDs, 41 ordered Goddard joints, and 506 unnormalized Q15 weight records before producing the same 721 VDP1 primitives. The BIOS-backed framebuffer hash is exactly identical to Stage 15, proving no neutral-render regression. | [IR regression frame](screenshots/ymir-mesh-ir-v1-2026-07-18.png), [capture report](ymir-mesh-ir-v1-2026-07-18.json), [compiled mesh IR](reports/introface-mesh-ir.json), [IR contract](../SATURN_MESH_IR.md) |
+| Animated-disc boot timing | The first rebuilt-disc automation capture stopped at the Sega BIOS logo after 2,100 frames. Extending the same deterministic USA-BIOS macro to 3,300 frames reached the target, so this is preserved as a boot-timing diagnostic rather than a renderer result. | [boot-delay frame](screenshots/ymir-eyelid-animation-first-2026-07-18.png), [report](ymir-eyelid-animation-first-2026-07-18.json) |
+| Rejected animated-quad frame | The first eyelid animation pass applied raw source eyelid streams to the weighted face while retaining every neutral-pose true quad. At a deterministic later phase, a deformed quad produced an incomplete face. Repeating the same 3,500-frame route produced the identical broken hash, so this is a renderer-safety failure rather than a capture race. | [failure frame](screenshots/ymir-eyelid-animation-later-phase-2026-07-18.png), [repeat report](ymir-eyelid-animation-later-phase-repeat-2026-07-18.json) |
+| Animation-safe eyelid fallback | The compiler now forbids merging any source triangle that touches one of the 42 eyelid-weighted face vertices until a full pose-complete Goddard evaluator exists. This leaves 130 static true quads and emits 108 animated-region triangles as explicit VDP1 fallbacks; the same later phase again renders the complete source face. This is an initial source-stream deformation study, not yet a full Goddard joint-matrix implementation. | [accepted frame](screenshots/ymir-eyelid-animation-triangle-fallback-2026-07-18.png), [capture report](ymir-eyelid-animation-triangle-fallback-2026-07-18.json), [pairing audit](reports/introface-quad-pairing.json) |
 
 ## Source-face gallery
 
@@ -79,10 +82,20 @@ must follow its Goddard net/skin transform and correct depth/material behavior.
 
 ![Pixel-identical face after routing through Saturn mesh IR v1](screenshots/ymir-mesh-ir-v1-2026-07-18.png)
 
+### Rejected: neutral-pose quads during eyelid deformation
+
+![Incomplete deterministic animation frame caused by a deformed neutral-pose quad](screenshots/ymir-eyelid-animation-later-phase-2026-07-18.png)
+
+### Accepted: animated eyelid region as triangle fallbacks
+
+![Complete Mario face at the same animation phase after animated eyelid triangles replace unsafe quads](screenshots/ymir-eyelid-animation-triangle-fallback-2026-07-18.png)
+
 ## Next visual gates
 
-1. Evaluate the animated Goddard skin-joint pose for facial and moustache
-   deformation; retain the source-scale static pose as the neutral baseline.
+1. Replace the first raw-stream eyelid displacement study with the complete
+   Goddard joint-matrix pose evaluator, then validate every animated quad over
+   the selected pose range; retain the current local triangle fallback unless
+   that proof permits a merge.
 2. Finish deterministic remote release after the duration-aware Ymir hold;
    press detection is proven, while the final Saturn sample can remain latched.
 3. Compare VDP1 command, Gouraud-table, CPU transform, and painter-sort budgets

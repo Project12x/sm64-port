@@ -163,6 +163,17 @@ class SaturnMeshIRTests(unittest.TestCase):
             ["triangle_fallback", "triangle_fallback"],
         )
 
+    def test_dynamic_region_can_forbid_neutral_pose_quad_pairing(self) -> None:
+        document = self.document()
+        document["pairing_forbidden_triangles"] = [0]
+        compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertEqual(report["quad_count"], 0)
+        self.assertEqual(report["pairing_forbidden_triangle_count"], 1)
+        self.assertEqual(
+            [primitive["representation"] for primitive in compiled["primitives"]],
+            ["triangle_fallback", "triangle_fallback"],
+        )
+
     def test_linear_blend_weights_must_sum_to_q15_one(self) -> None:
         document = self.document()
         document["deformation"] = {

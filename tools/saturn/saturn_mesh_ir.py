@@ -84,6 +84,13 @@ def validate_mesh_ir(document: dict[str, Any]) -> None:
             raise ValueError(f"duplicate source triangle id {source_id}")
         source_ids.add(source_id)
 
+    forbidden = document.get("pairing_forbidden_triangles", [])
+    if not isinstance(forbidden, list) or any(
+        isinstance(index, bool) or not isinstance(index, int) or index < 0 or index >= len(triangles)
+        for index in forbidden
+    ):
+        raise ValueError("pairing_forbidden_triangles must contain source triangle indexes")
+
     attributes = document.get("vertex_attributes", {})
     if not isinstance(attributes, dict):
         raise ValueError("vertex_attributes must be an object")
@@ -187,12 +194,15 @@ def compile_mesh_ir(
     textured_triangles = (
         set(range(len(faces))) if "uv" in document.get("vertex_attributes", {}) else set()
     )
+    pairing_forbidden_triangles = textured_triangles | set(document.get("pairing_forbidden_triangles", []))
     primitives, report = pair_triangles(
         positions,
         faces,
         deformation_poses=poses,
-        pairing_forbidden_triangles=textured_triangles,
+        pairing_forbidden_triangles=pairing_forbidden_triangles,
     )
+    if pairing_forbidden_triangles:
+        report["pairing_forbidden_triangle_count"] = len(pairing_forbidden_triangles)
     deformation = document.get("deformation")
     if deformation is not None:
         influence_counts = [len(items) for items in deformation["influences"]]
@@ -236,6 +246,7 @@ def compile_mesh_ir(
         "positions": document["positions"],
         "materials": document["materials"],
         "vertex_attributes": document.get("vertex_attributes", {}),
+        "pairing_forbidden_triangles": document.get("pairing_forbidden_triangles", []),
         "deformation": document.get("deformation"),
         "primitives": compiled_primitives,
         "report": report,

@@ -118,12 +118,23 @@ def eye_world_vertices(vertices: list[tuple[int, int, int]], joint_rotation: tup
     return converted
 
 
+def animation_rows(source: str, name: str) -> list[tuple[int, int, int]]:
+    """Extract a Goddard GD_ANIM_ROT3S stream without interpreting its values.
+
+    Goddard consumes these signed triples at 0.1 degree units.  The target
+    renderer keeps that raw contract in its generated header; fixed-point pose
+    evaluation is deliberately a separate target concern.
+    """
+    return named_rows(source, name, 3)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--eyes-input", type=Path, required=True)
     parser.add_argument("--features-input", type=Path, required=True)
     parser.add_argument("--master-input", type=Path)
+    parser.add_argument("--animation-input", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--quad-report", type=Path)
     parser.add_argument("--mesh-ir-output", type=Path)
@@ -132,6 +143,7 @@ def main() -> None:
     eyes_text = args.eyes_input.read_text(encoding="utf-8")
     features_text = args.features_input.read_text(encoding="utf-8")
     master_text = args.master_input.read_text(encoding="utf-8") if args.master_input else None
+    animation_text = args.animation_input.read_text(encoding="utf-8") if args.animation_input else None
     vertices = rows(initializer_body(text, "mario_Face_VtxData", "s16"), 3)
     faces = rows(initializer_body(text, "mario_Face_FaceData", "u16"), 4)
     face_materials = materials(text)
@@ -157,6 +169,40 @@ def main() -> None:
         "deformation": goddard_deformation(master_text, len(vertices)) if master_text else None,
         "validation_poses": [],
     }
+    deformation = source_ir["deformation"]
+    if not isinstance(deformation, dict):
+        raise ValueError("the intro face requires master-input deformation data")
+    joints = deformation["joints"]
+    right_eyelid_joint = joints.index("DYNOBJ_RIGHT_EYELID_JOINT_1")
+    left_eyelid_joint = joints.index("DYNOBJ_LEFT_EYELID_JOINT_1")
+    right_eyelid_weights = [
+        next((entry["weight_q15"] for entry in entries if entry["joint"] == right_eyelid_joint), 0)
+        for entries in deformation["influences"]
+    ]
+    left_eyelid_weights = [
+        next((entry["weight_q15"] for entry in entries if entry["joint"] == left_eyelid_joint), 0)
+        for entries in deformation["influences"]
+    ]
+    if animation_text is None:
+        raise ValueError("the intro face requires animation-input pose data")
+    right_eyelid_animation = animation_rows(animation_text, "animdata_mario_eyelid_right_1")
+    left_eyelid_animation = animation_rows(animation_text, "animdata_mario_eyelid_left_1")
+    animated_vertices = {
+        index
+        for index, (right_weight, left_weight) in enumerate(
+            zip(right_eyelid_weights, left_eyelid_weights)
+        )
+        if right_weight != 0 or left_weight != 0
+    }
+    # A VDP1 quad that spans even one animated eyelid vertex can become
+    # concave between static validation poses. Preserve the source triangles
+    # until the full Goddard joint evaluator supplies pose-complete safety
+    # samples. This keeps the fallback local to the deforming eyelid region.
+    source_ir["pairing_forbidden_triangles"] = [
+        source
+        for source, (_material, a, b, c) in enumerate(faces)
+        if {a, b, c} & animated_vertices
+    ]
     compiled_ir, face_primitives, quad_report = compile_mesh_ir(source_ir)
     right_eye = eye_world_vertices(named_rows(eyes_text, "verts_mario_eye_right", 3), (184.483, -178.885, 82.485), (90.0, 180.0, 0.0), (29.7, 192.4, -3.0))
     left_eye = eye_world_vertices(named_rows(eyes_text, "verts_mario_eye_left", 3), (-6.873, 0.206, -97.461), (-90.0, 0.0, 0.0), (-29.0, 192.3, -2.0))
@@ -179,6 +225,7 @@ def main() -> None:
         f" * SHA-256: {digest}",
         f" * Eye source: src/goddard/dynlists/dynlists_mario_eyes.c SHA-256: {hashlib.sha256(eyes_text.encode('utf-8')).hexdigest()}",
         f" * Feature source: src/goddard/dynlists/dynlists_mario_eyebrows_mustache.c SHA-256: {hashlib.sha256(features_text.encode('utf-8')).hexdigest()}",
+        f" * Animation source: src/goddard/dynlists/anim_group_2.c SHA-256: {hashlib.sha256(animation_text.encode('utf-8')).hexdigest()}",
         " * Reuse: direct data conversion; vertices and triangles are unchanged. */",
         "#ifndef SM64_SATURN_INTROFACE_MARIO_FACE_MESH_H",
         "#define SM64_SATURN_INTROFACE_MARIO_FACE_MESH_H",
@@ -211,6 +258,14 @@ def main() -> None:
     ]
     lines += ["};", "", "/* RGB555 values converted from the original SetAmbient material values. */", "static const uint8_t sm64_face_material_rgb[8][3] = {"]
     lines += [f"    {{{red}, {green}, {blue}}}," for red, green, blue in face_materials]
+    lines += ["};", "", "/* Directly converted eyelid-joint influence streams and GD_ANIM_ROT3S", " * keyframes. Runtime uses them for the first fixed-point deformation study. */", f"#define SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT {len(right_eyelid_animation)}U", f"#define SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT {len(left_eyelid_animation)}U", "static const uint16_t sm64_right_eyelid_weights[SM64_FACE_VERTEX_COUNT] = {"]
+    lines += [f"    {weight}U," for weight in right_eyelid_weights]
+    lines += ["};", "static const uint16_t sm64_left_eyelid_weights[SM64_FACE_VERTEX_COUNT] = {"]
+    lines += [f"    {weight}U," for weight in left_eyelid_weights]
+    lines += ["};", "static const int16_t sm64_right_eyelid_animation[SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT][3] = {"]
+    lines += [f"    {{{x}, {y}, {z}}}," for x, y, z in right_eyelid_animation]
+    lines += ["};", "static const int16_t sm64_left_eyelid_animation[SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT][3] = {"]
+    lines += [f"    {{{x}, {y}, {z}}}," for x, y, z in left_eyelid_animation]
     lines += ["};", "", f"#define SM64_RIGHT_EYE_VERTEX_COUNT {len(right_eye)}U", f"#define SM64_RIGHT_EYE_TRIANGLE_COUNT {len(right_eye_faces)}U", f"#define SM64_LEFT_EYE_VERTEX_COUNT {len(left_eye)}U", f"#define SM64_LEFT_EYE_TRIANGLE_COUNT {len(left_eye_faces)}U", "/* World-space eye vertices: source local data transformed using the static", " * joint/net rotations and offsets in dynlist_mario_master.c (XYZ Euler). */", "static const int16_t sm64_right_eye_vertices[SM64_RIGHT_EYE_VERTEX_COUNT][3] = {"]
     lines += [f"    {{{x}, {y}, {z}}}," for x, y, z in right_eye]
     lines += ["};", "static const uint16_t sm64_right_eye_triangles[SM64_RIGHT_EYE_TRIANGLE_COUNT][4] = {"]
@@ -251,6 +306,8 @@ def main() -> None:
             "algorithm": "exact constrained maximum-cardinality, maximum-integer-quality matching",
             "minimum_normal_alignment": 0.80,
             "camera_samples": {"yaw_degrees": [-45, -22, 0, 22, 45], "pitch_degrees": [-30, 0, 30]},
+            "animated_eyelid_vertex_count": len(animated_vertices),
+            "animated_eyelid_triangle_fallback_count": len(source_ir["pairing_forbidden_triangles"]),
             "prior_art": {
                 "repository": "https://github.com/Rulesobeyer/Optimized-Tris-to-Quads-Converter",
                 "commit": "1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c",
