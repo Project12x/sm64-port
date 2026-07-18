@@ -1,0 +1,168 @@
+{
+  "name": "normal_mario_neutral_turntable",
+  "reuse": "direct data conversion",
+  "source": {
+    "model": {
+      "path": "actors\\mario\\model.inc.c",
+      "sha256": "787b6c47c641238af87c51d4faa3cc8a8bd252ecbf59e70d8aac1520a96ed8c0"
+    },
+    "geo": {
+      "path": "actors\\mario\\geo.inc.c",
+      "sha256": "fc276e326a9cb22f55dfae8349b0ff746b9a7db7c108074a47508f3e2b225364"
+    }
+  },
+  "geo_layout": "mario_geo_body",
+  "parts": [
+    {
+      "display_list": "mario_butt",
+      "offset": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "display_list": "mario_torso",
+      "offset": [
+        68,
+        0,
+        0
+      ]
+    },
+    {
+      "display_list": "mario_cap_on_eyes_front",
+      "offset": [
+        155,
+        0,
+        0
+      ]
+    },
+    {
+      "display_list": "mario_left_arm",
+      "offset": [
+        135,
+        -10,
+        79
+      ]
+    },
+    {
+      "display_list": "mario_left_forearm_shared_dl",
+      "offset": [
+        200,
+        -10,
+        79
+      ]
+    },
+    {
+      "display_list": "mario_left_hand_open",
+      "offset": [
+        260,
+        -10,
+        79
+      ]
+    },
+    {
+      "display_list": "mario_right_arm",
+      "offset": [
+        136,
+        -10,
+        -79
+      ]
+    },
+    {
+      "display_list": "mario_right_forearm_shared_dl",
+      "offset": [
+        201,
+        -10,
+        -79
+      ]
+    },
+    {
+      "display_list": "mario_right_hand_open",
+      "offset": [
+        261,
+        -10,
+        -79
+      ]
+    },
+    {
+      "display_list": "mario_left_thigh",
+      "offset": [
+        13,
+        -8,
+        42
+      ]
+    },
+    {
+      "display_list": "mario_left_leg_shared_dl",
+      "offset": [
+        102,
+        -8,
+        42
+      ]
+    },
+    {
+      "display_list": "mario_left_foot",
+      "offset": [
+        169,
+        -8,
+        42
+      ]
+    },
+    {
+      "display_list": "mario_right_thigh",
+      "offset": [
+        13,
+        -8,
+        -42
+      ]
+    },
+    {
+      "display_list": "mario_right_leg_shared_dl",
+      "offset": [
+        102,
+        -8,
+        -42
+      ]
+    },
+    {
+      "display_list": "mario_right_foot",
+      "offset": [
+        169,
+        -8,
+        -42
+      ]
+    }
+  ],
+  "triangle_count": 788,
+  "triangle_display_lists": [
+    "mario_butt_dl",
+    "mario_eyes_cap_on_dl",
+    "mario_face_back_hair_cap_on_dl",
+    "mario_face_cap_dl",
+    "mario_face_part_cap_on_dl",
+    "mario_hair_sideburn_cap_on_dl",
+    "mario_left_arm_shared_dl",
+    "mario_left_foot_shared_dl",
+    "mario_left_forearm_shared_dl",
+    "mario_left_hand_open_shared_dl",
+    "mario_left_leg_shared_dl",
+    "mario_left_thigh_dl",
+    "mario_m_logo_dl",
+    "mario_mustache_cap_on_dl",
+    "mario_pants_overalls_shared_dl",
+    "mario_right_arm_shared_dl",
+    "mario_right_foot_dl",
+    "mario_right_forearm_shared_dl",
+    "mario_right_hand_open_dl",
+    "mario_right_leg_shared_dl",
+    "mario_right_thigh_shared_dl",
+    "mario_tshirt_shared_dl",
+    "mario_yellow_button_dl"
+  ],
+  "limits": [
+    "neutral bind pose only",
+    "translation-only hierarchy",
+    "RGBA16 texture commands use source light colors until VDP1 texture conversion"
+  ]
+}

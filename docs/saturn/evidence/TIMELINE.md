@@ -153,6 +153,26 @@ Pupil triangles are foreground only while the actual source eyelid is open.
 The threshold is deliberately not applied to closed poses, where the animated
 source skin must remain the occluder.
 
+### M2 rejected: initial in-game actor assembly
+
+![Exploded first source Mario actor assembly](screenshots/ymir-m2-source-mario-cachefix-2026-07-18.png)
+
+This is the first runtime capture of the normal in-game Mario actor stream:
+788 triangles directly extracted from actors/mario/model.inc.c and the
+mario_geo_body branch. It is deliberately preserved as a failure. The
+translation-only staging evaluator is not yet equivalent to the source
+GeoLayout transform stack, so the body is exploded rather than presented as
+a Mario silhouette.
+
+### M2 rejected: wrong actor-basis projection
+
+![Offscreen Mario actor after an incorrect source-axis interpretation](screenshots/ymir-m2-source-mario-sourceorder-2026-07-18.png)
+
+The fast source-order path presents correctly, but this capture proves that
+the attempted X-up camera conversion projects the actor offscreen. The next
+implementation gate is a source GeoLayout evaluator, not further camera
+calibration guesses.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
@@ -164,3 +184,6 @@ source skin must remain the occluder.
    with the intended game-frame budget.
 4. Evaluate the first source animation extrema through the deformation-aware
    quad safety gate and record any pairs that must fall back to triangles.
+5. Replace M2's hand-authored neutral offsets with evaluated mario_geo_body
+   transform nodes, then capture the accepted full Mario silhouette before
+   texture or animation work begins.
