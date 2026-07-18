@@ -173,6 +173,18 @@ the attempted X-up camera conversion projects the actor offscreen. The next
 implementation gate is a source GeoLayout evaluator, not further camera
 calibration guesses.
 
+### M2 accepted plumbing: unmasked source Mario actor
+
+![Actual mario_geo_body geometry reaches the VDP1 field](screenshots/ymir-m2-source-mario-vdp1-visible-2026-07-18.png)
+
+This capture is 788 triangles directly generated from the project’s
+`actors/mario/model.inc.c`, selected by the evaluated `mario_geo_body`
+GeoLayout branch, then submitted to VDP1. It proves the in-game source actor
+reaches the Saturn display path. The fractured silhouette is expected: each
+source triangle is still a repeated-vertex temporary VDP1 quad, so it is not
+yet a quality, animation-safe presentation. The preceding VDP1 command probe
+and depth-bucket captures are retained as rejected diagnostic evidence.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
