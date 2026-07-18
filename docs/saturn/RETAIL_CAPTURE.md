@@ -21,7 +21,8 @@ mapped expansion DRAM returned by the Saturn cartridge interface.
 
 1. Boot the exact `sm64-saturn-hwtest.cue` with the 4 MiB cart installed.
 2. Photograph or losslessly capture the final screen, including the cart ID,
-   CPU/SCU timings, six VDP1 probe lines, telemetry address, and status.
+   CPU/SCU timings, the seven VDP1 probe measurements, telemetry address, and
+   status.
 3. Read 120 bytes beginning at `0x06010000` through the approved hardware
    debugger or capture interface.
 4. Save the raw bytes unchanged, then decode them with
