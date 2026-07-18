@@ -24,8 +24,8 @@ The extractor also converts the eight `SetAmbient` RGB values in the same
 source file to RGB555. The renderer uses those converted colors as the bright
 endpoint of each VDP1 Gouraud table; its dark endpoint is a 50% intensity
 variant. This establishes source-derived flat material colors and first-pass
-lighting, but not pixel-identical original Mario materials: the separate
-eyebrow and moustache objects and the N64 shine texture are later work.
+lighting, but not pixel-identical original Mario materials: the N64 shine
+texture remains later work.
 
 The 2026-07-17 BIOS-backed Ymir capture is
 `docs/saturn/evidence/screenshots/ymir-source-face-2026-07-17.png` (SHA-256
@@ -59,3 +59,23 @@ preserved at `ymir-source-eyes-face-2026-07-17.png`; the calibrated capture is
 `docs/saturn/evidence/screenshots/ymir-source-eyes-calibrated-2026-07-17.png`
 (SHA-256 `0cd261ca7e9d1a95644caaaff7dbb587e4e5d0c6965892f6dea2592f4f2545b8`,
 frame 3300). Both are BIOS-backed Ymir emulator evidence only.
+
+The first feature experiment directly converts `verts_mario_eyebrow_right`,
+`facedata_mario_eyebrow_right`, `verts_mario_eyebrow_left`,
+`facedata_mario_eyebrow_left`, `verts_mario_mustache`, and
+`facedata_mario_mustache` from
+`src/goddard/dynlists/dynlists_mario_eyebrows_mustache.c` (source SHA-256
+`534876bb73e5b3b428f6b0cc515769479f3608c6ed72a3a6d4305e748acf2770`).
+The two eyebrows retain 26 vertices / 36 triangles each; the moustache retains
+56 vertices / 100 triangles. The initial renderer projected those raw vertices
+as if they already occupied final face space and used their black ambient
+material directly. The capture disproves that pose/material assumption: the
+moustache is oversized, sits in front of the nose, and reads as the wrong
+color. `dynlist_mario_master.c` defines additional net attachment, skin-joint,
+and animation transforms that the corrected static pose must evaluate.
+
+Its capture is
+`docs/saturn/evidence/screenshots/ymir-source-features-2026-07-17.png`
+(SHA-256 `f2a056166614cb022540faafc2b585930d1d0dd650bbc1d05265507aec5ec9ae`,
+frame hash `d9abbdcdafa238c405689f2c0c6d5e89`, frame 3300). It is retained as a
+rejected visual experiment and BIOS-backed Ymir emulator evidence only.

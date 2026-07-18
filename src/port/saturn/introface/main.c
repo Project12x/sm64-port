@@ -1,9 +1,8 @@
 /*
  * First source-derived SM64 geometry on Saturn.
  *
- * mario_face_mesh.h is a direct conversion of the Goddard face plus eye
- * vertices and triangles. The eyes include the original iris, pupil, and
- * highlight surfaces from dynlists_mario_eyes.c.
+ * mario_face_mesh.h is a direct conversion of the Goddard face, eyes,
+ * eyebrows, and moustache vertices and triangles.
  */
 #include <yaul.h>
 #include <string.h>
@@ -11,7 +10,8 @@
 #include "mario_face_mesh.h"
 
 #define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
-#define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + EYE_TRIANGLE_COUNT + 3U)
+#define FEATURE_TRIANGLE_COUNT (SM64_RIGHT_EYEBROW_TRIANGLE_COUNT + SM64_LEFT_EYEBROW_TRIANGLE_COUNT + SM64_MUSTACHE_TRIANGLE_COUNT)
+#define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + EYE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT + 3U)
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_TRIANGLE_COUNT];
 static uint16_t draw_order[SM64_FACE_TRIANGLE_COUNT];
@@ -127,6 +127,28 @@ draw_eye(vdp1_cmdt_t *cmdts, uint16_t *cursor, const int16_t vertices[][3],
 }
 
 static void
+draw_feature(vdp1_cmdt_t *cmdts, uint16_t *cursor,
+  const int16_t vertices[][3], const uint16_t triangles[][4],
+  uint16_t triangle_count, const uint8_t materials[][3])
+{
+    const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768 };
+    for (uint16_t i = 0; i < triangle_count; i++) {
+        const uint16_t *f = triangles[i];
+        const uint8_t *rgb = materials[f[0]];
+        const int16_vec2_t projected[4] = {
+            project_point(vertices[f[1]]), project_point(vertices[f[2]]),
+            project_point(vertices[f[3]]), project_point(vertices[f[3]])
+        };
+        vdp1_cmdt_t *cmdt = &cmdts[*cursor];
+        vdp1_cmdt_polygon_set(cmdt);
+        vdp1_cmdt_draw_mode_set(cmdt, mode);
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        vdp1_cmdt_vtx_set(cmdt, projected);
+        (*cursor)++;
+    }
+}
+
+static void
 draw_source_face(void)
 {
     const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
@@ -175,6 +197,17 @@ draw_source_face(void)
       SM64_RIGHT_EYE_TRIANGLE_COUNT, sm64_right_eye_material_rgb, 5, -4, 179, 128);
     draw_eye(list->cmdts, &cursor, sm64_left_eye_vertices, sm64_left_eye_triangles,
       SM64_LEFT_EYE_TRIANGLE_COUNT, sm64_left_eye_material_rgb, -6, -4, 139, 128);
+    /* Eyebrows and moustache are already in the face coordinate space in the
+     * source dynlist. Draw them last as distinct black surface objects. */
+    draw_feature(list->cmdts, &cursor, sm64_right_eyebrow_vertices,
+      sm64_right_eyebrow_triangles, SM64_RIGHT_EYEBROW_TRIANGLE_COUNT,
+      sm64_right_eyebrow_material_rgb);
+    draw_feature(list->cmdts, &cursor, sm64_left_eyebrow_vertices,
+      sm64_left_eyebrow_triangles, SM64_LEFT_EYEBROW_TRIANGLE_COUNT,
+      sm64_left_eyebrow_material_rgb);
+    draw_feature(list->cmdts, &cursor, sm64_mustache_vertices,
+      sm64_mustache_triangles, SM64_MUSTACHE_TRIANGLE_COUNT,
+      sm64_mustache_material_rgb);
     vdp1_cmdt_end_set(&list->cmdts[cursor]);
     vdp1_vram_partitions_get(&partitions);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud));
@@ -199,7 +232,7 @@ user_init(void)
     for (uint8_t i = 0; i < 8; i++) vdp2_sprite_priority_set(i, 7);
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load();
-    dbgio_puts("SM64 SATURN\nSOURCE FACE + EYES\n440 + 96 VERTICES\n1041 TRIANGLES");
+    dbgio_puts("SM64 SATURN\nSOURCE FACE FEATURES\n644 VERTICES\n1213 TRIANGLES");
     dbgio_flush(); vdp2_sync(); vdp2_sync_wait();
     draw_source_face();
     for (;;) {}

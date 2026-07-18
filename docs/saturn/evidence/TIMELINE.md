@@ -21,6 +21,7 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 | Mario eye alignment calibration | The first static transform was retained, measured against the source face eye-surface bounds, then corrected by right `(+5,-4)` and left `(-6,-4)` screen pixels. | [initial eye frame](screenshots/ymir-source-eyes-face-2026-07-17.png), [calibrated eye frame](screenshots/ymir-source-eyes-calibrated-2026-07-17.png), [capture report](ymir-source-eyes-calibrated-2026-07-17.json) |
 | Mario eye-size calibration | The separate source eye meshes were reduced to 2/3 around their matching source eye-surface centers so irises/pupils sit inside the white face geometry. | [scaled-eye frame](screenshots/ymir-source-eyes-scaled-2026-07-17.png), [capture report](ymir-source-eyes-scaled-2026-07-17.json) |
 | Topology-derived Gouraud depth | Per-vertex normals are accumulated from the 877 source triangles and evaluated against an upper-left key light, producing continuous VDP1 Gouraud lighting on the face. | [Gouraud frame](screenshots/ymir-source-gouraud-2026-07-17.png), [capture report](ymir-source-gouraud-2026-07-17.json) |
+| Rejected raw-feature placement | The first feature import exposed a false assumption: projecting the separate Goddard meshes directly in face space makes the moustache oversized, incorrectly black, and layered in front of the nose. Preserved as a failure, not accepted renderer progress. | [failure frame](screenshots/ymir-source-features-2026-07-17.png), [capture report](ymir-source-features-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
 
 ## Source-face gallery
 
@@ -40,10 +41,17 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 
 ![Source face with Gouraud depth lighting](screenshots/ymir-source-gouraud-2026-07-17.png)
 
+### Rejected: raw moustache and eyebrow placement
+
+![Failed raw placement with oversized black moustache in front of the nose](screenshots/ymir-source-features-2026-07-17.png)
+
+The source objects are valid, but this direct projection is not. The moustache
+must follow its Goddard net/skin transform and correct depth/material behavior.
+
 ## Next visual gates
 
-1. Add the separate source eyebrow and moustache objects to the converted
-   face scene.
+1. Correct the moustache pose, scale, depth ordering, and material from the
+   Goddard net/skin setup; recapture without deleting the rejected frame.
 2. Add source texture conversion for the N64 shine overlay and capture it.
 3. Add controllable camera yaw/pitch plus a deterministic two-angle screenshot
    pair.
