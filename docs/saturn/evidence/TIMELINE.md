@@ -5,6 +5,8 @@ boot/protocol diagnostic from an actual renderer result, and distinguishes
 source-derived content from an original stand-in. Screenshots are evidence of
 the named state only; emulator timing is not retail hardware evidence.
 
+For a screenshot-first viewer, open [the visual timeline gallery](index.html).
+
 | Stage | What it proves | Visual evidence |
 |---|---|---|
 | Hello disc | The first Yaul SH-2 disc reached a display through Yabause HLE. | [hello screen](screenshots/2026-07-17/hello-yabause-hle.png) |
