@@ -1,6 +1,12 @@
 /* M2 source Mario actor proof: generated geometry, neutral pose, VDP1 RGB fallback. */
 #include <yaul.h>
 #include <string.h>
+#include "controller_saturn.h"
+#include "game/area.h"
+#include "game/camera.h"
+#include "game/game_init.h"
+#include "game/mario.h"
+#include "sm64.h"
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 #define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
@@ -9,7 +15,7 @@
 #define FAR_DEPTH 2048
 /* mario_geo_body's source origin is at the feet rather than its visual center.
  * Keep that source-space convention and apply only the camera's framing offset. */
-#define CAMERA_FRAME_Y 180
+#define CAMERA_FRAME_Y 55
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
 static vdp1_gouraud_table_t gouraud[SM64_MARIO_PRIMITIVE_COUNT];
@@ -21,6 +27,11 @@ static int16_t bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 static angle_t yaw = 32768; static fix16_t sine_yaw, cosine_yaw;
 static uint16_t frame_ticks, sort_ticks, build_ticks, visible_triangles, rejected_triangles; static bool controls_ready;
 static uint16_t animation_frame;
+static OSContPad source_pad;
+static struct Controller source_controller;
+static struct MarioState source_mario_state;
+static struct Area source_area;
+static struct Camera source_camera;
 static int16_t projected_min_x, projected_min_y, projected_max_x, projected_max_y;
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
 static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
@@ -64,7 +75,9 @@ static point3_t transform_point(const int16_t *s) {
      * axis; do not retain the earlier bind-mesh X-up camera workaround. */
     const int32_t x = (((int32_t)s[0] * cosine_yaw) + ((int32_t)s[2] * sine_yaw)) >> 16;
     const int32_t z = ((-(int32_t)s[0] * sine_yaw) + ((int32_t)s[2] * cosine_yaw)) >> 16;
-    return (point3_t){ x, (int32_t)s[1] - CAMERA_FRAME_Y, z + 900 };
+    /* Close diagnostic framing only; the production path will consume the
+     * original graph camera rather than promoting this turntable camera. */
+    return (point3_t){ x, (int32_t)s[1] - CAMERA_FRAME_Y, z + 300 };
 }
 static int16_vec2_t project_point(point3_t p) {
     const int32_t z = p.z < 128 ? 128 : p.z;
@@ -97,11 +110,22 @@ static void texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
     output[3] = output[2];
 }
 static void update_view(void) {
-    smpc_peripheral_digital_t digital; (void)memset(&digital, 0, sizeof(digital));
-    smpc_peripheral_process(); smpc_peripheral_digital_port(1, &digital);
-    if (!controls_ready) controls_ready = digital.connected != 0;
-    else if ((digital.pressed.raw & PERIPHERAL_DIGITAL_LEFT) != 0) yaw -= 192;
-    else if ((digital.pressed.raw & PERIPHERAL_DIGITAL_RIGHT) != 0) yaw += 192;
+    controller_saturn.read(&source_pad);
+    if (!controls_ready) controls_ready = source_pad.errnum == 0;
+    source_controller.rawStickX = source_pad.stick_x;
+    source_controller.rawStickY = source_pad.stick_y;
+    source_controller.buttonPressed = source_pad.button & (source_pad.button ^ source_controller.buttonDown);
+    source_controller.buttonDown = source_pad.button;
+    adjust_analog_stick(&source_controller);
+    source_mario_state.input = 0;
+    update_mario_button_inputs(&source_mario_state);
+    update_mario_joystick_inputs(&source_mario_state);
+    /* This diagnostic target does not invent a second movement model.  The
+     * original SM64 joystick function owns intended magnitude/direction; the
+     * renderer merely presents that source result as actor orientation until
+     * the action/collision loop is linked. */
+    if (controls_ready && (source_mario_state.input & INPUT_NONZERO_ANALOG))
+        yaw = (angle_t)(32768 + source_mario_state.intendedYaw);
     fix16_sincos(yaw, &sine_yaw, &cosine_yaw);
 }
 static void sort_triangles(void) {
@@ -197,6 +221,12 @@ void user_init(void) {
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
+    source_area.camera = &source_camera;
+    source_mario_state.area = &source_area;
+    source_mario_state.controller = &source_controller;
+    source_mario_state.framesSinceA = 0xFF;
+    source_mario_state.framesSinceB = 0xFF;
+    source_mario_state.faceAngle[1] = 0;
     fix16_sincos(yaw, &sine_yaw, &cosine_yaw); build_vertex_normals(); rebuild_gouraud();
     { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
       scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0); }
@@ -208,7 +238,7 @@ void user_init(void) {
         }
         cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M2 — SOURCE MARIO IR\nmario_geo_body | %u tris -> %u quads + %u fallbacks\nD-PAD LEFT/RIGHT: orbit | anim_C5 %u/%u\nVISIBLE %u REJECTED %u | XY %d..%d / %d..%d\n~%u.%u FPS  SORT %u  BUILD %u  FRAME %u\n", (uint16_t)SM64_MARIO_TRIANGLE_COUNT, (uint16_t)SM64_MARIO_QUAD_COUNT, (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_QUAD_COUNT), animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_triangles, rejected_triangles, projected_min_x, projected_max_x, projected_min_y, projected_max_y, fps_x10 / 10U, fps_x10 % 10U, sort_ticks, build_ticks, (uint16_t)frame);
+            dbgio_printf("\x1B[HSM64 SATURN M2 — SOURCE MARIO IR\nmario_geo_body | %u tris -> %u quads + %u fallbacks\nPad %04X %d,%d -> Mario mag %d yaw %d input %04X | C5 %u/%u\nVISIBLE %u REJECTED %u | XY %d..%d / %d..%d\n~%u.%u FPS  SORT %u  BUILD %u  FRAME %u\n", (uint16_t)SM64_MARIO_TRIANGLE_COUNT, (uint16_t)SM64_MARIO_QUAD_COUNT, (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_QUAD_COUNT), source_pad.button, source_pad.stick_x, source_pad.stick_y, (int16_t)source_mario_state.intendedMag, source_mario_state.intendedYaw, source_mario_state.input, animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_triangles, rejected_triangles, projected_min_x, projected_max_x, projected_min_y, projected_max_y, fps_x10 / 10U, fps_x10 % 10U, sort_ticks, build_ticks, (uint16_t)frame);
             dbgio_flush(); vdp2_sync(); }
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
     }

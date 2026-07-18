@@ -82,6 +82,7 @@ void end_master_display_list(void);
 void render_init(void);
 void select_gfx_pool(void);
 void display_and_vsync(void);
+void adjust_analog_stick(struct Controller *controller);
 
 #ifdef USE_SYSTEM_MALLOC
 Gfx **alloc_next_dl(void);

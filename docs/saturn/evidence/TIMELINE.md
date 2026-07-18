@@ -552,10 +552,36 @@ clear field. This is preserved as an architectural failure: camera constants
 must flow through original SM64 state and graph traversal, not be transplanted
 into another bespoke room viewer.
 
+### M2 accepted: original SM64 controller and Mario intent on SH-2
+
+![Neutral source-state frame](screenshots/ymir-m2-sm64-state-neutral-2026-07-18.png)
+
+![Saturn Up converted by original Mario input code](screenshots/ymir-m2-sm64-state-up-2026-07-18.png)
+
+The Yaul controller backend now terminates at SM64's existing `OSContPad`
+interface. The target links the original `adjust_analog_stick()` from
+`src/game/game_init.c`, `update_mario_button_inputs()` and
+`update_mario_joystick_inputs()` from `src/game/mario.c`, and `atan2s()` plus
+its original lookup table from `src/engine/math_util.c`. Linker garbage
+collection retains that source-owned slice without pulling in replacement
+gameplay.
+
+The duration-aware Ymir report probes the paused SH-2 state beginning at the
+build's `_source_pad` symbol. Saturn Up is `stick_y=80`; the original
+controller becomes `stickY=64.0`, and the original `MarioState` becomes
+`input=INPUT_NONZERO_ANALOG`, `intendedMag=32.0`, `intendedYaw=0x8000`. The
+second screenshot presents that direction as a back-facing actor. A three-frame
+pulse produced the same neutral framebuffer because no SMPC collection landed
+inside that interval; the accepted evidence therefore uses a bounded 120-frame
+hold and 60-frame observation window. See
+[the state-bridge evidence note](ymir-m2-sm64-state-bridge-2026-07-18.md) and
+[the machine report](ymir-m2-sm64-state-up-2026-07-18.json).
+
 ## Next visual gates
 
-1. Compile the original SM64 controller/game-state, collision, camera, and
-   render-graph boundary for Saturn; stop adding room-specific target state.
+1. Extend the now-running original controller/Mario intent slice through
+   source collision, actions, and camera; stop adding room-specific target
+   state.
 2. Translate the display-list output to the current Saturn mesh/texture IR and
    VDP1 command builder, retaining conservative quadification and fallbacks.
 3. Batch each area's 1×/2×/4× texture profiles into RAM-cart manifests, then

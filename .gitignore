@@ -53,6 +53,7 @@ build/*
 .assets-local.txt
 .yaul.env
 .venv-saturn-tools/
+/work/
 sm64_save_file.bin
 sm64config.txt
 

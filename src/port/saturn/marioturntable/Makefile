@@ -3,14 +3,27 @@ ifeq ($(strip $(YAUL_INSTALL_ROOT)),)
 endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-mario-turntable
-SH_SRCS := main.c
+SH_SRCS := main.c \
+  $(ROOT)/src/port/saturn/controller/controller_saturn.c \
+  $(ROOT)/src/port/saturn/compat/sqrtf.c \
+  $(ROOT)/src/game/game_init.c \
+  $(ROOT)/src/game/mario.c \
+  $(ROOT)/src/engine/math_util.c
 SH_BUILD_DIR := $(ROOT)/build/saturn/marioturntable/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/marioturntable
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/marioturntable/cd
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
-SH_CFLAGS += -Os -g -DDEBUG -I$(ROOT)/build/saturn/marioturntable/generated
+SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DTARGET_SATURN=1 \
+  -I$(ROOT) \
+  -I$(ROOT)/src/port/saturn/compat \
+  -I$(ROOT)/include \
+  -I$(ROOT)/src \
+  -I$(ROOT)/src/game \
+  -I$(ROOT)/src/engine \
+  -I$(ROOT)/src/port/saturn/controller \
+  -I$(ROOT)/build/saturn/marioturntable/generated
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260718
 IP_AREAS := JTUBKAEL
