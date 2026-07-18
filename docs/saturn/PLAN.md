@@ -264,9 +264,14 @@ growth directly reduces texture residency.
 
 ## Gated roadmap
 
+This section defines the technical gates. The visible implementation order and
+the decision to advance emulator-driven rendering while retail validation is
+deferred are maintained in [`ROADMAP.md`](ROADMAP.md) and its
+[visual companion](roadmap.html).
+
 ### Phase 0: provenance and reproducible bring-up
 
-Status as of 2026-07-17: the provenance baseline, libyaul 0.3.1 submodule pin,
+Status as of 2026-07-18: the provenance baseline, libyaul 0.3.1 submodule pin,
 isolated hello-disc source, and Saturn Makefile are present. A source-built
 GCC 14.3.0/binutils 2.44 SH-2 toolchain and the pinned libyaul produced a CUE
 and ISO from a clean target build; the executable header and artifact hashes
@@ -275,11 +280,11 @@ reached the expected hello screen for 600 frames using its explicitly
 lower-confidence HLE BIOS. A GPL-contained Project12x Ymir fork now provides
 JSON-RPC stepping, memory/register inspection, continuous execution, pause,
 bounded frame runs, deterministic stopped events, canonical frame hashes, and
-base64 PNG capture; it remains an external tool and has not yet supplied the
-required BIOS-backed hello-disc evidence. A portable one-command toolchain
+base64 PNG capture. It remains an external tool and has supplied BIOS-backed
+hardware-test and source-face evidence. A portable one-command toolchain
 bootstrap wrapper is present; the local fallback path has been executed and
-verified, while Docker-container execution, a second BIOS-backed emulator run,
-and retail-hardware execution remain open.
+verified, while Docker-container execution and retail-hardware execution remain
+open.
 
 Deliver:
 
@@ -289,7 +294,8 @@ Deliver:
 - pinned dependencies and a maintained provenance/reuse ledger;
 - preserved libyaul MIT terms;
 - a reproducible build producing a bootable `.cue`/`.bin`; and
-- a hello-screen disc verified in two emulators and retail hardware.
+- a hello/render disc verified in two emulators, with retail cold-boot
+  validation tracked as the M8 authority gate.
 
 Gate: a clean checkout builds with one documented command, and no unlicensed
 PSX or examples code has been copied.
@@ -306,8 +312,14 @@ Deliver:
   transparency modes, and concave/twisted problem cases; and
 - record draw-end time, command count, and an approximate pixel count.
 
-Gate: retail-hardware results replace the provisional transfer and frame
-assumptions.
+Development gate: the disc, telemetry schema, visible failure modes, and
+capture automation work in BIOS-backed emulation. This gate is complete enough
+to advance renderer and gameplay prototyping.
+
+Authority gate: retail-hardware results must replace provisional transfer and
+frame assumptions before M7 optimizations are locked or M8 release claims are
+made. Deferring that measurement does not convert emulator timings into
+hardware evidence.
 
 ### Phase 2: asset audit and PC reference renderer
 
@@ -414,12 +426,8 @@ to take multiple years.
 
 ## Immediate implementation order
 
-After this documentation baseline, produce two evidence streams:
-
-1. a libyaul hardware-characterization disc for the cartridge and VDP1; and
-2. a host-side SM64 asset classifier measuring geometry and texture viability.
-
-The hardware bring-up starts first because it creates the reproducible Saturn
-build path required by every later target. The asset classifier should begin as
-soon as that build skeleton is stable. If either stream fails its gate, revise
-the architecture before committing to a broad port.
+The original hardware-characterization and classifier streams now exist. The
+active implementation order is the M1 queue in [`ROADMAP.md`](ROADMAP.md):
+duration-aware Ymir input, Goddard deformation tracing/extraction, one animated
+source expression, deterministic soak/captures, then the general Saturn render
+IR with in-game Mario as its first client.
