@@ -89,6 +89,10 @@ suite:
 make -f Makefile.saturn.mk bootstrap
 ```
 
+The same command also regenerates the checked-out source inventory and
+six-way geometry/UV report at
+`docs/saturn/evidence/reports/asset-classifier-sm64.json`.
+
 The wrapper is also directly runnable as
 `tools/saturn/bootstrap-toolchain.sh`, or from Windows PowerShell as
 `pwsh -File tools/saturn/bootstrap-toolchain.ps1`. Both follow the MIT-licensed

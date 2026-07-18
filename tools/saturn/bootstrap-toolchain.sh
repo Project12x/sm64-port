@@ -49,3 +49,11 @@ docker run --rm -i \
     '
 
 "$HOST_PYTHON" "$ROOT/tools/saturn/test_tools.py"
+
+# Keep the source-inventory artifact in sync with the exact checkout used by
+# the build. Run from the repository root so the report remains portable.
+cd "$ROOT"
+"$HOST_PYTHON" tools/saturn/asset_classifier.py \
+    --root . \
+    --primitives tools/saturn/fixtures/primitives-six-way.json \
+    --report docs/saturn/evidence/reports/asset-classifier-sm64.json

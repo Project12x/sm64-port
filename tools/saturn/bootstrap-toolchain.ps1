@@ -48,4 +48,17 @@ $dockerArgs = @(
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $HostPython (Join-Path $root "tools/saturn/test_tools.py")
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Push-Location $root
+try {
+    & $HostPython "tools/saturn/asset_classifier.py" `
+        --root . `
+        --primitives "tools/saturn/fixtures/primitives-six-way.json" `
+        --report "docs/saturn/evidence/reports/asset-classifier-sm64.json"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+finally {
+    Pop-Location
+}
 exit $LASTEXITCODE
