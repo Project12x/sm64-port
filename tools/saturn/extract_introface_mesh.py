@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import math
 import re
 from pathlib import Path
+
+from quad_pairing import pair_triangles
 
 
 def initializer_body(source: str, name: str, dimensions: str) -> str:
@@ -91,12 +94,14 @@ def main() -> None:
     parser.add_argument("--eyes-input", type=Path, required=True)
     parser.add_argument("--features-input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--quad-report", type=Path)
     args = parser.parse_args()
     text = args.input.read_text(encoding="utf-8")
     eyes_text = args.eyes_input.read_text(encoding="utf-8")
     features_text = args.features_input.read_text(encoding="utf-8")
     vertices = rows(initializer_body(text, "mario_Face_VtxData", "s16"), 3)
     faces = rows(initializer_body(text, "mario_Face_FaceData", "u16"), 4)
+    face_primitives, quad_report = pair_triangles(vertices, faces)
     face_materials = materials(text)
     right_eye = eye_world_vertices(named_rows(eyes_text, "verts_mario_eye_right", 3), (184.483, -178.885, 82.485), (90.0, 180.0, 0.0), (29.7, 192.4, -3.0))
     left_eye = eye_world_vertices(named_rows(eyes_text, "verts_mario_eye_left", 3), (-6.873, 0.206, -97.461), (-90.0, 0.0, 0.0), (-29.0, 192.3, -2.0))
@@ -126,11 +131,30 @@ def main() -> None:
         "",
         f"#define SM64_FACE_VERTEX_COUNT {len(vertices)}U",
         f"#define SM64_FACE_TRIANGLE_COUNT {len(faces)}U",
+        f"#define SM64_FACE_QUAD_COUNT {quad_report['quad_count']}U",
+        f"#define SM64_FACE_PRIMITIVE_COUNT {len(face_primitives)}U",
         "static const int16_t sm64_face_vertices[SM64_FACE_VERTEX_COUNT][3] = {",
     ]
     lines += [f"    {{{x}, {y}, {z}}}," for x, y, z in vertices]
     lines += ["};", "", "/* material, source vertex indices a/b/c */", "static const uint16_t sm64_face_triangles[SM64_FACE_TRIANGLE_COUNT][4] = {"]
     lines += [f"    {{{material}, {a}, {b}, {c}}}," for material, a, b, c in faces]
+    lines += [
+        "};",
+        "",
+        "/* Saturn render IR: material, ordered vertices a/b/c/d, source triangles.",
+        " * A source1 value of 0xFFFF marks a repeated-vertex triangle fallback. */",
+        "static const uint16_t sm64_face_primitives[SM64_FACE_PRIMITIVE_COUNT][7] = {",
+    ]
+    lines += [
+        "    {%d, %d, %d, %d, %d, %d, %s},"
+        % (
+            primitive.material,
+            *primitive.vertices,
+            primitive.first_triangle,
+            "0xFFFF" if primitive.second_triangle is None else str(primitive.second_triangle),
+        )
+        for primitive in face_primitives
+    ]
     lines += ["};", "", "/* RGB555 values converted from the original SetAmbient material values. */", "static const uint8_t sm64_face_material_rgb[8][3] = {"]
     lines += [f"    {{{red}, {green}, {blue}}}," for red, green, blue in face_materials]
     lines += ["};", "", f"#define SM64_RIGHT_EYE_VERTEX_COUNT {len(right_eye)}U", f"#define SM64_RIGHT_EYE_TRIANGLE_COUNT {len(right_eye_faces)}U", f"#define SM64_LEFT_EYE_VERTEX_COUNT {len(left_eye)}U", f"#define SM64_LEFT_EYE_TRIANGLE_COUNT {len(left_eye_faces)}U", "/* World-space eye vertices: source local data transformed using the static", " * joint/net rotations and offsets in dynlist_mario_master.c (XYZ Euler). */", "static const int16_t sm64_right_eye_vertices[SM64_RIGHT_EYE_VERTEX_COUNT][3] = {"]
@@ -165,6 +189,24 @@ def main() -> None:
     lines += [f"    {{{red}, {green}, {blue}}}," for red, green, blue in mustache_materials]
     lines += ["};", "", "#endif", ""]
     args.output.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+    if args.quad_report is not None:
+        report = {
+            "schema": 1,
+            "source": "src/goddard/dynlists/dynlist_mario_face.c",
+            "source_sha256": digest,
+            "algorithm": "deterministic constrained maximal matching with length-three augmentations",
+            "minimum_normal_alignment": 0.80,
+            "camera_samples": {"yaw_degrees": [-45, -22, 0, 22, 45], "pitch_degrees": [-30, 0, 30]},
+            "prior_art": {
+                "repository": "https://github.com/Rulesobeyer/Optimized-Tris-to-Quads-Converter",
+                "commit": "1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c",
+                "license": "Apache-2.0",
+                "reuse_mode": "pattern-only",
+            },
+            **quad_report,
+        }
+        args.quad_report.parent.mkdir(parents=True, exist_ok=True)
+        args.quad_report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

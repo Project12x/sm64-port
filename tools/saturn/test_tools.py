@@ -13,6 +13,7 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from quad_pairing import pair_triangles  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
 
@@ -70,6 +71,32 @@ class AssetClassifierTests(unittest.TestCase):
         report = classify_primitives(primitives)
         self.assertEqual(report["direct_textured_quad_candidates"], 0)
         self.assertEqual(report["rejection_reasons"]["uvs_length_mismatch"], 1)
+
+
+class QuadPairingTests(unittest.TestCase):
+    def test_coplanar_pair_becomes_one_ordered_quad(self) -> None:
+        vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        faces = [(3, 0, 1, 2), (3, 0, 2, 3)]
+        primitives, report = pair_triangles(vertices, faces)
+        self.assertEqual(report["quad_count"], 1)
+        self.assertEqual(report["commands_saved"], 1)
+        self.assertEqual(primitives[0].vertices, (0, 1, 2, 3))
+        self.assertEqual((primitives[0].first_triangle, primitives[0].second_triangle), (0, 1))
+
+    def test_material_boundary_keeps_original_triangles(self) -> None:
+        vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        faces = [(3, 0, 1, 2), (4, 0, 2, 3)]
+        primitives, report = pair_triangles(vertices, faces)
+        self.assertEqual(report["quad_count"], 0)
+        self.assertEqual(report["rejection_reasons"], {"material_mismatch": 1})
+        self.assertEqual([primitive.vertices for primitive in primitives], [(0, 1, 2, 2), (0, 2, 3, 3)])
+
+    def test_inconsistent_winding_is_rejected(self) -> None:
+        vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        faces = [(3, 0, 1, 2), (3, 0, 3, 2)]
+        _, report = pair_triangles(vertices, faces)
+        self.assertEqual(report["quad_count"], 0)
+        self.assertEqual(report["rejection_reasons"], {"winding_or_topology": 1})
 
 
 class YmirInputTests(unittest.TestCase):

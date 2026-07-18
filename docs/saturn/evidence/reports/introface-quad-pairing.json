@@ -1,0 +1,38 @@
+{
+  "schema": 1,
+  "source": "src/goddard/dynlists/dynlist_mario_face.c",
+  "source_sha256": "654541706fc131dc9d81107c2e2323ffae754965ab896bc9cd09a343062b1f6d",
+  "algorithm": "deterministic constrained maximal matching with length-three augmentations",
+  "minimum_normal_alignment": 0.8,
+  "camera_samples": {
+    "yaw_degrees": [
+      -45,
+      -22,
+      0,
+      22,
+      45
+    ],
+    "pitch_degrees": [
+      -30,
+      0,
+      30
+    ]
+  },
+  "prior_art": {
+    "repository": "https://github.com/Rulesobeyer/Optimized-Tris-to-Quads-Converter",
+    "commit": "1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c",
+    "license": "Apache-2.0",
+    "reuse_mode": "pattern-only"
+  },
+  "source_triangle_count": 877,
+  "candidate_count": 206,
+  "quad_count": 156,
+  "standalone_triangle_count": 565,
+  "render_primitive_count": 721,
+  "commands_saved": 156,
+  "rejection_reasons": {
+    "material_mismatch": 114,
+    "normal_divergence": 251,
+    "projection_not_convex": 740
+  }
+}

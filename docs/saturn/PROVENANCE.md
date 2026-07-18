@@ -1,6 +1,6 @@
 # Saturn Port Provenance and Reuse Ledger
 
-Last updated 2026-07-17.
+Last updated 2026-07-18.
 
 This ledger records the exact prior art inspected for the Saturn port, the
 permission known at the time of inspection, and how the project may use it. It
@@ -19,6 +19,27 @@ is an engineering record, not legal advice.
   implementation, and implement from that specification.
 
 ## Source ledger
+
+### Rulesobeyer/Optimized-Tris-to-Quads-Converter
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/Rulesobeyer/Optimized-Tris-to-Quads-Converter> |
+| Pinned commit inspected | `1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c` |
+| License | Apache-2.0 |
+| Role | Host-side triangle-pair selection prior art |
+| Files inspected | `README.md`, `LICENSE`, `__init__.py`, `blender_manifest.toml` |
+| Reuse mode | Pattern-only |
+
+The add-on models each dissolvable shared edge as a binary choice, maximizes
+selected choices, and constrains each triangle to at most one selected edge.
+The Saturn compiler adopts that candidate-graph/matching pattern, but no source
+is copied. The Blender/PuLP implementation accepts any selected two-triangle
+edge and therefore does not enforce Saturn material, winding, normal,
+projected-convexity, UV, or animation constraints. The target-specific
+standard-library implementation in `tools/saturn/quad_pairing.py` uses strict
+prefilters and deterministic maximal matching with local augmentations; this
+architecture mismatch is why the Apache implementation is not directly used.
 
 ### Project12x/sm64-port
 

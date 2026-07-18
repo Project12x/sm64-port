@@ -11,12 +11,12 @@
 
 #define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
 #define FEATURE_TRIANGLE_COUNT (SM64_RIGHT_EYEBROW_TRIANGLE_COUNT + SM64_LEFT_EYEBROW_TRIANGLE_COUNT + SM64_MUSTACHE_TRIANGLE_COUNT)
-#define SURFACE_TRIANGLE_COUNT (SM64_FACE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT)
-#define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + EYE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT + 3U)
+#define SURFACE_COUNT (SM64_FACE_PRIMITIVE_COUNT + FEATURE_TRIANGLE_COUNT)
+#define COMMAND_COUNT (SM64_FACE_PRIMITIVE_COUNT + EYE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT + 3U)
 
-static vdp1_gouraud_table_t gouraud[SM64_FACE_TRIANGLE_COUNT];
-static uint16_t draw_order[SURFACE_TRIANGLE_COUNT];
-static int32_t surface_depths[SURFACE_TRIANGLE_COUNT];
+static vdp1_gouraud_table_t gouraud[SM64_FACE_PRIMITIVE_COUNT];
+static uint16_t draw_order[SURFACE_COUNT];
+static int32_t surface_depths[SURFACE_COUNT];
 static bool draw_order_ready;
 static int32_t vertex_normals[SM64_FACE_VERTEX_COUNT][3];
 static uint8_t diffuse_cache[SM64_FACE_VERTEX_COUNT];
@@ -183,13 +183,13 @@ static void
 rebuild_gouraud_tables(void)
 {
     cpu_frt_count_set(0);
-    for (uint16_t source = 0; source < SM64_FACE_TRIANGLE_COUNT; source++) {
-        const uint16_t *f = sm64_face_triangles[source];
+    for (uint16_t source = 0; source < SM64_FACE_PRIMITIVE_COUNT; source++) {
+        const uint16_t *f = sm64_face_primitives[source];
         vdp1_gouraud_table_t *shade = &gouraud[source];
         shade->colors[0] = shaded_material_color(f[0], f[1]);
         shade->colors[1] = shaded_material_color(f[0], f[2]);
         shade->colors[2] = shaded_material_color(f[0], f[3]);
-        shade->colors[3] = shade->colors[2];
+        shade->colors[3] = shaded_material_color(f[0], f[4]);
     }
     shade_build_ticks = cpu_frt_count_get();
 }
@@ -234,20 +234,20 @@ project_feature_point(const int16_t *v, int16_t center_x, int16_t center_y,
 static int
 feature_depth(const int16_t vertices[][3], const uint16_t *f)
 {
-    return transform_point(vertices[f[1]]).z +
+    return (transform_point(vertices[f[1]]).z +
       transform_point(vertices[f[2]]).z +
-      transform_point(vertices[f[3]]).z;
+      transform_point(vertices[f[3]]).z) / 3;
 }
 
 static int
 depth_of(uint16_t surface)
 {
-    if (surface < SM64_FACE_TRIANGLE_COUNT) {
-        const uint16_t *f = sm64_face_triangles[surface];
-        return transformed_face[f[1]].z + transformed_face[f[2]].z +
-          transformed_face[f[3]].z;
+    if (surface < SM64_FACE_PRIMITIVE_COUNT) {
+        const uint16_t *f = sm64_face_primitives[surface];
+        return (transformed_face[f[1]].z + transformed_face[f[2]].z +
+          transformed_face[f[3]].z + transformed_face[f[4]].z) / 4;
     }
-    surface -= SM64_FACE_TRIANGLE_COUNT;
+    surface -= SM64_FACE_PRIMITIVE_COUNT;
     if (surface < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT)
         return feature_depth(sm64_right_eyebrow_vertices, sm64_right_eyebrow_triangles[surface]);
     surface -= SM64_RIGHT_EYEBROW_TRIANGLE_COUNT;
@@ -263,16 +263,16 @@ sort_for_painter(void)
     /* Transform each surface only once. The original proof recomputed three
      * fixed-point vertex transforms for every insertion-sort comparison,
      * making a 1,049-surface frame needlessly quadratic in transform cost. */
-    for (uint16_t i = 0; i < SURFACE_TRIANGLE_COUNT; i++)
+    for (uint16_t i = 0; i < SURFACE_COUNT; i++)
         surface_depths[i] = depth_of(i);
     if (!draw_order_ready) {
-        for (uint16_t i = 0; i < SURFACE_TRIANGLE_COUNT; i++)
+        for (uint16_t i = 0; i < SURFACE_COUNT; i++)
             draw_order[i] = i;
         draw_order_ready = true;
     }
     /* Stable insertion sort is efficient here because camera motion is small
      * and the preceding frame's painter order is already nearly sorted. */
-    for (uint16_t i = 1; i < SURFACE_TRIANGLE_COUNT; i++) {
+    for (uint16_t i = 1; i < SURFACE_COUNT; i++) {
         const uint16_t chosen = draw_order[i];
         const int32_t depth = surface_depths[chosen];
         uint16_t j = i;
@@ -353,11 +353,11 @@ draw_source_face(bool shade_dirty)
         .cc_mode = VDP1_CMDT_CC_GOURAUD,
     };
     vdp1_vram_partitions_get(&partitions);
-    for (uint16_t out = 0; out < SURFACE_TRIANGLE_COUNT; out++) {
+    for (uint16_t out = 0; out < SURFACE_COUNT; out++) {
         uint16_t source = draw_order[out];
         vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U];
-        if (source >= SM64_FACE_TRIANGLE_COUNT) {
-            source -= SM64_FACE_TRIANGLE_COUNT;
+        if (source >= SM64_FACE_PRIMITIVE_COUNT) {
+            source -= SM64_FACE_PRIMITIVE_COUNT;
             if (source < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) {
                 draw_feature_triangle(cmdt, sm64_right_eyebrow_vertices,
                   sm64_right_eyebrow_triangles, source, RGB1555(1, 0, 0, 0),
@@ -377,10 +377,10 @@ draw_source_face(bool shade_dirty)
             }
             continue;
         }
-        const uint16_t *f = sm64_face_triangles[source];
+        const uint16_t *f = sm64_face_primitives[source];
         const int16_vec2_t vertices[4] = {
             projected_face[f[1]], projected_face[f[2]],
-            projected_face[f[3]], projected_face[f[3]]
+            projected_face[f[3]], projected_face[f[4]]
         };
         vdp1_cmdt_polygon_set(cmdt);
         vdp1_cmdt_draw_mode_set(cmdt, mode);
@@ -389,7 +389,7 @@ draw_source_face(bool shade_dirty)
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base +
           (source * sizeof(vdp1_gouraud_table_t)));
     }
-    uint16_t cursor = SURFACE_TRIANGLE_COUNT + 2U;
+    uint16_t cursor = SURFACE_COUNT + 2U;
     /* Eye surfaces are separate original objects. Scale 2/3 about each source
      * eye-surface centre, after right (+5,-4) / left (-6,-4) calibration. */
     draw_eye(list->cmdts, &cursor, sm64_right_eye_vertices, sm64_right_eye_triangles,
@@ -487,11 +487,14 @@ update_hud(uint16_t frame)
       "A SHINE:%s  B AUTO-ORBIT:%s\n"
       "FRAME %u TICKS  ~%u.%u FPS\n"
       "SHADE REBUILD %u TICKS (ON TOGGLE)\n"
+      "CMD %u  QUAD %u  TRI %u\n"
       "SORT %u  BUILD %u  G-UP %u  WAIT %u\n"
       "PAD:%s DOWN %04X EDGE %04X   ",
       view.shine_enabled ? "ON " : "OFF",
       view.auto_rotate ? "ON " : "OFF",
       frame_ticks, fps_x10 / 10U, fps_x10 % 10U, shade_build_ticks,
+      (uint16_t)(COMMAND_COUNT - 3U), (uint16_t)SM64_FACE_QUAD_COUNT,
+      (uint16_t)(SM64_FACE_TRIANGLE_COUNT - (SM64_FACE_QUAD_COUNT * 2U)),
       painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
       render_wait_ticks,
       pad_connected ? "OK  " : "NONE", pad_down, pad_edge);

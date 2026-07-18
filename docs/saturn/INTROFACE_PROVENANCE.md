@@ -158,7 +158,7 @@ yet implemented.
 
 The shine path remains VDP1 Gouraud rather than half transparency. Diffuse and
 specular alignment are calculated once for each of the 440 unique face
-vertices, expanded into the 877 eight-byte Gouraud tables only when the shine
+vertices, expanded into the generated face primitives' Gouraud tables only when the shine
 state changes, and uploaded with SCU DMA. The VDP1 command-list allocation is
 also retained across frames. The HUD exposes uncapped render ticks, estimated
 render throughput, one-time shade rebuild ticks, and the most recently
@@ -178,3 +178,30 @@ connection, current-down, and new-press edge masks plus Ymir's default keyboard
 bindings. Duration-aware input injection remains useful for long deterministic
 holds, but is no longer required for a single-frame edge. A post-fix automated
 camera/toggle capture is required before the control milestone is closed.
+
+## Conservative true-quad render IR
+
+The source extractor still emits all 877 original triangles unchanged. It now
+also calls `tools/saturn/quad_pairing.py` to generate a Saturn-only primitive
+table. The compiler requires common material, consistent shared-edge winding,
+triangle-normal alignment of at least 0.80, and a strictly convex four-vertex
+projection across yaw `-45/-22/0/22/45` and pitch `-30/0/30` degrees. Original
+triangle indices remain attached to every primitive, and an unpaired triangle
+retains the documented repeated-final-vertex fallback.
+
+The generated result contains 156 true quads and 565 fallback triangles, or
+721 face commands instead of 877. Including the original eye and feature
+objects, draw commands fall from 1,213 to 1,057. The compiler report is
+`docs/saturn/evidence/reports/introface-quad-pairing.json`. The implementation
+uses the candidate-graph/matching pattern from the Apache-2.0
+`Rulesobeyer/Optimized-Tris-to-Quads-Converter` at commit
+`1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c`; no upstream code is copied, and
+Blender/PuLP are not build dependencies.
+
+The BIOS-backed Ymir visual regression is
+`docs/saturn/evidence/screenshots/ymir-true-quads-2026-07-18.png` (SHA-256
+`a4bcc8cdd5d71fd493f98b69bfd8ef6228b1573bcc2cd6ed589ffa3e2026506c`,
+frame hash `5c39367b895770cbcc2c34c9810dea64`, frame 3300). It preserves the face
+silhouette, feature occlusion, eyes, and shine. Emulator timing is comparative
+evidence only; animated-deformation validation and retail hardware timing
+remain future gates.

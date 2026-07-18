@@ -52,9 +52,22 @@ triangles and choose among:
 - clipped output with newly interpolated positions and shade values; or
 - a deliberately slower fallback for exceptional arbitrary-UV geometry.
 
-The intro face intentionally uses repeated-vertex triangles. It is a topology
-and lighting proof, not evidence that all SM64 geometry should remain one VDP1
-command per source triangle.
+The intro face's first implementation intentionally used repeated-vertex
+triangles as a topology and lighting proof. The first quad compiler pass now
+preserves those 877 source triangles while emitting a separate Saturn render
+IR. Pattern-only study of Rulesobeyer's Apache-2.0 converter at commit
+`1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c` supplied the candidate-graph and
+one-pair-per-triangle model; Blender/PuLP integration was rejected as an
+architecture mismatch because it does not enforce Saturn render constraints.
+
+The deterministic host tool accepts only same-material, consistently wound
+pairs whose triangle normals align by at least 0.80 and whose ordered boundary
+remains strictly convex over 15 yaw/pitch camera samples. It selects 156 true
+quads, leaves 565 face triangles as repeated-vertex fallbacks, and reduces the
+face from 877 to 721 VDP1 primitives. The generated report records 114 material
+rejections, 251 normal-divergence rejections, and 740 projected-convexity
+rejections. Textured world geometry will additionally require the existing UV
+rectangle/seam rules before it can enter the candidate graph.
 
 ## Measurements to add before world geometry
 
