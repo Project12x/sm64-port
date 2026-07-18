@@ -1,6 +1,6 @@
 # Saturn Port Provenance and Reuse Ledger
 
-Last updated 2026-07-16.
+Last updated 2026-07-17.
 
 This ledger records the exact prior art inspected for the Saturn port, the
 permission known at the time of inspection, and how the project may use it. It
@@ -184,6 +184,59 @@ GPL-2.0/GPL-3.0 use for this public project. The bounded DMA queue is now
 close-ported under `src/port/saturn/gpl/`; its raw-register and pointer-width
 assumptions were replaced with public Yaul APIs as recorded in
 `docs/saturn/SLAVEDRIVER_ADAPTATION.md`.
+
+The renderer follow-up also inspected `WALLS.C`, `WALLASM.S`, `SPRITE.C`,
+`OBJECT.C`, and `V_BLANK.C` at the same commit. Those files demonstrate
+sector-local object lists, portal/sector traversal, fixed-point near and screen
+clipping that carries shade values through generated vertices, VDP1 Gouraud
+submission, and explicit master/slave render records. They are behavior and
+architecture references for the future world renderer only; no additional
+SlaveDriver renderer source was copied.
+
+### johannes-fetz/joengine
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/johannes-fetz/joengine> |
+| Pinned commit inspected | `556d081146211b6a1cfa6591d70f9487d406758b` |
+| License | Root `LICENSE` is MIT; inspected engine files also carry a BSD-3-Clause-style source header |
+| Role | Practical Saturn C API and VDP1 command-buffer prior art |
+| Files inspected | `README.md`, `LICENSE`, `jo_engine/jo/3d.h`, `jo_engine/3d.c`, `jo_engine/vdp1_command_pipeline.c`, `jo_engine/jo/vdp1_command_pipeline.h` |
+| Reuse mode | Pattern-only for the current libyaul renderer; direct adaptation remains available if a source file's own notice is preserved |
+
+The non-SGL command pipeline grows the VDP1 list in small command-table blocks,
+resets it with system/user clipping and local-coordinate commands, then DMA
+flushes the blocks to VDP1 VRAM. The approach is permissively licensed, but the
+current renderer already uses libyaul's typed command-list API and persistent
+allocation, so copying Jo Engine would add an incompatible allocation layer
+without solving a current problem. Its useful lesson is the command lifecycle:
+allocate outside the hot loop, rebuild only active commands, and treat the
+three setup commands as a fixed prefix.
+
+### Maxime-XL2/SONIC-Z-TREME
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/Maxime-XL2/SONIC-Z-TREME> |
+| Pinned commit inspected | `cff75451c1616aac1236fc2b44223902b55c706b` |
+| License | GPL-3.0 (`LICENSE`; additional asset/Sega-library caveats in `README.md`) |
+| Role | Shipped-scale Saturn 3D renderer prior art for Gouraud cost, visibility, model arenas, and DMA |
+| Files inspected | `README.md`, `LICENSE`, `Projects/SONIC Z-TREME/ZTE/ZT_RENDERING.c`, `ZT_LOADING.c`, `ZT_LOAD_MODEL.c`, `ZT_SPRITES.H` |
+| Reuse mode | Behavior/architecture study only; no source copied |
+
+Sonic Z-Treme assigns each eligible polygon a stable Gouraud-table slot while
+loading a model, initializes the complete Gouraud work area once, and copies
+updated tables during VBlank only while realtime Gouraud is enabled. Its own
+README records Gouraud shading as a measurable performance regression relative
+to flat lighting. This directly supports the intro-face design already in this
+tree: persistent command storage, cached per-vertex lighting, a user toggle,
+and Gouraud uploads only when the toggle changes. For later level rendering,
+its contiguous model arena, DMA uploads, frustum traversal, octree experiment,
+polygon counters, and recommendation to submit work early enough to overlap the
+slave SH-2 are valuable measurement targets, not implementation to copy.
+
+The comparison and resulting renderer decisions are maintained in
+`docs/saturn/RENDERER_PRIOR_ART.md`.
 
 ### Sega hardware documentation
 

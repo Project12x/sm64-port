@@ -41,6 +41,10 @@ static fix16_t view_sin_pitch;
 static fix16_t view_cos_pitch;
 static uint16_t shade_build_ticks;
 static uint16_t frame_ticks;
+static uint16_t painter_sort_ticks;
+static uint16_t command_build_ticks;
+static uint16_t gouraud_upload_ticks;
+static uint16_t render_wait_ticks;
 static vdp1_cmdt_list_t *command_list;
 static bool controls_ready;
 static bool smpc_request_pending;
@@ -301,7 +305,10 @@ draw_source_face(bool shade_dirty)
     vdp1_vram_partitions_t partitions;
     if (command_list == NULL)
         return;
+    const uint16_t sort_start = cpu_frt_count_get();
     sort_for_painter();
+    painter_sort_ticks = (uint16_t)(cpu_frt_count_get() - sort_start);
+    const uint16_t command_start = cpu_frt_count_get();
     vdp1_cmdt_list_t *list = command_list;
     list->count = COMMAND_COUNT;
     (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * list->count);
@@ -361,13 +368,20 @@ draw_source_face(bool shade_dirty)
     draw_eye(list->cmdts, &cursor, sm64_left_eye_vertices, sm64_left_eye_triangles,
       SM64_LEFT_EYE_TRIANGLE_COUNT, sm64_left_eye_material_rgb, -6, -4, 139, 128);
     vdp1_cmdt_end_set(&list->cmdts[cursor]);
+    command_build_ticks = (uint16_t)(cpu_frt_count_get() - command_start);
     if (shade_dirty) {
+        const uint16_t upload_start = cpu_frt_count_get();
         scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud));
         scu_dma_transfer_wait(0);
+        gouraud_upload_ticks = (uint16_t)(cpu_frt_count_get() - upload_start);
+    } else {
+        gouraud_upload_ticks = 0;
     }
+    const uint16_t render_start = cpu_frt_count_get();
     vdp1_sync_cmdt_list_put(list, 0);
     vdp1_sync_render();
     vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
+    render_wait_ticks = (uint16_t)(cpu_frt_count_get() - render_start);
 }
 
 static bool
@@ -457,10 +471,13 @@ update_hud(uint16_t frame)
       "A SHINE:%s  B AUTO-ORBIT:%s\n"
       "FRAME %u TICKS  ~%u.%u FPS\n"
       "SHADE REBUILD %u TICKS (ON TOGGLE)\n"
+      "SORT %u  BUILD %u  G-UP %u  WAIT %u\n"
       "PAD %04X EDGE %04X   ",
       view.shine_enabled ? "ON " : "OFF",
       view.auto_rotate ? "ON " : "OFF",
       frame_ticks, fps_x10 / 10U, fps_x10 % 10U, shade_build_ticks,
+      painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
+      render_wait_ticks,
       pad_pressed, pad_edge);
     dbgio_flush();
 }

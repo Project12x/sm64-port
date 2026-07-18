@@ -392,6 +392,10 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 14. Boot the Bob-omb Battlefield slice with frame/memory telemetry.
 15. Choose and document the licensed SCSP audio architecture.
 16. Profile and, only if justified, add a slave-SH2 transform worker.
+17. Apply the pinned renderer prior-art decisions in
+    `docs/saturn/RENDERER_PRIOR_ART.md`: preserve the intro face's update-only
+    Gouraud path, add split timing counters, and delay spatial/dual-SH2 work
+    until representative world geometry is present.
 
 ## Effort estimate
 
