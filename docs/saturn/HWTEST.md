@@ -6,7 +6,9 @@ machine-readable result block in internal work RAM for Ymir's `mem.peek`.
 
 ## Telemetry block
 
-The block begins at `0x06010000` and contains sixteen big-endian 32-bit words:
+The block begins at `0x06010000` and contains sixteen big-endian 32-bit words.
+The Saturn source also asserts the documented field offsets at compile time,
+not only the total block sizes:
 
 | Word | Field | Meaning |
 |---:|---|---|

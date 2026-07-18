@@ -59,6 +59,19 @@ _Static_assert(sizeof(hwtest_telemetry_t) == 64,
     "base hardware-test telemetry must remain exactly 64 bytes");
 _Static_assert(sizeof(hwtest_extended_telemetry_t) == 56,
     "extended hardware-test telemetry must remain exactly 56 bytes");
+_Static_assert(offsetof(hwtest_telemetry_t, magic) == 0 &&
+    offsetof(hwtest_telemetry_t, status) == 12 &&
+    offsetof(hwtest_telemetry_t, cart_id) == 16 &&
+    offsetof(hwtest_telemetry_t, first_bad_offset) == 28 &&
+    offsetof(hwtest_telemetry_t, cpu_copy_ticks) == 40 &&
+    offsetof(hwtest_telemetry_t, vdp1_pixel_estimate) == 60,
+    "base hardware-test telemetry field offsets changed");
+_Static_assert(offsetof(hwtest_extended_telemetry_t, magic) == 0 &&
+    offsetof(hwtest_extended_telemetry_t, cpu_cached_ticks) == 8 &&
+    offsetof(hwtest_extended_telemetry_t, cpu_dmac_pass) == 20 &&
+    offsetof(hwtest_extended_telemetry_t, vdp1_modes_mask) == 24 &&
+    offsetof(hwtest_extended_telemetry_t, vdp1_textured_triangle_ticks) == 52,
+    "extended hardware-test telemetry field offsets changed");
 
 enum {
         HWTEST_STATUS_CART_PRESENT = 1U << 0,
