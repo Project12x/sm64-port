@@ -105,6 +105,9 @@ first-use indexed bank from the actual Area 1 root: 436 positions and 577
 opaque source triangles, plus the source display-list IDs that produced them.
 It is intentionally not yet a room-render claim: texture pixels, alpha/decal
 layers, clipping, visibility, and camera framing remain separate M3 gates.
+The same IR now keeps the original per-triangle texture identifier and Fast3D
+UV triplet. That prevents the first texture conversion from guessing a wall
+material or inventing replacement coordinates.
 
 ## M0 — Source-face proof
 

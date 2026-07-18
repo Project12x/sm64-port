@@ -189,6 +189,9 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(len(bank["positions"]), bank["vertex_count"])
         self.assertEqual(len(bank["triangles"]), bank["triangle_count"])
         self.assertIn("inside_castle_seg7_dl_07027DE8", bank["source_display_lists"])
+        self.assertEqual(len(bank["texture_indices"]), bank["triangle_count"])
+        self.assertEqual(len(bank["uv"]), bank["triangle_count"])
+        self.assertIn("inside_09000000", bank["textures"])
 
 
 class SaturnMeshIRTests(unittest.TestCase):
