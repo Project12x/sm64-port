@@ -17,6 +17,9 @@
 #define FEATURE_SURFACE_BASE (LEFT_EYE_SURFACE_BASE + SM64_LEFT_EYE_TRIANGLE_COUNT)
 #define SURFACE_COUNT (FEATURE_SURFACE_BASE + FEATURE_TRIANGLE_COUNT)
 #define COMMAND_COUNT (SURFACE_COUNT + 3U)
+#define TITLE_BITMAP_BASE VDP2_VRAM_ADDR(0, 0x00000)
+#define TITLE_BITMAP_WIDTH 512U
+#define TITLE_BITMAP_HEIGHT 256U
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_PRIMITIVE_COUNT];
 static uint16_t draw_order[SURFACE_COUNT];
@@ -63,9 +66,48 @@ static bool controls_ready;
 static bool pad_connected;
 static uint16_t pad_down;
 static uint16_t pad_edge;
+static bool title_handoff;
 
 static void build_vertex_normals(void);
 static void build_lighting_cache(void);
+
+static void
+title_backdrop_init(void)
+{
+    /* VDP2 owns the title field while VDP1 keeps the deforming face.  This
+     * deliberately uses a 512x256 RGB555 NBG1 bitmap, the Yaul equivalent of
+     * the R11 background pattern; the ROM-derived converter will replace this
+     * staging fill without changing the runtime layout. */
+    volatile rgb1555_t *pixels = (volatile rgb1555_t *)TITLE_BITMAP_BASE;
+    for (uint16_t y = 0; y < TITLE_BITMAP_HEIGHT; y++) {
+        for (uint16_t x = 0; x < TITLE_BITMAP_WIDTH; x++) {
+            const uint8_t wave = (uint8_t)(((x >> 4) ^ (y >> 3)) & 7U);
+            /* Keep this deliberately obvious on an uncalibrated CRT/emulator
+             * gamma curve: it is a staging field, not the eventual extracted
+             * title texture. */
+            const uint8_t blue = (uint8_t)(17U + (y >> 5) + wave);
+            pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = RGB1555(1,
+              (uint8_t)(3U + (wave >> 1)), (uint8_t)(6U + wave), blue);
+        }
+    }
+    /* VDP2 VRAM is reached through the SH-2 cacheable bus mapping.  Unlike
+     * Yaul's queued DMA helpers, this direct staging fill needs an explicit
+     * write-back before the VDP2 fetch engine can see it. */
+    cpu_cache_purge();
+    const vdp2_scrn_bitmap_format_t title_format = {
+        .scroll_screen = VDP2_SCRN_NBG1,
+        .ccc = VDP2_SCRN_CCC_RGB_32768,
+        .bitmap_size = VDP2_SCRN_BITMAP_SIZE_512X256,
+        .palette_base = 0,
+        .bitmap_base = TITLE_BITMAP_BASE,
+    };
+    vdp2_scrn_bitmap_format_set(&title_format);
+    /* Keep this staging plane behind the current VDP1 face until the
+     * standalone NBG1 bitmap probe has pinned down the remaining compositor
+     * issue. */
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 1);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
+}
 
 static rgb1555_t
 material_color(uint16_t material, uint8_t intensity)
@@ -155,7 +197,7 @@ update_face_deformation(void)
              * the rotation-to-local-displacement scale explicit until full
              * joint matrices replace it. */
             eyelid_offset = ((right_delta * sm64_right_eyelid_weights[i]) +
-              (left_delta * sm64_left_eyelid_weights[i])) / (32768 * 24);
+              (left_delta * sm64_left_eyelid_weights[i])) / (32768 * 8);
         }
         deformed_face[i][0] = sm64_face_vertices[i][0];
         deformed_face[i][1] = (int16_t)(sm64_face_vertices[i][1] - eyelid_offset);
@@ -281,6 +323,23 @@ feature_depth(const int16_t vertices[][3], const uint16_t *f)
 }
 
 static int
+eye_depth(const int16_t vertices[][3], const uint16_t *f)
+{
+    /* The Goddard eye objects are separate display-list geometry, while this
+     * first Saturn target evaluates the face deformation independently.  Put
+     * the complete eye skin fractionally ahead of the face so the white,
+     * iris, and pupil cannot fall through it; then retain an explicit tiny
+     * order for the pupil and glint.  A shared joint evaluator replaces this
+     * temporary composition bias in M2. */
+    int depth = feature_depth(vertices, f) + 48;
+    if (f[0] == 2U)
+        depth += 12; /* black pupil */
+    else if (f[0] == 3U)
+        depth += 24; /* white glint */
+    return depth;
+}
+
+static int
 depth_of(uint16_t surface)
 {
     if (surface < FACE_SURFACE_COUNT) {
@@ -289,10 +348,10 @@ depth_of(uint16_t surface)
           transformed_face[f[3]].z + transformed_face[f[4]].z) / 4;
     }
     if (surface < LEFT_EYE_SURFACE_BASE)
-        return feature_depth(sm64_right_eye_vertices,
+        return eye_depth(sm64_right_eye_vertices,
           &sm64_right_eye_triangles[surface - RIGHT_EYE_SURFACE_BASE][0]);
     if (surface < FEATURE_SURFACE_BASE)
-        return feature_depth(sm64_left_eye_vertices,
+        return eye_depth(sm64_left_eye_vertices,
           &sm64_left_eye_triangles[surface - LEFT_EYE_SURFACE_BASE][0]);
     surface -= FEATURE_SURFACE_BASE;
     if (surface < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT)
@@ -509,9 +568,7 @@ update_controls(void)
         shade_dirty = true;
     }
     if ((edge & PERIPHERAL_DIGITAL_START) != 0) {
-        view.yaw = 0;
-        view.pitch = 0;
-        view.projection_divisor = 6;
+        title_handoff = true;
         view.auto_rotate = false;
     }
     if (view.auto_rotate) {
@@ -530,7 +587,7 @@ update_hud(uint16_t frame)
         return;
     const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
     dbgio_printf("\x1B[HSM64 SATURN INTERACTIVE FACE\n"
-      "PAD D-PAD CAM L/R ZOOM START RESET\n"
+      "PAD D-PAD CAM L/R ZOOM START HANDOFF\n"
       "YMIR: WASD Q/E J/K F=RESET  C=ANIM\n"
       "A SHINE:%s  B ORBIT:%s  C EYELIDS:%s\n"
       "FRAME %u TICKS  ~%u.%u FPS\n"
@@ -547,6 +604,9 @@ update_hud(uint16_t frame)
       deformation_ticks, painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
       render_wait_ticks,
       pad_connected ? "OK  " : "NONE", pad_down, pad_edge);
+    dbgio_printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      "              %s\n",
+      title_handoff ? "CASTLE LOBBY HANDOFF (M1 PLACEHOLDER)" : "PRESS START");
     dbgio_flush();
 }
 
@@ -567,16 +627,22 @@ user_init(void)
     smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 0, 0, 5));
+    title_backdrop_init();
     vdp1_env_t env;
     vdp1_env_default_init(&env);
+    /* VDP1's erase field is an opaque sprite in the VDP compositor; NBG1's
+     * higher priority supplies the title field behind the face. */
     env.erase_color = RGB1555(1, 0, 0, 5);
     vdp1_env_set(&env);
     vdp_sync_vblank_out_set(vblank_out_handler, NULL);
-    /* Keep VDP1 one priority below dbgio's NBG0 plane so the live benchmark
+    /* Keep VDP1 one priority below dbgio's NBG3 plane so the live benchmark
      * HUD remains visible over the face. */
     for (uint8_t i = 0; i < 8; i++) vdp2_sprite_priority_set(i, 6);
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load();
+    /* dbgio's Yaul VDP2 device owns NBG3, not NBG0.  Keep it visible above
+     * the NBG1 title field and the VDP1 face so PRESS START is readable. */
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1 | VDP2_SCRN_DISP_NBG3);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT);
     if (command_list == NULL) {
         dbgio_puts("SM64 SATURN\nCOMMAND LIST ALLOCATION FAILED");
