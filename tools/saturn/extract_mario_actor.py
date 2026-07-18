@@ -150,10 +150,11 @@ def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> 
                 fields = [field.strip() for field in args.split(",")]
                 if len(fields) != 5:
                     raise ValueError(f"unexpected GEO_ANIMATED_PART: {args}")
-                # geo_process_animated_part consumes the root translation
-                # channels and switches to rotation mode; it does not consume
-                # a root rotation triplet. Every later animated part does.
-                rotation = (0, 0, 0) if animated_part_index == 0 else next_rotation()
+                # The root first consumes its translation channels, then the
+                # same geo_process_animated_part invocation immediately sees
+                # ANIM_TYPE_ROTATION and consumes its rotation triplet too.
+                # Skipping that triplet shifts every later limb channel.
+                rotation = next_rotation()
                 animated_part_index += 1
                 last = matrix_mul(source_matrix(tuple(int(fields[axis + 1]) for axis in range(3)), rotation), parent)
                 display_list = fields[4]
@@ -176,9 +177,9 @@ def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> 
             # controls. Their neutral Mario bind-pose values are identity.
         return index
 
-    # The root's animation channels are translation-only in SM64's renderer.
-    # This preview keeps object movement at zero but begins all joint rotations
-    # after the root, matching geo_process_animated_part's attribute cursor.
+    # The preview intentionally leaves root *translation* at zero (turntable
+    # placement), but consumes root rotation and every later joint triplet in
+    # the same order as geo_process_animated_part's attribute cursor.
     walk(0, identity_matrix())
     if not result:
         raise ValueError("mario_geo_body did not produce any display lists")
@@ -199,7 +200,8 @@ def ints(command: str) -> list[int]:
 
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
             name: str, matrix: Matrix, light: str,
-            out: list[dict[str, object]], stack: tuple[str, ...] = ()) -> str:
+            out: list[dict[str, object]], texture: str | None = None,
+            stack: tuple[str, ...] = ()) -> tuple[str, str | None]:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
@@ -211,11 +213,18 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
     # exploded actor.
     cache: list[tuple[int, int, int, int, int] | None] = [None] * 32
     current_light = light
+    current_texture = texture
     for macro, args in re.findall(r"(gs\w+)\(([^;]*?)\)", body, re.DOTALL):
         if macro == "gsSPLight":
             found = re.search(r"&(mario_\w+_lights_group)\.", args)
             if found:
                 current_light = found.group(1)
+        elif macro == "gsDPSetTextureImage":
+            found = re.search(r"\b(mario_texture_\w+)\b", args)
+            if found:
+                current_texture = found.group(1)
+        elif macro == "gsSPTexture" and "G_OFF" in args:
+            current_texture = None
         elif macro == "gsSPVertex":
             group = re.match(r"\s*(\w+)", args)
             if group is None or group.group(1) not in vertices:
@@ -240,12 +249,15 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                 ]
                 out.append({"rgb": LIGHTS[current_light], "positions": positions,
                             "uv": [[cache[index][3], cache[index][4]] for index in triangle],
-                            "display_list": name})
+                            "display_list": name, "texture": current_texture})
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                current_light = flatten(display_lists, vertices, child.group(1), matrix, current_light, out, stack + (name,))
-    return current_light
+                current_light, current_texture = flatten(
+                    display_lists, vertices, child.group(1), matrix, current_light,
+                    out, current_texture, stack + (name,)
+                )
+    return current_light, current_texture
 
 
 def main() -> None:
@@ -273,13 +285,15 @@ def main() -> None:
     positions: list[list[int]] = []
     position_index: dict[tuple[int, int, int], int] = {}
     materials: list[dict[str, object]] = []
-    material_index: dict[tuple[int, int, int], int] = {}
+    material_index: dict[tuple[tuple[int, int, int], str | None], int] = {}
     ir_triangles: list[dict[str, object]] = []
     for source, triangle in enumerate(triangles):
         rgb = tuple(triangle["rgb"])
-        if rgb not in material_index:
-            material_index[rgb] = len(materials)
-            materials.append({"id": material_index[rgb], "rgb555": list(rgb)})
+        texture = triangle["texture"]
+        material_key = (rgb, texture if isinstance(texture, str) else None)
+        if material_key not in material_index:
+            material_index[material_key] = len(materials)
+            materials.append({"id": material_index[material_key], "rgb555": list(rgb), "texture": material_key[1]})
         indices: list[int] = []
         for point in triangle["positions"]:
             key = tuple(point)
@@ -287,23 +301,26 @@ def main() -> None:
                 position_index[key] = len(positions)
                 positions.append(list(key))
             indices.append(position_index[key])
-        ir_triangles.append({"source": source, "material": material_index[rgb], "indices": indices})
+        ir_triangles.append({"source": source, "material": material_index[material_key], "indices": indices})
     source_ir = {
         "schema": "sm64-saturn-mesh-ir", "version": 1,
         "name": "normal_mario_neutral_turntable", "positions": positions,
         "materials": materials, "triangles": ir_triangles,
+        "pairing_forbidden_triangles": [index for index, triangle in enumerate(triangles) if triangle["texture"] is not None],
         "vertex_attributes": {}, "validation_poses": [],
         "source": {"model": {"path": str(args.model).replace("\\\\", "/"), "sha256": hashlib.sha256(model.encode()).hexdigest()},
                    "geo": {"path": str(args.geo).replace("\\\\", "/"), "sha256": hashlib.sha256(geo.encode()).hexdigest()}},
     }
     compiled_ir, primitives, quad_report = compile_mesh_ir(source_ir)
-    eye_source_ids = [index for index, triangle in enumerate(triangles) if triangle["display_list"] == "mario_eyes_cap_on_dl"]
-    eye_primitive_indices = [
-        index for index, primitive in enumerate(compiled_ir["primitives"])
-        if any(source in eye_source_ids for source in primitive["source_triangles"])
-    ]
-    if not eye_primitive_indices or eye_primitive_indices != list(range(eye_primitive_indices[0], eye_primitive_indices[-1] + 1)):
-        raise ValueError("source eye patch must remain contiguous in compiled command order")
+    textured_source_ids = [index for index, triangle in enumerate(triangles) if triangle["texture"] is not None]
+    textured_source_rank = {source: rank for rank, source in enumerate(textured_source_ids)}
+    texture_tile_start = [0xFFFF] * len(primitives)
+    for primitive_index, primitive in enumerate(compiled_ir["primitives"]):
+        sources = primitive["source_triangles"]
+        if any(source in textured_source_rank for source in sources):
+            if len(sources) != 1 or sources[0] not in textured_source_rank:
+                raise ValueError("textured source triangles must remain individual VDP1 primitives")
+            texture_tile_start[primitive_index] = textured_source_rank[sources[0]] * 4
     args.output.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "/* Generated by tools/saturn/extract_mario_actor.py; do not edit. */",
@@ -315,8 +332,8 @@ def main() -> None:
         f"#define SM64_MARIO_VERTEX_COUNT {len(positions)}U",
         f"#define SM64_MARIO_PRIMITIVE_COUNT {len(primitives)}U",
         f"#define SM64_MARIO_QUAD_COUNT {quad_report['quad_count']}U",
-        f"#define SM64_MARIO_EYE_FIRST_PRIMITIVE {eye_primitive_indices[0]}U",
-        f"#define SM64_MARIO_EYE_LAST_PRIMITIVE {eye_primitive_indices[-1]}U",
+        f"#define SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT {len(textured_source_ids)}U",
+        "#define SM64_MARIO_TEXTURE_TILE_NONE 0xFFFFU",
         "/* Source-space vertices and RGB555 material table. */",
         "static const int16_t sm64_mario_vertices[SM64_MARIO_VERTEX_COUNT][3] = {",
     ]
@@ -325,15 +342,8 @@ def main() -> None:
     lines += ["    {" + ", ".join(map(str, material["rgb555"])) + "}," for material in materials]
     lines += ["};", "/* material,a,b,c,d; d repeats c for explicit triangle fallbacks. */", "static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {"]
     lines += ["    {%d, %d, %d, %d, %d}," % (primitive.material, *primitive.vertices) for primitive in primitives]
-    # The selected normal-cap/front-eye branch supplies this exact source
-    # patch. It remains separate because VDP1 textures are rectangular; M2's
-    # full UV tessellation follows after this verified first textured surface.
-    eye_vertices = [
-        (point[0] + 155, point[1], point[2])
-        for point in vertices["mario_eyes_cap_on_dl_vertex"]
-    ]
-    lines += ["};", f"#define SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT {len(eye_vertices)}U", "static const int16_t sm64_mario_eye_texture_vertices[SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT][3] = {"]
-    lines += ["    {" + ", ".join(map(str, point)) + "}," for point in eye_vertices]
+    lines += ["};", "/* First UV subtile for a compiled primitive, or TEXTURE_TILE_NONE. */", "static const uint16_t sm64_mario_texture_tile_start[SM64_MARIO_PRIMITIVE_COUNT] = {"]
+    lines += ["    " + ", ".join(f"{value}U" for value in texture_tile_start[index:index + 12]) + "," for index in range(0, len(texture_tile_start), 12)]
     lines += ["};", "#endif"]
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
@@ -347,11 +357,11 @@ def main() -> None:
         "primitive_count": len(primitives), "quad_count": quad_report["quad_count"],
         "triangle_fallback_count": quad_report["standalone_triangle_count"],
         "triangle_display_lists": sorted({str(item["display_list"]) for item in triangles}),
-        "textured_eye_triangles": [
-            {"source": index, "positions": triangle["positions"], "uv": triangle["uv"]}
-            for index, triangle in enumerate(triangles) if index in eye_source_ids
+        "textured_triangles": [
+            {"source": index, "texture": triangle["texture"], "positions": triangle["positions"], "uv": triangle["uv"]}
+            for index, triangle in enumerate(triangles) if index in textured_source_rank
         ],
-        "textured_eye_primitive_range": eye_primitive_indices,
+        "textured_primitive_count": len(textured_source_ids),
         "geo_evaluator": {
             "layout": "mario_geo_body",
             "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST", "Animation index/value rotations", "source xyz matrices"],

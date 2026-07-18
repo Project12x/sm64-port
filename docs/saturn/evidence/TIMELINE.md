@@ -329,6 +329,30 @@ the actual compiled Mario geometry. This is the first accepted standing-body
 pose; remaining M2 work is texture coverage and painter-quality refinement,
 not a substitute geometry path.
 
+### M2 texture coverage: five original Mario textures reach VDP1
+
+![Standing source Mario with original cap-logo, eye, sideburn, mustache, and button texture tiles](screenshots/ymir-m2-source-mario-full-texture-2026-07-18.png)
+
+The adapter now tracks Fast3D `gsDPSetTextureImage` state through nested source
+display lists, marks those source triangles unsafe for quad pairing, and
+replaces each one in transformed painter order with four UV-baked VDP1 tiles.
+This capture exercises 50 original textured source triangles (200 tiles): cap
+logo, eyes, sideburns, mustache, and overalls buttons. The body remains source
+geometry with VDP1 Gouraud shading. UV-tile seams and per-subtile ordering are
+visible limitations to refine, not missing or invented texture data.
+
+### M2 accepted: root rotation completes the source standing pose
+
+![Standing Mario after consuming the root rotation triplet](screenshots/ymir-m2-source-mario-c5-root-rotation-fixed-2026-07-18.png)
+
+The final source-animation cursor correction is decisive. In SM64,
+`geo_process_animated_part` consumes root translation and then its root
+rotation in the *same* invocation. The earlier evaluator skipped that rotation,
+offsetting every limb channel. With the true cursor order, the source C5 idle
+places the head near +153 source Y and both feet near −125 source Y. This
+BIOS-backed capture shows an upright Mario with source geometry, five local
+ROM-derived texture sources, and native VDP1 Gouraud lighting together.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

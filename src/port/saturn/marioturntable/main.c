@@ -3,7 +3,7 @@
 #include <string.h>
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
-#define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_EYE_UV_TRIANGLE_COUNT + 3U)
+#define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DEPTH_BUCKET_COUNT 64U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 2048
@@ -127,23 +127,24 @@ static void draw_mario(void) {
     uint16_t command = 2U;
     for (uint16_t out = 0; out < visible_triangles; out++) {
         const uint16_t primitive = draw_order[out];
-        if (primitive >= SM64_MARIO_EYE_FIRST_PRIMITIVE && primitive <= SM64_MARIO_EYE_LAST_PRIMITIVE) {
-            if (primitive != SM64_MARIO_EYE_FIRST_PRIMITIVE) continue;
-            /* VDP1 has no arbitrary UV vertex attributes. Each original eye
-             * triangle is baked to one transparent tile and submitted exactly
-             * at the compiled Fast3D eye-patch command position. */
-            for (uint16_t eye = 0; eye < SM64_MARIO_EYE_UV_TRIANGLE_COUNT; eye++) {
+        const uint16_t texture_tile_start = sm64_mario_texture_tile_start[primitive];
+        if (texture_tile_start != SM64_MARIO_TEXTURE_TILE_NONE) {
+            /* VDP1 has no arbitrary UV vertex attributes. Every selected
+             * Fast3D textured triangle is pre-baked into four transparent
+             * affine tiles and replaces that source primitive in painter
+             * order; untextured source geometry remains true-quads/Gouraud. */
+            for (uint16_t tile = texture_tile_start; tile < texture_tile_start + 4U; tile++) {
                 const int16_vec2_t v[4] = {
-                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][0])),
-                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][1])),
-                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][2])),
-                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][2]))
+                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][0])),
+                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][1])),
+                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][2])),
+                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][2]))
                 };
                 vdp1_cmdt_t *cmdt = &list->cmdts[command++];
                 vdp1_cmdt_distorted_sprite_set(cmdt);
                 vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768 });
-                vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + eye * SM64_MARIO_EYE_UV_TILE_WIDTH * SM64_MARIO_EYE_UV_TILE_WIDTH * sizeof(uint16_t));
-                vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_EYE_UV_TILE_WIDTH, SM64_MARIO_EYE_UV_TILE_WIDTH);
+                vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + tile * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t));
+                vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_TEXTURE_UV_TILE_WIDTH, SM64_MARIO_TEXTURE_UV_TILE_WIDTH);
                 vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
             }
             continue;
@@ -175,7 +176,7 @@ void user_init(void) {
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     fix16_sincos(yaw, &sine_yaw, &cosine_yaw); build_vertex_normals(); rebuild_gouraud();
     { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
-      scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_eye_uv_tiles, sizeof(sm64_mario_eye_uv_tiles)); scu_dma_transfer_wait(0); }
+      scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0); }
     for (uint32_t frame = 0;; frame++) {
         update_view(); cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;

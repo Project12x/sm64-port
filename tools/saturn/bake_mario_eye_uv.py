@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake SM64's source eye UV triangles into VDP1-safe direct-color tiles.
+"""Bake SM64's normal-Mario UV triangles into VDP1-safe direct-color tiles.
 
 The N64 display list supplies per-vertex UVs; VDP1 distorted sprites do not.
 This local-only stage samples each source triangle into a 16x16 texture with a
@@ -9,11 +9,19 @@ degenerate VDP1 triangle.  ROM-derived output stays below build/.
 from __future__ import annotations
 
 import argparse, json
+from collections import Counter
 from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
 
 TILE = 16
+TEXTURE_ASSETS = {
+    "mario_texture_eyes_front": "mario_eyes_center",
+    "mario_texture_m_logo": "mario_logo",
+    "mario_texture_hair_sideburn": "mario_sideburn",
+    "mario_texture_mustache": "mario_mustache",
+    "mario_texture_yellow_button": "mario_overalls_button",
+}
 
 def bilinear_weights(x: int, y: int) -> tuple[float, float, float]:
     b = (x + 0.5) / TILE
@@ -50,17 +58,30 @@ def main() -> None:
     args = parser.parse_args()
     assets = json.loads(args.assets.read_text(encoding="utf-8"))
     intake = json.loads(args.intake.read_text(encoding="utf-8"))
-    entry = assets["actors/mario/mario_eyes_center.rgba16.png"]
-    width, height, size, regions = entry
-    base, offset = regions["us"]
-    source = mio0_decode(rom_bytes(args.rom), base)[offset:offset + size]
-    if len(source) != size:
-        raise ValueError("eye texture range outside decompressed MIO0 segment")
-    source_triangles = intake["textured_eye_triangles"]
-    triangles = [subtriangle for triangle in source_triangles for subtriangle in split_four(triangle)]
+    rom = rom_bytes(args.rom)
+    decoded: dict[int, bytes] = {}
+    textures: dict[str, tuple[bytes, int, int]] = {}
+    source_triangles = intake["textured_triangles"]
+    for texture_name in sorted({str(item["texture"]) for item in source_triangles}):
+        asset_name = TEXTURE_ASSETS.get(texture_name)
+        if asset_name is None:
+            raise ValueError(f"no local ROM asset mapping for {texture_name}")
+        width, height, size, regions = assets[f"actors/mario/{asset_name}.rgba16.png"]
+        base, offset = regions["us"]
+        image = decoded.setdefault(base, mio0_decode(rom, base))
+        source = image[offset:offset + size]
+        if len(source) != size:
+            raise ValueError(f"{texture_name}: range outside decompressed MIO0 segment")
+        textures[texture_name] = (source, width, height)
+    triangles = [
+        {**subtriangle, "texture": source_triangle["texture"]}
+        for source_triangle in source_triangles
+        for subtriangle in split_four(source_triangle)
+    ]
     tiles: list[list[int]] = []
     for triangle in triangles:
         uv = triangle["uv"]
+        source, width, height = textures[str(triangle["texture"])]
         tile: list[int] = []
         for y in range(TILE):
             for x in range(TILE):
@@ -73,12 +94,12 @@ def main() -> None:
                 tile.append(pixel(source, width, height, u, v))
         tiles.append(tile)
     lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once",
-             f"#define SM64_MARIO_EYE_UV_TRIANGLE_COUNT {len(triangles)}U",
-             f"#define SM64_MARIO_EYE_UV_TILE_WIDTH {TILE}U",
-             "static const int16_t sm64_mario_eye_uv_positions[SM64_MARIO_EYE_UV_TRIANGLE_COUNT][3][3] = {"]
+             f"#define SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT {len(triangles)}U",
+             f"#define SM64_MARIO_TEXTURE_UV_TILE_WIDTH {TILE}U",
+             "static const int16_t sm64_mario_texture_uv_positions[SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT][3][3] = {"]
     for triangle in triangles:
         lines.append("    {" + ", ".join("{" + ", ".join(str(value) for value in vertex) + "}" for vertex in triangle["positions"]) + "},")
-    lines += ["};", "static const uint16_t sm64_mario_eye_uv_tiles[SM64_MARIO_EYE_UV_TRIANGLE_COUNT][SM64_MARIO_EYE_UV_TILE_WIDTH * SM64_MARIO_EYE_UV_TILE_WIDTH] = {"]
+    lines += ["};", "static const uint16_t sm64_mario_texture_uv_tiles[SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT][SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH] = {"]
     for tile in tiles:
         lines.append("    {")
         lines.extend("        " + ", ".join(f"0x{word:04X}" for word in tile[index:index + 8]) + "," for index in range(0, len(tile), 8))
@@ -87,7 +108,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_eyes_cap_on_dl", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()

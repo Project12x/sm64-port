@@ -1,7 +1,14 @@
 {
-  "source": "mario_eyes_cap_on_dl",
-  "source_triangle_count": 11,
-  "triangle_count": 44,
+  "source": "mario_geo_body normal-cap/front branch",
+  "source_triangle_count": 50,
+  "triangle_count": 200,
+  "textures": {
+    "mario_texture_yellow_button": 10,
+    "mario_texture_m_logo": 5,
+    "mario_texture_eyes_front": 11,
+    "mario_texture_hair_sideburn": 8,
+    "mario_texture_mustache": 16
+  },
   "subdivision": "4 affine subtriangles per source triangle",
   "tile": [
     16,
