@@ -27,6 +27,9 @@ The project has moved beyond feasibility sketches:
   primitive modes in emulation;
 - the asset classifier has an initial six-way triangle/quad representation,
   plus exact maximum-cardinality matching through hash-pinned NetworkX 3.6.1;
+- Saturn mesh IR v1 now preserves source triangle IDs, independent vertex
+  streams, all 506 Goddard face-weight records, and deformation-pose safety
+  evidence without imposing a false four-weight limit;
 - the actual 440-vertex / 877-triangle SM64 Goddard face, eyes, pupils,
   eyebrows, and moustache render through VDP1;
 - the face has fixed-point camera control, topology-derived Gouraud depth,
@@ -34,9 +37,10 @@ The project has moved beyond feasibility sketches:
 - every accepted and rejected visual step is preserved in the
   [screenshot timeline](evidence/index.html).
 
-The current proof is still a specialized renderer. It does not yet execute the
-Goddard deformation system, consume the general SM64 display-list path, render
-gameplay textures, or run Mario's gameplay state.
+The current proof still uses a specialized renderer, although its face mesh now
+passes through the reusable IR compiler. It does not yet execute the Goddard
+deformation system, consume the general SM64 display-list path, render gameplay
+textures, or run Mario's gameplay state.
 
 ## Roadmap at a glance
 
@@ -85,8 +89,10 @@ Work:
 
 1. Trace the minimum Goddard face update path: nets, joints, skin weights,
    expression state, and any dynamic vertex ownership.
-2. Extend the extractor so source relationships are emitted as compact Saturn
-   data rather than manually approximating expressions.
+2. Extend the v1 mesh IR adapter so source relationships and evaluated pose
+   extrema are emitted as compact Saturn data rather than manually
+   approximating expressions. The schema and deformation-safety gate are done;
+   source Goddard relationship extraction remains.
 3. Add a fixed-step animation state separate from camera/view state.
 4. Deform vertices before projection while preserving the neutral source pose.
 5. Keep normals and shine correct under deformation; initially recompute only

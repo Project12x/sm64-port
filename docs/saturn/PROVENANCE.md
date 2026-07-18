@@ -58,6 +58,26 @@ implementation documents exact integer arithmetic and `O(nodes^3)` runtime.
 It is never imported or linked by Saturn target code. The locked universal
 wheel SHA-256 is recorded in `tools/saturn/requirements.txt`.
 
+### zeux/meshoptimizer 1.1
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/zeux/meshoptimizer> |
+| Release / pinned commit | `v1.1` / `dc9d09ed83e1004aef47a1c3c597e0ec64848a37` |
+| License | MIT |
+| Role | Multi-stream mesh IR, adjacency, remapping, and seam-preservation prior art |
+| Files inspected | `LICENSE.md`, `README.md`, `src/meshoptimizer.h`, `src/indexgenerator.cpp`, `src/vfetchoptimizer.cpp` |
+| Reuse mode | Pattern-only |
+
+The Saturn mesh IR follows meshoptimizer's useful separation of position,
+attribute, and index streams and its rule that remapping must account for all
+representation-relevant streams. No meshoptimizer implementation is copied or
+linked. The current Python compiler needs VDP1-specific material, winding,
+sampled-projection, and deformation-pose gates that do not match
+meshoptimizer's GPU-oriented optimization contract; that architecture mismatch
+is why it remains pattern-only. A later native host-tool performance pass may
+adopt the MIT library directly, with attribution added at that point.
+
 ### Project12x/sm64-port
 
 | Field | Record |

@@ -13,7 +13,7 @@ endif
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface verify-tools classify-source verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface verify-tools classify-source compile-introface-mesh verify-all clean
 
 all: hello
 
@@ -103,6 +103,16 @@ classify-source: check-host-tools
 	  --root . \
 	  --primitives "tools/saturn/fixtures/primitives-six-way.json" \
 	  --report "docs/saturn/evidence/reports/asset-classifier-sm64.json"
+
+compile-introface-mesh: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_introface_mesh.py" \
+	  --input "src/goddard/dynlists/dynlist_mario_face.c" \
+	  --eyes-input "src/goddard/dynlists/dynlists_mario_eyes.c" \
+	  --features-input "src/goddard/dynlists/dynlists_mario_eyebrows_mustache.c" \
+	  --master-input "src/goddard/dynlists/dynlist_mario_master.c" \
+	  --output "src/port/saturn/introface/mario_face_mesh.h" \
+	  --quad-report "docs/saturn/evidence/reports/introface-quad-pairing.json" \
+	  --mesh-ir-output "docs/saturn/evidence/reports/introface-mesh-ir.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 

@@ -129,9 +129,27 @@ def _projection_is_stable(vertices: list[Vertex], cycle: tuple[int, int, int, in
 
 
 def candidates(
-    vertices: list[Vertex], faces: list[Face], minimum_normal_alignment: float = 0.80
+    vertices: list[Vertex],
+    faces: list[Face],
+    minimum_normal_alignment: float = 0.80,
+    deformation_poses: Iterable[tuple[str, list[Vertex]]] | None = None,
+    pairing_forbidden_triangles: set[int] | None = None,
 ) -> tuple[list[QuadCandidate], dict[str, int]]:
-    """Return Saturn-safe shared-edge candidates and rejection counts."""
+    """Return Saturn-safe shared-edge candidates and rejection counts.
+
+    A candidate must remain aligned and project to a strictly convex VDP1
+    quadrilateral in the neutral mesh and every supplied deformation pose.
+    Pose samples are an offline safety contract; they are not emitted to the
+    Saturn binary by this module.
+    """
+    pose_list = list(deformation_poses or [])
+    forbidden = pairing_forbidden_triangles or set()
+    for name, pose_vertices in pose_list:
+        if len(pose_vertices) != len(vertices):
+            raise ValueError(
+                f"deformation pose {name!r} has {len(pose_vertices)} vertices; "
+                f"expected {len(vertices)}"
+            )
     edge_faces: dict[tuple[int, int], list[int]] = {}
     for face_index, face in enumerate(faces):
         triangle = face[1:]
@@ -149,6 +167,9 @@ def candidates(
             continue
         first_index, second_index = sorted(linked)
         first, second = faces[first_index], faces[second_index]
+        if first_index in forbidden or second_index in forbidden:
+            reject("textured_pairing_not_implemented")
+            continue
         if first[0] != second[0]:
             reject("material_mismatch")
             continue
@@ -169,6 +190,27 @@ def candidates(
             continue
         if not _projection_is_stable(vertices, cycle):
             reject("projection_not_convex")
+            continue
+        pose_rejection = None
+        for _pose_name, pose_vertices in pose_list:
+            first_pose_normal = _normal(pose_vertices, first[1:])
+            second_pose_normal = _normal(pose_vertices, second[1:])
+            pose_lengths = math.sqrt(
+                _dot(first_pose_normal, first_pose_normal)
+                * _dot(second_pose_normal, second_pose_normal)
+            )
+            if pose_lengths == 0:
+                pose_rejection = "pose_degenerate_triangle"
+                break
+            pose_alignment = _dot(first_pose_normal, second_pose_normal) / pose_lengths
+            if pose_alignment < minimum_normal_alignment:
+                pose_rejection = "pose_normal_divergence"
+                break
+            if not _projection_is_stable(pose_vertices, cycle):
+                pose_rejection = "pose_projection_not_convex"
+                break
+        if pose_rejection is not None:
+            reject(pose_rejection)
             continue
         edge_vector = _sub(vertices[shared_edge[0]], vertices[shared_edge[1]])
         accepted.append(
@@ -228,10 +270,19 @@ def maximum_weight_matching(options: list[QuadCandidate]) -> dict[int, QuadCandi
 
 
 def pair_triangles(
-    vertices: Iterable[Vertex], faces: Iterable[Face]
+    vertices: Iterable[Vertex],
+    faces: Iterable[Face],
+    deformation_poses: Iterable[tuple[str, Iterable[Vertex]]] | None = None,
+    pairing_forbidden_triangles: set[int] | None = None,
 ) -> tuple[list[RenderPrimitive], dict[str, object]]:
     vertex_list, face_list = list(vertices), list(faces)
-    options, rejected = candidates(vertex_list, face_list)
+    pose_list = [(name, list(pose)) for name, pose in (deformation_poses or [])]
+    options, rejected = candidates(
+        vertex_list,
+        face_list,
+        deformation_poses=pose_list,
+        pairing_forbidden_triangles=pairing_forbidden_triangles,
+    )
     matched = maximum_weight_matching(options)
     primitives: list[RenderPrimitive] = []
     emitted: set[int] = set()
@@ -252,6 +303,8 @@ def pair_triangles(
         "matcher": "networkx.max_weight_matching",
         "matcher_version": nx.__version__,
         "matching_policy": "maximum cardinality, then maximum integer quality",
+        "deformation_pose_count": len(pose_list),
+        "deformation_pose_names": [name for name, _vertices in pose_list],
         "source_triangle_count": len(face_list),
         "candidate_count": len(options),
         "quad_count": quad_count,

@@ -216,3 +216,30 @@ The exact-matching follow-up capture is
 frame hash `915851840edf189fb39889476ad98055`, frame 3300). Against the preceding
 heuristic pairing it changes 610 pixels in the nose-shading region and changes
 zero foreground-mask pixels, preserving the complete rendered silhouette.
+
+The face now enters quad pairing through the reusable Saturn mesh IR v1
+compiler in `tools/saturn/saturn_mesh_ir.py`. Its checked compiled artifact is
+`docs/saturn/evidence/reports/introface-mesh-ir.json` (SHA-256
+`9f308444f68af3cc8d43406935708ec0d3ae43f02caf2aeeeedd5fc208d3b357`). It
+records all 440 positions, 721 compiled primitives, and stable source triangle
+IDs. It also preserves 41 ordered Goddard joints and all 506 explicit weight
+records affecting 320 vertices. The source has up to eight influences per
+vertex, and 44 vertices have explicit totals over 100%; the IR therefore uses
+`goddard_weighted_accumulation` Q15 records instead of incorrectly normalizing
+or truncating them to conventional four-weight skinning. The relevant behavior
+was traced through `dynlist_mario_master.c`, `skin.c`, `skin_movement.c`, and
+`joints.c`.
+
+The generated C header remains byte-identical at SHA-256
+`d390d7638a024a59fbb0431a309353895a643e0917e4333c8dd47f43c24be6ad`.
+The intro face currently supplies zero deformation samples, so this is an IR
+and neutral-regression milestone rather than a claim that its quads are already
+safe under facial motion.
+
+The BIOS-backed reusable-IR regression capture is
+`docs/saturn/evidence/screenshots/ymir-mesh-ir-v1-2026-07-18.png` (SHA-256
+`4deb096a9dac257661a2a6b2055002234b62a100be1c233faf772b5fcaa6ee7f`,
+frame hash `915851840edf189fb39889476ad98055`, frame 3300). Both hashes exactly
+match the preceding exact-matcher capture, as expected from the unchanged C
+header. The separate capture and manifest establish that the generic compiler
+path boots through the USA BIOS without a visual regression.

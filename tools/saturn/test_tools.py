@@ -13,7 +13,9 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from extract_introface_mesh import goddard_deformation  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
+from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
 
@@ -106,6 +108,106 @@ class QuadPairingTests(unittest.TestCase):
         _, report = pair_triangles(vertices, faces)
         self.assertEqual(report["quad_count"], 0)
         self.assertEqual(report["rejection_reasons"], {"winding_or_topology": 1})
+
+    def test_pair_must_remain_safe_in_every_deformation_pose(self) -> None:
+        vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        faces = [(3, 0, 1, 2), (3, 0, 2, 3)]
+        folded = [(0, 0, 0), (10, 0, 0), (2, -2, 0), (0, 10, 0)]
+        _, neutral_report = pair_triangles(vertices, faces)
+        _, animated_report = pair_triangles(
+            vertices, faces, deformation_poses=[("folded", folded)]
+        )
+        self.assertEqual(neutral_report["quad_count"], 1)
+        self.assertEqual(animated_report["quad_count"], 0)
+        self.assertEqual(animated_report["deformation_pose_names"], ["folded"])
+        self.assertTrue(
+            any(reason.startswith("pose_") for reason in animated_report["rejection_reasons"])
+        )
+
+
+class SaturnMeshIRTests(unittest.TestCase):
+    @staticmethod
+    def document() -> dict[str, object]:
+        return {
+            "schema": "sm64-saturn-mesh-ir",
+            "version": 1,
+            "name": "unit_quad",
+            "source": {"path": "fixture"},
+            "positions": [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]],
+            "materials": [{"id": 3, "rgb555": [31, 15, 0]}],
+            "triangles": [
+                {"source": 40, "material": 3, "indices": [0, 1, 2]},
+                {"source": 41, "material": 3, "indices": [0, 2, 3]},
+            ],
+            "vertex_attributes": {},
+            "validation_poses": [],
+        }
+
+    def test_compiler_preserves_source_ids_and_emits_true_quad(self) -> None:
+        compiled, _primitives, report = compile_mesh_ir(self.document())
+        self.assertEqual(report["quad_count"], 1)
+        self.assertEqual(compiled["schema"], "sm64-saturn-compiled-mesh")
+        self.assertEqual(compiled["primitives"][0]["representation"], "quad")
+        self.assertEqual(compiled["primitives"][0]["source_triangles"], [40, 41])
+
+    def test_v1_keeps_textured_triangles_as_explicit_fallbacks(self) -> None:
+        document = self.document()
+        document["vertex_attributes"] = {
+            "uv": [[0, 0], [32, 0], [32, 32], [0, 32]]
+        }
+        compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertEqual(report["quad_count"], 0)
+        self.assertEqual(report["rejection_reasons"], {"textured_pairing_not_implemented": 1})
+        self.assertEqual(
+            [primitive["representation"] for primitive in compiled["primitives"]],
+            ["triangle_fallback", "triangle_fallback"],
+        )
+
+    def test_linear_blend_weights_must_sum_to_q15_one(self) -> None:
+        document = self.document()
+        document["deformation"] = {
+            "mode": "linear_blend",
+            "joint_count": 2,
+            "influences": [[{"joint": 0, "weight_q15": 24576}, {"joint": 1, "weight_q15": 8192}]] * 4,
+        }
+        validate_mesh_ir(document)
+        document["deformation"]["influences"][0] = [{"joint": 0, "weight_q15": 32767}]
+        with self.assertRaisesRegex(ValueError, "sum to 32768"):
+            validate_mesh_ir(document)
+
+    def test_goddard_mode_preserves_more_than_one_total_weight(self) -> None:
+        document = self.document()
+        document["deformation"] = {
+            "mode": "goddard_weighted_accumulation",
+            "joint_count": 3,
+            "influences": [
+                [
+                    {"joint": 0, "weight_q15": 32768},
+                    {"joint": 1, "weight_q15": 32768},
+                    {"joint": 2, "weight_q15": 16384},
+                ]
+            ] + [[] for _ in range(3)],
+        }
+        compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertEqual(compiled["deformation"]["mode"], "goddard_weighted_accumulation")
+        self.assertEqual(report["deformation_influence_count"], 3)
+        self.assertEqual(report["deformation_vertices_over_q15_one"], 1)
+
+    def test_goddard_extractor_preserves_joint_order_and_overweight_vertices(self) -> None:
+        source = """
+            MakeAttachedJoint(JOINT_A),
+                SetSkinWeight(1, 100.0),
+            MakeAttachedJoint(JOINT_B),
+                SetSkinWeight(1, 75.0),
+                SetSkinWeight(2, 0.02),
+        """
+        deformation = goddard_deformation(source, 3)
+        self.assertEqual(deformation["joints"], ["JOINT_A", "JOINT_B"])
+        self.assertEqual(
+            deformation["influences"][1],
+            [{"joint": 0, "weight_q15": 32768}, {"joint": 1, "weight_q15": 24576}],
+        )
+        self.assertEqual(deformation["influences"][2][0]["weight_q15"], 7)
 
 
 class YmirInputTests(unittest.TestCase):

@@ -135,6 +135,16 @@ report in one command:
 make -f Makefile.saturn.mk classify-source
 ```
 
+To run the source-derived intro face through the reusable Saturn mesh IR and
+regenerate its C header plus both machine-readable reports:
+
+```sh
+make -f Makefile.saturn.mk compile-introface-mesh
+```
+
+The versioned source/compiled contracts and direct CLI usage are documented in
+[`SATURN_MESH_IR.md`](SATURN_MESH_IR.md).
+
 With a locally installed Yaul SDK, the complete fallback verification gate is:
 
 ```sh
