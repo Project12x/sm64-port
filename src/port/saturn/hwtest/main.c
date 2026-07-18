@@ -237,6 +237,11 @@ typedef struct vdp1_probe {
         const int16_vec2_t *vertices;
 } vdp1_probe_t;
 
+/* VDP1 has double frame buffers. Retain and resubmit the final patterned
+ * command list after the one-shot timing suite so delayed emulator/retail
+ * captures observe the same rendered triangle rather than a later clear. */
+static vdp1_cmdt_list_t *visible_pattern_list;
+
 static void
 vdp1_test(void)
 {
@@ -270,8 +275,19 @@ vdp1_test(void)
                 INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),
                 INT16_VEC2_INITIALIZER(152, 112), INT16_VEC2_INITIALIZER(88, 112)
         };
+        /* Four distinct texel corners make the repeated-vertex distorted
+         * sprite a visual mapping probe as well as a command/timing probe.
+         * A solid texture only proves that VDP1 read *something*; it cannot
+         * reveal a swapped source corner or a bad triangle assumption. */
         static const uint16_t texture[64] = {
-                [0 ... 63] = 0x7C00
+                [0 ... 3] = 0xFC00, [4 ... 7] = 0x83E0,
+                [8 ... 11] = 0xFC00, [12 ... 15] = 0x83E0,
+                [16 ... 19] = 0xFC00, [20 ... 23] = 0x83E0,
+                [24 ... 27] = 0xFC00, [28 ... 31] = 0x83E0,
+                [32 ... 35] = 0x801F, [36 ... 39] = 0xFFFF,
+                [40 ... 43] = 0x801F, [44 ... 47] = 0xFFFF,
+                [48 ... 51] = 0x801F, [52 ... 55] = 0xFFFF,
+                [56 ... 59] = 0x801F, [60 ... 63] = 0xFFFF
         };
         static const vdp1_gouraud_table_t gouraud_table = {
                 .colors = { RGB1555(1, 31, 0, 0), RGB1555(1, 0, 31, 0),
@@ -301,12 +317,14 @@ vdp1_test(void)
                 { VDP1_PROBE_CONCAVE, solid_mode, RGB1555(1, 0, 0, 31), concave },
                 { VDP1_PROBE_TRANSPARENCY, transparent_mode,
                     RGB1555(1, 31, 31, 0), transparency },
-                { VDP1_PROBE_TEXTURED_TRIANGLE, textured_mode,
-                    RGB1555(1, 31, 31, 31), textured_triangle },
                 { VDP1_PROBE_TEXTURED, textured_mode,
                     RGB1555(1, 31, 0, 31), textured },
                 { VDP1_PROBE_GOURAUD, gouraud_mode,
-                    RGB1555(1, 31, 31, 31), gouraud }
+                    RGB1555(1, 31, 31, 31), gouraud },
+                /* Leave the patterned triangle visible after diagnostics so
+                 * Ymir/retail screenshots are inspectable evidence. */
+                { VDP1_PROBE_TEXTURED_TRIANGLE, textured_mode,
+                    RGB1555(1, 31, 31, 31), textured_triangle }
         };
 
         vdp1_cmdt_list_t * const list = vdp1_cmdt_list_alloc(4);
@@ -379,7 +397,7 @@ vdp1_test(void)
         extended_telemetry->vdp1_modes_mask = 0x7FU;
         telemetry->status |= HWTEST_STATUS_VDP1_PASS;
 
-        vdp1_cmdt_list_free(list);
+        visible_pattern_list = list;
 }
 
 void
@@ -401,6 +419,12 @@ user_init(void)
         dbgio_init();
         dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
         dbgio_dev_font_load();
+        /* dbgio occupies NBG3 with an opaque zero tile. Keep the final VDP1
+         * pattern probe above that instrumentation layer so its texel-corner
+         * mapping is inspectable in Ymir and on retail hardware. */
+        for (uint8_t priority = 0; priority < 8; priority++) {
+                vdp2_sprite_priority_set(priority, 7);
+        }
 
         dbgio_puts("\x1B[H\x1B[2JSM64 SATURN HWTEST\n\n"
                    "cart test: RUNNING\n"
@@ -449,6 +473,12 @@ user_init(void)
         vdp2_sync_wait();
 
         for (;;) {
+                vdp1_sync_cmdt_list_put(visible_pattern_list, 0);
+                vdp1_sync_render();
+                vdp1_sync();
+                vdp2_sync();
+                vdp2_sync_wait();
+                vdp1_sync_wait();
         }
 }
 

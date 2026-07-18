@@ -24,9 +24,17 @@ TEXTURE_ASSETS = {
 }
 
 def bilinear_weights(x: int, y: int) -> tuple[float, float, float]:
+    """Map VDP1's repeated-vertex sprite texel corners to Fast3D A/B/C.
+
+    The patterned BIOS-backed HWTEST probe establishes that a command emitted
+    as (A, B, C, C) maps its source tile corners as C, B, A, [collapsed].
+    This is not conventional image-space triangle order.  Keep the transform
+    here beside the offline bake so the output remains one target-native tile
+    per subtriangle rather than a software framebuffer workaround.
+    """
     b = (x + 0.5) / TILE
     c = (y + 0.5) / TILE
-    return 1.0 - b - c, b, c
+    return c, b, 1.0 - b - c
 
 def pixel(texture: bytes, width: int, height: int, u: float, v: float) -> int:
     # Fast3D's source coordinates are s10.5-style values for this 32x32 asset.
@@ -85,10 +93,10 @@ def main() -> None:
         tile: list[int] = []
         for y in range(TILE):
             for x in range(TILE):
-                a, b, c = bilinear_weights(x, y)
-                if a < 0.0:
+                if x + y >= TILE:
                     tile.append(0)
                     continue
+                a, b, c = bilinear_weights(x, y)
                 u = a * uv[0][0] + b * uv[1][0] + c * uv[2][0]
                 v = a * uv[0][1] + b * uv[1][1] + c * uv[2][1]
                 tile.append(pixel(source, width, height, u, v))
@@ -108,7 +116,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()

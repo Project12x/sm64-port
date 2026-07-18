@@ -145,6 +145,23 @@ make -f Makefile.saturn.mk compile-introface-mesh
 The versioned source/compiled contracts and direct CLI usage are documented in
 [`SATURN_MESH_IR.md`](SATURN_MESH_IR.md).
 
+## Regenerating local Mario texture tiles
+
+The Mario turntable's source texture tiles are derived from a user-supplied US
+SM64 ROM/archive and intentionally remain under ignored `build/` output. Before
+building the turntable after changing the UV baker, regenerate that header
+explicitly with a native path appropriate for the host Python runtime:
+
+```sh
+make -f Makefile.saturn.mk compile-mario-textures \
+  SM64_ROM='E:/ROM and ISO/n64/Super_Mario_64_(U)_[!].zip'
+make -f Makefile.saturn.mk verify-marioturntable
+```
+
+`compile-mario-textures` also refreshes the source actor intake first. It does
+not commit Nintendo-derived pixels; it only updates the ignored generated
+header and the tracked conversion report.
+
 With a locally installed Yaul SDK, the complete fallback verification gate is:
 
 ```sh

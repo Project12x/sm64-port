@@ -11,11 +11,12 @@ SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
 else
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
+SM64_ROM ?=
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures verify-all clean
 
 all: hello
 
@@ -138,6 +139,18 @@ compile-mario-actor: check-host-tools
 	  --output "src/port/saturn/marioturntable/mario_actor_mesh.h" \
 	  --report "docs/saturn/evidence/reports/mario-actor-intake.json" \
 	  --mesh-ir-output "docs/saturn/evidence/reports/mario-actor-mesh-ir.json"
+
+compile-mario-textures: compile-mario-actor check-host-tools
+	@if [ -z "$(SM64_ROM)" ]; then \
+	  printf '%s\n' 'SM64_ROM must name the user-supplied US ROM/archive for local-only Mario texture conversion.' >&2; \
+	  exit 1; \
+	fi
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_mario_eye_uv.py" \
+	  --rom "$(SM64_ROM)" \
+	  --assets "assets.json" \
+	  --intake "docs/saturn/evidence/reports/mario-actor-intake.json" \
+	  --output "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h" \
+	  --report "docs/saturn/evidence/reports/mario-eye-uv-bake.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 

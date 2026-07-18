@@ -395,6 +395,25 @@ improvement in the BIOS-backed frame. The camera-specific normalization is
 therefore rejected and reverted. A patterned hardware texture probe—not a
 further guessed actor conversion—is the next texture correctness gate.
 
+### M2 accepted conversion correction: measured VDP1 texel corner order
+
+![Patterned VDP1 repeated-vertex textured-triangle probe](screenshots/ymir-hwtest-textured-triangle-pattern-mapped-2026-07-18.png)
+
+The visible target probe establishes the actual repeated-vertex distorted
+sprite mapping: source tile corners land at C, B, A, and the collapsed fourth
+edge, rather than the intuitive A, B, C ordering. Opaque direct-color texels
+also require the MSB set; this matches the N64 RGBA16 alpha-to-Saturn-MSB
+conversion already used by the local Mario asset bake.
+
+![Standing Mario after the hardware-measured VDP1 UV-tile correction](screenshots/ymir-m2-source-mario-texture-cba-regenerated-2026-07-18.png)
+
+The Mario baker now emits its UV samples in C/B/A tile order and preserves a
+transparent fourth edge. The ROM-derived header is regenerated explicitly
+through `compile-mario-textures` before a target build, preventing the stale
+derived-header false negative caught during this experiment. This is a real
+texture-layout correction on the native VDP1 path, while the 16×16 fallback's
+resolution and remaining painter limitations stay visible and open.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

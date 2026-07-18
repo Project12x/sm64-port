@@ -15,5 +15,5 @@
     16
   ],
   "uv_space": "Fast3D source UV / 32",
-  "mapping": "per-subtriangle UV bake with transparent exterior"
+  "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"
 }
