@@ -46,3 +46,17 @@ new hwtest IP header or cartridge code.
 
 Retail Saturn execution with the 4 MiB RAM cartridge remains the authoritative
 gate for cartridge, DMA, and VDP1 measurements.
+
+## Follow-up Ymir CD-block patch
+
+The linked GPL Ymir fork then received commit
+`9da9c76b` (`feat(cdblock): implement sector copy and move commands`). It
+enables dispatcher commands `0x65`/`0x66`, routes copied buffers through the
+configured filter chain, implements move deletion, and makes `0x67` return a
+clean zero-error response. The fork was rebuilt successfully.
+
+A fresh 600-frame capture with that binary reported
+`diagnostics.cd_block_copy_unimplemented: false`, but still returned the same
+120 zero bytes. Its stderr now stops at unhandled SMPC on-chip register accesses
+before any copy/move command is issued. This narrows the remaining Ymir boot
+gap; it does not constitute valid Saturn telemetry.

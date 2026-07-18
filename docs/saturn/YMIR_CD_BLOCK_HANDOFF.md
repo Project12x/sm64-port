@@ -28,7 +28,19 @@ explicitly TODO/unimplemented and return `kHIRQ_ECPY`. The USA BIOS reaches the
 copy-error path (`0x67`) while trying to boot the disc, so the Saturn program
 never executes.
 
-## Minimal next patch
+## CD-block patch status
+
+The minimum CD-block patch was implemented and pushed to the linked Ymir fork
+as commit `9da9c76b` on `project12x/agent-debug-v0`. It enables `0x65`/`0x66`,
+routes copied buffers through the filter chain, removes source sectors for
+move, and returns a zero-error response for `0x67`.
+
+The rebuilt fork no longer reports the false “Get copy error command is
+unimplemented” diagnostic. The USA BIOS still stops earlier on unhandled SMPC
+on-chip register accesses, so a second emulator patch is required before the
+Saturn image can be expected to execute.
+
+## Original minimum patch shape
 
 Implement the CD-block sector-copy and sector-move state machine in the Ymir
 fork, preserving its GPL-3.0 notices and corresponding-source obligations:
