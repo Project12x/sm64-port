@@ -2,7 +2,8 @@
 #include <yaul.h>
 #include <string.h>
 #include "mario_actor_mesh.h"
-#define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + 3U)
+#include "mario_eye_uv_tiles.h"
+#define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_EYE_UV_TRIANGLE_COUNT + 3U)
 #define DEPTH_BUCKET_COUNT 64U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 2048
@@ -132,7 +133,24 @@ static void draw_mario(void) {
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + draw_order[out] * sizeof(vdp1_gouraud_table_t));
     }
-    vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U]);
+    /* Each tile is derived from the exact source triangle UV triplet. VDP1
+     * does not expose arbitrary UVs, so a complete tile maps to its matching
+     * repeated-vertex distorted sprite rather than a rectangular eye overlay. */
+    for (uint16_t eye = 0; eye < SM64_MARIO_EYE_UV_TRIANGLE_COUNT; eye++) {
+        const int16_vec2_t v[4] = {
+            project_point(transform_point(sm64_mario_eye_uv_positions[eye][0])),
+            project_point(transform_point(sm64_mario_eye_uv_positions[eye][1])),
+            project_point(transform_point(sm64_mario_eye_uv_positions[eye][2])),
+            project_point(transform_point(sm64_mario_eye_uv_positions[eye][2]))
+        };
+        vdp1_cmdt_t *cmdt = &list->cmdts[visible_triangles + 2U + eye];
+        vdp1_cmdt_distorted_sprite_set(cmdt);
+        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768 });
+        vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + eye * SM64_MARIO_EYE_UV_TILE_WIDTH * SM64_MARIO_EYE_UV_TILE_WIDTH * sizeof(uint16_t));
+        vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_EYE_UV_TILE_WIDTH, SM64_MARIO_EYE_UV_TILE_WIDTH);
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
+    }
+    vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U + SM64_MARIO_EYE_UV_TRIANGLE_COUNT]);
     build_ticks = (uint16_t)(cpu_frt_count_get() - start);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud)); scu_dma_transfer_wait(0);
     vdp1_sync_cmdt_list_put(list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
@@ -151,6 +169,8 @@ void user_init(void) {
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     fix16_sincos(yaw, &sine_yaw, &cosine_yaw); build_vertex_normals(); rebuild_gouraud();
+    { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
+      scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_eye_uv_tiles, sizeof(sm64_mario_eye_uv_tiles)); scu_dma_transfer_wait(0); }
     for (uint32_t frame = 0;; frame++) {
         update_view(); cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;

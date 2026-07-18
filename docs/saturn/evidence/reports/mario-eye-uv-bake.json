@@ -1,0 +1,10 @@
+{
+  "source": "mario_eyes_cap_on_dl",
+  "triangle_count": 11,
+  "tile": [
+    16,
+    16
+  ],
+  "uv_space": "Fast3D source UV / 32",
+  "mapping": "per-source-triangle UV bake with transparent exterior"
+}

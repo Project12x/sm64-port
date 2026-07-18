@@ -10,7 +10,7 @@ IMAGE_DIRECTORY := $(ROOT)/build/saturn/marioturntable/cd
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
-SH_CFLAGS += -Os -g -DDEBUG
+SH_CFLAGS += -Os -g -DDEBUG -I$(ROOT)/build/saturn/marioturntable/generated
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260718
 IP_AREAS := JTUBKAEL

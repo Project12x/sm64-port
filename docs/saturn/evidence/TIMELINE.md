@@ -227,6 +227,19 @@ texture over a non-rectangular Fast3D eye patch. Both captures are retained:
 the assets are now correct, while the renderer still needs per-primitive UV
 tessellation rather than an overlay approximation.
 
+### M2 rejected: UV tiles submitted after the actor
+
+![UV-baked source eye tiles overpaint the actor because their commands were appended](screenshots/ymir-m2-source-mario-eye-uv-baked-2026-07-18.png)
+
+All 11 original `mario_eyes_cap_on_dl` position/UV triplets now bake into
+transparent 16×16 VDP1-safe tiles, proving the local source-texture path is
+active. This frame is rejected: its tile commands were appended after the
+whole actor and therefore overpaint cap and face. The texture replacement
+must occupy the original compiled primitive span. Separately, this capture
+also makes clear that the current no-animation joint pose is not a credible
+standing Mario pose; source skeletal evaluation is now the higher-priority
+gate.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
