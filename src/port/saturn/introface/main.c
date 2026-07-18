@@ -9,6 +9,10 @@
 
 #include "mario_face_mesh.h"
 
+#ifdef SM64_TITLE_FONT_GENERATED
+#include "mario_title_font_generated.h"
+#endif
+
 #define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
 #define FEATURE_TRIANGLE_COUNT (SM64_RIGHT_EYEBROW_TRIANGLE_COUNT + SM64_LEFT_EYEBROW_TRIANGLE_COUNT + SM64_MUSTACHE_TRIANGLE_COUNT)
 #define FACE_SURFACE_COUNT SM64_FACE_PRIMITIVE_COUNT
@@ -97,6 +101,18 @@ title_glyph(char ch)
     }
 }
 
+#ifdef SM64_TITLE_FONT_GENERATED
+static int
+title_source_glyph_index(char ch)
+{
+    switch (ch) {
+    case 'A': return 0; case 'E': return 1; case 'P': return 2;
+    case 'R': return 3; case 'S': return 4; case 'T': return 5;
+    default: return -1;
+    }
+}
+#endif
+
 static void
 title_prompt_draw(const char *text)
 {
@@ -109,6 +125,22 @@ title_prompt_draw(const char *text)
         for (uint16_t x = 80U; x < 244U; x++)
             pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = title_backdrop_color(x, y);
     for (uint16_t index = 0; text[index] != '\0'; index++) {
+#ifdef SM64_TITLE_FONT_GENERATED
+        const int source_index = title_source_glyph_index(text[index]);
+        if (source_index >= 0) {
+            for (uint8_t row = 0; row < 16U; row++) {
+                for (uint8_t column = 0; column < 16U; column++) {
+                    const rgb1555_t pixel = (rgb1555_t)sm64_title_font[source_index][row * 16U + column];
+                    if (pixel.raw == 0)
+                        continue;
+                    const uint16_t x = origin_x + index * 16U + column;
+                    const uint16_t y = origin_y + row;
+                    pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = pixel;
+                }
+            }
+            continue;
+        }
+#endif
         const uint8_t * const glyph = title_glyph(text[index]);
         if (glyph == NULL)
             continue;

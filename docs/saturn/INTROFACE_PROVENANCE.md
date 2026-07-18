@@ -243,3 +243,16 @@ frame hash `915851840edf189fb39889476ad98055`, frame 3300). Both hashes exactly
 match the preceding exact-matcher capture, as expected from the unchanged C
 header. The separate capture and manifest establish that the generic compiler
 path boots through the USA BIOS without a visual regression.
+
+## Local title-prompt glyph conversion
+
+`tools/saturn/extract_title_prompt_font.py` reads only the six US `main_hud_lut`
+glyphs needed for `PRESS START` (`A`, `E`, `P`, `R`, `S`, `T`) from a user-owned
+US ROM, converts N64 RGBA16 pixels to Saturn RGB1555, and writes a generated
+header plus SHA-256 manifest beneath `build/saturn/introface/generated/`.
+Neither the ROM, generated header, nor manifest is committed. Source offsets
+are cross-checked against `assets.json` and `bin/segment2.c`; the title source
+calls `print_intro_text`, whose text path uses `main_hud_lut` in
+`src/game/print.c`. The BIOS-backed result is
+`ymir-m1-source-press-start-2026-07-18.png`; it proves local source glyphs,
+not a hand-drawn substitute, are composited into the VDP2 title bitmap.

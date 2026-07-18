@@ -11,6 +11,10 @@ export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 SH_CFLAGS += -Os -g -DDEBUG
+TITLE_FONT_DIR := $(ROOT)/build/saturn/introface/generated
+ifneq ($(wildcard $(TITLE_FONT_DIR)/mario_title_font_generated.h),)
+SH_CFLAGS += -I$(TITLE_FONT_DIR) -DSM64_TITLE_FONT_GENERATED
+endif
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260717
 IP_AREAS := JTUBKAEL
