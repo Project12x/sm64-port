@@ -71,6 +71,63 @@ static bool title_handoff;
 static void build_vertex_normals(void);
 static void build_lighting_cache(void);
 
+static rgb1555_t
+title_backdrop_color(uint16_t x, uint16_t y)
+{
+    const uint8_t wave = (uint8_t)(((x >> 4) ^ (y >> 3)) & 7U);
+    const uint8_t blue = (uint8_t)(17U + (y >> 5) + wave);
+    return RGB1555(1, (uint8_t)(3U + (wave >> 1)),
+      (uint8_t)(6U + wave), blue);
+}
+
+static const uint8_t *
+title_glyph(char ch)
+{
+    static const uint8_t a[7] = { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 };
+    static const uint8_t d[7] = { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E };
+    static const uint8_t e[7] = { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F };
+    static const uint8_t p[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 };
+    static const uint8_t r[7] = { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 };
+    static const uint8_t s[7] = { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E };
+    static const uint8_t t[7] = { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 };
+    switch (ch) {
+    case 'A': return a; case 'D': return d; case 'E': return e;
+    case 'P': return p; case 'R': return r; case 'S': return s;
+    case 'T': return t; default: return NULL;
+    }
+}
+
+static void
+title_prompt_draw(const char *text)
+{
+    volatile rgb1555_t * const pixels = (volatile rgb1555_t *)TITLE_BITMAP_BASE;
+    const uint16_t origin_x = 92U;
+    const uint16_t origin_y = 207U;
+    /* Repaint the prompt strip from the procedural backdrop before drawing
+     * its replacement state after START. */
+    for (uint16_t y = origin_y; y < origin_y + 16U; y++)
+        for (uint16_t x = 80U; x < 244U; x++)
+            pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = title_backdrop_color(x, y);
+    for (uint16_t index = 0; text[index] != '\0'; index++) {
+        const uint8_t * const glyph = title_glyph(text[index]);
+        if (glyph == NULL)
+            continue;
+        for (uint8_t row = 0; row < 7U; row++) {
+            for (uint8_t column = 0; column < 5U; column++) {
+                if ((glyph[row] & (1U << (4U - column))) == 0)
+                    continue;
+                const uint16_t x = origin_x + index * 12U + column * 2U;
+                const uint16_t y = origin_y + row * 2U;
+                pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = RGB1555(1, 31, 31, 31);
+                pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x + 1U] = RGB1555(1, 31, 31, 31);
+                pixels[(uint32_t)(y + 1U) * TITLE_BITMAP_WIDTH + x] = RGB1555(1, 31, 31, 31);
+                pixels[(uint32_t)(y + 1U) * TITLE_BITMAP_WIDTH + x + 1U] = RGB1555(1, 31, 31, 31);
+            }
+        }
+    }
+    cpu_cache_purge();
+}
+
 static void
 title_backdrop_init(void)
 {
@@ -81,13 +138,7 @@ title_backdrop_init(void)
     volatile rgb1555_t *pixels = (volatile rgb1555_t *)TITLE_BITMAP_BASE;
     for (uint16_t y = 0; y < TITLE_BITMAP_HEIGHT; y++) {
         for (uint16_t x = 0; x < TITLE_BITMAP_WIDTH; x++) {
-            const uint8_t wave = (uint8_t)(((x >> 4) ^ (y >> 3)) & 7U);
-            /* Keep this deliberately obvious on an uncalibrated CRT/emulator
-             * gamma curve: it is a staging field, not the eventual extracted
-             * title texture. */
-            const uint8_t blue = (uint8_t)(17U + (y >> 5) + wave);
-            pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = RGB1555(1,
-              (uint8_t)(3U + (wave >> 1)), (uint8_t)(6U + wave), blue);
+            pixels[(uint32_t)y * TITLE_BITMAP_WIDTH + x] = title_backdrop_color(x, y);
         }
     }
     /* VDP2 VRAM is reached through the SH-2 cacheable bus mapping.  Unlike
@@ -118,6 +169,7 @@ title_backdrop_init(void)
     vdp2_scrn_bitmap_format_set(&title_format);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 5);
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
+    title_prompt_draw("PRESS START");
 }
 
 static rgb1555_t
@@ -581,6 +633,7 @@ update_controls(void)
     if ((edge & PERIPHERAL_DIGITAL_START) != 0) {
         title_handoff = true;
         view.auto_rotate = false;
+        title_prompt_draw("STARTED");
     }
     if (view.auto_rotate) {
         view.yaw += 96;
@@ -619,6 +672,10 @@ update_hud(uint16_t frame)
       "              %s\n",
       title_handoff ? "CASTLE LOBBY HANDOFF (M1 PLACEHOLDER)" : "PRESS START");
     dbgio_flush();
+    /* dbgio's asynchronous NBG3 upload enters Yaul's VDP DMA queue. Commit
+     * that queue every HUD refresh; otherwise the glyph data stays host-side
+     * even though the NBG3 format and priority are correct. */
+    vdp2_sync();
 }
 
 static void
