@@ -131,6 +131,15 @@ With a locally installed Yaul SDK, the complete fallback verification gate is:
 make -f Makefile.saturn.mk verify-all
 ```
 
+The command uses `python3` by default. If the MSYS2 shell does not expose a
+Python executable on `PATH`, set the repository's host Python explicitly, for
+example:
+
+```sh
+PYTHON=/c/Users/estee/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe \
+  make -f Makefile.saturn.mk verify-all
+```
+
 It runs the host tests, regenerates the classifier report, and verifies both
 the hello and hardware-test ELF headers.
 

@@ -4,7 +4,8 @@ The documented MSYS2 fallback now has one command covering the host tools and
 both Saturn image verifiers:
 
 ```sh
-make -f Makefile.saturn.mk verify-all
+PYTHON=/c/Users/estee/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe \
+  make -f Makefile.saturn.mk verify-all
 ```
 
 Using the pinned local `sh-elf`/Yaul installation, the gate passed:
@@ -22,4 +23,5 @@ Verified ELF32 big-endian SH-2 hardware-test image at 0x06004000
 | Classifier report | `c5f9a90beb83ac0e26e3966527700dc7a1b64c3032caa1fea5c99d8f208742a2` |
 
 The Docker wrapper remains the portable path; this record proves the local
-fallback procedure is also one-command reproducible on the current host.
+fallback procedure is also one-command reproducible on the current host when
+the host Python path is explicit.
