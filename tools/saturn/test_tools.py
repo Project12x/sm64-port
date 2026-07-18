@@ -15,7 +15,7 @@ from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
 from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
-from bake_mario_eye_uv import bilinear_weights  # noqa: E402
+from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
@@ -150,9 +150,11 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertLess(abs(left_foot_y - right_foot_y), 1.0)
 
     def test_vdp1_repeated_vertex_tile_corner_order_is_c_b_a(self) -> None:
+        self.assertEqual(TILE, 16)
         self.assertEqual(bilinear_weights(0, 0), (0.03125, 0.03125, 0.9375))
         self.assertEqual(bilinear_weights(15, 0), (0.03125, 0.96875, 0.0))
         self.assertEqual(bilinear_weights(0, 15), (0.96875, 0.03125, 0.0))
+        self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
 
 class CastleAreaInventoryTests(unittest.TestCase):

@@ -414,6 +414,16 @@ derived-header false negative caught during this experiment. This is a real
 texture-layout correction on the native VDP1 path, while the 16×16 fallback's
 resolution and remaining painter limitations stay visible and open.
 
+### M2 rejected: 32×32 texture tiles exhaust residency without a visible win
+
+![Mario after the 32×32 source-texture tile trial](screenshots/ymir-m2-source-mario-texture-32x32-2026-07-18.png)
+
+The expanded 200-tile bake consumed 409,600 of Yaul's 442,336 default VDP1
+texture bytes. At the 320×224 front turntable view it did not provide a
+meaningful visual improvement over the 16×16 C/B/A-corrected bake. It is
+rejected and the compact 102,400-byte version is retained, reserving texture
+residency for the upcoming Castle scene.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

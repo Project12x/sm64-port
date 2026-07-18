@@ -14,6 +14,10 @@ from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
 
+# Four 16×16 RGB1555 tiles per source triangle keep this first source-actor
+# path at 102,400 bytes. A 32×32 trial fitted the partition but did not make a
+# meaningful target-visible improvement at the 320×224 turntable scale, and it
+# would consume texture residency needed by the Castle renderer.
 TILE = 16
 TEXTURE_ASSETS = {
     "mario_texture_eyes_front": "mario_eyes_center",
@@ -116,7 +120,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "texture_bytes": len(tiles) * TILE * TILE * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()
