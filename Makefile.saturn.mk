@@ -13,11 +13,14 @@ else
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
 SM64_ROM ?=
+CASTLE_TEXTURE ?= inside_09008000
+CASTLE_TILE ?= 16
+CASTLE_SOURCE_SCALE ?= 1
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 plan-castle-camera verify-all clean
 
 all: hello
 
@@ -165,6 +168,11 @@ compile-castle-area1: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_area1_opaque.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json"
 
+plan-castle-camera: compile-castle-area1 check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/plan_castle_camera_coverage.py" \
+	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
+	  --output "docs/saturn/evidence/reports/castle-area1-fixed-camera-coverage-2026-07-18.json"
+
 compile-castle-textures: compile-castle-area1 check-host-tools
 	@if [ -z "$(SM64_ROM)" ]; then \
 	  printf '%s\n' 'SM64_ROM must name the user-supplied US ROM/archive for local-only Castle texture conversion.' >&2; \
@@ -174,6 +182,9 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  --rom "$(SM64_ROM)" \
 	  --assets "assets.json" \
 	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
+	  --texture "$(CASTLE_TEXTURE)" \
+	  --tile "$(CASTLE_TILE)" \
+	  --source-scale "$(CASTLE_SOURCE_SCALE)" \
 	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-uv-bake-2026-07-18.json"
 

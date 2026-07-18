@@ -1,0 +1,20 @@
+{
+  "source": "levels/castle_inside/areas/1",
+  "selected_textures": [
+    "inside_09008000"
+  ],
+  "selected_triangles": 32,
+  "tile": [
+    8,
+    8
+  ],
+  "source_scale": 2,
+  "tile_count": 128,
+  "texture_bytes": 16384,
+  "command_estimate": 676,
+  "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode",
+  "rom_sha256": "17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91",
+  "texture_sha256": {
+    "inside_09008000": "3c6a338fccf210f6ee0385a8ae5c6af7e9b1593c9cab8a8fe66b38c0b9823690"
+  }
+}

@@ -19,6 +19,7 @@ from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
+from plan_castle_camera_coverage import plan  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
@@ -193,6 +194,12 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(len(bank["uv"]), bank["triangle_count"])
         self.assertIn("inside_09000000", bank["textures"])
         self.assertTrue(any(tile and tile.get("width") == 32 for tile in bank["tile_state"]))
+
+    def test_fixed_camera_coverage_prefers_the_visible_blue_white_material(self) -> None:
+        root = TOOLS.parents[1]
+        ranked = plan(compile_opaque(root / "levels/castle_inside/areas/1"))["ranked_materials"]
+        self.assertEqual(ranked[0]["texture"], "inside_09008000")
+        self.assertGreater(ranked[0]["projected_pixels"], ranked[1]["projected_pixels"])
 
 
 class SaturnMeshIRTests(unittest.TestCase):

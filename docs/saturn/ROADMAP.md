@@ -55,7 +55,7 @@ textures, or run Mario's gameplay state.
 | M0 — Face proof | Source-derived Mario face on Saturn | Geometry, features, Gouraud, camera, telemetry | Delivered | Complete |
 | M1 — Living title face | Animated face, title background, `PRESS START` | Goddard deformation subset, title presentation, deterministic input captures | 1–3 weeks | **Now** |
 | M2 — Mario turntable | In-game Mario model renders and animates | General display-list IR, textures, skeleton, actor materials | 3–8 weeks | **Active: render-correctness exit** |
-| M3 — Castle lobby renderer | Textured Castle Area 1 renders from fixed cameras | Static world banks, visibility, clipping, ordering, texture residency | 1–3 months | Planned |
+| M3 — Castle lobby renderer | Textured Castle Area 1 renders from fixed cameras | Static world banks, visibility, clipping, ordering, texture residency | 1–3 months | **Active: source-root / texture diagnostics** |
 | M4 — Castle-lobby Mario | Mario runs and jumps in the lobby | Game update, lobby collision, camera, animation integration | 1–3 months | Planned |
 | M5 — Castle entry visual slice | Title → lobby is a repeatable playable proof | HUD, basic door prompt, deterministic route, stable budgets | 1–2 months | Planned |
 | M6 — Battlefield slice | A small star route is playable | Outdoor visibility, actors, objects, particles, minimal audio | 2–5 months | Planned |
@@ -108,6 +108,13 @@ layers, clipping, visibility, and camera framing remain separate M3 gates.
 The same IR now keeps the original per-triangle texture identifier and Fast3D
 UV triplet. That prevents the first texture conversion from guessing a wall
 material or inventing replacement coordinates.
+
+M3 has now reached a BIOS-backed fixed-camera render of the 577-triangle
+opaque root. The local-only Castle baker records Fast3D tile size and
+clamp/wrap state, and exposes per-build `CASTLE_TEXTURE`, `CASTLE_TILE`, and
+`CASTLE_SOURCE_SCALE` controls. The active texture gate is camera-aware source
+coverage and correct direct-color VDP1 submission; the accepted render remains
+the Gouraud source root until a textured camera frame clears that gate.
 
 ## M0 — Source-face proof
 

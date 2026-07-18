@@ -463,10 +463,23 @@ remains the source-root Gouraud frame while the next compiler stage selects
 materials by projected camera coverage and increases only the visible brick
 surfaces' tile resolution.
 
+### M3 rejected: coverage-ranked material exposes static VDP1 color defect
+
+![Rejected coverage-ranked Castle texture probe](screenshots/ymir-m3-castle-area1-coverage-ranked-16x16-2026-07-18.png)
+
+Camera coverage correctly selects `inside_09008000`: only 32 source triangles
+cover about 42,607 projected pixels in this view. Its original 32×32 image is
+fully opaque blue-white, but the 16×16 target submission becomes red with dark
+seams. This rules out alpha coverage and material ranking as explanations; the
+remaining fault is in the static-world direct-color VDP1 tile command/data
+path. The source-root Gouraud renderer is restored pending a small patterned
+16×16 VDP1 probe that isolates character-base, size, and color-mode behavior.
+
 ## Next visual gates
 
-1. Convert a small, source-selected Castle texture set into bounded VDP1
-   residency and capture the same fixed camera with painted walls and doors.
+1. Use camera coverage plus a patterned 16×16 direct-color VDP1 probe to
+   verify character-base, size, and color-mode behavior; then recapture the
+   selected source material with a bounded tile-resolution budget.
 2. Add near-plane clipping and named source-order/opaque ordering evidence for
    the first two fixed cameras.
 3. Bring the accepted standing source Mario bank into the Castle frame before

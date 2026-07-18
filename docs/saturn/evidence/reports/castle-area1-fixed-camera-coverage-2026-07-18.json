@@ -1,0 +1,36 @@
+{
+  "schema": "sm64-saturn-castle-camera-coverage",
+  "camera": "castleviewer fixed source-space transform",
+  "ranked_materials": [
+    {
+      "texture": "inside_09008000",
+      "triangles": 32,
+      "projected_pixels": 42607.33752438007
+    },
+    {
+      "texture": "inside_09001000",
+      "triangles": 108,
+      "projected_pixels": 34919.817758224526
+    },
+    {
+      "texture": "inside_09000000",
+      "triangles": 175,
+      "projected_pixels": 28915.594296922973
+    },
+    {
+      "texture": "inside_09004000",
+      "triangles": 72,
+      "projected_pixels": 5357.34301438694
+    },
+    {
+      "texture": "inside_09005000",
+      "triangles": 166,
+      "projected_pixels": 3684.60790274018
+    },
+    {
+      "texture": "inside_09003800",
+      "triangles": 24,
+      "projected_pixels": 745.2665389330909
+    }
+  ]
+}
