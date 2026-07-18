@@ -26,27 +26,14 @@ LIGHTS = {
     "mario_brown2_lights_group": (14, 1, 0),
 }
 
-# This is mario_geo_body's neutral, normal-poly branch.  It is a close data
-# port of the GEO_ANIMATED_PART translation chain in actors/mario/geo.inc.c;
-# rotations are all zero in the bind pose.  The hand/eye switches select the
-# normal open-hand and cap-on/front-eye alternatives for the first turntable.
-PARTS = (
-    ("mario_butt", (0, 0, 0), "mario_blue_lights_group"),
-    ("mario_torso", (68, 0, 0), "mario_blue_lights_group"),
-    ("mario_cap_on_eyes_front", (155, 0, 0), "mario_beige_lights_group"),
-    ("mario_left_arm", (135, -10, 79), "mario_red_lights_group"),
-    ("mario_left_forearm_shared_dl", (200, -10, 79), "mario_red_lights_group"),
-    ("mario_left_hand_open", (260, -10, 79), "mario_white_lights_group"),
-    ("mario_right_arm", (136, -10, -79), "mario_red_lights_group"),
-    ("mario_right_forearm_shared_dl", (201, -10, -79), "mario_red_lights_group"),
-    ("mario_right_hand_open", (261, -10, -79), "mario_white_lights_group"),
-    ("mario_left_thigh", (13, -8, 42), "mario_blue_lights_group"),
-    ("mario_left_leg_shared_dl", (102, -8, 42), "mario_blue_lights_group"),
-    ("mario_left_foot", (169, -8, 42), "mario_brown1_lights_group"),
-    ("mario_right_thigh", (13, -8, -42), "mario_blue_lights_group"),
-    ("mario_right_leg_shared_dl", (102, -8, -42), "mario_blue_lights_group"),
-    ("mario_right_foot", (169, -8, -42), "mario_brown1_lights_group"),
-)
+BRANCH_SELECTIONS = {
+    # These are the normal-cap/front-eye/open-hand source switch states used
+    # by SM64's GeoLayout callbacks at boot. They select existing display
+    # lists; no actor geometry is recreated here.
+    "mario_geo_face_and_wings": ("mario_cap_on_eyes_front", (0, 0, 0)),
+    "mario_geo_left_hand": ("mario_left_hand_open", (60, 0, 0)),
+    "mario_geo_right_hand": ("mario_right_hand_open", (60, 0, 0)),
+}
 
 
 def blocks(source: str, kind: str) -> dict[str, str]:
@@ -58,6 +45,70 @@ def blocks(source: str, kind: str) -> dict[str, str]:
             re.DOTALL,
         )
     }
+
+
+def geo_tokens(body: str) -> list[tuple[str, str]]:
+    """Tokenize the limited GeoLayout vocabulary used by mario_geo_body."""
+    return [
+        (match.group(1), match.group(2) or "")
+        for match in re.finditer(r"(GEO_(?:OPEN_NODE|CLOSE_NODE)|GEO_\w+)\s*(?:\(([^)]*)\))?", body)
+    ]
+
+
+def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], str]]:
+    """Evaluate the neutral mario_geo_body hierarchy from the original source.
+
+    This first evaluator intentionally handles the bind pose: animated-part
+    rotations are zero and ASM callbacks are runtime animation hooks. The
+    renderer will consume those callbacks once the source animation path is
+    brought over. The hierarchy and translations are read, not copied.
+    """
+    layouts = blocks(geo_source, "GeoLayout")
+    tokens = geo_tokens(layouts["mario_geo_body"])
+    result: list[tuple[str, tuple[int, int, int], str]] = []
+
+    def walk(index: int, parent: tuple[int, int, int]) -> int:
+        last = parent
+        while index < len(tokens):
+            macro, args = tokens[index]
+            index += 1
+            if macro == "GEO_CLOSE_NODE":
+                return index
+            if macro == "GEO_OPEN_NODE":
+                index = walk(index, last)
+                continue
+            if macro == "GEO_RETURN":
+                return index
+            if macro == "GEO_ANIMATED_PART":
+                fields = [field.strip() for field in args.split(",")]
+                if len(fields) != 5:
+                    raise ValueError(f"unexpected GEO_ANIMATED_PART: {args}")
+                last = tuple(parent[axis] + int(fields[axis + 1]) for axis in range(3))
+                display_list = fields[4]
+                if display_list != "NULL":
+                    result.append((display_list, last, "mario_blue_lights_group"))
+                continue
+            if macro == "GEO_DISPLAY_LIST":
+                fields = [field.strip() for field in args.split(",")]
+                if len(fields) == 2:
+                    result.append((fields[1], parent, "mario_blue_lights_group"))
+                continue
+            if macro == "GEO_BRANCH":
+                fields = [field.strip() for field in args.split(",")]
+                if len(fields) == 2 and fields[1] in BRANCH_SELECTIONS:
+                    display_list, offset = BRANCH_SELECTIONS[fields[1]]
+                    result.append((display_list,
+                      tuple(parent[axis] + offset[axis] for axis in range(3)),
+                      "mario_blue_lights_group"))
+                continue
+            # GEO_ASM, GEO_ROTATION_NODE and GEO_SCALE are retained source
+            # controls. Their neutral Mario bind-pose values are identity.
+        return index
+
+    walk(0, (0, 0, 0))
+    if not result:
+        raise ValueError("mario_geo_body did not produce any display lists")
+    return result
 
 
 def vertex_groups(source: str) -> dict[str, list[tuple[int, int, int]]]:
@@ -132,7 +183,8 @@ def main() -> None:
     geo = args.geo.read_text(encoding="utf-8")
     display_lists, vertices = blocks(model, "Gfx"), vertex_groups(model)
     triangles: list[dict[str, object]] = []
-    for name, offset, light in PARTS:
+    parts = geo_layout_parts(geo)
+    for name, offset, light in parts:
         flatten(display_lists, vertices, name, offset, light, triangles)
     model_hash, geo_hash = hashlib.sha256(model.encode()).hexdigest(), hashlib.sha256(geo.encode()).hexdigest()
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -159,10 +211,15 @@ def main() -> None:
         "reuse": "direct data conversion",
         "source": {"model": {"path": str(args.model).replace("\\\\", "/"), "sha256": model_hash}, "geo": {"path": str(args.geo).replace("\\\\", "/"), "sha256": geo_hash}},
         "geo_layout": "mario_geo_body",
-        "parts": [{"display_list": name, "offset": offset} for name, offset, _light in PARTS],
+        "parts": [{"display_list": name, "offset": offset} for name, offset, _light in parts],
         "triangle_count": len(triangles),
         "triangle_display_lists": sorted({str(item["display_list"]) for item in triangles}),
-        "limits": ["neutral bind pose only", "translation-only hierarchy", "RGBA16 texture commands use source light colors until VDP1 texture conversion"],
+        "geo_evaluator": {
+            "layout": "mario_geo_body",
+            "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST"],
+            "branch_selections": BRANCH_SELECTIONS,
+        },
+        "limits": ["neutral bind pose only", "GeoLayout rotation and ASM animation callbacks are identity until the source animation path is adapted", "RGBA16 texture commands use source light colors until VDP1 texture conversion"],
     }, indent=2) + "\n", encoding="utf-8")
 
 

@@ -160,9 +160,45 @@
     "mario_tshirt_shared_dl",
     "mario_yellow_button_dl"
   ],
+  "geo_evaluator": {
+    "layout": "mario_geo_body",
+    "implemented": [
+      "GEO_ANIMATED_PART",
+      "GEO_OPEN_NODE",
+      "GEO_CLOSE_NODE",
+      "GEO_BRANCH",
+      "GEO_DISPLAY_LIST"
+    ],
+    "branch_selections": {
+      "mario_geo_face_and_wings": [
+        "mario_cap_on_eyes_front",
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "mario_geo_left_hand": [
+        "mario_left_hand_open",
+        [
+          60,
+          0,
+          0
+        ]
+      ],
+      "mario_geo_right_hand": [
+        "mario_right_hand_open",
+        [
+          60,
+          0,
+          0
+        ]
+      ]
+    }
+  },
   "limits": [
     "neutral bind pose only",
-    "translation-only hierarchy",
+    "GeoLayout rotation and ASM animation callbacks are identity until the source animation path is adapted",
     "RGBA16 texture commands use source light colors until VDP1 texture conversion"
   ]
 }
