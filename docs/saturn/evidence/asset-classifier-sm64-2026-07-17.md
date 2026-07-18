@@ -40,3 +40,6 @@ python tools/saturn/asset_classifier.py \
 ```
 
 Report SHA-256: `c5f9a90beb83ac0e26e3966527700dc7a1b64c3032caa1fea5c99d8f208742a2`.
+
+The host regression suite also covers malformed UV input and reports a stable
+rejection reason instead of raising an exception.

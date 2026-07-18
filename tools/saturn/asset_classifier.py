@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from collections import Counter
 from pathlib import Path
@@ -105,6 +106,36 @@ def shared_uvs_match(first: dict[str, Any], second: dict[str, Any]) -> bool:
     return True
 
 
+def primitive_validation_error(primitive: dict[str, Any]) -> str | None:
+    """Return a stable rejection reason for malformed decoded triangle data."""
+    indices = primitive.get("indices")
+    if indices is not None:
+        if not isinstance(indices, list) or len(indices) != 3:
+            return "indices_not_triangle"
+        try:
+            if any(int(value) != value for value in indices):
+                return "indices_not_integer"
+        except (TypeError, ValueError, OverflowError):
+            return "indices_not_integer"
+
+    if "uvs" not in primitive:
+        return None
+    uvs = primitive["uvs"]
+    if not isinstance(uvs, list):
+        return "uvs_malformed"
+    if indices is not None and len(uvs) != len(indices):
+        return "uvs_length_mismatch"
+    for uv in uvs:
+        if not isinstance(uv, (list, tuple)) or len(uv) != 2:
+            return "uvs_malformed"
+        try:
+            if not all(math.isfinite(float(value)) for value in uv):
+                return "uvs_malformed"
+        except (TypeError, ValueError, OverflowError):
+            return "uvs_malformed"
+    return None
+
+
 REPRESENTATION_NAMES = (
     "direct_textured_quad",
     "direct_untextured_triangle",
@@ -140,6 +171,10 @@ def classify_primitives(primitives: list[dict[str, Any]]) -> dict[str, Any]:
         first = primitives[index]
         second = primitives[index + 1]
         candidates += 1
+        malformed = primitive_validation_error(first) or primitive_validation_error(second)
+        if malformed is not None:
+            reasons[malformed] += 1
+            continue
         if representation_for_primitive(first) == "effect_fallback" or representation_for_primitive(second) == "effect_fallback":
             reasons["effect_fallback"] += 1
             continue

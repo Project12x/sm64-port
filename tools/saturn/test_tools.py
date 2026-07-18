@@ -61,6 +61,15 @@ class AssetClassifierTests(unittest.TestCase):
         self.assertEqual(counts["baked_surface"], 1)
         self.assertEqual(counts["effect_fallback"], 1)
 
+    def test_malformed_uvs_are_rejected_without_raising(self) -> None:
+        primitives = [
+            {"indices": [0, 1, 2], "uvs": [[0, 0], [8, 0]], "material": 1},
+            {"indices": [0, 2, 3], "uvs": [[0, 0], [8, 8], [0, 8]], "material": 1},
+        ]
+        report = classify_primitives(primitives)
+        self.assertEqual(report["direct_textured_quad_candidates"], 0)
+        self.assertEqual(report["rejection_reasons"]["uvs_length_mismatch"], 1)
+
 
 class TelemetryTests(unittest.TestCase):
     def test_complete_pass_status_decodes(self) -> None:
