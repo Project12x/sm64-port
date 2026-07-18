@@ -162,6 +162,33 @@ make -f Makefile.saturn.mk verify-marioturntable
 not commit Nintendo-derived pixels; it only updates the ignored generated
 header and the tracked conversion report.
 
+### Texture scaling profiles
+
+Both source-asset bakers retain the original ROM data as their canonical
+input. They can box-filter RGB1555 source images by 1×, 2×, or 4× and emit
+8×8, 16×16, or (for Mario experiments) 32×32 VDP1 tiles. Source scaling lowers
+sampling resolution; tile size is the control that lowers final VDP1 texture
+residency. For example:
+
+```sh
+make -f Makefile.saturn.mk compile-castle-textures \
+  SM64_ROM='E:/ROM and ISO/n64/Super_Mario_64_(U)_[!].zip' \
+  CASTLE_TILE=8 CASTLE_SOURCE_SCALE=2
+
+make -f Makefile.saturn.mk compile-mario-textures \
+  SM64_ROM='E:/ROM and ISO/n64/Super_Mario_64_(U)_[!].zip' \
+  MARIO_TEXTURE_TILE=16 MARIO_TEXTURE_SOURCE_SCALE=1
+```
+
+The accepted Castle default is 8×8 with a 2× RGB1555 box filter. Mario stays
+at 16×16/1× by default because its small facial details need a separate close
+camera acceptance test. Each conversion report records source bytes,
+resampled-source bytes, emitted VDP1 bytes, filter, tile size, and scale.
+The filter is an original small host implementation because the required
+five-bit direct-color and binary-alpha contract is specific to this offline
+VDP1 bake; importing a general image runtime would add maintenance and runtime
+cost without improving the deterministic conversion.
+
 With a locally installed Yaul SDK, the complete fallback verification gate is:
 
 ```sh

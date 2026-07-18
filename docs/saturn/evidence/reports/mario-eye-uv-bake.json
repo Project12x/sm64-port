@@ -14,8 +14,12 @@
     16,
     16
   ],
+  "source_scale": 1,
+  "source_filter": "RGB1555 box filter with majority alpha",
+  "source_texture_bytes": 10240,
+  "resampled_source_bytes": 10240,
   "texture_bytes": 102400,
   "vdp1_default_texture_partition_bytes": 442336,
   "uv_space": "Fast3D source UV / 32",
-  "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"
+  "mapping": "complete per-subtriangle UV bake; texel corners C/B/A/C follow the measured VDP1 repeated-vertex distorted-sprite mapping"
 }

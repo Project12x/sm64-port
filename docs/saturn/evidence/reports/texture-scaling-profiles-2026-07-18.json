@@ -1,0 +1,40 @@
+{
+  "schema": "sm64-saturn-texture-profile-comparison",
+  "date": "2026-07-18",
+  "vdp1_texture_partition_bytes": 442336,
+  "filter": "RGB1555 box filter with majority alpha",
+  "profiles": {
+    "full_16x16": {
+      "castle_tile": 16,
+      "castle_source_scale": 1,
+      "castle_texture_bytes": 295424,
+      "mario_tile": 16,
+      "mario_source_scale": 1,
+      "mario_texture_bytes": 102400,
+      "combined_texture_bytes": 397824,
+      "headroom_bytes": 44512
+    },
+    "accepted_castle_8x8": {
+      "castle_tile": 8,
+      "castle_source_scale": 2,
+      "castle_texture_bytes": 73856,
+      "mario_tile": 16,
+      "mario_source_scale": 1,
+      "mario_texture_bytes": 102400,
+      "combined_texture_bytes": 176256,
+      "headroom_bytes": 266080
+    },
+    "aggressive_8x8": {
+      "castle_tile": 8,
+      "castle_source_scale": 2,
+      "castle_texture_bytes": 73856,
+      "mario_tile": 8,
+      "mario_source_scale": 2,
+      "mario_texture_bytes": 25600,
+      "combined_texture_bytes": 99456,
+      "headroom_bytes": 342880,
+      "status": "tool-validated only; Mario visual acceptance pending"
+    }
+  },
+  "accepted_capture": "../screenshots/ymir-m3-castle-area1-texture-profile-8x8-2026-07-18.png"
+}

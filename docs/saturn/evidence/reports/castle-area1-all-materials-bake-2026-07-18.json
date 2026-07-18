@@ -10,13 +10,16 @@
   ],
   "selected_triangles": 577,
   "tile": [
-    16,
-    16
+    8,
+    8
   ],
-  "source_scale": 1,
+  "source_scale": 2,
+  "source_filter": "RGB1555 box filter with majority alpha",
+  "source_texture_bytes": 16384,
+  "resampled_source_bytes": 4096,
   "subdivision": 1,
   "tile_count": 577,
-  "texture_bytes": 295424,
+  "texture_bytes": 73856,
   "command_estimate": 580,
   "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode; complete VDP1 C/B/A/C repeated-vertex tile",
   "rom_sha256": "17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91",

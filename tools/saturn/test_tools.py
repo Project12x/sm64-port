@@ -17,7 +17,7 @@ from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E
 from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
-from vdp1_texture import repeated_vertex_weights  # noqa: E402
+from vdp1_texture import downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
@@ -134,6 +134,17 @@ class QuadPairingTests(unittest.TestCase):
 
 
 class MarioActorPoseTests(unittest.TestCase):
+    def test_rgb1555_box_filter_averages_channels_and_alpha(self) -> None:
+        width, height, pixels = downsample_rgb1555(
+            [0x801F, 0x83E0, 0xFC00, 0xFFFF], 2, 2, 2
+        )
+        self.assertEqual((width, height), (1, 1))
+        self.assertEqual(pixels, [0xC210])
+
+    def test_rgb1555_box_filter_rejects_invalid_scale(self) -> None:
+        with self.assertRaisesRegex(ValueError, "scale must be 1, 2, or 4"):
+            downsample_rgb1555([0xFFFF], 1, 1, 3)
+
     def test_n64_rgba16_channels_map_to_saturn_rgb1555_lanes(self) -> None:
         self.assertEqual(saturn_rgb1555(0xF801), 0x801F)  # opaque red
         self.assertEqual(saturn_rgb1555(0x07C1), 0x83E0)  # opaque green

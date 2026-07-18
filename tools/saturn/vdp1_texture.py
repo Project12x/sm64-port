@@ -3,6 +3,46 @@
 from __future__ import annotations
 
 
+def downsample_rgb1555(
+    pixels: list[int], width: int, height: int, scale: int
+) -> tuple[int, int, list[int]]:
+    """Box-filter an RGB1555 image by an integer power-of-two scale.
+
+    Filtering happens in five-bit channel space so the result can be emitted
+    directly as a Saturn texture.  Alpha uses majority coverage, which keeps
+    cutout edges deterministic without inventing intermediate alpha values.
+    """
+    if scale not in (1, 2, 4):
+        raise ValueError("texture scale must be 1, 2, or 4")
+    if len(pixels) != width * height:
+        raise ValueError("pixel count does not match texture dimensions")
+    if width % scale or height % scale:
+        raise ValueError("texture dimensions must be divisible by scale")
+    if scale == 1:
+        return width, height, list(pixels)
+
+    output: list[int] = []
+    sample_count = scale * scale
+    for output_y in range(height // scale):
+        for output_x in range(width // scale):
+            red = green = blue = alpha = 0
+            for y in range(output_y * scale, (output_y + 1) * scale):
+                for x in range(output_x * scale, (output_x + 1) * scale):
+                    value = pixels[y * width + x]
+                    red += value & 0x1F
+                    green += (value >> 5) & 0x1F
+                    blue += (value >> 10) & 0x1F
+                    alpha += (value >> 15) & 1
+            average = lambda total: (total + sample_count // 2) // sample_count
+            output.append(
+                (0x8000 if alpha * 2 >= sample_count else 0)
+                | (average(blue) << 10)
+                | (average(green) << 5)
+                | average(red)
+            )
+    return width // scale, height // scale, output
+
+
 def repeated_vertex_weights(x: int, y: int, width: int, height: int) -> tuple[float, float, float]:
     """Return Fast3D A/B/C weights for a VDP1 (A,B,C,C) texture texel.
 

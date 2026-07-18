@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
-from vdp1_texture import repeated_vertex_weights
+from vdp1_texture import downsample_rgb1555, repeated_vertex_weights
 
 DEFAULT_TILE = 16
 DEFAULT_SELECTED = (
@@ -31,14 +31,16 @@ ASSETS = {
 }
 
 
-def rgba16(rom: bytes, entry: list[object]) -> tuple[int, int, list[int], str]:
+def rgba16(rom: bytes, entry: list[object], source_scale: int) -> tuple[int, int, list[int], str, int]:
     width, height, size, regions = entry
     base, relative = regions["us"]
     image = mio0_decode(rom, base)
     data = image[relative:relative + size]
     if len(data) != size:
         raise ValueError("texture range outside decoded US ROM bank")
-    return int(width), int(height), [saturn_rgb1555(int.from_bytes(data[i:i + 2], "big")) for i in range(0, len(data), 2)], hashlib.sha256(data).hexdigest()
+    pixels = [saturn_rgb1555(int.from_bytes(data[i:i + 2], "big")) for i in range(0, len(data), 2)]
+    scaled_width, scaled_height, scaled = downsample_rgb1555(pixels, int(width), int(height), source_scale)
+    return scaled_width, scaled_height, scaled, hashlib.sha256(data).hexdigest(), len(data)
 
 
 def midpoint(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
@@ -51,14 +53,13 @@ def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], 
     # list's render-tile extent/mode instead of blindly wrapping image bounds.
     u = int((a * uv[0][0] + b * uv[1][0] + c * uv[2][0]) / (32.0 * source_scale))
     v = int((a * uv[0][1] + b * uv[1][1] + c * uv[2][1]) / (32.0 * source_scale))
-    width, height, pixels, _digest = texture
+    width, height, pixels, _digest, _source_bytes = texture
     tile_width, tile_height = int(tile_state["width"]) // source_scale, int(tile_state["height"]) // source_scale
     u = max(0, min(tile_width - 1, u)) if tile_state["clamp_s"] else u % tile_width
     v = max(0, min(tile_height - 1, v)) if tile_state["clamp_t"] else v % tile_height
-    width, height = width // source_scale, height // source_scale
     if tile_width > width or tile_height > height:
         raise ValueError("render tile extent exceeds ROM texture dimensions")
-    return pixels[(v * source_scale) * (width * source_scale) + (u * source_scale)]
+    return pixels[v * width + u]
 
 
 def main() -> None:
@@ -83,7 +84,7 @@ def main() -> None:
     unknown = set(selected) - set(ASSETS)
     if unknown:
         raise ValueError(f"unsupported Castle texture(s): {sorted(unknown)}")
-    texture_data = {name: rgba16(rom, asset_map[ASSETS[name]]) for name in selected}
+    texture_data = {name: rgba16(rom, asset_map[ASSETS[name]], args.source_scale) for name in selected}
     selected_indices = {scene["textures"].index(name) for name in selected}
     starts = [0xFFFF] * int(scene["triangle_count"])
     positions: list[tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]] = []
@@ -118,7 +119,7 @@ def main() -> None:
     for offset in range(0, len(words), args.tile * args.tile): lines.append("    {" + ", ".join(f"0x{word:04X}" for word in words[offset:offset + args.tile * args.tile]) + "},")
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_triangles": sum(value != 0xFFFF for value in starts), "tile": [args.tile, args.tile], "source_scale": args.source_scale, "subdivision": args.subdivision, "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + (len(positions)) + (int(scene["triangle_count"]) - sum(value != 0xFFFF for value in starts)) + 1, "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode; complete VDP1 C/B/A/C repeated-vertex tile", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_triangles": sum(value != 0xFFFF for value in starts), "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + (len(positions)) + (int(scene["triangle_count"]) - sum(value != 0xFFFF for value in starts)) + 1, "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode; complete VDP1 C/B/A/C repeated-vertex tile", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

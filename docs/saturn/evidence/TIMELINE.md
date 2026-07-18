@@ -509,6 +509,18 @@ are Saturn renderer work; the textures, UVs, geometry, and material selection
 come from the real Area 1 display lists. Alpha/decal layers and Mario-in-room
 remain the next port gates.
 
+### M3 accepted profile: scaled Castle texture bank
+
+![Castle Area 1 using the accepted 8×8 texture profile](screenshots/ymir-m3-castle-area1-texture-profile-8x8-2026-07-18.png)
+
+The same 577 source triangles and six ROM-derived materials now use 8×8 VDP1
+tiles sampled from a 2× RGB1555 box-filtered source bank. The BIOS-backed frame
+retains the recognizable lobby composition while VDP1 texture residency falls
+from 295,424 to 73,856 bytes—a 75% reduction—with no command-count increase.
+The executable falls from roughly 388 KiB to 172 KiB. This becomes the Castle
+default and leaves Mario on its independent 16×16 profile until a close-up
+comparison proves its facial textures tolerate further reduction.
+
 ## Next visual gates
 
 1. Bring the accepted source Mario bank and its C5 animation evaluator into

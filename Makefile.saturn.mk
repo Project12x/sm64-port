@@ -14,9 +14,11 @@ SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
 SM64_ROM ?=
 CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000
-CASTLE_TILE ?= 16
-CASTLE_SOURCE_SCALE ?= 1
+CASTLE_TILE ?= 8
+CASTLE_SOURCE_SCALE ?= 2
 CASTLE_SUBDIVISION ?= 1
+MARIO_TEXTURE_TILE ?= 16
+MARIO_TEXTURE_SOURCE_SCALE ?= 1
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
@@ -160,6 +162,8 @@ compile-mario-textures: compile-mario-actor check-host-tools
 	  --rom "$(SM64_ROM)" \
 	  --assets "assets.json" \
 	  --intake "docs/saturn/evidence/reports/mario-actor-intake.json" \
+	  --tile "$(MARIO_TEXTURE_TILE)" \
+	  --source-scale "$(MARIO_TEXTURE_SOURCE_SCALE)" \
 	  --output "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/mario-eye-uv-bake.json"
 

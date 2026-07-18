@@ -112,8 +112,12 @@ material or inventing replacement coordinates.
 M3 has now reached a BIOS-backed fixed-camera render of the 577-triangle
 opaque root with all six original source materials. The shared converter fixes
 the N64/Saturn red-blue lane difference and uses the measured complete
-C/B/A/C repeated-vertex mapping. One 16×16 tile per source triangle occupies
-295,424 VDP1 texture bytes and about 580 commands. The local-only baker exposes
+C/B/A/C repeated-vertex mapping. The initial 16×16 bake occupied 295,424 VDP1
+texture bytes. A target capture now accepts the 8×8, 2× box-filtered Castle
+profile: it occupies 73,856 bytes with the same roughly 580 commands, freeing
+221,568 bytes for Mario and future room banks while retaining the recognizable
+lobby composition. Mario remains independently configurable at 16×16 until a
+face-visible comparison justifies reducing it. The local-only bakers expose
 per-build material, tile-size, source-scale, and subdivision controls; this is
 the active source-display-list renderer, not a hand-painted lobby substitute.
 The next gate is the source Mario/game-state path inside this textured room.

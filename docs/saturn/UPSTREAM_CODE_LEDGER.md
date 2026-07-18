@@ -58,6 +58,11 @@ Implementation commitments:
    merge unsafe animated or arbitrary-UV geometry.
 3. M2 proves the IR with Mario; M3 uses the same records for Castle Area 1.
    A PC reference renderer and Ymir must capture matching named camera views.
+4. Texture reduction remains an original offline RGB1555 box filter in
+   `tools/saturn/vdp1_texture.py`. A general-purpose image dependency is an
+   architecture mismatch for the five-bit/binary-alpha output contract. Both
+   Mario and Castle bakers expose source-scale and emitted-tile controls and
+   must report the resulting residency.
 
 ## M3 onward — inspection and debugging evidence
 
