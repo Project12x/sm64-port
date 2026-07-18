@@ -125,6 +125,15 @@ report in one command:
 make -f Makefile.saturn.mk classify-source
 ```
 
+With a locally installed Yaul SDK, the complete fallback verification gate is:
+
+```sh
+make -f Makefile.saturn.mk verify-all
+```
+
+It runs the host tests, regenerates the classifier report, and verifies both
+the hello and hardware-test ELF headers.
+
 Copy the pinned template rather than inventing a different environment layout:
 
 ```sh

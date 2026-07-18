@@ -7,7 +7,7 @@ the authority for bus legality and final timings.
 
 | Requirement | Current evidence | Status |
 |---|---|---|
-| One-command pinned toolchain bootstrap | [`BUILDING.md`](BUILDING.md), [`bootstrap-toolchain.sh`](../../tools/saturn/bootstrap-toolchain.sh), [`bootstrap-toolchain.ps1`](../../tools/saturn/bootstrap-toolchain.ps1); Yaul Docker layout pinned in [`PROVENANCE.md`](PROVENANCE.md) | Verified by syntax and host-side regression; container execution awaits a Docker-capable host |
+| One-command pinned toolchain bootstrap | [`BUILDING.md`](BUILDING.md), Docker wrappers, and local `verify-all` gate; Yaul Docker layout pinned in [`PROVENANCE.md`](PROVENANCE.md) | Local fallback gate verified; container execution awaits a Docker-capable host |
 | C/SH-2 Saturn image compilation | [`hwtest-layout-assert-2026-07-17.md`](evidence/hwtest-layout-assert-2026-07-17.md); ELF verifier output at `0x06004000` | Verified locally with pinned `sh-elf-gcc`/Yaul install |
 | Cartridge ID `0x5C` detection | [`src/port/saturn/hwtest/main.c`](../../src/port/saturn/hwtest/main.c) and visible Kronos capture | BIOS-backed emulator verified; retail pending |
 | Destructive 4 MiB mapped-DRAM test | Exact ID-and-size gate precedes the full write/read pattern and visible PASS/FAIL state in `main.c` | Code/build verified; retail pending |
