@@ -201,21 +201,20 @@ draw_source_face(void)
             source -= SM64_FACE_TRIANGLE_COUNT;
             if (source < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) {
                 draw_feature_triangle(cmdt, sm64_right_eyebrow_vertices,
-                  sm64_right_eyebrow_triangles, source, RGB1555(1, 7, 3, 1),
+                  sm64_right_eyebrow_triangles, source, RGB1555(1, 0, 0, 0),
                   160, 160, 1, 1, 3, 0);
             } else if ((source -= SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) < SM64_LEFT_EYEBROW_TRIANGLE_COUNT) {
                 draw_feature_triangle(cmdt, sm64_left_eyebrow_vertices,
-                  sm64_left_eyebrow_triangles, source, RGB1555(1, 7, 3, 1),
+                  sm64_left_eyebrow_triangles, source, RGB1555(1, 0, 0, 0),
                   160, 160, 1, 1, -3, 0);
             } else {
                 source -= SM64_LEFT_EYEBROW_TRIANGLE_COUNT;
-                /* Calibrated static front pose: reduce around the source mesh
-                 * centre, lower it slightly, and let the common Z sort put the
-                 * nose in front. Pure source black reads as a cutout on VDP1,
-                 * so use a dark brown matched to the rendered hair. */
+                /* Preserve the source silhouette scale, placement, and black
+                 * material. The common Z sort—not screen-space shrinking—is
+                 * what makes the nose correctly occlude the moustache. */
                 draw_feature_triangle(cmdt, sm64_mustache_vertices,
-                  sm64_mustache_triangles, source, RGB1555(1, 7, 3, 1),
-                  160, 169, 3, 4, 0, 3);
+                  sm64_mustache_triangles, source, RGB1555(1, 0, 0, 0),
+                  160, 160, 1, 1, 0, 0);
             }
             continue;
         }

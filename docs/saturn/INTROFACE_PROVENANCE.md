@@ -69,10 +69,11 @@ The first feature experiment directly converts `verts_mario_eyebrow_right`,
 The two eyebrows retain 26 vertices / 36 triangles each; the moustache retains
 56 vertices / 100 triangles. The initial renderer projected those raw vertices
 as if they already occupied final face space and used their black ambient
-material directly. The capture disproves that pose/material assumption: the
-moustache is oversized, sits in front of the nose, and reads as the wrong
-color. `dynlist_mario_master.c` defines additional net attachment, skin-joint,
-and animation transforms that the corrected static pose must evaluate.
+material directly. The capture disproves the draw-order assumption: the
+moustache sits in front of the nose, which makes its correct black material
+and source scale read as a large cutout. `dynlist_mario_master.c` defines
+additional net attachment, skin-joint, and animation transforms that a later
+animated pose must evaluate.
 
 Its capture is
 `docs/saturn/evidence/screenshots/ymir-source-features-2026-07-17.png`
@@ -80,7 +81,7 @@ Its capture is
 frame hash `d9abbdcdafa238c405689f2c0c6d5e89`, frame 3300). It is retained as a
 rejected visual experiment and BIOS-backed Ymir emulator evidence only.
 
-The corrected static front-camera renderer keeps the same converted feature
+The intermediate static front-camera renderer keeps the same converted feature
 topology but scales the moustache projection to `3/4` around screen center
 `(160, 169)` and adds a `(0, +3)` pixel offset. It also sorts the eyebrow and
 moustache triangles together with all 877 face triangles by source Z, so the
@@ -91,8 +92,17 @@ cutout against the dark backdrop. The calibrated study therefore uses RGB555
 the rendered hair. This is a static presentation calibration, not a claim that
 the full Goddard skin/animation system has been reproduced.
 
-The corrected capture is
+The intermediate capture is
 `docs/saturn/evidence/screenshots/ymir-features-calibrated-2026-07-17.png`
 (SHA-256 `a0f26f60efe32e97617ac4763b6b7898bc963038598eff6c887d64e0476b6cd1`,
 frame hash `41055614fe317a229fc770a28cb3ae97`, frame 3300). It is BIOS-backed Ymir
+emulator evidence only.
+
+The accepted follow-up restores the moustache's full source projection and
+pure-black source ambient material. It retains the unified painter ordering of
+all 877 face and 172 feature triangles, which is the change that actually puts
+the nose in front. Its capture is
+`docs/saturn/evidence/screenshots/ymir-mustache-source-scale-2026-07-17.png`
+(SHA-256 `564a9de72a008f4d10563e05c30cc134ca26b41628a3cb95ad5b213c0ebcbb33`,
+frame hash `2a94f17eb58a1625b6f8fd6bc3536ed2`, frame 3300). It is BIOS-backed Ymir
 emulator evidence only.

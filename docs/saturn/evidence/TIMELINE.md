@@ -21,8 +21,9 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 | Mario eye alignment calibration | The first static transform was retained, measured against the source face eye-surface bounds, then corrected by right `(+5,-4)` and left `(-6,-4)` screen pixels. | [initial eye frame](screenshots/ymir-source-eyes-face-2026-07-17.png), [calibrated eye frame](screenshots/ymir-source-eyes-calibrated-2026-07-17.png), [capture report](ymir-source-eyes-calibrated-2026-07-17.json) |
 | Mario eye-size calibration | The separate source eye meshes were reduced to 2/3 around their matching source eye-surface centers so irises/pupils sit inside the white face geometry. | [scaled-eye frame](screenshots/ymir-source-eyes-scaled-2026-07-17.png), [capture report](ymir-source-eyes-scaled-2026-07-17.json) |
 | Topology-derived Gouraud depth | Per-vertex normals are accumulated from the 877 source triangles and evaluated against an upper-left key light, producing continuous VDP1 Gouraud lighting on the face. | [Gouraud frame](screenshots/ymir-source-gouraud-2026-07-17.png), [capture report](ymir-source-gouraud-2026-07-17.json) |
-| Rejected raw-feature placement | The first feature import exposed a false assumption: projecting the separate Goddard meshes directly in face space makes the moustache oversized, incorrectly black, and layered in front of the nose. Preserved as a failure, not accepted renderer progress. | [failure frame](screenshots/ymir-source-features-2026-07-17.png), [capture report](ymir-source-features-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
-| Calibrated moustache and eyebrows | The corrected static front pose scales the moustache to 3/4 around its center, lowers it 3 pixels, uses a dark hair-matched brown, and merges all feature triangles into the face Z sort. The nose now correctly occludes it. | [corrected frame](screenshots/ymir-features-calibrated-2026-07-17.png), [capture report](ymir-features-calibrated-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
+| Rejected raw-feature placement | The first feature import drew every moustache triangle after the face, placing it over the nose and making its otherwise-correct source scale and black material read like an oversized cutout. Preserved as a failure, not accepted renderer progress. | [failure frame](screenshots/ymir-source-features-2026-07-17.png), [capture report](ymir-source-features-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
+| Intermediate reduced moustache | A 3/4-scale dark-brown calibration proved that shared Z sorting fixes nose occlusion, but unnecessarily changed two source-authentic properties. Preserved as an intermediate correction. | [intermediate frame](screenshots/ymir-features-calibrated-2026-07-17.png), [capture report](ymir-features-calibrated-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
+| Source-scale black moustache | The accepted correction restores the original scale, position, and black material while retaining the unified face/feature Z sort. The nose now occludes the full source silhouette correctly. | [accepted frame](screenshots/ymir-mustache-source-scale-2026-07-17.png), [capture report](ymir-mustache-source-scale-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
 
 ## Source-face gallery
 
@@ -53,11 +54,16 @@ must follow its Goddard net/skin transform and correct depth/material behavior.
 
 ![Corrected dark-brown moustache behind the nose and aligned eyebrows](screenshots/ymir-features-calibrated-2026-07-17.png)
 
+### Accepted source-scale black moustache
+
+![Full-size source-black moustache correctly occluded by the nose](screenshots/ymir-mustache-source-scale-2026-07-17.png)
+
 ## Next visual gates
 
-1. Evaluate the animated Goddard skin-joint pose for moustache deformation;
-   retain the calibrated static pose as the front-camera baseline.
-2. Add source texture conversion for the N64 shine overlay and capture it.
+1. Extract and convert the original 32x32 IA8 Mario face shine map from the
+   user-owned US ROM, then capture its Saturn rendering.
+2. Evaluate the animated Goddard skin-joint pose for moustache deformation;
+   retain the source-scale static pose as the front-camera baseline.
 3. Add controllable camera yaw/pitch plus a deterministic two-angle screenshot
    pair.
 4. Compare VDP1 command and Gouraud-table budgets with the intended game frame
