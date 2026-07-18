@@ -175,7 +175,9 @@ The engine demonstrates a queued DMA abstraction that chooses CPU copying or a
 Saturn-side transfer based on address ranges, waits for completion, and keeps
 the queue interrupt-safe. Its `SCL_FUNC.C`/`INITMAIN.C` code also shows a
 hand-managed VDP2 register and frame-display path. These are strong candidates
-for direct adaptation in the future Saturn renderer/DMA component. GPL-derived
+for direct adaptation in the future Saturn renderer/DMA component; the
+adaptation boundary and required Yaul rewrites are recorded in
+`docs/saturn/SLAVEDRIVER_ADAPTATION.md`. GPL-derived
 components must retain the applicable GPL licensing, notices, and
 corresponding-source obligations. The project owner has authorized
 GPL-2.0/GPL-3.0 use for this public project; no SlaveDriver source is copied or
