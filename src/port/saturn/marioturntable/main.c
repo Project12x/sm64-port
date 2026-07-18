@@ -108,14 +108,12 @@ static void sort_triangles(void) {
         bucket_tail[bucket] = i;
     }
     visible_triangles = 0;
-    /* The direct source-triangle adapter is temporarily represented by a
-     * degenerate VDP1 quad. Its fill edge is not order-independent, so depth
-     * buckets can let one dark degenerate primitive obscure the whole actor.
-     * Preserve source command order until the M2 quadifier emits proper VDP1
-     * polygons; bucket construction remains measured above as the future path. */
-    for (uint16_t source = 0; source < SM64_MARIO_PRIMITIVE_COUNT; source++)
-        if (bucket_next[source] != -2)
-            draw_order[visible_triangles++] = source;
+    /* VDP1 has no Z buffer. Submit transformed far buckets first so the
+     * articulated source face/eye patch is not hidden by later body commands.
+     * Ordering within a coarse bucket remains stable source order. */
+    for (int16_t bucket = DEPTH_BUCKET_COUNT - 1; bucket >= 0; bucket--)
+        for (int16_t source = bucket_head[bucket]; source >= 0; source = bucket_next[source])
+            draw_order[visible_triangles++] = (uint16_t)source;
     sort_ticks = (uint16_t)(cpu_frt_count_get() - start);
 }
 static void draw_mario(void) {

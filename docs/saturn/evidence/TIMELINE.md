@@ -288,6 +288,17 @@ after articulated transforms, that is insufficient painter ordering. The next
 required renderer gate is depth ordering of the transformed primitives before
 the eye texture path can be judged visually.
 
+### M2 intermediate: transformed depth buckets restore the body silhouette
+
+![Depth-sorted articulated source Mario with VDP1 Gouraud](screenshots/ymir-m2-source-mario-c5-depth-buckets-2026-07-18.png)
+
+Submitting far transformed buckets before near buckets materially restores the
+body silhouette and preserves the VDP1 Gouraud gradients. The capture is
+still a rear presentation—so the eye patch being hidden is expected rather
+than evidence against the texture converter. The next camera gate derives the
+turntable front direction from the source face surface normal, rather than
+the patch centroid alone.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
