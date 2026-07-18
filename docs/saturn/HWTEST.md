@@ -65,8 +65,9 @@ python tools/saturn/capture_hwtest.py \
   --output ymir-hwtest-report.json
 ```
 
-The report is labeled `evidence_kind: ymir-emulator`; it is not a substitute
-for a retail Saturn capture.
+The report is labeled `evidence_kind: ymir-emulator`; it preserves Ymir's
+stderr diagnostics and flags the known `CD-block copy operation` limitation
+when present. It is not a substitute for a retail Saturn capture.
 
 For a BIOS-backed Kronos screenshot with an auditable hash manifest:
 

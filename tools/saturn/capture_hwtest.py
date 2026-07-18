@@ -111,6 +111,10 @@ def main() -> int:
             "ready": any(message.get("method") == "instance.ready" for message in messages),
             "stopped_reasons": stopped_reasons,
         },
+        "diagnostics": {
+            "stderr": completed.stderr,
+            "cd_block_copy_unimplemented": "CD-block copy operation" in completed.stderr,
+        },
         "telemetry": telemetry,
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
