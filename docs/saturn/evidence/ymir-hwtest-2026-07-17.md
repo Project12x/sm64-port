@@ -60,3 +60,16 @@ A fresh 600-frame capture with that binary reported
 120 zero bytes. Its stderr now stops at unhandled SMPC on-chip register accesses
 before any copy/move command is issued. This narrows the remaining Ymir boot
 gap; it does not constitute valid Saturn telemetry.
+
+## Follow-up SCI patch and register snapshot
+
+The fork then received commit `ef8a4e16` (`feat(sh2): retain minimal SCI
+register state`), adding register-visible latches for the SH-2 SCI offsets used
+by the USA BIOS. A rebuilt 1,800-frame capture removed the unhandled SCI log
+messages and archived the stopped master register snapshot in
+`evidence/reports/ymir-sci-2026-07-17-r3.json`.
+
+The master SH-2 still stops at PC `0x060402E4` with zero telemetry, and no
+CD-block copy/move command is issued. The capture runner now records
+`registers_at_stop` so subsequent emulator work can be compared at the exact
+same boot point.

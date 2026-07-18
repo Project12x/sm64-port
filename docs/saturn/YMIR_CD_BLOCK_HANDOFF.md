@@ -37,8 +37,10 @@ move, and returns a zero-error response for `0x67`.
 
 The rebuilt fork no longer reports the false “Get copy error command is
 unimplemented” diagnostic. The USA BIOS still stops earlier on unhandled SMPC
-on-chip register accesses, so a second emulator patch is required before the
-Saturn image can be expected to execute.
+on-chip register accesses. A follow-up Ymir commit `ef8a4e16` adds minimal SH-2
+SCI register latches and removes those logs, but the BIOS still stops at
+`0x060402E4` before issuing copy/move commands. The capture runner archives the
+master register snapshot for the next debugging pass.
 
 ## Original minimum patch shape
 
