@@ -106,3 +106,35 @@ the nose in front. Its capture is
 (SHA-256 `564a9de72a008f4d10563e05c30cc134ca26b41628a3cb95ad5b213c0ebcbb33`,
 frame hash `2a94f17eb58a1625b6f8fd6bc3536ed2`, frame 3300). It is BIOS-backed Ymir
 emulator evidence only.
+
+## Shine behavior port
+
+The shine implementation was researched from the existing Goddard renderer at
+repository baseline `8bab12daa6b376cdba960126a8c8a1087842fa0c`:
+
+| Reference file | Behavior inspected | Reuse mode |
+|---|---|---|
+| `src/goddard/objects.c` | Face materials default to type 16 (`GD_MTL_SHINE_DL`). | behavior/pattern only |
+| `src/goddard/renderer.c` | A 32x32 IA8 lobe is sampled with normal-generated coordinates and a camera/light-dependent highlight center. | clean-room behavior port |
+| `src/goddard/draw_objects.c` | The flagged white star supplies the moving Phong light. | behavior/pattern only |
+
+The repository intentionally omits ROM assets. The user supplied a US ROM ZIP;
+the contained ROM validated against the repository's expected SHA-1
+`9bef1128717f958171a4afac3ed78ee2bb4e86ce` (ROM SHA-256
+`17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91`).
+The repository's own `n64graphics` tool extracted only manifest entry
+`textures/intro_raw/mario_face_shine.ia8.png` at US ROM offset `2511696` for
+local analysis. That extracted Nintendo asset remains ignored and is not
+committed.
+
+The exact map is black except for a narrow 7x7 intensity lobe centered at
+`(15,16)`. The Saturn renderer close-ports that measured profile without
+copying its pixels: it evaluates normal alignment using fixed-point integer
+math, applies a narrow quadratic threshold, and blends the result toward white
+inside each existing VDP1 Gouraud table. Runtime floating point, extra polygons,
+and extra VDP1 texture commands are all avoided.
+
+Its capture is `docs/saturn/evidence/screenshots/ymir-face-shine-2026-07-17.png`
+(SHA-256 `c27aef050b56ab7a7d88fb470acf6e27698652fa91ec67dca3d6a3d671177f0a`,
+frame hash `8b1d4bf028e441b1a37890cb7456f5f6`, frame 3300). It is BIOS-backed Ymir
+emulator evidence only.

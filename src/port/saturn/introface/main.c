@@ -60,6 +60,40 @@ vertex_intensity(uint16_t index)
     return maximum == 0 ? 18U : (uint8_t)(6 + ((dot * 25) / maximum));
 }
 
+static uint8_t
+vertex_shine(uint16_t index)
+{
+    const int32_t *normal = vertex_normals[index];
+    /* Goddard's default material path projects a tiny 32x32 IA8 lobe using
+     * generated normal coordinates. Approximate that narrow lobe in fixed
+     * point, against the same upper-left white-star direction as our diffuse
+     * pass, so it fits directly in Saturn VDP1 Gouraud endpoints. */
+    const int32_t dot = abs32((-3 * normal[0]) + (4 * normal[1]) + (6 * normal[2]));
+    const int32_t maximum = 6 * (abs32(normal[0]) + abs32(normal[1]) + abs32(normal[2]));
+    if (maximum == 0)
+        return 0;
+    const int32_t alignment = (dot * 31) / maximum;
+    if (alignment <= 25)
+        return 0;
+    const int32_t lobe = alignment - 24;
+    return (uint8_t)((lobe * lobe * 31) / 49);
+}
+
+static rgb1555_t
+shaded_material_color(uint16_t material, uint16_t index)
+{
+    const uint8_t *rgb = sm64_face_material_rgb[material & 7U];
+    const uint8_t diffuse = vertex_intensity(index);
+    const uint8_t shine = vertex_shine(index);
+    const uint8_t red = (rgb[0] * diffuse) / 31U;
+    const uint8_t green = (rgb[1] * diffuse) / 31U;
+    const uint8_t blue = (rgb[2] * diffuse) / 31U;
+    return RGB1555(1,
+      red + (((31U - red) * shine) / 31U),
+      green + (((31U - green) * shine) / 31U),
+      blue + (((31U - blue) * shine) / 31U));
+}
+
 static int16_vec2_t
 project_point(const int16_t *v)
 {
@@ -226,9 +260,9 @@ draw_source_face(void)
             project_point(a), project_point(b), project_point(c), project_point(c)
         };
         vdp1_gouraud_table_t *shade = &gouraud[source];
-        shade->colors[0] = material_color(f[0], vertex_intensity(f[1]));
-        shade->colors[1] = material_color(f[0], vertex_intensity(f[2]));
-        shade->colors[2] = material_color(f[0], vertex_intensity(f[3]));
+        shade->colors[0] = shaded_material_color(f[0], f[1]);
+        shade->colors[1] = shaded_material_color(f[0], f[2]);
+        shade->colors[2] = shaded_material_color(f[0], f[3]);
         shade->colors[3] = shade->colors[2];
         vdp1_cmdt_polygon_set(cmdt);
         vdp1_cmdt_draw_mode_set(cmdt, mode);

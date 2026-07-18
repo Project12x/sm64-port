@@ -24,6 +24,7 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 | Rejected raw-feature placement | The first feature import drew every moustache triangle after the face, placing it over the nose and making its otherwise-correct source scale and black material read like an oversized cutout. Preserved as a failure, not accepted renderer progress. | [failure frame](screenshots/ymir-source-features-2026-07-17.png), [capture report](ymir-source-features-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
 | Intermediate reduced moustache | A 3/4-scale dark-brown calibration proved that shared Z sorting fixes nose occlusion, but unnecessarily changed two source-authentic properties. Preserved as an intermediate correction. | [intermediate frame](screenshots/ymir-features-calibrated-2026-07-17.png), [capture report](ymir-features-calibrated-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
 | Source-scale black moustache | The accepted correction restores the original scale, position, and black material while retaining the unified face/feature Z sort. The nose now occludes the full source silhouette correctly. | [accepted frame](screenshots/ymir-mustache-source-scale-2026-07-17.png), [capture report](ymir-mustache-source-scale-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
+| Goddard-profiled shine | The exact 32x32 IA8 shine map was extracted from a hash-validated user-owned US ROM and measured without committing the asset. Its narrow lobe is close-ported as a fixed-point specular term in the existing VDP1 Gouraud endpoints. | [shine frame](screenshots/ymir-face-shine-2026-07-17.png), [capture report](ymir-face-shine-2026-07-17.json), [provenance](../INTROFACE_PROVENANCE.md) |
 
 ## Source-face gallery
 
@@ -58,15 +59,17 @@ must follow its Goddard net/skin transform and correct depth/material behavior.
 
 ![Full-size source-black moustache correctly occluded by the nose](screenshots/ymir-mustache-source-scale-2026-07-17.png)
 
+### Goddard-profiled VDP1 shine
+
+![Mario source face with fixed-point Gouraud specular shine](screenshots/ymir-face-shine-2026-07-17.png)
+
 ## Next visual gates
 
-1. Extract and convert the original 32x32 IA8 Mario face shine map from the
-   user-owned US ROM, then capture its Saturn rendering.
-2. Evaluate the animated Goddard skin-joint pose for moustache deformation;
+1. Evaluate the animated Goddard skin-joint pose for moustache deformation;
    retain the source-scale static pose as the front-camera baseline.
-3. Add controllable camera yaw/pitch plus a deterministic two-angle screenshot
+2. Add controllable camera yaw/pitch plus a deterministic two-angle screenshot
    pair.
-4. Compare VDP1 command and Gouraud-table budgets with the intended game frame
+3. Compare VDP1 command and Gouraud-table budgets with the intended game frame
    budget.
 
 The current intro-face stand-in is useful only as a VDP1 composition and
