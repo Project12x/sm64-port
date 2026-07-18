@@ -11,10 +11,11 @@
 
 #define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
 #define FEATURE_TRIANGLE_COUNT (SM64_RIGHT_EYEBROW_TRIANGLE_COUNT + SM64_LEFT_EYEBROW_TRIANGLE_COUNT + SM64_MUSTACHE_TRIANGLE_COUNT)
+#define SURFACE_TRIANGLE_COUNT (SM64_FACE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT)
 #define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + EYE_TRIANGLE_COUNT + FEATURE_TRIANGLE_COUNT + 3U)
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_TRIANGLE_COUNT];
-static uint16_t draw_order[SM64_FACE_TRIANGLE_COUNT];
+static uint16_t draw_order[SURFACE_TRIANGLE_COUNT];
 static int32_t vertex_normals[SM64_FACE_VERTEX_COUNT][3];
 
 static rgb1555_t
@@ -78,20 +79,44 @@ project_eye_point(const int16_t *v, int16_t offset_x, int16_t offset_y,
     return point;
 }
 
-static int
-depth_of(uint16_t triangle)
+static int16_vec2_t
+project_feature_point(const int16_t *v, int16_t center_x, int16_t center_y,
+  uint8_t scale_num, uint8_t scale_den, int16_t offset_x, int16_t offset_y)
 {
-    const uint16_t *f = sm64_face_triangles[triangle];
-    return sm64_face_vertices[f[1]][2] + sm64_face_vertices[f[2]][2] + sm64_face_vertices[f[3]][2];
+    int16_vec2_t point = project_point(v);
+    point.x = center_x + (((point.x - center_x) * scale_num) / scale_den) + offset_x;
+    point.y = center_y + (((point.y - center_y) * scale_num) / scale_den) + offset_y;
+    return point;
+}
+
+static int
+feature_depth(const int16_t vertices[][3], const uint16_t *f)
+{
+    return vertices[f[1]][2] + vertices[f[2]][2] + vertices[f[3]][2];
+}
+
+static int
+depth_of(uint16_t surface)
+{
+    if (surface < SM64_FACE_TRIANGLE_COUNT)
+        return feature_depth(sm64_face_vertices, sm64_face_triangles[surface]);
+    surface -= SM64_FACE_TRIANGLE_COUNT;
+    if (surface < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT)
+        return feature_depth(sm64_right_eyebrow_vertices, sm64_right_eyebrow_triangles[surface]);
+    surface -= SM64_RIGHT_EYEBROW_TRIANGLE_COUNT;
+    if (surface < SM64_LEFT_EYEBROW_TRIANGLE_COUNT)
+        return feature_depth(sm64_left_eyebrow_vertices, sm64_left_eyebrow_triangles[surface]);
+    surface -= SM64_LEFT_EYEBROW_TRIANGLE_COUNT;
+    return feature_depth(sm64_mustache_vertices, sm64_mustache_triangles[surface]);
 }
 
 static void
 sort_for_painter(void)
 {
-    for (uint16_t i = 0; i < SM64_FACE_TRIANGLE_COUNT; i++)
+    for (uint16_t i = 0; i < SURFACE_TRIANGLE_COUNT; i++)
         draw_order[i] = i;
     /* Stable insertion sort: far Z first, nearer surface last. */
-    for (uint16_t i = 1; i < SM64_FACE_TRIANGLE_COUNT; i++) {
+    for (uint16_t i = 1; i < SURFACE_TRIANGLE_COUNT; i++) {
         const uint16_t chosen = draw_order[i];
         const int depth = depth_of(chosen);
         uint16_t j = i;
@@ -127,25 +152,23 @@ draw_eye(vdp1_cmdt_t *cmdts, uint16_t *cursor, const int16_t vertices[][3],
 }
 
 static void
-draw_feature(vdp1_cmdt_t *cmdts, uint16_t *cursor,
+draw_feature_triangle(vdp1_cmdt_t *cmdt,
   const int16_t vertices[][3], const uint16_t triangles[][4],
-  uint16_t triangle_count, const uint8_t materials[][3])
+  uint16_t triangle, rgb1555_t color, int16_t center_x, int16_t center_y,
+  uint8_t scale_num, uint8_t scale_den, int16_t offset_x, int16_t offset_y)
 {
     const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768 };
-    for (uint16_t i = 0; i < triangle_count; i++) {
-        const uint16_t *f = triangles[i];
-        const uint8_t *rgb = materials[f[0]];
-        const int16_vec2_t projected[4] = {
-            project_point(vertices[f[1]]), project_point(vertices[f[2]]),
-            project_point(vertices[f[3]]), project_point(vertices[f[3]])
-        };
-        vdp1_cmdt_t *cmdt = &cmdts[*cursor];
-        vdp1_cmdt_polygon_set(cmdt);
-        vdp1_cmdt_draw_mode_set(cmdt, mode);
-        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
-        vdp1_cmdt_vtx_set(cmdt, projected);
-        (*cursor)++;
-    }
+    const uint16_t *f = triangles[triangle];
+    const int16_vec2_t projected[4] = {
+        project_feature_point(vertices[f[1]], center_x, center_y, scale_num, scale_den, offset_x, offset_y),
+        project_feature_point(vertices[f[2]], center_x, center_y, scale_num, scale_den, offset_x, offset_y),
+        project_feature_point(vertices[f[3]], center_x, center_y, scale_num, scale_den, offset_x, offset_y),
+        project_feature_point(vertices[f[3]], center_x, center_y, scale_num, scale_den, offset_x, offset_y)
+    };
+    vdp1_cmdt_polygon_set(cmdt);
+    vdp1_cmdt_draw_mode_set(cmdt, mode);
+    vdp1_cmdt_color_set(cmdt, color);
+    vdp1_cmdt_vtx_set(cmdt, projected);
 }
 
 static void
@@ -170,8 +193,32 @@ draw_source_face(void)
         .color_mode = VDP1_CMDT_CM_RGB_32768,
         .cc_mode = VDP1_CMDT_CC_GOURAUD,
     };
-    for (uint16_t out = 0; out < SM64_FACE_TRIANGLE_COUNT; out++) {
-        const uint16_t source = draw_order[out];
+    vdp1_vram_partitions_get(&partitions);
+    for (uint16_t out = 0; out < SURFACE_TRIANGLE_COUNT; out++) {
+        uint16_t source = draw_order[out];
+        vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U];
+        if (source >= SM64_FACE_TRIANGLE_COUNT) {
+            source -= SM64_FACE_TRIANGLE_COUNT;
+            if (source < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) {
+                draw_feature_triangle(cmdt, sm64_right_eyebrow_vertices,
+                  sm64_right_eyebrow_triangles, source, RGB1555(1, 7, 3, 1),
+                  160, 160, 1, 1, 3, 0);
+            } else if ((source -= SM64_RIGHT_EYEBROW_TRIANGLE_COUNT) < SM64_LEFT_EYEBROW_TRIANGLE_COUNT) {
+                draw_feature_triangle(cmdt, sm64_left_eyebrow_vertices,
+                  sm64_left_eyebrow_triangles, source, RGB1555(1, 7, 3, 1),
+                  160, 160, 1, 1, -3, 0);
+            } else {
+                source -= SM64_LEFT_EYEBROW_TRIANGLE_COUNT;
+                /* Calibrated static front pose: reduce around the source mesh
+                 * centre, lower it slightly, and let the common Z sort put the
+                 * nose in front. Pure source black reads as a cutout on VDP1,
+                 * so use a dark brown matched to the rendered hair. */
+                draw_feature_triangle(cmdt, sm64_mustache_vertices,
+                  sm64_mustache_triangles, source, RGB1555(1, 7, 3, 1),
+                  160, 169, 3, 4, 0, 3);
+            }
+            continue;
+        }
         const uint16_t *f = sm64_face_triangles[source];
         const int16_t *a = sm64_face_vertices[f[1]];
         const int16_t *b = sm64_face_vertices[f[2]];
@@ -179,41 +226,28 @@ draw_source_face(void)
         const int16_vec2_t vertices[4] = {
             project_point(a), project_point(b), project_point(c), project_point(c)
         };
-        vdp1_gouraud_table_t *shade = &gouraud[out];
+        vdp1_gouraud_table_t *shade = &gouraud[source];
         shade->colors[0] = material_color(f[0], vertex_intensity(f[1]));
         shade->colors[1] = material_color(f[0], vertex_intensity(f[2]));
         shade->colors[2] = material_color(f[0], vertex_intensity(f[3]));
         shade->colors[3] = shade->colors[2];
-        vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U];
         vdp1_cmdt_polygon_set(cmdt);
         vdp1_cmdt_draw_mode_set(cmdt, mode);
         vdp1_cmdt_color_set(cmdt, material_color(f[0], 31));
         vdp1_cmdt_vtx_set(cmdt, vertices);
+        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base +
+          (source * sizeof(vdp1_gouraud_table_t)));
     }
-    uint16_t cursor = SM64_FACE_TRIANGLE_COUNT + 2U;
+    uint16_t cursor = SURFACE_TRIANGLE_COUNT + 2U;
     /* Eye surfaces are separate original objects. Scale 2/3 about each source
      * eye-surface centre, after right (+5,-4) / left (-6,-4) calibration. */
     draw_eye(list->cmdts, &cursor, sm64_right_eye_vertices, sm64_right_eye_triangles,
       SM64_RIGHT_EYE_TRIANGLE_COUNT, sm64_right_eye_material_rgb, 5, -4, 179, 128);
     draw_eye(list->cmdts, &cursor, sm64_left_eye_vertices, sm64_left_eye_triangles,
       SM64_LEFT_EYE_TRIANGLE_COUNT, sm64_left_eye_material_rgb, -6, -4, 139, 128);
-    /* Eyebrows and moustache are already in the face coordinate space in the
-     * source dynlist. Draw them last as distinct black surface objects. */
-    draw_feature(list->cmdts, &cursor, sm64_right_eyebrow_vertices,
-      sm64_right_eyebrow_triangles, SM64_RIGHT_EYEBROW_TRIANGLE_COUNT,
-      sm64_right_eyebrow_material_rgb);
-    draw_feature(list->cmdts, &cursor, sm64_left_eyebrow_vertices,
-      sm64_left_eyebrow_triangles, SM64_LEFT_EYEBROW_TRIANGLE_COUNT,
-      sm64_left_eyebrow_material_rgb);
-    draw_feature(list->cmdts, &cursor, sm64_mustache_vertices,
-      sm64_mustache_triangles, SM64_MUSTACHE_TRIANGLE_COUNT,
-      sm64_mustache_material_rgb);
     vdp1_cmdt_end_set(&list->cmdts[cursor]);
-    vdp1_vram_partitions_get(&partitions);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud));
     scu_dma_transfer_wait(0);
-    for (uint16_t i = 0; i < SM64_FACE_TRIANGLE_COUNT; i++)
-        vdp1_cmdt_gouraud_base_set(&list->cmdts[i + 2U], (vdp1_vram_t)partitions.gouraud_base + (i * sizeof(vdp1_gouraud_table_t)));
     vdp1_sync_cmdt_list_put(list, 0);
     vdp1_sync_render();
     vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();

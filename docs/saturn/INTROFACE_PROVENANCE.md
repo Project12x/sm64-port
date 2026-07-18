@@ -79,3 +79,20 @@ Its capture is
 (SHA-256 `f2a056166614cb022540faafc2b585930d1d0dd650bbc1d05265507aec5ec9ae`,
 frame hash `d9abbdcdafa238c405689f2c0c6d5e89`, frame 3300). It is retained as a
 rejected visual experiment and BIOS-backed Ymir emulator evidence only.
+
+The corrected static front-camera renderer keeps the same converted feature
+topology but scales the moustache projection to `3/4` around screen center
+`(160, 169)` and adds a `(0, +3)` pixel offset. It also sorts the eyebrow and
+moustache triangles together with all 877 face triangles by source Z, so the
+nose is painted after and occludes the moustache. The original material is
+pure black; on the Saturn's untextured VDP1 polygon path that read as a flat
+cutout against the dark backdrop. The calibrated study therefore uses RGB555
+`(7, 3, 1)`, a deliberately documented dark-brown approximation matched to
+the rendered hair. This is a static presentation calibration, not a claim that
+the full Goddard skin/animation system has been reproduced.
+
+The corrected capture is
+`docs/saturn/evidence/screenshots/ymir-features-calibrated-2026-07-17.png`
+(SHA-256 `a0f26f60efe32e97617ac4763b6b7898bc963038598eff6c887d64e0476b6cd1`,
+frame hash `41055614fe317a229fc770a28cb3ae97`, frame 3300). It is BIOS-backed Ymir
+emulator evidence only.
