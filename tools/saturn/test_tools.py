@@ -12,7 +12,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
-from capture_hwtest import has_cd_block_copy_limitation  # noqa: E402
+from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
 
@@ -70,6 +70,13 @@ class AssetClassifierTests(unittest.TestCase):
         report = classify_primitives(primitives)
         self.assertEqual(report["direct_textured_quad_candidates"], 0)
         self.assertEqual(report["rejection_reasons"]["uvs_length_mismatch"], 1)
+
+
+class YmirInputTests(unittest.TestCase):
+    def test_pressed_mask_is_converted_to_active_low_pad_report(self) -> None:
+        message = input_pulse_request(7, 0x0400)
+        self.assertEqual(message["id"], 7)
+        self.assertEqual(message["params"]["buttons"], 0xFBF8)
 
 
 class TelemetryTests(unittest.TestCase):

@@ -138,3 +138,37 @@ Its capture is `docs/saturn/evidence/screenshots/ymir-face-shine-2026-07-17.png`
 (SHA-256 `c27aef050b56ab7a7d88fb470acf6e27698652fa91ec67dca3d6a3d671177f0a`,
 frame hash `8b1d4bf028e441b1a37890cb7456f5f6`, frame 3300). It is BIOS-backed Ymir
 emulator evidence only.
+
+## Interactive presentation loop
+
+The implementation inspected pinned permissive reference code before editing:
+
+| Upstream | Commit / license | Files inspected | Reuse mode |
+|---|---|---|---|
+| `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `gamemath/fix16/fix16_trig.c`, `scu/bus/cpu/smpc/smpc_peripheral.c`, `smpc_peripherals.c`, `scu/bus/b/vdp/vdp_sync.c` and their public headers | API use and pattern-only lifecycle adaptation |
+
+The next renderer revision replaces the one-shot draw with a VBlank-paced
+presentation loop. It uses libyaul 0.3.1 fixed-point `fix16_sincos` projection
+for yaw and pitch, re-sorts face and feature depth after camera changes, and
+retains the calibrated eye/feature projection. Saturn controls are D-pad
+yaw/pitch, L/R zoom, A shine, B auto-orbit, and Start camera reset. This is
+whole-head presentation motion; Goddard skin-joint facial deformation is not
+yet implemented.
+
+The shine path remains VDP1 Gouraud rather than half transparency. Diffuse and
+specular alignment are calculated once for each of the 440 unique face
+vertices, expanded into the 877 eight-byte Gouraud tables only when the shine
+state changes, and uploaded with SCU DMA. The VDP1 command-list allocation is
+also retained across frames. The HUD exposes uncapped render ticks, estimated
+render throughput, one-time shade rebuild ticks, and the most recently
+consumed pad state; presentation itself is capped to VBlank.
+
+The accepted interactive capture is
+`docs/saturn/evidence/screenshots/ymir-interactive-face-2026-07-17.png`
+(SHA-256 `5b575fcdfc25d55165689161859f65055da346650c3667461786a3ead0bb734c`,
+frame hash `0a4022b318768232e53d13864ad91ff8`, frame 3300). The accompanying
+`ymir-interactive-face-2026-07-17.json` is BIOS-backed Ymir emulator evidence.
+Ymir's current one-frame `input.pulse` does not reliably overlap libyaul's
+multi-frame asynchronous INTBACK collection, so automated camera/toggle proof
+remains explicitly open; the renderer and disc build are verified, but this
+capture shows the neutral control state.

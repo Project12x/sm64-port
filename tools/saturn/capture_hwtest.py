@@ -35,6 +35,15 @@ def request(method: str, request_id: int, params: dict[str, Any] | None = None) 
     return message
 
 
+def input_pulse_request(request_id: int, pressed_buttons: int) -> dict[str, Any]:
+    """Translate a logical pressed mask to Ymir's active-low pad report."""
+    return request(
+        "input.pulse",
+        request_id,
+        {"buttons": 0xFFF8 & ~pressed_buttons},
+    )
+
+
 def response_for(messages: list[dict[str, Any]], request_id: int) -> dict[str, Any]:
     for message in messages:
         if message.get("id") == request_id:
@@ -95,11 +104,33 @@ def main() -> int:
         default=600,
         help="frames to run after --event-word-poke (1..3600)",
     )
+    parser.add_argument(
+        "--input-pulse",
+        type=lambda value: int(value, 0),
+        metavar="BUTTONS",
+        help="pulse a Saturn digital-button mask after the main bounded run",
+    )
+    parser.add_argument(
+        "--input-pulse-count",
+        type=int,
+        default=1,
+        help="number of post-run input pulses (1..120)",
+    )
+    parser.add_argument(
+        "--input-pulse-frames",
+        type=int,
+        default=2,
+        help="frames to execute after each post-run pulse (1..120)",
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= 3600 or not 1 <= args.post_poke_frames <= 3600:
         parser.error("--frames and --post-poke-frames must be between 1 and 3600")
     if args.event_word_poke is not None and not 0 <= args.event_word_poke <= 0xFFFFFFFF:
         parser.error("--event-word-poke must be an unsigned 32-bit value")
+    if args.input_pulse is not None and not 0 <= args.input_pulse <= 0xFFFF:
+        parser.error("--input-pulse must be an unsigned 16-bit value")
+    if not 1 <= args.input_pulse_count <= 120 or not 1 <= args.input_pulse_frames <= 120:
+        parser.error("--input-pulse-count and --input-pulse-frames must be between 1 and 120")
     if args.event_word_poke is not None and args.handoff_yield:
         parser.error("--event-word-poke and --handoff-yield are mutually exclusive")
     for label, path in (("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
@@ -124,6 +155,8 @@ def main() -> int:
         requests.extend(
             [
                 request("exec.run_for", next_id, {"frames": 120}),
+                # Preserve the proven USA-BIOS boot macro's raw active-low
+                # states; post-boot --input-pulse uses logical pressed masks.
                 request("input.pulse", next_id + 1, {"buttons": 0x4000}),
                 request("exec.run_for", next_id + 2, {"frames": 30}),
                 request("input.pulse", next_id + 3, {"buttons": 0x0400}),
@@ -163,6 +196,13 @@ def main() -> int:
     elif args.handoff_yield:
         requests.append(request("exec.run_for", next_id, {"frames": args.post_poke_frames}))
         next_id += 1
+    if args.input_pulse is not None:
+        for _ in range(args.input_pulse_count):
+            requests.append(input_pulse_request(next_id, args.input_pulse))
+            requests.append(
+                request("exec.run_for", next_id + 1, {"frames": args.input_pulse_frames})
+            )
+            next_id += 2
     telemetry_id = next_id
     registers_id = next_id + 1
     boot_window_id = next_id + 2
@@ -259,6 +299,9 @@ def main() -> int:
         "post_poke_frames": (
             args.post_poke_frames if args.event_word_poke is not None or args.handoff_yield else None
         ),
+        "input_pulse": args.input_pulse,
+        "input_pulse_count": args.input_pulse_count if args.input_pulse is not None else None,
+        "input_pulse_frames": args.input_pulse_frames if args.input_pulse is not None else None,
         "protocol": {
             "ready": any(message.get("method") == "instance.ready" for message in messages),
             "stopped_reasons": stopped_reasons,
