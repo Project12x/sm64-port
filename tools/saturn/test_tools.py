@@ -12,6 +12,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
+from capture_hwtest import has_cd_block_copy_limitation  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
 
@@ -98,6 +99,11 @@ class TelemetryTests(unittest.TestCase):
         data = b"".join(word.to_bytes(4, "big") for word in words)
         decoded = decode(list(data), require_complete=True)
         self.assertFalse(decoded["ok"])
+
+    def test_ymir_cd_block_diagnostic_is_recognized(self) -> None:
+        self.assertTrue(has_cd_block_copy_limitation("info | CDBlock | Get copy error command is unimplemented"))
+        self.assertTrue(has_cd_block_copy_limitation("CD-block copy operation unavailable"))
+        self.assertFalse(has_cd_block_copy_limitation("Filesystem built successfully"))
 
     def test_bad_extended_magic_is_rejected(self) -> None:
         words = [

@@ -17,6 +17,15 @@ from typing import Any
 from telemetry_decode import decode
 
 
+def has_cd_block_copy_limitation(stderr: str) -> bool:
+    """Recognize Ymir's current and historical CD-block copy diagnostics."""
+    normalized = stderr.casefold()
+    return (
+        "cd-block copy operation" in normalized
+        or "get copy error command is unimplemented" in normalized
+    )
+
+
 def request(method: str, request_id: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": request_id}
     if params is not None:
@@ -113,7 +122,7 @@ def main() -> int:
         },
         "diagnostics": {
             "stderr": completed.stderr,
-            "cd_block_copy_unimplemented": "CD-block copy operation" in completed.stderr,
+            "cd_block_copy_unimplemented": has_cd_block_copy_limitation(completed.stderr),
         },
         "telemetry": telemetry,
     }
