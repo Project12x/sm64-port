@@ -73,3 +73,17 @@ The master SH-2 still stops at PC `0x060402E4` with zero telemetry, and no
 CD-block copy/move command is issued. The capture runner now records
 `registers_at_stop` so subsequent emulator work can be compared at the exact
 same boot point.
+
+The archived `boot_window` at `0x060402C0` disassembles at the stop PC to:
+
+```asm
+mov.l   @(0x240,gbr),r0
+mov     r0,r4
+mov.l   @(0x240,gbr),r0
+cmp/eq  r0,r4
+bt      .-8
+```
+
+With `GBR = 0x06020000`, the BIOS is polling the shared event word at
+`0x06020240`. This is the current Ymir investigation target; it is not
+evidence that the Saturn image or cartridge test has run.
