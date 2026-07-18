@@ -17,8 +17,8 @@ static int32_t vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static uint16_t draw_order[SM64_MARIO_PRIMITIVE_COUNT];
 static int16_t bucket_head[DEPTH_BUCKET_COUNT], bucket_tail[DEPTH_BUCKET_COUNT];
 static int16_t bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
-/* The evaluated C5 eye patch is on positive source Z; view it at yaw zero. */
-static angle_t yaw; static fix16_t sine_yaw, cosine_yaw;
+/* Eye normals face +Z, so the front camera stands on +Z and looks back. */
+static angle_t yaw = 32768; static fix16_t sine_yaw, cosine_yaw;
 static uint16_t frame_ticks, sort_ticks, build_ticks, visible_triangles, rejected_triangles; static bool controls_ready;
 static int16_t projected_min_x, projected_min_y, projected_max_x, projected_max_y;
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }

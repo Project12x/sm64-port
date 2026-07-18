@@ -309,6 +309,26 @@ child joints. The evaluator is now corrected to match SM64's
 `geo_process_animated_part` push/recurse/pop stack discipline. A rebuilt
 capture is required before any pose is called standing or accepted.
 
+### M2 stack correction: rear view restores the articulated body
+
+![Corrected C5 Mario from the rear through the native Saturn renderer](screenshots/ymir-m2-source-mario-c5-stack-fixed-2026-07-18.png)
+
+The first rebuilt capture removes the collapsed sibling transforms visible in
+Stage 40. It provides an independent rear-view proof that the source cap,
+torso, gloves, overalls, and feet now inherit their own intended joints.
+
+### M2 accepted: source GeoLayout stack restores standing Mario
+
+![Corrected front-facing C5 Mario standing through the native Saturn renderer](screenshots/ymir-m2-source-mario-c5-standing-front-2026-07-18.png)
+
+The rebuilt front view verifies the stack correction on target: the cap, face,
+torso, arms, gloves, legs, and feet now remain attached to their intended
+source hierarchy branches. The face includes the converted original eye-patch
+texture, while the rest of the actor uses VDP1 Gouraud shading derived from
+the actual compiled Mario geometry. This is the first accepted standing-body
+pose; remaining M2 work is texture coverage and painter-quality refinement,
+not a substitute geometry path.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
