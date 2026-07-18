@@ -21,7 +21,14 @@ def rom_bytes(path: Path) -> bytes:
         return archive.read(max(candidates, key=lambda item: item.file_size))
 
 def saturn_rgb1555(n64: int) -> int:
-    return ((n64 & 1) << 15) | ((n64 >> 1) & 0x7FFF)
+    # N64 RGBA16 is R5:G5:B5:A1 from most- to least-significant bits.
+    # Saturn direct-color RGB1555 is MSB:B5:G5:R5.  The alpha/MSB and green
+    # lanes already agree after extraction, but red and blue must exchange
+    # ends; preserving the original lanes turns blue Castle brick red.
+    red = (n64 >> 11) & 0x1F
+    green = (n64 >> 6) & 0x1F
+    blue = (n64 >> 1) & 0x1F
+    return ((n64 & 1) << 15) | (blue << 10) | (green << 5) | red
 
 def mio0_decode(image: bytes, offset: int) -> bytes:
     if image[offset:offset + 4] != b"MIO0":

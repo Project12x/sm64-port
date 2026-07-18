@@ -2,9 +2,9 @@
 """Bake SM64's normal-Mario UV triangles into VDP1-safe direct-color tiles.
 
 The N64 display list supplies per-vertex UVs; VDP1 distorted sprites do not.
-This local-only stage samples each source triangle into a 16x16 texture with a
-transparent exterior.  Runtime then maps one complete tile to the matching
-degenerate VDP1 triangle.  ROM-derived output stays below build/.
+This local-only stage samples each source triangle into a complete 16x16 VDP1
+distorted-sprite texture. Runtime maps the complete tile to the matching
+repeated-vertex triangle. ROM-derived output stays below build/.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
+from vdp1_texture import repeated_vertex_weights
 
 # Four 16×16 RGB1555 tiles per source triangle keep this first source-actor
 # path at 102,400 bytes. A 32×32 trial fitted the partition but did not make a
@@ -36,9 +37,7 @@ def bilinear_weights(x: int, y: int) -> tuple[float, float, float]:
     here beside the offline bake so the output remains one target-native tile
     per subtriangle rather than a software framebuffer workaround.
     """
-    b = (x + 0.5) / TILE
-    c = (y + 0.5) / TILE
-    return c, b, 1.0 - b - c
+    return repeated_vertex_weights(x, y, TILE, TILE)
 
 def pixel(texture: bytes, width: int, height: int, u: float, v: float) -> int:
     # Fast3D's source coordinates are s10.5-style values for this 32x32 asset.
@@ -97,9 +96,6 @@ def main() -> None:
         tile: list[int] = []
         for y in range(TILE):
             for x in range(TILE):
-                if x + y >= TILE:
-                    tile.append(0)
-                    continue
                 a, b, c = bilinear_weights(x, y)
                 u = a * uv[0][0] + b * uv[1][0] + c * uv[2][0]
                 v = a * uv[0][1] + b * uv[1][1] + c * uv[2][1]
@@ -120,7 +116,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "texture_bytes": len(tiles) * TILE * TILE * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior; texel corners C/B/A follow the measured VDP1 repeated-vertex distorted-sprite mapping"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "texture_bytes": len(tiles) * TILE * TILE * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "complete per-subtriangle UV bake; texel corners C/B/A/C follow the measured VDP1 repeated-vertex distorted-sprite mapping"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()

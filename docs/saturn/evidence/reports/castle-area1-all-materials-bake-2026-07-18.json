@@ -1,0 +1,31 @@
+{
+  "source": "levels/castle_inside/areas/1",
+  "selected_textures": [
+    "inside_09000000",
+    "inside_09001000",
+    "inside_09003800",
+    "inside_09004000",
+    "inside_09005000",
+    "inside_09008000"
+  ],
+  "selected_triangles": 577,
+  "tile": [
+    16,
+    16
+  ],
+  "source_scale": 1,
+  "subdivision": 1,
+  "tile_count": 577,
+  "texture_bytes": 295424,
+  "command_estimate": 580,
+  "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode; complete VDP1 C/B/A/C repeated-vertex tile",
+  "rom_sha256": "17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91",
+  "texture_sha256": {
+    "inside_09000000": "3b87139af59b63f9aec17eaab7a409dd8a2bf38a729616ca2c45a58228e92b74",
+    "inside_09001000": "87e088d0f6eb53efa5cbb51ed196918edd0d760ac8bb0b75596845c98890789c",
+    "inside_09003800": "b87b4540d7445fd282fab7fb0ce5aa2410f6fa40ee84a08beb1d22815a85a01c",
+    "inside_09004000": "f9587a862d17b8f66c4f636c0844abe42b63b5fd52306dcf442514633c478676",
+    "inside_09005000": "d0d8baa59e69b0b11e253efeadc07db5a8d272a010dbd8a4ee6db31573a17933",
+    "inside_09008000": "3c6a338fccf210f6ee0385a8ae5c6af7e9b1593c9cab8a8fe66b38c0b9823690"
+  }
+}

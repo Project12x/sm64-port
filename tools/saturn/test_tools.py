@@ -14,8 +14,10 @@ sys.path.insert(0, str(TOOLS))
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
 from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
+from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
+from vdp1_texture import repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
@@ -132,6 +134,12 @@ class QuadPairingTests(unittest.TestCase):
 
 
 class MarioActorPoseTests(unittest.TestCase):
+    def test_n64_rgba16_channels_map_to_saturn_rgb1555_lanes(self) -> None:
+        self.assertEqual(saturn_rgb1555(0xF801), 0x801F)  # opaque red
+        self.assertEqual(saturn_rgb1555(0x07C1), 0x83E0)  # opaque green
+        self.assertEqual(saturn_rgb1555(0x003F), 0xFC00)  # opaque blue
+        self.assertEqual(saturn_rgb1555(0xFFFF), 0xFFFF)  # opaque white
+
     def test_c5_root_rotation_keeps_both_feet_on_the_ground(self) -> None:
         root = TOOLS.parents[1]
         rotations = animation_rotations(
@@ -153,9 +161,12 @@ class MarioActorPoseTests(unittest.TestCase):
 
     def test_vdp1_repeated_vertex_tile_corner_order_is_c_b_a(self) -> None:
         self.assertEqual(TILE, 16)
-        self.assertEqual(bilinear_weights(0, 0), (0.03125, 0.03125, 0.9375))
-        self.assertEqual(bilinear_weights(15, 0), (0.03125, 0.96875, 0.0))
-        self.assertEqual(bilinear_weights(0, 15), (0.96875, 0.03125, 0.0))
+        self.assertEqual(bilinear_weights(0, 0), repeated_vertex_weights(0, 0, 16, 16))
+        for x, y in ((0, 0), (15, 0), (0, 15), (15, 15), (8, 8)):
+            self.assertAlmostEqual(sum(bilinear_weights(x, y)), 1.0)
+        # The formerly masked lower-right half contributes the repeated C
+        # corner and therefore contains source texture data.
+        self.assertGreater(bilinear_weights(15, 15)[2], 0.9)
         self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
 

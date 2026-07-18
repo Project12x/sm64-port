@@ -110,11 +110,13 @@ UV triplet. That prevents the first texture conversion from guessing a wall
 material or inventing replacement coordinates.
 
 M3 has now reached a BIOS-backed fixed-camera render of the 577-triangle
-opaque root. The local-only Castle baker records Fast3D tile size and
-clamp/wrap state, and exposes per-build `CASTLE_TEXTURE`, `CASTLE_TILE`, and
-`CASTLE_SOURCE_SCALE` controls. The active texture gate is camera-aware source
-coverage and correct direct-color VDP1 submission; the accepted render remains
-the Gouraud source root until a textured camera frame clears that gate.
+opaque root with all six original source materials. The shared converter fixes
+the N64/Saturn red-blue lane difference and uses the measured complete
+C/B/A/C repeated-vertex mapping. One 16×16 tile per source triangle occupies
+295,424 VDP1 texture bytes and about 580 commands. The local-only baker exposes
+per-build material, tile-size, source-scale, and subdivision controls; this is
+the active source-display-list renderer, not a hand-painted lobby substitute.
+The next gate is the source Mario/game-state path inside this textured room.
 
 ## M0 — Source-face proof
 

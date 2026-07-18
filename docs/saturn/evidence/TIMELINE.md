@@ -475,12 +475,45 @@ remaining fault is in the static-world direct-color VDP1 tile command/data
 path. The source-root Gouraud renderer is restored pending a small patterned
 16×16 VDP1 probe that isolates character-base, size, and color-mode behavior.
 
+### M3 rejected: RGB lanes corrected, half-tile mask exposed
+
+![Correct blue source material with invalid half-tile wedges](screenshots/ymir-m3-castle-area1-rgb-lanes-corrected-2026-07-18.png)
+
+The shared N64 RGBA16 converter had retained N64's high-bit red / low-bit blue
+layout even though Saturn RGB1555 stores red low and blue high. Exchanging
+those channels turns the falsely red `inside_09008000` submission back into
+its source blue-white material. The dark triangular wedges remain a rejected
+coverage result: they expose an independent baker error that zeroed half of
+every repeated-vertex sprite tile.
+
+### M3 accepted intermediate: complete repeated-vertex tile
+
+![Complete blue source material without half-tile holes](screenshots/ymir-m3-castle-area1-full-tile-mapping-2026-07-18.png)
+
+The BIOS-backed corner probe established source corners C/B/A with the fourth
+corner collapsed onto repeated C. Bilinear C/B/A/C sampling now fills the
+complete VDP1 tile instead of treating its lower half as transparent. The
+wedges disappear while the source triangle remains in its original painter
+slot. This rule is shared by the Castle and Mario source-texture bakers.
+
+### M3 accepted: all opaque lobby source materials
+
+![Castle Area 1 with all six original opaque material streams on Saturn](screenshots/ymir-m3-castle-area1-all-source-materials-2026-07-18.png)
+
+All 577 opaque source triangles now carry their original SM64 material: the
+sky/grass wall mural, blue brick, wood, marble, red carpet, and cloud/light
+detail. One complete 16×16 VDP1 tile per source triangle uses 295,424 texture
+bytes and an estimated 580 commands, fitting Yaul's default 442,336-byte /
+2,048-command partitions. The visible affine warping and painter limitations
+are Saturn renderer work; the textures, UVs, geometry, and material selection
+come from the real Area 1 display lists. Alpha/decal layers and Mario-in-room
+remain the next port gates.
+
 ## Next visual gates
 
-1. Use camera coverage plus a patterned 16×16 direct-color VDP1 probe to
-   verify character-base, size, and color-mode behavior; then recapture the
-   selected source material with a bounded tile-resolution budget.
-2. Add near-plane clipping and named source-order/opaque ordering evidence for
-   the first two fixed cameras.
-3. Bring the accepted standing source Mario bank into the Castle frame before
-   introducing gameplay movement or collision.
+1. Bring the accepted source Mario bank and its C5 animation evaluator into
+   this textured Area 1 renderer, preserving the common painter/texture path.
+2. Wire SM64 controller/game-state movement and Castle collision so the camera
+   follows Mario through the actual room rather than a fixed turntable pose.
+3. Add alpha/decal roots, near-plane clipping, and visibility management while
+   retaining the source display-list material state.

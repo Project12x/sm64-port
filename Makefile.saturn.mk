@@ -13,9 +13,10 @@ else
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
 SM64_ROM ?=
-CASTLE_TEXTURE ?= inside_09008000
+CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000
 CASTLE_TILE ?= 16
 CASTLE_SOURCE_SCALE ?= 1
+CASTLE_SUBDIVISION ?= 1
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
@@ -100,7 +101,7 @@ marioturntable: compile-mario-actor check-libyaul check-sdk
 verify-marioturntable: marioturntable
 	$(MAKE) -C "$(MARIOTURNTABLE_DIR)" verify
 
-castleviewer: compile-castle-area1 check-libyaul check-sdk
+castleviewer: compile-castle-area1 compile-castle-textures check-libyaul check-sdk
 	$(MAKE) -C "$(CASTLEVIEWER_DIR)"
 
 verify-castleviewer: castleviewer
@@ -182,11 +183,12 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  --rom "$(SM64_ROM)" \
 	  --assets "assets.json" \
 	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
-	  --texture "$(CASTLE_TEXTURE)" \
+	  $(foreach texture,$(CASTLE_TEXTURES),--texture "$(texture)") \
 	  --tile "$(CASTLE_TILE)" \
 	  --source-scale "$(CASTLE_SOURCE_SCALE)" \
+	  --subdivision "$(CASTLE_SUBDIVISION)" \
 	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
-	  --report "docs/saturn/evidence/reports/castle-area1-uv-bake-2026-07-18.json"
+	  --report "docs/saturn/evidence/reports/castle-area1-all-materials-bake-2026-07-18.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 

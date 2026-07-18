@@ -2,8 +2,9 @@
 #include <yaul.h>
 #include <string.h>
 #include "castle_area1_opaque.h"
+#include "castle_uv_tiles.h"
 
-#define COMMAND_COUNT (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT + 3U)
+#define COMMAND_COUNT (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT + SM64_CASTLE_UV_TILE_COUNT + 3U)
 #define DEPTH_BUCKETS 128U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 8192
@@ -81,6 +82,35 @@ static void draw_scene(void) {
     uint16_t command = 2;
     for (uint16_t out = 0; out < visible_triangles; out++) {
         const uint16_t index = draw_order[out], *tri = sm64_castle_area1_triangles[index];
+        const uint16_t texture_tile_start = sm64_castle_uv_tile_start[index];
+        if (texture_tile_start != SM64_CASTLE_UV_TILE_NONE) {
+            /* Source-selected Fast3D material: replace this source triangle
+             * in the same painter slot with its four pre-baked affine VDP1
+             * tiles. This is the same generic path used by source Mario. */
+            for (uint16_t tile = texture_tile_start;
+                 tile < texture_tile_start + SM64_CASTLE_UV_TILES_PER_TRIANGLE; tile++) {
+                const int16_vec2_t v[4] = {
+                    project_point(transform_point(sm64_castle_uv_positions[tile][0])),
+                    project_point(transform_point(sm64_castle_uv_positions[tile][1])),
+                    project_point(transform_point(sm64_castle_uv_positions[tile][2])),
+                    project_point(transform_point(sm64_castle_uv_positions[tile][2]))
+                };
+                vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
+                vdp1_cmdt_distorted_sprite_set(cmdt);
+                vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                    .color_mode = VDP1_CMDT_CM_RGB_32768,
+                    .cc_mode = VDP1_CMDT_CC_GOURAUD
+                });
+                vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base +
+                    tile * SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH * sizeof(uint16_t));
+                vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
+                vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
+                vdp1_cmdt_vtx_set(cmdt, v);
+                vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base +
+                    index * sizeof(vdp1_gouraud_table_t));
+            }
+            continue;
+        }
         const int16_vec2_t a = project_point(transform_point(sm64_castle_area1_vertices[tri[0]]));
         const int16_vec2_t b = project_point(transform_point(sm64_castle_area1_vertices[tri[1]]));
         const int16_vec2_t c = project_point(transform_point(sm64_castle_area1_vertices[tri[2]]));
@@ -101,10 +131,13 @@ void user_init(void) {
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     build_gouraud();
+    { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
+      scu_dma_transfer(0, (void *)partitions.texture_base, sm64_castle_uv_tiles,
+          sizeof(sm64_castle_uv_tiles)); scu_dma_transfer_wait(0); }
     for (uint32_t frame = 0;; frame++) {
         cpu_frt_count_set(0); sort_triangles(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M3 — CASTLE AREA 1 ROOT\nactual source opaque bank | fixed camera\n%u source tris | %u visible | %u rejected\n~%u.%u FPS | no textures/alpha/decal yet\n", (uint16_t)SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT, visible_triangles, rejected_triangles, fps_x10 / 10U, fps_x10 % 10U); dbgio_flush(); vdp2_sync(); }
+            dbgio_printf("\x1B[HSM64 SATURN M3 — CASTLE AREA 1 ROOT\nactual source opaque bank | fixed camera\n%u source tris | %u visible | %u rejected\n~%u.%u FPS | source texture slice active\n", (uint16_t)SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT, visible_triangles, rejected_triangles, fps_x10 / 10U, fps_x10 % 10U); dbgio_flush(); vdp2_sync(); }
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
     }
 }
