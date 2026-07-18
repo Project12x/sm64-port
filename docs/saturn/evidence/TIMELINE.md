@@ -216,6 +216,17 @@ uploaded through Yaul's SCU DMA path; the command mode explicitly selects
 `VDP1_CMDT_CC_GOURAUD`. This is visible target lighting, not a flat-material
 stand-in. Original Fast3D texture state remains the next fidelity gate.
 
+### M2 rejected: first original texture submissions
+
+![MIO0-corrected source eye texture still fails under a rectangular VDP1 mapping](screenshots/ymir-m2-source-mario-eye-texture-mio0-2026-07-18.png)
+
+The first local-ROM texture converter initially read Mario's MIO0-compressed
+segment as pixels; decoding the segment corrected those words. The following
+VDP1 distorted-sprite pass still masks the actor because it maps a rectangular
+texture over a non-rectangular Fast3D eye patch. Both captures are retained:
+the assets are now correct, while the renderer still needs per-primitive UV
+tessellation rather than an overlay approximation.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

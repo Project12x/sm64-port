@@ -239,6 +239,15 @@ def main() -> None:
     lines += ["    {" + ", ".join(map(str, material["rgb555"])) + "}," for material in materials]
     lines += ["};", "/* material,a,b,c,d; d repeats c for explicit triangle fallbacks. */", "static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {"]
     lines += ["    {%d, %d, %d, %d, %d}," % (primitive.material, *primitive.vertices) for primitive in primitives]
+    # The selected normal-cap/front-eye branch supplies this exact source
+    # patch. It remains separate because VDP1 textures are rectangular; M2's
+    # full UV tessellation follows after this verified first textured surface.
+    eye_vertices = [
+        (point[0] + 155, point[1], point[2])
+        for point in vertices["mario_eyes_cap_on_dl_vertex"]
+    ]
+    lines += ["};", f"#define SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT {len(eye_vertices)}U", "static const int16_t sm64_mario_eye_texture_vertices[SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT][3] = {"]
+    lines += ["    {" + ", ".join(map(str, point)) + "}," for point in eye_vertices]
     lines += ["};", "#endif"]
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)

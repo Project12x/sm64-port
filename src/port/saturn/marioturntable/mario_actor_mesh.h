@@ -1051,4 +1051,19 @@ static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {
     {5, 418, 423, 421, 419},
     {5, 420, 421, 423, 422},
 };
+#define SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT 12U
+static const int16_t sm64_mario_eye_texture_vertices[SM64_MARIO_EYE_TEXTURE_VERTEX_COUNT][3] = {
+    {300, 101, 0},
+    {263, 105, 0},
+    {252, 103, 25},
+    {252, 103, -24},
+    {330, 91, -38},
+    {299, 83, -66},
+    {259, 87, -69},
+    {330, 91, 39},
+    {308, 33, -94},
+    {259, 87, 70},
+    {299, 83, 67},
+    {308, 33, 95},
+};
 #endif

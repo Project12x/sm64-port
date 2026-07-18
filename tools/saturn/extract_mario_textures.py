@@ -23,6 +23,24 @@ def rom_bytes(path: Path) -> bytes:
 def saturn_rgb1555(n64: int) -> int:
     return ((n64 & 1) << 15) | ((n64 >> 1) & 0x7FFF)
 
+def mio0_decode(image: bytes, offset: int) -> bytes:
+    if image[offset:offset + 4] != b"MIO0":
+        raise ValueError(f"expected MIO0 at 0x{offset:X}")
+    size = int.from_bytes(image[offset + 4:offset + 8], "big")
+    comp = offset + int.from_bytes(image[offset + 8:offset + 12], "big")
+    raw = offset + int.from_bytes(image[offset + 12:offset + 16], "big")
+    mask, bits, out = offset + 16, 0, bytearray()
+    while len(out) < size:
+        if bits == 0: flags, mask, bits = image[mask], mask + 1, 8
+        if flags & 0x80:
+            out.append(image[raw]); raw += 1
+        else:
+            pair = int.from_bytes(image[comp:comp + 2], "big"); comp += 2
+            count, distance = (pair >> 12) + 3, (pair & 0xFFF) + 1
+            for _ in range(count): out.append(out[-distance])
+        flags = (flags << 1) & 0xFF; bits -= 1
+    return bytes(out[:size])
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rom", type=Path, required=True)
@@ -36,8 +54,13 @@ def main() -> None:
     for name in NAMES:
         entry = assets[f"actors/mario/{name}.rgba16.png"]
         width, height, size, regions = entry
-        base, relative = regions["us"]
-        start, data = base + relative, rom[base + relative:base + relative + size]
+        location = regions["us"]
+        if len(location) == 2:
+            base, relative = location
+            image, start = mio0_decode(rom, base), relative
+        else:
+            image, start = rom, location[0]
+        data = image[start:start + size]
         if len(data) != size: raise ValueError(f"{name}: range outside ROM")
         words = [saturn_rgb1555(int.from_bytes(data[i:i + 2], "big")) for i in range(0, size, 2)]
         lines += [f"#define SM64_{name.upper()}_WIDTH {width}U", f"#define SM64_{name.upper()}_HEIGHT {height}U", f"static const uint16_t sm64_{name}_rgb1555[{len(words)}] = {{"]
