@@ -276,6 +276,18 @@ contribute visibly in this C5 presentation. This rules out simply increasing
 tile density; the next gate is a source-facing standing frame/camera proof
 before more texture commands are added.
 
+### M2 rejected: face-facing camera still masks the eye patch
+
+![Face-direction camera capture still lacks a visible eye patch](screenshots/ymir-m2-source-mario-c5-face-view-2026-07-18.png)
+
+The source eye centroid establishes positive Z as the face direction, and the
+zero-yaw capture has a distinct deterministic frame hash. It still lacks a
+visible eye patch, ruling out camera direction and UV subdivision as the
+immediate cause. M2 currently preserves source-stream primitive submission;
+after articulated transforms, that is insufficient painter ordering. The next
+required renderer gate is depth ordering of the transformed primitives before
+the eye texture path can be judged visually.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
