@@ -353,6 +353,16 @@ places the head near +153 source Y and both feet near −125 source Y. This
 BIOS-backed capture shows an upright Mario with source geometry, five local
 ROM-derived texture sources, and native VDP1 Gouraud lighting together.
 
+### M2 Saturn cleanup: 256 transformed-depth buckets
+
+![Standing source Mario after increasing the native VDP1 painter precision](screenshots/ymir-m2-source-mario-depth256-2026-07-18.png)
+
+The body now submits through 256 bounded transformed-depth buckets rather than
+64. This is still a Saturn-appropriate integer painter path—not a hidden Z
+buffer—and it materially reduces ordering fights around the legs, feet, and
+torso while retaining the real VDP1 quad/fallback IR. Remaining artifacts are
+localized to the source texture tile mapping/order around the face.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

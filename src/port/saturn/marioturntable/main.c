@@ -4,7 +4,7 @@
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 #define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
-#define DEPTH_BUCKET_COUNT 64U
+#define DEPTH_BUCKET_COUNT 256U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 2048
 /* mario_geo_body's source origin is at the feet rather than its visual center.
@@ -82,7 +82,7 @@ static void sort_triangles(void) {
     rejected_triangles = 0;
     projected_min_x = projected_min_y = 32767;
     projected_max_x = projected_max_y = -32768;
-    for (uint8_t bucket = 0; bucket < DEPTH_BUCKET_COUNT; bucket++)
+    for (uint16_t bucket = 0; bucket < DEPTH_BUCKET_COUNT; bucket++)
         bucket_head[bucket] = bucket_tail[bucket] = -1;
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *t = sm64_mario_primitives[i];
