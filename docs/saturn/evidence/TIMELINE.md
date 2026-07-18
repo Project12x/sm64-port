@@ -521,11 +521,44 @@ The executable falls from roughly 388 KiB to 172 KiB. This becomes the Castle
 default and leaves Mario on its independent 16×16 profile until a close-up
 comparison proves its facial textures tolerate further reduction.
 
+### M2 accepted: source C5 animation bank
+
+![Runtime source Mario animation](screenshots/ymir-m2-source-mario-c5-runtime-animation-2026-07-18.png)
+
+All 30 frames from `assets/anims/anim_C5.inc.c` now drive the 424 shared actor
+vertices at runtime. The 788-triangle source topology and material state remain
+stable, and the 50 textured source triangles retain stable vertex references
+through every pose. The generated position bank costs 76,320 binary bytes.
+This proves source animation data can remain resident without rewriting Mario.
+
+### M4 rejected: first combined actor/room transform
+
+![First combined Mario and Castle frame](screenshots/ymir-m4-source-mario-in-textured-castle-first-2026-07-18.png)
+
+The real Mario actor and all six real lobby materials fit one VDP1 texture bank
+and one 1,197-item painter domain. The visual composition is rejected because
+it used provisional target placement and omitted `mario_geo`'s source 0.25
+wrapper scale. It remains evidence that combined residency works.
+
+### M4 rejected: standalone source-camera transplant
+
+![Blank frame after source-camera transplant](screenshots/ymir-m4-source-camera-scaled-mario-2026-07-18.png)
+
+The follow-up compiler reads Castle's `MARIO_POS`, the collision floor below
+it, the lobby entrance camera base, 0.3 follow factor, 125-unit focus offset,
+and 45-degree FOV directly from the SM64 sources. The target build succeeds,
+but the standalone view transform rejects the scene and produces only the
+clear field. This is preserved as an architectural failure: camera constants
+must flow through original SM64 state and graph traversal, not be transplanted
+into another bespoke room viewer.
+
 ## Next visual gates
 
-1. Bring the accepted source Mario bank and its C5 animation evaluator into
-   this textured Area 1 renderer, preserving the common painter/texture path.
-2. Wire SM64 controller/game-state movement and Castle collision so the camera
-   follows Mario through the actual room rather than a fixed turntable pose.
-3. Add alpha/decal roots, near-plane clipping, and visibility management while
+1. Compile the original SM64 controller/game-state, collision, camera, and
+   render-graph boundary for Saturn; stop adding room-specific target state.
+2. Translate the display-list output to the current Saturn mesh/texture IR and
+   VDP1 command builder, retaining conservative quadification and fallbacks.
+3. Batch each area's 1×/2×/4× texture profiles into RAM-cart manifests, then
+   promote the visible working set to VDP1 VRAM without per-texture CD stalls.
+4. Add alpha/decal roots, near-plane clipping, and visibility management while
    retaining the source display-list material state.

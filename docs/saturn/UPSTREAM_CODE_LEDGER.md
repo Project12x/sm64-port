@@ -46,6 +46,7 @@ Implementation commitments:
 | [SaitoTsutomu/Tris-Quads-Ex](https://github.com/SaitoTsutomu/Tris-Quads-Ex) | `f5acd93873728c45d48c3398382aec380a280182` / Apache-2.0 | `__init__.py`, `README.md` | **Pattern-only test oracle.** Its one-selected-edge-per-triangle objective informs an independent regression case for `tools/saturn/quad_pairing.py` and `tools/saturn/test_tools.py`. Keep NetworkX exact matching; do not add Blender or PuLP to the project. Saturn filters for material, winding, convexity, UVs, and deformation stay mandatory. |
 | [HailToDodongo/pyrite64](https://github.com/HailToDodongo/pyrite64) | `297a10e606af6149327364d8b694f136c62b506e` / MIT | `src/project/assets/model3d.h`, `collision.h`, `src/renderer/n64Mesh.h`, `animation.h` | **Pattern-only.** Create an original limited Fast3D-to-Saturn IR exporter under `tools/saturn/` with explicit model/material partitions, source primitive IDs, collision data, and animation streams. The C++/desktop/libdragon runtime is not a Saturn runtime candidate and no code is copied. |
 | [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) | `dc9d09ed83e1004aef47a1c3c597e0ec64848a37` / MIT | `src/meshoptimizer.h`, `src/indexgenerator.cpp`, `src/vfetchoptimizer.cpp` | **Pattern-only.** Preserve independent position/attribute/index streams in the new IR so seams and per-material splits survive conversion. Do not introduce a native dependency until host-tool profiling proves it worthwhile. |
+| [malucard/sm64-psx](https://github.com/malucard/sm64-psx) | `3073845688ea273da78d539b20c45110d8a868c3` / no repository-wide license found; bundled components vary | `README.md`, `src/port/gfx/gfx_rsp_jit.c`, `src/port/psx/gfx_dl_exec_psx.c`, `gfx_tessellation_psx.c`, `gfx_texture_psx.c`, `controller_psx.c`, `tools/preprocess_graphics.py`, `convert_image_psx.py`, `pack_textures.py`, `compress_mario_anims.c` | **Behavior study only.** Preserve the SM64 game/level/behavior boundary, translate display lists to a compact Saturn command IR, expose an `OSContPad` backend, profile the whole loop, and budget texture/animation residency by area. Do not copy source: the useful lesson is the architecture, while Saturn needs VDP1 quads, Yaul input, and its own VRAM/RAM-cart policies. |
 
 Implementation commitments:
 
@@ -63,6 +64,15 @@ Implementation commitments:
    architecture mismatch for the five-bit/binary-alpha output contract. Both
    Mario and Castle bakers expose source-scale and emitted-tile controls and
    must report the resulting residency.
+5. Follow the PSX port's milestone ordering without inheriting its backend:
+   get the original game loop, controller state, collision, camera, behaviors,
+   and graph traversal running before texture perfection. Translate emitted
+   Fast3D state at the renderer boundary; do not keep adding per-room placement
+   or camera logic to the Saturn viewer.
+6. Avoid the PSX port's documented texture-loading stall: package an area
+   manifest and batch/prefetch its texture bank into the 4 MB RAM cart, then
+   promote only the visible working set to VDP1 VRAM. The texture tools must
+   support per-class 1x/2x/4x source scales and 8/16/32-pixel output profiles.
 
 ## M3 onward — inspection and debugging evidence
 

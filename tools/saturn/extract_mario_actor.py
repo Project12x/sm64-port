@@ -63,6 +63,9 @@ Matrix = tuple[float, float, float, float, float, float, float, float, float, fl
 def identity_matrix() -> Matrix:
     return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
 
+def scale_matrix(scale: float) -> Matrix:
+    return (scale, 0.0, 0.0, 0.0, scale, 0.0, 0.0, 0.0, scale, 0.0, 0.0, 0.0)
+
 def source_matrix(translation: tuple[int, int, int], rotation: tuple[int, int, int]) -> Matrix:
     """Close port mtxf_rotate_xyz_and_translate() from math_util.c."""
     sx, sy, sz = (math.sin(value * math.tau / 65536.0) for value in rotation)
@@ -80,8 +83,7 @@ def matrix_mul(local: Matrix, parent: Matrix) -> Matrix:
 def matrix_apply(matrix: Matrix, point: tuple[int, int, int]) -> tuple[int, int, int]:
     return tuple(round(sum(point[axis] * matrix[axis * 3 + col] for axis in range(3)) + matrix[9 + col]) for col in range(3))
 
-def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
-    """Read a source Animation's index/value stream like retrieve_animation_index()."""
+def animation_streams(source: str) -> tuple[list[int], list[int]]:
     name = re.search(r"struct Animation (anim_\w+)\[\]", source)
     if name is None:
         raise ValueError("missing source Animation header")
@@ -92,7 +94,21 @@ def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
             raise ValueError(f"missing {stem}_{suffix}")
         raw = [int(value, 0) for value in re.findall(r"(?:0x[0-9A-Fa-f]+|-?\d+)", body.group(1))]
         return [value - 0x10000 if suffix == "values" and value & 0x8000 else value for value in raw]
-    indices, samples = values("indices"), values("values")
+    return values("indices"), values("values")
+
+
+def animation_translation(source: str, frame: int) -> tuple[int, int, int]:
+    """Read the source root x/y/z translation channels."""
+    indices, samples = animation_streams(source)
+    return tuple(
+        samples[indices[axis * 2 + 1] + min(frame, indices[axis * 2] - 1)]
+        for axis in range(3)
+    )
+
+
+def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
+    """Read a source Animation's index/value stream like retrieve_animation_index()."""
+    indices, samples = animation_streams(source)
     if len(indices) < 6 or len(indices) % 2:
         raise ValueError("invalid source Animation index stream")
     cursor = 6  # source root consumes translation x/y/z before part rotations.
@@ -106,7 +122,18 @@ def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
         rotations.append(tuple(triplet))
     return rotations
 
-def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> list[tuple[str, Matrix, str]]:
+
+def animation_frame_count(source: str) -> int:
+    """Return the source Animation frame count from its header."""
+    header = re.search(r"struct Animation anim_\w+\[\]\s*=\s*\{(.*?)\};", source, re.DOTALL)
+    if header is None:
+        raise ValueError("missing source Animation header")
+    fields = [field.strip() for field in header.group(1).split(",")]
+    if len(fields) < 5:
+        raise ValueError("incomplete source Animation header")
+    return int(fields[4], 0)
+
+def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]], root_translation: tuple[int, int, int] = (0, 0, 0)) -> list[tuple[str, Matrix, str]]:
     """Evaluate the neutral mario_geo_body hierarchy from the original source.
 
     This first evaluator intentionally handles the bind pose: animated-part
@@ -155,8 +182,11 @@ def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> 
                 # ANIM_TYPE_ROTATION and consumes its rotation triplet too.
                 # Skipping that triplet shifts every later limb channel.
                 rotation = next_rotation()
+                translation = tuple(int(fields[axis + 1]) for axis in range(3))
+                if animated_part_index == 0:
+                    translation = tuple(translation[axis] + root_translation[axis] for axis in range(3))
                 animated_part_index += 1
-                last = matrix_mul(source_matrix(tuple(int(fields[axis + 1]) for axis in range(3)), rotation), parent)
+                last = matrix_mul(source_matrix(translation, rotation), parent)
                 display_list = fields[4]
                 if display_list != "NULL":
                     result.append((display_list, last, "mario_blue_lights_group"))
@@ -177,10 +207,16 @@ def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> 
             # controls. Their neutral Mario bind-pose values are identity.
         return index
 
-    # The preview intentionally leaves root *translation* at zero (turntable
-    # placement), but consumes root rotation and every later joint triplet in
-    # the same order as geo_process_animated_part's attribute cursor.
-    walk(0, identity_matrix())
+    # mario_geo is the LevelScript entry and wraps every body branch in the
+    # original 0.25 GEO_SCALE. Entering mario_geo_body directly without this
+    # wrapper makes the actor four times too large in SM64 world coordinates.
+    wrapper = layouts.get("mario_geo", "")
+    scale_match = re.search(r"GEO_SCALE\s*\([^,]+,\s*(\d+)\s*\)", wrapper)
+    root = scale_matrix(int(scale_match.group(1)) / 65536.0) if scale_match else identity_matrix()
+    # Root translation remains zero (object/world placement is the game
+    # runtime's responsibility), while the source rotations and global scale
+    # are consumed in original graph order.
+    walk(0, root)
     if not result:
         raise ValueError("mario_geo_body did not produce any display lists")
     return result
@@ -274,8 +310,9 @@ def main() -> None:
     geo = args.geo.read_text(encoding="utf-8")
     display_lists, vertices = blocks(model, "Gfx"), vertex_groups(model)
     triangles: list[dict[str, object]] = []
-    rotations = animation_rotations(args.animation.read_text(encoding="utf-8"), args.animation_frame) if args.animation else []
-    parts = geo_layout_parts(geo, rotations)
+    animation_source = args.animation.read_text(encoding="utf-8") if args.animation else None
+    rotations = animation_rotations(animation_source, args.animation_frame) if animation_source else []
+    parts = geo_layout_parts(geo, rotations, animation_translation(animation_source, args.animation_frame) if animation_source else (0, 0, 0))
     for name, matrix, light in parts:
         flatten(display_lists, vertices, name, matrix, light, triangles)
     model_hash, geo_hash = hashlib.sha256(model.encode()).hexdigest(), hashlib.sha256(geo.encode()).hexdigest()
@@ -302,6 +339,42 @@ def main() -> None:
                 positions.append(list(key))
             indices.append(position_index[key])
         ir_triangles.append({"source": source, "material": material_index[material_key], "indices": indices})
+
+    # Evaluate every frame through the original Animation index/value stream
+    # and GeoLayout hierarchy. This compact vertex pose bank is a transitional
+    # Saturn representation of source animation data, not a replacement
+    # animation or action system.
+    animation_positions: list[list[list[int]]] = []
+    if animation_source is not None:
+        references: dict[tuple[int, int, int], list[tuple[int, int]]] = {}
+        for triangle_index, triangle in enumerate(triangles):
+            for corner, point in enumerate(triangle["positions"]):
+                references.setdefault(tuple(point), []).append((triangle_index, corner))
+        for frame in range(animation_frame_count(animation_source)):
+            frame_triangles: list[dict[str, object]] = []
+            frame_parts = geo_layout_parts(geo, animation_rotations(animation_source, frame), animation_translation(animation_source, frame))
+            for name, matrix, light in frame_parts:
+                flatten(display_lists, vertices, name, matrix, light, frame_triangles)
+            if len(frame_triangles) != len(triangles):
+                raise ValueError(f"animation frame {frame} changed source triangle count")
+            if any(
+                (current["display_list"], current["texture"])
+                != (neutral["display_list"], neutral["texture"])
+                for current, neutral in zip(frame_triangles, triangles)
+            ):
+                raise ValueError(f"animation frame {frame} changed source topology/material state")
+            frame_vertices: list[list[int]] = []
+            for point in positions:
+                values = {
+                    tuple(frame_triangles[triangle_index]["positions"][corner])
+                    for triangle_index, corner in references[tuple(point)]
+                }
+                if len(values) != 1:
+                    raise ValueError(
+                        f"animation frame {frame} splits a neutral shared vertex at {point}"
+                    )
+                frame_vertices.append(list(values.pop()))
+            animation_positions.append(frame_vertices)
     source_ir = {
         "schema": "sm64-saturn-mesh-ir", "version": 1,
         "name": "normal_mario_neutral_turntable", "positions": positions,
@@ -321,6 +394,10 @@ def main() -> None:
             if len(sources) != 1 or sources[0] not in textured_source_rank:
                 raise ValueError("textured source triangles must remain individual VDP1 primitives")
             texture_tile_start[primitive_index] = textured_source_rank[sources[0]] * 4
+    textured_source_vertices = [
+        [position_index[tuple(point)] for point in triangles[source]["positions"]]
+        for source in textured_source_ids
+    ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         "/* Generated by tools/saturn/extract_mario_actor.py; do not edit. */",
@@ -338,12 +415,28 @@ def main() -> None:
         "static const int16_t sm64_mario_vertices[SM64_MARIO_VERTEX_COUNT][3] = {",
     ]
     lines += ["    {" + ", ".join(map(str, point)) + "}," for point in positions]
+    if animation_positions:
+        lines += [
+            "};",
+            f"#define SM64_MARIO_ANIMATION_FRAME_COUNT {len(animation_positions)}U",
+            "static const int16_t sm64_mario_animation_vertices[SM64_MARIO_ANIMATION_FRAME_COUNT][SM64_MARIO_VERTEX_COUNT][3] = {",
+        ]
+        for frame_vertices in animation_positions:
+            lines.append("    {")
+            lines += ["        {" + ", ".join(map(str, point)) + "}," for point in frame_vertices]
+            lines.append("    },")
     lines += ["};", f"#define SM64_MARIO_MATERIAL_COUNT {len(materials)}U", "static const uint8_t sm64_mario_material_rgb[SM64_MARIO_MATERIAL_COUNT][3] = {"]
     lines += ["    {" + ", ".join(map(str, material["rgb555"])) + "}," for material in materials]
     lines += ["};", "/* material,a,b,c,d; d repeats c for explicit triangle fallbacks. */", "static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {"]
     lines += ["    {%d, %d, %d, %d, %d}," % (primitive.material, *primitive.vertices) for primitive in primitives]
     lines += ["};", "/* First UV subtile for a compiled primitive, or TEXTURE_TILE_NONE. */", "static const uint16_t sm64_mario_texture_tile_start[SM64_MARIO_PRIMITIVE_COUNT] = {"]
     lines += ["    " + ", ".join(f"{value}U" for value in texture_tile_start[index:index + 12]) + "," for index in range(0, len(texture_tile_start), 12)]
+    lines += [
+        "};",
+        "/* Stable source vertex indices for each textured Fast3D triangle. */",
+        "static const uint16_t sm64_mario_textured_source_vertices[SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT][3] = {",
+    ]
+    lines += ["    {" + ", ".join(map(str, indices)) + "}," for indices in textured_source_vertices]
     lines += ["};", "#endif"]
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
@@ -364,11 +457,11 @@ def main() -> None:
         "textured_primitive_count": len(textured_source_ids),
         "geo_evaluator": {
             "layout": "mario_geo_body",
-            "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST", "Animation index/value rotations", "source xyz matrices"],
+            "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST", "mario_geo global GEO_SCALE", "Animation index/value rotations", "source xyz matrices"],
             "branch_selections": BRANCH_SELECTIONS,
         },
-        "animation": {"path": str(args.animation).replace("\\\\", "/"), "frame": args.animation_frame} if args.animation else None,
-        "limits": ["source Animation rotations are fixed to one pose", "ASM head/torso callbacks remain identity", "RGBA16 texture commands use source light colors until VDP1 texture conversion"],
+        "animation": {"path": str(args.animation).replace("\\\\", "/"), "preview_frame": args.animation_frame, "frame_count": len(animation_positions), "vertex_pose_bytes": len(animation_positions) * len(positions) * 3 * 2} if args.animation else None,
+        "limits": ["ASM head/torso callbacks remain identity", "Animation poses are pre-evaluated offline until the full runtime GeoLayout evaluator is linked"],
         "mesh_ir": compiled_ir,
     }, indent=2) + "\n", encoding="utf-8")
     if args.mesh_ir_output is not None:

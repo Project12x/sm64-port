@@ -10,12 +10,15 @@ IMAGE_DIRECTORY := $(ROOT)/build/saturn/castlearea/cd
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
-SH_CFLAGS += -Os -g -DDEBUG -I$(ROOT)/build/saturn/castlearea/generated
+SH_CFLAGS += -Os -g -DDEBUG \
+  -I$(ROOT)/build/saturn/castlearea/generated \
+  -I$(ROOT)/build/saturn/marioturntable/generated \
+  -I$(ROOT)/src/port/saturn/marioturntable
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260718
 IP_AREAS := JTUBKAEL
 IP_PERIPHERALS := JAMKST
-IP_TITLE := SM64 SATURN CASTLE M3
+IP_TITLE := SM64 SATURN CASTLE M4
 IP_MASTER_STACK_ADDR := 0x06004000
 IP_SLAVE_STACK_ADDR := 0x06001E00
 IP_1ST_READ_ADDR := 0x06004000

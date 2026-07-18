@@ -20,15 +20,19 @@ static int16_t bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 /* Eye normals face +Z, so the front camera stands on +Z and looks back. */
 static angle_t yaw = 32768; static fix16_t sine_yaw, cosine_yaw;
 static uint16_t frame_ticks, sort_ticks, build_ticks, visible_triangles, rejected_triangles; static bool controls_ready;
+static uint16_t animation_frame;
 static int16_t projected_min_x, projected_min_y, projected_max_x, projected_max_y;
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
 static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
 static int32_t abs32(int32_t value) { return value < 0 ? -value : value; }
+static const int16_t *actor_vertex(uint16_t index) {
+    return sm64_mario_animation_vertices[animation_frame][index];
+}
 static void build_vertex_normals(void) {
     (void)memset(vertex_normals, 0, sizeof(vertex_normals));
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *p = sm64_mario_primitives[i];
-        const int16_t *a = sm64_mario_vertices[p[1]], *b = sm64_mario_vertices[p[2]], *c = sm64_mario_vertices[p[3]];
+        const int16_t *a = actor_vertex(p[1]), *b = actor_vertex(p[2]), *c = actor_vertex(p[3]);
         const int32_t ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
         const int32_t vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
         const int32_t nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
@@ -69,6 +73,29 @@ static int16_vec2_t project_point(point3_t p) {
       (int16_t)(112 - (p.y * 256) / z));
     return result;
 }
+static void texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
+    const uint16_t *indices = sm64_mario_textured_source_vertices[tile / 4U];
+    const int16_t *a = actor_vertex(indices[0]);
+    const int16_t *b = actor_vertex(indices[1]);
+    const int16_t *c = actor_vertex(indices[2]);
+    int16_t ab[3], bc[3], ca[3];
+    for (uint8_t axis = 0; axis < 3; axis++) {
+        ab[axis] = (int16_t)(((int32_t)a[axis] + b[axis]) / 2);
+        bc[axis] = (int16_t)(((int32_t)b[axis] + c[axis]) / 2);
+        ca[axis] = (int16_t)(((int32_t)c[axis] + a[axis]) / 2);
+    }
+    const int16_t *points[3];
+    switch (tile & 3U) {
+        case 0: points[0] = a;  points[1] = ab; points[2] = ca; break;
+        case 1: points[0] = ab; points[1] = b;  points[2] = bc; break;
+        case 2: points[0] = ca; points[1] = bc; points[2] = c;  break;
+        default: points[0] = ab; points[1] = bc; points[2] = ca; break;
+    }
+    output[0] = project_point(transform_point(points[0]));
+    output[1] = project_point(transform_point(points[1]));
+    output[2] = project_point(transform_point(points[2]));
+    output[3] = output[2];
+}
 static void update_view(void) {
     smpc_peripheral_digital_t digital; (void)memset(&digital, 0, sizeof(digital));
     smpc_peripheral_process(); smpc_peripheral_digital_port(1, &digital);
@@ -87,14 +114,14 @@ static void sort_triangles(void) {
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *t = sm64_mario_primitives[i];
         bucket_next[i] = -2;
-        const int32_t a = transform_point(sm64_mario_vertices[t[1]]).z, b = transform_point(sm64_mario_vertices[t[2]]).z, c = transform_point(sm64_mario_vertices[t[3]]).z;
+        const int32_t a = transform_point(actor_vertex(t[1])).z, b = transform_point(actor_vertex(t[2])).z, c = transform_point(actor_vertex(t[3])).z;
         const int32_t minimum = min3(a, b, c), maximum = max3(a, b, c);
         /* This is the libmic3d-style reject boundary. M2 will replace the
          * near intersection reject with source-preserving clipping. */
         if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) { rejected_triangles++; continue; }
-        const int16_vec2_t pa = project_point(transform_point(sm64_mario_vertices[t[1]]));
-        const int16_vec2_t pb = project_point(transform_point(sm64_mario_vertices[t[2]]));
-        const int16_vec2_t pc = project_point(transform_point(sm64_mario_vertices[t[3]]));
+        const int16_vec2_t pa = project_point(transform_point(actor_vertex(t[1])));
+        const int16_vec2_t pb = project_point(transform_point(actor_vertex(t[2])));
+        const int16_vec2_t pc = project_point(transform_point(actor_vertex(t[3])));
         if (pa.x < projected_min_x) projected_min_x = pa.x; if (pa.x > projected_max_x) projected_max_x = pa.x;
         if (pb.x < projected_min_x) projected_min_x = pb.x; if (pb.x > projected_max_x) projected_max_x = pb.x;
         if (pc.x < projected_min_x) projected_min_x = pc.x; if (pc.x > projected_max_x) projected_max_x = pc.x;
@@ -134,12 +161,7 @@ static void draw_mario(void) {
              * affine tiles and replaces that source primitive in painter
              * order; untextured source geometry remains true-quads/Gouraud. */
             for (uint16_t tile = texture_tile_start; tile < texture_tile_start + 4U; tile++) {
-                const int16_vec2_t v[4] = {
-                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][0])),
-                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][1])),
-                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][2])),
-                    project_point(transform_point(sm64_mario_texture_uv_positions[tile][2]))
-                };
+                int16_vec2_t v[4]; texture_tile_vertices(tile, v);
                 vdp1_cmdt_t *cmdt = &list->cmdts[command++];
                 vdp1_cmdt_distorted_sprite_set(cmdt);
                 vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD });
@@ -152,7 +174,7 @@ static void draw_mario(void) {
         }
         const uint16_t *t = sm64_mario_primitives[primitive];
         const uint8_t *rgb = sm64_mario_material_rgb[t[0]];
-        const int16_vec2_t v[4] = { project_point(transform_point(sm64_mario_vertices[t[1]])), project_point(transform_point(sm64_mario_vertices[t[2]])), project_point(transform_point(sm64_mario_vertices[t[3]])), project_point(transform_point(sm64_mario_vertices[t[4]])) };
+        const int16_vec2_t v[4] = { project_point(transform_point(actor_vertex(t[1]))), project_point(transform_point(actor_vertex(t[2]))), project_point(transform_point(actor_vertex(t[3]))), project_point(transform_point(actor_vertex(t[4]))) };
         vdp1_cmdt_t *cmdt = &list->cmdts[command++]; vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
@@ -179,9 +201,14 @@ void user_init(void) {
     { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
       scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0); }
     for (uint32_t frame = 0;; frame++) {
-        update_view(); cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
+        update_view();
+        const uint16_t next_animation_frame = (uint16_t)((frame / 2U) % SM64_MARIO_ANIMATION_FRAME_COUNT);
+        if (next_animation_frame != animation_frame) {
+            animation_frame = next_animation_frame; build_vertex_normals(); rebuild_gouraud();
+        }
+        cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M2 — SOURCE MARIO IR\nmario_geo_body | %u tris -> %u quads + %u fallbacks\nD-PAD LEFT/RIGHT: orbit | source-order IR\nVISIBLE %u REJECTED %u | XY %d..%d / %d..%d\n~%u.%u FPS  SORT %u  BUILD %u  FRAME %u\n", (uint16_t)SM64_MARIO_TRIANGLE_COUNT, (uint16_t)SM64_MARIO_QUAD_COUNT, (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_QUAD_COUNT), visible_triangles, rejected_triangles, projected_min_x, projected_max_x, projected_min_y, projected_max_y, fps_x10 / 10U, fps_x10 % 10U, sort_ticks, build_ticks, (uint16_t)frame);
+            dbgio_printf("\x1B[HSM64 SATURN M2 — SOURCE MARIO IR\nmario_geo_body | %u tris -> %u quads + %u fallbacks\nD-PAD LEFT/RIGHT: orbit | anim_C5 %u/%u\nVISIBLE %u REJECTED %u | XY %d..%d / %d..%d\n~%u.%u FPS  SORT %u  BUILD %u  FRAME %u\n", (uint16_t)SM64_MARIO_TRIANGLE_COUNT, (uint16_t)SM64_MARIO_QUAD_COUNT, (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_QUAD_COUNT), animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_triangles, rejected_triangles, projected_min_x, projected_max_x, projected_min_y, projected_max_y, fps_x10 / 10U, fps_x10 % 10U, sort_ticks, build_ticks, (uint16_t)frame);
             dbgio_flush(); vdp2_sync(); }
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
     }

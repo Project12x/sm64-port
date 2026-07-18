@@ -13,13 +13,14 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
-from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
+from extract_mario_actor import animation_frame_count, animation_rotations, animation_translation, geo_layout_parts  # noqa: E402
 from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
 from vdp1_texture import downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
+from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
 from plan_castle_camera_coverage import plan  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
@@ -134,6 +135,11 @@ class QuadPairingTests(unittest.TestCase):
 
 
 class MarioActorPoseTests(unittest.TestCase):
+    def test_c5_source_frame_count_is_preserved(self) -> None:
+        root = TOOLS.parents[1]
+        source = (root / "assets/anims/anim_C5.inc.c").read_text(encoding="utf-8")
+        self.assertEqual(animation_frame_count(source), 30)
+
     def test_rgb1555_box_filter_averages_channels_and_alpha(self) -> None:
         width, height, pixels = downsample_rgb1555(
             [0x801F, 0x83E0, 0xFC00, 0xFFFF], 2, 2, 2
@@ -156,18 +162,25 @@ class MarioActorPoseTests(unittest.TestCase):
         rotations = animation_rotations(
             (root / "assets/anims/anim_C5.inc.c").read_text(encoding="utf-8"), 0
         )
+        animation_source = (root / "assets/anims/anim_C5.inc.c").read_text(encoding="utf-8")
         parts = {
             name: matrix
             for name, matrix, _light in geo_layout_parts(
-                (root / "actors/mario/geo.inc.c").read_text(encoding="utf-8"), rotations
+                (root / "actors/mario/geo.inc.c").read_text(encoding="utf-8"), rotations,
+                animation_translation(animation_source, 0)
             )
         }
         head_y = parts["mario_cap_on_eyes_front"][10]
         left_foot_y = parts["mario_left_foot"][10]
         right_foot_y = parts["mario_right_foot"][10]
-        self.assertGreater(head_y, 150.0)
-        self.assertLess(left_foot_y, -120.0)
-        self.assertLess(right_foot_y, -120.0)
+        # mario_geo wraps the body in GEO_SCALE(..., 16384), so these are
+        # source-space world coordinates after the real 0.25 actor scale and
+        # anim_C5's root translation have both been applied.
+        self.assertGreater(head_y, 70.0)
+        self.assertGreater(left_foot_y, 5.0)
+        self.assertLess(left_foot_y, 20.0)
+        self.assertGreater(right_foot_y, 5.0)
+        self.assertLess(right_foot_y, 20.0)
         self.assertLess(abs(left_foot_y - right_foot_y), 1.0)
 
     def test_vdp1_repeated_vertex_tile_corner_order_is_c_b_a(self) -> None:
@@ -182,6 +195,20 @@ class MarioActorPoseTests(unittest.TestCase):
 
 
 class CastleAreaInventoryTests(unittest.TestCase):
+    def test_castle_gameplay_config_comes_from_source(self) -> None:
+        root = TOOLS.parents[1]
+        result = extract_castle_gameplay_config(
+            root / "levels/castle_inside/script.c",
+            root / "levels/castle_inside/areas/1/collision.inc.c",
+            root / "src/game/camera.c",
+        )
+        self.assertEqual(result["spawn"]["position"], [-1023, 0, 1152])
+        self.assertEqual(result["spawn"]["yaw_degrees"], 180)
+        # The LevelScript starts Mario at Y=0, while the source collision
+        # triangle beneath (-1023, 1152) evaluates to Y=-37.
+        self.assertEqual(result["collision"]["floor_height"], -37)
+        self.assertEqual(result["camera"]["entrance_base"], [-813, 378, 1103])
+
     def test_area_one_intake_points_at_the_real_lobby_source(self) -> None:
         root = TOOLS.parents[1]
         report = inventory(

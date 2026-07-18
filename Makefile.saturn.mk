@@ -23,7 +23,7 @@ MARIO_TEXTURE_SOURCE_SCALE ?= 1
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-textures plan-castle-camera verify-all clean
 
 all: hello
 
@@ -103,7 +103,7 @@ marioturntable: compile-mario-actor check-libyaul check-sdk
 verify-marioturntable: marioturntable
 	$(MAKE) -C "$(MARIOTURNTABLE_DIR)" verify
 
-castleviewer: compile-castle-area1 compile-castle-textures check-libyaul check-sdk
+castleviewer: compile-castle-area1 compile-castle-gameplay-config compile-castle-textures compile-mario-actor compile-mario-textures check-libyaul check-sdk
 	$(MAKE) -C "$(CASTLEVIEWER_DIR)"
 
 verify-castleviewer: castleviewer
@@ -172,6 +172,14 @@ compile-castle-area1: check-host-tools
 	  --area "levels/castle_inside/areas/1" \
 	  --output "build/saturn/castlearea/generated/castle_area1_opaque.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json"
+
+compile-castle-gameplay-config: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_castle_gameplay_config.py" \
+	  --script "levels/castle_inside/script.c" \
+	  --collision "levels/castle_inside/areas/1/collision.inc.c" \
+	  --camera "src/game/camera.c" \
+	  --output "build/saturn/castlearea/generated/castle_gameplay_config.h" \
+	  --report "docs/saturn/evidence/reports/castle-area1-gameplay-config-2026-07-18.json"
 
 plan-castle-camera: compile-castle-area1 check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/plan_castle_camera_coverage.py" \

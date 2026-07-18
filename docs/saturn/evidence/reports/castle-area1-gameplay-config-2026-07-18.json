@@ -1,0 +1,41 @@
+{
+  "spawn": {
+    "area": 1,
+    "yaw_degrees": 180,
+    "yaw_angle": 32768,
+    "position": [
+      -1023,
+      0,
+      1152
+    ]
+  },
+  "collision": {
+    "floor_height": -37,
+    "floor_triangle": 1604
+  },
+  "camera": {
+    "entrance_base": [
+      -813,
+      378,
+      1103
+    ],
+    "follow_q16": 19661,
+    "focus_height": 125,
+    "fov_degrees": 45,
+    "focal_length_320": 386
+  },
+  "source": {
+    "script": {
+      "path": "levels/castle_inside/script.c",
+      "sha256": "61b8346b311f41508208e73e03318129f42ff46adbbb485978f7b5638faa7a6a"
+    },
+    "collision": {
+      "path": "levels/castle_inside/areas/1/collision.inc.c",
+      "sha256": "c08b7e8e0ba8371601a9e11338a51b528634dee27ad6d0c863618917e77cf093"
+    },
+    "camera": {
+      "path": "src/game/camera.c",
+      "sha256": "c472cb3c1ad9aa60b932df3e57eaeeab613d8ee44a4c6be58917a1b7cc9270a4"
+    }
+  }
+}
