@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "../gpl/slavedriver_dma_queue.h"
+
 #define HWTEST_TELEMETRY_ADDRESS ((volatile hwtest_telemetry_t *)0x06010000UL)
 #define HWTEST_MAGIC 0x53415430UL /* "SAT0" */
 #define HWTEST_VERSION 1U
@@ -192,8 +194,8 @@ dma_test(void)
         }
 
         cpu_frt_count_set(0);
-        scu_dma_transfer(0, dma_sink, (const void *)cart, sizeof(dma_sink));
-        scu_dma_transfer_wait(0);
+        saturn_dma_queue_transfer_wait(dma_sink, (const void *)cart,
+            sizeof(dma_sink), SATURN_DMA_QUEUE_SCU);
         telemetry->scu_cart_to_wram_ticks = cpu_frt_count_get();
 
         bool sink_ok = true;
@@ -208,8 +210,8 @@ dma_test(void)
         }
 
         cpu_frt_count_set(0);
-        scu_dma_transfer(0, (void *)VDP1_VRAM(0), dma_sink, sizeof(dma_sink));
-        scu_dma_transfer_wait(0);
+        saturn_dma_queue_transfer_wait((void *)VDP1_VRAM(0), dma_sink,
+            sizeof(dma_sink), SATURN_DMA_QUEUE_SCU);
         telemetry->scu_wram_to_vdp1_ticks = cpu_frt_count_get();
         telemetry->status |= HWTEST_STATUS_DMA_PASS;
 }
@@ -273,11 +275,10 @@ vdp1_test(void)
         };
         vdp1_vram_partitions_t partitions;
         vdp1_vram_partitions_get(&partitions);
-        scu_dma_transfer(0, partitions.texture_base, texture, sizeof(texture));
-        scu_dma_transfer_wait(0);
-        scu_dma_transfer(0, partitions.gouraud_base, &gouraud_table,
-            sizeof(gouraud_table));
-        scu_dma_transfer_wait(0);
+        saturn_dma_queue_transfer_wait(partitions.texture_base, texture,
+            sizeof(texture), SATURN_DMA_QUEUE_SCU);
+        saturn_dma_queue_transfer_wait(partitions.gouraud_base, &gouraud_table,
+            sizeof(gouraud_table), SATURN_DMA_QUEUE_SCU);
 
         static const vdp1_cmdt_draw_mode_t solid_mode = {.raw = 0};
         static const vdp1_cmdt_draw_mode_t transparent_mode = {
@@ -380,6 +381,7 @@ vdp1_test(void)
 void
 user_init(void)
 {
+        saturn_dma_queue_init();
         telemetry_init();
 
         vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,

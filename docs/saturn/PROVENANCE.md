@@ -180,9 +180,10 @@ adaptation boundary and required Yaul rewrites are recorded in
 `docs/saturn/SLAVEDRIVER_ADAPTATION.md`. GPL-derived
 components must retain the applicable GPL licensing, notices, and
 corresponding-source obligations. The project owner has authorized
-GPL-2.0/GPL-3.0 use for this public project; no SlaveDriver source is copied or
-linked at the current revision, and the existing Yaul-based bring-up remains a
-clean-room design using public Yaul APIs.
+GPL-2.0/GPL-3.0 use for this public project. The bounded DMA queue is now
+close-ported under `src/port/saturn/gpl/`; its raw-register and pointer-width
+assumptions were replaced with public Yaul APIs as recorded in
+`docs/saturn/SLAVEDRIVER_ADAPTATION.md`.
 
 ### Sega hardware documentation
 

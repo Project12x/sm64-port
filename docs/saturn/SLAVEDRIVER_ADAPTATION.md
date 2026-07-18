@@ -38,8 +38,10 @@ accept GPL code.
 
 ## Current status
 
-The hardware-test image still uses direct Yaul calls so its DMA measurements
-remain a small, auditable baseline. The next renderer/DMA phase should add the
-isolated adapter and replace the two display-upload call sites with it. This
-keeps the current telemetry comparable while making the reuse decision
-explicit and reversible.
+The isolated adapter now lives in `src/port/saturn/gpl/` and is linked into the
+hardware-test image. It replaces the cart-to-WRAM, WRAM-to-VDP1, texture, and
+Gouraud upload calls with the bounded queue and Yaul-backed transfer/wait path.
+The host tool tests pass and the image builds with the pinned SH-2 toolchain.
+The queue is intentionally drained synchronously for this bring-up; the
+renderer can later submit work across a frame boundary without changing the
+source-level contract.

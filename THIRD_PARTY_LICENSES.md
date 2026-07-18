@@ -95,8 +95,10 @@ The currently recorded GPL references are:
   JSON-RPC emulator/debugging tool;
 - `FCare/Kronos` and `Yabause/yabause`, GPL-2.0, used as external BIOS-backed
   or HLE emulator tools; and
-- `Lobotomy-Software/SlaveDriver-Engine`, GPL-3.0-or-later, studied as Saturn
-  DMA/VDP2 prior art. No SlaveDriver source is copied at the current revision.
+- `Lobotomy-Software/SlaveDriver-Engine`, GPL-3.0-or-later, used as Saturn
+  DMA/VDP2 prior art. Its bounded DMA queue is close-ported into the isolated
+  `src/port/saturn/gpl/` component; see `docs/saturn/SLAVEDRIVER_ADAPTATION.md`
+  for the pinned revision, changes, and source obligations.
 
 Exact commits, inspected files, and reuse modes are maintained in
 `docs/saturn/PROVENANCE.md`.

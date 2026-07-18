@@ -6,7 +6,7 @@ HWTEST_ROOT := $(patsubst %/,%,$(dir $(realpath $(firstword $(MAKEFILE_LIST)))))
 REPO_ROOT := $(abspath $(HWTEST_ROOT)/../../../..)
 
 SH_PROGRAM := sm64-saturn-hwtest
-SH_SRCS := main.c
+SH_SRCS := main.c ../gpl/slavedriver_dma_queue.c
 
 SH_BUILD_DIR := $(REPO_ROOT)/build/saturn/hwtest/obj
 SH_OUTPUT_DIR := $(REPO_ROOT)/build/saturn/hwtest
