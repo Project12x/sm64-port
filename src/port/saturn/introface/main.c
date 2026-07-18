@@ -16,6 +16,8 @@
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_TRIANGLE_COUNT];
 static uint16_t draw_order[SURFACE_TRIANGLE_COUNT];
+static int32_t surface_depths[SURFACE_TRIANGLE_COUNT];
+static bool draw_order_ready;
 static int32_t vertex_normals[SM64_FACE_VERTEX_COUNT][3];
 static uint8_t diffuse_cache[SM64_FACE_VERTEX_COUNT];
 static uint8_t shine_cache[SM64_FACE_VERTEX_COUNT];
@@ -33,6 +35,9 @@ typedef struct point3 {
     int32_t y;
     int32_t z;
 } point3_t;
+
+static point3_t transformed_face[SM64_FACE_VERTEX_COUNT];
+static int16_vec2_t projected_face[SM64_FACE_VERTEX_COUNT];
 
 static view_state_t view = { 0, 0, 6, true, false };
 static fix16_t view_sin_yaw;
@@ -101,6 +106,23 @@ transform_point(const int16_t *v)
         (((int32_t)v[1] * view_cos_pitch) - (z * view_sin_pitch)) >> 16,
         (((int32_t)v[1] * view_sin_pitch) + (z * view_cos_pitch)) >> 16
     };
+}
+
+static int16_vec2_t
+project_transformed(point3_t point)
+{
+    return (int16_vec2_t)INT16_VEC2_INITIALIZER(
+      160 + (point.x / view.projection_divisor),
+      160 - (point.y / view.projection_divisor));
+}
+
+static void
+update_face_transform_cache(void)
+{
+    for (uint16_t i = 0; i < SM64_FACE_VERTEX_COUNT; i++) {
+        transformed_face[i] = transform_point(sm64_face_vertices[i]);
+        projected_face[i] = project_transformed(transformed_face[i]);
+    }
 }
 
 static uint8_t
@@ -176,10 +198,7 @@ static int16_vec2_t
 project_point(const int16_t *v)
 {
     /* Goddard face coordinates: X is horizontal and Y is vertical. */
-    const point3_t point = transform_point(v);
-    return (int16_vec2_t)INT16_VEC2_INITIALIZER(
-      160 + (point.x / view.projection_divisor),
-      160 - (point.y / view.projection_divisor));
+    return project_transformed(transform_point(v));
 }
 
 static int16_vec2_t
@@ -223,8 +242,11 @@ feature_depth(const int16_t vertices[][3], const uint16_t *f)
 static int
 depth_of(uint16_t surface)
 {
-    if (surface < SM64_FACE_TRIANGLE_COUNT)
-        return feature_depth(sm64_face_vertices, sm64_face_triangles[surface]);
+    if (surface < SM64_FACE_TRIANGLE_COUNT) {
+        const uint16_t *f = sm64_face_triangles[surface];
+        return transformed_face[f[1]].z + transformed_face[f[2]].z +
+          transformed_face[f[3]].z;
+    }
     surface -= SM64_FACE_TRIANGLE_COUNT;
     if (surface < SM64_RIGHT_EYEBROW_TRIANGLE_COUNT)
         return feature_depth(sm64_right_eyebrow_vertices, sm64_right_eyebrow_triangles[surface]);
@@ -238,14 +260,23 @@ depth_of(uint16_t surface)
 static void
 sort_for_painter(void)
 {
+    /* Transform each surface only once. The original proof recomputed three
+     * fixed-point vertex transforms for every insertion-sort comparison,
+     * making a 1,049-surface frame needlessly quadratic in transform cost. */
     for (uint16_t i = 0; i < SURFACE_TRIANGLE_COUNT; i++)
-        draw_order[i] = i;
-    /* Stable insertion sort: far Z first, nearer surface last. */
+        surface_depths[i] = depth_of(i);
+    if (!draw_order_ready) {
+        for (uint16_t i = 0; i < SURFACE_TRIANGLE_COUNT; i++)
+            draw_order[i] = i;
+        draw_order_ready = true;
+    }
+    /* Stable insertion sort is efficient here because camera motion is small
+     * and the preceding frame's painter order is already nearly sorted. */
     for (uint16_t i = 1; i < SURFACE_TRIANGLE_COUNT; i++) {
         const uint16_t chosen = draw_order[i];
-        const int depth = depth_of(chosen);
+        const int32_t depth = surface_depths[chosen];
         uint16_t j = i;
-        while (j > 0 && depth_of(draw_order[j - 1]) > depth) {
+        while (j > 0 && surface_depths[draw_order[j - 1]] > depth) {
             draw_order[j] = draw_order[j - 1];
             j--;
         }
@@ -305,6 +336,7 @@ draw_source_face(bool shade_dirty)
     if (command_list == NULL)
         return;
     const uint16_t sort_start = cpu_frt_count_get();
+    update_face_transform_cache();
     sort_for_painter();
     painter_sort_ticks = (uint16_t)(cpu_frt_count_get() - sort_start);
     const uint16_t command_start = cpu_frt_count_get();
@@ -346,11 +378,9 @@ draw_source_face(bool shade_dirty)
             continue;
         }
         const uint16_t *f = sm64_face_triangles[source];
-        const int16_t *a = sm64_face_vertices[f[1]];
-        const int16_t *b = sm64_face_vertices[f[2]];
-        const int16_t *c = sm64_face_vertices[f[3]];
         const int16_vec2_t vertices[4] = {
-            project_point(a), project_point(b), project_point(c), project_point(c)
+            projected_face[f[1]], projected_face[f[2]],
+            projected_face[f[3]], projected_face[f[3]]
         };
         vdp1_cmdt_polygon_set(cmdt);
         vdp1_cmdt_draw_mode_set(cmdt, mode);

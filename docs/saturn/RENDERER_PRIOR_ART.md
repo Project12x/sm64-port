@@ -25,6 +25,16 @@ The current shine path is already the Saturn-appropriate one:
 6. The HUD reports frame ticks and the isolated shade-rebuild cost so the
    quality/performance decision remains visible.
 
+The first interactive proof reset 1,049 surface indices to source order every
+frame and recomputed three transformed vertices inside each insertion-sort
+comparison. The optimized path caches one depth per surface and retains the
+previous frame's nearly sorted order. This is a local data-lifecycle fix rather
+than copied engine code: the studied GPL engines are behavior references only,
+and their SGL/sector sort structures do not match this libyaul face renderer.
+The same pass caches each of the 440 transformed/projected face vertices once
+per frame; triangle depth and command emission then index those results rather
+than transforming shared vertices repeatedly.
+
 This avoids texture upload, framebuffer blending, per-pixel simulation, and a
 full Gouraud rebuild every frame. Sonic Z-Treme's source and README provide a
 useful independent comparison point, but no GPL renderer code is used here.
