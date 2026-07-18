@@ -15,7 +15,7 @@ the authority for bus legality and final timings.
 | DMA measurements | CPU copy, cached/uncached reads, CPU-DMAC, SCU cart→WRAM, SCU WRAM→VDP1 fields | BIOS-backed Kronos observation recorded; retail pending |
 | VDP1 measurements | Seven isolated probes: solid quad/triangle, concave, transparency, textured quad/triangle, Gouraud | BIOS-backed Kronos observation recorded; retail pending |
 | SM64 geometry/UV classifier | [`asset_classifier.py`](../../tools/saturn/asset_classifier.py), checked-out source scan and six-way report in [`asset-classifier-sm64-2026-07-17.md`](evidence/asset-classifier-sm64-2026-07-17.md), 8/8 regression tests | Verified host-side |
-| BIOS-backed evidence | Kronos screenshot and manifest; Ymir path-fixed but currently returns zero telemetry because its BIOS/CD path does not reach the disc | Kronos verified; Ymir execution limitation documented |
+| BIOS-backed evidence | Kronos screenshot and manifest; [Ymir CD-block handoff](YMIR_CD_BLOCK_HANDOFF.md) records the pinned-source limitation; Ymir currently returns zero telemetry because its BIOS/CD path does not reach the disc | Kronos verified; Ymir execution limitation documented |
 | Retail evidence | [`RETAIL_CAPTURE.md`](RETAIL_CAPTURE.md) handoff with two cold-boot runs, raw 120-byte telemetry, hashes, and manifest schema | Pending physical console/cart access |
 
 ## Current conclusion
