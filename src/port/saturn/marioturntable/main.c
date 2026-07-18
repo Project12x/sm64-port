@@ -11,6 +11,8 @@
 #define CAMERA_FRAME_Y 230
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
+static vdp1_gouraud_table_t gouraud[SM64_MARIO_PRIMITIVE_COUNT];
+static int32_t vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static uint16_t draw_order[SM64_MARIO_PRIMITIVE_COUNT];
 static int16_t bucket_head[DEPTH_BUCKET_COUNT], bucket_tail[DEPTH_BUCKET_COUNT];
 static int16_t bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
@@ -19,6 +21,37 @@ static uint16_t frame_ticks, sort_ticks, build_ticks, visible_triangles, rejecte
 static int16_t projected_min_x, projected_min_y, projected_max_x, projected_max_y;
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
 static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
+static int32_t abs32(int32_t value) { return value < 0 ? -value : value; }
+static void build_vertex_normals(void) {
+    (void)memset(vertex_normals, 0, sizeof(vertex_normals));
+    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
+        const uint16_t *p = sm64_mario_primitives[i];
+        const int16_t *a = sm64_mario_vertices[p[1]], *b = sm64_mario_vertices[p[2]], *c = sm64_mario_vertices[p[3]];
+        const int32_t ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
+        const int32_t vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        const int32_t nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        for (uint8_t v = 1; v < 5; v++) {
+            const uint16_t index = p[v];
+            if (v == 4 && index == p[3]) continue;
+            vertex_normals[index][0] += nx; vertex_normals[index][1] += ny; vertex_normals[index][2] += nz;
+        }
+    }
+}
+static rgb1555_t shaded_color(uint16_t material, uint16_t vertex) {
+    const uint8_t *rgb = sm64_mario_material_rgb[material];
+    const int32_t *n = vertex_normals[vertex];
+    const int32_t maximum = 6 * (abs32(n[0]) + abs32(n[1]) + abs32(n[2]));
+    const int32_t dot = (-2 * n[0]) + (4 * n[1]) + (5 * n[2]);
+    const uint8_t intensity = maximum == 0 ? 20U : (uint8_t)(8 + ((dot > 0 ? dot : 0) * 23) / maximum);
+    return RGB1555(1, (rgb[0] * intensity) / 31U, (rgb[1] * intensity) / 31U, (rgb[2] * intensity) / 31U);
+}
+static void rebuild_gouraud(void) {
+    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
+        const uint16_t *p = sm64_mario_primitives[i]; vdp1_gouraud_table_t *shade = &gouraud[i];
+        shade->colors[0] = shaded_color(p[0], p[1]); shade->colors[1] = shaded_color(p[0], p[2]);
+        shade->colors[2] = shaded_color(p[0], p[3]); shade->colors[3] = shaded_color(p[0], p[4]);
+    }
+}
 static point3_t transform_point(const int16_t *s) {
     /* mario_geo_body advances along source X (torso/head, limbs, legs).
      * Map that native articulated axis to screen-up, source Z to horizontal,
@@ -85,7 +118,8 @@ static void sort_triangles(void) {
 }
 static void draw_mario(void) {
     const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223), local = INT16_VEC2_INITIALIZER(0, 0);
-    const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768 };
+    const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD };
+    vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
     const uint16_t start = cpu_frt_count_get(); vdp1_cmdt_list_t *list = command_list; list->count = COMMAND_COUNT;
     (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * list->count);
     vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
@@ -96,8 +130,10 @@ static void draw_mario(void) {
         const int16_vec2_t v[4] = { project_point(transform_point(sm64_mario_vertices[t[1]])), project_point(transform_point(sm64_mario_vertices[t[2]])), project_point(transform_point(sm64_mario_vertices[t[3]])), project_point(transform_point(sm64_mario_vertices[t[4]])) };
         vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U]; vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
+        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + draw_order[out] * sizeof(vdp1_gouraud_table_t));
     }
     vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U]); build_ticks = (uint16_t)(cpu_frt_count_get() - start);
+    scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud)); scu_dma_transfer_wait(0);
     vdp1_sync_cmdt_list_put(list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
 }
 static void vblank_out_handler(void *work __unused) { smpc_peripheral_intback_issue(); }
@@ -113,7 +149,7 @@ void user_init(void) {
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
-    fix16_sincos(yaw, &sine_yaw, &cosine_yaw);
+    fix16_sincos(yaw, &sine_yaw, &cosine_yaw); build_vertex_normals(); rebuild_gouraud();
     for (uint32_t frame = 0;; frame++) {
         update_view(); cpu_frt_count_set(0); sort_triangles(); draw_mario(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) { const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;

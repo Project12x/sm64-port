@@ -206,6 +206,16 @@ triangle fallbacks. This is an upright source actor geometry proof; it still
 uses the temporary source-light RGB fallback, before texture conversion and
 Gouraud lighting.
 
+### M2 accepted: native VDP1 Gouraud actor lighting
+
+![Standing Mario with geometry-derived per-vertex VDP1 Gouraud lighting](screenshots/ymir-m2-source-mario-gouraud-active-2026-07-18.png)
+
+The same upright source actor now uses one VDP1 Gouraud table per compiled
+primitive. Tables are built from accumulated source-mesh vertex normals and
+uploaded through Yaul's SCU DMA path; the command mode explicitly selects
+`VDP1_CMDT_CC_GOURAUD`. This is visible target lighting, not a flat-material
+stand-in. Original Fast3D texture state remains the next fidelity gate.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
