@@ -113,11 +113,11 @@ def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], s
     return result
 
 
-def vertex_groups(source: str) -> dict[str, list[tuple[int, int, int]]]:
-    result: dict[str, list[tuple[int, int, int]]] = {}
+def vertex_groups(source: str) -> dict[str, list[tuple[int, int, int, int, int]]]:
+    result: dict[str, list[tuple[int, int, int, int, int]]] = {}
     for name, body in blocks(source, "Vtx").items():
-        positions = re.findall(r"\{\{\{\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\}", body)
-        result[name] = [tuple(map(int, position)) for position in positions]
+        rows = re.findall(r"\{\{\{\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\},\s*\d+,\s*\{\s*(-?\d+),\s*(-?\d+)", body)
+        result[name] = [tuple(map(int, row)) for row in rows]
     return result
 
 
@@ -125,7 +125,7 @@ def ints(command: str) -> list[int]:
     return [int(value, 0) for value in re.findall(r"(?<![A-Za-z_])(?:0x[0-9A-Fa-f]+|\d+)", command)]
 
 
-def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int]]],
+def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
             name: str, offset: tuple[int, int, int], light: str,
             out: list[dict[str, object]], stack: tuple[str, ...] = ()) -> str:
     if name in stack:
@@ -137,7 +137,7 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
     # specifies a destination slot. Replacing the whole cache (the earlier
     # prototype) turns valid triangles that reference retained slots into an
     # exploded actor.
-    cache: list[tuple[int, int, int] | None] = [None] * 32
+    cache: list[tuple[int, int, int, int, int] | None] = [None] * 32
     current_light = light
     for macro, args in re.findall(r"(gs\w+)\(([^;]*?)\)", body, re.DOTALL):
         if macro == "gsSPLight":
@@ -166,7 +166,9 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                     [cache[index][axis] + offset[axis] for axis in range(3)]
                     for index in triangle
                 ]
-                out.append({"rgb": LIGHTS[current_light], "positions": positions, "display_list": name})
+                out.append({"rgb": LIGHTS[current_light], "positions": positions,
+                            "uv": [[cache[index][3], cache[index][4]] for index in triangle],
+                            "display_list": name})
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
@@ -261,6 +263,11 @@ def main() -> None:
         "primitive_count": len(primitives), "quad_count": quad_report["quad_count"],
         "triangle_fallback_count": quad_report["standalone_triangle_count"],
         "triangle_display_lists": sorted({str(item["display_list"]) for item in triangles}),
+        "textured_eye_triangles": [
+            {"source": index, "positions": triangle["positions"], "uv": triangle["uv"]}
+            for index, triangle in enumerate(triangles)
+            if triangle["display_list"] == "mario_eyes_cap_on_dl"
+        ],
         "geo_evaluator": {
             "layout": "mario_geo_body",
             "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST"],

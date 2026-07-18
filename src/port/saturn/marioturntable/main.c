@@ -132,7 +132,8 @@ static void draw_mario(void) {
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + draw_order[out] * sizeof(vdp1_gouraud_table_t));
     }
-    vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U]); build_ticks = (uint16_t)(cpu_frt_count_get() - start);
+    vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U]);
+    build_ticks = (uint16_t)(cpu_frt_count_get() - start);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud)); scu_dma_transfer_wait(0);
     vdp1_sync_cmdt_list_put(list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
 }
