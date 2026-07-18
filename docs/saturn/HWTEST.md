@@ -64,12 +64,15 @@ python tools/saturn/capture_hwtest.py \
   --ymir path/to/ymir-headless \
   --ipl path/to/bios.bin \
   --game build/saturn/hwtest/sm64-saturn-hwtest.cue \
-  --output ymir-hwtest-report.json
+  --output ymir-hwtest-report.json \
+  --raw-output ymir-hwtest-telemetry.bin
 ```
 
 The report is labeled `evidence_kind: ymir-emulator`; it preserves Ymir's
 stderr diagnostics and flags the known `CD-block copy operation` limitation
-when present. It is not a substitute for a retail Saturn capture.
+when present. With `--raw-output`, the unchanged `mem.peek` bytes and their
+SHA-256 are recorded separately in the report. It is not a substitute for a
+retail Saturn capture.
 
 For a BIOS-backed Kronos screenshot with an auditable hash manifest:
 

@@ -9,6 +9,7 @@ evidence and should be paired with a retail capture when available.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -49,6 +50,11 @@ def main() -> int:
     parser.add_argument("--game", type=Path, required=True, help="hwtest .cue/.iso path")
     parser.add_argument("--frames", type=int, default=600, help="bounded frames to execute (1..3600)")
     parser.add_argument("--output", type=Path, default=Path("ymir-hwtest-report.json"))
+    parser.add_argument(
+        "--raw-output",
+        type=Path,
+        help="optional path for the unchanged raw mem.peek byte payload",
+    )
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument(
         "--allow-invalid",
@@ -69,6 +75,8 @@ def main() -> int:
     args.ipl = args.ipl.resolve()
     args.game = args.game.resolve()
     args.output = args.output.resolve()
+    if args.raw_output:
+        args.raw_output = args.raw_output.resolve()
 
     requests = [
         request("exec.run_for", 1, {"frames": args.frames}),
@@ -99,6 +107,15 @@ def main() -> int:
             messages.append(json.loads(line))
     telemetry_response = response_for(messages, 2)
     raw_data = telemetry_response["result"]["data"]
+    raw_bytes = bytes(raw_data)
+    raw_telemetry = {
+        "bytes": len(raw_bytes),
+        "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+    }
+    if args.raw_output:
+        args.raw_output.parent.mkdir(parents=True, exist_ok=True)
+        args.raw_output.write_bytes(raw_bytes)
+        raw_telemetry["path"] = str(args.raw_output)
     try:
         telemetry = decode(raw_data, require_complete=True)
     except ValueError as error:
@@ -124,6 +141,7 @@ def main() -> int:
             "stderr": completed.stderr,
             "cd_block_copy_unimplemented": has_cd_block_copy_limitation(completed.stderr),
         },
+        "raw_telemetry": raw_telemetry,
         "telemetry": telemetry,
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

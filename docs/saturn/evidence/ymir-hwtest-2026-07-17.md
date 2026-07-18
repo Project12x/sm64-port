@@ -31,6 +31,10 @@ A fresh 600-frame rerun verified `protocol.ready: true`,
 `stopped_reasons: ["frame_limit"]`, and that diagnostic flag. Its local raw
 JSON report SHA-256 was
 `9fac44a4df2329b729b415a51b24c4402366498dae8d8c23d2c161667abb38c4`.
+
+The runner's new raw-export path also produced exactly 120 bytes; the zeroed
+payload SHA-256 was
+`6edd9f6f9cc92cded36e6c4a580933f9c9f1b90562b46903b806f21902a1a54f`.
 The raw JSON report SHA-256 is
 `4da0901627945b6e82a7913ef7f9bb415a3649432d6f8ad0010a4a0ca8c0e786`.
 

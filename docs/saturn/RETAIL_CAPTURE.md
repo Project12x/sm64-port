@@ -24,7 +24,7 @@ mapped expansion DRAM returned by the Saturn cartridge interface.
    CPU/SCU timings, the seven VDP1 probe measurements, telemetry address, and
    status.
 3. Read 120 bytes beginning at `0x06010000` through the approved hardware
-   debugger or capture interface.
+   debugger or capture interface and save the unchanged byte payload.
 4. Save the raw bytes unchanged, then decode them with
    `tools/saturn/telemetry_decode.py`.
 5. Repeat once after a cold power cycle; retain both runs even if they agree.
