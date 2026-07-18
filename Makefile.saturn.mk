@@ -3,6 +3,7 @@ LIBYAUL_DIR := $(SATURN_REPO_ROOT)/third_party/libyaul
 HELLO_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hello
 HWTEST_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hwtest
 INTROFACE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/introface
+VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
@@ -13,7 +14,7 @@ endif
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface verify-tools classify-source compile-introface-mesh verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh verify-all clean
 
 all: hello
 
@@ -86,6 +87,12 @@ introface: check-libyaul check-sdk
 
 verify-introface: check-libyaul check-sdk
 	$(MAKE) -C "$(INTROFACE_DIR)" verify
+
+vdp2probe: check-libyaul check-sdk
+	$(MAKE) -C "$(VDP2_PROBE_DIR)"
+
+verify-vdp2probe: check-libyaul check-sdk
+	$(MAKE) -C "$(VDP2_PROBE_DIR)" verify
 
 check-host-tools:
 	@if [ ! -x "$(SATURN_TOOLS_PYTHON)" ]; then \

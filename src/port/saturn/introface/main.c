@@ -101,11 +101,22 @@ title_backdrop_init(void)
         .palette_base = 0,
         .bitmap_base = TITLE_BITMAP_BASE,
     };
+    /* A 512x256 RGB555 bitmap spans VDP2 banks A0 and A1.  The bitmap format
+     * alone does not schedule those banks for NBG1 fetches; this is a close
+     * port of Yaul's MIT vdp2-normal-bitmap cycle-allocation pattern. */
+    const vdp2_vram_cycp_t title_cycles = {
+        .pt[0].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+    };
+    vdp2_vram_cycp_set(&title_cycles);
     vdp2_scrn_bitmap_format_set(&title_format);
-    /* Keep this staging plane behind the current VDP1 face until the
-     * standalone NBG1 bitmap probe has pinned down the remaining compositor
-     * issue. */
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 1);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 5);
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
 }
 
@@ -630,9 +641,9 @@ user_init(void)
     title_backdrop_init();
     vdp1_env_t env;
     vdp1_env_default_init(&env);
-    /* VDP1's erase field is an opaque sprite in the VDP compositor; NBG1's
-     * higher priority supplies the title field behind the face. */
-    env.erase_color = RGB1555(1, 0, 0, 5);
+    /* A transparent VDP1 erase lets NBG1 supply the field where no VDP1
+     * polygon exists. The face itself uses sprite priority 6 above NBG1. */
+    env.erase_color = RGB1555(0, 0, 0, 0);
     vdp1_env_set(&env);
     vdp_sync_vblank_out_set(vblank_out_handler, NULL);
     /* Keep VDP1 one priority below dbgio's NBG3 plane so the live benchmark
