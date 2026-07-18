@@ -195,6 +195,17 @@ source triangle is still a repeated-vertex temporary VDP1 quad, so it is not
 yet a quality, animation-safe presentation. The preceding VDP1 command probe
 and depth-bucket captures are retained as rejected diagnostic evidence.
 
+### M2 accepted: native-basis standing Mario IR
+
+![Source Mario standing through the true Saturn quad and triangle IR](screenshots/ymir-m2-source-mario-standing-basis-2026-07-18.png)
+
+The actor now evaluates its native `mario_geo_body` basis correctly: source X
+is screen-up, source Z is horizontal, and source Y is view depth. Its 788
+source triangles compile into 183 accepted true VDP1 quads and 422 explicit
+triangle fallbacks. This is an upright source actor geometry proof; it still
+uses the temporary source-light RGB fallback, before texture conversion and
+Gouraud lighting.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

@@ -134,7 +134,8 @@ compile-mario-actor: check-host-tools
 	  --model "actors/mario/model.inc.c" \
 	  --geo "actors/mario/geo.inc.c" \
 	  --output "src/port/saturn/marioturntable/mario_actor_mesh.h" \
-	  --report "docs/saturn/evidence/reports/mario-actor-intake.json"
+	  --report "docs/saturn/evidence/reports/mario-actor-intake.json" \
+	  --mesh-ir-output "docs/saturn/evidence/reports/mario-actor-mesh-ir.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 
