@@ -384,6 +384,17 @@ does not improve their painting. The baseline transformed painter order is
 kept, and the next correctness work targets the VDP1 triangle-tile mapping
 itself rather than submission order.
 
+### M2 neutral experiment: VDP1 winding normalization does not repair painting
+
+![Winding-normalized source texture tiles with no material visual change](screenshots/ymir-m2-source-mario-texture-winding-2026-07-18.png)
+
+The 50 source texture triangles were compared against Yaul's repeated-vertex
+distorted-sprite test convention; 44 had the opposite front-camera screen
+winding. Flipping both their position and UV order produced no material visual
+improvement in the BIOS-backed frame. The camera-specific normalization is
+therefore rejected and reverted. A patterned hardware texture probe—not a
+further guessed actor conversion—is the next texture correctness gate.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
