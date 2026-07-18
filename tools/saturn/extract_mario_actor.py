@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import re
 from pathlib import Path
 
@@ -57,7 +58,55 @@ def geo_tokens(body: str) -> list[tuple[str, str]]:
     ]
 
 
-def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], str]]:
+Matrix = tuple[float, float, float, float, float, float, float, float, float, float, float, float]
+
+def identity_matrix() -> Matrix:
+    return (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+
+def source_matrix(translation: tuple[int, int, int], rotation: tuple[int, int, int]) -> Matrix:
+    """Close port mtxf_rotate_xyz_and_translate() from math_util.c."""
+    sx, sy, sz = (math.sin(value * math.tau / 65536.0) for value in rotation)
+    cx, cy, cz = (math.cos(value * math.tau / 65536.0) for value in rotation)
+    return (cy * cz, cy * sz, -sy,
+            sx * sy * cz - cx * sz, sx * sy * sz + cx * cz, sx * cy,
+            cx * sy * cz + sx * sz, cx * sy * sz - sx * cz, cx * cy,
+            float(translation[0]), float(translation[1]), float(translation[2]))
+
+def matrix_mul(local: Matrix, parent: Matrix) -> Matrix:
+    rows = tuple(sum(local[row * 3 + axis] * parent[axis * 3 + col] for axis in range(3)) for row in range(3) for col in range(3))
+    translation = tuple(sum(local[9 + axis] * parent[axis * 3 + col] for axis in range(3)) + parent[9 + col] for col in range(3))
+    return rows + translation
+
+def matrix_apply(matrix: Matrix, point: tuple[int, int, int]) -> tuple[int, int, int]:
+    return tuple(round(sum(point[axis] * matrix[axis * 3 + col] for axis in range(3)) + matrix[9 + col]) for col in range(3))
+
+def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
+    """Read a source Animation's index/value stream like retrieve_animation_index()."""
+    name = re.search(r"struct Animation (anim_\w+)\[\]", source)
+    if name is None:
+        raise ValueError("missing source Animation header")
+    stem = name.group(1)
+    def values(suffix: str) -> list[int]:
+        body = re.search(rf"{stem}_{suffix}\[\]\s*=\s*\{{(.*?)\}};", source, re.DOTALL)
+        if body is None:
+            raise ValueError(f"missing {stem}_{suffix}")
+        raw = [int(value, 0) for value in re.findall(r"(?:0x[0-9A-Fa-f]+|-?\d+)", body.group(1))]
+        return [value - 0x10000 if suffix == "values" and value & 0x8000 else value for value in raw]
+    indices, samples = values("indices"), values("values")
+    if len(indices) < 6 or len(indices) % 2:
+        raise ValueError("invalid source Animation index stream")
+    cursor = 6  # source root consumes translation x/y/z before part rotations.
+    rotations: list[tuple[int, int, int]] = []
+    while cursor + 5 < len(indices):
+        triplet = []
+        for axis in range(3):
+            count, offset = indices[cursor], indices[cursor + 1]
+            cursor += 2
+            triplet.append(samples[offset + min(frame, count - 1)])
+        rotations.append(tuple(triplet))
+    return rotations
+
+def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> list[tuple[str, Matrix, str]]:
     """Evaluate the neutral mario_geo_body hierarchy from the original source.
 
     This first evaluator intentionally handles the bind pose: animated-part
@@ -67,9 +116,17 @@ def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], s
     """
     layouts = blocks(geo_source, "GeoLayout")
     tokens = geo_tokens(layouts["mario_geo_body"])
-    result: list[tuple[str, tuple[int, int, int], str]] = []
+    result: list[tuple[str, Matrix, str]] = []
+    rotation_index = 0
+    animated_part_index = 0
 
-    def walk(index: int, parent: tuple[int, int, int]) -> int:
+    def next_rotation() -> tuple[int, int, int]:
+        nonlocal rotation_index
+        rotation = rotations[rotation_index] if rotation_index < len(rotations) else (0, 0, 0)
+        rotation_index += 1
+        return rotation
+
+    def walk(index: int, parent: Matrix) -> int:
         last = parent
         while index < len(tokens):
             macro, args = tokens[index]
@@ -82,10 +139,16 @@ def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], s
             if macro == "GEO_RETURN":
                 return index
             if macro == "GEO_ANIMATED_PART":
+                nonlocal animated_part_index
                 fields = [field.strip() for field in args.split(",")]
                 if len(fields) != 5:
                     raise ValueError(f"unexpected GEO_ANIMATED_PART: {args}")
-                last = tuple(parent[axis] + int(fields[axis + 1]) for axis in range(3))
+                # geo_process_animated_part consumes the root translation
+                # channels and switches to rotation mode; it does not consume
+                # a root rotation triplet. Every later animated part does.
+                rotation = (0, 0, 0) if animated_part_index == 0 else next_rotation()
+                animated_part_index += 1
+                last = matrix_mul(source_matrix(tuple(int(fields[axis + 1]) for axis in range(3)), rotation), parent)
                 display_list = fields[4]
                 if display_list != "NULL":
                     result.append((display_list, last, "mario_blue_lights_group"))
@@ -99,15 +162,17 @@ def geo_layout_parts(geo_source: str) -> list[tuple[str, tuple[int, int, int], s
                 fields = [field.strip() for field in args.split(",")]
                 if len(fields) == 2 and fields[1] in BRANCH_SELECTIONS:
                     display_list, offset = BRANCH_SELECTIONS[fields[1]]
-                    result.append((display_list,
-                      tuple(parent[axis] + offset[axis] for axis in range(3)),
-                      "mario_blue_lights_group"))
+                    branch_matrix = parent if fields[1] == "mario_geo_face_and_wings" else matrix_mul(source_matrix(offset, next_rotation()), parent)
+                    result.append((display_list, branch_matrix, "mario_blue_lights_group"))
                 continue
             # GEO_ASM, GEO_ROTATION_NODE and GEO_SCALE are retained source
             # controls. Their neutral Mario bind-pose values are identity.
         return index
 
-    walk(0, (0, 0, 0))
+    # The root's animation channels are translation-only in SM64's renderer.
+    # This preview keeps object movement at zero but begins all joint rotations
+    # after the root, matching geo_process_animated_part's attribute cursor.
+    walk(0, identity_matrix())
     if not result:
         raise ValueError("mario_geo_body did not produce any display lists")
     return result
@@ -126,7 +191,7 @@ def ints(command: str) -> list[int]:
 
 
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
-            name: str, offset: tuple[int, int, int], light: str,
+            name: str, matrix: Matrix, light: str,
             out: list[dict[str, object]], stack: tuple[str, ...] = ()) -> str:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
@@ -163,7 +228,7 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                 if len(triangle) != 3 or any(index >= len(cache) or cache[index] is None for index in triangle):
                     raise ValueError(f"invalid triangle in {name}: {args}")
                 positions = [
-                    [cache[index][axis] + offset[axis] for axis in range(3)]
+                    list(matrix_apply(matrix, tuple(cache[index][0:3])))
                     for index in triangle
                 ]
                 out.append({"rgb": LIGHTS[current_light], "positions": positions,
@@ -172,7 +237,7 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                current_light = flatten(display_lists, vertices, child.group(1), offset, current_light, out, stack + (name,))
+                current_light = flatten(display_lists, vertices, child.group(1), matrix, current_light, out, stack + (name,))
     return current_light
 
 
@@ -183,14 +248,17 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--mesh-ir-output", type=Path)
+    parser.add_argument("--animation", type=Path, help="source Mario Animation table for the fixed preview pose")
+    parser.add_argument("--animation-frame", type=int, default=0)
     args = parser.parse_args()
     model = args.model.read_text(encoding="utf-8")
     geo = args.geo.read_text(encoding="utf-8")
     display_lists, vertices = blocks(model, "Gfx"), vertex_groups(model)
     triangles: list[dict[str, object]] = []
-    parts = geo_layout_parts(geo)
-    for name, offset, light in parts:
-        flatten(display_lists, vertices, name, offset, light, triangles)
+    rotations = animation_rotations(args.animation.read_text(encoding="utf-8"), args.animation_frame) if args.animation else []
+    parts = geo_layout_parts(geo, rotations)
+    for name, matrix, light in parts:
+        flatten(display_lists, vertices, name, matrix, light, triangles)
     model_hash, geo_hash = hashlib.sha256(model.encode()).hexdigest(), hashlib.sha256(geo.encode()).hexdigest()
     # Build the same versioned interchange document used by the intro face.
     # Position sharing is preserved only when the complete source-space point
@@ -258,7 +326,7 @@ def main() -> None:
         "reuse": "direct data conversion",
         "source": {"model": {"path": str(args.model).replace("\\\\", "/"), "sha256": model_hash}, "geo": {"path": str(args.geo).replace("\\\\", "/"), "sha256": geo_hash}},
         "geo_layout": "mario_geo_body",
-        "parts": [{"display_list": name, "offset": offset} for name, offset, _light in parts],
+        "parts": [{"display_list": name, "matrix": [round(value, 6) for value in matrix]} for name, matrix, _light in parts],
         "triangle_count": len(triangles), "vertex_count": len(positions),
         "primitive_count": len(primitives), "quad_count": quad_report["quad_count"],
         "triangle_fallback_count": quad_report["standalone_triangle_count"],
@@ -270,10 +338,11 @@ def main() -> None:
         ],
         "geo_evaluator": {
             "layout": "mario_geo_body",
-            "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST"],
+            "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST", "Animation index/value rotations", "source xyz matrices"],
             "branch_selections": BRANCH_SELECTIONS,
         },
-        "limits": ["neutral bind pose only", "GeoLayout rotation and ASM animation callbacks are identity until the source animation path is adapted", "RGBA16 texture commands use source light colors until VDP1 texture conversion"],
+        "animation": {"path": str(args.animation).replace("\\\\", "/"), "frame": args.animation_frame} if args.animation else None,
+        "limits": ["source Animation rotations are fixed to one pose", "ASM head/torso callbacks remain identity", "RGBA16 texture commands use source light colors until VDP1 texture conversion"],
         "mesh_ir": compiled_ir,
     }, indent=2) + "\n", encoding="utf-8")
     if args.mesh_ir_output is not None:

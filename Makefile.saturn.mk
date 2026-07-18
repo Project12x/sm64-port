@@ -133,6 +133,8 @@ compile-mario-actor: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_mario_actor.py" \
 	  --model "actors/mario/model.inc.c" \
 	  --geo "actors/mario/geo.inc.c" \
+	  --animation "assets/anims/anim_C5.inc.c" \
+	  --animation-frame 0 \
 	  --output "src/port/saturn/marioturntable/mario_actor_mesh.h" \
 	  --report "docs/saturn/evidence/reports/mario-actor-intake.json" \
 	  --mesh-ir-output "docs/saturn/evidence/reports/mario-actor-mesh-ir.json"

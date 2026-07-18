@@ -240,6 +240,19 @@ also makes clear that the current no-animation joint pose is not a credible
 standing Mario pose; source skeletal evaluation is now the higher-priority
 gate.
 
+### M2 intermediate: source Animation / GeoLayout world pose
+
+![Source C5 idle animation evaluated through Mario's GeoLayout hierarchy on VDP1](screenshots/ymir-m2-source-mario-c5-front-2026-07-18.png)
+
+This replaces the translation-only actor staging with a close port of
+`mtxf_rotate_xyz_and_translate`, `mtxf_mul`, and the source Animation
+index/value channel cursor used by `geo_process_animated_part`. The evaluated
+world pose is Y-up; correcting the Saturn turntable camera to that basis turns
+the earlier contortion into a coherent animated source body. It remains an
+intermediate gate: C5 frame 0 is not yet the chosen standing presentation,
+and the previously generated UV tile header is intentionally treated as stale
+until it is regenerated and inserted in the original eye command span.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

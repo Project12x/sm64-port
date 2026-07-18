@@ -9,7 +9,7 @@
 #define FAR_DEPTH 2048
 /* mario_geo_body's source origin is at the feet rather than its visual center.
  * Keep that source-space convention and apply only the camera's framing offset. */
-#define CAMERA_FRAME_Y 230
+#define CAMERA_FRAME_Y 180
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
 static vdp1_gouraud_table_t gouraud[SM64_MARIO_PRIMITIVE_COUNT];
@@ -17,7 +17,8 @@ static int32_t vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static uint16_t draw_order[SM64_MARIO_PRIMITIVE_COUNT];
 static int16_t bucket_head[DEPTH_BUCKET_COUNT], bucket_tail[DEPTH_BUCKET_COUNT];
 static int16_t bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
-static angle_t yaw; static fix16_t sine_yaw, cosine_yaw;
+/* The source C5 idle faces -Z; begin the turntable at its front view. */
+static angle_t yaw = 32768; static fix16_t sine_yaw, cosine_yaw;
 static uint16_t frame_ticks, sort_ticks, build_ticks, visible_triangles, rejected_triangles; static bool controls_ready;
 static int16_t projected_min_x, projected_min_y, projected_max_x, projected_max_y;
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
@@ -54,12 +55,12 @@ static void rebuild_gouraud(void) {
     }
 }
 static point3_t transform_point(const int16_t *s) {
-    /* mario_geo_body advances along source X (torso/head, limbs, legs).
-     * Map that native articulated axis to screen-up, source Z to horizontal,
-     * and source Y to view depth; this is a camera basis, not reauthored mesh. */
-    const int32_t x = (((int32_t)s[2] * cosine_yaw) + ((int32_t)s[1] * sine_yaw)) >> 16;
-    const int32_t z = ((-(int32_t)s[2] * sine_yaw) + ((int32_t)s[1] * cosine_yaw)) >> 16;
-    return (point3_t){ x, (int32_t)s[0] - CAMERA_FRAME_Y, z + 900 };
+    /* The source Animation/GeoLayout matrix walk yields standard SM64 world
+     * coordinates: X horizontal, Y up, Z depth. Rotate about that source Y
+     * axis; do not retain the earlier bind-mesh X-up camera workaround. */
+    const int32_t x = (((int32_t)s[0] * cosine_yaw) + ((int32_t)s[2] * sine_yaw)) >> 16;
+    const int32_t z = ((-(int32_t)s[0] * sine_yaw) + ((int32_t)s[2] * cosine_yaw)) >> 16;
+    return (point3_t){ x, (int32_t)s[1] - CAMERA_FRAME_Y, z + 900 };
 }
 static int16_vec2_t project_point(point3_t p) {
     const int32_t z = p.z < 128 ? 128 : p.z;
