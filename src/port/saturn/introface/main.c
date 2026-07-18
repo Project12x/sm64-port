@@ -47,9 +47,8 @@ static uint16_t gouraud_upload_ticks;
 static uint16_t render_wait_ticks;
 static vdp1_cmdt_list_t *command_list;
 static bool controls_ready;
-static bool smpc_request_pending;
-static uint8_t smpc_wait_frames;
-static uint16_t pad_pressed;
+static bool pad_connected;
+static uint16_t pad_down;
 static uint16_t pad_edge;
 
 static rgb1555_t
@@ -387,33 +386,16 @@ draw_source_face(bool shade_dirty)
 static bool
 update_controls(void)
 {
-    if (!smpc_request_pending) {
-        smpc_peripheral_intback_issue();
-        smpc_request_pending = true;
-        smpc_wait_frames = 3;
-        if (view.auto_rotate) {
-            view.yaw += 96;
-            if (view.yaw > 8192)
-                view.yaw = -8192;
-            update_view_trig();
-        }
-        return false;
-    }
-    if (smpc_wait_frames > 0) {
-        smpc_wait_frames--;
-        if (view.auto_rotate) {
-            view.yaw += 96;
-            if (view.yaw > 8192)
-                view.yaw = -8192;
-            update_view_trig();
-        }
-        return false;
-    }
     smpc_peripheral_digital_t digital;
     (void)memset(&digital, 0, sizeof(digital));
     smpc_peripheral_process();
     smpc_peripheral_digital_port(1, &digital);
-    smpc_request_pending = false;
+    pad_connected = digital.connected != 0;
+    if (!pad_connected) {
+        pad_down = 0;
+        pad_edge = 0;
+        return false;
+    }
     /* The first populated SMPC sample can present every changed bit as an
      * edge relative to libyaul's zeroed history. Seed that history before
      * accepting one-shot controls such as A and B. */
@@ -422,30 +404,33 @@ update_controls(void)
         return false;
     }
 
-    const uint16_t pressed = digital.pressed.raw;
-    const uint16_t held = digital.held.raw;
-    pad_pressed = pressed;
-    pad_edge = held;
-    if ((pressed & PERIPHERAL_DIGITAL_LEFT) != 0 && view.yaw > -8192)
+    /* libyaul 0.3.1 names the current-down mask `pressed` and the newly
+     * pressed edge mask `held`. Use semantic aliases here so continuous and
+     * one-shot controls cannot be accidentally exchanged. */
+    const uint16_t down = digital.pressed.raw;
+    const uint16_t edge = digital.held.raw;
+    pad_down = down;
+    pad_edge = edge;
+    if ((down & PERIPHERAL_DIGITAL_LEFT) != 0 && view.yaw > -8192)
         view.yaw -= 256;
-    if ((pressed & PERIPHERAL_DIGITAL_RIGHT) != 0 && view.yaw < 8192)
+    if ((down & PERIPHERAL_DIGITAL_RIGHT) != 0 && view.yaw < 8192)
         view.yaw += 256;
-    if ((pressed & PERIPHERAL_DIGITAL_UP) != 0 && view.pitch > -5461)
+    if ((down & PERIPHERAL_DIGITAL_UP) != 0 && view.pitch > -5461)
         view.pitch -= 256;
-    if ((pressed & PERIPHERAL_DIGITAL_DOWN) != 0 && view.pitch < 5461)
+    if ((down & PERIPHERAL_DIGITAL_DOWN) != 0 && view.pitch < 5461)
         view.pitch += 256;
-    if ((held & PERIPHERAL_DIGITAL_L) != 0 && view.projection_divisor < 8)
+    if ((edge & PERIPHERAL_DIGITAL_L) != 0 && view.projection_divisor < 8)
         view.projection_divisor++;
-    if ((held & PERIPHERAL_DIGITAL_R) != 0 && view.projection_divisor > 5)
+    if ((edge & PERIPHERAL_DIGITAL_R) != 0 && view.projection_divisor > 5)
         view.projection_divisor--;
-    if ((held & PERIPHERAL_DIGITAL_B) != 0)
+    if ((edge & PERIPHERAL_DIGITAL_B) != 0)
         view.auto_rotate = !view.auto_rotate;
     bool shade_dirty = false;
-    if ((held & PERIPHERAL_DIGITAL_A) != 0) {
+    if ((edge & PERIPHERAL_DIGITAL_A) != 0) {
         view.shine_enabled = !view.shine_enabled;
         shade_dirty = true;
     }
-    if ((held & PERIPHERAL_DIGITAL_START) != 0) {
+    if ((edge & PERIPHERAL_DIGITAL_START) != 0) {
         view.yaw = 0;
         view.pitch = 0;
         view.projection_divisor = 6;
@@ -467,36 +452,49 @@ update_hud(uint16_t frame)
         return;
     const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
     dbgio_printf("\x1B[HSM64 SATURN INTERACTIVE FACE\n"
-      "D-PAD CAMERA  L/R ZOOM  START RESET\n"
+      "PAD D-PAD CAM L/R ZOOM START RESET\n"
+      "YMIR DEFAULT: WASD Q/E J/K F=RESET\n"
       "A SHINE:%s  B AUTO-ORBIT:%s\n"
       "FRAME %u TICKS  ~%u.%u FPS\n"
       "SHADE REBUILD %u TICKS (ON TOGGLE)\n"
       "SORT %u  BUILD %u  G-UP %u  WAIT %u\n"
-      "PAD %04X EDGE %04X   ",
+      "PAD:%s DOWN %04X EDGE %04X   ",
       view.shine_enabled ? "ON " : "OFF",
       view.auto_rotate ? "ON " : "OFF",
       frame_ticks, fps_x10 / 10U, fps_x10 % 10U, shade_build_ticks,
       painter_sort_ticks, command_build_ticks, gouraud_upload_ticks,
       render_wait_ticks,
-      pad_pressed, pad_edge);
+      pad_connected ? "OK  " : "NONE", pad_down, pad_edge);
     dbgio_flush();
+}
+
+static void
+vblank_out_handler(void *work __unused)
+{
+    /* Schedule one asynchronous SMPC collection per video frame. The main
+     * loop processes the completed sample on the following frame. */
+    smpc_peripheral_intback_issue();
 }
 
 void
 user_init(void)
 {
+    /* libyaul's controller examples initialize SMPC before registering the
+     * VBlank callback that issues INTBACK. Reversing this order leaves the
+     * demo displaying its first sample without receiving later updates. */
+    smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 0, 0, 5));
     vdp1_env_t env;
     vdp1_env_default_init(&env);
     env.erase_color = RGB1555(1, 0, 0, 5);
     vdp1_env_set(&env);
+    vdp_sync_vblank_out_set(vblank_out_handler, NULL);
     /* Keep VDP1 one priority below dbgio's NBG0 plane so the live benchmark
      * HUD remains visible over the face. */
     for (uint8_t i = 0; i < 8; i++) vdp2_sprite_priority_set(i, 6);
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load();
-    smpc_peripheral_init();
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT);
     if (command_list == NULL) {
         dbgio_puts("SM64 SATURN\nCOMMAND LIST ALLOCATION FAILED");

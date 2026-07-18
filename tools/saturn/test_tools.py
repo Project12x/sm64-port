@@ -77,6 +77,11 @@ class YmirInputTests(unittest.TestCase):
         message = input_pulse_request(7, 0x0400)
         self.assertEqual(message["id"], 7)
         self.assertEqual(message["params"]["buttons"], 0xFBF8)
+        self.assertEqual(message["params"]["frames"], 1)
+
+    def test_hold_duration_is_forwarded(self) -> None:
+        message = input_pulse_request(8, 0x8000, 12)
+        self.assertEqual(message["params"], {"buttons": 0x7FF8, "frames": 12})
 
 
 class TelemetryTests(unittest.TestCase):

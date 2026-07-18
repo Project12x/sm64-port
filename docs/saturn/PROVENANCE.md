@@ -91,7 +91,7 @@ hardware support.
 | Role | Hardware-usage examples and behavioral reference |
 | Root license | No root license file found at the pinned revision |
 | Current reuse mode | Behavior study only |
-| Files/areas inspected | DRAM-cart, dual-CPU, VDP1, CD-block, and SCSP examples |
+| Files/areas inspected | DRAM-cart, dual-CPU, VDP1, CD-block, and SCSP examples; `vdp1-mesh/vdp1-mesh.c` and `vdp1-drawing/vdp1-drawing.c` for the VBlank-driven peripheral lifecycle |
 
 Do not copy example code unless its applicable license or an explicit grant is
 identified and recorded here. No example code was copied into this bootstrap

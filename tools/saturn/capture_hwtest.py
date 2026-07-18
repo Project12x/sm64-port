@@ -35,12 +35,14 @@ def request(method: str, request_id: int, params: dict[str, Any] | None = None) 
     return message
 
 
-def input_pulse_request(request_id: int, pressed_buttons: int) -> dict[str, Any]:
-    """Translate a logical pressed mask to Ymir's active-low pad report."""
+def input_pulse_request(
+    request_id: int, pressed_buttons: int, hold_frames: int = 1
+) -> dict[str, Any]:
+    """Translate a logical pressed mask to a bounded Ymir pad hold."""
     return request(
         "input.pulse",
         request_id,
-        {"buttons": 0xFFF8 & ~pressed_buttons},
+        {"buttons": 0xFFF8 & ~pressed_buttons, "frames": hold_frames},
     )
 
 
@@ -122,6 +124,12 @@ def main() -> int:
         default=2,
         help="frames to execute after each post-run pulse (1..120)",
     )
+    parser.add_argument(
+        "--input-hold-frames",
+        type=int,
+        default=8,
+        help="emulated frames to hold each post-run input state (1..120)",
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= 3600 or not 1 <= args.post_poke_frames <= 3600:
         parser.error("--frames and --post-poke-frames must be between 1 and 3600")
@@ -129,8 +137,15 @@ def main() -> int:
         parser.error("--event-word-poke must be an unsigned 32-bit value")
     if args.input_pulse is not None and not 0 <= args.input_pulse <= 0xFFFF:
         parser.error("--input-pulse must be an unsigned 16-bit value")
-    if not 1 <= args.input_pulse_count <= 120 or not 1 <= args.input_pulse_frames <= 120:
-        parser.error("--input-pulse-count and --input-pulse-frames must be between 1 and 120")
+    if (
+        not 1 <= args.input_pulse_count <= 120
+        or not 1 <= args.input_pulse_frames <= 120
+        or not 1 <= args.input_hold_frames <= 120
+    ):
+        parser.error(
+            "--input-pulse-count, --input-pulse-frames, and --input-hold-frames "
+            "must be between 1 and 120"
+        )
     if args.event_word_poke is not None and args.handoff_yield:
         parser.error("--event-word-poke and --handoff-yield are mutually exclusive")
     for label, path in (("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
@@ -198,7 +213,9 @@ def main() -> int:
         next_id += 1
     if args.input_pulse is not None:
         for _ in range(args.input_pulse_count):
-            requests.append(input_pulse_request(next_id, args.input_pulse))
+            requests.append(
+                input_pulse_request(next_id, args.input_pulse, args.input_hold_frames)
+            )
             requests.append(
                 request("exec.run_for", next_id + 1, {"frames": args.input_pulse_frames})
             )
@@ -301,6 +318,7 @@ def main() -> int:
         ),
         "input_pulse": args.input_pulse,
         "input_pulse_count": args.input_pulse_count if args.input_pulse is not None else None,
+        "input_hold_frames": args.input_hold_frames if args.input_pulse is not None else None,
         "input_pulse_frames": args.input_pulse_frames if args.input_pulse is not None else None,
         "protocol": {
             "ready": any(message.get("method") == "instance.ready" for message in messages),

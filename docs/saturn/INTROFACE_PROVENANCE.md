@@ -146,6 +146,7 @@ The implementation inspected pinned permissive reference code before editing:
 | Upstream | Commit / license | Files inspected | Reuse mode |
 |---|---|---|---|
 | `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `gamemath/fix16/fix16_trig.c`, `scu/bus/cpu/smpc/smpc_peripheral.c`, `smpc_peripherals.c`, `scu/bus/b/vdp/vdp_sync.c` and their public headers | API use and pattern-only lifecycle adaptation |
+| `yaul-org/libyaul-examples` | `66b648eb059bb8bb7392eac70821605a68205b85` / no root license found | `vdp1-mesh/vdp1-mesh.c`, `vdp1-drawing/vdp1-drawing.c` | Behavior study of one INTBACK issue per VBlank and main-loop processing; no source copied |
 
 The next renderer revision replaces the one-shot draw with a VBlank-paced
 presentation loop. It uses libyaul 0.3.1 fixed-point `fix16_sincos` projection
@@ -168,7 +169,12 @@ The accepted interactive capture is
 (SHA-256 `5b575fcdfc25d55165689161859f65055da346650c3667461786a3ead0bb734c`,
 frame hash `0a4022b318768232e53d13864ad91ff8`, frame 3300). The accompanying
 `ymir-interactive-face-2026-07-17.json` is BIOS-backed Ymir emulator evidence.
-Ymir's current one-frame `input.pulse` does not reliably overlap libyaul's
-multi-frame asynchronous INTBACK collection, so automated camera/toggle proof
-remains explicitly open; the renderer and disc build are verified, but this
-capture shows the neutral control state.
+The original interactive proof issued an SMPC collection only once every four
+frames, so short manual taps and Ymir's one-frame `input.pulse` could be missed
+entirely. The corrected path follows the pinned libyaul API lifecycle: a
+VBlank-out callback issues one asynchronous INTBACK collection per video frame,
+and the main loop processes the completed sample. The HUD now shows controller
+connection, current-down, and new-press edge masks plus Ymir's default keyboard
+bindings. Duration-aware input injection remains useful for long deterministic
+holds, but is no longer required for a single-frame edge. A post-fix automated
+camera/toggle capture is required before the control milestone is closed.
