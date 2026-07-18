@@ -54,7 +54,7 @@ textures, or run Mario's gameplay state.
 |---|---|---|---|---|
 | M0 — Face proof | Source-derived Mario face on Saturn | Geometry, features, Gouraud, camera, telemetry | Delivered | Complete |
 | M1 — Living title face | Animated face, title background, `PRESS START` | Goddard deformation subset, title presentation, deterministic input captures | 1–3 weeks | **Now** |
-| M2 — Mario turntable | In-game Mario model renders and animates | General display-list IR, textures, skeleton, actor materials | 3–8 weeks | Next |
+| M2 — Mario turntable | In-game Mario model renders and animates | General display-list IR, textures, skeleton, actor materials | 3–8 weeks | **Active: render-correctness exit** |
 | M3 — Castle lobby renderer | Textured Castle Area 1 renders from fixed cameras | Static world banks, visibility, clipping, ordering, texture residency | 1–3 months | Planned |
 | M4 — Castle-lobby Mario | Mario runs and jumps in the lobby | Game update, lobby collision, camera, animation integration | 1–3 months | Planned |
 | M5 — Castle entry visual slice | Title → lobby is a repeatable playable proof | HUD, basic door prompt, deterministic route, stable budgets | 1–2 months | Planned |
@@ -66,6 +66,21 @@ textures, or run Mario's gameplay state.
 These are engineering effort bands, not calendar promises. They assume one
 lead developer with agent assistance, usable decompilation source, no prolonged
 licensing block, and strict scope control. Re-estimate after M2 and M5.
+
+### Current execution choice: prove the room before polishing the actor
+
+Mario is now standing from the source C5 idle animation. M2 remains open only
+for bounded renderer correctness work: source texture patches must use an
+explicit opaque/decal ordering path, and named turntable captures must expose
+remaining UV or ordering defects. Do not spend this phase attempting an
+artist-level reconstruction of every Mario texture.
+
+The next major delivery is M3's **static Castle Area 1 fixed-camera slice**.
+It will use the same source display-list/texture compiler as Mario and makes
+texture conversion failures measurable on walls, doors, decals, and room
+boundaries. Only after its accepted camera set should M4 add movement, source
+collision, and a following camera. This preserves the path toward actual
+SM64 code/data rather than a replacement game framework.
 
 ## M0 — Source-face proof
 

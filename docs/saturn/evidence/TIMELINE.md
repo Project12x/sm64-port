@@ -373,6 +373,17 @@ compiled primitive's table, so the source cap/face patches no longer form a
 separate unlit rendering path. This retains a small Saturn-native command/data
 model: no software lighting pass, shader, or Z buffer was introduced.
 
+### M2 neutral experiment: late texture pass does not repair tile mapping
+
+![Late source texture pass with the same unresolved texture corruption](screenshots/ymir-m2-source-mario-texture-decal-pass-2026-07-18.png)
+
+This BIOS-backed experiment drew opaque source geometry before the UV-baked
+texture tiles. It is retained because it confirms the result is materially the
+same class of failure as the baseline: moving the tiles into a late pass alone
+does not improve their painting. The baseline transformed painter order is
+kept, and the next correctness work targets the VDP1 triangle-tile mapping
+itself rather than submission order.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
