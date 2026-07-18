@@ -23,7 +23,7 @@ mapped expansion DRAM returned by the Saturn cartridge interface.
 2. Photograph or losslessly capture the final screen, including the cart ID,
    CPU/SCU timings, the seven VDP1 probe measurements, telemetry address, and
    status.
-3. Read 120 bytes beginning at `0x06010000` through the approved hardware
+3. Read 120 bytes beginning at `0x06030000` through the approved hardware
    debugger or capture interface and save the unchanged byte payload.
 4. Save the raw bytes unchanged, then decode them with
    `tools/saturn/telemetry_decode.py`.
@@ -31,7 +31,7 @@ mapped expansion DRAM returned by the Saturn cartridge interface.
 
 The first run is a compatibility result only when the base block has magic
 `SAT0`, cart ID `0x5C`, complete bit set, and cart/DMA/VDP1 status bits set.
-The extended block at `0x06010040` is required for the cached/uncached,
+The extended block at `0x06030040` is required for the cached/uncached,
 CPU-DMAC, and per-probe timing comparison.
 
 ## Manifest shape
@@ -50,7 +50,7 @@ Create a JSON manifest beside the raw dump and screenshots:
     "elf_sha256": "..."
   },
   "telemetry": {
-    "address": "0x06010000",
+    "address": "0x06030000",
     "bytes": 120,
     "raw_file": "telemetry.bin",
     "decoded_report": "telemetry.json"

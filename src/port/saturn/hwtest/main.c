@@ -8,14 +8,18 @@
 
 #include "../gpl/slavedriver_dma_queue.h"
 
-#define HWTEST_TELEMETRY_ADDRESS ((volatile hwtest_telemetry_t *)0x06010000UL)
+/* Publish through the SH-2 cache-through alias. Ymir's mem.peek and a
+ * hardware debugger read backing WRAM, not dirty cache lines. */
+#define HWTEST_TELEMETRY_ADDRESS \
+        ((volatile hwtest_telemetry_t *)(CPU_CACHE_THROUGH | 0x06030000UL))
 #define HWTEST_MAGIC 0x53415430UL /* "SAT0" */
 #define HWTEST_VERSION 1U
 #define HWTEST_PHASE 1U
 #define HWTEST_CART_BYTES 0x00400000UL
 #define HWTEST_WORD_BYTES 4U
 #define HWTEST_DMA_BYTES 0x00001000UL
-#define HWTEST_EXT_TELEMETRY_ADDRESS ((volatile hwtest_extended_telemetry_t *)0x06010040UL)
+#define HWTEST_EXT_TELEMETRY_ADDRESS \
+        ((volatile hwtest_extended_telemetry_t *)(CPU_CACHE_THROUGH | 0x06030040UL))
 #define HWTEST_EXT_MAGIC 0x53415458UL /* "SATX" */
 
 typedef struct hwtest_telemetry {
@@ -400,7 +404,7 @@ user_init(void)
 
         dbgio_puts("\x1B[H\x1B[2JSM64 SATURN HWTEST\n\n"
                    "cart test: RUNNING\n"
-                   "telemetry: 0x06010000\n");
+                   "telemetry: 0x06030000\n");
         dbgio_flush();
         vdp2_sync();
         vdp2_sync_wait();
@@ -439,7 +443,7 @@ user_init(void)
             extended_telemetry->vdp1_textured_triangle_ticks);
         /* Make the visible status line and the WRAM contract agree. */
         telemetry->status |= HWTEST_STATUS_COMPLETE;
-        dbgio_printf("telemetry: 0x06010000\nstatus: 0x%08X\n", telemetry->status);
+        dbgio_printf("telemetry: 0x06030000\nstatus: 0x%08X\n", telemetry->status);
         dbgio_flush();
         vdp2_sync();
         vdp2_sync_wait();

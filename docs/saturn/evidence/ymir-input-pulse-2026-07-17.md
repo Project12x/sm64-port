@@ -12,10 +12,11 @@ Screenshots:
 - [After A confirmation](screenshots/ymir-input-pulse-a-2026-07-17.png), frame
   hash `3d1b5414fb4592a610b61ae533068a80`.
 
-After the transition, a 1,200-frame run still left the `SAT0` region at
-`0x06010000` zeroed and stopped in the BIOS polling loop. This removes the
-first-boot language prompt as the blocker; the remaining failure is in the
-BIOS/CD handoff path. It remains emulator evidence only and does not replace
-retail hardware validation.
+Before telemetry relocation, a 1,200-frame run left the original `SAT0` region
+at `0x06010000` zeroed and stopped in the BIOS polling loop. This removed the
+first-boot language prompt as the blocker. The current telemetry contract is
+at `0x06030000`; later paused-only event-word diagnostic evidence reaches the
+hwtest, documented in `ymir-event-poke-hwtest-2026-07-17.md`. It remains
+emulator evidence only and does not replace retail hardware validation.
 
 The controller/debug changes are in Ymir fork commit `ad2e05fb`.

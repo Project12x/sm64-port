@@ -6,7 +6,7 @@ machine-readable result block in internal work RAM for Ymir's `mem.peek`.
 
 ## Telemetry block
 
-The block begins at `0x06010000` and contains sixteen big-endian 32-bit words.
+The block begins at `0x06030000` and contains sixteen big-endian 32-bit words.
 The Saturn source also asserts the documented field offsets at compile time,
 not only the total block sizes:
 
@@ -28,14 +28,14 @@ not only the total block sizes:
 | 14 | `vdp1_command_count` | command-list count used |
 | 15 | `vdp1_pixel_estimate` | conservative filled-pixel estimate |
 
-The extended block begins at `0x06010040` and contains fourteen words: cached
+The extended block begins at `0x06030040` and contains fourteen words: cached
 and uncached CPU-copy ticks, SH-2 CPU-DMAC ticks/pass, a VDP1 mode mask, and
 per-probe timing slots for solid quad, solid repeated-vertex triangle,
 Gouraud, transparency, concave, textured quad, and textured repeated-vertex
 triangle probes. It is optional for older readers;
 the decoder consumes it when a 120-byte read is supplied.
 
-Run the disc paused in Ymir, then read `0x06010000` with `mem.peek`. Emulator
+Run the disc paused in Ymir, then read `0x06030000` with `mem.peek`. Emulator
 timings are development evidence only; retail hardware remains authoritative.
 
 Ymir returns the bytes as `result.data` in the JSON-RPC response. A complete
@@ -43,7 +43,7 @@ headless session can be captured as JSON-lines and decoded directly:
 
 ```sh
 printf '%s\n' '{"jsonrpc":"2.0","method":"exec.pause","id":1}' \
-  '{"jsonrpc":"2.0","method":"mem.peek","params":{"address":"0x06010000","count":120},"id":2}' \
+  '{"jsonrpc":"2.0","method":"mem.peek","params":{"address":"0x06030000","count":120},"id":2}' \
   | ymir-headless --ipl bios.bin --game build/saturn/hwtest/sm64-saturn-hwtest.cue \
   > ymir-session.jsonl
 python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
