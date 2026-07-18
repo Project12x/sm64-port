@@ -27,6 +27,19 @@ def pixel(texture: bytes, width: int, height: int, u: float, v: float) -> int:
     value = int.from_bytes(texture[(y * width + x) * 2:(y * width + x + 1) * 2], "big")
     return saturn_rgb1555(value)
 
+def blend(vertices: list[list[int]], weights: tuple[float, float, float]) -> list[int]:
+    return [round(sum(weights[index] * vertices[index][axis] for index in range(3))) for axis in range(len(vertices[0]))]
+
+def split_four(triangle: dict[str, object]) -> list[dict[str, object]]:
+    """Split one Fast3D triangle into four source-space affine subtriangles."""
+    positions, uv = triangle["positions"], triangle["uv"]
+    a, b, c = (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)
+    ab, bc, ca = (0.5, 0.5, 0.0), (0.0, 0.5, 0.5), (0.5, 0.0, 0.5)
+    point = lambda weights: {"position": blend(positions, weights), "uv": blend(uv, weights)}
+    corners = {"a": point(a), "b": point(b), "c": point(c), "ab": point(ab), "bc": point(bc), "ca": point(ca)}
+    return [{"positions": [corners[key]["position"] for key in keys], "uv": [corners[key]["uv"] for key in keys]}
+            for keys in (("a", "ab", "ca"), ("ab", "b", "bc"), ("ca", "bc", "c"), ("ab", "bc", "ca"))]
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rom", type=Path, required=True)
@@ -43,7 +56,8 @@ def main() -> None:
     source = mio0_decode(rom_bytes(args.rom), base)[offset:offset + size]
     if len(source) != size:
         raise ValueError("eye texture range outside decompressed MIO0 segment")
-    triangles = intake["textured_eye_triangles"]
+    source_triangles = intake["textured_eye_triangles"]
+    triangles = [subtriangle for triangle in source_triangles for subtriangle in split_four(triangle)]
     tiles: list[list[int]] = []
     for triangle in triangles:
         uv = triangle["uv"]
@@ -73,7 +87,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_eyes_cap_on_dl", "triangle_count": len(triangles), "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-source-triangle UV bake with transparent exterior"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_eyes_cap_on_dl", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "subdivision": "4 affine subtriangles per source triangle", "tile": [TILE, TILE], "uv_space": "Fast3D source UV / 32", "mapping": "per-subtriangle UV bake with transparent exterior"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()

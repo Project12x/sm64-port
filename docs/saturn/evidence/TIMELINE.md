@@ -265,6 +265,17 @@ still does not approximate Fast3D's per-triangle UV interpolation closely
 enough to show a legible eye. The next texture gate is adaptive UV subdivision
 into smaller VDP1-safe tiles, not another screen-space overlay.
 
+### M2 rejected: four-way UV subdivision has no visible contribution
+
+![Four-way UV-subdivided eye submission is framebuffer-identical to the prior in-place result](screenshots/ymir-m2-source-mario-c5-eye-subdiv4-2026-07-18.png)
+
+The converter now emits four affine source-space subtriangles for each of the
+11 original eye triangles (44 tiles total). The deterministic Ymir framebuffer
+hash is exactly the Stage 36 hash, proving the selected eye patch does not
+contribute visibly in this C5 presentation. This rules out simply increasing
+tile density; the next gate is a source-facing standing frame/camera proof
+before more texture commands are added.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
