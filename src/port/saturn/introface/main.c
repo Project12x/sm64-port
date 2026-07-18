@@ -273,30 +273,98 @@ update_face_transform_cache(void)
     }
 }
 
+static point3_t
+rotate_y_q16(point3_t point, angle_t angle)
+{
+    fix16_t sine;
+    fix16_t cosine;
+    fix16_sincos(angle, &sine, &cosine);
+    return (point3_t) {
+        (((point.x * (cosine >> 8)) + (point.z * (sine >> 8))) >> 8),
+        point.y,
+        (((-point.x * (sine >> 8)) + (point.z * (cosine >> 8))) >> 8)
+    };
+}
+
+static point3_t
+rotate_z_q16(point3_t point, angle_t angle)
+{
+    fix16_t sine;
+    fix16_t cosine;
+    fix16_sincos(angle, &sine, &cosine);
+    return (point3_t) {
+        (((point.x * (cosine >> 8)) - (point.y * (sine >> 8))) >> 8),
+        (((point.x * (sine >> 8)) + (point.y * (cosine >> 8))) >> 8),
+        point.z
+    };
+}
+
+static point3_t
+eyelid_joint_transform(const int16_t *vertex, int16_t pivot_x_tenths,
+  int16_t pivot_y_tenths, int16_t pivot_z_tenths, angle_t net_yaw,
+  angle_t rest_roll, angle_t pose_roll)
+{
+    /* Direct fixed-point equivalent of Goddard's reset_weight() followed by
+     * move_skin(): inverse(restJoint) puts the source vertex in joint space,
+     * then currentJoint returns it to face space.  The pivots, net yaw, rest
+     * roll, animation stream, and Q15 influences are all source values from
+     * dynlist_mario_master.c and anim_group_2.c. */
+    const point3_t pivot = {
+        ((int32_t)pivot_x_tenths * 256) / 10,
+        ((int32_t)pivot_y_tenths * 256) / 10,
+        ((int32_t)pivot_z_tenths * 256) / 10
+    };
+    point3_t point = {
+        (int32_t)vertex[0] << 8,
+        (int32_t)vertex[1] << 8,
+        (int32_t)vertex[2] << 8
+    };
+    point.x -= pivot.x;
+    point.y -= pivot.y;
+    point.z -= pivot.z;
+    point = rotate_y_q16(point, (angle_t)-net_yaw);
+    point = rotate_z_q16(point, (angle_t)-rest_roll);
+    point = rotate_z_q16(point, pose_roll);
+    point = rotate_y_q16(point, net_yaw);
+    point.x += pivot.x;
+    point.y += pivot.y;
+    point.z += pivot.z;
+    return point;
+}
+
 static void
 update_face_deformation(void)
 {
     const uint16_t right_frame = deformation_frame % SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT;
     const uint16_t left_frame = deformation_frame % SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT;
-    const int32_t right_delta = sm64_right_eyelid_animation[right_frame][2] -
-      sm64_right_eyelid_animation[0][2];
-    const int32_t left_delta = sm64_left_eyelid_animation[left_frame][2] -
-      sm64_left_eyelid_animation[0][2];
+    const angle_t rest_roll = (angle_t)((1620 * 65536L) / 3600L);
+    const angle_t right_roll = view.animation_enabled ?
+      (angle_t)(((int32_t)sm64_right_eyelid_animation[right_frame][2] * 65536L) / 3600L) : rest_roll;
+    const angle_t left_roll = view.animation_enabled ?
+      (angle_t)(((int32_t)sm64_left_eyelid_animation[left_frame][2] * 65536L) / 3600L) : rest_roll;
     const uint16_t start = cpu_frt_count_get();
     for (uint16_t i = 0; i < SM64_FACE_VERTEX_COUNT; i++) {
-        int32_t eyelid_offset = 0;
-        if (view.animation_enabled) {
-            /* The stream is direct GD_ANIM_ROT3S source data (0.1 degree
-             * units); the weights are the original Goddard non-normalized
-             * accumulation values. This first target-side evaluator keeps
-             * the rotation-to-local-displacement scale explicit until full
-             * joint matrices replace it. */
-            eyelid_offset = ((right_delta * sm64_right_eyelid_weights[i]) +
-              (left_delta * sm64_left_eyelid_weights[i])) / (32768 * 8);
-        }
-        deformed_face[i][0] = sm64_face_vertices[i][0];
-        deformed_face[i][1] = (int16_t)(sm64_face_vertices[i][1] - eyelid_offset);
-        deformed_face[i][2] = sm64_face_vertices[i][2];
+        const point3_t source = {
+            (int32_t)sm64_face_vertices[i][0] << 8,
+            (int32_t)sm64_face_vertices[i][1] << 8,
+            (int32_t)sm64_face_vertices[i][2] << 8
+        };
+        const point3_t right = eyelid_joint_transform(sm64_face_vertices[i],
+          1163, 1826, -702, DEG2ANGLE(90), rest_roll, right_roll);
+        const point3_t left = eyelid_joint_transform(sm64_face_vertices[i],
+          -1163, 1826, -702, DEG2ANGLE(90), rest_roll, left_roll);
+        const int32_t x = source.x +
+          ((((right.x - source.x) >> 3) * sm64_right_eyelid_weights[i]) >> 12) +
+          ((((left.x - source.x) >> 3) * sm64_left_eyelid_weights[i]) >> 12);
+        const int32_t y = source.y +
+          ((((right.y - source.y) >> 3) * sm64_right_eyelid_weights[i]) >> 12) +
+          ((((left.y - source.y) >> 3) * sm64_left_eyelid_weights[i]) >> 12);
+        const int32_t z = source.z +
+          ((((right.z - source.z) >> 3) * sm64_right_eyelid_weights[i]) >> 12) +
+          ((((left.z - source.z) >> 3) * sm64_left_eyelid_weights[i]) >> 12);
+        deformed_face[i][0] = (int16_t)(x >> 8);
+        deformed_face[i][1] = (int16_t)(y >> 8);
+        deformed_face[i][2] = (int16_t)(z >> 8);
     }
     build_vertex_normals();
     build_lighting_cache();
@@ -434,32 +502,13 @@ eye_depth(const int16_t vertices[][3], const uint16_t *f)
     return depth;
 }
 
-static bool
-face_eyelid_primitive(const uint16_t *f)
-{
-    /* Only promote genuinely skinned upper-face triangles. The eye objects
-     * are separate Goddard display-list geometry, so without this the static
-     * white/iris mesh wins painter ordering and hides the moving eyelid skin. */
-    for (uint8_t corner = 1; corner < 5U; corner++) {
-        const uint16_t vertex = f[corner];
-        const int32_t weight = sm64_right_eyelid_weights[vertex] +
-          sm64_left_eyelid_weights[vertex];
-        if (weight >= 16000 && deformed_face[vertex][1] >= 80)
-            return true;
-    }
-    return false;
-}
-
 static int
 depth_of(uint16_t surface)
 {
     if (surface < FACE_SURFACE_COUNT) {
         const uint16_t *f = sm64_face_primitives[surface];
-        int depth = (transformed_face[f[1]].z + transformed_face[f[2]].z +
+        return (transformed_face[f[1]].z + transformed_face[f[2]].z +
           transformed_face[f[3]].z + transformed_face[f[4]].z) / 4;
-        if (face_eyelid_primitive(f))
-            depth += 72;
-        return depth;
     }
     if (surface < LEFT_EYE_SURFACE_BASE)
         return eye_depth(sm64_right_eye_vertices,

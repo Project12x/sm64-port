@@ -41,6 +41,7 @@ For a screenshot-first viewer, open [the visual timeline gallery](index.html).
 | M1 VDP2 prompt | The player-facing `PRESS START` prompt is rasterized into the proven NBG1 title bitmap, avoiding the still-instrumentation-only NBG3 debug font path. It is correctly behind VDP1 Mario, so the face occludes its center; a Start edge replaces it with `STARTED`. | [accepted title frame](screenshots/ymir-m1-press-start-accepted-2026-07-18.png), [capture report](ymir-m1-press-start-accepted-2026-07-18.json) |
 | Original title glyphs | The title prompt now uses locally generated N64 source HUD glyph pixels, converted from the user-owned US ROM into Saturn RGB1555 at build time. The derived header and ROM hash manifest stay uncommitted under `build/`; only the converter and evidence are tracked. | [source-glyph frame](screenshots/ymir-m1-source-press-start-2026-07-18.png), [capture report](ymir-m1-source-press-start-2026-07-18.json), [provenance](../INTROFACE_PROVENANCE.md) |
 | Corrected source prompt + eyelid ordering | The first source-glyph pass read MIO0-compressed Segment 2 bytes directly and produced a noisy strip. The local converter now decompresses Segment 2 as the project extractor does, restoring the colorful original HUD glyphs. Strongly weighted upper-face primitives are also composed ahead of the independent eye meshes, making the eyelid contour visible over the eyes. | [accepted frame](screenshots/ymir-m1-source-glyphs-eyelid-occlusion-2026-07-18.png), [capture report](ymir-m1-source-glyphs-eyelid-occlusion-2026-07-18.json), [provenance](../INTROFACE_PROVENANCE.md) |
+| Source-derived eyelid joint pose | The target now evaluates the same Goddard rest-joint inverse/current-joint transform used by `reset_weight()` / `move_skin()`: original eyelid pivots, static net yaw, `GD_ANIM_ROT3S` keyframes, and Q15 influences drive the original face vertices. The high-pose capture visibly closes the upper face over the independent source eye objects; it is not a screen-space lid substitute. | [neutral-pose frame](screenshots/ymir-m1-source-eyelid-joint-2026-07-18.png), [high-pose frame](screenshots/ymir-m1-source-eyelid-joint-highpose-2026-07-18.png), [high-pose report](ymir-m1-source-eyelid-joint-highpose-2026-07-18.json), [provenance](../INTROFACE_PROVENANCE.md) |
 
 ## Source-face gallery
 
@@ -135,12 +136,19 @@ The prior glyph result read compressed Segment 2 bytes as pixels. The current
 route decompresses first, and the eyelid face primitives now compose ahead of
 the independent eye objects.
 
+### Actual source eyelid joint pose
+
+![Original source eyelid mesh at a high Goddard animation pose](screenshots/ymir-m1-source-eyelid-joint-highpose-2026-07-18.png)
+
+This replaces the earlier vertical-offset study. The face vertices are moved
+through the source rest-joint inverse/current-joint transform and blended by
+the original Q15 skin weights; no screen-space eyelid geometry is used.
+
 ## Next visual gates
 
-1. Replace the first raw-stream eyelid displacement study with the complete
-   Goddard joint-matrix pose evaluator, then validate every animated quad over
-   the selected pose range; retain the current local triangle fallback unless
-   that proof permits a merge.
+1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
+   then validate every animated quad over the selected pose range; retain the
+   current local triangle fallback unless that proof permits a merge.
 2. Finish deterministic remote release after the duration-aware Ymir hold;
    press detection is proven, while the final Saturn sample can remain latched.
 3. Compare VDP1 command, Gouraud-table, CPU transform, and painter-sort budgets

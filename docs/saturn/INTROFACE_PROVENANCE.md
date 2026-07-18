@@ -262,3 +262,24 @@ by `extract_assets.py` before reading the recorded US glyph offsets. The
 corrected capture is
 `ymir-m1-source-glyphs-eyelid-occlusion-2026-07-18.png`; the earlier noisy
 prompt is retained in the gallery as a rejected compressed-data read.
+
+## Source eyelid joint evaluator
+
+The eyelid pass is now a close port of the Goddard skinning behavior rather
+than a screen-space approximation. `skin_movement.c` establishes the method:
+`reset_weight()` stores `inverse(restJoint) * vertex`, then `move_skin()`
+rotates/translates that local vector through the current joint and adds the
+recorded influence. The Saturn evaluator applies that same rest/current joint
+relationship in fixed point and blends each source vertex by the original Q15
+right/left eyelid weights. It uses the eyelid skin-net pivots, net rotations,
+and rest joint roll from `dynlist_mario_master.c`, plus the `GD_ANIM_ROT3S`
+keyframes in `anim_group_2.c`. It deliberately uses Q8 position intermediates
+and Q16 trigonometry so the SH-2 avoids floating point and 64-bit multiplies.
+
+The visible high-pose proof is
+`docs/saturn/evidence/screenshots/ymir-m1-source-eyelid-joint-highpose-2026-07-18.png`
+(SHA-256 `f54d64216481c652e642f7b13b68960edb7d58ee4cd2062848e879b877cd99f9`,
+frame hash `6c8e3c5a4c7557c1e8d81f8489df3c8d`, sequence 3840). It visibly
+deforms the original upper-face mesh over the source eye objects. This covers
+the two eyelids only; jaw, nose, mouth, ears, eyebrows, moustache, and global
+face animation remain separate future joint-evaluator work.
