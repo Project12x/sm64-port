@@ -17,6 +17,10 @@ Retail Saturn measurements are authoritative before performance claims or
 release, but they do not block the next rendering milestones.
 
 For a presentation-oriented view, open [the visual roadmap](roadmap.html).
+Concrete upstream selections, destination modules, and non-adoptions are in
+[the visual-slice upstream code ledger](UPSTREAM_CODE_LEDGER.md). A milestone
+may not silently turn a studied source into a copied dependency: its reuse mode
+and pinned revision must change there and in [PROVENANCE.md](PROVENANCE.md).
 
 ## Current position
 
@@ -111,6 +115,9 @@ Work:
 10. Put eyes into the same painter/depth ordering domain as face and feature
    surfaces; they must no longer overpaint eyelids, nose, or brows merely
    because they were submitted last.
+11. Implement the title backdrop and Start prompt using the Yaul-specific
+    adaptation rules and measurable separate layers in
+    [`UPSTREAM_CODE_LEDGER.md`](UPSTREAM_CODE_LEDGER.md).
 
 Gate:
 

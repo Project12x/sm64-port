@@ -33,8 +33,11 @@ uses PS1 GPU/GTE/SPU interfaces, and its Makefile selects a missing
 ## Evidence baseline
 
 The exact revisions, files inspected, permission status, and reuse modes are
-recorded in [PROVENANCE.md](PROVENANCE.md). No third-party implementation code
-is introduced by this planning baseline.
+recorded in [PROVENANCE.md](PROVENANCE.md). The next visual-slice sources,
+their intended destination code, and explicit non-adoptions are additionally
+listed in [UPSTREAM_CODE_LEDGER.md](UPSTREAM_CODE_LEDGER.md). No third-party
+implementation code is introduced by this planning baseline unless its reuse
+mode explicitly records a dependency, direct copy, fork, or close port.
 
 ### Quads versus triangles
 

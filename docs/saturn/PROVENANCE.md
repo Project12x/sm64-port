@@ -58,6 +58,73 @@ implementation documents exact integer arithmetic and `O(nodes^3)` runtime.
 It is never imported or linked by Saturn target code. The locked universal
 wheel SHA-256 is recorded in `tools/saturn/requirements.txt`.
 
+### R11/saturn-libs
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/R11/saturn-libs> |
+| Pinned commit inspected | `cecf21a68dfca4388887b28e906bb37b95f0849c` |
+| License | MIT |
+| Role | VDP2 background and controller-state reference for M1 title presentation |
+| Files inspected | `LICENSE`, `README.md`, `saturn-vdp2/core/saturn_vdp2_bg_core.c`, `saturn-vdp2/saturn/saturn_vdp2_bg_saturn.c`, `saturn-vdp2/tests/test_vdp2_bg.c`, `saturn-smpc/core/saturn_smpc_core.c`, `saturn-smpc/tests/test_smpc_buttons.c` |
+| Reuse mode | Pattern-only |
+
+The source separates host-testable background/controller state from the SGL
+hardware layer. Its NBG1 RGB555 backdrop below NBG0 text and edge-triggered
+button pattern will inform original Yaul code in the title proof. SGL calls and
+hardware-address conventions are an architecture mismatch with this project;
+no R11 code is copied. The exact M1 destination and test evidence are tracked
+in `UPSTREAM_CODE_LEDGER.md`.
+
+### SaitoTsutomu/Tris-Quads-Ex
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/SaitoTsutomu/Tris-Quads-Ex> |
+| Pinned commit inspected | `f5acd93873728c45d48c3398382aec380a280182` |
+| License | Apache-2.0 |
+| Role | Independent triangle-pair matching objective for host regression |
+| Files inspected | `README.md`, `__init__.py`, `blender_manifest.toml` |
+| Reuse mode | Pattern-only |
+
+The Blender add-on selects shared-edge choices while allowing at most one
+choice per triangle and favoring selected edge length. This validates the
+matching *shape*, but not Saturn rendering safety: it has no material,
+winding, UV, convexity, or deformation gate. The project retains NetworkX for
+the deterministic matching implementation and may add this objective only as a
+host regression oracle. Blender and PuLP are not project dependencies.
+
+### HailToDodongo/pyrite64
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/HailToDodongo/pyrite64> |
+| Pinned commit inspected | `297a10e606af6149327364d8b694f136c62b506e` |
+| License | MIT |
+| Role | Asset-boundary reference for M2/M3 IR and offline conversion |
+| Files inspected | `LICENSE`, `README.md`, `src/project/assets/model3d.h`, `src/project/assets/collision.h`, `src/renderer/n64Mesh.h`, `src/renderer/animation.h` |
+| Reuse mode | Pattern-only |
+
+Pyrite64's separate model/material, mesh-part, collision, and animation
+records are a useful shape for an original limited Fast3D-to-Saturn IR. Its
+C++ desktop/libdragon runtime does not fit Yaul/SH-2 execution, so no code is
+copied or linked.
+
+### VGKintsugi/Ghidra-SegaSaturn-Loader
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/VGKintsugi/Ghidra-SegaSaturn-Loader> |
+| Pinned commit inspected | `c489a190a79d2634b9ecf82e2c0dcec8fd999cf5` |
+| License | Apache-2.0 |
+| Role | Optional developer-side ISO and emulator-save-state inspection |
+| Files inspected | `README.md` |
+| Reuse mode | External tool / behavior study |
+
+The loader may aid later debugging of generated media and compatible emulator
+state. It is not part of the Saturn executable or asset compiler, and no code
+is copied.
+
 ### zeux/meshoptimizer 1.1
 
 | Field | Record |

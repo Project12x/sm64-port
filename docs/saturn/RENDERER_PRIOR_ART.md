@@ -85,6 +85,24 @@ rectangle/seam rules before it can enter the candidate graph.
 - single-SH2 versus early slave-SH2 submission only after the single-CPU path
   is correct and profiled.
 
+## Visual-slice source decisions
+
+The next runtime changes follow the concrete destinations in
+[`UPSTREAM_CODE_LEDGER.md`](UPSTREAM_CODE_LEDGER.md), not a generic search for
+an engine to import:
+
+- R11's MIT VDP2/SMPC C layers provide a **pattern-only** reference for the
+  title's separately measured NBG1 backdrop, NBG0 prompt, and input edge; Yaul
+  remains the target API.
+- SaitoTsutomu's Apache-2.0 triangle-pair optimizer provides a **pattern-only**
+  independent matching objective for host regression. The existing NetworkX
+  matcher and Saturn-specific safety filters remain authoritative.
+- Pyrite64's MIT model/material/collision/animation boundaries provide a
+  **pattern-only** shape for the M2/M3 Fast3D-to-Saturn IR, not a C++ renderer
+  import.
+- VGKintsugi's Apache-2.0 Ghidra Saturn loader is an optional external
+  inspection aid for later ISO/save-state debugging, never target code.
+
 ## Explicit non-adoptions
 
 - Jo Engine's command allocator is not copied because the port is already based

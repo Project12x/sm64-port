@@ -136,6 +136,30 @@ The currently recorded GPL references are:
 Exact commits, inspected files, and reuse modes are maintained in
 `docs/saturn/PROVENANCE.md`.
 
+## Permissive visual-slice studies (not included code)
+
+The following repositories are reviewed as pattern-only or external-tool
+references. Their source is not copied, linked, vendored, or distributed by
+this repository, so this section records attribution and the decision boundary
+rather than reproducing licenses that are not included here.
+
+- `R11/saturn-libs`, `cecf21a68dfca4388887b28e906bb37b95f0849c`, MIT:
+  VDP2 background and controller-state patterns for an original Yaul M1 title
+  layer.
+- `SaitoTsutomu/Tris-Quads-Ex`,
+  `f5acd93873728c45d48c3398382aec380a280182`, Apache-2.0: matching-objective
+  reference for a host regression; Blender/PuLP are not dependencies.
+- `HailToDodongo/pyrite64`, `297a10e606af6149327364d8b694f136c62b506e`, MIT:
+  asset-boundary pattern for a new original Fast3D-to-Saturn IR.
+- `VGKintsugi/Ghidra-SegaSaturn-Loader`,
+  `c489a190a79d2634b9ecf82e2c0dcec8fd999cf5`, Apache-2.0: optional external
+  developer inspection tool.
+
+See `docs/saturn/UPSTREAM_CODE_LEDGER.md` for the exact inspected paths and
+intended destination modules. If any of these sources becomes an incorporated
+dependency or copied implementation, update this document with the applicable
+license text and notices before merging.
+
 ## Maintenance rule
 
 Before adding any third-party code, data, binary, tool, or close port, update
