@@ -253,6 +253,18 @@ intermediate gate: C5 frame 0 is not yet the chosen standing presentation,
 and the previously generated UV tile header is intentionally treated as stale
 until it is regenerated and inserted in the original eye command span.
 
+### M2 rejected: in-place eye tiles need affine subdivision
+
+![Source eye tiles replace their original primitive span but remain visually indistinct](screenshots/ymir-m2-source-mario-c5-eye-inplace-2026-07-18.png)
+
+The source eye range is now regenerated after the Animation/GeoLayout pose and
+replaces compiled primitives 146–152 in its original order; VDP1 Gouraud
+remains active for all surrounding source primitives. This fixes the prior
+overpaint boundary, but an individual repeated-vertex VDP1 distorted sprite
+still does not approximate Fast3D's per-triangle UV interpolation closely
+enough to show a legible eye. The next texture gate is adaptive UV subdivision
+into smaller VDP1-safe tiles, not another screen-space overlay.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,

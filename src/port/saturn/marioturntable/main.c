@@ -126,32 +126,38 @@ static void draw_mario(void) {
     (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * list->count);
     vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
     vdp1_cmdt_local_coord_set(&list->cmdts[1]); vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
+    uint16_t command = 2U;
     for (uint16_t out = 0; out < visible_triangles; out++) {
-        const uint16_t *t = sm64_mario_primitives[draw_order[out]];
+        const uint16_t primitive = draw_order[out];
+        if (primitive >= SM64_MARIO_EYE_FIRST_PRIMITIVE && primitive <= SM64_MARIO_EYE_LAST_PRIMITIVE) {
+            if (primitive != SM64_MARIO_EYE_FIRST_PRIMITIVE) continue;
+            /* VDP1 has no arbitrary UV vertex attributes. Each original eye
+             * triangle is baked to one transparent tile and submitted exactly
+             * at the compiled Fast3D eye-patch command position. */
+            for (uint16_t eye = 0; eye < SM64_MARIO_EYE_UV_TRIANGLE_COUNT; eye++) {
+                const int16_vec2_t v[4] = {
+                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][0])),
+                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][1])),
+                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][2])),
+                    project_point(transform_point(sm64_mario_eye_uv_positions[eye][2]))
+                };
+                vdp1_cmdt_t *cmdt = &list->cmdts[command++];
+                vdp1_cmdt_distorted_sprite_set(cmdt);
+                vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768 });
+                vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + eye * SM64_MARIO_EYE_UV_TILE_WIDTH * SM64_MARIO_EYE_UV_TILE_WIDTH * sizeof(uint16_t));
+                vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_EYE_UV_TILE_WIDTH, SM64_MARIO_EYE_UV_TILE_WIDTH);
+                vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
+            }
+            continue;
+        }
+        const uint16_t *t = sm64_mario_primitives[primitive];
         const uint8_t *rgb = sm64_mario_material_rgb[t[0]];
         const int16_vec2_t v[4] = { project_point(transform_point(sm64_mario_vertices[t[1]])), project_point(transform_point(sm64_mario_vertices[t[2]])), project_point(transform_point(sm64_mario_vertices[t[3]])), project_point(transform_point(sm64_mario_vertices[t[4]])) };
-        vdp1_cmdt_t *cmdt = &list->cmdts[out + 2U]; vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
+        vdp1_cmdt_t *cmdt = &list->cmdts[command++]; vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
-        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + draw_order[out] * sizeof(vdp1_gouraud_table_t));
+        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
     }
-    /* Each tile is derived from the exact source triangle UV triplet. VDP1
-     * does not expose arbitrary UVs, so a complete tile maps to its matching
-     * repeated-vertex distorted sprite rather than a rectangular eye overlay. */
-    for (uint16_t eye = 0; eye < SM64_MARIO_EYE_UV_TRIANGLE_COUNT; eye++) {
-        const int16_vec2_t v[4] = {
-            project_point(transform_point(sm64_mario_eye_uv_positions[eye][0])),
-            project_point(transform_point(sm64_mario_eye_uv_positions[eye][1])),
-            project_point(transform_point(sm64_mario_eye_uv_positions[eye][2])),
-            project_point(transform_point(sm64_mario_eye_uv_positions[eye][2]))
-        };
-        vdp1_cmdt_t *cmdt = &list->cmdts[visible_triangles + 2U + eye];
-        vdp1_cmdt_distorted_sprite_set(cmdt);
-        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768 });
-        vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + eye * SM64_MARIO_EYE_UV_TILE_WIDTH * SM64_MARIO_EYE_UV_TILE_WIDTH * sizeof(uint16_t));
-        vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_EYE_UV_TILE_WIDTH, SM64_MARIO_EYE_UV_TILE_WIDTH);
-        vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
-    }
-    vdp1_cmdt_end_set(&list->cmdts[visible_triangles + 2U + SM64_MARIO_EYE_UV_TRIANGLE_COUNT]);
+    vdp1_cmdt_end_set(&list->cmdts[command]);
     build_ticks = (uint16_t)(cpu_frt_count_get() - start);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud)); scu_dma_transfer_wait(0);
     vdp1_sync_cmdt_list_put(list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();

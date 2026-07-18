@@ -7,6 +7,8 @@
 #define SM64_MARIO_VERTEX_COUNT 424U
 #define SM64_MARIO_PRIMITIVE_COUNT 596U
 #define SM64_MARIO_QUAD_COUNT 192U
+#define SM64_MARIO_EYE_FIRST_PRIMITIVE 146U
+#define SM64_MARIO_EYE_LAST_PRIMITIVE 152U
 /* Source-space vertices and RGB555 material table. */
 static const int16_t sm64_mario_vertices[SM64_MARIO_VERTEX_COUNT][3] = {
     {-34, 73, 9},

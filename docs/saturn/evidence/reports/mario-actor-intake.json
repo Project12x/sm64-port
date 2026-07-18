@@ -675,6 +675,15 @@
       ]
     }
   ],
+  "textured_eye_primitive_range": [
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152
+  ],
   "geo_evaluator": {
     "layout": "mario_geo_body",
     "implemented": [
