@@ -134,7 +134,14 @@ def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]]) -> 
             if macro == "GEO_CLOSE_NODE":
                 return index
             if macro == "GEO_OPEN_NODE":
+                # GeoLayout sibling nodes all begin at this walk's parent
+                # matrix.  `last` is only the matrix of the immediately
+                # preceding node whose child list follows the OPEN_NODE.
+                # Match geo_process_animated_part's push / recurse / pop:
+                # when that child list returns, its local joint transform
+                # must not leak into a later arm, leg, or head sibling.
                 index = walk(index, last)
+                last = parent
                 continue
             if macro == "GEO_RETURN":
                 return index

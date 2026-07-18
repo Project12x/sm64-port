@@ -247,11 +247,10 @@ gate.
 This replaces the translation-only actor staging with a close port of
 `mtxf_rotate_xyz_and_translate`, `mtxf_mul`, and the source Animation
 index/value channel cursor used by `geo_process_animated_part`. The evaluated
-world pose is Y-up; correcting the Saturn turntable camera to that basis turns
-the earlier contortion into a coherent animated source body. It remains an
-intermediate gate: C5 frame 0 is not yet the chosen standing presentation,
-and the previously generated UV tile header is intentionally treated as stale
-until it is regenerated and inserted in the original eye command span.
+world pose is Y-up. It remains an intermediate gate, not a pose acceptance:
+the later front-facing capture exposed a hierarchy-stack error in this first
+evaluator. The C5 data and source geometry are valid; the local GeoLayout walk
+was not yet restoring the parent matrix after a child subtree.
 
 ### M2 rejected: in-place eye tiles need affine subdivision
 
@@ -298,6 +297,17 @@ still a rear presentation—so the eye patch being hidden is expected rather
 than evidence against the texture converter. The next camera gate derives the
 turntable front direction from the source face surface normal, rather than
 the patch centroid alone.
+
+### M2 rejected: front camera exposes a hierarchy-stack defect
+
+![Front-facing C5 Mario capture with a collapsed, twisted body](screenshots/ymir-m2-source-mario-c5-front-wide-2026-07-18.png)
+
+The wider, front-facing capture is retained as a rejected visual checkpoint.
+It conclusively shows that the remaining problem is not camera distance or
+face direction: later arm and leg siblings inherited transforms from earlier
+child joints. The evaluator is now corrected to match SM64's
+`geo_process_animated_part` push/recurse/pop stack discipline. A rebuilt
+capture is required before any pose is called standing or accepted.
 
 ## Next visual gates
 
