@@ -283,3 +283,11 @@ frame hash `6c8e3c5a4c7557c1e8d81f8489df3c8d`, sequence 3840). It visibly
 deforms the original upper-face mesh over the source eye objects. This covers
 the two eyelids only; jaw, nose, mouth, ears, eyebrows, moustache, and global
 face animation remain separate future joint-evaluator work.
+
+The separate eye objects need a painter-order bridge until their full source
+joint attachment path is evaluated. For material-ID 2 (black pupils), the
+renderer applies a foreground bias only when the imported eyelid roll differs
+from its 162.0-degree rest value by less than 16.0 degrees. This restores
+pupils over their blue/white eye geometry in open poses without making them
+draw through an actually closed source eyelid. The open-pose evidence is
+`ymir-m1-source-eyelid-pupil-open-2026-07-18.png`.

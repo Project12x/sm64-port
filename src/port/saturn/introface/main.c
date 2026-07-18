@@ -495,8 +495,16 @@ eye_depth(const int16_t vertices[][3], const uint16_t *f)
      * order for the pupil and glint.  A shared joint evaluator replaces this
      * temporary composition bias in M2. */
     int depth = feature_depth(vertices, f) + 48;
-    if (f[0] == 2U)
-        depth += 12; /* black pupil */
+    if (f[0] == 2U) {
+        const uint16_t right_frame = deformation_frame % SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT;
+        const int32_t closure = abs32((int32_t)sm64_right_eyelid_animation[right_frame][2] - 1620);
+        /* Pupil triangles are a separate source object, so at an open pose
+         * they must win the painter tie against the white/iris geometry. At
+         * a genuinely closed lid pose, leave them behind the deformed skin:
+         * the source face—not an artificial depth override—then hides them. */
+        if (closure < 160)
+            depth += 112;
+    }
     else if (f[0] == 3U)
         depth += 24; /* white glint */
     return depth;
