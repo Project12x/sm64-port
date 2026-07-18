@@ -15,6 +15,7 @@ from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
 from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
+from inspect_castle_area import inventory  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
@@ -145,6 +146,19 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertLess(left_foot_y, -120.0)
         self.assertLess(right_foot_y, -120.0)
         self.assertLess(abs(left_foot_y - right_foot_y), 1.0)
+
+
+class CastleAreaInventoryTests(unittest.TestCase):
+    def test_area_one_intake_points_at_the_real_lobby_source(self) -> None:
+        root = TOOLS.parents[1]
+        report = inventory(
+            root / "levels/castle_inside/areas/1",
+            root / "levels/castle_inside/texture.inc.c",
+        )
+        self.assertEqual(report["model_file_count"], 26)
+        self.assertGreater(report["fast3d"]["static_triangle_upper_bound"], 1000)
+        self.assertEqual(report["collision"]["declared_vertices"], report["collision"]["vertices"])
+        self.assertIn("LAYER_OPAQUE", report["root_layers"])
 
 
 class SaturnMeshIRTests(unittest.TestCase):

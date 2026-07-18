@@ -1,0 +1,258 @@
+{
+  "schema": "sm64-saturn-castle-area-inventory",
+  "version": 1,
+  "source": {
+    "area": "levels/castle_inside/areas/1",
+    "models": [
+      "levels/castle_inside/areas/1/1/model.inc.c",
+      "levels/castle_inside/areas/1/2/model.inc.c",
+      "levels/castle_inside/areas/1/3/model.inc.c",
+      "levels/castle_inside/areas/1/4/model.inc.c",
+      "levels/castle_inside/areas/1/5/model.inc.c",
+      "levels/castle_inside/areas/1/6/model.inc.c",
+      "levels/castle_inside/areas/1/7/model.inc.c",
+      "levels/castle_inside/areas/1/8/model.inc.c",
+      "levels/castle_inside/areas/1/9/model.inc.c",
+      "levels/castle_inside/areas/1/10/model.inc.c",
+      "levels/castle_inside/areas/1/11/model.inc.c",
+      "levels/castle_inside/areas/1/12/model.inc.c",
+      "levels/castle_inside/areas/1/13/model.inc.c",
+      "levels/castle_inside/areas/1/14/model.inc.c",
+      "levels/castle_inside/areas/1/15/model.inc.c",
+      "levels/castle_inside/areas/1/16/model.inc.c",
+      "levels/castle_inside/areas/1/17/model.inc.c",
+      "levels/castle_inside/areas/1/18/model.inc.c",
+      "levels/castle_inside/areas/1/19/model.inc.c",
+      "levels/castle_inside/areas/1/20/model.inc.c",
+      "levels/castle_inside/areas/1/21/model.inc.c",
+      "levels/castle_inside/areas/1/22/model.inc.c",
+      "levels/castle_inside/areas/1/23/model.inc.c",
+      "levels/castle_inside/areas/1/24/model.inc.c",
+      "levels/castle_inside/areas/1/25/model.inc.c",
+      "levels/castle_inside/areas/1/26/model.inc.c"
+    ],
+    "geo": "levels/castle_inside/areas/1/geo.inc.c",
+    "collision": "levels/castle_inside/areas/1/collision.inc.c",
+    "textures": "levels/castle_inside/texture.inc.c"
+  },
+  "model_file_count": 26,
+  "fast3d": {
+    "macros": {
+      "gsSPVertex": 342,
+      "gsSP1Triangle": 145,
+      "gsSP2Triangles": 1086,
+      "gsSP1Quadrangle": 0,
+      "gsDPSetTextureImage": 70,
+      "gsSPDisplayList": 61
+    },
+    "static_triangle_upper_bound": 2317
+  },
+  "root_display_lists": [
+    {
+      "layer": "LAYER_OPAQUE",
+      "display_list": "inside_castle_seg7_dl_07028FD0"
+    },
+    {
+      "layer": "LAYER_ALPHA",
+      "display_list": "inside_castle_seg7_dl_07029578"
+    },
+    {
+      "layer": "LAYER_OPAQUE",
+      "display_list": "inside_castle_seg7_dl_0702A650"
+    },
+    {
+      "layer": "LAYER_TRANSPARENT_DECAL",
+      "display_list": "inside_castle_seg7_dl_0702AA10"
+    },
+    {
+      "layer": "LAYER_ALPHA",
+      "display_list": "inside_castle_seg7_dl_0702AB20"
+    }
+  ],
+  "root_layers": {
+    "LAYER_OPAQUE": 2,
+    "LAYER_ALPHA": 2,
+    "LAYER_TRANSPARENT_DECAL": 1
+  },
+  "texture_definitions": [
+    {
+      "symbol": "texture_castle_light",
+      "include": "levels/castle_inside/castle_light.ia16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07000800",
+      "include": "levels/castle_inside/1.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07001000",
+      "include": "levels/castle_inside/2.ia16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07002000",
+      "include": "levels/castle_inside/3.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07003000",
+      "include": "levels/castle_inside/4.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07003800",
+      "include": "levels/castle_inside/5.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07004800",
+      "include": "levels/castle_inside/6.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07005800",
+      "include": "levels/castle_inside/7.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07006000",
+      "include": "levels/castle_inside/8.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07006800",
+      "include": "levels/castle_inside/9.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07007000",
+      "include": "levels/castle_inside/10.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07007800",
+      "include": "levels/castle_inside/11.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07008000",
+      "include": "levels/castle_inside/12.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07008800",
+      "include": "levels/castle_inside/13.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07009000",
+      "include": "levels/castle_inside/14.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07009800",
+      "include": "levels/castle_inside/15.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700A000",
+      "include": "levels/castle_inside/16.ia16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700A800",
+      "include": "levels/castle_inside/17.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700B800",
+      "include": "levels/castle_inside/18.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700C800",
+      "include": "levels/castle_inside/19.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700D800",
+      "include": "levels/castle_inside/20.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700E800",
+      "include": "levels/castle_inside/21.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0700F800",
+      "include": "levels/castle_inside/22.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07010800",
+      "include": "levels/castle_inside/23.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07011800",
+      "include": "levels/castle_inside/24.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07010800",
+      "include": "levels/castle_inside/23_us.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07011800",
+      "include": "levels/castle_inside/24_us.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07012800",
+      "include": "levels/castle_inside/25.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07013800",
+      "include": "levels/castle_inside/26.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07014800",
+      "include": "levels/castle_inside/27.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07015800",
+      "include": "levels/castle_inside/28.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07016800",
+      "include": "levels/castle_inside/29.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07017000",
+      "include": "levels/castle_inside/30.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07017800",
+      "include": "levels/castle_inside/31.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07018800",
+      "include": "levels/castle_inside/32.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07019800",
+      "include": "levels/castle_inside/33.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701A800",
+      "include": "levels/castle_inside/34.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701B800",
+      "include": "levels/castle_inside/35.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701C800",
+      "include": "levels/castle_inside/36.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701D800",
+      "include": "levels/castle_inside/37.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701E800",
+      "include": "levels/castle_inside/38.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_0701F800",
+      "include": "levels/castle_inside/39.rgba16.inc.c"
+    },
+    {
+      "symbol": "inside_castle_seg7_texture_07020800",
+      "include": "levels/castle_inside/40.rgba16.inc.c"
+    }
+  ],
+  "collision": {
+    "declared_vertices": 1563,
+    "vertices": 1563,
+    "triangles": 2144,
+    "surface_groups": 30
+  },
+  "next_gate": "Compile the listed root display lists through the shared Saturn IR, then capture fixed source-camera checkpoints before collision/player work."
+}

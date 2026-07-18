@@ -82,6 +82,14 @@ boundaries. Only after its accepted camera set should M4 add movement, source
 collision, and a following camera. This preserves the path toward actual
 SM64 code/data rather than a replacement game framework.
 
+M3 intake has begun from the real source bank. The generated
+[`Castle Area 1 inventory`](evidence/reports/castle-area1-inventory-2026-07-18.json)
+currently identifies 26 model units, a 2,317-triangle static upper bound, 70
+Fast3D texture-image commands, five root display-list entries across opaque,
+alpha, and transparent-decal layers, and 1,563 collision vertices. These are
+compiler inputs and pressure estimates—not a claim that the room already
+renders on Saturn.
+
 ## M0 — Source-face proof
 
 Status: complete as a development milestone.
