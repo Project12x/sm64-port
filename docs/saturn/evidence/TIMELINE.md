@@ -353,15 +353,15 @@ places the head near +153 source Y and both feet near −125 source Y. This
 BIOS-backed capture shows an upright Mario with source geometry, five local
 ROM-derived texture sources, and native VDP1 Gouraud lighting together.
 
-### M2 Saturn cleanup: 256 transformed-depth buckets
+### M2 rejected: 256 transformed-depth buckets do not improve this view
 
 ![Standing source Mario after increasing the native VDP1 painter precision](screenshots/ymir-m2-source-mario-depth256-2026-07-18.png)
 
-The body now submits through 256 bounded transformed-depth buckets rather than
-64. This is still a Saturn-appropriate integer painter path—not a hidden Z
-buffer—and it materially reduces ordering fights around the legs, feet, and
-torso while retaining the real VDP1 quad/fallback IR. Remaining artifacts are
-localized to the source texture tile mapping/order around the face.
+The body submits through 256 bounded transformed-depth buckets rather than 64.
+Although that remains a valid Saturn-native integer painter experiment, this
+capture is visibly worse rather than better in the legs, feet, and torso. It
+is retained as a rejected ordering configuration; the project must not claim
+that bucket count alone stabilizes the articulated actor.
 
 ### M2 Saturn cleanup: Gouraud reaches original texture tiles
 
@@ -373,16 +373,16 @@ compiled primitive's table, so the source cap/face patches no longer form a
 separate unlit rendering path. This retains a small Saturn-native command/data
 model: no software lighting pass, shader, or Z buffer was introduced.
 
-### M2 neutral experiment: late texture pass does not repair tile mapping
+### M2 rejected: late texture pass worsens painter ordering
 
 ![Late source texture pass with the same unresolved texture corruption](screenshots/ymir-m2-source-mario-texture-decal-pass-2026-07-18.png)
 
 This BIOS-backed experiment drew opaque source geometry before the UV-baked
-texture tiles. It is retained because it confirms the result is materially the
-same class of failure as the baseline: moving the tiles into a late pass alone
-does not improve their painting. The baseline transformed painter order is
-kept, and the next correctness work targets the VDP1 triangle-tile mapping
-itself rather than submission order.
+texture tiles. It visibly worsens the actor's painter ordering and overpaints
+surfaces that were at least coherent in the baseline. The baseline transformed
+painter order is retained. The experiment is evidence that a late VDP1 texture
+pass cannot stand in for depth-aware decals; the next correctness work targets
+the tile mapping and a proper later-pass design rather than this shortcut.
 
 ### M2 neutral experiment: VDP1 winding normalization does not repair painting
 
