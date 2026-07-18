@@ -13,6 +13,7 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
@@ -123,6 +124,27 @@ class QuadPairingTests(unittest.TestCase):
         self.assertTrue(
             any(reason.startswith("pose_") for reason in animated_report["rejection_reasons"])
         )
+
+
+class MarioActorPoseTests(unittest.TestCase):
+    def test_c5_root_rotation_keeps_both_feet_on_the_ground(self) -> None:
+        root = TOOLS.parents[1]
+        rotations = animation_rotations(
+            (root / "assets/anims/anim_C5.inc.c").read_text(encoding="utf-8"), 0
+        )
+        parts = {
+            name: matrix
+            for name, matrix, _light in geo_layout_parts(
+                (root / "actors/mario/geo.inc.c").read_text(encoding="utf-8"), rotations
+            )
+        }
+        head_y = parts["mario_cap_on_eyes_front"][10]
+        left_foot_y = parts["mario_left_foot"][10]
+        right_foot_y = parts["mario_right_foot"][10]
+        self.assertGreater(head_y, 150.0)
+        self.assertLess(left_foot_y, -120.0)
+        self.assertLess(right_foot_y, -120.0)
+        self.assertLess(abs(left_foot_y - right_foot_y), 1.0)
 
 
 class SaturnMeshIRTests(unittest.TestCase):
