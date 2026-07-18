@@ -175,10 +175,10 @@ The engine demonstrates a queued DMA abstraction that chooses CPU copying or a
 Saturn-side transfer based on address ranges, waits for completion, and keeps
 the queue interrupt-safe. Its `SCL_FUNC.C`/`INITMAIN.C` code also shows a
 hand-managed VDP2 register and frame-display path. These are useful review
-inputs for the SM64 renderer and DMA scheduler, but the GPL terms are not
-would require the derived component to retain GPL-3.0-or-later licensing and
-corresponding-source obligations. The project owner has authorized GPL use in
-principle; no SlaveDriver source is copied or linked at the current revision,
+inputs for the SM64 renderer and DMA scheduler. GPL-derived components must
+retain the applicable GPL licensing, notices, and corresponding-source
+obligations. The project owner has authorized GPL-2.0/GPL-3.0 use for this
+public project; no SlaveDriver source is copied or linked at the current revision,
 and the Yaul-based implementation remains a clean-room design using public
 Yaul APIs.
 

@@ -277,13 +277,15 @@ JSON-RPC stepping, memory/register inspection, continuous execution, pause,
 bounded frame runs, deterministic stopped events, canonical frame hashes, and
 base64 PNG capture; it remains an external tool and has not yet supplied the
 required BIOS-backed hello-disc evidence. A portable one-command toolchain
-bootstrap wrapper is now present but has not yet been executed in this
-environment; a second BIOS-backed emulator run and retail-hardware execution
-also remain open.
+bootstrap wrapper is present; the local fallback path has been executed and
+verified, while Docker-container execution, a second BIOS-backed emulator run,
+and retail-hardware execution remain open.
 
 Deliver:
 
 - explicit license or written permission for any PSX-specific code reuse;
+- GPL-2.0/GPL-3.0 code is acceptable when the derived component preserves the
+  applicable license, notices, and corresponding-source obligations;
 - pinned dependencies and a maintained provenance/reuse ledger;
 - preserved libyaul MIT terms;
 - a reproducible build producing a bootable `.cue`/`.bin`; and
