@@ -1,6 +1,6 @@
-/* Compact VDP1 rendering study for the Mario intro-face milestone. Material
- * regions follow the cap/skin/hair/eyes/moustache vocabulary in the port's
- * existing src/goddard/dynlists/dynlist_mario_face.c source. */
+/* Original compact VDP1 stand-in for the Mario intro-face milestone. It is
+ * not original SM64 mesh data. Its material regions only follow the
+ * cap/skin/hair/eyes/moustache vocabulary in dynlist_mario_face.c. */
 #include <yaul.h>
 #include <string.h>
 
