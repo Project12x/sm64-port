@@ -87,3 +87,7 @@ bt      .-8
 With `GBR = 0x06020000`, the BIOS is polling the shared event word at
 `0x06020240`. This is the current Ymir investigation target; it is not
 evidence that the Saturn image or cartridge test has run.
+
+The follow-up capture reads that word as `0x000006C7`, exactly matching the
+stopped `R0`/`R4` values. It is static across the 1,800-frame run, confirming
+that the wait loop is not receiving its expected event update.

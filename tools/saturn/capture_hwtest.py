@@ -83,7 +83,8 @@ def main() -> int:
         request("mem.peek", 2, {"address": "0x06010000", "count": 120}),
         request("regs.read", 3, {"target": "sh2.master"}),
         request("mem.peek", 4, {"address": "0x060402C0", "count": 128}),
-        request("instance.shutdown", 5),
+        request("mem.peek", 5, {"address": "0x06020240", "count": 32}),
+        request("instance.shutdown", 6),
     ]
     command = [str(args.ymir), "--ipl", str(args.ipl), "--game", str(args.game)]
     try:
@@ -110,6 +111,7 @@ def main() -> int:
     telemetry_response = response_for(messages, 2)
     registers_response = response_for(messages, 3)
     boot_window_response = response_for(messages, 4)
+    event_word_response = response_for(messages, 5)
     raw_data = telemetry_response["result"]["data"]
     raw_bytes = bytes(raw_data)
     raw_telemetry = {
@@ -143,6 +145,7 @@ def main() -> int:
         },
         "registers_at_stop": registers_response.get("result", {}),
         "boot_window": boot_window_response.get("result", {}),
+        "event_word": event_word_response.get("result", {}),
         "diagnostics": {
             "stderr": completed.stderr,
             "cd_block_copy_unimplemented": has_cd_block_copy_limitation(completed.stderr),
