@@ -81,6 +81,26 @@ source unless the applicable terms are identified or permission is granted.
 Sega Saturn ST-103, ST-013, and ST-TECH-47 are referenced as hardware
 documentation. They are not included or redistributed by this repository.
 
+## GPL development tools and prior art
+
+GPL-licensed development tools and emulator source may be used by this public
+project. Any copied, forked, or closely ported implementation must retain its
+applicable GPL version, copyright notices, license text, and corresponding
+source obligations. Tool-only use does not impose a license on this
+repository's independent Saturn target.
+
+The currently recorded GPL references are:
+
+- `Project12x/Ymir` fork of `StrikerX3/Ymir`, GPL-3.0, used as an external
+  JSON-RPC emulator/debugging tool;
+- `FCare/Kronos` and `Yabause/yabause`, GPL-2.0, used as external BIOS-backed
+  or HLE emulator tools; and
+- `Lobotomy-Software/SlaveDriver-Engine`, GPL-3.0-or-later, studied as Saturn
+  DMA/VDP2 prior art. No SlaveDriver source is copied at the current revision.
+
+Exact commits, inspected files, and reuse modes are maintained in
+`docs/saturn/PROVENANCE.md`.
+
 ## Maintenance rule
 
 Before adding any third-party code, data, binary, tool, or close port, update
