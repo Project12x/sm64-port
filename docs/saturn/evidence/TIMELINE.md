@@ -424,17 +424,22 @@ meaningful visual improvement over the 16×16 C/B/A-corrected bake. It is
 rejected and the compact 102,400-byte version is retained, reserving texture
 residency for the upcoming Castle scene.
 
+### M3 accepted: first Castle Area 1 source-root frame
+
+![Fixed-camera opaque Castle Area 1 source geometry on Saturn](screenshots/ymir-m3-castle-area1-opaque-fixed-camera-2026-07-18.png)
+
+The BIOS-backed target frame executes the deterministic Area 1 opaque source
+bank: 436 indexed vertices and 577 source triangles. The resulting room
+silhouette includes the lobby wall, upper arch, and door openings; it is
+Gouraud-lit VDP1 geometry rather than a stand-in reconstruction. This is only
+the M3 opaque fixed-camera gate: source textures, alpha/decal layers,
+visibility, clipping, and Mario-in-room integration remain open.
+
 ## Next visual gates
 
-1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
-   then validate every animated quad over the selected pose range; retain the
-   current local triangle fallback unless that proof permits a merge.
-2. Finish deterministic remote release after the duration-aware Ymir hold;
-   press detection is proven, while the final Saturn sample can remain latched.
-3. Compare VDP1 command, Gouraud-table, CPU transform, and painter-sort budgets
-   with the intended game-frame budget.
-4. Evaluate the first source animation extrema through the deformation-aware
-   quad safety gate and record any pairs that must fall back to triangles.
-5. Replace M2's hand-authored neutral offsets with evaluated mario_geo_body
-   transform nodes, then capture the accepted full Mario silhouette before
-   texture or animation work begins.
+1. Convert a small, source-selected Castle texture set into bounded VDP1
+   residency and capture the same fixed camera with painted walls and doors.
+2. Add near-plane clipping and named source-order/opaque ordering evidence for
+   the first two fixed cameras.
+3. Bring the accepted standing source Mario bank into the Castle frame before
+   introducing gameplay movement or collision.

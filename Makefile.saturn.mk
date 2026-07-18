@@ -4,6 +4,7 @@ HELLO_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hello
 HWTEST_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hwtest
 INTROFACE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/introface
 MARIOTURNTABLE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/marioturntable
+CASTLEVIEWER_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/castleviewer
 VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 PYTHON ?= python3
 ifeq ($(OS),Windows_NT)
@@ -16,7 +17,7 @@ SM64_ROM ?=
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 verify-all clean
 
 all: hello
 
@@ -95,6 +96,12 @@ marioturntable: compile-mario-actor check-libyaul check-sdk
 
 verify-marioturntable: marioturntable
 	$(MAKE) -C "$(MARIOTURNTABLE_DIR)" verify
+
+castleviewer: compile-castle-area1 check-libyaul check-sdk
+	$(MAKE) -C "$(CASTLEVIEWER_DIR)"
+
+verify-castleviewer: castleviewer
+	$(MAKE) -C "$(CASTLEVIEWER_DIR)" verify
 
 vdp2probe: check-libyaul check-sdk
 	$(MAKE) -C "$(VDP2_PROBE_DIR)"
