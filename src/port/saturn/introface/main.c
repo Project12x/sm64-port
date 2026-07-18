@@ -1,16 +1,17 @@
 /*
  * First source-derived SM64 geometry on Saturn.
  *
- * mario_face_mesh.h is a direct conversion of the Goddard face vertices and
- * triangles in src/goddard/dynlists/dynlist_mario_face.c.  This renderer uses
- * a temporary, documented material palette rather than original textures.
+ * mario_face_mesh.h is a direct conversion of the Goddard face plus eye
+ * vertices and triangles. The eyes include the original iris, pupil, and
+ * highlight surfaces from dynlists_mario_eyes.c.
  */
 #include <yaul.h>
 #include <string.h>
 
 #include "mario_face_mesh.h"
 
-#define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + 3U)
+#define EYE_TRIANGLE_COUNT (SM64_RIGHT_EYE_TRIANGLE_COUNT + SM64_LEFT_EYE_TRIANGLE_COUNT)
+#define COMMAND_COUNT (SM64_FACE_TRIANGLE_COUNT + EYE_TRIANGLE_COUNT + 3U)
 
 static vdp1_gouraud_table_t gouraud[SM64_FACE_TRIANGLE_COUNT];
 static uint16_t draw_order[SM64_FACE_TRIANGLE_COUNT];
@@ -27,11 +28,19 @@ material_color(uint16_t material, int shade)
 }
 
 static int16_vec2_t
-project_vertex(uint16_t index)
+project_point(const int16_t *v)
 {
-    const int16_t *v = sm64_face_vertices[index];
     /* Goddard face coordinates: X is horizontal and Y is vertical. */
     return (int16_vec2_t)INT16_VEC2_INITIALIZER(160 + (v[0] / 6), 160 - (v[1] / 6));
+}
+
+static int16_vec2_t
+project_eye_point(const int16_t *v, int16_t offset_x, int16_t offset_y)
+{
+    int16_vec2_t point = project_point(v);
+    point.x += offset_x;
+    point.y += offset_y;
+    return point;
 }
 
 static int
@@ -56,6 +65,28 @@ sort_for_painter(void)
             j--;
         }
         draw_order[j] = chosen;
+    }
+}
+
+static void
+draw_eye(vdp1_cmdt_t *cmdts, uint16_t *cursor, const int16_t vertices[][3],
+  const uint16_t triangles[][4], uint16_t triangle_count,
+  const uint8_t materials[][3], int16_t offset_x, int16_t offset_y)
+{
+    const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768 };
+    for (uint16_t i = 0; i < triangle_count; i++) {
+        const uint16_t *f = triangles[i];
+        const uint8_t *rgb = materials[f[0] & 3U];
+        const int16_vec2_t projected[4] = {
+            project_eye_point(vertices[f[1]], offset_x, offset_y), project_eye_point(vertices[f[2]], offset_x, offset_y),
+            project_eye_point(vertices[f[3]], offset_x, offset_y), project_eye_point(vertices[f[3]], offset_x, offset_y)
+        };
+        vdp1_cmdt_t *cmdt = &cmdts[*cursor];
+        vdp1_cmdt_polygon_set(cmdt);
+        vdp1_cmdt_draw_mode_set(cmdt, mode);
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        vdp1_cmdt_vtx_set(cmdt, projected);
+        (*cursor)++;
     }
 }
 
@@ -87,7 +118,7 @@ draw_source_face(void)
         const int16_t *b = sm64_face_vertices[f[2]];
         const int16_t *c = sm64_face_vertices[f[3]];
         const int16_vec2_t vertices[4] = {
-            project_vertex(f[1]), project_vertex(f[2]), project_vertex(f[3]), project_vertex(f[3])
+            project_point(a), project_point(b), project_point(c), project_point(c)
         };
         vdp1_gouraud_table_t *shade = &gouraud[out];
         shade->colors[0] = material_color(f[0], a[0] + a[1] - a[2] > 0);
@@ -100,7 +131,15 @@ draw_source_face(void)
         vdp1_cmdt_color_set(cmdt, material_color(f[0], 1));
         vdp1_cmdt_vtx_set(cmdt, vertices);
     }
-    vdp1_cmdt_end_set(&list->cmdts[SM64_FACE_TRIANGLE_COUNT + 2U]);
+    uint16_t cursor = SM64_FACE_TRIANGLE_COUNT + 2U;
+    /* Eye surfaces are separate original objects. The projection offsets
+     * align their static joint/net pose to the corresponding source face-eye
+     * surfaces at this camera: right (+5,-4), left (-6,-4) screen pixels. */
+    draw_eye(list->cmdts, &cursor, sm64_right_eye_vertices, sm64_right_eye_triangles,
+      SM64_RIGHT_EYE_TRIANGLE_COUNT, sm64_right_eye_material_rgb, 5, -4);
+    draw_eye(list->cmdts, &cursor, sm64_left_eye_vertices, sm64_left_eye_triangles,
+      SM64_LEFT_EYE_TRIANGLE_COUNT, sm64_left_eye_material_rgb, -6, -4);
+    vdp1_cmdt_end_set(&list->cmdts[cursor]);
     vdp1_vram_partitions_get(&partitions);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud));
     scu_dma_transfer_wait(0);
@@ -124,7 +163,7 @@ user_init(void)
     for (uint8_t i = 0; i < 8; i++) vdp2_sprite_priority_set(i, 7);
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load();
-    dbgio_puts("SM64 SATURN\nSOURCE FACE\n440 VERTICES / 877 TRIS\nGOURAUD VDP1");
+    dbgio_puts("SM64 SATURN\nSOURCE FACE + EYES\n440 + 96 VERTICES\n1041 TRIANGLES");
     dbgio_flush(); vdp2_sync(); vdp2_sync_wait();
     draw_source_face();
     for (;;) {}

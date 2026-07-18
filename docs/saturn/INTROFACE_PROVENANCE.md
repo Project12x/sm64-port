@@ -24,8 +24,8 @@ The extractor also converts the eight `SetAmbient` RGB values in the same
 source file to RGB555. The renderer uses those converted colors as the bright
 endpoint of each VDP1 Gouraud table; its dark endpoint is a 50% intensity
 variant. This establishes source-derived flat material colors and first-pass
-lighting, but not pixel-identical original Mario materials: the separate eye,
-eyebrow, and moustache objects and the N64 shine texture are later work.
+lighting, but not pixel-identical original Mario materials: the separate
+eyebrow and moustache objects and the N64 shine texture are later work.
 
 The 2026-07-17 BIOS-backed Ymir capture is
 `docs/saturn/evidence/screenshots/ymir-source-face-2026-07-17.png` (SHA-256
@@ -36,3 +36,26 @@ The source-material follow-up is
 `docs/saturn/evidence/screenshots/ymir-source-material-face-2026-07-17.png`
 (SHA-256 `9331b87d14feae3fadec4d41f7c36578ad0bcd22d9c3fc7b18c1f6fac04670d6`,
 frame 3300). It is likewise BIOS-backed Ymir emulator evidence only.
+
+The eye follow-up directly converts `verts_mario_eye_right`,
+`facedata_mario_eye_right`, `verts_mario_eye_left`, and
+`facedata_mario_eye_left` from `src/goddard/dynlists/dynlists_mario_eyes.c`
+(source SHA-256 `7db76365e55bfdc4a38649a53088fe55eac9bdcec6263491118a95f7378bffbb`).
+Each 48-vertex / 82-triangle eye retains the source iris, pupil, and highlight
+material IDs. For this fixed front camera, the extractor evaluates the static
+eye joint/net rotations and offsets specified in `dynlist_mario_master.c` as
+XYZ Euler transforms; dynamic eye tracking is intentionally out of scope.
+
+Its capture is `docs/saturn/evidence/screenshots/ymir-source-eyes-face-2026-07-17.png`
+(SHA-256 `cffaf736bcab95fa6e1af03a91d5fd4874a0f5185adfd15debfaf21eff6c5199`,
+frame 3300). It is BIOS-backed Ymir emulator evidence only.
+
+The initial static-eye transform was measured against the source face's two
+material-4 eye-surface bounds. It placed the right eye 5 screen pixels inward,
+the left eye 6 pixels inward, and both eyes 4 pixels low. The fixed-camera
+Saturn renderer therefore applies right `(+5, -4)` and left `(-6, -4)`
+projection offsets after source transformation. The uncalibrated result is
+preserved at `ymir-source-eyes-face-2026-07-17.png`; the calibrated capture is
+`docs/saturn/evidence/screenshots/ymir-source-eyes-calibrated-2026-07-17.png`
+(SHA-256 `0cd261ca7e9d1a95644caaaff7dbb587e4e5d0c6965892f6dea2592f4f2545b8`,
+frame 3300). Both are BIOS-backed Ymir emulator evidence only.
