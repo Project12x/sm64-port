@@ -6,7 +6,7 @@ SM64 Saturn image. This is an emulator limitation, not a hardware-test result.
 ## Reproduced state
 
 - Ymir fork: `Project12x/Ymir` / `StrikerX3/Ymir`
-- inspected fork commit: `6efc5324943c27f4db7a1b7c8bcf90f51459b12e`
+- inspected fork commit: `ab23d9ed` (`project12x/agent-debug-v0`)
 - license: GPL-3.0 (`../ymir-agent/LICENSE`)
 - BIOS: USA IPL supplied by the user; SHA-256 is recorded in the capture
   evidence
@@ -41,6 +41,12 @@ on-chip register accesses. A follow-up Ymir commit `ef8a4e16` adds minimal SH-2
 SCI register latches and removes those logs, but the BIOS still stops at
 `0x060402E4` before issuing copy/move commands. The capture runner archives the
 master register snapshot for the next debugging pass.
+
+The fork now also exposes a paused-only `mem.poke` diagnostic command
+(`ab23d9ed`). It was used to change the BIOS event word at `0x06020240`; the
+BIOS advanced only a few instructions and still did not write `SAT0`. This
+rules out a simple stale event-word latch while keeping the intervention
+explicit and reproducible.
 
 ## Original minimum patch shape
 
