@@ -8,11 +8,13 @@ technical plan in [`PLAN.md`](PLAN.md): that document defines the architecture
 and hard gates; this one defines the order in which the port should become
 visibly more like SM64.
 
-The north star is a 30 Hz, source-derived, controllable Bob-omb Battlefield
-slice running through the Saturn backend with visible timing and memory
-telemetry. Emulator results drive development. Retail Saturn measurements are
-authoritative before performance claims or release, but they do not block the
-next rendering milestones.
+The next visual north star is a source-derived **Castle Lobby entry slice**:
+the title face hands off through `PRESS START` into a textured Peach's Castle
+Area 1 where a controllable Mario can idle, run, jump, and turn under a
+following camera. Bob-omb Battlefield remains the first broader course and
+gameplay-budget gate after that slice. Emulator results drive development.
+Retail Saturn measurements are authoritative before performance claims or
+release, but they do not block the next rendering milestones.
 
 For a presentation-oriented view, open [the visual roadmap](roadmap.html).
 
@@ -47,14 +49,15 @@ textures, or run Mario's gameplay state.
 | Milestone | Visible result | Primary proof | Rough focused-effort band | Status |
 |---|---|---|---|---|
 | M0 — Face proof | Source-derived Mario face on Saturn | Geometry, features, Gouraud, camera, telemetry | Delivered | Complete |
-| M1 — Living face | The intro face animates and responds predictably | Goddard deformation subset and deterministic input captures | 1–3 weeks | **Now** |
+| M1 — Living title face | Animated face, title background, `PRESS START` | Goddard deformation subset, title presentation, deterministic input captures | 1–3 weeks | **Now** |
 | M2 — Mario turntable | In-game Mario model renders and animates | General display-list IR, textures, skeleton, actor materials | 3–8 weeks | Next |
-| M3 — Course flythrough | A textured Bob-omb Battlefield view renders | Level banks, visibility, clipping, ordering, texture residency | 1–3 months | Planned |
-| M4 — Controllable Mario | Mario runs and jumps in the course | Game update, input, camera, collision, animation integration | 1–3 months | Planned |
-| M5 — Battlefield slice | A small star route is playable | Actors, objects, HUD, particles, minimal audio, stable budgets | 2–5 months | Planned |
-| M6 — Castle loop | Castle → course → star → castle works repeatedly | Transitions, save state, asset-bank lifecycle, audio | 2–4 months | Planned |
-| M7 — Content and optimization | Increasing level/effect coverage | Stress-class rollout and measured optimization | 12–24+ months | Planned |
-| M8 — Hardware and release | Reproducible public source release | Retail validation, compatibility, packaging, documentation | Ongoing validation plus 1–3 release months | Deferred validation lane |
+| M3 — Castle lobby renderer | Textured Castle Area 1 renders from fixed cameras | Static world banks, visibility, clipping, ordering, texture residency | 1–3 months | Planned |
+| M4 — Castle-lobby Mario | Mario runs and jumps in the lobby | Game update, lobby collision, camera, animation integration | 1–3 months | Planned |
+| M5 — Castle entry visual slice | Title → lobby is a repeatable playable proof | HUD, basic door prompt, deterministic route, stable budgets | 1–2 months | Planned |
+| M6 — Battlefield slice | A small star route is playable | Outdoor visibility, actors, objects, particles, minimal audio | 2–5 months | Planned |
+| M7 — Castle loop | Castle → course → star → castle works repeatedly | Transitions, save state, asset-bank lifecycle, audio | 2–4 months | Planned |
+| M8 — Content and optimization | Increasing level/effect coverage | Stress-class rollout and measured optimization | 12–24+ months | Planned |
+| M9 — Hardware and release | Reproducible public source release | Retail validation, compatibility, packaging, documentation | Ongoing validation plus 1–3 release months | Deferred validation lane |
 
 These are engineering effort bands, not calendar promises. They assume one
 lead developer with agent assistance, usable decompilation source, no prolonged
@@ -81,9 +84,10 @@ This milestone proves that nontrivial SM64 geometry can be compiled as C,
 transformed on SH-2, and rendered by VDP1. It does not prove a general graphics
 backend or a gameplay frame budget.
 
-## M1 — Living intro face
+## M1 — Living title face
 
-Goal: turn the static mesh study into the first visibly animated SM64 subsystem.
+Goal: turn the static mesh study into an honest, interactive SM64 title-screen
+proof that visibly hands off into the future game runtime.
 
 Work:
 
@@ -100,6 +104,13 @@ Work:
 6. Add duration-aware controller holds to Ymir automation.
 7. Capture deterministic neutral, yawed, zoomed, shine-off, auto-orbit, and
    animated-expression frames.
+8. Convert and display the source title background as a Saturn texture/VDP2
+   plane, retaining a local-only ROM-derived asset workflow.
+9. Render a source-layout `PRESS START` prompt and transition on Start into a
+   visibly distinct, deterministic placeholder handoff screen.
+10. Put eyes into the same painter/depth ordering domain as face and feature
+   surfaces; they must no longer overpaint eyelids, nose, or brows merely
+   because they were submitted last.
 
 Gate:
 
@@ -108,6 +119,8 @@ Gate:
 - shine on/off produces deterministic frame hashes;
 - the HUD separates deformation, sort, command-build, Gouraud, and wait costs;
 - the screenshot gallery preserves both the first failure and accepted result.
+- the accepted title frame visibly contains the animated source face, title
+  background, `PRESS START`, and correct eye occlusion.
 
 Explicit limit: do not spend this milestone recreating every mouse-pull and
 presentation detail from the original intro. Its purpose is to prove dynamic
@@ -143,9 +156,86 @@ Gate:
 This is the decisive renderer-architecture milestone. If Mario only fits by
 special-casing his source data, the IR is not ready for a course.
 
-## M3 — Bob-omb Battlefield flythrough
+## M3 — Castle lobby renderer
 
-Goal: prove the world path before adding gameplay complexity.
+Goal: render the first room of Peach's Castle from source assets before
+introducing broad world/gameplay complexity.
+
+Scope boundary: Castle Interior Area 1/lobby entrance only. Doors, paintings,
+lights, and room geometry may begin as static scenery. Do not add warps, save
+state, moving objects, or the full level-script interpreter here.
+
+Source ownership:
+
+| Concern | Primary source inputs | Saturn deliverable |
+|---|---|---|
+| Static geometry/materials | `levels/castle_inside/areas/1`, `leveldata.c` | converted mesh/material/texture banks |
+| Scene graph | `levels/castle_inside/geo.c` | bounded offline traversal/export |
+| Collision | `levels/castle_inside/areas/1/collision.inc.c` | compact floor/wall query data |
+| Special interior light | `src/game/geo_misc.c` | initially baked/static lighting rule |
+
+Work:
+
+- extend the Saturn IR compiler to consume a bounded Fast3D display-list
+  subset: vertex loads, material state, textures, triangles, and nested lists;
+- convert Area 1 geometry, textures, collision, and source IDs into a
+  cartridge-resident bank with a PC reference render;
+- implement fixed-point transforms, backface culling, near-plane clipping,
+  coarse opaque depth buckets, and explicit later passes for decals/effects;
+- use fixed cameras first, then replayable camera rails, to expose ordering,
+  texture residency, and clipping failures before player control; and
+- capture the same camera checkpoints in the PC reference viewer and Ymir.
+
+Gate:
+
+- recognizable textured lobby frames render without missing surfaces, UV
+  corruption, or systematic doorframe/decal/wall ordering defects;
+- all camera checkpoints fit provisional command, VDP1 texture, CLUT,
+  internal-WRAM, and 4 MiB cartridge budgets; and
+- the gallery includes source reference, first failure, correction, and
+  accepted camera set.
+
+## M4 — Castle-lobby Mario
+
+Goal: demonstrate that the rendered room is running game code, not merely a
+flythrough.
+
+Work:
+
+- connect the M2 Mario actor path to Castle Area 1 collision;
+- integrate digital and 3D Control Pad input behind the platform API;
+- run a fixed 30 Hz update with idle, run, turn, jump, gravity, floor/wall
+  response, and a following camera;
+- show position, action, floor, camera, collision, and frame-budget telemetry;
+- record deterministic short movement and jump routes against a PC reference.
+
+Gate: Mario can idle, run, turn, jump, land, and collide with the lobby using
+source-derived model/collision data, with replayable final state and capture.
+
+## M5 — Castle entry visual slice
+
+Goal: produce the concise visual proof a viewer immediately recognizes as
+“Mario 64 running from source on Saturn.”
+
+Required sequence:
+
+1. animated title face over the source title background;
+2. `PRESS START` responds to controller input;
+3. deterministic transition/fade into Castle Area 1;
+4. controllable, animated Mario in the textured lobby; and
+5. HUD, timing/memory overlay, and a bounded door prompt.
+
+Gate: the complete route is captured as screenshots and a short deterministic
+video/replay, has a machine-readable budget report, and survives a 10,000-frame
+emulator soak without command, texture, or allocator overflow.
+
+Audio is explicitly out of scope for this visual proof; silence is an accepted
+M5 presentation state. The first minimal audio requirement belongs to M6.
+
+## M6 — Bob-omb Battlefield slice
+
+Goal: expand the proven actor/runtime path into an outdoor course and first
+star route.
 
 Work:
 
@@ -159,37 +249,13 @@ Work:
 - capture an automated flythrough with identical camera checkpoints in the PC
   reference renderer and Ymir.
 
-Gate:
+M6a renderer sub-gate:
 
 - a textured course view survives near-plane, horizon, and dense-camera tests;
 - fixed camera checkpoints have stable frame hashes;
 - no asset or command arena silently overflows;
 - representative views fit provisional VDP1 and 4 MiB cartridge envelopes;
 - visual differences from the PC reference are classified and documented.
-
-## M4 — Controllable Mario
-
-Goal: connect real SM64 update code to the Saturn renderer.
-
-Work:
-
-- integrate digital and 3D Control Pad input behind the platform API;
-- run Mario state, course collision, camera, and animation at a fixed 30 Hz;
-- render one frame per update unless measurements justify a documented fallback;
-- add floor, wall, slope, ledge, jump, and camera-wall regression routes;
-- expose position, action, floor, camera, and frame-budget telemetry; and
-- add deterministic state traces that can be compared with the PC port.
-
-Gate:
-
-- Mario can idle, run, turn, jump, land, and recover from camera collisions;
-- a recorded input route replays to the same final state and frame hashes;
-- there are no systematic geometry holes, UV failures, or stale actor poses;
-- single-SH2 cost is measured before any gameplay work moves to the slave SH-2.
-
-## M5 — Playable Battlefield slice
-
-Goal: complete one small but honest gameplay route.
 
 Scope:
 
@@ -200,7 +266,7 @@ Scope:
 - course-local asset loading from disc through WRAM into cartridge banks; and
 - failure-visible allocators and command/texture budget guards.
 
-Gate:
+M6 completion gate:
 
 - the route completes repeatedly without leaks or stale cartridge pointers;
 - update cadence remains 30 Hz under the chosen render policy;
@@ -208,9 +274,9 @@ Gate:
 - the complete route has a screenshot sequence, video capture, state trace,
   budget report, and known-differences list.
 
-This is the main go/no-go milestone for a full port.
+This is the main course-scale go/no-go milestone for a full port.
 
-## M6 — Castle loop
+## M7 — Castle loop
 
 Goal: prove that the port is a game runtime rather than a single loaded scene.
 
@@ -225,7 +291,7 @@ Gate: castle → Battlefield → star → castle repeats at least 25 times in an
 automated soak without leaks, stale resources, active-play CD stalls, or
 transition-dependent visual corruption.
 
-## M7 — Content breadth and measured optimization
+## M8 — Content breadth and measured optimization
 
 Port content by stress class rather than original level order:
 
@@ -241,7 +307,7 @@ material batching, lower-cost Gouraud tiers, display-list caching, spatial
 visibility, assembly kernels, and coarse slave-SH2 transform jobs. Every change
 must keep a before/after capture and timing report.
 
-## M8 — Retail validation, compatibility, and release
+## M9 — Retail validation, compatibility, and release
 
 Retail testing is deliberately deferred in calendar order, but not removed as
 an authority:
@@ -304,16 +370,18 @@ These run through every milestone:
 
 The next sequence should stay narrow enough to commit and capture frequently:
 
-1. add duration-aware Ymir input holds and capture yaw/zoom/shine-off controls;
-2. add a fifth HUD counter for deformation/update cost;
-3. document the exact Goddard face update call graph and data ownership;
-4. extend the face extractor with the minimum joint/skin relationship data;
-5. animate one source-derived expression at a fixed update rate;
-6. correct normals/shine under deformation;
-7. run a 10,000-frame deterministic soak;
-8. capture failure, intermediate, and accepted animation frames;
-9. close M1 with a machine-readable budget report; and
-10. begin the general Saturn IR with the in-game Mario actor as its first client.
+1. complete M1 face deformation, eye occlusion, title background, and `PRESS
+   START` handoff as independently captured increments;
+2. add duration-aware Ymir input holds plus deformation/update HUD telemetry;
+3. run the M1 10,000-frame deterministic soak and close it with a budget
+   report and accepted gallery entry;
+4. begin M2 by compiling the in-game Mario actor through the general Saturn
+   IR, then prove its textured turntable and one animation;
+5. select the Area 1 Castle geometry/texture/collision subset and generate the
+   M3 source-bank inventory, representation report, and PC reference frames;
+6. build the fixed-camera lobby renderer before enabling Mario control; and
+7. use the first controllable lobby route to establish the M5 title-to-castle
+   evidence sequence before broadening to Battlefield.
 
 ## Roadmap rules
 

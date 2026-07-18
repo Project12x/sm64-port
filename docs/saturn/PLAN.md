@@ -224,10 +224,11 @@ its implementation must not be copied without explicit permission.
 
 ### Audio
 
-Audio is a separate high-risk stream. Initial milestones are silence, then one
-PCM sound, then basic PCM effects with pre-rendered or streamed music for the
-vertical slice. By the end of that slice the project must choose either a
-properly licensed SCSP/68K sequence driver or an explicit rendered-audio design.
+Audio is a separate high-risk stream. The M5 Castle-entry visual proof permits
+silence; M6 begins with one PCM sound, then basic PCM effects with pre-rendered
+or streamed music for the Battlefield course slice. By the end of M6 the
+project must choose either a properly licensed SCSP/68K sequence driver or an
+explicit rendered-audio design.
 
 ## Provisional memory envelopes
 
@@ -336,16 +337,24 @@ Gate:
 If this fails, reduce texture fidelity/LOD or revise the asset strategy before
 broad gameplay work.
 
-### Phase 3: single-SH2 Bob-omb Battlefield slice
+### Phase 3: single-SH2 visual-slice sequence
 
-Deliver Mario, terrain, representative actors, camera, collision, shadows,
-HUD, input, minimal audio, correct near clipping, stable ordering, and visible
-timing/memory telemetry. Compare recorded PC and Saturn state traces.
+Roadmap crosswalk: Phase 3 spans M1 through M6. M5 is the Castle-entry visual
+proof; M6 is the first course-scale go/no-go milestone.
+
+First deliver the bounded Castle Interior Area 1 lobby slice defined in
+[`ROADMAP.md`](ROADMAP.md): title handoff, textured static room, Mario,
+camera, collision, HUD, input, correct near clipping, stable ordering, and
+visible timing/memory telemetry. Then apply the same renderer/runtime path to
+Bob-omb Battlefield terrain and representative actors. Compare recorded PC and
+Saturn state traces throughout.
 
 Retail-hardware gate: 30 Hz gameplay update, one render per update or an
 explicit approved fallback, no memory/cache/command overflow, and no systematic
-UV corruption, camera-wall holes, or ordering failures. This is the main
-go/no-go point for the full port.
+UV corruption, camera-wall holes, or ordering failures. The Castle lobby is
+the first visual proof; the Battlefield route is the main course-scale go/no-go
+point for the full port. This is an authority gate for performance claims and
+release planning, not a blocker for emulator-driven M1–M6 development.
 
 ### Phase 4: measured dual-SH2 optimization and castle loop
 
@@ -384,7 +393,7 @@ Ship no baserom, extracted assets, Nintendo audio, or prebuilt game image.
 | Audio becomes a late rewrite | High | Choose a licensed direction by Phase 3 |
 | Dual-SH2 bus contention erases gains | High | Coarse jobs and before/after measurements |
 | Transparency produces double-write artifacts | Medium-high | Effect-specific VDP1/VDP2 fallbacks |
-| Emulator success hides hardware faults | High | Retail-hardware evidence at every gate |
+| Emulator success hides hardware faults | High | Retail evidence before performance/release claims; keep emulator assumptions explicit throughout development |
 
 ## Initial issue backlog
 
