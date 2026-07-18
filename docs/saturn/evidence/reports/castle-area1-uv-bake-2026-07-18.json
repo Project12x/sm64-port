@@ -1,0 +1,20 @@
+{
+  "source": "levels/castle_inside/areas/1",
+  "selected_textures": [
+    "inside_09000000",
+    "inside_09005000"
+  ],
+  "selected_triangles": 341,
+  "tile": [
+    8,
+    8
+  ],
+  "tile_count": 1364,
+  "texture_bytes": 174592,
+  "command_estimate": 1603,
+  "rom_sha256": "17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91",
+  "texture_sha256": {
+    "inside_09000000": "3b87139af59b63f9aec17eaab7a409dd8a2bf38a729616ca2c45a58228e92b74",
+    "inside_09005000": "d0d8baa59e69b0b11e253efeadc07db5a8d272a010dbd8a4ee6db31573a17933"
+  }
+}

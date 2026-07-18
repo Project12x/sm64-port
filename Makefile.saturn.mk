@@ -165,6 +165,18 @@ compile-castle-area1: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_area1_opaque.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json"
 
+compile-castle-textures: compile-castle-area1 check-host-tools
+	@if [ -z "$(SM64_ROM)" ]; then \
+	  printf '%s\n' 'SM64_ROM must name the user-supplied US ROM/archive for local-only Castle texture conversion.' >&2; \
+	  exit 1; \
+	fi
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_castle_uv.py" \
+	  --rom "$(SM64_ROM)" \
+	  --assets "assets.json" \
+	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
+	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
+	  --report "docs/saturn/evidence/reports/castle-area1-uv-bake-2026-07-18.json"
+
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 
 clean: check-sdk

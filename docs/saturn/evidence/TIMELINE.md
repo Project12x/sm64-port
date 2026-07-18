@@ -435,6 +435,18 @@ Gouraud-lit VDP1 geometry rather than a stand-in reconstruction. This is only
 the M3 opaque fixed-camera gate: source textures, alpha/decal layers,
 visibility, clipping, and Mario-in-room integration remain open.
 
+### M3 rejected: first two-material UV tile pass
+
+![Rejected two-material Castle Area 1 texture pass](screenshots/ymir-m3-castle-area1-two-material-texture-2026-07-18.png)
+
+The bounded local-ROM bake fit the provisional command and texture budgets
+(341 source triangles, 1,364 8×8 tiles, 174,592 texture bytes, and a
+1,603-command estimate), but the target frame paints the lower wall as
+fragmented incorrect tiles. It is rejected and the Gouraud-only root renderer
+is restored. The reusable bake records the actual source UV/material data;
+the failure isolates the remaining issue to static-world tile sampling/mapping
+rather than a fictitious texture or an over-budget submission.
+
 ## Next visual gates
 
 1. Convert a small, source-selected Castle texture set into bounded VDP1
