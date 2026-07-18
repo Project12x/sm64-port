@@ -153,6 +153,16 @@ Pupil triangles are foreground only while the actual source eyelid is open.
 The threshold is deliberately not applied to closed poses, where the animated
 source skin must remain the occluder.
 
+### Closed-pose pupil occlusion correction
+
+![Controlled original source eyelid pose fully occludes both independent eye objects](screenshots/ymir-m1-source-eyelid-pupil-closed-controlled-2026-07-18.png)
+
+The capture-only build locks both original eyelid tracks to source frame 699,
+where their roll values are maximally separated from rest. The complete eye
+objects are submitted behind the deformed lid at this pose, so neither pupil
+nor white leaks through. Normal builds retain the moving source animation;
+the deterministic lock exists only to make this boundary reproducible.
+
 ### M2 rejected: initial in-game actor assembly
 
 ![Exploded first source Mario actor assembly](screenshots/ymir-m2-source-mario-cachefix-2026-07-18.png)

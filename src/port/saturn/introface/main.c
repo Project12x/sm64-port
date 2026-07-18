@@ -72,6 +72,18 @@ static uint16_t pad_down;
 static uint16_t pad_edge;
 static bool title_handoff;
 
+#ifndef SM64_INTRO_FORCE_EYELID_FRAME
+#define SM64_INTRO_FORCE_EYELID_FRAME (-1)
+#endif
+
+static uint16_t
+eyelid_pose_frame(uint16_t frame, uint16_t count)
+{
+    return SM64_INTRO_FORCE_EYELID_FRAME >= 0 ?
+      (uint16_t)(SM64_INTRO_FORCE_EYELID_FRAME % count) :
+      (uint16_t)(frame % count);
+}
+
 static void build_vertex_normals(void);
 static void build_lighting_cache(void);
 
@@ -335,8 +347,8 @@ eyelid_joint_transform(const int16_t *vertex, int16_t pivot_x_tenths,
 static void
 update_face_deformation(void)
 {
-    const uint16_t right_frame = deformation_frame % SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT;
-    const uint16_t left_frame = deformation_frame % SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT;
+    const uint16_t right_frame = eyelid_pose_frame(deformation_frame, SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT);
+    const uint16_t left_frame = eyelid_pose_frame(deformation_frame, SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT);
     const angle_t rest_roll = (angle_t)((1620 * 65536L) / 3600L);
     const angle_t right_roll = view.animation_enabled ?
       (angle_t)(((int32_t)sm64_right_eyelid_animation[right_frame][2] * 65536L) / 3600L) : rest_roll;
@@ -494,19 +506,26 @@ eye_depth(const int16_t vertices[][3], const uint16_t *f)
      * iris, and pupil cannot fall through it; then retain an explicit tiny
      * order for the pupil and glint.  A shared joint evaluator replaces this
      * temporary composition bias in M2. */
-    int depth = feature_depth(vertices, f) + 48;
-    if (f[0] == 2U) {
-        const uint16_t right_frame = deformation_frame % SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT;
-        const int32_t closure = abs32((int32_t)sm64_right_eyelid_animation[right_frame][2] - 1620);
-        /* Pupil triangles are a separate source object, so at an open pose
-         * they must win the painter tie against the white/iris geometry. At
-         * a genuinely closed lid pose, leave them behind the deformed skin:
-         * the source face—not an artificial depth override—then hides them. */
-        if (closure < 160)
+    const uint16_t right_frame = eyelid_pose_frame(deformation_frame, SM64_RIGHT_EYELID_ANIMATION_FRAME_COUNT);
+    const uint16_t left_frame = eyelid_pose_frame(deformation_frame, SM64_LEFT_EYELID_ANIMATION_FRAME_COUNT);
+    const int32_t right_closure = abs32((int32_t)sm64_right_eyelid_animation[right_frame][2] - 1620);
+    const int32_t left_closure = abs32((int32_t)sm64_left_eyelid_animation[left_frame][2] - 1620);
+    const int32_t closure = right_closure > left_closure ? right_closure : left_closure;
+    int depth = feature_depth(vertices, f);
+    if (closure >= 160) {
+        /* A closed source lid is deformed face geometry. Submit the complete
+         * separate eye object behind it; otherwise the pupil's independent
+         * triangle order leaks through skin which should be opaque. */
+        depth -= 96;
+    } else {
+        /* In an open pose, retain the independent eye object's local order:
+         * white/iris, then pupil, then highlight. */
+        depth += 48;
+        if (f[0] == 2U)
             depth += 112;
+        else if (f[0] == 3U)
+            depth += 136;
     }
-    else if (f[0] == 3U)
-        depth += 24; /* white glint */
     return depth;
 }
 
