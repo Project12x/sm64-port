@@ -1,8 +1,8 @@
 # Ymir CD-block handoff
 
-The BIOS-backed Ymir path reaches the Saturn image after a documented,
-paused-only event-word diagnostic. This is emulator evidence only: retail
-hardware must boot the unmodified disc without any debugger write.
+The BIOS-backed Ymir path reaches the Saturn image with an unmodified disc.
+This is emulator evidence only: retail hardware remains the authority for the
+0x5C/4 MiB cartridge test.
 
 ## Reproduced state
 
@@ -43,13 +43,15 @@ SCI register latches and removes those logs, but the BIOS still stops at
 `0x060402E4` before issuing copy/move commands. The capture runner archives the
 master register snapshot for the next debugging pass.
 
-The fork now also exposes a paused-only `mem.poke` diagnostic command
-(`ab23d9ed`). After the BIOS had read `A.BIN`, a write of zero to its shared
-event word at `0x06020240` allowed the BIOS to dispatch the program. The
-hwtest then wrote valid `SAT0`/`SATX` telemetry at `0x06030000` and completed
-the VDP1 probes. This isolates a remaining Ymir BIOS-event/handoff defect; it
-does not demonstrate that the real Saturn needs, accepts, or should receive
-such a write. See `evidence/ymir-event-poke-hwtest-2026-07-17.md`.
+The fork also exposes a paused-only `mem.poke` diagnostic command
+(`ab23d9ed`). It initially showed that a pause/resume was sufficient to
+release the BIOS after `A.BIN` had loaded. The root cause was the synchronous
+headless `exec.run_for` loop starving Ymir's host CD worker. Commit
+`4d517116` yields after each completed frame, without changing emulated
+cycles. A normal 1,800-frame BIOS run now writes valid `SAT0`/`SATX` telemetry
+at `0x06030000` and completes the VDP1 probes; see
+`evidence/ymir-bios-hwtest-2026-07-17.md`. The earlier `mem.poke` capture is
+retained as diagnostic history only.
 
 ## Original minimum patch shape
 
@@ -61,9 +63,9 @@ fork, preserving its GPL-3.0 notices and corresponding-source obligations:
    or move using the existing partition-manager/transfer primitives;
 3. report `kHIRQ_CMOK`/`kHIRQ_ECPY` consistently with the Saturn command
    protocol; and
-4. add a focused BIOS event/handoff test, then rerun `capture_hwtest.py`
-   without `--event-word-poke` until the `SAT0` magic is present at
-   `0x06030000`.
+4. add a focused bounded-run/CD-worker scheduling test, then rerun
+   `capture_hwtest.py` without `--event-word-poke` until the `SAT0` magic is
+   present at `0x06030000`.
 
 No Ymir source is copied into this repository by this handoff. The project is
 authorized to use GPL code, provided the fork retains its license, notices,

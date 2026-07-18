@@ -82,6 +82,14 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--handoff-yield",
+        action="store_true",
+        help=(
+            "pause after the initial BIOS run and resume without mutating memory; "
+            "isolates whether the Ymir handoff needs a debugger write"
+        ),
+    )
+    parser.add_argument(
         "--post-poke-frames",
         type=int,
         default=600,
@@ -92,6 +100,8 @@ def main() -> int:
         parser.error("--frames and --post-poke-frames must be between 1 and 3600")
     if args.event_word_poke is not None and not 0 <= args.event_word_poke <= 0xFFFFFFFF:
         parser.error("--event-word-poke must be an unsigned 32-bit value")
+    if args.event_word_poke is not None and args.handoff_yield:
+        parser.error("--event-word-poke and --handoff-yield are mutually exclusive")
     for label, path in (("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
         if not path.is_file():
             parser.error(f"{label} not found: {path}")
@@ -148,6 +158,9 @@ def main() -> int:
             )
         )
         next_id += 1
+        requests.append(request("exec.run_for", next_id, {"frames": args.post_poke_frames}))
+        next_id += 1
+    elif args.handoff_yield:
         requests.append(request("exec.run_for", next_id, {"frames": args.post_poke_frames}))
         next_id += 1
     telemetry_id = next_id
@@ -242,7 +255,10 @@ def main() -> int:
         "frames": args.frames,
         "bios_input": args.bios_input,
         "event_word_poke": args.event_word_poke,
-        "post_poke_frames": args.post_poke_frames if args.event_word_poke is not None else None,
+        "handoff_yield": args.handoff_yield,
+        "post_poke_frames": (
+            args.post_poke_frames if args.event_word_poke is not None or args.handoff_yield else None
+        ),
         "protocol": {
             "ready": any(message.get("method") == "instance.ready" for message in messages),
             "stopped_reasons": stopped_reasons,

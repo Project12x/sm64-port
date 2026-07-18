@@ -1,12 +1,12 @@
 # Ymir BIOS event diagnostic reaches hwtest — 2026-07-17
 
-This is BIOS-backed **emulator** evidence, not retail-hardware evidence. The
-USA BIOS authenticated the disc and read `A.BIN`. Ymir then required a
-paused-only diagnostic write to its BIOS shared event word at `0x06020240`
-before it dispatched the game program. The write was recorded by
-`tools/saturn/capture_hwtest.py` as `event_word_poke: 0`; it is a workaround
-for the current Ymir handoff gap, not behavior to reproduce on Saturn
-hardware.
+This is superseded diagnostic history. The USA BIOS authenticated the disc and
+read `A.BIN`; a paused-only write of zero to its shared event word at
+`0x06020240` then dispatched the game program. The write was recorded by
+`tools/saturn/capture_hwtest.py` as `event_word_poke: 0`. Follow-up testing
+showed that the pause/resume, rather than the value, released a starved
+CD-block host worker. Ymir commit `4d517116` fixes that scheduling issue, and
+the clean replacement evidence is `ymir-bios-hwtest-2026-07-17.md`.
 
 After that diagnostic handoff, the hwtest published valid `SAT0`/`SATX`
 telemetry through cache-through WRAM at `0x06030000` and drew the final status
