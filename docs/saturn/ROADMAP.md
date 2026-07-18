@@ -90,6 +90,15 @@ alpha, and transparent-decal layers, and 1,563 collision vertices. These are
 compiler inputs and pressure estimates—not a claim that the room already
 renders on Saturn.
 
+The first root flatten is also checked in as a source-only
+[`static scene intake`](evidence/reports/castle-area1-static-scene-intake-2026-07-18.json):
+the five Area 1 root lists resolve to 619 source triangles (577 opaque, 34
+alpha, and 8 transparent-decal). It preserves per-triangle world positions,
+UVs, texture state, source display-list IDs, and render layer; texture bytes
+remain outside the repository. The next implementation step is to compile its
+opaque subset through the shared Saturn mesh IR and produce the first fixed
+camera frame.
+
 ## M0 — Source-face proof
 
 Status: complete as a development milestone.

@@ -16,6 +16,7 @@ from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # 
 from extract_mario_actor import animation_rotations, geo_layout_parts  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
+from extract_castle_area import extract  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
@@ -159,6 +160,17 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertGreater(report["fast3d"]["static_triangle_upper_bound"], 1000)
         self.assertEqual(report["collision"]["declared_vertices"], report["collision"]["vertices"])
         self.assertIn("LAYER_OPAQUE", report["root_layers"])
+
+    def test_area_one_root_display_lists_flatten_to_source_triangles(self) -> None:
+        root = TOOLS.parents[1]
+        scene = extract(root / "levels/castle_inside/areas/1")
+        # The 2,317-triangle bank includes every room/object unit. The Area 1
+        # entry GeoLayout intentionally selects a 619-triangle first-camera
+        # slice; keep this gate tied to the actual root, not the full bank.
+        self.assertGreater(scene["triangle_count"], 500)
+        self.assertEqual(scene["triangle_count"], sum(scene["layers"].values()))
+        self.assertGreater(scene["textured_triangle_count"], 0)
+        self.assertIn("LAYER_OPAQUE", scene["layers"])
 
 
 class SaturnMeshIRTests(unittest.TestCase):
