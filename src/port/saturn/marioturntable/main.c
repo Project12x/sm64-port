@@ -142,10 +142,11 @@ static void draw_mario(void) {
                 };
                 vdp1_cmdt_t *cmdt = &list->cmdts[command++];
                 vdp1_cmdt_distorted_sprite_set(cmdt);
-                vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768 });
+                vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD });
                 vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + tile * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t));
                 vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_TEXTURE_UV_TILE_WIDTH, SM64_MARIO_TEXTURE_UV_TILE_WIDTH);
                 vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
+                vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
             }
             continue;
         }

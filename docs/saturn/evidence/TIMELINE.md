@@ -363,6 +363,16 @@ buffer—and it materially reduces ordering fights around the legs, feet, and
 torso while retaining the real VDP1 quad/fallback IR. Remaining artifacts are
 localized to the source texture tile mapping/order around the face.
 
+### M2 Saturn cleanup: Gouraud reaches original texture tiles
+
+![Standing source Mario with VDP1 Gouraud applied to texture tiles and polygon body](screenshots/ymir-m2-source-mario-textured-gouraud-2026-07-18.png)
+
+Yaul's VDP1 RGB1555 distorted-sprite path accepts the same Gouraud color-calc
+mode used by the polygon body. Texture subtiles now reference their originating
+compiled primitive's table, so the source cap/face patches no longer form a
+separate unlit rendering path. This retains a small Saturn-native command/data
+model: no software lighting pass, shader, or Z buffer was introduced.
+
 ## Next visual gates
 
 1. Expand the accepted eyelid evaluator to the remaining Goddard facial joints,
