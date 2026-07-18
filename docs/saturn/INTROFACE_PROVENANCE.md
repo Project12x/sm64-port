@@ -20,13 +20,19 @@ unchanged. `main.c` then uses an orthographic `X/Y` projection and paints the
 triangles far-to-near by their original `Z` coordinate, because VDP1 has no
 Z buffer.
 
-This milestone does **not** yet convert the original face textures or its
-runtime material setup. Its cap/skin/hair/eye colors are a temporary,
-hand-authored mapping of the original material IDs, with per-vertex Gouraud
-intensity supplied by VDP1. The screenshot therefore proves original geometry
-on the Saturn renderer, not pixel-identical original Mario materials.
+The extractor also converts the eight `SetAmbient` RGB values in the same
+source file to RGB555. The renderer uses those converted colors as the bright
+endpoint of each VDP1 Gouraud table; its dark endpoint is a 50% intensity
+variant. This establishes source-derived flat material colors and first-pass
+lighting, but not pixel-identical original Mario materials: the separate eye,
+eyebrow, and moustache objects and the N64 shine texture are later work.
 
 The 2026-07-17 BIOS-backed Ymir capture is
 `docs/saturn/evidence/screenshots/ymir-source-face-2026-07-17.png` (SHA-256
 `c576acd491459bf810c638f5fb54d108e66558d7fbd6f29e915ecdee8f193c66`, frame
 3300). Its adjacent JSON is emulator evidence only, not retail hardware proof.
+
+The source-material follow-up is
+`docs/saturn/evidence/screenshots/ymir-source-material-face-2026-07-17.png`
+(SHA-256 `9331b87d14feae3fadec4d41f7c36578ad0bcd22d9c3fc7b18c1f6fac04670d6`,
+frame 3300). It is likewise BIOS-backed Ymir emulator evidence only.

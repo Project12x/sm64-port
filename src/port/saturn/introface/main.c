@@ -18,22 +18,12 @@ static uint16_t draw_order[SM64_FACE_TRIANGLE_COUNT];
 static rgb1555_t
 material_color(uint16_t material, int shade)
 {
-    /* Provisional palette by original face-material group.  Texture and
-     * material conversion are separate milestones; this only exposes the
-     * source mesh topology on VDP1. */
-    static const rgb1555_t dark[8] = {
-        RGB1555(1, 20, 10, 6), RGB1555(1, 22, 11, 7),
-        RGB1555(1,  4,  2, 1), RGB1555(1, 19,  2, 2),
-        RGB1555(1,  1,  5,18), RGB1555(1,  5,  2, 1),
-        RGB1555(1, 12,  5, 2), RGB1555(1, 18,  2, 2)
-    };
-    static const rgb1555_t light[8] = {
-        RGB1555(1, 31, 20,13), RGB1555(1, 31, 22,15),
-        RGB1555(1, 11,  6, 2), RGB1555(1, 31,  6, 4),
-        RGB1555(1,  4, 13,31), RGB1555(1, 12,  6, 2),
-        RGB1555(1, 23, 11, 4), RGB1555(1, 31,  6, 4)
-    };
-    return shade > 0 ? light[material & 7U] : dark[material & 7U];
+    const uint8_t *rgb = sm64_face_material_rgb[material & 7U];
+    /* The original source supplies matching ambient/diffuse colours.  Keep
+     * them exact at the bright endpoint and use a half-intensity Gouraud
+     * endpoint for the first Saturn lighting pass. */
+    const uint8_t divisor = shade > 0 ? 1U : 2U;
+    return RGB1555(1, rgb[0] / divisor, rgb[1] / divisor, rgb[2] / divisor);
 }
 
 static int16_vec2_t

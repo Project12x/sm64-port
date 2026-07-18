@@ -1331,4 +1331,16 @@ static const uint16_t sm64_face_triangles[SM64_FACE_TRIANGLE_COUNT][4] = {
     {7, 156, 424, 427},
 };
 
+/* RGB555 values converted from the original SetAmbient material values. */
+static const uint8_t sm64_face_material_rgb[8][3] = {
+    {31, 31, 31},
+    {27, 19, 13},
+    {11, 0, 0},
+    {31, 31, 31},
+    {31, 31, 31},
+    {11, 0, 0},
+    {16, 0, 0},
+    {31, 0, 0},
+};
+
 #endif
