@@ -99,6 +99,13 @@ remain outside the repository. The next implementation step is to compile its
 opaque subset through the shared Saturn mesh IR and produce the first fixed
 camera frame.
 
+The initial opaque compiler is `tools/saturn/compile_castle_area.py`, invoked
+as `make -f Makefile.saturn.mk compile-castle-area1`. It emits a deterministic
+first-use indexed bank from the actual Area 1 root: 436 positions and 577
+opaque source triangles, plus the source display-list IDs that produced them.
+It is intentionally not yet a room-render claim: texture pixels, alpha/decal
+layers, clipping, visibility, and camera framing remain separate M3 gates.
+
 ## M0 — Source-face proof
 
 Status: complete as a development milestone.

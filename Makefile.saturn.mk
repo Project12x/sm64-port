@@ -16,7 +16,7 @@ SM64_ROM ?=
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 verify-all clean
 
 all: hello
 
@@ -151,6 +151,12 @@ compile-mario-textures: compile-mario-actor check-host-tools
 	  --intake "docs/saturn/evidence/reports/mario-actor-intake.json" \
 	  --output "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/mario-eye-uv-bake.json"
+
+compile-castle-area1: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_castle_area.py" \
+	  --area "levels/castle_inside/areas/1" \
+	  --output "build/saturn/castlearea/generated/castle_area1_opaque.h" \
+	  --report "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 

@@ -18,6 +18,7 @@ from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract  # noqa: E402
+from compile_castle_area import compile_opaque  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
@@ -179,6 +180,15 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(scene["triangle_count"], sum(scene["layers"].values()))
         self.assertGreater(scene["textured_triangle_count"], 0)
         self.assertIn("LAYER_OPAQUE", scene["layers"])
+
+    def test_area_one_opaque_compiler_preserves_root_topology(self) -> None:
+        root = TOOLS.parents[1]
+        bank = compile_opaque(root / "levels/castle_inside/areas/1")
+        self.assertEqual(bank["triangle_count"], 577)
+        self.assertEqual(bank["vertex_count"], 436)
+        self.assertEqual(len(bank["positions"]), bank["vertex_count"])
+        self.assertEqual(len(bank["triangles"]), bank["triangle_count"])
+        self.assertIn("inside_castle_seg7_dl_07027DE8", bank["source_display_lists"])
 
 
 class SaturnMeshIRTests(unittest.TestCase):
