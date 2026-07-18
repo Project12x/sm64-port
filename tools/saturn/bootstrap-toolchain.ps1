@@ -47,6 +47,10 @@ $dockerArgs = @(
 & docker @dockerArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+& (Join-Path $root "tools/saturn/bootstrap-host-tools.ps1") -Python $HostPython
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$HostPython = Join-Path $root ".venv-saturn-tools/Scripts/python.exe"
+
 & $HostPython (Join-Path $root "tools/saturn/test_tools.py")
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

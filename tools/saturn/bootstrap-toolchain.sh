@@ -48,6 +48,8 @@ docker run --rm -i \
         make -f Makefile.saturn.mk hello verify-hello hwtest verify-hwtest
     '
 
+PYTHON="$HOST_PYTHON" sh "$ROOT/tools/saturn/bootstrap-host-tools.sh"
+HOST_PYTHON="$ROOT/.venv-saturn-tools/bin/python"
 "$HOST_PYTHON" "$ROOT/tools/saturn/test_tools.py"
 
 # Keep the source-inventory artifact in sync with the exact checkout used by

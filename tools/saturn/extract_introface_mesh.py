@@ -194,7 +194,7 @@ def main() -> None:
             "schema": 1,
             "source": "src/goddard/dynlists/dynlist_mario_face.c",
             "source_sha256": digest,
-            "algorithm": "deterministic constrained maximal matching with length-three augmentations",
+            "algorithm": "exact constrained maximum-cardinality, maximum-integer-quality matching",
             "minimum_normal_alignment": 0.80,
             "camera_samples": {"yaw_degrees": [-45, -22, 0, 22, 45], "pitch_degrees": [-30, 0, 30]},
             "prior_art": {

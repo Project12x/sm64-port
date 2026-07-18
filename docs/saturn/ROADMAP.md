@@ -25,7 +25,8 @@ The project has moved beyond feasibility sketches:
   controller pulses, frame hashes, and PNG capture;
 - the hardware-test disc exercises the RAM-cart gate, DMA paths, and seven VDP1
   primitive modes in emulation;
-- the asset classifier has an initial six-way triangle/quad representation;
+- the asset classifier has an initial six-way triangle/quad representation,
+  plus exact maximum-cardinality matching through hash-pinned NetworkX 3.6.1;
 - the actual 440-vertex / 877-triangle SM64 Goddard face, eyes, pupils,
   eyebrows, and moustache render through VDP1;
 - the face has fixed-point camera control, topology-derived Gouraud depth,
@@ -67,6 +68,8 @@ Delivered:
 - topology-derived VDP1 Gouraud shading and fixed-point shine;
 - yaw, pitch, zoom, reset, shine, and auto-orbit controls;
 - persistent VDP1 command storage and update-only Gouraud uploads;
+- a conservative Saturn render IR with 156 provably maximum safe true quads,
+  565 explicit face-triangle fallbacks, and unchanged source topology;
 - split sort/build/upload/wait counters; and
 - BIOS-backed screenshots and capture manifests.
 

@@ -62,7 +62,10 @@ architecture mismatch because it does not enforce Saturn render constraints.
 
 The deterministic host tool accepts only same-material, consistently wound
 pairs whose triangle normals align by at least 0.80 and whose ordered boundary
-remains strictly convex over 15 yaw/pitch camera samples. It selects 156 true
+remains strictly convex over 15 yaw/pitch camera samples. NetworkX 3.6.1's
+BSD-licensed exact blossom matcher proves that 156 is the maximum-cardinality
+selection from the 206 accepted candidates, then maximizes integer-weighted
+normal alignment, shared-edge length, and stable source order. It selects 156 true
 quads, leaves 565 face triangles as repeated-vertex fallbacks, and reduces the
 face from 877 to 721 VDP1 primitives. The generated report records 114 material
 rejections, 251 normal-divergence rejections, and 740 projected-convexity

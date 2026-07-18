@@ -4,16 +4,28 @@ HELLO_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hello
 HWTEST_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/hwtest
 INTROFACE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/introface
 PYTHON ?= python3
+ifeq ($(OS),Windows_NT)
+SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
+else
+SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
+endif
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap check check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface verify-tools classify-source verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface verify-tools classify-source verify-all clean
 
 all: hello
 
 bootstrap:
 	@sh "$(SATURN_REPO_ROOT)/tools/saturn/bootstrap-toolchain.sh"
+
+bootstrap-host-tools:
+ifeq ($(OS),Windows_NT)
+	@powershell -ExecutionPolicy Bypass -File "$(SATURN_REPO_ROOT)/tools/saturn/bootstrap-host-tools.ps1" -Python "$(PYTHON)"
+else
+	@PYTHON="$(PYTHON)" sh "$(SATURN_REPO_ROOT)/tools/saturn/bootstrap-host-tools.sh"
+endif
 
 check: check-libyaul
 
@@ -75,12 +87,19 @@ introface: check-libyaul check-sdk
 verify-introface: check-libyaul check-sdk
 	$(MAKE) -C "$(INTROFACE_DIR)" verify
 
-verify-tools:
-	$(PYTHON) "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
+check-host-tools:
+	@if [ ! -x "$(SATURN_TOOLS_PYTHON)" ]; then \
+		printf '%s\n' 'Saturn host-tool environment is missing.' \
+		  'Run: make -f Makefile.saturn.mk bootstrap-host-tools' >&2; \
+		exit 1; \
+	fi
 
-classify-source:
+verify-tools: check-host-tools
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
+
+classify-source: check-host-tools
 	@mkdir -p "$(SATURN_REPO_ROOT)/docs/saturn/evidence/reports"
-	@cd "$(SATURN_REPO_ROOT)" && $(PYTHON) "tools/saturn/asset_classifier.py" \
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/asset_classifier.py" \
 	  --root . \
 	  --primitives "tools/saturn/fixtures/primitives-six-way.json" \
 	  --report "docs/saturn/evidence/reports/asset-classifier-sm64.json"

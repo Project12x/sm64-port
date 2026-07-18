@@ -2,7 +2,7 @@
   "schema": 1,
   "source": "src/goddard/dynlists/dynlist_mario_face.c",
   "source_sha256": "654541706fc131dc9d81107c2e2323ffae754965ab896bc9cd09a343062b1f6d",
-  "algorithm": "deterministic constrained maximal matching with length-three augmentations",
+  "algorithm": "exact constrained maximum-cardinality, maximum-integer-quality matching",
   "minimum_normal_alignment": 0.8,
   "camera_samples": {
     "yaw_degrees": [
@@ -24,6 +24,9 @@
     "license": "Apache-2.0",
     "reuse_mode": "pattern-only"
   },
+  "matcher": "networkx.max_weight_matching",
+  "matcher_version": "3.6.1",
+  "matching_policy": "maximum cardinality, then maximum integer quality",
   "source_triangle_count": 877,
   "candidate_count": 206,
   "quad_count": 156,

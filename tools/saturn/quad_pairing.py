@@ -10,6 +10,14 @@ from dataclasses import dataclass
 import math
 from typing import Iterable
 
+try:
+    import networkx as nx
+except ModuleNotFoundError as error:  # pragma: no cover - exercised by bootstrap failure
+    raise ModuleNotFoundError(
+        "Saturn mesh tools require NetworkX; run tools/saturn/bootstrap-host-tools.ps1 "
+        "or tools/saturn/bootstrap-host-tools.sh"
+    ) from error
+
 
 Vertex = tuple[int, int, int]
 Face = tuple[int, int, int, int]
@@ -183,58 +191,39 @@ def candidates(
     return accepted, dict(sorted(rejected.items()))
 
 
-def _maximal_matching(options: list[QuadCandidate]) -> dict[int, QuadCandidate]:
-    matched: dict[int, QuadCandidate] = {}
-    for option in options:
-        if option.first not in matched and option.second not in matched:
-            matched[option.first] = option
-            matched[option.second] = option
+def maximum_weight_matching(options: list[QuadCandidate]) -> dict[int, QuadCandidate]:
+    """Return an exact maximum-cardinality, maximum-quality matching.
 
-    # Deterministic length-three augmentations convert one existing pair into
-    # two whenever two currently unmatched triangles permit it.
-    changed = True
-    while changed:
-        changed = False
-        unmatched = sorted(
-            {vertex for option in options for vertex in (option.first, option.second)} - set(matched)
+    NetworkX's blossom implementation uses exact arithmetic for these integer
+    weights. Cardinality is the primary objective; normal alignment, shared
+    edge length, and stable source order break ties in that order.
+    """
+    graph = nx.Graph()
+    maximum_length = max((option.shared_length_squared for option in options), default=0)
+    maximum_pairs = max(1, len({index for option in options for index in (option.first, option.second)}) // 2)
+    length_scale = (maximum_length * maximum_pairs) + 1
+    tie_scale = (len(options) * len(options)) + 1
+    source_order = {
+        option: rank
+        for rank, option in enumerate(sorted(options, key=lambda item: (item.first, item.second)))
+    }
+    for option in options:
+        alignment_units = round(option.alignment * 1_000_000)
+        quality = (alignment_units * length_scale) + option.shared_length_squared
+        stable_tie = len(options) - source_order[option]
+        graph.add_edge(
+            option.first,
+            option.second,
+            weight=(quality * tie_scale) + stable_tie,
+            candidate=option,
         )
-        unmatched_set = set(unmatched)
-        for first_unmatched in unmatched:
-            for outer in options:
-                if first_unmatched not in (outer.first, outer.second):
-                    continue
-                middle = outer.second if outer.first == first_unmatched else outer.first
-                old = matched.get(middle)
-                if old is None:
-                    continue
-                other_middle = old.second if old.first == middle else old.first
-                replacement = next(
-                    (
-                        option
-                        for option in options
-                        if other_middle in (option.first, option.second)
-                        and (option.second if option.first == other_middle else option.first) in unmatched_set
-                        and (option.second if option.first == other_middle else option.first) != first_unmatched
-                    ),
-                    None,
-                )
-                if replacement is None:
-                    continue
-                second_unmatched = (
-                    replacement.second if replacement.first == other_middle else replacement.first
-                )
-                del matched[old.first]
-                del matched[old.second]
-                matched[outer.first] = outer
-                matched[outer.second] = outer
-                matched[replacement.first] = replacement
-                matched[replacement.second] = replacement
-                unmatched_set.discard(first_unmatched)
-                unmatched_set.discard(second_unmatched)
-                changed = True
-                break
-            if changed:
-                break
+
+    selected = nx.max_weight_matching(graph, maxcardinality=True, weight="weight")
+    matched: dict[int, QuadCandidate] = {}
+    for first, second in sorted(tuple(sorted(edge)) for edge in selected):
+        option = graph.edges[first, second]["candidate"]
+        matched[first] = option
+        matched[second] = option
     return matched
 
 
@@ -243,7 +232,7 @@ def pair_triangles(
 ) -> tuple[list[RenderPrimitive], dict[str, object]]:
     vertex_list, face_list = list(vertices), list(faces)
     options, rejected = candidates(vertex_list, face_list)
-    matched = _maximal_matching(options)
+    matched = maximum_weight_matching(options)
     primitives: list[RenderPrimitive] = []
     emitted: set[int] = set()
     for index, face in enumerate(face_list):
@@ -260,6 +249,9 @@ def pair_triangles(
         emitted.update((option.first, option.second))
     quad_count = sum(primitive.second_triangle is not None for primitive in primitives)
     return primitives, {
+        "matcher": "networkx.max_weight_matching",
+        "matcher_version": nx.__version__,
+        "matching_policy": "maximum cardinality, then maximum integer quality",
         "source_triangle_count": len(face_list),
         "candidate_count": len(options),
         "quad_count": quad_count,

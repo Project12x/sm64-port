@@ -13,7 +13,7 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
-from quad_pairing import pair_triangles  # noqa: E402
+from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
 
@@ -74,6 +74,15 @@ class AssetClassifierTests(unittest.TestCase):
 
 
 class QuadPairingTests(unittest.TestCase):
+    def test_exact_matcher_prefers_cardinality_over_single_edge_quality(self) -> None:
+        options = [
+            QuadCandidate(0, 1, (0, 1, 2, 3), 1.0, 100),
+            QuadCandidate(0, 2, (0, 1, 2, 3), 0.9, 10),
+            QuadCandidate(1, 3, (0, 1, 2, 3), 0.9, 10),
+        ]
+        matched = maximum_weight_matching(options)
+        self.assertEqual({tuple(sorted((option.first, option.second))) for option in matched.values()}, {(0, 2), (1, 3)})
+
     def test_coplanar_pair_becomes_one_ordered_quad(self) -> None:
         vertices = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
         faces = [(3, 0, 1, 2), (3, 0, 2, 3)]

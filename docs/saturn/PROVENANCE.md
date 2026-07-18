@@ -37,9 +37,26 @@ The Saturn compiler adopts that candidate-graph/matching pattern, but no source
 is copied. The Blender/PuLP implementation accepts any selected two-triangle
 edge and therefore does not enforce Saturn material, winding, normal,
 projected-convexity, UV, or animation constraints. The target-specific
-standard-library implementation in `tools/saturn/quad_pairing.py` uses strict
-prefilters and deterministic maximal matching with local augmentations; this
+implementation in `tools/saturn/quad_pairing.py` uses strict prefilters; this
 architecture mismatch is why the Apache implementation is not directly used.
+Candidate selection is delegated to the pinned NetworkX dependency below.
+
+### NetworkX 3.6.1
+
+| Field | Record |
+|---|---|
+| Repository | <https://github.com/networkx/networkx> |
+| Release / pinned commit | `networkx-3.6.1` / `7530809bfa1ea7ed6fdf918a4d1431488953cb1f` |
+| License | BSD-3-Clause |
+| Role | Exact maximum-cardinality, maximum-integer-quality quad matching |
+| Files inspected | `LICENSE.txt`, `networkx/algorithms/matching.py` |
+| Reuse mode | Hash-pinned host-tool dependency |
+
+The compiler calls `networkx.max_weight_matching` with `maxcardinality=True`
+and integer edge weights. NetworkX's inspected blossom/primal-dual
+implementation documents exact integer arithmetic and `O(nodes^3)` runtime.
+It is never imported or linked by Saturn target code. The locked universal
+wheel SHA-256 is recorded in `tools/saturn/requirements.txt`.
 
 ### Project12x/sm64-port
 

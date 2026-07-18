@@ -111,8 +111,18 @@ Docker is optional. The existing MSYS2/source-built workflow below remains the
 fallback when Docker is unavailable or when the host needs a locally inspected
 compiler build.
 
-The host-side classifier and telemetry decoder also have a standard-library-only
-regression check:
+The Saturn mesh compiler uses hash-pinned NetworkX 3.6.1 for exact blossom
+matching. Create the workspace-local host-tool environment once:
+
+```sh
+make -f Makefile.saturn.mk bootstrap-host-tools
+```
+
+PowerShell and POSIX entry points are also available as
+`tools/saturn/bootstrap-host-tools.ps1` and
+`tools/saturn/bootstrap-host-tools.sh`. The virtual environment is ignored;
+`tools/saturn/requirements.txt` is the committed dependency lock. Run the
+classifier, matching, controller, and telemetry regression suite with:
 
 ```sh
 make -f Makefile.saturn.mk verify-tools

@@ -196,7 +196,11 @@ objects, draw commands fall from 1,213 to 1,057. The compiler report is
 uses the candidate-graph/matching pattern from the Apache-2.0
 `Rulesobeyer/Optimized-Tris-to-Quads-Converter` at commit
 `1e1cdb1aaf55bb3e222cd8ecf7233f9065af392c`; no upstream code is copied, and
-Blender/PuLP are not build dependencies.
+Blender/PuLP are not build dependencies. Exact selection uses hash-pinned
+NetworkX 3.6.1 (`7530809bfa1ea7ed6fdf918a4d1431488953cb1f`, BSD-3-Clause)
+with maximum cardinality followed by integer-weighted pairing quality. This
+proves that 156 is the maximum under the current safety gates rather than an
+artifact of greedy ordering.
 
 The BIOS-backed Ymir visual regression is
 `docs/saturn/evidence/screenshots/ymir-true-quads-2026-07-18.png` (SHA-256
@@ -205,3 +209,10 @@ frame hash `5c39367b895770cbcc2c34c9810dea64`, frame 3300). It preserves the fac
 silhouette, feature occlusion, eyes, and shine. Emulator timing is comparative
 evidence only; animated-deformation validation and retail hardware timing
 remain future gates.
+
+The exact-matching follow-up capture is
+`docs/saturn/evidence/screenshots/ymir-exact-quads-2026-07-18.png` (SHA-256
+`4deb096a9dac257661a2a6b2055002234b62a100be1c233faf772b5fcaa6ee7f`,
+frame hash `915851840edf189fb39889476ad98055`, frame 3300). Against the preceding
+heuristic pairing it changes 610 pixels in the nose-shading region and changes
+zero foreground-mask pixels, preserving the complete rendered silhouette.
