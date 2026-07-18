@@ -26,6 +26,11 @@ passing or failing cartridge result. The capture runner now supports
 New reports retain the complete stderr stream and set
 `diagnostics.cd_block_copy_unimplemented: true` for the observed
 `Get copy error command is unimplemented` diagnostic.
+
+A fresh 600-frame rerun verified `protocol.ready: true`,
+`stopped_reasons: ["frame_limit"]`, and that diagnostic flag. Its local raw
+JSON report SHA-256 was
+`9fac44a4df2329b729b415a51b24c4402366498dae8d8c23d2c161667abb38c4`.
 The raw JSON report SHA-256 is
 `4da0901627945b6e82a7913ef7f9bb415a3649432d6f8ad0010a4a0ca8c0e786`.
 
