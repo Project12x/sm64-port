@@ -434,13 +434,32 @@ eye_depth(const int16_t vertices[][3], const uint16_t *f)
     return depth;
 }
 
+static bool
+face_eyelid_primitive(const uint16_t *f)
+{
+    /* Only promote genuinely skinned upper-face triangles. The eye objects
+     * are separate Goddard display-list geometry, so without this the static
+     * white/iris mesh wins painter ordering and hides the moving eyelid skin. */
+    for (uint8_t corner = 1; corner < 5U; corner++) {
+        const uint16_t vertex = f[corner];
+        const int32_t weight = sm64_right_eyelid_weights[vertex] +
+          sm64_left_eyelid_weights[vertex];
+        if (weight >= 16000 && deformed_face[vertex][1] >= 80)
+            return true;
+    }
+    return false;
+}
+
 static int
 depth_of(uint16_t surface)
 {
     if (surface < FACE_SURFACE_COUNT) {
         const uint16_t *f = sm64_face_primitives[surface];
-        return (transformed_face[f[1]].z + transformed_face[f[2]].z +
+        int depth = (transformed_face[f[1]].z + transformed_face[f[2]].z +
           transformed_face[f[3]].z + transformed_face[f[4]].z) / 4;
+        if (face_eyelid_primitive(f))
+            depth += 72;
+        return depth;
     }
     if (surface < LEFT_EYE_SURFACE_BASE)
         return eye_depth(sm64_right_eye_vertices,

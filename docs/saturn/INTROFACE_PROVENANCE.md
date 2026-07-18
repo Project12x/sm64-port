@@ -256,3 +256,9 @@ calls `print_intro_text`, whose text path uses `main_hud_lut` in
 `src/game/print.c`. The BIOS-backed result is
 `ymir-m1-source-press-start-2026-07-18.png`; it proves local source glyphs,
 not a hand-drawn substitute, are composited into the VDP2 title bitmap.
+
+The converter now follows the same MIO0 Segment 2 decompression boundary used
+by `extract_assets.py` before reading the recorded US glyph offsets. The
+corrected capture is
+`ymir-m1-source-glyphs-eyelid-occlusion-2026-07-18.png`; the earlier noisy
+prompt is retained in the gallery as a rejected compressed-data read.
