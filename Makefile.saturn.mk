@@ -23,6 +23,7 @@ CASTLE_TILE_BUDGET ?= 6000
 CASTLE_ORDERING ?= bsp
 MARIO_TEXTURE_TILE ?= 16
 MARIO_TEXTURE_SOURCE_SCALE ?= 1
+MARIO_TEXTURE_SUBDIVISION ?= 1
 
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
@@ -169,6 +170,7 @@ compile-mario-textures: compile-mario-actor check-host-tools
 	  --intake "docs/saturn/evidence/reports/mario-actor-intake.json" \
 	  --tile "$(MARIO_TEXTURE_TILE)" \
 	  --source-scale "$(MARIO_TEXTURE_SOURCE_SCALE)" \
+	  --subdivision "$(MARIO_TEXTURE_SUBDIVISION)" \
 	  --output "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/mario-eye-uv-bake.json"
 

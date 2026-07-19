@@ -1,7 +1,7 @@
 {
   "source": "mario_geo_body normal-cap/front branch",
   "source_triangle_count": 50,
-  "triangle_count": 200,
+  "triangle_count": 50,
   "textures": {
     "mario_texture_yellow_button": 10,
     "mario_texture_m_logo": 5,
@@ -9,7 +9,7 @@
     "mario_texture_hair_sideburn": 8,
     "mario_texture_mustache": 16
   },
-  "subdivision": "4 affine subtriangles per source triangle",
+  "subdivision": "1 affine tile(s) per source triangle",
   "tile": [
     16,
     16
@@ -18,8 +18,8 @@
   "source_filter": "RGB1555 box filter with majority alpha",
   "source_texture_bytes": 10240,
   "resampled_source_bytes": 10240,
-  "texture_bytes": 102400,
+  "texture_bytes": 25600,
   "vdp1_default_texture_partition_bytes": 442336,
   "uv_space": "Fast3D source UV / 32",
-  "mapping": "complete per-subtriangle UV bake; texel corners C/B/A/C follow the measured VDP1 repeated-vertex distorted-sprite mapping"
+  "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"
 }

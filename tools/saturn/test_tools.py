@@ -16,7 +16,7 @@ from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # 
 from extract_mario_actor import animation_frame_count, animation_rotations, animation_translation, geo_layout_parts  # noqa: E402
 from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
-from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
+from bake_mario_eye_uv import TILE, bilinear_weights, split_four  # noqa: E402
 from vdp1_texture import distorted_sprite_weights, downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract, flatten  # noqa: E402
@@ -218,6 +218,16 @@ class MarioActorPoseTests(unittest.TestCase):
         # The lower-left D corner contributes to repeated destination C and
         # therefore contains source texture data.
         self.assertGreater(bilinear_weights(15, 15)[2], 0.9)
+
+    def test_actor_texture_quality_tier_splits_one_triangle_into_four(self) -> None:
+        source = {
+            "positions": [[0, 0, 0], [8, 0, 0], [0, 8, 0]],
+            "uv": [[0, 0], [256, 0], [0, 256]],
+        }
+        split = split_four(source)
+        self.assertEqual(len(split), 4)
+        self.assertEqual(split[0]["positions"], [[0, 0, 0], [4, 0, 0], [0, 4, 0]])
+        self.assertEqual(split[3]["uv"], [[128, 0], [128, 128], [0, 128]])
         self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
     def test_vdp1_native_quad_uses_measured_a_b_c_d_corner_order(self) -> None:

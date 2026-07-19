@@ -1236,3 +1236,16 @@ sort falls from about 101 to 73 ms and command construction from 63 to 25 ms.
 The source animation, materials, texture path, and collision-backed game state
 remain live. Evidence: [Stage 114](screenshots/ymir-m4-transform-once-2026-07-19.png)
 and [phase report](reports/ymir-m4-transform-once-2026-07-19.json).
+
+### 2026-07-19 — One-command actor texture tier
+
+Mario's 50 textured source triangles now default to one complete 16x16
+repeated-C tile each instead of four runtime subtriangles. The four-tile
+quality profile remains available through `MARIO_TEXTURE_SUBDIVISION=4`. In
+the captured view, 43 visible textured triangles remove 129 commands: the live
+END index falls from 1,031 to 902 (903 commands). ROM-derived actor texture
+residency falls from 102,400 to 25,600 bytes, command construction drops from
+about 25 to 20 ms, and the sampled full loop improves from 6.6 to 7.5 FPS.
+Evidence: [Stage 115](screenshots/ymir-m4-actor-single-texture-tile-2026-07-19.png),
+[phase report](reports/ymir-m4-actor-single-texture-tile-2026-07-19.json), and
+[command probe](reports/ymir-m4-actor-single-texture-command-2026-07-19.json).

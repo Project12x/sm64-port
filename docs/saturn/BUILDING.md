@@ -177,12 +177,15 @@ make -f Makefile.saturn.mk compile-castle-textures \
 
 make -f Makefile.saturn.mk compile-mario-textures \
   SM64_ROM='E:/ROM and ISO/n64/Super_Mario_64_(U)_[!].zip' \
-  MARIO_TEXTURE_TILE=16 MARIO_TEXTURE_SOURCE_SCALE=1
+  MARIO_TEXTURE_TILE=16 MARIO_TEXTURE_SOURCE_SCALE=1 \
+  MARIO_TEXTURE_SUBDIVISION=1
 ```
 
 The accepted Castle default is 8×8 with a 2× RGB1555 box filter. Mario stays
-at 16×16/1× by default because its small facial details need a separate close
-camera acceptance test. Each conversion report records source bytes,
+at 16×16/1× by default. Its performance profile uses one affine tile per
+source triangle; `MARIO_TEXTURE_SUBDIVISION=4` retains the former close-camera
+quality tier at four times the texture bytes and up to four times the commands.
+Each conversion report records source bytes,
 resampled-source bytes, emitted VDP1 bytes, filter, tile size, and scale.
 The filter is an original small host implementation because the required
 five-bit direct-color and binary-alpha contract is specific to this offline

@@ -67,6 +67,7 @@ def main() -> None:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--tile", type=int, choices=(8, 16, 32), default=TILE)
     parser.add_argument("--source-scale", type=int, choices=(1, 2, 4), default=1)
+    parser.add_argument("--subdivision", type=int, choices=(1, 4), default=1)
     args = parser.parse_args()
     assets = json.loads(args.assets.read_text(encoding="utf-8"))
     intake = json.loads(args.intake.read_text(encoding="utf-8"))
@@ -89,11 +90,11 @@ def main() -> None:
         converted = [saturn_rgb1555(int.from_bytes(source[index:index + 2], "big")) for index in range(0, len(source), 2)]
         scaled_width, scaled_height, scaled = downsample_rgb1555(converted, width, height, args.source_scale)
         textures[texture_name] = (scaled, scaled_width, scaled_height)
-    triangles = [
+    triangles = ([
         {**subtriangle, "texture": source_triangle["texture"]}
         for source_triangle in source_triangles
         for subtriangle in split_four(source_triangle)
-    ]
+    ] if args.subdivision == 4 else source_triangles)
     tiles: list[list[int]] = []
     for triangle in triangles:
         uv = triangle["uv"]
@@ -108,6 +109,7 @@ def main() -> None:
         tiles.append(tile)
     lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once",
              f"#define SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT {len(triangles)}U",
+             f"#define SM64_MARIO_TEXTURE_TILES_PER_SOURCE {args.subdivision}U",
              f"#define SM64_MARIO_TEXTURE_UV_TILE_WIDTH {args.tile}U",
              "static const int16_t sm64_mario_texture_uv_positions[SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT][3][3] = {"]
     for triangle in triangles:
@@ -121,7 +123,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": "4 affine subtriangles per source triangle", "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": source_texture_bytes, "resampled_source_bytes": sum(width * height * 2 for _pixels, width, height in textures.values()), "texture_bytes": len(tiles) * args.tile * args.tile * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": f"{args.subdivision} affine tile(s) per source triangle", "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": source_texture_bytes, "resampled_source_bytes": sum(width * height * 2 for _pixels, width, height in textures.values()), "texture_bytes": len(tiles) * args.tile * args.tile * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()

@@ -405,7 +405,8 @@ static void build_mario_gouraud(void) {
 }
 
 static void mario_texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
-    const uint16_t *indices = sm64_mario_textured_source_vertices[tile / 4U];
+    const uint16_t *indices = sm64_mario_textured_source_vertices[
+        tile / SM64_MARIO_TEXTURE_TILES_PER_SOURCE];
     const point3_t a = mario_view_vertices[indices[0]];
     const point3_t b = mario_view_vertices[indices[1]];
     const point3_t c = mario_view_vertices[indices[2]];
@@ -413,7 +414,9 @@ static void mario_texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
     const point3_t bc = {(b.x + c.x) / 2, (b.y + c.y) / 2, (b.z + c.z) / 2};
     const point3_t ca = {(c.x + a.x) / 2, (c.y + a.y) / 2, (c.z + a.z) / 2};
     point3_t points[3];
-    switch (tile & 3U) {
+    if (SM64_MARIO_TEXTURE_TILES_PER_SOURCE == 1U) {
+        points[0] = a; points[1] = b; points[2] = c;
+    } else switch (tile & 3U) {
         case 0: points[0] = a;  points[1] = ab; points[2] = ca; break;
         case 1: points[0] = ab; points[1] = b;  points[2] = bc; break;
         case 2: points[0] = ca; points[1] = bc; points[2] = c;  break;
@@ -621,7 +624,10 @@ static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_par
 static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram_partitions_t *partitions) {
     const uint16_t texture_start = sm64_mario_texture_tile_start[primitive];
     if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE) {
-        for (uint16_t tile = texture_start; tile < texture_start + 4U; tile++) {
+        const uint16_t first_tile = (texture_start / 4U) *
+            SM64_MARIO_TEXTURE_TILES_PER_SOURCE;
+        for (uint16_t tile = first_tile;
+             tile < first_tile + SM64_MARIO_TEXTURE_TILES_PER_SOURCE; tile++) {
             int16_vec2_t vertices[4]; mario_texture_tile_vertices(tile, vertices);
             vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
             vdp1_cmdt_distorted_sprite_set(cmdt);

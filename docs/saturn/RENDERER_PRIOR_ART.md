@@ -143,6 +143,14 @@ about 4.6 to 6.6 FPS while the original animation vertices, collision stream,
 materials, and VDP1 commands remained active. This is the new optimization
 baseline; it is progress toward, not satisfaction of, the 15 FPS gate.
 
+Actor texture lowering is now an explicit quality tier. The default maps each
+of the 50 original textured Mario triangles to one complete 16x16 repeated-C
+VDP1 sprite; the previous four-way affine split remains selectable offline.
+In the captured view, 43 visible textured triangles remove 129 live commands
+(1,032 to 903), texture residency falls from 100 KiB to 25 KiB, command build
+drops from about 25 to 20 ms, and the sampled loop rises from 6.6 to 7.5 FPS.
+No source triangle, UV, animation, or material is replaced.
+
 Source `G_CULL_BACK`/`G_CULL_FRONT` state is now preserved by the Castle IR.
 The accepted per-fragment Fast3D winding test removes 148 tiles and lowers the
 captured live VDP1 prefix from 1,105 to 1,032 commands without changing the
