@@ -9,12 +9,15 @@ ROM-derived pixels are emitted beneath build/ and must never be committed.
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import hashlib
 import json
 import math
 from pathlib import Path
 
+from compile_castle_bsp import expand_render_polygons
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
+from static_bsp import Node, Polygon, build
 from vdp1_texture import (
     distorted_sprite_weights,
     downsample_rgb1555,
@@ -146,6 +149,121 @@ def sample_quad(
     )
 
 
+def triangulate_polygon(polygon: Polygon) -> list[Polygon]:
+    """Lower an arbitrary convex BSP fragment to VDP1 repeated-vertex tris."""
+    if len(polygon.vertices) == 3:
+        return [polygon]
+    output = []
+    for index in range(1, len(polygon.vertices) - 1):
+        output.append(Polygon(
+            (polygon.vertices[0], polygon.vertices[index], polygon.vertices[index + 1]),
+            source=polygon.source, root=polygon.root, layer=polygon.layer,
+            texture=polygon.texture,
+        ))
+    return output
+
+
+def adaptive_subdivide_triangle(polygon: Polygon, threshold: int) -> list[Polygon]:
+    """Bisect a VDP1 triangle's longest world-space edge until it fits.
+
+    This deliberately runs after BSP construction: every child remains coplanar
+    and in the same BSP node, while Vertex.between() interpolates the original
+    Fast3D attributes exactly.  It is the Saturn-shaped counterpart to the PS1
+    port's static longest-edge preprocessor, not camera-authored replacement
+    geometry.
+    """
+    if len(polygon.vertices) != 3:
+        raise ValueError("adaptive subdivision requires a triangle")
+    if threshold <= 0:
+        return [polygon]
+
+    vertices = polygon.vertices
+    edges = ((0, 1), (1, 2), (2, 0))
+    lengths = tuple(sum(
+        (vertices[right].position[axis] - vertices[left].position[axis]) ** 2
+        for axis in range(3)
+    ) for left, right in edges)
+    edge_index = max(range(3), key=lambda index: (lengths[index], -index))
+    if lengths[edge_index] <= threshold * threshold:
+        return [polygon]
+
+    midpoint_vertex = vertices[edges[edge_index][0]].between(
+        vertices[edges[edge_index][1]], Fraction(1, 2))
+    if edge_index == 0:
+        children = (
+            (vertices[0], midpoint_vertex, vertices[2]),
+            (midpoint_vertex, vertices[1], vertices[2]),
+        )
+    elif edge_index == 1:
+        children = (
+            (vertices[0], vertices[1], midpoint_vertex),
+            (vertices[0], midpoint_vertex, vertices[2]),
+        )
+    else:
+        children = (
+            (vertices[0], vertices[1], midpoint_vertex),
+            (midpoint_vertex, vertices[1], vertices[2]),
+        )
+
+    output: list[Polygon] = []
+    for child_vertices in children:
+        child = Polygon(
+            child_vertices, source=polygon.source, root=polygon.root,
+            layer=polygon.layer, texture=polygon.texture,
+        )
+        output.extend(adaptive_subdivide_triangle(child, threshold))
+    return output
+
+
+def lower_polygon(polygon: Polygon, threshold: int) -> list[Polygon]:
+    output: list[Polygon] = []
+    for triangle in triangulate_polygon(polygon):
+        output.extend(adaptive_subdivide_triangle(triangle, threshold))
+    return output
+
+
+def flatten_bsp(
+        root: Node, subdivision_threshold: int = 0,
+) -> tuple[list[dict[str, object]], list[Polygon], int]:
+    """Serialize nodes preorder and group their VDP1 triangles contiguously."""
+    nodes: list[dict[str, object] | None] = []
+    polygons: list[Polygon] = []
+    triangle_count = 0
+
+    def visit(node: Node | None) -> int:
+        nonlocal triangle_count
+        if node is None:
+            return -1
+        index = len(nodes)
+        nodes.append(None)
+        start = len(polygons)
+        for polygon in node.coplanar:
+            triangle_count += len(polygon.vertices) - 2
+            polygons.extend(lower_polygon(polygon, subdivision_threshold))
+        count = len(polygons) - start
+        front, back = visit(node.front), visit(node.back)
+        nodes[index] = {
+            "plane": node.plane,
+            "front": front,
+            "back": back,
+            "tile_start": start,
+            "tile_count": count,
+        }
+        return index
+
+    visit(root)
+    return [node for node in nodes if node is not None], polygons, triangle_count
+
+
+def nearest_integer(value: Fraction) -> int:
+    """Round a rational symmetrically for the source's int16 world domain."""
+    if value >= 0:
+        return (value.numerator * 2 + value.denominator) // (2 * value.denominator)
+    positive = -value
+    return -((positive.numerator * 2 + positive.denominator) //
+             (2 * positive.denominator))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rom", type=Path, required=True)
@@ -159,6 +277,12 @@ def main() -> None:
     parser.add_argument("--subdivision", type=int, choices=(1, 4), default=1)
     parser.add_argument("--subdivision-threshold", type=int, default=0,
                         help="split triangles whose source-space diagonal exceeds this value")
+    parser.add_argument("--max-tiles", type=int, default=2400,
+                        help="reject a generated bank larger than the measured VDP1 budget")
+    parser.add_argument("--ordering", choices=("depth", "bsp"), default="bsp",
+                        help="compile a camera-independent static BSP or retain depth-sort input")
+    parser.add_argument("--bsp-candidate-limit", type=int, default=32)
+    parser.add_argument("--bsp-split-weight", type=int, default=8)
     args = parser.parse_args()
     rom, asset_map = rom_bytes(args.rom), json.loads(args.assets.read_text(encoding="utf-8"))
     scene = json.loads(args.intake.read_text(encoding="utf-8"))
@@ -177,57 +301,96 @@ def main() -> None:
     positions: list[tuple[tuple[int, int, int], ...]] = []
     tile_primitives: list[int] = []
     words: list[int] = []
+    render_polygons = expand_render_polygons(scene, args.subdivision)
+    bsp_nodes: list[dict[str, object]] = []
+    bsp_stats = None
+    if args.ordering == "bsp":
+        static = [polygon for polygon in render_polygons if polygon.layer != 1]
+        decals = [polygon for polygon in render_polygons if polygon.layer == 1]
+        bsp_root, bsp_stats = build(
+            static, candidate_limit=args.bsp_candidate_limit,
+            split_weight=args.bsp_split_weight,
+        )
+        bsp_nodes, output_polygons, post_bsp_triangle_count = flatten_bsp(
+            bsp_root, args.subdivision_threshold)
+        decal_start = len(output_polygons)
+        for polygon in decals:
+            post_bsp_triangle_count += len(polygon.vertices) - 2
+            output_polygons.extend(lower_polygon(
+                polygon, args.subdivision_threshold))
+        decal_count = len(output_polygons) - decal_start
+    else:
+        output_polygons = [fragment for polygon in render_polygons
+                           for fragment in lower_polygon(
+                               polygon, args.subdivision_threshold)]
+        post_bsp_triangle_count = sum(
+            len(polygon.vertices) - 2 for polygon in render_polygons)
+        decal_start = 0
+        decal_count = 0
+
+    if args.max_tiles > 0 and len(output_polygons) > args.max_tiles:
+        raise ValueError(
+            f"adaptive Castle bank needs {len(output_polygons)} tiles; "
+            f"measured VDP1 budget is {args.max_tiles}")
+
     paired_quads = 0
-    for index, primitive in enumerate(scene["primitives"]):
+    maximum_position_error = Fraction(0)
+    for polygon in output_polygons:
+        index = polygon.source
+        primitive = scene["primitives"][index]
         texture_index = int(primitive["texture_index"])
         if texture_index not in selected_indices:
-            continue
-        starts[index] = len(positions)
+            raise ValueError(f"BSP output primitive {index} has an unselected texture")
+        if starts[index] == 0xFFFF:
+            starts[index] = len(positions)
+        counts[index] += 1
         source_index = int(primitive["first_triangle"])
-        tri = scene["triangles"][source_index]
-        original = [tuple(scene["positions"][vertex]) for vertex in tri]
-        original_uv = [tuple(pair) for pair in scene["uv"][source_index]]
         tile_state = scene["tile_state"][source_index]
         if tile_state is None or "width" not in tile_state or "height" not in tile_state:
             raise ValueError(f"primitive {index} has no complete Fast3D render-tile state")
         texture = texture_data[scene["textures"][texture_index]]
-        second_index = primitive["second_triangle"]
-        if second_index is not None:
-            vertex_uv: dict[int, tuple[int, int]] = {}
-            for triangle_index in (source_index, int(second_index)):
-                for vertex, pair in zip(scene["triangles"][triangle_index], scene["uv"][triangle_index]):
-                    value = tuple(pair)
-                    if vertex in vertex_uv and vertex_uv[vertex] != value:
-                        raise ValueError(f"primitive {index} crossed a source UV seam")
-                    vertex_uv[vertex] = value
-            quad_vertices = tuple(int(value) for value in primitive["vertices"])
-            position_quad = tuple(tuple(scene["positions"][vertex]) for vertex in quad_vertices)
-            uv_quad = tuple(vertex_uv[vertex] for vertex in quad_vertices)
-            positions.append(position_quad)
-            tile_primitives.append(index)
-            words.extend(sample_quad(texture, uv_quad, tile_state, x, y, args.tile,
+        rounded: list[tuple[int, int, int]] = []
+        for vertex in polygon.vertices:
+            point = tuple(nearest_integer(value) for value in vertex.position)
+            maximum_position_error = max(maximum_position_error, *(
+                abs(value - rounded_value)
+                for value, rounded_value in zip(vertex.position, point)
+            ))
+            if any(value < -32768 or value > 32767 for value in point):
+                raise ValueError("BSP fragment left the int16 Castle world domain")
+            rounded.append(point)
+        uv = tuple(tuple(value for value in vertex.attributes) for vertex in polygon.vertices)
+        tile_primitives.append(index)
+        if len(polygon.vertices) == 4:
+            positions.append(tuple(rounded))
+            words.extend(sample_quad(texture, uv, tile_state, x, y, args.tile,
                                      args.source_scale)
                          for y in range(args.tile) for x in range(args.tile))
-            counts[index] = 1
             paired_quads += 1
-            continue
-        if should_subdivide(original, args.subdivision, args.subdivision_threshold):
-            ab, bc, ca = midpoint(original[0], original[1]), midpoint(original[1], original[2]), midpoint(original[2], original[0])
-            uab, ubc, uca = midpoint(original_uv[0], original_uv[1]), midpoint(original_uv[1], original_uv[2]), midpoint(original_uv[2], original_uv[0])
-            parts = (((original[0], ab, ca), (original_uv[0], uab, uca)), ((ab, original[1], bc), (uab, original_uv[1], ubc)), ((ca, bc, original[2]), (uca, ubc, original_uv[2])), ((ab, bc, ca), (uab, ubc, uca)))
-        else:
-            parts = ((tuple(original), tuple(original_uv)),)
-        counts[index] = len(parts)
-        for position_tri, uv_tri in parts:
-            positions.append((*position_tri, position_tri[2]))
-            tile_primitives.append(index)
-            words.extend(sample_triangle(texture, uv_tri, tile_state, x, y,
+        elif len(polygon.vertices) == 3:
+            positions.append((*rounded, rounded[2]))
+            words.extend(sample_triangle(texture, uv, tile_state, x, y,
                                          args.tile, args.source_scale)
                          for y in range(args.tile) for x in range(args.tile))
+        else:
+            raise ValueError("BSP lowering must produce only triangles or quads")
     textured_count = sum(value != 0xFFFF for value in starts)
-    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_PAIRED_QUAD_COUNT {paired_quads}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {"]
+    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_PAIRED_QUAD_COUNT {paired_quads}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", f"#define SM64_CASTLE_BSP_NODE_COUNT {len(bsp_nodes)}U", f"#define SM64_CASTLE_BSP_DECAL_START {decal_start}U", f"#define SM64_CASTLE_BSP_DECAL_COUNT {decal_count}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {"]
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
     lines.append("};")
+    if bsp_nodes:
+        lines.append("static const int32_t sm64_castle_bsp_normal[SM64_CASTLE_BSP_NODE_COUNT][3] = {")
+        lines.extend("    {" + ", ".join(str(value) for value in node["plane"][:3]) + "}," for node in bsp_nodes)
+        lines.append("};")
+        lines.append("static const int64_t sm64_castle_bsp_distance[SM64_CASTLE_BSP_NODE_COUNT] = {")
+        lines.extend("    INT64_C(" + str(node["plane"][3]) + ")," for node in bsp_nodes)
+        lines.append("};")
+        lines.append("static const int16_t sm64_castle_bsp_children[SM64_CASTLE_BSP_NODE_COUNT][2] = {")
+        lines.extend(f"    {{{node['front']}, {node['back']}}}," for node in bsp_nodes)
+        lines.append("};")
+        lines.append("static const uint16_t sm64_castle_bsp_tile_range[SM64_CASTLE_BSP_NODE_COUNT][2] = {")
+        lines.extend(f"    {{{node['tile_start']}U, {node['tile_count']}U}}," for node in bsp_nodes)
+        lines.append("};")
     lines.append("static const uint16_t sm64_castle_uv_tile_primitive[SM64_CASTLE_UV_TILE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{value}U" for value in tile_primitives[offset:offset + 16]) + "," for offset in range(0, len(tile_primitives), 16))
     lines.append("};")
@@ -241,7 +404,7 @@ def main() -> None:
     for offset in range(0, len(words), args.tile * args.tile): lines.append("    {" + ", ".join(f"0x{word:04X}" for word in words[offset:offset + args.tile * args.tile]) + "},")
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivided_triangles": sum(value == 4 for value in counts), "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; native VDP1 quads use measured C/B/A/D character-corner order, fallbacks retain C/B/A/C repeated-vertex tiles", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "ordering": args.ordering, "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivision_policy": "post-BSP recursive longest-edge bisection with exact Fast3D attribute interpolation", "tile_budget": args.max_tiles, "post_bsp_triangles_before_adaptive_split": post_bsp_triangle_count, "adaptive_split_events": len(positions) - post_bsp_triangle_count, "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; native VDP1 quads use measured C/B/A/D character-corner order, fallbacks retain C/B/A/C repeated-vertex tiles", "bsp": None if bsp_stats is None else {"policy": "exact rational offline splits before VDP1 lowering", "node_count": bsp_stats.node_count, "split_events": bsp_stats.split_events, "input_polygons": bsp_stats.input_polygons, "output_convex_polygons": bsp_stats.output_polygons, "max_depth": bsp_stats.max_depth, "max_fragment_vertices": bsp_stats.max_vertices, "decal_start": decal_start, "decal_count": decal_count, "position_quantization": "nearest source world unit", "maximum_position_error": [maximum_position_error.numerator, maximum_position_error.denominator], "deterministic_sha256": bsp_stats.digest}, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

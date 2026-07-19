@@ -23,7 +23,19 @@ from extract_castle_area import extract, flatten  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
 from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: E402
 from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
-from bake_castle_uv import should_subdivide, texture_coordinate  # noqa: E402
+from bake_castle_uv import (  # noqa: E402
+    adaptive_subdivide_triangle,
+    should_subdivide,
+    texture_coordinate,
+)
+from compile_castle_bsp import compile_bsp  # noqa: E402
+from static_bsp import (  # noqa: E402
+    Polygon as BspPolygon,
+    Vertex as BspVertex,
+    build as build_bsp,
+    painter_order as bsp_painter_order,
+    split_polygon as split_bsp_polygon,
+)
 from plan_castle_camera_coverage import plan  # noqa: E402
 from quad_pairing import QuadCandidate, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
@@ -373,6 +385,68 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertFalse(should_subdivide(small, 1, 512))
         self.assertTrue(should_subdivide(large, 1, 512))
         self.assertTrue(should_subdivide(small, 4, 0))
+
+    def test_post_bsp_subdivision_preserves_winding_and_exact_uvs(self) -> None:
+        polygon = BspPolygon((
+            BspVertex.make((0, 0, 0), (0, 0)),
+            BspVertex.make((1024, 0, 0), (1024, 0)),
+            BspVertex.make((0, 128, 0), (0, 128)),
+        ), source=7, texture=3)
+        fragments = adaptive_subdivide_triangle(polygon, 512)
+        self.assertGreater(len(fragments), 1)
+        self.assertTrue(all(fragment.source == 7 and fragment.texture == 3
+                            for fragment in fragments))
+        self.assertIn(
+            BspVertex.make((512, 0, 0), (512, 0)),
+            {vertex for fragment in fragments for vertex in fragment.vertices},
+        )
+        for fragment in fragments:
+            a, b, c = (vertex.position for vertex in fragment.vertices)
+            cross_z = ((b[0] - a[0]) * (c[1] - a[1]) -
+                       (b[1] - a[1]) * (c[0] - a[0]))
+            self.assertGreater(cross_z, 0)
+            for left, right in ((a, b), (b, c), (c, a)):
+                self.assertLessEqual(sum(
+                    (right[axis] - left[axis]) ** 2 for axis in range(3)
+                ), 512 * 512)
+
+    def test_static_bsp_splits_geometry_and_interpolates_uv_exactly(self) -> None:
+        polygon = BspPolygon(tuple(BspVertex.make(position, uv) for position, uv in (
+            ((-2, 0, -2), (0, 0)),
+            ((2, 0, -2), (64, 0)),
+            ((0, 0, 2), (32, 64)),
+        )), source=7)
+        front, back = split_bsp_polygon(polygon, (1, 0, 0, 0))
+        seam = [vertex for fragment in (front, back) for vertex in fragment.vertices
+                if vertex.position[0] == 0]
+        self.assertGreaterEqual(len(seam), 4)
+        self.assertTrue(all(vertex.attributes[0] == 32 for vertex in seam))
+        self.assertEqual({fragment.source for fragment in (front, back)}, {7})
+
+    def test_static_bsp_order_changes_with_camera_side(self) -> None:
+        polygons = [
+            BspPolygon(tuple(BspVertex.make(point) for point in points), source=source)
+            for source, points in (
+                (0, ((0, -2, -2), (0, 2, -2), (0, 0, 2))),
+                (1, ((-2, -2, 0), (2, -2, 0), (0, 2, 0))),
+            )
+        ]
+        root, stats = build_bsp(polygons, candidate_limit=2)
+        self.assertGreater(stats.split_events, 0)
+        positive = [polygon.vertices for polygon in bsp_painter_order(root, (4, 0, 4))]
+        negative = [polygon.vertices for polygon in bsp_painter_order(root, (-4, 0, -4))]
+        self.assertNotEqual(positive, negative)
+        self.assertEqual(stats.digest, build_bsp(polygons, candidate_limit=2)[1].digest)
+
+    def test_castle_bsp_prototype_preserves_source_driven_policy(self) -> None:
+        root = TOOLS.parents[1]
+        report = compile_bsp(compile_scene(root / "levels/castle_inside/areas/1"),
+                             subdivision=1, candidate_limit=8)
+        self.assertEqual(report["source"], "levels/castle_inside/areas/1")
+        self.assertEqual(report["input_render_polygons"], 567)
+        self.assertGreater(report["node_count"], 1)
+        self.assertGreater(report["output_convex_polygons"], 0)
+        self.assertEqual(len(report["deterministic_sha256"]), 64)
 
     def test_fixed_camera_coverage_prefers_the_visible_blue_white_material(self) -> None:
         root = TOOLS.parents[1]

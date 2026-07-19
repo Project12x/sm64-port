@@ -18,8 +18,9 @@ typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int32_t mario_vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
-static int16_t bucket_head[DEPTH_BUCKETS], bucket_tail[DEPTH_BUCKETS];
-static int16_t bucket_next[DRAW_ITEM_COUNT];
+static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
+static int16_t mario_bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t mario_order[SM64_MARIO_PRIMITIVE_COUNT], mario_visible;
 static uint16_t draw_order[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
@@ -98,6 +99,13 @@ static point3_t world_to_view(int32_t x, int32_t y, int32_t z) {
     };
 #endif
 }
+static point3_t painter_camera_position(void) {
+#ifdef SM64_SATURN_TEXTURE_PROBE_CAMERA
+    return (point3_t){-1050, 720, -4200};
+#else
+    return camera_position;
+#endif
+}
 static point3_t castle_point(const int16_t *source) {
     return world_to_view(source[0], source[1], source[2]);
 }
@@ -173,48 +181,94 @@ static void mario_texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
     output[3] = output[2];
 }
 
-static void sort_scene(void) {
-    for (uint16_t bucket = 0; bucket < DEPTH_BUCKETS; bucket++) bucket_head[bucket] = bucket_tail[bucket] = -1;
-    rejected_items = 0;
-    for (uint16_t item = 0; item < DRAW_ITEM_COUNT; item++) {
-        point3_t a, b, c, d;
-        if (item < SM64_CASTLE_UV_TILE_COUNT) {
-            const uint16_t primitive = sm64_castle_uv_tile_primitive[item];
-            const uint8_t root = sm64_castle_area1_primitive_root[primitive];
-            if ((source_graph.selected_root_mask & (1U << root)) == 0U) {
-                rejected_items++;
-                bucket_next[item] = -2;
-                continue;
-            }
-            a = castle_point(sm64_castle_uv_positions[item][0]);
-            b = castle_point(sm64_castle_uv_positions[item][1]);
-            c = castle_point(sm64_castle_uv_positions[item][2]);
-            d = castle_point(sm64_castle_uv_positions[item][3]);
-        } else {
-            const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
-            const uint16_t *indices = sm64_mario_primitives[primitive];
-            a = mario_point(mario_vertex(indices[1]));
-            b = mario_point(mario_vertex(indices[2]));
-            c = mario_point(mario_vertex(indices[3]));
-            d = mario_point(mario_vertex(indices[4]));
+static bool tile_is_visible(uint16_t tile) {
+    const uint16_t primitive = sm64_castle_uv_tile_primitive[tile];
+    const uint8_t root = sm64_castle_area1_primitive_root[primitive];
+    if ((source_graph.selected_root_mask & (1U << root)) == 0U) return false;
+    const point3_t a = castle_point(sm64_castle_uv_positions[tile][0]);
+    const point3_t b = castle_point(sm64_castle_uv_positions[tile][1]);
+    const point3_t c = castle_point(sm64_castle_uv_positions[tile][2]);
+    const point3_t d = castle_point(sm64_castle_uv_positions[tile][3]);
+    const int32_t minimum = min4(a.z, b.z, c.z, d.z);
+    const int32_t maximum = max4(a.z, b.z, c.z, d.z);
+    return minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH;
+}
+
+static void append_static_tile(uint16_t tile) {
+    if (tile_is_visible(tile)) draw_order[visible_items++] = tile;
+    else rejected_items++;
+}
+
+static void sort_mario(void) {
+    for (uint16_t bucket = 0; bucket < DEPTH_BUCKETS; bucket++)
+        mario_bucket_head[bucket] = mario_bucket_tail[bucket] = -1;
+    for (uint16_t primitive = 0; primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++) {
+        const uint16_t *indices = sm64_mario_primitives[primitive];
+        const point3_t a = mario_point(mario_vertex(indices[1]));
+        const point3_t b = mario_point(mario_vertex(indices[2]));
+        const point3_t c = mario_point(mario_vertex(indices[3]));
+        const point3_t d = mario_point(mario_vertex(indices[4]));
+        const int32_t minimum = min4(a.z, b.z, c.z, d.z);
+        const int32_t maximum = max4(a.z, b.z, c.z, d.z);
+        if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) {
+            mario_bucket_next[primitive] = -2;
+            rejected_items++;
+            continue;
         }
-        const int32_t minimum = min4(a.z, b.z, c.z, d.z), maximum = max4(a.z, b.z, c.z, d.z);
-        if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) { rejected_items++; bucket_next[item] = -2; continue; }
-        /* A centroid key lets one long wall triangle paint over geometry that
-         * is wholly in front of its far edge.  The PS1 port's ordering-table
-         * path keys opaque polygons by their farthest transformed vertex;
-         * retain that hardware-oriented behavior here while preserving the
-         * source display-list order within equal buckets. */
         const uint16_t bucket = (uint16_t)((maximum - NEAR_DEPTH) *
             (DEPTH_BUCKETS - 1U) / (FAR_DEPTH - NEAR_DEPTH));
-        bucket_next[item] = -1;
-        if (bucket_head[bucket] < 0) bucket_head[bucket] = (int16_t)item;
-        else bucket_next[bucket_tail[bucket]] = (int16_t)item;
-        bucket_tail[bucket] = (int16_t)item;
+        mario_bucket_next[primitive] = -1;
+        if (mario_bucket_head[bucket] < 0) mario_bucket_head[bucket] = (int16_t)primitive;
+        else mario_bucket_next[mario_bucket_tail[bucket]] = (int16_t)primitive;
+        mario_bucket_tail[bucket] = (int16_t)primitive;
     }
-    visible_items = 0;
+    mario_visible = 0;
     for (int16_t bucket = DEPTH_BUCKETS - 1; bucket >= 0; bucket--)
-        for (int16_t item = bucket_head[bucket]; item >= 0; item = bucket_next[item]) draw_order[visible_items++] = (uint16_t)item;
+        for (int16_t primitive = mario_bucket_head[bucket]; primitive >= 0;
+             primitive = mario_bucket_next[primitive])
+            mario_order[mario_visible++] = (uint16_t)primitive;
+}
+
+static void append_mario(void) {
+    for (uint16_t index = 0; index < mario_visible; index++)
+        draw_order[visible_items++] = SM64_CASTLE_UV_TILE_COUNT + mario_order[index];
+}
+
+static int64_t bsp_side(uint16_t node, point3_t point) {
+    return ((int64_t)sm64_castle_bsp_normal[node][0] * point.x) +
+           ((int64_t)sm64_castle_bsp_normal[node][1] * point.y) +
+           ((int64_t)sm64_castle_bsp_normal[node][2] * point.z) +
+           sm64_castle_bsp_distance[node];
+}
+
+static void traverse_bsp(int16_t node, bool insert_mario) {
+    if (node < 0) {
+        if (insert_mario) append_mario();
+        return;
+    }
+    const bool camera_front = bsp_side((uint16_t)node, painter_camera_position()) >= 0;
+    const bool mario_front = bsp_side((uint16_t)node, (point3_t){
+        SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z}) >= 0;
+    const int16_t front = sm64_castle_bsp_children[node][0];
+    const int16_t back = sm64_castle_bsp_children[node][1];
+    const int16_t far = camera_front ? back : front;
+    const int16_t near = camera_front ? front : back;
+    const bool mario_in_far = camera_front ? !mario_front : mario_front;
+    traverse_bsp(far, insert_mario && mario_in_far);
+    for (uint16_t offset = 0; offset < sm64_castle_bsp_tile_range[node][1]; offset++)
+        append_static_tile(sm64_castle_bsp_tile_range[node][0] + offset);
+    traverse_bsp(near, insert_mario && !mario_in_far);
+}
+
+static void sort_scene(void) {
+    rejected_items = 0;
+    visible_items = 0;
+    sort_mario();
+    traverse_bsp(0, true);
+    /* True translucent decals remain a deliberately late source-derived pass. */
+    for (uint16_t tile = SM64_CASTLE_BSP_DECAL_START;
+         tile < SM64_CASTLE_BSP_DECAL_START + SM64_CASTLE_BSP_DECAL_COUNT; tile++)
+        append_static_tile(tile);
 }
 
 static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_partitions_t *partitions) {

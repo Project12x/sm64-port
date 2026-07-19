@@ -48,6 +48,10 @@ Implementation commitments:
 | [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) | `dc9d09ed83e1004aef47a1c3c597e0ec64848a37` / MIT | `src/meshoptimizer.h`, `src/indexgenerator.cpp`, `src/vfetchoptimizer.cpp` | **Pattern-only.** Preserve independent position/attribute/index streams in the new IR so seams and per-material splits survive conversion. Do not introduce a native dependency until host-tool profiling proves it worthwhile. |
 | [malucard/sm64-psx](https://github.com/malucard/sm64-psx) | `3073845688ea273da78d539b20c45110d8a868c3` / no repository-wide license found; bundled components vary | `README.md`, `src/port/gfx/gfx_rsp_jit.c`, `src/port/psx/gfx_dl_exec_psx.c`, `gfx_tessellation_psx.c`, `gfx_texture_psx.c`, `controller_psx.c`, `tools/preprocess_graphics.py`, `convert_image_psx.py`, `pack_textures.py`, `compress_mario_anims.c` | **Behavior study only.** Preserve the SM64 game/level/behavior boundary, translate display lists to a compact Saturn command IR, expose an `OSContPad` backend, profile the whole loop, and budget texture/animation residency by area. Do not copy source: the useful lesson is the architecture, while Saturn needs VDP1 quads, Yaul input, and its own VRAM/RAM-cart policies. |
 | [yaul-org/libyaul-examples](https://github.com/yaul-org/libyaul-examples) | `66b648eb059bb8bb7392eac70821605a68205b85` / MIT | `vdp1-mesh/vdp1-mesh.c`, `cd-block/cd-block.c` | **Close-port (small peripheral cadence).** `marioturntable/main.c` uses the same public Yaul pattern: initialize SMPC, issue INTBACK from VBlank-out, process the completed collection in the frame loop, and read port 1. Button mapping and the `OSContPad` backend remain original Saturn-port code. |
+| `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `libmic3d/render.c`, `libmic3d/sort.h`, `libyaul/scu/bus/b/vdp/vdp1/cmdt.h`, `vdp1_vram.c` | **Dependency / API use.** Its sort modes establish that the permissive Saturn references provide depth keys, not a reusable static BSP. The original host BSP therefore retains exact SM64 attributes and emits only Yaul command data. The next indexed-bank pass will call its public `VDP1_CMDT_CM_CLUT_16`, `vdp1_cmdt_color_mode1_set`, and CLUT partition APIs directly. |
+| `johannes-fetz/joengine` | `556d081146211b6a1cfa6591d70f9487d406758b` / MIT plus file-level BSD-style terms | `jo_engine/3d.c`, `jo_engine/jo/sega_saturn.h` | **Pattern-only.** Its `SORT_CEN` path confirms a center-depth renderer but contains no static-world BSP to port. No Jo Engine code enters `tools/saturn/static_bsp.py`. |
+| `Maxime-XL2/SONIC-Z-TREME` | `cff75451c1616aac1236fc2b44223902b55c706b` / GPL-3.0 | `README.md` BSP/compiler description | **Behavior study only.** The README reports a useful offline BSP compiler but states that compiler was not published. It validates the architectural direction only; no source is copied. |
+| `Lobotomy-Software/SlaveDriver-Engine` | `a8986591557b6e680550d3c23970284d3b38ff8f` / GPL-3.0 | `WALLS.C` clipping behavior | **Behavior study only.** Its wall clipping demonstrates the target-era need for bounded painter primitives. The exact rational host clipping and UV interpolation are original and do not copy GPL implementation details. |
 | [musl libc](https://git.musl-libc.org/cgit/musl/tree/src/math/sqrtf.c) | file blob `740d81cbab421707a090d2475523807fd27b1337` / MIT-compatible project copyright terms | `src/math/sqrtf.c`, `COPYRIGHT` | **Pattern study only.** The SH freestanding build needs positive-domain `sqrtf` for SM64 vector magnitudes. Musl's implementation depends on its reciprocal-square-root table, floating-point environment helpers, and internal libm ABI, so `src/port/saturn/compat/sqrtf.c` uses an independent exponent seed plus four Newton steps instead of importing that architecture-mismatched dependency. |
 
 Implementation commitments:
@@ -98,8 +102,21 @@ Implementation commitments:
    target directly adapts pinned Yaul's MIT-licensed
    `libyaul/scu/bus/b/vdp/vdp1_vram.c` partition API so generated command,
    texture, and Gouraud counts—not the default fixed partition—own VDP1 VRAM.
-   The preserved 144-quad failure establishes a local policy constraint:
-   planar-convex validity does not imply painter-safe granularity.
+    The preserved 144-quad failure establishes a local policy constraint:
+    planar-convex validity does not imply painter-safe granularity.
+10. The static-world ordering pass is original because the pinned permissive
+    Saturn candidates expose depth sorting but no reusable BSP implementation.
+    `tools/saturn/static_bsp.py` uses exact rational planes, splits, and
+    attribute interpolation; `bake_castle_uv.py` serializes its 352 nodes and
+    inserts dynamic Mario at traversal time. A 144-split/884-tile capture
+    preserves the unresolved texture fans, proving that painter order is not
+    their primary cause.
+11. The PS1 longest-edge lesson is adapted **pattern-only** after BSP lowering,
+    where each child remains in the same node. The 512-unit profile adds 840
+    exact attribute-preserving splits for 1,724 tiles/220,672 RGB1555 bytes;
+    384 units needs 2,911 tiles and exceeds the measured 2,400-tile direct-color
+    policy. No PS1 code is copied. Pinned Yaul CLUT mode is the next dependency
+    API adaptation to reduce that residency before a finer visual trial.
 
 ## M3 onward — inspection and debugging evidence
 

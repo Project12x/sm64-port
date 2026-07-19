@@ -725,15 +725,54 @@ The four configurations, framebuffer hashes, residency figures, and accepted
 selection are preserved in the
 [quad-policy experiment report](reports/castle-vdp1-quad-policy-experiments-2026-07-18.json).
 
+### M4 rejected: BSP ordering isolates the remaining texture fault
+
+![Exact BSP ordering with unresolved texture fans](screenshots/ymir-m4-source-bsp-first-2026-07-18.png)
+
+A deterministic exact-rational host BSP now operates on the real Castle IR
+before VDP1 lowering. It takes 559 opaque and binary-alpha source-derived
+polygons, records 144 splitting events across 352 nodes, and emits 876 static
+triangles plus eight source decals. Runtime traversal is camera-dependent and
+inserts animated Mario into the containing branch; no room geometry or camera
+path is authored by the BSP. The 884-tile bank occupies 113,152 bytes.
+
+The large blue, white, and mural-colored diagonal fans survive. This rejects
+the hypothesis that source submission order or a finer depth key is the root
+cause. The screenshot is retained because it moves the fault boundary to the
+repeated-vertex distorted-sprite texture mapping/coverage path.
+
+### M4 rejected: exact post-BSP longest-edge subdivision
+
+![Adaptive 512-unit post-BSP subdivision](screenshots/ymir-m4-adaptive-512-real-2026-07-18.png)
+
+The PS1 port's useful build-time lesson is adapted without its GPU backend:
+each BSP fragment is triangulated, then recursively bisected on its longest
+source-space edge. Exact `Fraction` positions and Fast3D UV attributes are
+interpolated before the final int16 target quantization. At a 512-unit bound,
+840 splits grow the bank from 884 to 1,724 tiles and from 113,152 to 220,672
+RGB1555 bytes. The 384-unit profile would require 2,911 tiles and is rejected
+by the measured 2,400-tile budget.
+
+The real 1,724-tile capture differs from the BSP-only frame and breaks several
+large fans into smaller pieces, but it does not change their structural shape.
+Subdivision is therefore a useful bounded mitigation, not the correction. The
+next renderer pass will use pinned Yaul's MIT VDP1 CLUT mode to shrink the
+per-tile bank, then test a finer mapping while retaining the same source IR and
+BSP. A stale 884-tile rebuild was detected because the Castle sub-Makefile did
+not regenerate its host-produced header; future evidence builds must run the
+root `compile-castle-textures` dependency first.
+
 ## Next visual gates
 
-1. Add screen-space intersection/projected-error splitting and near-plane
-   clipping on top of the 52 native quads and 2,060 fallback tiles while
-   retaining the graph-selected 619-triangle source bank.
-2. Extend the now-running original controller/Mario intent slice through
+1. Convert the generated Castle tile bank to per-material 4-bit VDP1 CLUTs,
+   preserving source alpha and material identity, so finer Saturn-native
+   triangle mapping fits without exhausting VDP1 VRAM.
+2. Verify the repeated-vertex texture fold with the asymmetric BIOS-backed
+   pattern probe, then apply the measured mapping to the unchanged BSP IR.
+3. Extend the now-running original controller/Mario intent slice through
    source collision, actions, animation, and graph camera; stop adding
    room-specific target state.
-3. Batch each area's 1×/2×/4× texture profiles into RAM-cart manifests, then
+4. Batch each area's 1×/2×/4× texture profiles into RAM-cart manifests, then
    promote the visible working set to VDP1 VRAM without per-texture CD stalls.
-4. Add near-plane clipping and visibility management while retaining the
+5. Add near-plane clipping and visibility management while retaining the
    source display-list material state.
