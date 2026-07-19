@@ -3,11 +3,12 @@
 #include <string.h>
 #include "sm64.h"
 #include "controller_saturn.h"
-#include "saturn_command_arena.h"
 #include "saturn_cart_bank.h"
 #include "saturn_frame_profile.h"
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
+#include "saturn_texture_residency.h"
+#include "saturn_vdp1_backend.h"
 #include "game/area.h"
 #include "game/camera.h"
 #include "game/game_init.h"
@@ -47,8 +48,8 @@
 #define SOURCE_BANK_MARIO 2U
 
 typedef sm64_saturn_vec3i_t point3_t;
-static vdp1_cmdt_list_t *command_list;
-static sm64_saturn_command_arena_t command_arena;
+static sm64_saturn_vdp1_backend_t vdp1_backend;
+static sm64_saturn_texture_residency_t texture_residency;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int32_t mario_vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
@@ -596,9 +597,8 @@ static void draw_castle(uint16_t tile, const vdp1_vram_partitions_t *partitions)
             ? project_point(castle_point(sm64_castle_uv_positions[tile][2]))
             : project_point(castle_point(sm64_castle_uv_positions[tile][3]))
     };
-    uint16_t command;
-    if (!sm64_saturn_command_arena_reserve(&command_arena, 1, &command)) return;
-    vdp1_cmdt_t *cmdt = &command_list->cmdts[command];
+    vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(&vdp1_backend, 1);
+    if (cmdt == NULL) return;
     vdp1_cmdt_distorted_sprite_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
         .color_mode = SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
@@ -623,14 +623,12 @@ static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partiti
     if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE) {
         const uint16_t first_tile = (texture_start / 4U) *
             SM64_MARIO_TEXTURE_TILES_PER_SOURCE;
-        uint16_t command;
-        if (!sm64_saturn_command_arena_reserve(
-                &command_arena, SM64_MARIO_TEXTURE_TILES_PER_SOURCE,
-                &command)) return;
+        vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(
+            &vdp1_backend, SM64_MARIO_TEXTURE_TILES_PER_SOURCE);
+        if (cmdt == NULL) return;
         for (uint16_t tile = first_tile;
              tile < first_tile + SM64_MARIO_TEXTURE_TILES_PER_SOURCE; tile++) {
             int16_vec2_t vertices[4]; mario_texture_tile_vertices(tile, vertices);
-            vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
             vdp1_cmdt_distorted_sprite_set(cmdt);
             vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){.color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD});
             vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + sizeof(sm64_castle_uv_tiles) + tile * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t));
@@ -638,6 +636,7 @@ static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partiti
             vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
             vdp1_cmdt_vtx_set(cmdt, vertices);
             vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions->gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
+            cmdt++;
         }
         return;
     }
@@ -649,9 +648,8 @@ static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partiti
         mario_screen_vertices[indices[3]],
         mario_screen_vertices[indices[4]]
     };
-    uint16_t command;
-    if (!sm64_saturn_command_arena_reserve(&command_arena, 1, &command)) return;
-    vdp1_cmdt_t *cmdt = &command_list->cmdts[command];
+    vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(&vdp1_backend, 1);
+    if (cmdt == NULL) return;
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){.color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD});
     vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
@@ -664,8 +662,7 @@ static void draw_scene(void) {
     /* The command array is initialized once at allocation.  Preserve it like
      * the intro renderer: clear only the prior END marker, overwrite the live
      * commands, then DMA only the used prefix instead of the maximum list. */
-    vdp1_cmdt_end_clear(&command_list->cmdts[
-        sm64_saturn_command_arena_begin(&command_arena)]);
+    sm64_saturn_vdp1_backend_begin(&vdp1_backend);
     /* N64 LAYER_ALPHA is binary cutout geometry that relies on the RDP's
      * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, and Mario must
      * share one far-to-near ordering pass. Only the genuinely translucent
@@ -678,9 +675,7 @@ static void draw_scene(void) {
         else if (item->kind == SM64_SATURN_RENDER_ACTOR)
             draw_mario(item->lowered_index, &partitions);
     }
-    vdp1_cmdt_end_set(&command_list->cmdts[
-        sm64_saturn_command_arena_finish(&command_arena)]);
-    command_list->count = command_arena.live_count;
+    sm64_saturn_vdp1_backend_finish(&vdp1_backend);
     /* Gouraud tables live in VDP1 VRAM. They only change when the source
      * animation frame changes; re-uploading the whole Mario bank every frame
      * was a measurable Saturn bandwidth tax. */
@@ -689,7 +684,7 @@ static void draw_scene(void) {
         scu_dma_transfer_wait(0);
         mario_gouraud_dirty = false;
     }
-    vdp1_sync_cmdt_list_put(command_list, 0);
+    sm64_saturn_vdp1_backend_upload(&vdp1_backend);
     frame_profile.command_ticks = cpu_frt_count_get();
     cpu_frt_count_set(0);
     vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
@@ -701,7 +696,7 @@ static void vblank_out_handler(void *work __unused) {
 }
 
 static void
-upload_texture_bank(const vdp1_vram_partitions_t *partitions)
+upload_texture_bank(void)
 {
     const size_t castle_bytes = sizeof(sm64_castle_uv_tiles);
     const size_t mario_bytes = sizeof(sm64_mario_texture_uv_tiles);
@@ -710,12 +705,11 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
     if (!cartridge_present) {
         cartridge_stage_ticks = 0;
         cartridge_staged_bytes = 0;
-        scu_dma_transfer(0, partitions->texture_base, sm64_castle_uv_tiles,
-                         castle_bytes);
-        scu_dma_transfer_wait(0);
-        scu_dma_transfer(0, (uint8_t *)partitions->texture_base + castle_bytes,
-                         sm64_mario_texture_uv_tiles, mario_bytes);
-        scu_dma_transfer_wait(0);
+        if (!sm64_saturn_texture_residency_upload(
+                &texture_residency, 0, sm64_castle_uv_tiles, castle_bytes) ||
+            !sm64_saturn_texture_residency_upload(
+                &texture_residency, castle_bytes,
+                sm64_mario_texture_uv_tiles, mario_bytes)) for (;;) {}
         return;
     }
 
@@ -729,7 +723,7 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
         cartridge_present = false;
         cartridge_stage_ticks = 0;
         cartridge_staged_bytes = 0;
-        upload_texture_bank(partitions);
+        upload_texture_bank();
         return;
     }
     cartridge_staged_bytes = (uint32_t)total_bytes;
@@ -741,12 +735,11 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
             cartridge_present = false;
             cartridge_stage_ticks = 0;
             cartridge_staged_bytes = 0;
-            upload_texture_bank(partitions);
+            upload_texture_bank();
             return;
         }
-        scu_dma_transfer(0, (uint8_t *)partitions->texture_base + offset,
-                         cartridge_stage, bytes);
-        scu_dma_transfer_wait(0);
+        if (!sm64_saturn_texture_residency_upload(
+                &texture_residency, offset, cartridge_stage, bytes)) for (;;) {}
     }
     cartridge_stage_ticks = cpu_frt_count_get();
 }
@@ -775,17 +768,11 @@ void user_init(void) {
     vdp1_vram_partitions_set(COMMAND_COUNT,
         sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
-    command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
-    (void)memset(command_list->cmdts, 0, sizeof(vdp1_cmdt_t) * COMMAND_COUNT);
-    sm64_saturn_command_arena_init(&command_arena, COMMAND_COUNT, 2);
     {
         const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
         const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
-        vdp1_cmdt_system_clip_coord_set(&command_list->cmdts[0]);
-        vdp1_cmdt_vtx_system_clip_coord_set(&command_list->cmdts[0], clip);
-        vdp1_cmdt_local_coord_set(&command_list->cmdts[1]);
-        vdp1_cmdt_vtx_local_coord_set(&command_list->cmdts[1], local);
-        vdp1_cmdt_end_set(&command_list->cmdts[2]);
+        if (!sm64_saturn_vdp1_backend_init(
+                &vdp1_backend, COMMAND_COUNT, clip, local)) for (;;) {}
     }
     sm64_saturn_render_queue_init(&render_queue, render_items, render_order,
                                   DRAW_ITEM_COUNT);
@@ -803,13 +790,14 @@ void user_init(void) {
     {
         vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
         if (sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles) > partitions.texture_size) for (;;) {}
+        sm64_saturn_texture_residency_init(&texture_residency, &partitions);
 #if SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
         if (sizeof(sm64_castle_uv_cluts) > partitions.clut_size) for (;;) {}
         scu_dma_transfer(0, partitions.clut_base, sm64_castle_uv_cluts,
                          sizeof(sm64_castle_uv_cluts));
         scu_dma_transfer_wait(0);
 #endif
-        upload_texture_bank(&partitions);
+        upload_texture_bank();
     }
     /* A 16-bit /128 FRT spans ~312 ms: enough to measure the current ~8 FPS
      * prototype and the 15-20 FPS acceptance band without overflow. */
@@ -851,8 +839,8 @@ void user_init(void) {
                 source_mario_state.input, render_queue.count,
                 (uint16_t)DRAW_ITEM_COUNT,
                 rejected_items, culled_items,
-                command_arena.live_count, command_arena.peak,
-                command_arena.overflowed ? "!" : "",
+                vdp1_backend.commands.live_count, vdp1_backend.commands.peak,
+                vdp1_backend.commands.overflowed ? "!" : "",
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 frame_profile.update_ticks, frame_profile.sort_ticks,
                 frame_profile.command_ticks, frame_profile.wait_ticks,

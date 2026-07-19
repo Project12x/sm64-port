@@ -23,6 +23,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DTARGE
   -I$(ROOT)/src/game \
   -I$(ROOT)/src/engine \
   -I$(ROOT)/src/port/saturn/controller \
+  -I$(ROOT)/src/port/saturn/gfx \
   -I$(ROOT)/build/saturn/marioturntable/generated
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260718

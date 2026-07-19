@@ -1263,3 +1263,20 @@ hash `d1459d9bf3b71542d22f260c11d04f77` and PNG SHA-256
 identical to Stage 115. Evidence: [Stage 116](screenshots/ymir-m4-command-arena-e0-2026-07-19.png),
 [capture report](reports/ymir-m4-command-arena-e0-2026-07-19.json), and
 [E0 verification note](m4-command-arena-e0-2026-07-19.md).
+
+### 2026-07-19 — E1 shared VDP1 and texture-residency backend
+
+The Castle visual slice and standalone source-Mario turntable now initialize,
+reserve, terminate, and upload commands through the same scene-neutral
+`gfx/saturn_vdp1_backend.h`. Both also terminate texture loading in the same
+bounded `gfx/saturn_texture_residency.h` SCU-transfer destination, regardless
+of whether the source is linked data or the Castle's 4 MiB cartridge staging
+ring. Both native SH-2 targets compile, link, package, and boot. Castle retains
+ISO SHA-256 `a49a253caf9a4fecac62c6c1464aae7735dfbd5a0e1f61a39176137bf669194e`
+and the exact Stage 116 framebuffer. The turntable independently reaches its
+animated source actor through the new backend. E1 remains open for its common
+source-identified render-queue submission. Evidence: [Castle parity](screenshots/ymir-e1-shared-vdp1-castle-2026-07-19.png),
+[turntable client](screenshots/ymir-e1-shared-vdp1-turntable-2026-07-19.png),
+[Castle report](reports/ymir-e1-shared-vdp1-castle-2026-07-19.json), and
+[turntable report](reports/ymir-e1-shared-vdp1-turntable-2026-07-19.json), with
+the [reference and verification record](e1-shared-vdp1-backend-2026-07-19.md).

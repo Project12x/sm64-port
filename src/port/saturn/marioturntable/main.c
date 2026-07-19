@@ -9,6 +9,8 @@
 #include "sm64.h"
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
+#include "saturn_texture_residency.h"
+#include "saturn_vdp1_backend.h"
 #define COMMAND_COUNT (SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DEPTH_BUCKET_COUNT 256U
 #define NEAR_DEPTH 128
@@ -17,7 +19,8 @@
  * Keep that source-space convention and apply only the camera's framing offset. */
 #define CAMERA_FRAME_Y 55
 typedef struct { int32_t x, y, z; } point3_t;
-static vdp1_cmdt_list_t *command_list;
+static sm64_saturn_vdp1_backend_t vdp1_backend;
+static sm64_saturn_texture_residency_t texture_residency;
 static vdp1_gouraud_table_t gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int32_t vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static uint16_t draw_order[SM64_MARIO_PRIMITIVE_COUNT];
@@ -168,14 +171,10 @@ static void sort_triangles(void) {
     sort_ticks = (uint16_t)(cpu_frt_count_get() - start);
 }
 static void draw_mario(void) {
-    const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223), local = INT16_VEC2_INITIALIZER(0, 0);
     const vdp1_cmdt_draw_mode_t mode = { .color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD };
     vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
-    const uint16_t start = cpu_frt_count_get(); vdp1_cmdt_list_t *list = command_list; list->count = COMMAND_COUNT;
-    (void)memset(list->cmdts, 0, sizeof(vdp1_cmdt_t) * list->count);
-    vdp1_cmdt_system_clip_coord_set(&list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&list->cmdts[0], clip);
-    vdp1_cmdt_local_coord_set(&list->cmdts[1]); vdp1_cmdt_vtx_local_coord_set(&list->cmdts[1], local);
-    uint16_t command = 2U;
+    const uint16_t start = cpu_frt_count_get();
+    sm64_saturn_vdp1_backend_begin(&vdp1_backend);
     for (uint16_t out = 0; out < visible_triangles; out++) {
         const uint16_t primitive = draw_order[out];
         const uint16_t texture_tile_start = sm64_mario_texture_tile_start[primitive];
@@ -184,29 +183,34 @@ static void draw_mario(void) {
              * Fast3D textured triangle is pre-baked into four transparent
              * affine tiles and replaces that source primitive in painter
              * order; untextured source geometry remains true-quads/Gouraud. */
+            vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(
+                &vdp1_backend, 4);
+            if (cmdt == NULL) continue;
             for (uint16_t tile = texture_tile_start; tile < texture_tile_start + 4U; tile++) {
                 int16_vec2_t v[4]; texture_tile_vertices(tile, v);
-                vdp1_cmdt_t *cmdt = &list->cmdts[command++];
                 vdp1_cmdt_distorted_sprite_set(cmdt);
                 vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){ .color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD });
                 vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions.texture_base + tile * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t));
                 vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_TEXTURE_UV_TILE_WIDTH, SM64_MARIO_TEXTURE_UV_TILE_WIDTH);
                 vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31)); vdp1_cmdt_vtx_set(cmdt, v);
                 vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
+                cmdt++;
             }
             continue;
         }
         const uint16_t *t = sm64_mario_primitives[primitive];
         const uint8_t *rgb = sm64_mario_material_rgb[t[0]];
         const int16_vec2_t v[4] = { project_point(transform_point(actor_vertex(t[1]))), project_point(transform_point(actor_vertex(t[2]))), project_point(transform_point(actor_vertex(t[3]))), project_point(transform_point(actor_vertex(t[4]))) };
-        vdp1_cmdt_t *cmdt = &list->cmdts[command++]; vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
+        vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(&vdp1_backend, 1);
+        if (cmdt == NULL) continue;
+        vdp1_cmdt_polygon_set(cmdt); vdp1_cmdt_draw_mode_set(cmdt, mode);
         vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2])); vdp1_cmdt_vtx_set(cmdt, v);
         vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions.gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
     }
-    vdp1_cmdt_end_set(&list->cmdts[command]);
+    sm64_saturn_vdp1_backend_finish(&vdp1_backend);
     build_ticks = (uint16_t)(cpu_frt_count_get() - start);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, gouraud, sizeof(gouraud)); scu_dma_transfer_wait(0);
-    vdp1_sync_cmdt_list_put(list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
+    sm64_saturn_vdp1_backend_upload(&vdp1_backend); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
 }
 static void vblank_out_handler(void *work __unused) { smpc_peripheral_intback_issue(); }
 void user_init(void) {
@@ -220,7 +224,12 @@ void user_init(void) {
         vdp2_sprite_priority_set(priority, 7);
     vdp2_tvmd_display_set();
     dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
-    command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
+    {
+        const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
+        const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
+        if (!sm64_saturn_vdp1_backend_init(
+                &vdp1_backend, COMMAND_COUNT, clip, local)) for (;;) {}
+    }
     source_area.camera = &source_camera;
     source_mario_state.area = &source_area;
     source_mario_state.controller = &source_controller;
@@ -229,7 +238,10 @@ void user_init(void) {
     source_mario_state.faceAngle[1] = 0;
     fix16_sincos(yaw, &sine_yaw, &cosine_yaw); build_vertex_normals(); rebuild_gouraud();
     { vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
-      scu_dma_transfer(0, (void *)partitions.texture_base, sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0); }
+      sm64_saturn_texture_residency_init(&texture_residency, &partitions);
+      if (!sm64_saturn_texture_residency_upload(
+              &texture_residency, 0, sm64_mario_texture_uv_tiles,
+              sizeof(sm64_mario_texture_uv_tiles))) for (;;) {} }
     for (uint32_t frame = 0;; frame++) {
         update_view();
         const uint16_t next_animation_frame = (uint16_t)((frame / 2U) % SM64_MARIO_ANIMATION_FRAME_COUNT);

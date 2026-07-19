@@ -84,7 +84,9 @@ performance work must now land in scene-neutral stages that survive the
 transition to the original game loop. E0 is closed: frame, transform, memory,
 render-queue, and bounded VDP1 command-arena contracts are shared, and the
 native Stage 116 capture exactly matches Stage 115. E1 now makes the Castle and turntable targets
-clients of the same backend, and E2 introduces Saturn `exec_display_list()`.
+clients of the same backend. Stage 117 shares their VDP1 list lifetime and
+bounded texture-transfer destination; common source-identified job submission
+remains before E1 closes. E2 then introduces Saturn `exec_display_list()`.
 
 Mario is now standing from the source C5 idle animation. M2 remains open only
 for bounded renderer correctness work: source texture patches must use an

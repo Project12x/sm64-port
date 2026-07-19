@@ -190,6 +190,15 @@ Make Castle and Mario submit independent source-identified jobs to the common
 render queue. The turntable and Castle harness must use the same backend and
 texture residency code. No backend symbol may contain `castle` or `mario`.
 
+Implementation checkpoint (2026-07-19): `gfx/saturn_vdp1_backend.h` now owns
+the pinned-Yaul persistent command-list lifecycle for both targets, while
+`gfx/saturn_texture_residency.h` provides one capacity-checked SCU transfer
+destination for linked, staged, and eventual package-loaded texture sources.
+Both SH-2 targets build and boot through these scene-neutral symbols. Castle's
+ISO and deterministic framebuffer remain byte-identical to Stage 116. E1
+still requires the turntable to submit source-identified render jobs through
+the common queue rather than its older private depth buckets.
+
 ### E2 — Real source frame handoff
 
 Boot enough of the original target loop to call `game_loop_one_iteration()` and
