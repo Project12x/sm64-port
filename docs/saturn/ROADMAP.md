@@ -492,11 +492,13 @@ These run through every milestone:
 
 ### Provenance and licensing
 
-- inspect permissive upstream implementations before nontrivial new work;
+- inspect license-compatible upstream implementations before nontrivial new work;
 - record pinned commits, licenses, files, and reuse mode;
-- preserve required notices for copied or closely adapted permissive source;
-- use GPL renderer sources as behavioral/architectural references only in new
-  port work; and
+- preserve required copyright, license, NOTICE, attribution, and change records
+  for copied or closely adapted source;
+- permit direct-copy, close-port, fork, or dependency reuse from GPL sources in
+  this GPL-compatible project, while retaining corresponding source and all
+  applicable copyleft obligations; and
 - keep user-owned ROM-derived assets out of Git.
 
 ### Performance and memory

@@ -8,7 +8,7 @@ for the SM64 port. Exact commits, licenses, and inspected paths are recorded in
 
 | Reference | Strongest evidence | Use now | Use later |
 |---|---|---|---|
-| SlaveDriver | A commercial-era engine can combine sector visibility, fixed-point clipping, interpolated shade values, queued transfers, and master/slave render records. | Keep its bounded DMA behavior isolated; do not import more renderer code. | Use sector-local object lists and shade-preserving clip behavior as test oracles for the world renderer. |
+| SlaveDriver | A commercial-era engine can combine sector visibility, fixed-point clipping, interpolated shade values, queued transfers, and master/slave render records. | Keep the attributed bounded-DMA close-port and adapt additional routines only where their data contracts fit SM64. | Directly adapt sector dependency records, local object lists, clipping, or master/slave work partitioning when profiling justifies them. |
 | Jo Engine | A small C command pipeline can keep VDP1 setup commands explicit and flush bounded command blocks by DMA. | Retain libyaul's typed persistent command list; it already gives the useful lifecycle without another allocator. | Compare block/arena command allocation if variable scene command counts make a fixed list wasteful. |
 | Sonic Z-Treme | Stable per-polygon Gouraud slots plus conditional VBlank table copies make realtime lighting optional and measurable; frustum/octree culling and contiguous model arenas are viable on Saturn. | Keep the intro face's cached vertex lighting, persistent Gouraud slots, A-button shine toggle, and update-only-on-change upload. | Benchmark contiguous level banks, coarse visibility, early slave-SH2 submission, and Gouraud quality tiers. |
 
@@ -29,15 +29,18 @@ The first interactive proof reset 1,049 surface indices to source order every
 frame and recomputed three transformed vertices inside each insertion-sort
 comparison. The optimized path caches one depth per surface and retains the
 previous frame's nearly sorted order. This is a local data-lifecycle fix rather
-than copied engine code: the studied GPL engines are behavior references only,
-and their SGL/sector sort structures do not match this libyaul face renderer.
+than copied engine code: this specific pass predates direct GPL renderer reuse,
+and the inspected SGL/sector sort structures do not match this libyaul face
+renderer. The GPL-compatible project may nevertheless copy or close-port other
+suitable routines with pinned provenance and full GPL compliance.
 The same pass caches each of the 440 transformed/projected face vertices once
 per frame; triangle depth and command emission then index those results rather
 than transforming shared vertices repeatedly.
 
 This avoids texture upload, framebuffer blending, per-pixel simulation, and a
 full Gouraud rebuild every frame. Sonic Z-Treme's source and README provide a
-useful independent comparison point, but no GPL renderer code is used here.
+useful independent comparison point; this particular intro-face optimization
+does not yet contain code copied from its renderer.
 
 ## Quads versus triangles
 
@@ -186,8 +189,10 @@ an engine to import:
 - Jo Engine's command allocator is not copied because the port is already based
   on libyaul and has a persistent typed command list.
 - Sonic Z-Treme's SGL data structures, octree/PVS code, and lighting functions
-  are not copied because they are GPL, SGL-specific, and described upstream as
-  experimental or inefficient in places.
+  are not copied wholesale because their SGL contracts do not fit Yaul and
+  portions are described upstream as experimental or inefficient. Stable,
+  relevant routines may be directly copied or close-ported under GPL terms.
 - SlaveDriver's world renderer is not copied because its sector assumptions do
-  not match SM64's scene graph and dynamic object model. Its clipping and work
-  partitioning remain behavioral references.
+  not match SM64's scene graph and dynamic object model wholesale. Its clipping,
+  dependency ordering, and work partitioning are eligible for attributed direct
+  adaptation when their contracts are integrated into the shared renderer.
