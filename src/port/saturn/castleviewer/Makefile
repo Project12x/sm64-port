@@ -4,6 +4,9 @@ endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-castle-area1
 SH_SRCS := main.c castle_graph_bridge.c \
+  $(ROOT)/src/port/saturn/controller/controller_saturn.c \
+  $(ROOT)/src/game/game_init.c \
+  $(ROOT)/src/game/mario.c \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/engine/geo_layout.c \
   $(ROOT)/src/engine/graph_node.c \
@@ -22,7 +25,8 @@ SH_CFLAGS += -Os -g -DDEBUG \
   -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src -I$(ROOT)/src/game -I$(ROOT)/src/engine \
   -I$(ROOT)/build/saturn/castlearea/generated \
   -I$(ROOT)/build/saturn/marioturntable/generated \
-  -I$(ROOT)/src/port/saturn/marioturntable
+  -I$(ROOT)/src/port/saturn/marioturntable \
+  -I$(ROOT)/src/port/saturn/controller
 ifeq ($(TEXTURE_PROBE),1)
 SH_CFLAGS += -DSM64_SATURN_TEXTURE_PROBE_CAMERA=1
 endif

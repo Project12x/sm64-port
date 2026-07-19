@@ -1,6 +1,12 @@
 /* M4 integration: actual SM64 Castle Area 1 plus source Mario actor/animation. */
 #include <yaul.h>
 #include <string.h>
+#include "sm64.h"
+#include "controller_saturn.h"
+#include "game/area.h"
+#include "game/camera.h"
+#include "game/game_init.h"
+#include "game/mario.h"
 #include "castle_area1.h"
 #include "castle_gameplay_config.h"
 #include "castle_graph_bridge.h"
@@ -29,6 +35,15 @@ static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
 static point3_t camera_position, camera_right, camera_up, camera_forward;
 static sm64_saturn_castle_graph_state_t source_graph;
+static OSContPad source_pad;
+static struct Controller source_controller;
+static struct MarioState source_mario_state;
+static struct Area source_area;
+static struct Camera source_camera;
+static int32_t mario_world_x = SM64_CASTLE_SPAWN_X;
+static int32_t mario_world_y = SM64_CASTLE_SPAWN_Y;
+static int32_t mario_world_z = SM64_CASTLE_SPAWN_Z;
+static bool controls_ready;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
                "Castle tile painter requires the complete source material bank");
@@ -69,7 +84,7 @@ static point3_t normalize_q16(point3_t value) {
 }
 
 static void update_source_camera(void) {
-    const point3_t mario = {SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z};
+    const point3_t mario = {mario_world_x, mario_world_y, mario_world_z};
     camera_position.x = SM64_CASTLE_CAMERA_BASE_X +
         (((mario.x - SM64_CASTLE_CAMERA_BASE_X) * SM64_CASTLE_CAMERA_FOLLOW_Q16) >> 16);
     camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
@@ -120,9 +135,35 @@ static const int16_t *mario_vertex(uint16_t index) {
 static point3_t mario_point(const int16_t *source) {
     const int32_t x = (((int32_t)source[0] * mario_cosine) + ((int32_t)source[2] * mario_sine)) >> 16;
     const int32_t z = ((-(int32_t)source[0] * mario_sine) + ((int32_t)source[2] * mario_cosine)) >> 16;
-    return world_to_view(x + SM64_CASTLE_SPAWN_X,
-                         (int32_t)source[1] + SM64_CASTLE_SPAWN_Y,
-                         z + SM64_CASTLE_SPAWN_Z);
+    return world_to_view(x + mario_world_x,
+                         (int32_t)source[1] + mario_world_y,
+                         z + mario_world_z);
+}
+
+static void update_source_input(void) {
+    controller_saturn.read(&source_pad);
+    if (!controls_ready) controls_ready = source_pad.errnum == 0;
+    source_controller.rawStickX = source_pad.stick_x;
+    source_controller.rawStickY = source_pad.stick_y;
+    source_controller.buttonPressed = source_pad.button &
+        (source_pad.button ^ source_controller.buttonDown);
+    source_controller.buttonDown = source_pad.button;
+    adjust_analog_stick(&source_controller);
+    source_mario_state.input = 0;
+    update_mario_button_inputs(&source_mario_state);
+    update_mario_joystick_inputs(&source_mario_state);
+    source_camera.yaw = 0;
+    if ((source_mario_state.input & INPUT_NONZERO_ANALOG) != 0U) {
+        mario_yaw = (angle_t)(32768 + source_mario_state.intendedYaw);
+        fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
+        /* The original SM64 joystick routine owns magnitude and intended
+         * direction. This bridge advances the source actor in source units
+         * until collision/action execution is linked into this target. */
+        const int32_t speed = (int32_t)source_mario_state.intendedMag / 4;
+        mario_world_x += ((int32_t)mario_sine * speed) >> 16;
+        mario_world_z += ((int32_t)mario_cosine * speed) >> 16;
+    }
+    update_source_camera();
 }
 static int16_vec2_t project_point(point3_t point) {
     const int32_t z = point.z < NEAR_DEPTH ? NEAR_DEPTH : point.z;
@@ -139,6 +180,12 @@ static bool quad_intersects_viewport(point3_t a, point3_t b, point3_t c, point3_
     int32_t minimum_x = INT32_MAX, minimum_y = INT32_MAX;
     int32_t maximum_x = INT32_MIN, maximum_y = INT32_MIN;
     for (uint8_t corner = 0; corner < 4; corner++) {
+        /* VDP1 has no homogeneous clipper. Clamping a vertex behind the
+         * near plane turns a floor polygon crossing the camera into a giant
+         * wedge, making the lobby emblem appear beyond the doors. Reject it
+         * until the source polygon can be split with its UVs preserved. */
+        if (points[corner].z < NEAR_DEPTH)
+            return false;
         const int32_t x = 160 + (points[corner].x * SM64_CASTLE_CAMERA_FOCAL_LENGTH) /
                                   points[corner].z;
         const int32_t y = 112 - (points[corner].y * SM64_CASTLE_CAMERA_FOCAL_LENGTH) /
@@ -274,7 +321,7 @@ static void traverse_bsp(int16_t node, bool insert_mario) {
     }
     const bool camera_front = bsp_side((uint16_t)node, painter_camera_position()) >= 0;
     const bool mario_front = bsp_side((uint16_t)node, (point3_t){
-        SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z}) >= 0;
+        mario_world_x, mario_world_y, mario_world_z}) >= 0;
     const int16_t front = sm64_castle_bsp_children[node][0];
     const int16_t back = sm64_castle_bsp_children[node][1];
     const int16_t far = camera_front ? back : front;
@@ -397,18 +444,31 @@ static void draw_scene(void) {
     vdp1_sync_cmdt_list_put(command_list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
 }
 
+static void vblank_out_handler(void *work __unused) {
+    smpc_peripheral_intback_issue();
+}
+
 void user_init(void) {
+    smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 2, 4, 12));
     vdp1_env_t env; vdp1_env_default_init(&env); env.erase_color = RGB1555(1, 2, 4, 12); vdp1_env_set(&env);
     for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
+    vdp_sync_vblank_out_set(vblank_out_handler, NULL);
     source_graph = sm64_saturn_castle_graph_init();
     if (!source_graph.valid) for (;;) {}
     vdp1_vram_partitions_set(COMMAND_COUNT,
         sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
+    source_area.camera = &source_camera;
+    source_mario_state.area = &source_area;
+    source_mario_state.controller = &source_controller;
+    source_mario_state.framesSinceA = 0xFF;
+    source_mario_state.framesSinceB = 0xFF;
+    source_mario_state.faceAngle[1] = mario_yaw;
+    source_camera.yaw = 0;
     fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
     update_source_camera();
     build_mario_gouraud();
@@ -425,6 +485,7 @@ void user_init(void) {
         scu_dma_transfer(0, (uint8_t *)partitions.texture_base + sizeof(sm64_castle_uv_tiles), sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0);
     }
     for (uint32_t frame = 0;; frame++) {
+        update_source_input();
         const uint16_t next_frame = (uint16_t)((frame / 2U) % SM64_MARIO_ANIMATION_FRAME_COUNT);
         if (next_frame != animation_frame) { animation_frame = next_frame; build_mario_gouraud(); }
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
@@ -434,7 +495,7 @@ void user_init(void) {
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
-                SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z,
+                mario_world_x, mario_world_y, mario_world_z,
                 animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);

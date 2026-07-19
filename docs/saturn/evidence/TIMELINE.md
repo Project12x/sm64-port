@@ -893,3 +893,13 @@ work for the next pass.
    action, animation selection, and the source camera update.
 4. Capture deterministic neutral and movement frames from the same source
    lobby path before expanding to another room.
+### 2026-07-18 — M4 geometry diagnosis: near-plane crossing is a real Saturn failure class
+
+The source-camera capture shows that the remaining floor/carpet and central-emblem
+misregistration is not a level-coordinate rewrite: several source lobby polygons
+cross the close camera plane. VDP1 has no homogeneous clipper, so the old fallback
+projected those vertices at a fixed depth and produced giant wedges that visually
+made the floor appear to run beyond the doors. The Castle lowering now rejects a
+primitive whose source-space corners cross `NEAR_DEPTH`; this is a safe interim
+guard while the next pass implements UV-preserving near-plane subdivision. The
+neutral Ymir capture is retained as evidence: [near-plane diagnostic](screenshots/ymir-m4-source-camera-near-plane-reject-2026-07-18.png).
