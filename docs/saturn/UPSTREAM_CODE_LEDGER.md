@@ -46,7 +46,7 @@ Implementation commitments:
 | [SaitoTsutomu/Tris-Quads-Ex](https://github.com/SaitoTsutomu/Tris-Quads-Ex) | `f5acd93873728c45d48c3398382aec380a280182` / Apache-2.0 | `__init__.py`, `README.md` | **Pattern-only test oracle.** Its one-selected-edge-per-triangle objective informs an independent regression case for `tools/saturn/quad_pairing.py` and `tools/saturn/test_tools.py`. Keep NetworkX exact matching; do not add Blender or PuLP to the project. Saturn filters for material, winding, convexity, UVs, and deformation stay mandatory. |
 | [HailToDodongo/pyrite64](https://github.com/HailToDodongo/pyrite64) | `297a10e606af6149327364d8b694f136c62b506e` / MIT | `src/project/assets/model3d.h`, `collision.h`, `src/renderer/n64Mesh.h`, `animation.h` | **Pattern-only.** Create an original limited Fast3D-to-Saturn IR exporter under `tools/saturn/` with explicit model/material partitions, source primitive IDs, collision data, and animation streams. The C++/desktop/libdragon runtime is not a Saturn runtime candidate and no code is copied. |
 | [zeux/meshoptimizer](https://github.com/zeux/meshoptimizer) | `dc9d09ed83e1004aef47a1c3c597e0ec64848a37` / MIT | `src/meshoptimizer.h`, `src/indexgenerator.cpp`, `src/vfetchoptimizer.cpp` | **Pattern-only.** Preserve independent position/attribute/index streams in the new IR so seams and per-material splits survive conversion. Do not introduce a native dependency until host-tool profiling proves it worthwhile. |
-| [malucard/sm64-psx](https://github.com/malucard/sm64-psx) | `3073845688ea273da78d539b20c45110d8a868c3` / no repository-wide license found; bundled components vary | `README.md`, `src/port/gfx/gfx_rsp_jit.c`, `src/port/psx/gfx_dl_exec_psx.c`, `gfx_tessellation_psx.c`, `gfx_texture_psx.c`, `controller_psx.c`, `tools/preprocess_graphics.py`, `convert_image_psx.py`, `pack_textures.py`, `compress_mario_anims.c` | **Behavior study only.** Preserve the SM64 game/level/behavior boundary, translate display lists to a compact Saturn command IR, expose an `OSContPad` backend, profile the whole loop, and budget texture/animation residency by area. Do not copy source: the useful lesson is the architecture, while Saturn needs VDP1 quads, Yaul input, and its own VRAM/RAM-cart policies. |
+| [malucard/sm64-psx](https://github.com/malucard/sm64-psx) | `3073845688ea273da78d539b20c45110d8a868c3` / no repository-wide license found; bundled components vary | `README.md`, `src/game/game_init.c`, `src/port/gfx/gfx_rsp_jit.c`, `src/port/psx/gfx_dl_exec_psx.c`, `gfx_tessellation_psx.c`, `gfx_texture_psx.c`, `cd_psx.c`, `controller_psx.c`, `src/game/hud.c`, `tools/preprocess_graphics.py`, `convert_image_psx.py`, `pack_textures.py`, `compress_mario_anims.c` | **Behavior study only.** The port proves a source-loop/compact-IR/asset-preparation architecture: `OSContPad` input, source frame/level execution, target command lowering, whole-loop profiling, prepared texture/animation residency, and target-specific large-polygon policy. Saturn must implement those boundaries through Yaul, VDP1/VDP2, and the 4 MiB cartridge—not copy PS1 source, GTE math, ordering tables, VRAM layout, or packet format. The concrete Saturn decision and limits are in `PSX_PORT_ARCHITECTURE_LESSONS.md`. |
 | [yaul-org/libyaul-examples](https://github.com/yaul-org/libyaul-examples) | `66b648eb059bb8bb7392eac70821605a68205b85` / MIT | `vdp1-mesh/vdp1-mesh.c`, `cd-block/cd-block.c` | **Close-port (small peripheral cadence).** `marioturntable/main.c` uses the same public Yaul pattern: initialize SMPC, issue INTBACK from VBlank-out, process the completed collection in the frame loop, and read port 1. Button mapping and the `OSContPad` backend remain original Saturn-port code. |
 | `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `libmic3d/render.c`, `libmic3d/sort.h`, `libyaul/scu/bus/b/vdp/vdp1/cmdt.h`, `vdp1_vram.c` | **Dependency / API use.** Its sort modes establish that the permissive Saturn references provide depth keys, not a reusable static BSP. The original host BSP therefore retains exact SM64 attributes and emits only Yaul command data. The next indexed-bank pass will call its public `VDP1_CMDT_CM_CLUT_16`, `vdp1_cmdt_color_mode1_set`, and CLUT partition APIs directly. |
 | `johannes-fetz/joengine` | `556d081146211b6a1cfa6591d70f9487d406758b` / MIT plus file-level BSD-style terms | `jo_engine/3d.c`, `jo_engine/jo/sega_saturn.h` | **Pattern-only.** Its `SORT_CEN` path confirms a center-depth renderer but contains no static-world BSP to port. No Jo Engine code enters `tools/saturn/static_bsp.py`. |
@@ -79,6 +79,8 @@ Implementation commitments:
    manifest and batch/prefetch its texture bank into the 4 MB RAM cart, then
    promote only the visible working set to VDP1 VRAM. The texture tools must
    support per-class 1x/2x/4x source scales and 8/16/32-pixel output profiles.
+   Prepared Mario animation banks belong in the same area/actor residency
+   manifest, with source action selection remaining in the original game loop.
 7. The behavior study of `src/port/psx/gfx_dl_exec_psx.c` uses the farthest
    transformed vertex for its opaque ordering-table key. The Castle diagnostic
    now exercises that conservative key while retaining source order inside a
@@ -136,6 +138,11 @@ Implementation commitments:
     from `set_fixed_cam_axis_sa_lobby`. The target adds original viewport
     rejection and coordinate saturation as Saturn-specific lowering; it does
     not change source room vertices or author camera coordinates.
+14. The PS1 study adds an E2/E3 architecture constraint: source loop and level
+    execution must select render work; generated Saturn command templates only
+    patch dynamic matrices, visibility, ordering, and residency. A benchmark
+    cannot rely on the PS1 port's 8 MiB non-retail configuration. The Saturn
+    4 MiB cartridge policy stays authoritative.
 
 ## M3 onward — inspection and debugging evidence
 
@@ -163,3 +170,14 @@ Before implementing a row, add the exact source paths used to the commit note
 and update `PROVENANCE.md` if the reuse mode changes. Before accepting it,
 record a reproducible host test or Ymir capture in `evidence/` and link the
 result from the visual timeline.
+
+## M4 — input/cache probe additions (2026-07-19)
+
+| Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
+|---|---|---|---|
+| `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `libyaul/scu/bus/cpu/smpc/smpc_peripherals.c` (`pressed.raw` XOR normalization) and pinned public input examples | **Dependency / API use.** The controller boundary treats Yaul's normalized `pressed.raw` and digital direction bits as active-high, matching the upstream decoder and examples. The existing `OSContPad` mapping remains original port code; this source is cited because polarity at this boundary directly affects idle drift and movement determinism. |
+
+The stable frame probe in `src/port/saturn/platform/saturn_frame_sample.h` is
+new project code. It is deliberately not attributed to an upstream engine: its
+sequence-guarded, all-16-bit layout exists to make the Yaul/Ymir observation
+boundary deterministic.

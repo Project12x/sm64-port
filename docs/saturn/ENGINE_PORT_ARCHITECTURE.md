@@ -207,11 +207,31 @@ input/actions/camera/animation in the visual slice with source-owned state.
 This is the required next gameplay milestone; adding more handcrafted actions
 does not satisfy it.
 
+The target must preserve the source-frame ownership visible in the inherited
+PC path: platform input enters `OSContPad`; the source game/level/object loop
+advances; the submitted display work crosses `exec_display_list()`; and the
+Saturn backend lowers it to VDP1/VDP2 work. Audio may be a temporary no-op
+transport for the visual slice, but it remains a source-frame boundary rather
+than a renderer responsibility. This is the architecture lesson from the PS1
+port study, not PS1 code reuse; see
+[`PSX_PORT_ARCHITECTURE_LESSONS.md`](PSX_PORT_ARCHITECTURE_LESSONS.md).
+
+E2 acceptance additionally requires a deterministic input/state replay: at
+least one idle/run/jump route records source action, Mario position, camera
+mode, and final state against the PC reference. A post-run screenshot alone
+does not prove source-owned locomotion.
+
 ### E3 — Versioned area package
 
 Load Castle Area 1 through the offset-based package API, including collision
 and actor dependencies. Unload and reload it under a deterministic soak with
 arena, cartridge, VDP1 texture, and source-ID validation.
+
+The package is the target equivalent of a prepared level working set. It must
+batch geometry, texture/CLUT, and animation-bank residency by area rather than
+performing per-texture loads in a frame. The 4 MiB cartridge stores cold,
+read-mostly banks; hot decoded metadata, transforms, sort keys, and command
+patches remain in bounded internal-WRAM records.
 
 ### E4 — Generalization proof
 

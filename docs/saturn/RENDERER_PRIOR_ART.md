@@ -12,6 +12,21 @@ for the SM64 port. Exact commits, licenses, and inspected paths are recorded in
 | Jo Engine | A small C command pipeline can keep VDP1 setup commands explicit and flush bounded command blocks by DMA. | Retain libyaul's typed persistent command list; it already gives the useful lifecycle without another allocator. | Compare block/arena command allocation if variable scene command counts make a fixed list wasteful. |
 | Sonic Z-Treme | Stable per-polygon Gouraud slots plus conditional VBlank table copies make realtime lighting optional and measurable; frustum/octree culling and contiguous model arenas are viable on Saturn. | Keep the intro face's cached vertex lighting, persistent Gouraud slots, A-button shine toggle, and update-only-on-change upload. | Benchmark contiguous level banks, coarse visibility, early slave-SH2 submission, and Gouraud quality tiers. |
 
+## PS1 port: architecture lesson, not renderer source
+
+The inspected PS1 port is not a Saturn code donor: it lacks one
+repository-wide reuse license and its GTE, ordering-table, packet, and VRAM
+contracts do not match Yaul or VDP1. It does establish the right *shape* for
+the next Saturn work: preserve the original game/level loop, preprocess source
+display work into a compact target IR, prepare texture and animation residency
+by area, and measure the whole frame rather than only draw submission.
+
+For Saturn, that means per-area VDP1 command templates and 4 MiB cartridge
+manifests, with each frame patching only source-selected dynamic state. It does
+not mean a generic PS1 ordering table, per-texture load during rendering, or
+an 8 MiB benchmark assumption. The full decision and source-path list is in
+[`PSX_PORT_ARCHITECTURE_LESSONS.md`](PSX_PORT_ARCHITECTURE_LESSONS.md).
+
 ## Decision for the intro face
 
 The current shine path is already the Saturn-appropriate one:
@@ -196,3 +211,22 @@ an engine to import:
   not match SM64's scene graph and dynamic object model wholesale. Its clipping,
   dependency ordering, and work partitioning are eligible for attributed direct
   adaptation when their contracts are integrated into the shared renderer.
+
+## Stable M4 measurement boundary
+
+The Castle viewer now publishes a separate sequence-guarded frame record after
+the VBlank wait in `src/port/saturn/platform/saturn_frame_sample.h`. This keeps
+the phase budget from being read while the legacy rolling HUD counters are
+still being updated. A 900-frame USA-BIOS Ymir run decodes as 2,296 update,
+5,041 sort, 569 command, 2,634 wait, and 3,495 VBlank FRT ticks: 10,540 render
+ticks, 14,035 loop ticks, or 14.93 loop FPS using the existing `/128` clock.
+The result is emulator software-VDP evidence, not a retail timing claim.
+
+The same capture path proves the persistent command-lowering cache is
+pixel-identical at the neutral boundary: the pre-cache and post-cache PNG
+SHA-256 is `3d2d56d9ff48fa2a955d40e5474b3b01bed7210639e117e08be022bf534f71d6`.
+The cache skips CPU command reconstruction while still re-arming and
+uploading the VDP1 list each frame, which preserves Saturn submission
+semantics. Yaul's normalized SMPC polarity is documented separately in the
+upstream ledger; correcting it removes the all-buttons/idle-drift failure
+before further movement profiling.

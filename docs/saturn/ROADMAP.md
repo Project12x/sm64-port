@@ -21,6 +21,9 @@ Concrete upstream selections, destination modules, and non-adoptions are in
 [the visual-slice upstream code ledger](UPSTREAM_CODE_LEDGER.md). A milestone
 may not silently turn a studied source into a copied dependency: its reuse mode
 and pinned revision must change there and in [PROVENANCE.md](PROVENANCE.md).
+The PS1-port comparison is recorded separately in
+[`PSX_PORT_ARCHITECTURE_LESSONS.md`](PSX_PORT_ARCHITECTURE_LESSONS.md): its
+lesson is compact source-loop/runtime architecture, not a PS1 renderer to port.
 
 ## Current position
 
@@ -57,6 +60,11 @@ yet the production game loop. `castleviewer/main.c` still owns manual movement,
 jump, camera, animation cadence, and display submission. E0–E2 now retire that
 scaffolding into a shared renderer and the original `game_loop_one_iteration()`
 plus `exec_display_list()` path.
+
+The PS1-port comparison sharpens this transition: asset conversion, compact
+render packets, input/camera, and profiler state belong beneath the source game
+loop. The next gains must therefore be scene-neutral command templates and
+area-bank residency, not more Castle-specific renderer or movement code.
 
 ## Roadmap at a glance
 
@@ -321,6 +329,12 @@ shared renderer/runtime records, accept source-identified jobs, then drive the
 slice through `game_loop_one_iteration()` and Saturn `exec_display_list()`.
 The current manual movement, jump, camera, and animation bridge is scaffolding
 and cannot close M4.
+
+The implementation reference is summarized in
+[`PSX_PORT_ARCHITECTURE_LESSONS.md`](PSX_PORT_ARCHITECTURE_LESSONS.md): compile
+area command templates and residency banks offline, then patch only
+source-selected dynamic state per frame. The source loop, not a Castle viewer,
+selects the area, camera, animation, behavior, and render work.
 
 Gate: Mario can idle, run, turn, jump, land, and collide with the lobby using
 source-derived model/collision data, with replayable final state and capture.
