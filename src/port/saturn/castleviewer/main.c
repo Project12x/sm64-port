@@ -202,7 +202,8 @@ static void update_source_input(void) {
         const f32 floor = find_floor_height((f32)mario_world_x,
                                             (f32)mario_world_y + 200.0f,
                                             (f32)mario_world_z);
-        if (floor > FLOOR_LOWER_LIMIT && (f32)mario_world_y <= floor) {
+        if (floor > FLOOR_LOWER_LIMIT && floor >= (f32)mario_world_y - 256.0f &&
+            (f32)mario_world_y <= floor) {
             mario_world_y = (int32_t)floor;
             mario_vertical_velocity = 0.0f;
             mario_airborne = false;
@@ -225,10 +226,22 @@ static void update_source_input(void) {
          * bridge; floor and wall acceptance remain source engine behavior. */
         (void)f32_find_wall_collision(&next_x, &next_y, &next_z, 60.0f, 50.0f);
         const f32 floor = find_floor_height(next_x, next_y + 200.0f, next_z);
-        if (!mario_airborne && floor > FLOOR_LOWER_LIMIT) next_y = floor;
-        mario_world_x = (int32_t)next_x;
-        mario_world_y = (int32_t)next_y;
-        mario_world_z = (int32_t)next_z;
+        /* A source collision query returning FLOOR_LOWER_LIMIT means the
+         * candidate left the loaded Castle surface bank. Do not accept that
+         * step: otherwise the follow camera chases Mario into empty space and
+         * the VDP1 scene correctly exposes the void as blue/black patches. */
+        /* Do not snap to a distant lower collision layer when the candidate
+         * crosses a doorway edge. The source engine treats that as an invalid
+         * step/OOB transition; accepting it here is what makes the follow
+         * camera expose the blue/black void. */
+        const bool floor_is_reachable = floor > FLOOR_LOWER_LIMIT &&
+                                        floor >= next_y - 256.0f;
+        if (floor_is_reachable) {
+            if (!mario_airborne) next_y = floor;
+            mario_world_x = (int32_t)next_x;
+            mario_world_y = (int32_t)next_y;
+            mario_world_z = (int32_t)next_z;
+        }
     }
     update_source_camera();
 }

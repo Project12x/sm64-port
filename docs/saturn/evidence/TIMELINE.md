@@ -938,6 +938,19 @@ extra VDP2 synchronization stall. This is a Saturn-specific performance tier,
 not a texture or geometry substitute; the next profiling pass should measure
 retail-hardware frame time separately from Ymir's software VDP renderer.
 
+### M4 source-floor reachability guard
+
+![Source-floor reachability guard](screenshots/ymir-m4-source-floor-reachability-2026-07-19.png)
+
+Movement candidates are now accepted only when the original Castle floor query
+returns a reachable surface. A missing floor or a distant lower collision layer
+leaves Mario at his last valid source position, preventing the follow camera
+from chasing him into the blue/black void. The frame remains source-derived;
+the remaining checker-floor coverage mismatch is still tracked separately from
+this camera/collision correction.
+
+Evidence: [capture report](reports/ymir-m4-source-floor-reachability-2026-07-19.json).
+
 ### M4 material profile: full-resolution source textures accepted
 
 ![Full-resolution source Castle textures after triangle collapse](screenshots/ymir-m4-source-fullres-triangle-collapse-2026-07-19.png)
