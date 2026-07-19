@@ -5,9 +5,11 @@
 #include "controller_saturn.h"
 #include "saturn_cart_bank.h"
 #include "saturn_frame_profile.h"
+#include "saturn_frame_sample.h"
 #include "saturn_gouraud.h"
 #include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
+#include "saturn_scene_profile.h"
 #include "saturn_transform.h"
 #include "saturn_texture_residency.h"
 #include "saturn_vdp1_backend.h"
@@ -89,6 +91,8 @@ static bool animation_clock_started, animation_was_walking;
 static uint16_t mario_bsp_straddlers;
 static uint16_t mario_bsp_refined_clusters, mario_bsp_primitive_tests;
 static sm64_saturn_frame_profile_t frame_profile;
+volatile sm64_saturn_frame_sample_t saturn_frame_sample;
+static uint16_t saturn_frame_sample_sequence;
 static int32_t castle_tile_depth[SM64_CASTLE_UV_TILE_COUNT];
 static static_render_token_t static_render_stream[STATIC_STREAM_CAPACITY];
 static uint16_t static_render_stream_count;
@@ -98,6 +102,14 @@ static bool static_render_stream_valid;
 static bool castle_scene_dirty = true;
 static bool castle_vertex_cache_valid;
 static bool mario_gouraud_dirty;
+static bool mario_projection_dirty = true;
+static bool mario_sort_dirty = true;
+static bool mario_sort_cache_valid;
+static bool render_commands_dirty = true;
+static bool mario_leaf_state_valid;
+static bool mario_leaf_state_changed;
+static uint16_t mario_leaf_state_changed_count;
+static uint16_t mario_previous_primitive_edge[SM64_MARIO_PRIMITIVE_COUNT];
 static const int16_t (*mario_frame_vertices)[3];
 static const uint8_t *mario_frame_light_intensity;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
@@ -122,6 +134,10 @@ static bool cartridge_present;
 static uint8_t cartridge_stage[CART_STAGE_CHUNK] __aligned(32);
 static uint32_t cartridge_stage_ticks;
 static uint32_t cartridge_staged_bytes;
+
+/* Volatile by design: this is the stable remote-debugger contract for the
+ * scene-neutral painter profile, separate from the legacy SAT0/HWTEST block. */
+volatile sm64_saturn_scene_profile_t saturn_scene_profile;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
                "Castle tile painter requires the complete source material bank");
@@ -203,6 +219,9 @@ static void update_source_camera(void) {
         castle_scene_dirty = true;
         static_render_stream_valid = false;
         castle_vertex_cache_valid = false;
+        mario_projection_dirty = true;
+        mario_sort_dirty = true;
+        render_commands_dirty = true;
     }
 }
 
@@ -252,6 +271,7 @@ static point3_t mario_world_point(const int16_t *source) {
 }
 
 static void cache_mario_vertices(void) {
+    if (!mario_projection_dirty) return;
     sm64_saturn_projected_workarea_reset(&mario_projected_workarea);
     for (uint16_t vertex = 0; vertex < SM64_MARIO_VERTEX_COUNT; vertex++) {
         mario_world_vertices[vertex] = mario_world_point(mario_vertex(vertex));
@@ -261,6 +281,7 @@ static void cache_mario_vertices(void) {
         if (!sm64_saturn_projected_workarea_push(
                 &mario_projected_workarea, projected, NULL)) for (;;) {}
     }
+    mario_projection_dirty = false;
 }
 
 static void cache_castle_vertices(void) {
@@ -284,6 +305,7 @@ static void update_source_input(void) {
     const int32_t previous_x = mario_world_x;
     const int32_t previous_y = mario_world_y;
     const int32_t previous_z = mario_world_z;
+    const angle_t previous_yaw = mario_yaw;
     controller_saturn.read(&source_pad);
     if (!controls_ready && source_pad.errnum == 0) {
         /* Do not turn the BIOS language/clock handoff into a gameplay edge.
@@ -363,6 +385,46 @@ static void update_source_input(void) {
         previous_x != mario_world_x || previous_y != mario_world_y ||
         previous_z != mario_world_z)
         update_source_camera();
+    if (previous_x != mario_world_x || previous_y != mario_world_y ||
+        previous_z != mario_world_z || previous_yaw != mario_yaw) {
+        mario_projection_dirty = true;
+        mario_sort_dirty = true;
+        render_commands_dirty = true;
+    }
+}
+
+static void publish_frame_sample(void) {
+    const uint16_t sequence = (uint16_t)(saturn_frame_sample_sequence + 2U);
+    const uint32_t render_ticks = frame_profile.render_ticks;
+    const uint32_t loop_ticks = frame_profile.loop_ticks;
+    const uint32_t x = (uint32_t)mario_world_x;
+    const uint32_t y = (uint32_t)mario_world_y;
+    const uint32_t z = (uint32_t)mario_world_z;
+
+    /* An odd sequence tells a remote reader not to consume a partial record. */
+    saturn_frame_sample.sequence = (uint16_t)(sequence - 1U);
+    saturn_frame_sample.magic = SM64_SATURN_FRAME_SAMPLE_MAGIC;
+    saturn_frame_sample.version = SM64_SATURN_FRAME_SAMPLE_VERSION;
+    saturn_frame_sample.size = sizeof(saturn_frame_sample);
+    saturn_frame_sample.update_ticks = frame_profile.update_ticks;
+    saturn_frame_sample.sort_ticks = frame_profile.sort_ticks;
+    saturn_frame_sample.command_ticks = frame_profile.command_ticks;
+    saturn_frame_sample.wait_ticks = frame_profile.wait_ticks;
+    saturn_frame_sample.vblank_ticks = frame_profile.vblank_ticks;
+    saturn_frame_sample.render_ticks_hi = (uint16_t)(render_ticks >> 16);
+    saturn_frame_sample.render_ticks_lo = (uint16_t)render_ticks;
+    saturn_frame_sample.loop_ticks_hi = (uint16_t)(loop_ticks >> 16);
+    saturn_frame_sample.loop_ticks_lo = (uint16_t)loop_ticks;
+    saturn_frame_sample.mario_walking = mario_walking ? 1U : 0U;
+    saturn_frame_sample.animation_frame = animation_frame;
+    saturn_frame_sample.mario_world_x_hi = (uint16_t)(x >> 16);
+    saturn_frame_sample.mario_world_x_lo = (uint16_t)x;
+    saturn_frame_sample.mario_world_y_hi = (uint16_t)(y >> 16);
+    saturn_frame_sample.mario_world_y_lo = (uint16_t)y;
+    saturn_frame_sample.mario_world_z_hi = (uint16_t)(z >> 16);
+    saturn_frame_sample.mario_world_z_lo = (uint16_t)z;
+    saturn_frame_sample.sequence = sequence;
+    saturn_frame_sample_sequence = sequence;
 }
 /* Close-port of libmic3d's MIT-licensed transform-once projection schedule:
  * start one SH-2 DIVU reciprocal, prepare X/Y while it runs, then reuse that
@@ -624,6 +686,16 @@ static uint16_t mario_primitive_leaf_edge_from(
     return 0;
 }
 
+static void set_mario_primitive_edge(uint16_t primitive, uint16_t edge) {
+    if (!mario_leaf_state_valid ||
+        mario_previous_primitive_edge[primitive] != edge) {
+        mario_leaf_state_changed = true;
+        if (mario_leaf_state_changed_count != UINT16_MAX)
+            mario_leaf_state_changed_count++;
+    }
+    mario_primitive_edge[primitive] = edge;
+}
+
 /* Z-Treme-style leaf work units avoid descending every actor primitive
  * through the world BSP. Classify one current-pose cluster AABB; refine only
  * a cluster that actually crosses a structural plane. This is scene-neutral:
@@ -672,8 +744,8 @@ static void assign_mario_cluster(uint16_t cluster) {
             for (uint16_t entry = primitive_start; entry < primitive_end; entry++) {
                 const uint16_t primitive =
                     sm64_mario_render_cluster_primitive_list[entry];
-                mario_primitive_edge[primitive] =
-                    mario_primitive_leaf_edge_from(primitive, node);
+                set_mario_primitive_edge(
+                    primitive, mario_primitive_leaf_edge_from(primitive, node));
             }
             return;
         }
@@ -686,8 +758,8 @@ static void assign_mario_cluster(uint16_t cluster) {
             const uint16_t primitive_end =
                 sm64_mario_render_cluster_primitive_offsets[cluster + 1U];
             for (uint16_t entry = primitive_start; entry < primitive_end; entry++)
-                mario_primitive_edge[
-                    sm64_mario_render_cluster_primitive_list[entry]] = edge;
+                set_mario_primitive_edge(
+                    sm64_mario_render_cluster_primitive_list[entry], edge);
             return;
         }
         node = child;
@@ -739,6 +811,8 @@ static void sort_mario(void) {
     mario_bsp_straddlers = 0;
     mario_bsp_refined_clusters = 0;
     mario_bsp_primitive_tests = 0;
+    mario_leaf_state_changed = false;
+    mario_leaf_state_changed_count = 0;
     for (uint16_t cluster = 0; cluster < SM64_MARIO_RENDER_CLUSTER_COUNT;
          cluster++)
         assign_mario_cluster(cluster);
@@ -753,6 +827,10 @@ static void sort_mario(void) {
             mario_leaf_tail[edge] = (int16_t)primitive;
         }
     }
+    for (uint16_t primitive = 0;
+         primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++)
+        mario_previous_primitive_edge[primitive] = mario_primitive_edge[primitive];
+    mario_leaf_state_valid = true;
 }
 
 static void append_mario_leaf(uint16_t edge) {
@@ -822,10 +900,27 @@ static void emit_static_stream(void) {
 }
 
 static void sort_scene(void) {
+    const uint16_t sort_start = cpu_frt_count_get();
+    uint16_t sort_mario_ticks = 0;
+    uint16_t static_rebuild_ticks = 0;
+    uint16_t emit_ticks = 0;
+    const bool sort_cache_hit = mario_sort_cache_valid && !mario_sort_dirty;
+    if (sort_cache_hit) mario_leaf_state_changed_count = 0;
     rejected_items = 0;
     culled_items = 0;
     sm64_saturn_render_queue_reset(&render_queue);
-    sort_mario();
+    if (!sort_cache_hit) {
+        sort_mario();
+        sort_mario_ticks = (uint16_t)(cpu_frt_count_get() - sort_start);
+        mario_sort_cache_valid = true;
+        mario_sort_dirty = false;
+        render_commands_dirty = true;
+        /* Every source BSP leaf already contributes a Mario-leaf marker to the
+         * cached topology.  Only the linked primitive lists change when an
+         * animated cluster crosses a plane, so the global far-to-near stream
+         * remains exact without rebuilding all static visibility work. */
+    }
+    const uint16_t static_start = cpu_frt_count_get();
     if (castle_scene_dirty || !static_render_stream_valid) {
         static_render_stream_count = 0;
         static_render_stream_rejected = 0;
@@ -838,12 +933,38 @@ static void sort_scene(void) {
         rejected_items += static_render_stream_rejected;
         culled_items += static_render_stream_culled;
     }
+    static_rebuild_ticks = (uint16_t)(cpu_frt_count_get() - static_start);
+    const uint16_t emit_start = cpu_frt_count_get();
     emit_static_stream();
     /* Opaque surfaces, alpha-test geometry, coplanar decals, and actors share
      * one topology-derived painter stream. VDP1 has no depth buffer, so a
      * global late decal pass would inevitably paint the lobby emblem over
      * Mario. Coplanar base-before-decal order is compiled into the BSP. */
     render_queue.opaque_count = render_queue.count;
+    emit_ticks = (uint16_t)(cpu_frt_count_get() - emit_start);
+    saturn_scene_profile.magic = SM64_SATURN_SCENE_PROFILE_MAGIC;
+    saturn_scene_profile.version = SM64_SATURN_SCENE_PROFILE_VERSION;
+    saturn_scene_profile.size = sizeof(saturn_scene_profile);
+    saturn_scene_profile.sort_mario_ticks = sort_mario_ticks;
+    saturn_scene_profile.static_rebuild_ticks = static_rebuild_ticks;
+    saturn_scene_profile.emit_ticks = emit_ticks;
+    saturn_scene_profile.sort_cache_hit = sort_cache_hit;
+    saturn_scene_profile.static_cache_hit =
+        !castle_scene_dirty && static_render_stream_valid &&
+        static_rebuild_ticks == 0;
+    saturn_scene_profile.static_stream_count = static_render_stream_count;
+    saturn_scene_profile.mario_visible = mario_visible;
+    saturn_scene_profile.mario_rejected = rejected_items;
+    saturn_scene_profile.mario_culled = culled_items;
+    saturn_scene_profile.mario_edge_changed = mario_leaf_state_changed_count;
+    saturn_scene_profile.static_rejected = static_render_stream_rejected;
+    saturn_scene_profile.static_culled = static_render_stream_culled;
+    saturn_scene_profile.mario_bsp_tests = mario_bsp_primitive_tests;
+    saturn_scene_profile.mario_bsp_refined_clusters = mario_bsp_refined_clusters;
+    saturn_scene_profile.mario_bsp_straddlers = mario_bsp_straddlers;
+    saturn_scene_profile.scene_dirty = castle_scene_dirty;
+    saturn_scene_profile.mario_dirty = mario_sort_dirty;
+    saturn_scene_profile.static_valid = static_render_stream_valid;
 }
 
 static void draw_castle(uint16_t tile, const vdp1_vram_partitions_t *partitions) {
@@ -970,19 +1091,23 @@ static void draw_scene(void) {
     /* The command array is initialized once at allocation.  Preserve it like
      * the intro renderer: clear only the prior END marker, overwrite the live
      * commands, then DMA only the used prefix instead of the maximum list. */
-    sm64_saturn_vdp1_backend_begin(&vdp1_backend);
-    /* N64 LAYER_ALPHA is binary cutout geometry that relies on the RDP's
-     * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, coplanar decals,
-     * and Mario must share one far-to-near topology/dependency stream. */
-    for (uint16_t output = 0; output < render_queue.count; output++) {
-        const sm64_saturn_render_item_t *item =
-            &render_queue.items[render_queue.order[output]];
-        if (item->kind == SM64_SATURN_RENDER_WORLD)
-            draw_castle(item->lowered_index, &partitions);
-        else if (item->kind == SM64_SATURN_RENDER_ACTOR)
-            draw_mario(item->lowered_index, &partitions);
+    if (render_commands_dirty) {
+        sm64_saturn_vdp1_backend_begin(&vdp1_backend);
+        /* N64 LAYER_ALPHA is binary cutout geometry that relies on the RDP's
+         * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, coplanar
+         * decals, and Mario must share one far-to-near topology/dependency
+         * stream. */
+        for (uint16_t output = 0; output < render_queue.count; output++) {
+            const sm64_saturn_render_item_t *item =
+                &render_queue.items[render_queue.order[output]];
+            if (item->kind == SM64_SATURN_RENDER_WORLD)
+                draw_castle(item->lowered_index, &partitions);
+            else if (item->kind == SM64_SATURN_RENDER_ACTOR)
+                draw_mario(item->lowered_index, &partitions);
+        }
+        sm64_saturn_vdp1_backend_finish(&vdp1_backend);
+        render_commands_dirty = false;
     }
-    sm64_saturn_vdp1_backend_finish(&vdp1_backend);
     /* Gouraud tables live in VDP1 VRAM. They only change when the source
      * animation frame changes; re-uploading the whole Mario bank every frame
      * was a measurable Saturn bandwidth tax. */
@@ -991,6 +1116,9 @@ static void draw_scene(void) {
         scu_dma_transfer_wait(0);
         mario_gouraud_dirty = false;
     }
+    /* VDP1 still needs the persistent command prefix transferred each frame
+     * to arm its render request, but the expensive command lowering is skipped
+     * whenever the source pose/camera/global painter key is unchanged. */
     sm64_saturn_vdp1_backend_upload(&vdp1_backend);
     frame_profile.command_ticks = cpu_frt_count_get();
     cpu_frt_count_set(0);
@@ -1138,6 +1266,11 @@ void user_init(void) {
                 animation_changed = true;
             }
         }
+        if (animation_changed) {
+            mario_projection_dirty = true;
+            mario_sort_dirty = true;
+            render_commands_dirty = true;
+        }
         select_mario_animation_frame();
         cache_mario_vertices();
         cache_castle_vertices();
@@ -1178,6 +1311,7 @@ void user_init(void) {
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
         frame_profile.vblank_ticks = cpu_frt_count_get();
         sm64_saturn_frame_profile_loop_total(&frame_profile);
+        publish_frame_sample();
     }
 }
 int main(void) { user_init(); return 0; }

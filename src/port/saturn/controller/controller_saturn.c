@@ -27,19 +27,19 @@ static int8_t axis_to_n64(uint8_t raw, bool invert) {
 static uint16_t buttons_to_n64(const smpc_peripheral_digital_t *digital) {
     uint16_t buttons = 0;
     const uint16_t raw = digital->pressed.raw;
-    /* The SMPC digital report is active-low: 0xFFF8 is neutral and a held
-     * button clears its corresponding bit. Keep this inversion at the
-     * Yaul boundary so the original SM64 ControllerAPI sees its normal
-     * active-high N64 button mask. */
-    if (!(raw & PERIPHERAL_DIGITAL_A)) buttons |= A_BUTTON;
-    if (!(raw & PERIPHERAL_DIGITAL_B)) buttons |= B_BUTTON;
-    if (!(raw & PERIPHERAL_DIGITAL_C)) buttons |= Z_TRIG;
-    if (!(raw & PERIPHERAL_DIGITAL_START)) buttons |= START_BUTTON;
-    if (!(raw & PERIPHERAL_DIGITAL_L)) buttons |= L_TRIG;
-    if (!(raw & PERIPHERAL_DIGITAL_R)) buttons |= R_TRIG;
-    if (!(raw & PERIPHERAL_DIGITAL_X)) buttons |= L_CBUTTONS;
-    if (!(raw & PERIPHERAL_DIGITAL_Y)) buttons |= D_CBUTTONS;
-    if (!(raw & PERIPHERAL_DIGITAL_Z)) buttons |= U_CBUTTONS;
+    /* libyaul's SMPC decoder already XORs the raw hardware bytes with 0xFF
+     * before publishing `pressed.raw`; its public examples therefore test
+     * direction bits as active-high.  Keep this boundary active-high so a
+     * neutral report remains zero instead of becoming every N64 button. */
+    if (raw & PERIPHERAL_DIGITAL_A) buttons |= A_BUTTON;
+    if (raw & PERIPHERAL_DIGITAL_B) buttons |= B_BUTTON;
+    if (raw & PERIPHERAL_DIGITAL_C) buttons |= Z_TRIG;
+    if (raw & PERIPHERAL_DIGITAL_START) buttons |= START_BUTTON;
+    if (raw & PERIPHERAL_DIGITAL_L) buttons |= L_TRIG;
+    if (raw & PERIPHERAL_DIGITAL_R) buttons |= R_TRIG;
+    if (raw & PERIPHERAL_DIGITAL_X) buttons |= L_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_Y) buttons |= D_CBUTTONS;
+    if (raw & PERIPHERAL_DIGITAL_Z) buttons |= U_CBUTTONS;
     return buttons;
 }
 
@@ -73,17 +73,21 @@ static void controller_saturn_read(OSContPad *pad) {
     pad->errnum = 0;
 
     smpc_peripheral_analog_port(1, &analog);
-    if (analog.connected && analog.size >= 6) {
+    /* A digital pad can still be returned through Yaul's analog-shaped
+     * accessor during SMPC handoff. Only ID_ANALOG carries valid axis bytes;
+     * accepting any connected record caused the persistent +80,+80 idle drift
+     * seen in Ymir. */
+    if (analog.connected && analog.type == ID_ANALOG && analog.size >= 6) {
         pad->stick_x = axis_to_n64(analog.pressed.button.axis.x_axis, false);
         pad->stick_y = axis_to_n64(analog.pressed.button.axis.y_axis, true);
     }
 
     /* A digital Saturn pad must still drive SM64's analog movement path. */
-    /* Direction bits use the same active-low report convention. */
-    if ((digital.pressed.raw & PERIPHERAL_DIGITAL_LEFT) == 0U) pad->stick_x = -80;
-    if ((digital.pressed.raw & PERIPHERAL_DIGITAL_RIGHT) == 0U) pad->stick_x = 80;
-    if ((digital.pressed.raw & PERIPHERAL_DIGITAL_DOWN) == 0U) pad->stick_y = -80;
-    if ((digital.pressed.raw & PERIPHERAL_DIGITAL_UP) == 0U) pad->stick_y = 80;
+    /* Direction bits use the same active-high public report convention. */
+    if (digital.pressed.raw & PERIPHERAL_DIGITAL_LEFT) pad->stick_x = -80;
+    if (digital.pressed.raw & PERIPHERAL_DIGITAL_RIGHT) pad->stick_x = 80;
+    if (digital.pressed.raw & PERIPHERAL_DIGITAL_DOWN) pad->stick_y = -80;
+    if (digital.pressed.raw & PERIPHERAL_DIGITAL_UP) pad->stick_y = 80;
 }
 
 struct ControllerAPI controller_saturn = {

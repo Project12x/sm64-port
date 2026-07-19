@@ -1280,3 +1280,28 @@ source-identified render-queue submission. Evidence: [Castle parity](screenshots
 [Castle report](reports/ymir-e1-shared-vdp1-castle-2026-07-19.json), and
 [turntable report](reports/ymir-e1-shared-vdp1-turntable-2026-07-19.json), with
 the [reference and verification record](e1-shared-vdp1-backend-2026-07-19.md).
+
+### 2026-07-19 — Sequence-guarded frame budget
+
+The Castle viewer now publishes a separate 42-byte, all-16-bit
+`saturn_frame_sample` after the VBlank wait. Its odd/even sequence lets a
+remote reader reject a half-written record instead of interpreting the old
+rolling HUD counters. A 900-frame USA-BIOS Ymir capture decodes as 2,296
+update, 5,041 sort, 569 command, 2,634 wait, and 3,495 VBlank FRT ticks:
+10,540 render / 14,035 loop ticks, or 14.93 loop FPS at the `/128` clock.
+This is software-VDP emulator evidence, not retail timing. Evidence:
+[stable frame screenshot](screenshots/ymir-m4-stable-frame-sample-neutral-2026-07-19.png)
+and [stable probe report](reports/ymir-m4-stable-frame-sample-neutral-2026-07-19.json).
+
+### 2026-07-19 — Yaul input polarity and cache-boundary correction
+
+The controller adapter now follows Yaul's normalized active-high `pressed.raw`
+direction bits and rejects analog-shaped digital-pad handoff records. A
+neutral probe returns zero buttons and centered sticks, removing the prior
+all-buttons/idle-drift baseline. The persistent command-lowering cache remains
+pixel-identical at the neutral boundary while VDP1 still receives a fresh
+submission each frame. The right-input capture is retained as a movement-path
+diagnostic, but its post-run sample is neutral, so it is not yet a position
+proof. Evidence: [right-input screenshot](screenshots/ymir-m4-stable-frame-sample-right-held-2026-07-19.png),
+[right-input report](reports/ymir-m4-stable-frame-sample-right-held-2026-07-19.json),
+and [neutral cache report](reports/ymir-m4-input-boundary-cache-2026-07-19.json).

@@ -18,7 +18,15 @@ from pathlib import Path
 
 from compile_castle_bsp import expand_render_polygons
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
-from static_bsp import Node, Polygon, Vertex, build
+from static_bsp import (
+    Node,
+    Polygon,
+    Vertex,
+    build,
+    classify_polygon,
+    serialize,
+    split_polygon,
+)
 from vdp1_texture import (
     distorted_sprite_weights,
     downsample_rgb1555,
@@ -43,6 +51,33 @@ ASSETS = {
     "inside_castle_seg7_texture_07000800": "levels/castle_inside/1.rgba16.png",
     "inside_castle_seg7_texture_07002000": "levels/castle_inside/3.rgba16.png",
 }
+
+
+def index_position_quads(
+    quads: list[tuple[tuple[int, int, int], ...]],
+    triangles: list[bool],
+) -> tuple[list[tuple[int, int, int]], list[tuple[int, int, int, int]]]:
+    """Deduplicate final post-BSP vertices for a transform-once runtime pool.
+
+    Triangle texture tiles carry an offline affine companion point, but VDP1
+    geometry intentionally repeats C. Do not retain or transform that unused
+    companion in the runtime work set.
+    """
+    if len(quads) != len(triangles):
+        raise ValueError("position quad/triangle metadata length mismatch")
+    vertices: list[tuple[int, int, int]] = []
+    vertex_index: dict[tuple[int, int, int], int] = {}
+    indices: list[tuple[int, int, int, int]] = []
+    for quad, is_triangle in zip(quads, triangles):
+        effective = (*quad[:3], quad[2]) if is_triangle else quad
+        indexed: list[int] = []
+        for point in effective:
+            if point not in vertex_index:
+                vertex_index[point] = len(vertices)
+                vertices.append(point)
+            indexed.append(vertex_index[point])
+        indices.append(tuple(indexed))
+    return vertices, indices
 
 
 def rgb555_components(value: int) -> tuple[int, int, int]:
@@ -345,10 +380,69 @@ def lower_polygon(polygon: Polygon, threshold: int) -> list[Polygon]:
     return output
 
 
+def integrate_decals(
+        root: Node, decals: list[Polygon], decal_layer: int = 1,
+) -> dict[str, int]:
+    """Clip decals through an existing structural BSP and attach to carriers.
+
+    Decals must not choose structural split planes: doing so lets a render
+    layer perturb the world topology and still does not establish which base
+    surface it decorates.  Instead, route each source decal through the
+    already-built tree with the same exact rational classifier/splitter.  A
+    fragment is accepted only when it reaches a coplanar structural node, then
+    appended after that node's carrier polygons.  Processing source decals in
+    input order makes the coplanar painter tie deterministic.
+    """
+    if any(polygon.layer != decal_layer for polygon in decals):
+        raise ValueError("decal integration received a non-decal polygon")
+
+    split_events = 0
+    attached_fragments = 0
+    carrier_nodes: set[int] = set()
+
+    def attach(node: Node | None, polygon: Polygon) -> None:
+        nonlocal split_events, attached_fragments
+        if node is None:
+            raise ValueError(
+                f"decal source polygon {polygon.source} has no coplanar "
+                "structural BSP carrier"
+            )
+        classification = classify_polygon(polygon, node.plane)
+        if classification == "coplanar":
+            if not any(carrier.layer != decal_layer for carrier in node.coplanar):
+                raise ValueError(
+                    f"decal source polygon {polygon.source} reached a BSP "
+                    "plane without a structural carrier"
+                )
+            node.coplanar.append(polygon)
+            carrier_nodes.add(id(node))
+            attached_fragments += 1
+            return
+        if classification == "front":
+            attach(node.front, polygon)
+            return
+        if classification == "back":
+            attach(node.back, polygon)
+            return
+        front, back = split_polygon(polygon, node.plane)
+        split_events += 1
+        attach(node.front, front)
+        attach(node.back, back)
+
+    for polygon in decals:
+        attach(root, polygon)
+    return {
+        "input_polygons": len(decals),
+        "split_events": split_events,
+        "attached_fragments": attached_fragments,
+        "carrier_nodes": len(carrier_nodes),
+    }
+
+
 def flatten_bsp(
-        root: Node, subdivision_threshold: int = 0,
+        root: Node, subdivision_threshold: int = 0, decal_layer: int = 1,
 ) -> tuple[list[dict[str, object]], list[Polygon], int, int]:
-    """Serialize nodes preorder and group their VDP1 triangles contiguously."""
+    """Serialize nodes preorder with stable carrier-before-decal ranges."""
     nodes: list[dict[str, object] | None] = []
     polygons: list[Polygon] = []
     triangle_count = 0
@@ -361,10 +455,24 @@ def flatten_bsp(
         index = len(nodes)
         nodes.append(None)
         start = len(polygons)
-        for polygon in node.coplanar:
+        # Python's sort is stable: structural carrier order is unchanged, as
+        # is source decal order, while every carrier is guaranteed to paint
+        # before its coplanar decoration.
+        coplanar = sorted(
+            node.coplanar,
+            key=lambda polygon: polygon.layer == decal_layer,
+        )
+        decal_start = -1
+        decal_count = 0
+        for polygon in coplanar:
             polygon_count += 1
             triangle_count += len(polygon.vertices) - 2
-            polygons.extend(lower_polygon(polygon, subdivision_threshold))
+            lowered = lower_polygon(polygon, subdivision_threshold)
+            if polygon.layer == decal_layer:
+                if decal_start < 0:
+                    decal_start = len(polygons)
+                decal_count += len(lowered)
+            polygons.extend(lowered)
         count = len(polygons) - start
         front, back = visit(node.front), visit(node.back)
         nodes[index] = {
@@ -373,6 +481,9 @@ def flatten_bsp(
             "back": back,
             "tile_start": start,
             "tile_count": count,
+            "decal_tile_start": 0 if decal_start < 0 else decal_start,
+            "decal_tile_count": decal_count,
+            "carrier_tile_count": count - decal_count,
         }
         return index
 
@@ -439,24 +550,27 @@ def main() -> None:
     tile_cluts: list[int] = []
     texels: list[int] = []
     render_polygons = expand_render_polygons(scene, args.subdivision)
+    decal_layer = int(scene["layers"]["LAYER_TRANSPARENT_DECAL"])
     bsp_nodes: list[dict[str, object]] = []
     bsp_stats = None
+    decal_integration: dict[str, int] | None = None
+    integrated_bsp_digest: str | None = None
     if args.ordering == "bsp":
-        static = [polygon for polygon in render_polygons if polygon.layer != 1]
-        decals = [polygon for polygon in render_polygons if polygon.layer == 1]
+        static = [polygon for polygon in render_polygons
+                  if polygon.layer != decal_layer]
+        decals = [polygon for polygon in render_polygons
+                  if polygon.layer == decal_layer]
         bsp_root, bsp_stats = build(
             static, candidate_limit=args.bsp_candidate_limit,
             split_weight=args.bsp_split_weight,
         )
+        decal_integration = integrate_decals(
+            bsp_root, decals, decal_layer=decal_layer)
+        integrated_bsp_digest = hashlib.sha256(json.dumps(
+            serialize(bsp_root), sort_keys=True, separators=(",", ":"),
+        ).encode()).hexdigest()
         bsp_nodes, output_polygons, post_bsp_triangle_count, post_bsp_polygon_count = flatten_bsp(
-            bsp_root, args.subdivision_threshold)
-        decal_start = len(output_polygons)
-        for polygon in decals:
-            post_bsp_polygon_count += 1
-            post_bsp_triangle_count += len(polygon.vertices) - 2
-            output_polygons.extend(lower_polygon(
-                polygon, args.subdivision_threshold))
-        decal_count = len(output_polygons) - decal_start
+            bsp_root, args.subdivision_threshold, decal_layer=decal_layer)
     else:
         output_polygons = [fragment for polygon in render_polygons
                            for fragment in lower_polygon(
@@ -464,8 +578,26 @@ def main() -> None:
         post_bsp_triangle_count = sum(
             len(polygon.vertices) - 2 for polygon in render_polygons)
         post_bsp_polygon_count = len(render_polygons)
-        decal_start = 0
-        decal_count = 0
+
+    decal_tiles = [polygon.layer == decal_layer
+                   for polygon in output_polygons]
+    decal_carriers = [{
+        "node_index": index,
+        "node_tile_start": int(node["tile_start"]),
+        "node_tile_count": int(node["tile_count"]),
+        "carrier_tiles_before_decals": int(node["carrier_tile_count"]),
+        "decal_tile_start": int(node["decal_tile_start"]),
+        "decal_tile_count": int(node["decal_tile_count"]),
+    } for index, node in enumerate(bsp_nodes)
+        if int(node["decal_tile_count"]) > 0]
+    if decal_integration is not None:
+        if len(decal_carriers) != decal_integration["carrier_nodes"]:
+            raise ValueError("decal carrier metadata disagrees with BSP integration")
+        if sum(item["decal_tile_count"] for item in decal_carriers) != sum(decal_tiles):
+            raise ValueError("decal tile metadata does not cover every integrated fragment")
+        if any(item["carrier_tiles_before_decals"] <= 0
+               for item in decal_carriers):
+            raise ValueError("integrated decal node has no carrier tiles")
 
     if args.max_tiles > 0 and len(output_polygons) > args.max_tiles:
         raise ValueError(
@@ -530,9 +662,14 @@ def main() -> None:
         else:
             texels.extend(sampled)
     textured_count = sum(value != 0xFFFF for value in starts)
+    indexed_positions, tile_vertex_indices = index_position_quads(
+        positions, tile_triangles
+    )
     bytes_per_tile = (args.tile * args.tile // 2 if args.texture_format == "clut16"
                       else args.tile * args.tile * 2)
-    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", f"#define SM64_CASTLE_UV_TILE_BYTES {bytes_per_tile}U", f"#define SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16 {1 if args.texture_format == 'clut16' else 0}U", f"#define SM64_CASTLE_UV_CLUT_COUNT {len(cluts)}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_PAIRED_QUAD_COUNT {paired_quads}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", f"#define SM64_CASTLE_BSP_NODE_COUNT {len(bsp_nodes)}U", f"#define SM64_CASTLE_BSP_DECAL_START {decal_start}U", f"#define SM64_CASTLE_BSP_DECAL_COUNT {decal_count}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {"]
+    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", f"#define SM64_CASTLE_UV_TILE_BYTES {bytes_per_tile}U", f"#define SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16 {1 if args.texture_format == 'clut16' else 0}U", f"#define SM64_CASTLE_UV_CLUT_COUNT {len(cluts)}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_PAIRED_QUAD_COUNT {paired_quads}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", f"#define SM64_CASTLE_BSP_NODE_COUNT {len(bsp_nodes)}U", f"#define SM64_CASTLE_BSP_INTEGRATED_DECAL_TILE_COUNT {sum(decal_tiles)}U", f"#define SM64_CASTLE_BSP_DECAL_CARRIER_NODE_COUNT {len(decal_carriers)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {"]
+    lines.insert(len(lines) - 1,
+                 f"#define SM64_CASTLE_UV_VERTEX_COUNT {len(indexed_positions)}U")
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
     lines.append("};")
     if bsp_nodes:
@@ -557,11 +694,17 @@ def main() -> None:
     lines.append("static const uint16_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{value}U" for value in counts[offset:offset + 16]) + "," for offset in range(0, len(counts), 16))
     lines.append("};")
-    lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][4][3] = {")
-    lines.extend("    {" + ", ".join(f"{{{x}, {y}, {z}}}" for x, y, z in quad) + "}," for quad in positions)
+    lines.append("static const int16_t sm64_castle_uv_vertices[SM64_CASTLE_UV_VERTEX_COUNT][3] = {")
+    lines.extend(f"    {{{x}, {y}, {z}}}," for x, y, z in indexed_positions)
+    lines.append("};")
+    lines.append("static const uint16_t sm64_castle_uv_tile_vertices[SM64_CASTLE_UV_TILE_COUNT][4] = {")
+    lines.extend("    {" + ", ".join(f"{value}U" for value in quad) + "}," for quad in tile_vertex_indices)
     lines.append("};")
     lines.append("static const uint8_t sm64_castle_uv_tile_is_triangle[SM64_CASTLE_UV_TILE_COUNT] = {")
     lines.extend("    " + ", ".join("1U" if value else "0U" for value in tile_triangles[offset:offset + 32]) + "," for offset in range(0, len(tile_triangles), 32))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_uv_tile_is_decal[SM64_CASTLE_UV_TILE_COUNT] = {")
+    lines.extend("    " + ", ".join("1U" if value else "0U" for value in decal_tiles[offset:offset + 32]) + "," for offset in range(0, len(decal_tiles), 32))
     lines.append("};")
     if args.texture_format == "clut16":
         packed = pack_clut16(texels)
@@ -577,7 +720,18 @@ def main() -> None:
         emitted_texture_bytes = len(texels) * 2
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "texture_format": args.texture_format, "clut_count": len(cluts), "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "ordering": args.ordering, "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivision_policy": "post-BSP recursive source-space quad/triangle subdivision with exact Fast3D attribute interpolation", "tile_budget": args.max_tiles, "post_bsp_triangles_before_adaptive_split": post_bsp_triangle_count, "post_bsp_polygons_before_adaptive_split": post_bsp_polygon_count, "adaptive_split_events": max(0, len(positions) - post_bsp_polygon_count), "tile_count": len(positions), "texture_bytes": emitted_texture_bytes, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; VDP1 character corners use A/B/C/D, with source triangles using the complete affine repeated-C tile (no diagonal coverage mask)", "bsp": None if bsp_stats is None else {"policy": "exact rational offline splits before VDP1 lowering", "node_count": bsp_stats.node_count, "split_events": bsp_stats.split_events, "input_polygons": bsp_stats.input_polygons, "output_convex_polygons": bsp_stats.output_polygons, "max_depth": bsp_stats.max_depth, "max_fragment_vertices": bsp_stats.max_vertices, "decal_start": decal_start, "decal_count": decal_count, "position_quantization": "nearest source world unit", "maximum_position_error": [maximum_position_error.numerator, maximum_position_error.denominator], "deterministic_sha256": bsp_stats.digest}, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "texture_format": args.texture_format, "clut_count": len(cluts), "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "ordering": args.ordering, "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivision_policy": "post-BSP recursive source-space quad/triangle subdivision with exact Fast3D attribute interpolation", "tile_budget": args.max_tiles, "post_bsp_triangles_before_adaptive_split": post_bsp_triangle_count, "post_bsp_polygons_before_adaptive_split": post_bsp_polygon_count, "adaptive_split_events": max(0, len(positions) - post_bsp_polygon_count), "tile_count": len(positions), "texture_bytes": emitted_texture_bytes, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; VDP1 character corners use A/B/C/D, with source triangles using the complete affine repeated-C tile (no diagonal coverage mask)", "bsp": None if bsp_stats is None else {"policy": "structural exact-rational BSP followed by exact coplanar decal attachment", "node_count": bsp_stats.node_count, "structural_split_events": bsp_stats.split_events, "structural_input_polygons": bsp_stats.input_polygons, "structural_output_convex_polygons": bsp_stats.output_polygons, "integrated_output_convex_polygons": post_bsp_polygon_count, "max_depth": bsp_stats.max_depth, "max_fragment_vertices": bsp_stats.max_vertices, "decal_integration": decal_integration, "decal_carriers": decal_carriers, "integrated_decal_tile_count": sum(decal_tiles), "position_quantization": "nearest source world unit", "maximum_position_error": [maximum_position_error.numerator, maximum_position_error.denominator], "structural_sha256": bsp_stats.digest, "integrated_sha256": integrated_bsp_digest}, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report.update({
+        "runtime_vertex_count": len(indexed_positions),
+        "unindexed_vertex_references": len(positions) * 4,
+        "transform_reuse_ratio": round(
+            (len(positions) * 4) / max(1, len(indexed_positions)), 3
+        ),
+        "runtime_geometry": (
+            "indexed post-BSP vertex pool; transform/project each unique "
+            "vertex once per frame"
+        ),
+    })
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

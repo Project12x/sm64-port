@@ -14,7 +14,7 @@
   "selected_primitives": 567,
   "source_triangles": 619,
   "render_primitives": 567,
-  "paired_textured_quads": 193,
+  "paired_textured_quads": 195,
   "tile": [
     16,
     16
@@ -30,30 +30,55 @@
   "subdivision_threshold": 1024,
   "subdivision_policy": "post-BSP recursive source-space quad/triangle subdivision with exact Fast3D attribute interpolation",
   "tile_budget": 6000,
-  "post_bsp_triangles_before_adaptive_split": 884,
-  "post_bsp_polygons_before_adaptive_split": 711,
+  "post_bsp_triangles_before_adaptive_split": 888,
+  "post_bsp_polygons_before_adaptive_split": 713,
   "adaptive_split_events": 119,
-  "tile_count": 830,
-  "texture_bytes": 106240,
-  "command_estimate": 833,
+  "tile_count": 832,
+  "texture_bytes": 106496,
+  "command_estimate": 835,
   "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings",
   "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; VDP1 character corners use A/B/C/D, with source triangles using the complete affine repeated-C tile (no diagonal coverage mask)",
   "bsp": {
-    "policy": "exact rational offline splits before VDP1 lowering",
+    "policy": "structural exact-rational BSP followed by exact coplanar decal attachment",
     "node_count": 352,
-    "split_events": 144,
-    "input_polygons": 559,
-    "output_convex_polygons": 703,
+    "structural_split_events": 144,
+    "structural_input_polygons": 559,
+    "structural_output_convex_polygons": 703,
+    "integrated_output_convex_polygons": 713,
     "max_depth": 20,
     "max_fragment_vertices": 5,
-    "decal_start": 822,
-    "decal_count": 8,
+    "decal_integration": {
+      "input_polygons": 8,
+      "split_events": 2,
+      "attached_fragments": 10,
+      "carrier_nodes": 2
+    },
+    "decal_carriers": [
+      {
+        "node_index": 163,
+        "node_tile_start": 346,
+        "node_tile_count": 4,
+        "carrier_tiles_before_decals": 2,
+        "decal_tile_start": 348,
+        "decal_tile_count": 2
+      },
+      {
+        "node_index": 273,
+        "node_tile_start": 654,
+        "node_tile_count": 10,
+        "carrier_tiles_before_decals": 2,
+        "decal_tile_start": 656,
+        "decal_tile_count": 8
+      }
+    ],
+    "integrated_decal_tile_count": 10,
     "position_quantization": "nearest source world unit",
     "maximum_position_error": [
       1,
       2
     ],
-    "deterministic_sha256": "679fcb838267a6ba54499971fccdcdf74f1d827521746d1a6661eb7540e92057"
+    "structural_sha256": "679fcb838267a6ba54499971fccdcdf74f1d827521746d1a6661eb7540e92057",
+    "integrated_sha256": "0a4740735f50e8a1754f8b2b1c48a2547f493ebb2492f618d2f7eac1232059fd"
   },
   "rom_sha256": "17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91",
   "texture_sha256": {
@@ -66,5 +91,9 @@
     "inside_09008800": "19f8b77a0f2fed49c27747961bb0f19a1f113f0678acd9b895f116f9c128922b",
     "inside_castle_seg7_texture_07000800": "c95820577fbe18150784cd6b40aac01b1a4072263dc95743fb9882da44dd82f2",
     "inside_castle_seg7_texture_07002000": "17bc8ab04691fa420c77d3d0751dd8e8cfd56f9c4912b6de33c5cd60a398ad2d"
-  }
+  },
+  "runtime_vertex_count": 730,
+  "unindexed_vertex_references": 3328,
+  "transform_reuse_ratio": 4.559,
+  "runtime_geometry": "indexed post-BSP vertex pool; transform/project each unique vertex once per frame"
 }

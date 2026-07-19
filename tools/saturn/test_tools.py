@@ -831,6 +831,15 @@ class YmirInputTests(unittest.TestCase):
         message = input_pulse_request(8, 0x8000, 12)
         self.assertEqual(message["params"], {"buttons": 0x7FF8, "frames": 12})
 
+    def test_frame_sample_contract_is_probe_safe(self) -> None:
+        header = (TOOLS / ".." / ".." / "src" / "port" / "saturn" / "platform" /
+                  "saturn_frame_sample.h").resolve().read_text(encoding="utf-8")
+        fields = [line.strip() for line in header.splitlines()
+                  if line.strip().startswith("uint16_t ")]
+        self.assertEqual(len(fields), 21)
+        self.assertIn("#define SM64_SATURN_FRAME_SAMPLE_MAGIC 0x4653U", header)
+        self.assertIn("uint16_t sequence;", header)
+
 
 class TelemetryTests(unittest.TestCase):
     def test_complete_pass_status_decodes(self) -> None:

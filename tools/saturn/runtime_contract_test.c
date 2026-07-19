@@ -2,8 +2,10 @@
 #include <stdint.h>
 
 #include "saturn_frame_profile.h"
+#include "saturn_gouraud.h"
 #include "saturn_command_arena.h"
 #include "saturn_memory_arena.h"
+#include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
 
@@ -108,6 +110,70 @@ static void test_source_identified_render_queue(void)
     assert(!queue.overflowed);
 }
 
+static void test_projected_workarea(void)
+{
+    sm64_saturn_projected_vertex_t storage[4];
+    sm64_saturn_projected_workarea_t workarea;
+    uint16_t indices[4];
+    const sm64_saturn_viewport_t viewport = {
+        .left = 0,
+        .top = 0,
+        .right = 319,
+        .bottom = 223
+    };
+    sm64_saturn_projected_quad_t quad;
+
+    sm64_saturn_projected_workarea_init(&workarea, storage, 4);
+    assert(workarea.count == 0);
+    assert(workarea.peak == 0);
+    assert(!workarea.overflowed);
+
+    assert(sm64_saturn_projected_workarea_push(&workarea,
+        (sm64_saturn_projected_vertex_t){10, 10, 100}, &indices[0]));
+    assert(sm64_saturn_projected_workarea_push(&workarea,
+        (sm64_saturn_projected_vertex_t){330, 10, 200}, &indices[1]));
+    assert(sm64_saturn_projected_workarea_push(&workarea,
+        (sm64_saturn_projected_vertex_t){330, 200, 300}, &indices[2]));
+    assert(sm64_saturn_projected_workarea_push(&workarea,
+        (sm64_saturn_projected_vertex_t){10, 200, 400}, &indices[3]));
+    assert(workarea.count == 4);
+    assert(workarea.peak == 4);
+    assert(indices[0] == 0 && indices[3] == 3);
+
+    assert(sm64_saturn_projected_quad_analyze(
+        &workarea, indices, &viewport, &quad));
+    assert(quad.min_x == 10 && quad.max_x == 330);
+    assert(quad.min_y == 10 && quad.max_y == 200);
+    assert(quad.min_z == 100 && quad.max_z == 400);
+    assert(quad.center_z == 200);
+    assert(quad.clip_and == SM64_SATURN_CLIP_NONE);
+    assert(quad.clip_or == SM64_SATURN_CLIP_RIGHT);
+    assert(sm64_saturn_projected_quad_is_visible(&quad, 64, 512, 512));
+    assert(!sm64_saturn_projected_quad_is_visible(&quad, 128, 512, 512));
+    assert(!sm64_saturn_projected_quad_is_visible(&quad, 64, 256, 512));
+    assert(!sm64_saturn_projected_quad_is_visible(&quad, 64, 512, 128));
+
+    for (uint8_t corner = 0; corner < 4; corner++) {
+        storage[corner].x = -10;
+    }
+    assert(sm64_saturn_projected_quad_analyze(
+        &workarea, indices, &viewport, &quad));
+    assert((quad.clip_and & SM64_SATURN_CLIP_LEFT) != 0);
+    assert(!sm64_saturn_projected_quad_is_visible(&quad, 64, 512, 512));
+
+    indices[3] = 4;
+    assert(!sm64_saturn_projected_quad_analyze(
+        &workarea, indices, &viewport, &quad));
+    assert(!sm64_saturn_projected_workarea_push(&workarea,
+        (sm64_saturn_projected_vertex_t){0, 0, 0}, NULL));
+    assert(workarea.overflowed);
+
+    sm64_saturn_projected_workarea_reset(&workarea);
+    assert(workarea.count == 0);
+    assert(workarea.peak == 4);
+    assert(!workarea.overflowed);
+}
+
 static void test_bounded_command_arena(void)
 {
     sm64_saturn_command_arena_t arena;
@@ -135,11 +201,13 @@ static void test_bounded_command_arena(void)
 
 int main(void)
 {
+    assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
     test_identity_camera();
     test_q16_normalization();
     test_frame_profile();
     test_bounded_memory_arena();
     test_source_identified_render_queue();
+    test_projected_workarea();
     test_bounded_command_arena();
     return 0;
 }
