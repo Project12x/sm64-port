@@ -1107,3 +1107,14 @@ every 30 frames so an in-game FPS/painter counter can be validated without a
 per-frame text upload. Build: Yaul Saturn release image; host tool suite:
 47 tests pass. Evidence: [input/FPS capture](screenshots/ymir-m4-fps-hud-deadzone-2026-07-19.png)
 and [capture report](reports/ymir-m4-fps-hud-deadzone-2026-07-19.json).
+
+### 2026-07-19 — Cartridge-aware Castle build preserves the Ymir fallback
+
+The Castle target now builds with a validated `0x5C`/4 MiB cartridge-bank
+boundary. On hardware with the expansion, cold Castle and Mario texture tiles
+stage into cartridge DRAM and are read back through an 8 KiB internal-WRAM ring
+before VDP1 DMA. Ymir has no cartridge, so Stage 102 deliberately exercises
+the direct source upload fallback; its non-`SAT0` probe bytes are recorded as an
+emulator limitation rather than claimed as cartridge telemetry. Evidence:
+[fallback capture](screenshots/ymir-m4-cart-fallback-2026-07-19.png) and
+[capture report](reports/ymir-m4-cart-fallback-2026-07-19.json).
