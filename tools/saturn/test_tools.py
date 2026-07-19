@@ -27,6 +27,7 @@ from bake_castle_uv import (  # noqa: E402
     adaptive_subdivide_triangle,
     pack_clut16,
     quantize_clut16,
+    sample_triangle,
     should_subdivide,
     texture_coordinate,
 )
@@ -391,6 +392,19 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertFalse(should_subdivide(small, 1, 512))
         self.assertTrue(should_subdivide(large, 1, 512))
         self.assertTrue(should_subdivide(small, 4, 0))
+
+    def test_castle_triangle_tiles_preserve_transparent_half(self) -> None:
+        texture = (8, 8, [0x801F] * 64, "digest", 128)
+        state = {
+            "width": 8, "height": 8, "sp_scale_s": 65536,
+            "sp_scale_t": 65536, "uls": 0, "ult": 0,
+            "mask_s": 3, "mask_t": 3, "shift_s": 0, "shift_t": 0,
+            "clamp_s": False, "clamp_t": False,
+            "mirror_s": False, "mirror_t": False,
+        }
+        uv = ((0, 0), (32 * 65536, 0), (32 * 65536, 32 * 65536))
+        self.assertEqual(sample_triangle(texture, uv, state, 0, 7, 8, 1), 0)
+        self.assertEqual(sample_triangle(texture, uv, state, 7, 0, 8, 1), 0x801F)
 
     def test_post_bsp_subdivision_preserves_winding_and_exact_uvs(self) -> None:
         polygon = BspPolygon((

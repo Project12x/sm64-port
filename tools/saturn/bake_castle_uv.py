@@ -194,6 +194,10 @@ def sample_triangle(
         uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
         tile_state: dict[str, object], x: int, y: int, tile: int,
         source_scale: int) -> int:
+    # VDP1 textured commands are quads. Use the affine companion
+    # D=A+C-B and make the unused half of the parallelogram transparent.
+    if y > x:
+        return 0
     a, b, c = repeated_vertex_weights(x, y, tile, tile)
     return sample_raw(
         texture,
@@ -284,6 +288,13 @@ def adaptive_subdivide_triangle(polygon: Polygon, threshold: int) -> list[Polygo
 
 
 def lower_polygon(polygon: Polygon, threshold: int) -> list[Polygon]:
+    # VDP1 has a native distorted-sprite quad. Preserve source/BSP convex
+    # quads so their four Fast3D attributes remain one affine primitive; the
+    # old unconditional triangulation turned every wall/floor quad into a
+    # degenerate textured triangle and multiplied both command count and UV
+    # distortion.
+    if len(polygon.vertices) == 4 and threshold <= 0:
+        return [polygon]
     output: list[Polygon] = []
     for triangle in triangulate_polygon(polygon):
         output.extend(adaptive_subdivide_triangle(triangle, threshold))
@@ -450,7 +461,12 @@ def main() -> None:
                        for y in range(args.tile) for x in range(args.tile)]
             paired_quads += 1
         elif len(polygon.vertices) == 3:
-            positions.append((*rounded, rounded[2]))
+            extrapolated = tuple(
+                rounded[0][axis] + rounded[2][axis] - rounded[1][axis]
+                for axis in range(3))
+            if any(value < -32768 or value > 32767 for value in extrapolated):
+                raise ValueError("triangle affine companion left int16 Castle world domain")
+            positions.append((*rounded, extrapolated))
             sampled = [sample_triangle(texture, uv, tile_state, x, y,
                                        args.tile, args.source_scale)
                        for y in range(args.tile) for x in range(args.tile)]
@@ -507,7 +523,7 @@ def main() -> None:
         emitted_texture_bytes = len(texels) * 2
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "texture_format": args.texture_format, "clut_count": len(cluts), "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "ordering": args.ordering, "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivision_policy": "post-BSP recursive longest-edge bisection with exact Fast3D attribute interpolation", "tile_budget": args.max_tiles, "post_bsp_triangles_before_adaptive_split": post_bsp_triangle_count, "adaptive_split_events": len(positions) - post_bsp_triangle_count, "tile_count": len(positions), "texture_bytes": emitted_texture_bytes, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; VDP1 character corners use A/B/C/D, and repeated C=D fallbacks merge D into destination C", "bsp": None if bsp_stats is None else {"policy": "exact rational offline splits before VDP1 lowering", "node_count": bsp_stats.node_count, "split_events": bsp_stats.split_events, "input_polygons": bsp_stats.input_polygons, "output_convex_polygons": bsp_stats.output_polygons, "max_depth": bsp_stats.max_depth, "max_fragment_vertices": bsp_stats.max_vertices, "decal_start": decal_start, "decal_count": decal_count, "position_quantization": "nearest source world unit", "maximum_position_error": [maximum_position_error.numerator, maximum_position_error.denominator], "deterministic_sha256": bsp_stats.digest}, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "texture_format": args.texture_format, "clut_count": len(cluts), "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "ordering": args.ordering, "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivision_policy": "post-BSP recursive longest-edge bisection with exact Fast3D attribute interpolation", "tile_budget": args.max_tiles, "post_bsp_triangles_before_adaptive_split": post_bsp_triangle_count, "adaptive_split_events": len(positions) - post_bsp_triangle_count, "tile_count": len(positions), "texture_bytes": emitted_texture_bytes, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; VDP1 character corners use A/B/C/D, with triangle tiles using affine companion D=A+C-B and a deterministic y>x transparent half", "bsp": None if bsp_stats is None else {"policy": "exact rational offline splits before VDP1 lowering", "node_count": bsp_stats.node_count, "split_events": bsp_stats.split_events, "input_polygons": bsp_stats.input_polygons, "output_convex_polygons": bsp_stats.output_polygons, "max_depth": bsp_stats.max_depth, "max_fragment_vertices": bsp_stats.max_vertices, "decal_start": decal_start, "decal_count": decal_count, "position_quantization": "nearest source world unit", "maximum_position_error": [maximum_position_error.numerator, maximum_position_error.denominator], "deterministic_sha256": bsp_stats.digest}, "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

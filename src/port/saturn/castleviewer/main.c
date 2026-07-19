@@ -36,6 +36,7 @@ static int16_t mario_bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t mario_order[SM64_MARIO_PRIMITIVE_COUNT], mario_visible;
 static uint16_t draw_order[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
+static bool mario_gouraud_dirty;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
 static bool mario_walking;
@@ -251,6 +252,7 @@ static void build_mario_gouraud(void) {
                 (rgb[2] * intensity) / 31U);
         }
     }
+    mario_gouraud_dirty = true;
 }
 
 static void mario_texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
@@ -463,7 +465,14 @@ static void draw_scene(void) {
         }
     }
     vdp1_cmdt_end_set(&command_list->cmdts[command]);
-    scu_dma_transfer(0, (void *)partitions.gouraud_base, mario_gouraud, sizeof(mario_gouraud)); scu_dma_transfer_wait(0);
+    /* Gouraud tables live in VDP1 VRAM. They only change when the source
+     * animation frame changes; re-uploading the whole Mario bank every frame
+     * was a measurable Saturn bandwidth tax. */
+    if (mario_gouraud_dirty) {
+        scu_dma_transfer(0, (void *)partitions.gouraud_base, mario_gouraud, sizeof(mario_gouraud));
+        scu_dma_transfer_wait(0);
+        mario_gouraud_dirty = false;
+    }
     vdp1_sync_cmdt_list_put(command_list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
 }
 

@@ -938,3 +938,15 @@ testing. The next gameplay gate is to connect the source collision/surface
 path so movement cannot pass through the lobby walls. No gallery frame is
 claimed for this checkpoint because the current test capture crossed the
 uncorrected collision boundary.
+
+### 2026-07-19 — Native source quads reduce the VDP1 command budget
+
+The Castle lowering no longer triangulates every convex four-vertex BSP
+fragment. Native source/BSP quads retain all four Fast3D attributes and map to
+one VDP1 distorted-sprite command. The remaining triangles use an affine
+companion corner (`D = A + C - B`) and a transparent unused half instead of
+repeating `C = D`, which was responsible for the lobby's fan-shaped texture
+streaks. The source-derived bank falls from 884 to 733 textured commands while
+the real animated Mario remains in the scene. Gouraud tables are now DMA'd only
+when the animation frame changes. Evidence: [source-quad capture](screenshots/ymir-m4-source-quads-2026-07-19.png)
+and [bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
