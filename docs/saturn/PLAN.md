@@ -452,8 +452,11 @@ to take multiple years.
 
 ## Immediate implementation order
 
-The original hardware-characterization and classifier streams now exist. The
-active implementation order is the M1 queue in [`ROADMAP.md`](ROADMAP.md):
-duration-aware Ymir input, Goddard deformation tracing/extraction, one animated
-source expression, deterministic soak/captures, then the general Saturn render
-IR with in-game Mario as its first client.
+The original hardware-characterization, classifier, title, Mario actor, and
+Castle Area 1 proof streams now exist. The active order is the engine migration
+in [`ENGINE_PORT_ARCHITECTURE.md`](ENGINE_PORT_ARCHITECTURE.md): finish E0's
+bounded VDP1 command arena and target pixel-identity capture; complete E1 by
+making the turntable and Castle targets clients of one renderer/residency path;
+then implement E2's Saturn `exec_display_list()` handoff and boot the original
+`game_loop_one_iteration()` path. M1 closure evidence remains a bounded visual
+workstream, not the owner of the production runtime sequence.

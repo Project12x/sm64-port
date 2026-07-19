@@ -1,6 +1,6 @@
 # SM64 Saturn development roadmap
 
-Last updated 2026-07-18.
+Last updated 2026-07-19.
 
 This is the visual-first execution roadmap for porting Super Mario 64 to the
 Sega Saturn with a required 4 MiB DRAM cartridge. It complements the deeper
@@ -39,24 +39,34 @@ The project has moved beyond feasibility sketches:
 - the actual 440-vertex / 877-triangle SM64 Goddard face, eyes, pupils,
   eyebrows, and moustache render through VDP1;
 - the face has fixed-point camera control, topology-derived Gouraud depth,
-  toggleable shine, persistent command storage, and split timing telemetry; and
+  toggleable shine, persistent command storage, and split timing telemetry;
 - every accepted and rejected visual step is preserved in the
-  [screenshot timeline](evidence/index.html).
+  [screenshot timeline](evidence/index.html);
+- source Mario now stands, responds to input, jumps, collides, and selects idle
+  and walking animation banks inside the source-derived Castle Area 1 slice;
+- the measured Ymir establishing-view baseline is approximately 7.5 FPS after
+  source culling, transform caching, and a generated one-tile Mario texture
+  tier, with 15 FPS the hard M4 target; and
+- engine-port gate E0 has extracted shared frame profiling, fixed-point camera
+  transforms, bounded memory arenas, and a source-identified render queue from
+  the Castle harness.
 
-The current proof still uses a specialized renderer, although its face mesh now
-passes through the reusable IR compiler. It does not yet execute the Goddard
-deformation system, consume the general SM64 display-list path, render gameplay
-textures, or run Mario's gameplay state.
+The current proof renders real gameplay geometry and invokes selected original
+input, collision, geo-layout, camera-support, and animation code, but it is not
+yet the production game loop. `castleviewer/main.c` still owns manual movement,
+jump, camera, animation cadence, and display submission. E0–E2 now retire that
+scaffolding into a shared renderer and the original `game_loop_one_iteration()`
+plus `exec_display_list()` path.
 
 ## Roadmap at a glance
 
 | Milestone | Visible result | Primary proof | Rough focused-effort band | Status |
 |---|---|---|---|---|
 | M0 — Face proof | Source-derived Mario face on Saturn | Geometry, features, Gouraud, camera, telemetry | Delivered | Complete |
-| M1 — Living title face | Animated face, title background, `PRESS START` | Goddard deformation subset, title presentation, deterministic input captures | 1–3 weeks | **Now** |
+| M1 — Living title face | Animated face, title background, `PRESS START` | Goddard deformation subset, title presentation, deterministic input captures | 1–3 weeks | Active: closure evidence remains |
 | M2 — Mario turntable | In-game Mario model renders and animates | General display-list IR, textures, skeleton, actor materials | 3–8 weeks | **Active: render-correctness exit** |
 | M3 — Castle lobby renderer | Textured Castle Area 1 renders from fixed cameras | Static world banks, visibility, clipping, ordering, texture residency | 1–3 months | **Active: source-root / texture diagnostics** |
-| M4 — Castle-lobby Mario | Mario runs and jumps in the lobby | Game update, lobby collision, camera, animation integration | 1–3 months | Planned |
+| M4 — Castle-lobby Mario | Mario runs and jumps in the lobby | Game update, lobby collision, camera, animation integration | 1–3 months | **Active: E0–E2 engine cutover** |
 | M5 — Castle entry visual slice | Title → lobby is a repeatable playable proof | HUD, basic door prompt, deterministic route, stable budgets | 1–2 months | Planned |
 | M6 — Battlefield slice | A small star route is playable | Outdoor visibility, actors, objects, particles, minimal audio | 2–5 months | Planned |
 | M7 — Castle loop | Castle → course → star → castle works repeatedly | Transitions, save state, asset-bank lifecycle, audio | 2–4 months | Planned |
@@ -67,7 +77,14 @@ These are engineering effort bands, not calendar promises. They assume one
 lead developer with agent assistance, usable decompilation source, no prolonged
 licensing block, and strict scope control. Re-estimate after M2 and M5.
 
-### Current execution choice: prove the room before polishing the actor
+### Current execution choice: retire the harness into the engine path
+
+The visible room-and-actor proof has served its purpose. Further gameplay or
+performance work must now land in scene-neutral stages that survive the
+transition to the original game loop. E0 is active: frame, transform, memory,
+and render-queue contracts are shared; the VDP1 command arena and target
+pixel-identity capture remain. E1 then makes the Castle and turntable targets
+clients of the same backend, and E2 introduces Saturn `exec_display_list()`.
 
 Mario is now standing from the source C5 idle animation. M2 remains open only
 for bounded renderer correctness work: source texture patches must use an
