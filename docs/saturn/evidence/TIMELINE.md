@@ -1118,3 +1118,13 @@ the direct source upload fallback; its non-`SAT0` probe bytes are recorded as an
 emulator limitation rather than claimed as cartridge telemetry. Evidence:
 [fallback capture](screenshots/ymir-m4-cart-fallback-2026-07-19.png) and
 [capture report](reports/ymir-m4-cart-fallback-2026-07-19.json).
+
+### 2026-07-19 — Ymir 32 Mbit DRAM cartridge path is live
+
+Ymir's portable profile inserted a `32Mbit` DRAM cartridge, which is the
+required 4 MiB Saturn expansion. The rebuilt Castle disc reached the running
+target with cartridge-aware texture staging enabled and produced a visually
+comparable source lobby frame. This separates emulator cartridge support from
+the earlier no-cartridge fallback capture; neither is retail timing evidence.
+Evidence: [cart-enabled screenshot](screenshots/ymir-m4-cart-enabled-2026-07-19.png)
+and [capture notes](ymir-cart-enabled-2026-07-19.md).
