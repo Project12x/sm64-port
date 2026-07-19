@@ -919,6 +919,25 @@ providing a stable visual baseline for the next material/near-plane pass.
 
 Evidence: [neutral capture report](ymir-m4-source-triangle-collapse-neutral-2026-07-19.json).
 
+### M4 movement bridge: analog, collision, and jump
+
+The Saturn controller backend already converts both the analog peripheral axes
+and digital direction bits into the original SM64 `ControllerAPI` range. The
+Castle bank uses the original wall/floor collision queries for movement; this
+pass adds an A-edge jump impulse and gravity, landing through the same source
+floor query instead of a room-specific bound. The first valid SMPC sample is
+now treated as the held baseline so BIOS menu input cannot create an automatic
+jump edge.
+
+### M4 Saturn performance cadence
+
+The full source Mario Gouraud bank is roughly 28 KiB. Geometry and animation
+remain at source cadence, but Gouraud-table rebuild/DMA is bounded to every
+second frame and the debug HUD flush is reduced to once per second without an
+extra VDP2 synchronization stall. This is a Saturn-specific performance tier,
+not a texture or geometry substitute; the next profiling pass should measure
+retail-hardware frame time separately from Ymir's software VDP renderer.
+
 ### M4 material profile: full-resolution source textures accepted
 
 ![Full-resolution source Castle textures after triangle collapse](screenshots/ymir-m4-source-fullres-triangle-collapse-2026-07-19.png)
