@@ -1080,3 +1080,16 @@ object records remain intentionally outside this first collision-only bank.
 Evidence: [source-collision capture](screenshots/ymir-m4-source-collision-2026-07-19.png),
 [collision-bank report](reports/castle-area1-collision-bank-2026-07-19.json), and
 [headless run report](reports/ymir-m4-source-collision-2026-07-19.json).
+
+### 2026-07-19 — Saturn input deadzone, camera-relative movement, and FPS instrumentation
+
+The Yaul controller adapter now applies a 12-count hardware deadzone before
+the original SM64 `adjust_analog_stick()` path, eliminating the small neutral
+stick drift seen in Ymir. The viewer derives `source_camera.yaw` from its live
+view basis and passes the original `intendedYaw` directly into movement, fixing
+the prior 180-degree/tank-style direction inversion. The VDP2 debug layer is
+raised to priority 7 and the existing bounded frame statistics are refreshed
+every 30 frames so an in-game FPS/painter counter can be validated without a
+per-frame text upload. Build: Yaul Saturn release image; host tool suite:
+47 tests pass. Evidence: [input/FPS capture](screenshots/ymir-m4-fps-hud-deadzone-2026-07-19.png)
+and [capture report](reports/ymir-m4-fps-hud-deadzone-2026-07-19.json).

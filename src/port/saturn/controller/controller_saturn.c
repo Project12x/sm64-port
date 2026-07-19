@@ -14,6 +14,11 @@ static int8_t axis_to_n64(uint8_t raw, bool invert) {
     int16_t centered = (int16_t)raw - 127;
     if (invert) centered = -centered;
     int16_t value = (centered * 80) / 128;
+    /* Saturn analog reports can dither a few counts around centre.  SM64's
+     * original 8-count deadzone is too small after the SMPC conversion and
+     * causes an idle Mario to drift.  Keep the source ControllerAPI intact,
+     * but quantize only the hardware boundary before it reaches it. */
+    if (value > -12 && value < 12) value = 0;
     if (value < -80) value = -80;
     if (value > 80) value = 80;
     return (int8_t)value;

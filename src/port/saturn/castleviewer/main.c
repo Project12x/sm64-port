@@ -16,6 +16,7 @@
 #include "mario_eye_uv_tiles.h"
 #include "engine/surface_load.h"
 #include "engine/surface_collision.h"
+#include "engine/math_util.h"
 
 #define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DRAW_ITEM_COUNT (SM64_CASTLE_UV_TILE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
@@ -31,7 +32,7 @@
  * host lowering can split it with interpolated attributes. */
 #define MAX_PROJECTED_SPAN 640
 #define GOURAUD_UPDATE_PERIOD 2U
-#define FRAME_STATS_PERIOD 60U
+#define FRAME_STATS_PERIOD 30U
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -246,9 +247,12 @@ static void update_source_input(void) {
         }
     }
     mario_walking = (source_mario_state.input & INPUT_NONZERO_ANALOG) != 0U;
-    source_camera.yaw = 0;
+    /* Keep SM64's camera-relative stick semantics.  The old fixed zero yaw
+     * made the Saturn pad feel like a tank: up/left were interpreted in the
+     * room's world axes instead of the view axes. */
+    source_camera.yaw = atan2s(-camera_forward.z, camera_forward.x);
     if (mario_walking) {
-        mario_yaw = (angle_t)(32768 + source_mario_state.intendedYaw);
+        mario_yaw = (angle_t)source_mario_state.intendedYaw;
         fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
         /* The original SM64 joystick routine owns magnitude and intended
          * direction. This bridge advances the source actor in source units
@@ -634,7 +638,9 @@ void user_init(void) {
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 2, 4, 12));
     vdp1_env_t env; vdp1_env_default_init(&env); env.erase_color = RGB1555(1, 2, 4, 12); vdp1_env_set(&env);
     for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
-    vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
+    vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2); dbgio_dev_font_load(); dbgio_display_set(true);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     vdp_sync_vblank_out_set(vblank_out_handler, NULL);
     /* Prime the first INTBACK collection. The callback supplies subsequent
      * frames, but a target that starts polling before the first VBlank can
