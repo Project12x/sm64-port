@@ -38,6 +38,7 @@
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
+static uint16_t previous_command_end = 2U;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int32_t mario_vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
@@ -616,8 +617,10 @@ static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram
 static void draw_scene(void) {
     const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223), local = INT16_VEC2_INITIALIZER(0, 0);
     vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
-    command_list->count = COMMAND_COUNT;
-    (void)memset(command_list->cmdts, 0, sizeof(vdp1_cmdt_t) * command_list->count);
+    /* The command array is initialized once at allocation.  Preserve it like
+     * the intro renderer: clear only the prior END marker, overwrite the live
+     * commands, then DMA only the used prefix instead of the maximum list. */
+    vdp1_cmdt_end_clear(&command_list->cmdts[previous_command_end]);
     vdp1_cmdt_system_clip_coord_set(&command_list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&command_list->cmdts[0], clip);
     vdp1_cmdt_local_coord_set(&command_list->cmdts[1]); vdp1_cmdt_vtx_local_coord_set(&command_list->cmdts[1], local);
     uint16_t command = 2;
@@ -642,6 +645,8 @@ static void draw_scene(void) {
         }
     }
     vdp1_cmdt_end_set(&command_list->cmdts[command]);
+    previous_command_end = command;
+    command_list->count = command + 1U;
     /* Gouraud tables live in VDP1 VRAM. They only change when the source
      * animation frame changes; re-uploading the whole Mario bank every frame
      * was a measurable Saturn bandwidth tax. */
@@ -733,6 +738,7 @@ void user_init(void) {
         sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
+    (void)memset(command_list->cmdts, 0, sizeof(vdp1_cmdt_t) * COMMAND_COUNT);
     source_area.camera = &source_camera;
     source_mario_state.area = &source_area;
     source_mario_state.controller = &source_controller;

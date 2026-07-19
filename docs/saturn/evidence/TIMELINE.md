@@ -1155,3 +1155,17 @@ framebuffer hash, `02caa7267473b3a40de371c55044db2c`, is exactly identical to
 the preceding accepted no-cart Castle capture. Evidence:
 [Stage 106](screenshots/ymir-m4-actor-frame-pointer-2026-07-19.png) and
 [capture report](reports/ymir-m4-actor-frame-pointer-2026-07-19.json).
+
+### 2026-07-19 — Persistent variable-length VDP1 command submission
+
+The Castle renderer no longer clears and transfers all 1,627 allocated command
+slots every frame. The list is initialized once, the preceding END marker is
+cleared, live commands are overwritten, and `command_list->count` is set to the
+new END-inclusive prefix before Yaul submission. A paused Ymir read at the
+linked `previous_command_end` symbol (`0x06097F60`) returned big-endian
+`0x0450`, proving an END index of 1,104 and a submitted count of 1,105 for the
+captured view. That is 35,360 command bytes instead of 52,064: 16,704 fewer
+bytes, or 32%, per frame. The framebuffer hash remains exactly
+`02caa7267473b3a40de371c55044db2c`.
+Evidence: [Stage 107](screenshots/ymir-m4-persistent-command-prefix-2026-07-19.png)
+and [symbol-probe report](reports/ymir-m4-persistent-command-prefix-2026-07-19.json).

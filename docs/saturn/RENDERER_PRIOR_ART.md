@@ -106,6 +106,14 @@ reuses a single pointer through culling, ordering, Gouraud, and command build.
 This retains the Z-Treme-style stable-data lifecycle without expanding the hot
 internal-WRAM footprint; the accepted framebuffer hash is unchanged.
 
+The Castle command list now follows the same persistent lifecycle. Its full
+1,627-slot arena is zeroed only at startup; subsequent frames clear the old END
+bit, rewrite the live commands, and ask Yaul to upload only the new prefix. A
+linked-symbol Ymir probe measured 1,105 live slots in the accepted view, cutting
+the per-frame command transfer from 52,064 to 35,360 bytes (32%) without a
+framebuffer change. This is a direct use of Yaul's typed persistent list and a
+Jo-style bounded command-block pattern; no Jo Engine allocator code is copied.
+
 This is the practical split suggested by the references: Z-Treme-style coarse
 visibility and stable per-primitive keys stay in internal RAM, while
 SlaveDriver-style queued/DMA staging remains reserved for cold 4 MiB RAM-Cart
