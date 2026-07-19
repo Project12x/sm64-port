@@ -3,6 +3,7 @@
 
 #include "saturn_frame_profile.h"
 #include "saturn_memory_arena.h"
+#include "saturn_render_queue.h"
 #include "saturn_transform.h"
 
 static void test_identity_camera(void)
@@ -68,11 +69,50 @@ static void test_bounded_memory_arena(void)
     assert(!arena.overflowed);
 }
 
+static void test_source_identified_render_queue(void)
+{
+    sm64_saturn_render_item_t items[2];
+    uint16_t order[2];
+    sm64_saturn_render_queue_t queue;
+    sm64_saturn_render_queue_init(&queue, items, order, 2);
+
+    assert(sm64_saturn_render_queue_push(&queue,
+        (sm64_saturn_render_item_t){
+            .depth_key = 900,
+            .source_bank = 7,
+            .source_primitive = 42,
+            .lowered_index = 3,
+            .kind = SM64_SATURN_RENDER_WORLD,
+            .pass = SM64_SATURN_PASS_OPAQUE
+        }));
+    assert(sm64_saturn_render_queue_push(&queue,
+        (sm64_saturn_render_item_t){
+            .depth_key = 700,
+            .source_bank = 9,
+            .source_primitive = 11,
+            .lowered_index = 5,
+            .kind = SM64_SATURN_RENDER_ACTOR,
+            .pass = SM64_SATURN_PASS_OPAQUE
+        }));
+    assert(queue.count == 2);
+    assert(queue.order[0] == 0 && queue.order[1] == 1);
+    assert(queue.items[0].source_primitive == 42);
+    assert(queue.items[1].lowered_index == 5);
+    assert(!sm64_saturn_render_queue_push(&queue,
+        (sm64_saturn_render_item_t){0}));
+    assert(queue.overflowed);
+
+    sm64_saturn_render_queue_reset(&queue);
+    assert(queue.count == 0);
+    assert(!queue.overflowed);
+}
+
 int main(void)
 {
     test_identity_camera();
     test_q16_normalization();
     test_frame_profile();
     test_bounded_memory_arena();
+    test_source_identified_render_queue();
     return 0;
 }

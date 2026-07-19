@@ -174,9 +174,12 @@ used by the Castle harness. Their native C contract test covers integer camera
 transforms, Q16 normalization, phase totals, and zero-safe rate calculation.
 The bounded `platform/saturn_memory_arena.h` now also owns alignment, peak
 usage, and overflow state for the Castle collision pool without owning its
-backing address. Render-job and command-arena extraction remains open. The
-target pixel-identity capture remains required after the Yaul build environment
-is available; a host-only pass does not close E0.
+backing address. `gfx/saturn_render_queue.h` now carries source-bank,
+source-primitive, generated-IR, depth, kind, and pass identity through one
+bounded queue; Castle world tiles and Mario actor primitives are its first two
+clients. Command-arena extraction remains open. The target pixel-identity
+capture remains required after the Yaul build environment is available; a
+host-only pass does not close E0.
 
 ### E1 — Shared renderer client
 

@@ -5,6 +5,7 @@
 #include "controller_saturn.h"
 #include "saturn_cart_bank.h"
 #include "saturn_frame_profile.h"
+#include "saturn_render_queue.h"
 #include "saturn_transform.h"
 #include "game/area.h"
 #include "game/camera.h"
@@ -41,6 +42,8 @@
  * the one-decimal FPS display.  The former /8 timer wrapped every ~19.5 ms
  * and therefore reported nonsense for the observed ~125 ms Castle frame. */
 #define FRT_TICKS_PER_SECOND_X10 2095500UL
+#define SOURCE_BANK_CASTLE_AREA1 1U
+#define SOURCE_BANK_MARIO 2U
 
 typedef sm64_saturn_vec3i_t point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -52,11 +55,13 @@ static int16_t mario_bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t mario_order[SM64_MARIO_PRIMITIVE_COUNT], mario_visible;
 static point3_t mario_view_vertices[SM64_MARIO_VERTEX_COUNT];
 static int16_vec2_t mario_screen_vertices[SM64_MARIO_VERTEX_COUNT];
-static uint16_t draw_order[DRAW_ITEM_COUNT];
+static sm64_saturn_render_item_t render_items[DRAW_ITEM_COUNT];
+static uint16_t render_order[DRAW_ITEM_COUNT];
+static sm64_saturn_render_queue_t render_queue;
 static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_DEPTH_BUCKETS];
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
-static uint16_t visible_items, opaque_items, rejected_items, culled_items, animation_frame;
+static uint16_t rejected_items, culled_items, animation_frame;
 static sm64_saturn_frame_profile_t frame_profile;
 /* Cache only the full-width source depth key.  Projection remains on the
  * proven direct path; this removes the redundant transform pass used by the
@@ -427,9 +432,22 @@ static bool tile_is_visible(uint16_t tile) {
     return visible;
 }
 
-static void append_static_tile(uint16_t tile) {
-    if (tile_is_visible(tile)) draw_order[visible_items++] = tile;
-    else rejected_items++;
+static void append_static_tile(uint16_t tile, sm64_saturn_render_pass_t pass) {
+    if (!tile_is_visible(tile)) {
+        rejected_items++;
+        return;
+    }
+    if (!sm64_saturn_render_queue_push(&render_queue,
+            (sm64_saturn_render_item_t){
+                .depth_key = castle_tile_depth[tile],
+                .source_bank = SOURCE_BANK_CASTLE_AREA1,
+                .source_primitive = sm64_castle_uv_tile_primitive[tile],
+                .lowered_index = tile,
+                .kind = SM64_SATURN_RENDER_WORLD,
+                .pass = pass
+            })) {
+        rejected_items++;
+    }
 }
 
 static void sort_mario(void) {
@@ -464,8 +482,26 @@ static void sort_mario(void) {
 }
 
 static void append_mario(void) {
-    for (uint16_t index = 0; index < mario_visible; index++)
-        draw_order[visible_items++] = SM64_CASTLE_UV_TILE_COUNT + mario_order[index];
+    for (uint16_t index = 0; index < mario_visible; index++) {
+        const uint16_t primitive = mario_order[index];
+        const uint16_t *indices = sm64_mario_primitives[primitive];
+        const int32_t maximum = max4(
+            mario_view_vertices[indices[1]].z,
+            mario_view_vertices[indices[2]].z,
+            mario_view_vertices[indices[3]].z,
+            mario_view_vertices[indices[4]].z);
+        if (!sm64_saturn_render_queue_push(&render_queue,
+                (sm64_saturn_render_item_t){
+                    .depth_key = maximum,
+                    .source_bank = SOURCE_BANK_MARIO,
+                    .source_primitive = primitive,
+                    .lowered_index = primitive,
+                    .kind = SM64_SATURN_RENDER_ACTOR,
+                    .pass = SM64_SATURN_PASS_OPAQUE
+                })) {
+            rejected_items++;
+        }
+    }
 }
 
 /* VDP1 has no depth buffer.  The source BSP is still the authority for
@@ -474,31 +510,15 @@ static void append_mario(void) {
  * a coarse, stable transformed-depth key; source traversal remains the
  * tie-breaker inside each bucket and decals stay in their explicit late pass.
  */
-static int32_t scene_item_max_depth(uint16_t item) {
-    if (item < SM64_CASTLE_UV_TILE_COUNT) {
-        if (castle_tile_depth_valid[item]) return castle_tile_depth[item];
-        const point3_t a = castle_point(sm64_castle_uv_positions[item][0]);
-        const point3_t b = castle_point(sm64_castle_uv_positions[item][1]);
-        const point3_t c = castle_point(sm64_castle_uv_positions[item][2]);
-        const point3_t d = sm64_castle_uv_tile_is_triangle[item]
-            ? c : castle_point(sm64_castle_uv_positions[item][3]);
-        return max4(a.z, b.z, c.z, d.z);
-    }
-    const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
-    const uint16_t *indices = sm64_mario_primitives[primitive];
-    return max4(mario_view_vertices[indices[1]].z,
-                mario_view_vertices[indices[2]].z,
-                mario_view_vertices[indices[3]].z,
-                mario_view_vertices[indices[4]].z);
-}
-
 static void refine_opaque_depth_order(uint16_t opaque_count) {
-    (void)memcpy(scene_order_scratch, draw_order, sizeof(uint16_t) * opaque_count);
+    (void)memcpy(scene_order_scratch, render_queue.order,
+                 sizeof(uint16_t) * opaque_count);
     for (uint16_t bucket = 0; bucket < SCENE_DEPTH_BUCKETS; bucket++)
         scene_bucket_head[bucket] = scene_bucket_tail[bucket] = -1;
     for (uint16_t order = 0; order < opaque_count; order++) {
-        const uint16_t item = scene_order_scratch[order];
-        const int32_t depth = clamp32(scene_item_max_depth(item), NEAR_DEPTH, FAR_DEPTH);
+        const uint16_t slot = scene_order_scratch[order];
+        const int32_t depth = clamp32(render_queue.items[slot].depth_key,
+                                      NEAR_DEPTH, FAR_DEPTH);
         const uint16_t bucket = (uint16_t)((depth - NEAR_DEPTH) *
             (SCENE_DEPTH_BUCKETS - 1U) / (FAR_DEPTH - NEAR_DEPTH));
         scene_bucket_next[order] = -1;
@@ -513,7 +533,7 @@ static void refine_opaque_depth_order(uint16_t opaque_count) {
     for (int16_t bucket = SCENE_DEPTH_BUCKETS - 1; bucket >= 0; bucket--)
         for (int16_t order = scene_bucket_head[bucket]; order >= 0;
              order = scene_bucket_next[order])
-            draw_order[output++] = scene_order_scratch[(uint16_t)order];
+            render_queue.order[output++] = scene_order_scratch[(uint16_t)order];
 }
 
 static int64_t bsp_side(uint16_t node, point3_t point) {
@@ -538,25 +558,26 @@ static void traverse_bsp(int16_t node, bool insert_mario) {
     const bool mario_in_far = camera_front ? !mario_front : mario_front;
     traverse_bsp(far, insert_mario && mario_in_far);
     for (uint16_t offset = 0; offset < sm64_castle_bsp_tile_range[node][1]; offset++)
-        append_static_tile(sm64_castle_bsp_tile_range[node][0] + offset);
+        append_static_tile(sm64_castle_bsp_tile_range[node][0] + offset,
+                           SM64_SATURN_PASS_OPAQUE);
     traverse_bsp(near, insert_mario && !mario_in_far);
 }
 
 static void sort_scene(void) {
     rejected_items = 0;
     culled_items = 0;
-    visible_items = 0;
+    sm64_saturn_render_queue_reset(&render_queue);
     castle_tile_depth_evaluations = 0;
     (void)memset(castle_tile_depth_valid, 0, sizeof(castle_tile_depth_valid));
     sort_mario();
     traverse_bsp(0, true);
-    const uint16_t opaque_count = visible_items;
+    const uint16_t opaque_count = render_queue.count;
     refine_opaque_depth_order(opaque_count);
-    opaque_items = opaque_count;
+    render_queue.opaque_count = opaque_count;
     /* True translucent decals remain a deliberately late source-derived pass. */
     for (uint16_t tile = SM64_CASTLE_BSP_DECAL_START;
          tile < SM64_CASTLE_BSP_DECAL_START + SM64_CASTLE_BSP_DECAL_COUNT; tile++)
-        append_static_tile(tile);
+        append_static_tile(tile, SM64_SATURN_PASS_TRANSLUCENT);
 }
 
 static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_partitions_t *partitions) {
@@ -645,16 +666,14 @@ static void draw_scene(void) {
      * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, and Mario must
      * share one far-to-near ordering pass. Only the genuinely translucent
      * decal root is submitted afterward with half-transparency. */
-    for (uint16_t output = 0; output < opaque_items; output++) {
-        const uint16_t item = draw_order[output];
-        if (item < SM64_CASTLE_UV_TILE_COUNT)
-            command = draw_castle(item, command, &partitions);
-        else
-            command = draw_mario(item - SM64_CASTLE_UV_TILE_COUNT,
-                                 command, &partitions);
+    for (uint16_t output = 0; output < render_queue.count; output++) {
+        const sm64_saturn_render_item_t *item =
+            &render_queue.items[render_queue.order[output]];
+        if (item->kind == SM64_SATURN_RENDER_WORLD)
+            command = draw_castle(item->lowered_index, command, &partitions);
+        else if (item->kind == SM64_SATURN_RENDER_ACTOR)
+            command = draw_mario(item->lowered_index, command, &partitions);
     }
-    for (uint16_t output = opaque_items; output < visible_items; output++)
-        command = draw_castle(draw_order[output], command, &partitions);
     vdp1_cmdt_end_set(&command_list->cmdts[command]);
     previous_command_end = command;
     command_list->count = command + 1U;
@@ -754,6 +773,8 @@ void user_init(void) {
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     (void)memset(command_list->cmdts, 0, sizeof(vdp1_cmdt_t) * COMMAND_COUNT);
+    sm64_saturn_render_queue_init(&render_queue, render_items, render_order,
+                                  DRAW_ITEM_COUNT);
     source_area.camera = &source_camera;
     source_mario_state.area = &source_area;
     source_mario_state.controller = &source_controller;
@@ -813,7 +834,8 @@ void user_init(void) {
                 source_graph.selected_root_mask,
                 mario_world_x, mario_world_y, mario_world_z,
                 mario_walking ? "walk" : "idle", animation_frame, animation_count,
-                source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
+                source_mario_state.input, render_queue.count,
+                (uint16_t)DRAW_ITEM_COUNT,
                 rejected_items, culled_items,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 frame_profile.update_ticks, frame_profile.sort_ticks,
