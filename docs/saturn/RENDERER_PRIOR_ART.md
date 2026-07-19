@@ -85,6 +85,25 @@ rectangle/seam rules before it can enter the candidate graph.
 - single-SH2 versus early slave-SH2 submission only after the single-CPU path
   is correct and profiled.
 
+## Accepted M4 throughput pass
+
+The Castle viewer now applies one narrow optimization from the same principles:
+the source-derived tile is still transformed and projected directly for the
+visibility decision and command emission, but its full-width maximum view-depth
+key is retained for the subsequent opaque re-bucket. This removes the duplicate
+depth transform without quantizing screen coordinates or changing source UVs.
+The cache is 830 `int32_t` keys plus validity bytes (about 4 KiB in hot internal
+RAM), while the source texture/UV banks remain cartridge-backed build assets and
+are uploaded to VDP1 once. A larger four-corner point cache was tested and
+rejected because its runtime image was blank; it is preserved as a failure, not
+silently shipped.
+
+This is the practical split suggested by the references: Z-Treme-style coarse
+visibility and stable per-primitive keys stay in internal RAM, while
+SlaveDriver-style queued/DMA staging remains reserved for cold 4 MiB RAM-Cart
+asset transfers. No source SM64 geometry, material, or collision data is
+replaced by hand-authored Saturn scene data.
+
 ## Visual-slice source decisions
 
 The next runtime changes follow the concrete destinations in

@@ -46,6 +46,12 @@ static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_D
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
+/* Cache only the full-width source depth key.  Projection remains on the
+ * proven direct path; this removes the redundant transform pass used by the
+ * painter re-bucket without risking quantization of visible coordinates. */
+static int32_t castle_tile_depth[SM64_CASTLE_UV_TILE_COUNT];
+static uint8_t castle_tile_depth_valid[SM64_CASTLE_UV_TILE_COUNT];
+static uint16_t castle_tile_depth_evaluations;
 static bool mario_gouraud_dirty;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
@@ -387,8 +393,14 @@ static bool tile_is_visible(uint16_t tile) {
         ? c : castle_point(sm64_castle_uv_positions[tile][3]);
     const int32_t minimum = min4(a.z, b.z, c.z, d.z);
     const int32_t maximum = max4(a.z, b.z, c.z, d.z);
-    return minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH &&
-           quad_intersects_viewport(a, b, c, d);
+    const bool visible = minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH &&
+                         quad_intersects_viewport(a, b, c, d);
+    if (visible) {
+        castle_tile_depth[tile] = maximum;
+        castle_tile_depth_valid[tile] = 1;
+        castle_tile_depth_evaluations++;
+    }
+    return visible;
 }
 
 static void append_static_tile(uint16_t tile) {
@@ -440,12 +452,12 @@ static void append_mario(void) {
  */
 static int32_t scene_item_max_depth(uint16_t item) {
     if (item < SM64_CASTLE_UV_TILE_COUNT) {
-        const int16_t (*indices)[3] = sm64_castle_uv_positions[item];
-        const point3_t a = castle_point(indices[0]);
-        const point3_t b = castle_point(indices[1]);
-        const point3_t c = castle_point(indices[2]);
+        if (castle_tile_depth_valid[item]) return castle_tile_depth[item];
+        const point3_t a = castle_point(sm64_castle_uv_positions[item][0]);
+        const point3_t b = castle_point(sm64_castle_uv_positions[item][1]);
+        const point3_t c = castle_point(sm64_castle_uv_positions[item][2]);
         const point3_t d = sm64_castle_uv_tile_is_triangle[item]
-            ? c : castle_point(indices[3]);
+            ? c : castle_point(sm64_castle_uv_positions[item][3]);
         return max4(a.z, b.z, c.z, d.z);
     }
     const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
@@ -509,6 +521,8 @@ static void traverse_bsp(int16_t node, bool insert_mario) {
 static void sort_scene(void) {
     rejected_items = 0;
     visible_items = 0;
+    castle_tile_depth_evaluations = 0;
+    (void)memset(castle_tile_depth_valid, 0, sizeof(castle_tile_depth_valid));
     sort_mario();
     traverse_bsp(0, true);
     const uint16_t opaque_count = visible_items;
@@ -637,9 +651,9 @@ void user_init(void) {
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 2, 4, 12));
     vdp1_env_t env; vdp1_env_default_init(&env); env.erase_color = RGB1555(1, 2, 4, 12); vdp1_env_set(&env);
-    /* Leave the top VDP2 priority for the lightweight dbgio FPS/painter HUD;
-     * VDP1 sprites remain one level below it and still cover the backdrop. */
-    for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 6);
+    /* VDP1 remains above the diagnostic NBG3 layer so the debug console's
+     * cleared cells never occlude source Castle pixels. */
+    for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2); dbgio_dev_font_load(); dbgio_display_set(true);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
@@ -696,14 +710,16 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % FRAME_STATS_PERIOD) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | VDP1 quads %u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | textures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
                 mario_world_x, mario_world_y, mario_world_z,
                 mario_walking ? "walk" : "idle", animation_frame, animation_count,
                 source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
+                rejected_items,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
+                castle_tile_depth_evaluations,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
             dbgio_flush();
         }

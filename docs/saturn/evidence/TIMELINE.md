@@ -1081,6 +1081,20 @@ Evidence: [source-collision capture](screenshots/ymir-m4-source-collision-2026-0
 [collision-bank report](reports/castle-area1-collision-bank-2026-07-19.json), and
 [headless run report](reports/ymir-m4-source-collision-2026-07-19.json).
 
+### 2026-07-19 — Source-depth key cache keeps the Saturn painter on the hot path
+
+The renderer now caches one full-width maximum view-depth per visible source
+tile for the opaque re-bucket. Visibility and VDP1 coordinate generation still
+use the unchanged direct source transform, so the cache cannot alter texture
+coordinates or projected geometry. This removes the duplicate depth-transform
+pass while using roughly 4 KiB of internal RAM. A larger four-corner transform
+cache produced a blank frame and is explicitly rejected. The accepted capture
+shows the same source Castle textures, animated Mario, and collision-backed
+movement after the optimization. This follows Sonic Z-Treme's stable primitive
+key/coarse-visibility direction and reserves SlaveDriver-style DMA staging for
+cold source banks in the 4 MiB RAM Cart. Evidence: [depth-key capture](screenshots/ymir-m4-depth-key-cache-2026-07-19.png)
+and [capture report](reports/ymir-m4-depth-key-cache-2026-07-19.json).
+
 ### 2026-07-19 — Saturn input deadzone, camera-relative movement, and FPS instrumentation
 
 The Yaul controller adapter now applies a 12-count hardware deadzone before
