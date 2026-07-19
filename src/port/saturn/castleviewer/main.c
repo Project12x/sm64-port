@@ -30,6 +30,8 @@
  * Keep the source tile/UV data intact, but reject that primitive until the
  * host lowering can split it with interpolated attributes. */
 #define MAX_PROJECTED_SPAN 640
+#define GOURAUD_UPDATE_PERIOD 2U
+#define FRAME_STATS_PERIOD 60U
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -171,7 +173,13 @@ static point3_t mario_point(const int16_t *source) {
 
 static void update_source_input(void) {
     controller_saturn.read(&source_pad);
-    if (!controls_ready) controls_ready = source_pad.errnum == 0;
+    if (!controls_ready && source_pad.errnum == 0) {
+        /* Do not turn the BIOS language/clock handoff into a gameplay edge.
+         * Establish the first valid Saturn report as the held baseline; later
+         * A presses still arrive through the original ControllerAPI edge. */
+        source_controller.buttonDown = source_pad.button;
+        controls_ready = true;
+    }
     source_controller.rawStickX = source_pad.stick_x;
     source_controller.rawStickY = source_pad.stick_y;
     source_controller.buttonPressed = source_pad.button &
@@ -620,9 +628,16 @@ void user_init(void) {
             : SM64_MARIO_ANIMATION_FRAME_COUNT;
         const uint16_t animation_divisor = mario_walking ? 1U : 2U;
         const uint16_t next_frame = (uint16_t)((frame / animation_divisor) % animation_count);
-        if (next_frame != animation_frame) { animation_frame = next_frame; build_mario_gouraud(); }
+        if (next_frame != animation_frame) {
+            animation_frame = next_frame;
+            /* Gouraud tables are a 28 KiB VDP1 bank for the full source actor.
+             * Keep geometry animation at source cadence but update lighting at
+             * a bounded Saturn-friendly cadence; this halves SCU traffic while
+             * preserving the source mesh and visible material gradients. */
+            if ((frame % GOURAUD_UPDATE_PERIOD) == 0U) build_mario_gouraud();
+        }
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
-        if ((frame % 15U) == 0) {
+        if ((frame % FRAME_STATS_PERIOD) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
             dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | VDP1 quads %u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
@@ -633,7 +648,7 @@ void user_init(void) {
                 source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
-            dbgio_flush(); vdp2_sync();
+            dbgio_flush();
         }
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
     }
