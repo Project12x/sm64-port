@@ -304,6 +304,8 @@ def main() -> None:
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--mesh-ir-output", type=Path)
     parser.add_argument("--animation", type=Path, help="source Mario Animation table for the fixed preview pose")
+    parser.add_argument("--walking-animation", type=Path,
+                        help="second source Animation table selected while the actor has movement intent")
     parser.add_argument("--animation-frame", type=int, default=0)
     args = parser.parse_args()
     model = args.model.read_text(encoding="utf-8")
@@ -311,6 +313,8 @@ def main() -> None:
     display_lists, vertices = blocks(model, "Gfx"), vertex_groups(model)
     triangles: list[dict[str, object]] = []
     animation_source = args.animation.read_text(encoding="utf-8") if args.animation else None
+    walking_animation_source = (args.walking_animation.read_text(encoding="utf-8")
+                                if args.walking_animation else None)
     rotations = animation_rotations(animation_source, args.animation_frame) if animation_source else []
     parts = geo_layout_parts(geo, rotations, animation_translation(animation_source, args.animation_frame) if animation_source else (0, 0, 0))
     for name, matrix, light in parts:
@@ -344,15 +348,19 @@ def main() -> None:
     # and GeoLayout hierarchy. This compact vertex pose bank is a transitional
     # Saturn representation of source animation data, not a replacement
     # animation or action system.
-    animation_positions: list[list[list[int]]] = []
-    if animation_source is not None:
-        references: dict[tuple[int, int, int], list[tuple[int, int]]] = {}
-        for triangle_index, triangle in enumerate(triangles):
-            for corner, point in enumerate(triangle["positions"]):
-                references.setdefault(tuple(point), []).append((triangle_index, corner))
-        for frame in range(animation_frame_count(animation_source)):
+    references: dict[tuple[int, int, int], list[tuple[int, int]]] = {}
+    for triangle_index, triangle in enumerate(triangles):
+        for corner, point in enumerate(triangle["positions"]):
+            references.setdefault(tuple(point), []).append((triangle_index, corner))
+
+    def evaluate_animation(source: str | None) -> list[list[list[int]]]:
+        if source is None:
+            return []
+        output: list[list[list[int]]] = []
+        for frame in range(animation_frame_count(source)):
             frame_triangles: list[dict[str, object]] = []
-            frame_parts = geo_layout_parts(geo, animation_rotations(animation_source, frame), animation_translation(animation_source, frame))
+            frame_parts = geo_layout_parts(geo, animation_rotations(source, frame),
+                                            animation_translation(source, frame))
             for name, matrix, light in frame_parts:
                 flatten(display_lists, vertices, name, matrix, light, frame_triangles)
             if len(frame_triangles) != len(triangles):
@@ -374,7 +382,11 @@ def main() -> None:
                         f"animation frame {frame} splits a neutral shared vertex at {point}"
                     )
                 frame_vertices.append(list(values.pop()))
-            animation_positions.append(frame_vertices)
+            output.append(frame_vertices)
+        return output
+
+    animation_positions = evaluate_animation(animation_source)
+    walking_animation_positions = evaluate_animation(walking_animation_source)
     source_ir = {
         "schema": "sm64-saturn-mesh-ir", "version": 1,
         "name": "normal_mario_neutral_turntable", "positions": positions,
@@ -415,9 +427,9 @@ def main() -> None:
         "static const int16_t sm64_mario_vertices[SM64_MARIO_VERTEX_COUNT][3] = {",
     ]
     lines += ["    {" + ", ".join(map(str, point)) + "}," for point in positions]
+    lines.append("};")
     if animation_positions:
         lines += [
-            "};",
             f"#define SM64_MARIO_ANIMATION_FRAME_COUNT {len(animation_positions)}U",
             "static const int16_t sm64_mario_animation_vertices[SM64_MARIO_ANIMATION_FRAME_COUNT][SM64_MARIO_VERTEX_COUNT][3] = {",
         ]
@@ -425,7 +437,18 @@ def main() -> None:
             lines.append("    {")
             lines += ["        {" + ", ".join(map(str, point)) + "}," for point in frame_vertices]
             lines.append("    },")
-    lines += ["};", f"#define SM64_MARIO_MATERIAL_COUNT {len(materials)}U", "static const uint8_t sm64_mario_material_rgb[SM64_MARIO_MATERIAL_COUNT][3] = {"]
+        lines.append("};")
+    if walking_animation_positions:
+        lines += [
+            f"#define SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT {len(walking_animation_positions)}U",
+            "static const int16_t sm64_mario_walking_animation_vertices[SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT][SM64_MARIO_VERTEX_COUNT][3] = {",
+        ]
+        for frame_vertices in walking_animation_positions:
+            lines.append("    {")
+            lines += ["        {" + ", ".join(map(str, point)) + "}," for point in frame_vertices]
+            lines.append("    },")
+        lines.append("};")
+    lines += [f"#define SM64_MARIO_MATERIAL_COUNT {len(materials)}U", "static const uint8_t sm64_mario_material_rgb[SM64_MARIO_MATERIAL_COUNT][3] = {"]
     lines += ["    {" + ", ".join(map(str, material["rgb555"])) + "}," for material in materials]
     lines += ["};", "/* material,a,b,c,d; d repeats c for explicit triangle fallbacks. */", "static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {"]
     lines += ["    {%d, %d, %d, %d, %d}," % (primitive.material, *primitive.vertices) for primitive in primitives]
@@ -461,6 +484,7 @@ def main() -> None:
             "branch_selections": BRANCH_SELECTIONS,
         },
         "animation": {"path": str(args.animation).replace("\\\\", "/"), "preview_frame": args.animation_frame, "frame_count": len(animation_positions), "vertex_pose_bytes": len(animation_positions) * len(positions) * 3 * 2} if args.animation else None,
+        "walking_animation": {"path": str(args.walking_animation).replace("\\\\", "/"), "frame_count": len(walking_animation_positions), "vertex_pose_bytes": len(walking_animation_positions) * len(positions) * 3 * 2} if args.walking_animation else None,
         "limits": ["ASM head/torso callbacks remain identity", "Animation poses are pre-evaluated offline until the full runtime GeoLayout evaluator is linked"],
         "mesh_ir": compiled_ir,
     }, indent=2) + "\n", encoding="utf-8")

@@ -203,6 +203,11 @@ def main() -> int:
                 ]
             )
             next_id += 2
+        # The BIOS macro uses raw active-low states. Explicitly release every
+        # pad bit before handing execution to the game so a post-boot neutral
+        # capture cannot inherit the last language/clock navigation pulse.
+        requests.append(request("input.pulse", next_id, {"buttons": 0xFFF8}))
+        next_id += 1
     run_id = next_id
     requests.append(request("exec.run_for", run_id, {"frames": args.frames}))
     next_id += 1

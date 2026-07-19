@@ -2097,6 +2097,11 @@
     "frame_count": 30,
     "vertex_pose_bytes": 76320
   },
+  "walking_animation": {
+    "path": "assets\\anims\\anim_48.inc.c",
+    "frame_count": 77,
+    "vertex_pose_bytes": 195888
+  },
   "limits": [
     "ASM head/torso callbacks remain identity",
     "Animation poses are pre-evaluated offline until the full runtime GeoLayout evaluator is linked"

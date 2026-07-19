@@ -924,3 +924,17 @@ source-correct value while retaining its 320×224 letterboxed output. This
 pulls the floor and central emblem back from the doorway relationship without
 changing any room vertices or camera placement. Evidence: [vertical-FOV
 capture](screenshots/ymir-m4-source-camera-vertical-fov-2026-07-18.png).
+
+### 2026-07-19 — Source controller selects the real walking animation
+
+The Saturn adapter now converts Yaul's active-low SMPC report (`0xFFF8` is
+neutral) into the original SM64 active-high `Controller` mask. This removes
+the previous autonomous diagonal drift caused by interpreting every neutral
+bit as pressed. The actor extractor carries both the original 30-frame
+`anim_C5` idle bank and the original 77-frame `anim_48` walking bank; source
+joystick intent selects the walking bank at runtime, while neutral keeps the
+idle bank animating. The rebuilt Yaul disc is launched in Ymir SDL3 for manual
+testing. The next gameplay gate is to connect the source collision/surface
+path so movement cannot pass through the lobby walls. No gallery frame is
+claimed for this checkpoint because the current test capture crossed the
+uncorrected collision boundary.

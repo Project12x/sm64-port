@@ -38,6 +38,7 @@ static uint16_t draw_order[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
+static bool mario_walking;
 static point3_t camera_position, camera_right, camera_up, camera_forward;
 static sm64_saturn_castle_graph_state_t source_graph;
 static OSContPad source_pad;
@@ -144,7 +145,11 @@ static point3_t castle_point(const int16_t *source) {
     return world_to_view(source[0], source[1], source[2]);
 }
 static const int16_t *mario_vertex(uint16_t index) {
-    return sm64_mario_animation_vertices[animation_frame][index];
+    if (mario_walking)
+        return sm64_mario_walking_animation_vertices[
+            animation_frame % SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT][index];
+    return sm64_mario_animation_vertices[
+        animation_frame % SM64_MARIO_ANIMATION_FRAME_COUNT][index];
 }
 static point3_t mario_point(const int16_t *source) {
     const int32_t x = (((int32_t)source[0] * mario_cosine) + ((int32_t)source[2] * mario_sine)) >> 16;
@@ -166,8 +171,9 @@ static void update_source_input(void) {
     source_mario_state.input = 0;
     update_mario_button_inputs(&source_mario_state);
     update_mario_joystick_inputs(&source_mario_state);
+    mario_walking = (source_mario_state.input & INPUT_NONZERO_ANALOG) != 0U;
     source_camera.yaw = 0;
-    if ((source_mario_state.input & INPUT_NONZERO_ANALOG) != 0U) {
+    if (mario_walking) {
         mario_yaw = (angle_t)(32768 + source_mario_state.intendedYaw);
         fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
         /* The original SM64 joystick routine owns magnitude and intended
@@ -507,17 +513,22 @@ void user_init(void) {
     }
     for (uint32_t frame = 0;; frame++) {
         update_source_input();
-        const uint16_t next_frame = (uint16_t)((frame / 2U) % SM64_MARIO_ANIMATION_FRAME_COUNT);
+        const uint16_t animation_count = mario_walking
+            ? SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT
+            : SM64_MARIO_ANIMATION_FRAME_COUNT;
+        const uint16_t animation_divisor = mario_walking ? 1U : 2U;
+        const uint16_t next_frame = (uint16_t)((frame / animation_divisor) % animation_count);
         if (next_frame != animation_frame) { animation_frame = next_frame; build_mario_gouraud(); }
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source spawn %d,%d,%d\nanim_C5 %u/%u | painter %u/%u | VDP1 quads %u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | VDP1 quads %u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
                 mario_world_x, mario_world_y, mario_world_z,
-                animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_items, (uint16_t)DRAW_ITEM_COUNT,
+                mario_walking ? "walk" : "idle", animation_frame, animation_count,
+                source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
             dbgio_flush(); vdp2_sync();
