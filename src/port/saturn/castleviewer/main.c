@@ -3,6 +3,7 @@
 #include <string.h>
 #include "sm64.h"
 #include "controller_saturn.h"
+#include "saturn_cart_bank.h"
 #include "game/area.h"
 #include "game/camera.h"
 #include "game/game_init.h"
@@ -70,6 +71,8 @@ static f32 mario_vertical_velocity;
 static bool mario_airborne;
 static bool camera_position_initialized;
 static bool controls_ready;
+static sm64_saturn_cart_bank_t cartridge_bank;
+static bool cartridge_present;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
                "Castle tile painter requires the complete source material bank");
@@ -647,6 +650,7 @@ static void vblank_out_handler(void *work __unused) {
 }
 
 void user_init(void) {
+    cartridge_present = sm64_saturn_cart_bank_init(&cartridge_bank);
     smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 2, 4, 12));
@@ -710,7 +714,7 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % FRAME_STATS_PERIOD) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | textures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB | textures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
@@ -720,6 +724,8 @@ void user_init(void) {
                 rejected_items,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 castle_tile_depth_evaluations,
+                cartridge_present ? "4M" : "WRAM",
+                (uint32_t)(cartridge_bank.capacity / 1024U),
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
             dbgio_flush();
         }
