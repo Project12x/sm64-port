@@ -34,6 +34,7 @@
 #define MAX_PROJECTED_SPAN 640
 #define GOURAUD_UPDATE_PERIOD 2U
 #define FRAME_STATS_PERIOD 30U
+#define CART_STAGE_CHUNK 8192U
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -73,6 +74,7 @@ static bool camera_position_initialized;
 static bool controls_ready;
 static sm64_saturn_cart_bank_t cartridge_bank;
 static bool cartridge_present;
+static uint8_t cartridge_stage[CART_STAGE_CHUNK] __aligned(32);
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
                "Castle tile painter requires the complete source material bank");
@@ -649,6 +651,48 @@ static void vblank_out_handler(void *work __unused) {
     smpc_peripheral_intback_issue();
 }
 
+static void
+upload_texture_bank(const vdp1_vram_partitions_t *partitions)
+{
+    const size_t castle_bytes = sizeof(sm64_castle_uv_tiles);
+    const size_t mario_bytes = sizeof(sm64_mario_texture_uv_tiles);
+    const size_t total_bytes = castle_bytes + mario_bytes;
+
+    if (!cartridge_present) {
+        scu_dma_transfer(0, partitions->texture_base, sm64_castle_uv_tiles,
+                         castle_bytes);
+        scu_dma_transfer_wait(0);
+        scu_dma_transfer(0, (uint8_t *)partitions->texture_base + castle_bytes,
+                         sm64_mario_texture_uv_tiles, mario_bytes);
+        scu_dma_transfer_wait(0);
+        return;
+    }
+
+    /* Cold source textures take the cartridge path only once at startup. The
+     * ring below is internal WRAM, so VDP1 never follows a slow cart pointer. */
+    if (!sm64_saturn_cart_bank_stage(&cartridge_bank, 0,
+                                     sm64_castle_uv_tiles, castle_bytes) ||
+        !sm64_saturn_cart_bank_stage(&cartridge_bank, castle_bytes,
+                                     sm64_mario_texture_uv_tiles, mario_bytes)) {
+        cartridge_present = false;
+        upload_texture_bank(partitions);
+        return;
+    }
+    for (size_t offset = 0; offset < total_bytes; offset += CART_STAGE_CHUNK) {
+        const size_t bytes = (total_bytes - offset) < CART_STAGE_CHUNK
+            ? (total_bytes - offset) : CART_STAGE_CHUNK;
+        if (!sm64_saturn_cart_bank_read(&cartridge_bank, offset,
+                                        cartridge_stage, bytes)) {
+            cartridge_present = false;
+            upload_texture_bank(partitions);
+            return;
+        }
+        scu_dma_transfer(0, (uint8_t *)partitions->texture_base + offset,
+                         cartridge_stage, bytes);
+        scu_dma_transfer_wait(0);
+    }
+}
+
 void user_init(void) {
     cartridge_present = sm64_saturn_cart_bank_init(&cartridge_bank);
     smpc_peripheral_init();
@@ -693,8 +737,7 @@ void user_init(void) {
                          sizeof(sm64_castle_uv_cluts));
         scu_dma_transfer_wait(0);
 #endif
-        scu_dma_transfer(0, partitions.texture_base, sm64_castle_uv_tiles, sizeof(sm64_castle_uv_tiles)); scu_dma_transfer_wait(0);
-        scu_dma_transfer(0, (uint8_t *)partitions.texture_base + sizeof(sm64_castle_uv_tiles), sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0);
+        upload_texture_bank(&partitions);
     }
     for (uint32_t frame = 0;; frame++) {
         update_source_input();
