@@ -394,7 +394,7 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertTrue(should_subdivide(large, 1, 512))
         self.assertTrue(should_subdivide(small, 4, 0))
 
-    def test_castle_triangle_tiles_preserve_transparent_half(self) -> None:
+    def test_castle_triangle_tiles_preserve_complete_repeated_c_mapping(self) -> None:
         texture = (8, 8, [0x801F] * 64, "digest", 128)
         state = {
             "width": 8, "height": 8, "sp_scale_s": 65536,
@@ -404,7 +404,7 @@ class CastleAreaInventoryTests(unittest.TestCase):
             "mirror_s": False, "mirror_t": False,
         }
         uv = ((0, 0), (32 * 65536, 0), (32 * 65536, 32 * 65536))
-        self.assertEqual(sample_triangle(texture, uv, state, 0, 7, 8, 1), 0)
+        self.assertEqual(sample_triangle(texture, uv, state, 0, 7, 8, 1), 0x801F)
         self.assertEqual(sample_triangle(texture, uv, state, 7, 0, 8, 1), 0x801F)
 
     def test_post_bsp_subdivision_preserves_winding_and_exact_uvs(self) -> None:

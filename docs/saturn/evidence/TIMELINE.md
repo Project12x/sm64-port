@@ -961,3 +961,15 @@ threshold produces 830 textured commands (193 native quads) versus the former
 884-command bank, while reducing the large wall/floor affine stretch visible
 in the prior capture. Evidence: [tessellated lobby frame](screenshots/ymir-m4-source-tessellation-1024-2026-07-19.png)
 and [bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
+
+### 2026-07-19 — Complete repeated-C triangle coverage removes the remaining fans
+
+The previous Castle triangle bake masked one diagonal of each VDP1 character
+tile. That was not a valid coverage model for the repeated-C destination command:
+it discarded source texels before VDP1 performed its affine collapse and left
+view-dependent seams in the lobby. Castle triangles now use the same complete
+repeated-C tile mapping already used by the source Mario path. A 16×16 CLUT16
+capture removes the large fan-shaped wedges while preserving the original source
+positions, UVs, BSP ordering, animated Mario, and 830-command tessellated bank.
+Evidence: [complete-triangle capture](screenshots/ymir-m4-complete-tri-2026-07-19.png)
+and [updated bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
