@@ -918,6 +918,19 @@ produces the same 320×224 framebuffer hash as the moving-input capture,
 providing a stable visual baseline for the next material/near-plane pass.
 
 Evidence: [neutral capture report](ymir-m4-source-triangle-collapse-neutral-2026-07-19.json).
+
+### M4 material profile: full-resolution source textures accepted
+
+![Full-resolution source Castle textures after triangle collapse](screenshots/ymir-m4-source-fullres-triangle-collapse-2026-07-19.png)
+
+The scale-1 ROM bake keeps the corrected A/B/C/C triangle lowering and the
+deterministic source camera while improving carpet and stone texture detail in
+the visual comparison. It is now the active material baseline. The remaining
+failure is localized to source-faithful near-plane coverage and occlusion; this
+profile does not claim those are solved.
+
+Evidence: [capture report](reports/ymir-m4-source-fullres-triangle-collapse-2026-07-19.json),
+[source bake report](reports/castle-area1-source-scale1-triangle-collapse-2026-07-19.json).
 ### 2026-07-18 — M4 geometry diagnosis: near-plane crossing is a real Saturn failure class
 
 The source-camera capture shows that the remaining floor/carpet and central-emblem
