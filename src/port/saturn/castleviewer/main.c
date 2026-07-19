@@ -75,6 +75,8 @@ static bool controls_ready;
 static sm64_saturn_cart_bank_t cartridge_bank;
 static bool cartridge_present;
 static uint8_t cartridge_stage[CART_STAGE_CHUNK] __aligned(32);
+static uint32_t cartridge_stage_ticks;
+static uint32_t cartridge_staged_bytes;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
                "Castle tile painter requires the complete source material bank");
@@ -659,6 +661,8 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
     const size_t total_bytes = castle_bytes + mario_bytes;
 
     if (!cartridge_present) {
+        cartridge_stage_ticks = 0;
+        cartridge_staged_bytes = 0;
         scu_dma_transfer(0, partitions->texture_base, sm64_castle_uv_tiles,
                          castle_bytes);
         scu_dma_transfer_wait(0);
@@ -670,6 +674,7 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
 
     /* Cold source textures take the cartridge path only once at startup. The
      * ring below is internal WRAM, so VDP1 never follows a slow cart pointer. */
+    cpu_frt_count_set(0);
     if (!sm64_saturn_cart_bank_stage(&cartridge_bank, 0,
                                      sm64_castle_uv_tiles, castle_bytes) ||
         !sm64_saturn_cart_bank_stage(&cartridge_bank, castle_bytes,
@@ -678,6 +683,7 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
         upload_texture_bank(partitions);
         return;
     }
+    cartridge_staged_bytes = (uint32_t)total_bytes;
     for (size_t offset = 0; offset < total_bytes; offset += CART_STAGE_CHUNK) {
         const size_t bytes = (total_bytes - offset) < CART_STAGE_CHUNK
             ? (total_bytes - offset) : CART_STAGE_CHUNK;
@@ -691,6 +697,7 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
                          cartridge_stage, bytes);
         scu_dma_transfer_wait(0);
     }
+    cartridge_stage_ticks = cpu_frt_count_get();
 }
 
 void user_init(void) {
@@ -757,7 +764,7 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % FRAME_STATS_PERIOD) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB | textures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB/%lu B/%lu ticks | textures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
@@ -769,6 +776,8 @@ void user_init(void) {
                 castle_tile_depth_evaluations,
                 cartridge_present ? "4M" : "WRAM",
                 (uint32_t)(cartridge_bank.capacity / 1024U),
+                cartridge_staged_bytes,
+                cartridge_stage_ticks,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
             dbgio_flush();
         }
