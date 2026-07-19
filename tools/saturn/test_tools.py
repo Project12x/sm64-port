@@ -21,6 +21,7 @@ from vdp1_texture import downsample_rgb1555, repeated_vertex_weights  # noqa: E4
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract, flatten  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
+from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
 from bake_castle_uv import should_subdivide, texture_coordinate  # noqa: E402
 from plan_castle_camera_coverage import plan  # noqa: E402
@@ -209,6 +210,19 @@ class CastleAreaInventoryTests(unittest.TestCase):
         # triangle beneath (-1023, 1152) evaluates to Y=-37.
         self.assertEqual(result["collision"]["floor_height"], -37)
         self.assertEqual(result["camera"]["entrance_base"], [-813, 378, 1103])
+
+    def test_castle_geo_root_preserves_original_layer_selection(self) -> None:
+        root = TOOLS.parents[1]
+        source = (root / "levels/castle_inside/areas/1/geo.inc.c").read_text(encoding="utf-8")
+        body, displays = extract_castle_geo_root(source, "castle_geo_000F30")
+        self.assertIn("geo_exec_inside_castle_light", body)
+        self.assertEqual(displays, [
+            ("LAYER_OPAQUE", "inside_castle_seg7_dl_07028FD0"),
+            ("LAYER_ALPHA", "inside_castle_seg7_dl_07029578"),
+            ("LAYER_OPAQUE", "inside_castle_seg7_dl_0702A650"),
+            ("LAYER_TRANSPARENT_DECAL", "inside_castle_seg7_dl_0702AA10"),
+            ("LAYER_ALPHA", "inside_castle_seg7_dl_0702AB20"),
+        ])
 
     def test_area_one_intake_points_at_the_real_lobby_source(self) -> None:
         root = TOOLS.parents[1]

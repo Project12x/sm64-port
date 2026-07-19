@@ -122,6 +122,17 @@ per-build material, tile-size, source-scale, and subdivision controls; this is
 the active source-display-list renderer, not a hand-painted lobby substitute.
 The next gate is the source Mario/game-state path inside this textured room.
 
+The next ownership handoff is now running on SH-2: the Castle target links the
+original `geo_layout.c`, `graph_node.c`, `graph_node_manager.c`, and
+`math_util.c`, and executes an exact generated copy of `castle_geo_000F30`.
+The BIOS-backed Stage 70 capture includes a paused target-memory proof of the
+resulting five display-list nodes (two opaque, two alpha, one transparent
+decal). The current opaque Fast3D IR is still submitted as one bank, so this is
+not yet a complete graph renderer. The immediate M3/M4 task is to bind each
+source GraphNode display-list identity and layer to its generated Saturn IR,
+then let the original graph camera, animation, collision, and action state own
+the frame.
+
 ## M0 — Source-face proof
 
 Status: complete as a development milestone.

@@ -629,14 +629,31 @@ inside equal buckets. This removes a few centroid inversions but cannot order
 surfaces that cross in screen space. It remains a conservative improvement,
 not a substitute for safe quads, clipping, or projected-error splitting.
 
+### M4 accepted: original Castle GeoLayout executes on SH-2
+
+![Original Castle GeoLayout bridge](screenshots/ymir-m4-original-geolayout-root-fixed-camera-2026-07-18.png)
+
+The Saturn executable now links and runs the original SM64
+`src/engine/geo_layout.c`, `graph_node.c`, `graph_node_manager.c`, and
+`math_util.c`. A generated header preserves the exact body of
+`castle_geo_000F30` instead of rewriting the room selection. At the paused
+frame, Ymir reads the live `source_graph` bytes at `0x060545AC` as
+`01 05 02 02 01`: valid, five display lists, two opaque, two alpha, and one
+transparent decal. The screenshot is intentionally visually neutral against
+the corrected Fast3D-state diagnostic because the current opaque payload is
+still the compiled Saturn IR. This proves the source graph ownership boundary;
+per-list IR dispatch, alpha/decal submission, and the original graph camera
+remain open.
+
 ## Next visual gates
 
-1. Extend the now-running original controller/Mario intent slice through
-   source collision, actions, and camera; stop adding room-specific target
-   state.
-2. Translate the display-list output to the current Saturn mesh/texture IR and
-   VDP1 command builder, retaining conservative quadification and fallbacks.
+1. Dispatch each original graph display-list identity and layer into the
+   corresponding Saturn IR payload, including the 34 alpha and eight
+   transparent-decal source triangles.
+2. Extend the now-running original controller/Mario intent slice through
+   source collision, actions, animation, and graph camera; stop adding
+   room-specific target state.
 3. Batch each area's 1×/2×/4× texture profiles into RAM-cart manifests, then
    promote the visible working set to VDP1 VRAM without per-texture CD stalls.
-4. Add alpha/decal roots, near-plane clipping, and visibility management while
-   retaining the source display-list material state.
+4. Add near-plane clipping and visibility management while retaining the
+   source display-list material state.

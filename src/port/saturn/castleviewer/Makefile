@@ -3,7 +3,12 @@ ifeq ($(strip $(YAUL_INSTALL_ROOT)),)
 endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-castle-area1
-SH_SRCS := main.c
+SH_SRCS := main.c castle_graph_bridge.c \
+  $(ROOT)/src/port/saturn/compat/sqrtf.c \
+  $(ROOT)/src/engine/geo_layout.c \
+  $(ROOT)/src/engine/graph_node.c \
+  $(ROOT)/src/engine/graph_node_manager.c \
+  $(ROOT)/src/engine/math_util.c
 SH_BUILD_DIR := $(ROOT)/build/saturn/castlearea/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/castlearea
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/castlearea/cd
@@ -11,6 +16,10 @@ export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 SH_CFLAGS += -Os -g -DDEBUG \
+  -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DTARGET_SATURN=1 -DNO_SEGMENTED_MEMORY=1 \
+  -ffunction-sections -fdata-sections \
+  -I$(ROOT)/src/port/saturn/compat \
+  -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src -I$(ROOT)/src/game -I$(ROOT)/src/engine \
   -I$(ROOT)/build/saturn/castlearea/generated \
   -I$(ROOT)/build/saturn/marioturntable/generated \
   -I$(ROOT)/src/port/saturn/marioturntable

@@ -3,6 +3,7 @@
 #include <string.h>
 #include "castle_area1_opaque.h"
 #include "castle_gameplay_config.h"
+#include "castle_graph_bridge.h"
 #include "castle_uv_tiles.h"
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
@@ -24,6 +25,7 @@ static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
 static point3_t camera_position, camera_right, camera_up, camera_forward;
+static sm64_saturn_castle_graph_state_t source_graph;
 
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
 static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
@@ -294,6 +296,8 @@ void user_init(void) {
     vdp1_env_t env; vdp1_env_default_init(&env); env.erase_color = RGB1555(1, 2, 4, 12); vdp1_env_set(&env);
     for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
+    source_graph = sm64_saturn_castle_graph_init();
+    if (!source_graph.valid) for (;;) {}
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
     update_source_camera();
@@ -310,7 +314,9 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\nsource spawn %d,%d,%d | source fixed camera\nanim_C5 %u/%u | shared painter %u/%u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u | source spawn %d,%d,%d\nanim_C5 %u/%u | shared painter %u/%u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+                source_graph.display_lists, source_graph.opaque_lists,
+                source_graph.alpha_lists, source_graph.decal_lists,
                 SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z,
                 animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
