@@ -61,7 +61,7 @@ def distorted_sprite_weights(
 ) -> tuple[float, float, float, float]:
     """Return measured VDP1 A/B/C/D weights for a source-image texel.
 
-    The BIOS-backed corner probe established source-image corner order C/B/A/D
+    The BIOS-backed valid-quad probe established source-image corner order D/B/A/C
     for the vertex order passed to ``vdp1_cmdt_vtx_set``.  Keeping this rule in
     one host helper lets native quads and repeated-vertex triangle fallbacks use
     the same proven orientation rather than guessing at character flips.
@@ -71,6 +71,6 @@ def distorted_sprite_weights(
     return (
         (1.0 - s) * t,
         s * (1.0 - t),
-        (1.0 - s) * (1.0 - t),
         s * t,
+        (1.0 - s) * (1.0 - t),
     )

@@ -16,9 +16,10 @@ SM64_ROM ?=
 CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000 inside_09008800 inside_castle_seg7_texture_07000800 inside_castle_seg7_texture_07002000
 CASTLE_TILE ?= 8
 CASTLE_SOURCE_SCALE ?= 2
+CASTLE_TEXTURE_FORMAT ?= clut16
 CASTLE_SUBDIVISION ?= 1
-CASTLE_SUBDIVISION_THRESHOLD ?= 512
-CASTLE_TILE_BUDGET ?= 2400
+CASTLE_SUBDIVISION_THRESHOLD ?= 384
+CASTLE_TILE_BUDGET ?= 6000
 CASTLE_ORDERING ?= bsp
 MARIO_TEXTURE_TILE ?= 16
 MARIO_TEXTURE_SOURCE_SCALE ?= 1
@@ -207,6 +208,7 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  $(foreach texture,$(CASTLE_TEXTURES),--texture "$(texture)") \
 	  --tile "$(CASTLE_TILE)" \
 	  --source-scale "$(CASTLE_SOURCE_SCALE)" \
+	  --texture-format "$(CASTLE_TEXTURE_FORMAT)" \
 	  --subdivision "$(CASTLE_SUBDIVISION)" \
 	  --subdivision-threshold "$(CASTLE_SUBDIVISION_THRESHOLD)" \
 	  --max-tiles "$(CASTLE_TILE_BUDGET)" \

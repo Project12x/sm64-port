@@ -19,6 +19,9 @@ export MAKE_ISO_XORRISOFS := $(REPO_ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 
 SH_CFLAGS += -Os -g -DDEBUG -I.
+ifeq ($(MAPPING_PROBE),1)
+SH_CFLAGS += -DSM64_SATURN_ABCD_MAPPING_PROBE=1
+endif
 SH_LDFLAGS +=
 
 IP_VERSION := V0.001

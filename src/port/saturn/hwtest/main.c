@@ -268,8 +268,13 @@ vdp1_test(void)
                 INT16_VEC2_INITIALIZER(72, 112), INT16_VEC2_INITIALIZER(8, 112)
         };
         static const int16_vec2_t textured_triangle[] = {
+#ifdef SM64_SATURN_ABCD_MAPPING_PROBE
+                INT16_VEC2_INITIALIZER(88, 112), INT16_VEC2_INITIALIZER(152, 112),
+                INT16_VEC2_INITIALIZER(152, 176), INT16_VEC2_INITIALIZER(88, 176)
+#else
                 INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),
                 INT16_VEC2_INITIALIZER(88, 112), INT16_VEC2_INITIALIZER(88, 112)
+#endif
         };
         static const int16_vec2_t gouraud[] = {
                 INT16_VEC2_INITIALIZER(88, 176), INT16_VEC2_INITIALIZER(152, 176),

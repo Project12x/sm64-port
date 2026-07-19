@@ -287,12 +287,20 @@ static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_par
     vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
     vdp1_cmdt_distorted_sprite_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-        .color_mode = VDP1_CMDT_CM_RGB_32768,
-        .cc_mode = color_calculation
+        .color_mode = SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
+            ? VDP1_CMDT_CM_CLUT_16 : VDP1_CMDT_CM_RGB_32768,
+        .cc_mode = color_calculation,
+        .end_code_disable = SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
     });
-    vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + tile * SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH * sizeof(uint16_t));
+    vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base +
+                            tile * SM64_CASTLE_UV_TILE_BYTES);
     vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
+#if SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
+    vdp1_cmdt_color_mode1_set(cmdt,
+        (vdp1_vram_t)&partitions->clut_base[sm64_castle_uv_tile_clut[tile]]);
+#else
     vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
+#endif
     vdp1_cmdt_vtx_set(cmdt, vertices);
     return command;
 }
@@ -373,7 +381,7 @@ void user_init(void) {
     if (!source_graph.valid) for (;;) {}
     vdp1_vram_partitions_set(COMMAND_COUNT,
         sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
-        SM64_MARIO_PRIMITIVE_COUNT, 0);
+        SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
     update_source_camera();
@@ -381,6 +389,12 @@ void user_init(void) {
     {
         vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
         if (sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles) > partitions.texture_size) for (;;) {}
+#if SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
+        if (sizeof(sm64_castle_uv_cluts) > partitions.clut_size) for (;;) {}
+        scu_dma_transfer(0, partitions.clut_base, sm64_castle_uv_cluts,
+                         sizeof(sm64_castle_uv_cluts));
+        scu_dma_transfer_wait(0);
+#endif
         scu_dma_transfer(0, partitions.texture_base, sm64_castle_uv_tiles, sizeof(sm64_castle_uv_tiles)); scu_dma_transfer_wait(0);
         scu_dma_transfer(0, (uint8_t *)partitions.texture_base + sizeof(sm64_castle_uv_tiles), sm64_mario_texture_uv_tiles, sizeof(sm64_mario_texture_uv_tiles)); scu_dma_transfer_wait(0);
     }

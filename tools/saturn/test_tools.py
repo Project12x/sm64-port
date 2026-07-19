@@ -25,6 +25,8 @@ from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: 
 from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
 from bake_castle_uv import (  # noqa: E402
     adaptive_subdivide_triangle,
+    pack_clut16,
+    quantize_clut16,
     should_subdivide,
     texture_coordinate,
 )
@@ -215,14 +217,14 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertGreater(bilinear_weights(15, 15)[2], 0.9)
         self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
-    def test_vdp1_native_quad_uses_measured_c_b_a_d_corner_order(self) -> None:
+    def test_vdp1_native_quad_uses_measured_d_b_a_c_corner_order(self) -> None:
         for x, y in ((0, 0), (15, 0), (0, 15), (15, 15), (8, 8)):
             a, b, c, d = distorted_sprite_weights(x, y, 16, 16)
             self.assertAlmostEqual(a + b + c + d, 1.0)
             repeated = repeated_vertex_weights(x, y, 16, 16)
             self.assertEqual(repeated, (a, b, c + d))
-        self.assertGreater(distorted_sprite_weights(0, 0, 16, 16)[2], 0.9)
-        self.assertGreater(distorted_sprite_weights(15, 15, 16, 16)[3], 0.9)
+        self.assertGreater(distorted_sprite_weights(0, 0, 16, 16)[3], 0.9)
+        self.assertGreater(distorted_sprite_weights(15, 15, 16, 16)[2], 0.9)
 
 
 class CastleAreaInventoryTests(unittest.TestCase):
@@ -409,6 +411,17 @@ class CastleAreaInventoryTests(unittest.TestCase):
                 self.assertLessEqual(sum(
                     (right[axis] - left[axis]) ** 2 for axis in range(3)
                 ), 512 * 512)
+
+    def test_castle_clut_reserves_transparency_and_is_deterministic(self) -> None:
+        pixels = [0x0000, 0x801F, 0x83E0, 0xFC00, 0xFFFF] * 8
+        palette, mapping = quantize_clut16(pixels)
+        self.assertEqual(len(palette), 16)
+        self.assertEqual(palette[0], 0)
+        self.assertEqual(mapping[0], 0)
+        self.assertTrue(all(1 <= mapping[value] <= 15
+                            for value in pixels if value & 0x8000))
+        self.assertEqual((palette, mapping), quantize_clut16(pixels))
+        self.assertEqual(pack_clut16([0, 1, 14, 15]), [0x01, 0xEF])
 
     def test_static_bsp_splits_geometry_and_interpolates_uv_exactly(self) -> None:
         polygon = BspPolygon(tuple(BspVertex.make(position, uv) for position, uv in (

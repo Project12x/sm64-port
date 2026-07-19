@@ -97,7 +97,8 @@ Implementation commitments:
 9. The textured-quad Castle checkpoint reuses the existing original
    `tools/saturn/quad_pairing.py` exact NetworkX matching path and the measured
    C/B/A/C triangle mapping from the repository's BIOS-backed VDP1 probe. For
-   native four-corner commands it generalizes that measured order to C/B/A/D
+   native four-corner commands the valid-quad probe resolves the previously
+   ambiguous collapsed corner as D/B/A/C
    in `tools/saturn/vdp1_texture.py`; no upstream mesh code is copied. The
    target directly adapts pinned Yaul's MIT-licensed
    `libyaul/scu/bus/b/vdp/vdp1_vram.c` partition API so generated command,
@@ -115,8 +116,17 @@ Implementation commitments:
     where each child remains in the same node. The 512-unit profile adds 840
     exact attribute-preserving splits for 1,724 tiles/220,672 RGB1555 bytes;
     384 units needs 2,911 tiles and exceeds the measured 2,400-tile direct-color
-    policy. No PS1 code is copied. Pinned Yaul CLUT mode is the next dependency
-    API adaptation to reduce that residency before a finer visual trial.
+    policy. No PS1 code is copied. Pinned Yaul CLUT mode reduces that profile to
+    93,152 texture bytes and makes the finer visual trial practical.
+12. The four-bit Castle path directly uses pinned Yaul's MIT public
+    `VDP1_CMDT_CM_CLUT_16`, `vdp1_cmdt_color_mode1_set()`, CLUT partition, and
+    `end_code_disable` field. Quantization and nibble packing are original host
+    code: each source material receives transparent index zero plus fifteen
+    deterministic RGB555 colors. The first end-code failure and corrected
+    frames are both retained. A valid build-flagged A-B-C-D probe resolves
+    native character corners as D/B/A/C; repeated C=D fallbacks remain
+    C/B/A/C. The 5,253-tile 256-unit stress frame shows that brute subdivision
+    does not solve the repeated-sprite fold, so 384 units remains the default.
 
 ## M3 onward — inspection and debugging evidence
 

@@ -123,19 +123,25 @@ original `geo_layout.c`, `graph_node.c`, `graph_node_manager.c`, and
 The BIOS-backed Stage 70 capture includes a paused target-memory proof of the
 resulting five display-list nodes (two opaque, two alpha, one transparent
 decal). Each live display-list identity now selects its matching generated
-Saturn IR root through a verified `0x1F` root mask. All nine source materials
-fit a 79,232-byte local texture bank. Because VDP1 has no Z-buffer, opaque and
-binary-alpha source geometry share a far-to-near painter while the eight
-transparent-decal triangles use a late half-transparency pass. The next M4
-renderer checkpoint now compiles 52 source-identical, UV-rectangular,
-multi-view-safe pairs into true VDP1 quads. The remaining 515 source triangles
-are split into 2,060 independently sorted affine fallback tiles; together the
-Castle bank uses 2,112 commands and 270,336 texture bytes. A broader 144-quad
-planar policy was captured and rejected because large legal wall quads are too
-coarse for a painter without a Z-buffer. The next renderer task is therefore
-screen-space intersection/projected-error splitting and near-plane clipping,
-not less conservative merging. After that, the original graph camera,
-collision, action, and animation state must own the complete frame.
+Saturn IR root through a verified `0x1F` root mask. Because VDP1 has no
+Z-buffer, opaque and binary-alpha source geometry share one exact host-BSP
+painter while the eight transparent-decal triangles use a late
+half-transparency pass. The 352-node BSP records 144 source-plane splits and
+inserts dynamic Mario by camera-side traversal; its 884-tile capture proves
+that painter order is not the primary diagonal texture fault.
+
+The accepted storage path now quantizes each of the nine original materials to
+one transparent-plus-15-color VDP1 CLUT through pinned Yaul APIs. End-code
+processing is explicitly disabled and index zero retains source binary alpha.
+This funds the current 384-unit exact post-BSP profile: 2,911 tiles, 2,027
+adaptive splits, and 93,152 texture bytes. A 5,253-tile/256-unit stress frame
+still contains the same fold and is rejected, proving that more subdivision is
+not the correction. A valid A-B-C-D hardware probe resolves native texture
+corners as D/B/A/C while repeated C=D triangles remain C/B/A/C. The next
+renderer task is a correct non-folding Saturn triangle lowering plus
+near-plane clipping—not another room-specific asset or painter key. The
+original graph camera, collision, action, and animation state must then own the
+complete moving frame.
 
 ## M0 — Source-face proof
 

@@ -762,6 +762,65 @@ BSP. A stale 884-tile rebuild was detected because the Castle sub-Makefile did
 not regenerate its host-produced header; future evidence builds must run the
 root `compile-castle-textures` dependency first.
 
+### M4 rejected: first four-bit VDP1 bank exposes end codes
+
+![First CLUT bank with end-code tears](screenshots/ymir-m4-clut16-512-2026-07-18.png)
+
+The original offline RGB1555 box-filter output now feeds an original,
+deterministic weighted median-cut quantizer. Each of the nine source Castle
+materials receives index zero for transparency and fifteen opaque RGB555
+entries. Packing two texels per byte cuts the 1,724-tile 512-unit bank from
+220,672 to 55,168 bytes. Pinned Yaul `VDP1_CMDT_CM_CLUT_16`,
+`vdp1_cmdt_color_mode1_set()`, and its CLUT VRAM partition are used directly.
+
+The first frame contained black and white scanline tears. Palette index `0xF`
+is a VDP1 end code unless command PMOD disables end-code processing. The frame
+is retained because it proves that the indexed bytes, CLUT addresses, and
+source materials reached the target before the final mode bit was corrected.
+
+### M4 accepted infrastructure: source-material CLUTs
+
+![Corrected four-bit Castle material bank](screenshots/ymir-m4-clut16-ecd-512-2026-07-18.png)
+
+Setting Yaul's `end_code_disable` field removes the scanline tears while index
+zero continues to provide source binary alpha. The corrected frame closely
+matches the RGB1555 512-unit reference at one quarter of its texture residency.
+This is accepted renderer infrastructure even though the independent
+repeated-vertex triangle fold remains visible.
+
+### M4 current: 384-unit indexed profile
+
+![Current 2,911-tile CLUT profile](screenshots/ymir-m4-clut16-384-2026-07-18.png)
+
+The recovered VDP1 space funds 2,911 source-derived tiles, 2,027 exact
+post-BSP split events, and 93,152 texture bytes. The large fans become smaller
+and the original mural, brick, wood, marble, carpet, and cloud palettes remain
+recognizable. This is the current balanced profile: it improves granularity but
+does not redefine the unresolved fold as correct rendering.
+
+### M4 rejected: 256-unit convergence stress
+
+![Rejected 5,253-tile CLUT stress profile](screenshots/ymir-m4-clut16-256-2026-07-18.png)
+
+At 256 source units, 4,369 adaptive splits produce 5,253 commands and 168,096
+indexed texture bytes. The target still boots inside the measured VDP1
+partition, but the diagonal topology remains and only becomes finer. Brute
+tessellation therefore does not converge to correctness and is rejected as the
+default; the 384-unit bank is restored.
+
+### VDP1 accepted evidence: unambiguous valid-quad orientation
+
+![Valid A-B-C-D VDP1 mapping reference](screenshots/ymir-vdp1-valid-abcd-reference-2026-07-18.png)
+
+The earlier asymmetric probe repeated its third and fourth destination
+vertices, so it could not distinguish those source corners. A build-flagged
+nondegenerate A-B-C-D reference does: source-character corners reach the
+passed vertices in D/B/A/C order. When C and D coincide, the result remains
+C/B/A/C, explaining why the old triangle bake was stable while its claimed
+native-quad generalization was ambiguous. `vdp1_texture.py` and its regression
+test now use the valid-quad result. The probe is reproducible with
+`MAPPING_PROBE=1` in the Saturn hwtest subproject.
+
 ## Next visual gates
 
 1. Convert the generated Castle tile bank to per-material 4-bit VDP1 CLUTs,
