@@ -56,6 +56,7 @@ static int32_t castle_tile_depth[SM64_CASTLE_UV_TILE_COUNT];
 static uint8_t castle_tile_depth_valid[SM64_CASTLE_UV_TILE_COUNT];
 static uint16_t castle_tile_depth_evaluations;
 static bool mario_gouraud_dirty;
+static const int16_t (*mario_frame_vertices)[3];
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
 static bool mario_walking;
@@ -208,11 +209,13 @@ static point3_t castle_point(const int16_t *source) {
     return world_to_view(source[0], source[1], source[2]);
 }
 static const int16_t *mario_vertex(uint16_t index) {
+    return mario_frame_vertices[index];
+}
+static void select_mario_animation_frame(void) {
     if (mario_walking)
-        return sm64_mario_walking_animation_vertices[
-            animation_frame % SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT][index];
-    return sm64_mario_animation_vertices[
-        animation_frame % SM64_MARIO_ANIMATION_FRAME_COUNT][index];
+        mario_frame_vertices = sm64_mario_walking_animation_vertices[animation_frame];
+    else
+        mario_frame_vertices = sm64_mario_animation_vertices[animation_frame];
 }
 static point3_t mario_point(const int16_t *source) {
     const int32_t x = (((int32_t)source[0] * mario_cosine) + ((int32_t)source[2] * mario_sine)) >> 16;
@@ -739,6 +742,7 @@ void user_init(void) {
     source_camera.yaw = 0;
     fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
     update_source_camera();
+    select_mario_animation_frame();
     build_mario_gouraud();
     {
         vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
@@ -759,8 +763,10 @@ void user_init(void) {
             : SM64_MARIO_ANIMATION_FRAME_COUNT;
         const uint16_t animation_divisor = mario_walking ? 1U : 2U;
         const uint16_t next_frame = (uint16_t)((frame / animation_divisor) % animation_count);
-        if (next_frame != animation_frame) {
-            animation_frame = next_frame;
+        const bool animation_changed = next_frame != animation_frame;
+        animation_frame = next_frame;
+        select_mario_animation_frame();
+        if (animation_changed) {
             /* Gouraud tables are a 28 KiB VDP1 bank for the full source actor.
              * Keep geometry animation at source cadence but update lighting at
              * a bounded Saturn-friendly cadence; this halves SCU traffic while

@@ -1138,3 +1138,20 @@ the telemetry attached to the visual frame so later performance work can be
 compared against a known cart-enabled run.
 Evidence: [foreground telemetry screenshot](screenshots/ymir-m4-cart-foreground-2026-07-19.png)
 and [machine-readable report](reports/ymir-m4-cart-foreground-2026-07-19.json).
+
+### 2026-07-19 — Rejected large actor cache; accepted zero-growth frame selection
+
+The first ~8 fps optimization pass cached transformed and projected values for
+all 424 source Mario vertices. Although it removed repeated work, the added hot
+static footprint reproduced the previously observed cache-class failure: a
+deterministic black 320×224 framebuffer. The code was removed and the failure
+is retained as [Stage 105](screenshots/ymir-m4-rejected-large-actor-cache-2026-07-19.png)
+with its [capture report](reports/ymir-m4-rejected-large-actor-cache-2026-07-19.json).
+
+The accepted replacement adds only one frame-bank pointer. The active original
+SM64 idle/walk vertex bank is selected once per game frame, eliminating the
+branch and modulus from every `mario_vertex()` call. Its deterministic
+framebuffer hash, `02caa7267473b3a40de371c55044db2c`, is exactly identical to
+the preceding accepted no-cart Castle capture. Evidence:
+[Stage 106](screenshots/ymir-m4-actor-frame-pointer-2026-07-19.png) and
+[capture report](reports/ymir-m4-actor-frame-pointer-2026-07-19.json).

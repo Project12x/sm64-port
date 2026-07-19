@@ -98,6 +98,14 @@ are uploaded to VDP1 once. A larger four-corner point cache was tested and
 rejected because its runtime image was blank; it is preserved as a failure, not
 silently shipped.
 
+The same constraint now governs the animated actor path. A second attempt to
+hold all 424 Mario view-space and projected vertices in new static arrays also
+produced a deterministic black frame and was removed. The accepted zero-growth
+pass instead selects the active original SM64 animation bank once per frame and
+reuses a single pointer through culling, ordering, Gouraud, and command build.
+This retains the Z-Treme-style stable-data lifecycle without expanding the hot
+internal-WRAM footprint; the accepted framebuffer hash is unchanged.
+
 This is the practical split suggested by the references: Z-Treme-style coarse
 visibility and stable per-primitive keys stay in internal RAM, while
 SlaveDriver-style queued/DMA staging remains reserved for cold 4 MiB RAM-Cart
