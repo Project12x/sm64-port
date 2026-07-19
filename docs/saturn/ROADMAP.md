@@ -298,6 +298,26 @@ Work:
 Gate: Mario can idle, run, turn, jump, land, and collide with the lobby using
 source-derived model/collision data, with replayable final state and capture.
 
+Performance acceptance for this slice is explicit: 15 FPS full game-loop is
+the hard floor, 20 FPS is the stretch target, and 30 FPS is expected only for
+simple/low-load views until retail hardware says otherwise. The current
+BIOS-backed Ymir baseline is approximately 5 FPS in the establishing view
+(the earlier `/8` 16-bit FRT counter wrapped and was invalid). Emulator timing
+is comparative evidence, not a retail claim. Reaching the gate requires:
+
+- a typical establishing view at no more than roughly 650 live VDP1 commands;
+- a 20 FPS stretch profile near 450 commands, both provisional until measured;
+- transform-once actor/world job records instead of repeated projection in
+  visibility, scene ordering, and command construction;
+- a source-derived Mario Saturn LOD bank, with full and reduced banks staged
+  through the 4 MiB cartridge boundary; and
+- phase telemetry for update, sort, command build/upload, VDP wait, and VBlank.
+
+Visual quality is part of the same gate. The current small affine-tile painter
+is a bring-up path, not the target look: material clustering, correct source
+culling, native quad retention, near clipping, and bounded LOD must reduce
+both texture discontinuities and command pressure together.
+
 ## M5 — Castle entry visual slice
 
 Goal: produce the concise visual proof a viewer immediately recognizes as

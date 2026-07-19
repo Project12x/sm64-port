@@ -292,6 +292,13 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(scene["triangle_count"], sum(scene["layers"].values()))
         self.assertGreater(scene["textured_triangle_count"], 0)
         self.assertIn("LAYER_OPAQUE", scene["layers"])
+        self.assertEqual(scene["version"], 3)
+        self.assertEqual(
+            sum(bool(triangle["cull_back"]) for triangle in scene["triangles"]),
+            587,
+        )
+        self.assertFalse(any(bool(triangle["cull_front"])
+                             for triangle in scene["triangles"]))
         self.assertEqual({triangle["root_display_list"] for triangle in scene["triangles"]},
                          {root["display_list"] for root in scene["roots"]})
 
@@ -325,6 +332,15 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(bank["primitive_count"], 567)
         self.assertEqual(bank["pairing"]["quad_count"], 52)
         self.assertEqual(bank["pairing"]["commands_saved"], 52)
+        self.assertEqual(bank["triangle_cull_back"].count(True), 587)
+        self.assertEqual(
+            sum(bool(primitive["cull_back"]) for primitive in bank["primitives"]),
+            544,
+        )
+        self.assertFalse(any(bool(primitive["cull_front"])
+                             for primitive in bank["primitives"]))
+        self.assertTrue(all(len(set(primitive["vertices"][:3])) == 3
+                            for primitive in bank["primitives"]))
         self.assertEqual(
             sum(primitive["second_triangle"] is not None
                 for primitive in bank["primitives"]),

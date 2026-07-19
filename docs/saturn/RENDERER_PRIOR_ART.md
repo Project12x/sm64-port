@@ -120,6 +120,27 @@ SlaveDriver-style queued/DMA staging remains reserved for cold 4 MiB RAM-Cart
 asset transfers. No source SM64 geometry, material, or collision data is
 replaced by hand-authored Saturn scene data.
 
+The first non-wrapping Castle phase probe changes the priority. Yaul's 16-bit
+FRT at `/8` wrapped every ~19.5 ms, so it could not measure the observed slow
+frame. The viewer now uses `/128` (about 312 ms of range). A deterministic
+Ymir sample reports roughly 2.3 ms update, 101 ms visibility/painter sorting,
+63 ms command construction/upload, 10 ms VDP wait, and 17 ms VBlank. The
+master-SH2 software path—not VDP1 draw completion—is therefore the first-order
+bottleneck. Of 882 visible items, 638 are Mario; his 50 textured source
+triangles expand to 200 commands. The next accepted work is consequently:
+
+1. transform Mario vertices once into bounded frame records and reuse them;
+2. lower textured actor triangles without the current four-command expansion;
+3. compile source-derived full/medium/far actor LOD banks for the RAM Cart; and
+4. only then prototype Z-Treme-style early slave-SH2 transform jobs.
+
+Source `G_CULL_BACK`/`G_CULL_FRONT` state is now preserved by the Castle IR.
+The accepted per-fragment Fast3D winding test removes 148 tiles and lowers the
+captured live VDP1 prefix from 1,105 to 1,032 commands without changing the
+recognized scene. Attempts to cache culling at unsplit-source or whole-
+primitive granularity produced black frames because exact BSP fragments do
+not share a reliable winding key; those failures remain in the gallery.
+
 The concrete placement and staging rules for that split live in
 [`CARTRIDGE_ASSET_POLICY.md`](CARTRIDGE_ASSET_POLICY.md). Any future move of
 Castle BSP, texture banks, animation data, or LOD blocks into the 4 MiB

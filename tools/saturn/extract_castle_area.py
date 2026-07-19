@@ -156,6 +156,11 @@ def initial_state() -> dict[str, object]:
         "combine": None,
         "cycle_type": None,
         "render_mode": None,
+        # SM64 enables G_CULL_BACK in the global display-list setup before
+        # traversing level geometry. Individual model lists may temporarily
+        # clear it, so preserve that state across nested display lists.
+        "cull_back": True,
+        "cull_front": False,
     }
 
 
@@ -269,6 +274,13 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
             state["cycle_type"] = args.strip()
         elif macro == "gsDPSetRenderMode":
             state["render_mode"] = split_args(args)
+        elif macro in ("gsSPClearGeometryMode", "gsSPSetGeometryMode"):
+            enabled = macro == "gsSPSetGeometryMode"
+            modes = {value.strip() for value in args.split("|")}
+            if "G_CULL_BACK" in modes:
+                state["cull_back"] = enabled
+            if "G_CULL_FRONT" in modes:
+                state["cull_front"] = enabled
         elif macro == "gsSPVertex":
             group = re.match(r"\s*(\w+)", args)
             if group is None or group.group(1) not in vertices:
@@ -300,6 +312,8 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                     "texture": texture,
                     "textures": [binding["texture"] for binding in bindings],
                     "tile": tile,
+                    "cull_back": bool(state["cull_back"]),
+                    "cull_front": bool(state["cull_front"]),
                     "positions": [list(cache[index][0:3]) for index in triangle],
                     "uv": [[cache[index][3], cache[index][4]] for index in triangle],
                 })
@@ -320,7 +334,7 @@ def extract(area: Path) -> dict[str, object]:
                 root_display_list=root["display_list"])
     return {
         "schema": "sm64-saturn-static-scene-intake",
-        "version": 2,
+        "version": 3,
         "name": "castle_inside_area_1_root",
         "source": "levels/castle_inside/areas/1",
         "roots": roots,

@@ -1180,3 +1180,41 @@ remain unchanged. The deterministic framebuffer hash is again exactly
 `02caa7267473b3a40de371c55044db2c`.
 Evidence: [Stage 108](screenshots/ymir-m4-single-pass-layers-2026-07-19.png)
 and [capture report](reports/ymir-m4-single-pass-layers-2026-07-19.json).
+
+### 2026-07-19 — Honest FPS clock and source geometry culling
+
+The Castle extractor now preserves SM64's global `G_CULL_BACK` state and the
+specific display lists that clear it: 587 of the selected 619 source triangles
+request backface culling, while 32 remain deliberately two-sided. A Fast3D-
+compatible per-fragment winding test rejects 148 baked tiles in the captured
+view and reduces the live VDP1 END index from 1,104 to 1,031 (1,032 commands).
+The accepted framebuffer remains visually stable. Evidence:
+[Stage 109](screenshots/ymir-m4-source-cull-honest-fps-2026-07-19.png) and
+[compact command probe](reports/ymir-m4-source-cull-command-2026-07-19.json).
+
+The same pass corrected the performance clock. The old 16-bit FRT `/8` mode
+wrapped every ~19.5 ms and could make an approximately eight-frame-per-second
+manual result look much faster. `/128` provides roughly 312 ms of range. The
+deterministic headless sample is about 5.2 FPS, confirming that the 15 FPS
+floor and 20 FPS stretch target require architectural command/transform work.
+
+### 2026-07-19 — Preserved cull-cache failures
+
+A 6.8 KiB precomputed normal bank crossed the current hot-WRAM boundary and
+produced a deterministic black frame. Removing the bank but classifying an
+unsplit source primitive once also failed: exact BSP fragments do not retain a
+single usable winding, and the target rejected 624 tiles. Sampling one final
+fragment per primitive still rejected 292 and hung on black. All three cache
+designs were removed. Evidence: [normal-bank failure](screenshots/ymir-m4-source-primitive-cull-2026-07-19.png),
+[source-plane failure](screenshots/ymir-m4-dynamic-primitive-cull-2026-07-19.png),
+and [fragment-cache failure](screenshots/ymir-m4-fragment-cull-cache-2026-07-19.png).
+
+### 2026-07-19 — Full non-wrapping phase budget
+
+The HUD and linked globals now separate update, visibility/sort, command
+construction/upload, VDP wait, and VBlank under the `/128` clock. The captured
+sample is approximately 2.3/101/63/10/17 ms respectively. Mario accounts for
+638 of 882 visible items, identifying repeated actor transforms and his
+four-command textured-triangle lowering as the next high-leverage work.
+Evidence: [Stage 112](screenshots/ymir-m4-phase-budget-2026-07-19.png) and
+[phase report](reports/ymir-m4-phase-budget-compact-2026-07-19.json).

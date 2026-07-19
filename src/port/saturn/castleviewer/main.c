@@ -35,6 +35,10 @@
 #define GOURAUD_UPDATE_PERIOD 2U
 #define FRAME_STATS_PERIOD 30U
 #define CART_STAGE_CHUNK 8192U
+/* NTSC 320-wide master SH-2 clock (26.8224 MHz), FRT /128, times ten for
+ * the one-decimal FPS display.  The former /8 timer wrapped every ~19.5 ms
+ * and therefore reported nonsense for the observed ~125 ms Castle frame. */
+#define FRT_TICKS_PER_SECOND_X10 2095500UL
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -48,8 +52,9 @@ static uint16_t draw_order[DRAW_ITEM_COUNT];
 static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_DEPTH_BUCKETS];
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
-static uint16_t visible_items, opaque_items, rejected_items, frame_ticks, animation_frame;
-static uint32_t loop_ticks;
+static uint16_t visible_items, opaque_items, rejected_items, culled_items, animation_frame;
+static uint16_t update_ticks, sort_ticks, command_ticks, wait_ticks, vblank_ticks;
+static uint32_t frame_ticks, loop_ticks;
 /* Cache only the full-width source depth key.  Projection remains on the
  * proven direct path; this removes the redundant transform pass used by the
  * painter re-bucket without risking quantization of visible coordinates. */
@@ -339,6 +344,23 @@ static bool quad_intersects_viewport(point3_t a, point3_t b, point3_t c, point3_
     return maximum_x >= 0 && minimum_x <= 319 && maximum_y >= 0 && minimum_y <= 223;
 }
 
+/* For positive view depth this dot-product sign is the inverse of
+ * gfx_sp_tri1()'s perspective-divided cross product. Exact BSP fragments can
+ * have different winding, so retain tile-authoritative testing while avoiding
+ * the more expensive homogeneous 64-bit product chain. */
+static bool tile_is_culled(uint16_t primitive, point3_t a, point3_t b, point3_t c) {
+    const int32_t ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+    const int32_t vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
+    const int32_t nx = uy * vz - uz * vy;
+    const int32_t ny = uz * vx - ux * vz;
+    const int32_t nz = ux * vy - uy * vx;
+    const int64_t facing = ((int64_t)nx * a.x) +
+                           ((int64_t)ny * a.y) +
+                           ((int64_t)nz * a.z);
+    return (sm64_castle_area1_primitive_cull_back[primitive] && facing <= 0) ||
+           (sm64_castle_area1_primitive_cull_front[primitive] && facing >= 0);
+}
+
 static void build_mario_gouraud(void) {
     (void)memset(mario_vertex_normals, 0, sizeof(mario_vertex_normals));
     for (uint16_t primitive = 0; primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++) {
@@ -405,6 +427,10 @@ static bool tile_is_visible(uint16_t tile) {
         ? c : castle_point(sm64_castle_uv_positions[tile][3]);
     const int32_t minimum = min4(a.z, b.z, c.z, d.z);
     const int32_t maximum = max4(a.z, b.z, c.z, d.z);
+    if (minimum >= NEAR_DEPTH && tile_is_culled(primitive, a, b, c)) {
+        culled_items++;
+        return false;
+    }
     const bool visible = minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH &&
                          quad_intersects_viewport(a, b, c, d);
     if (visible) {
@@ -532,6 +558,7 @@ static void traverse_bsp(int16_t node, bool insert_mario) {
 
 static void sort_scene(void) {
     rejected_items = 0;
+    culled_items = 0;
     visible_items = 0;
     castle_tile_depth_evaluations = 0;
     (void)memset(castle_tile_depth_valid, 0, sizeof(castle_tile_depth_valid));
@@ -650,7 +677,11 @@ static void draw_scene(void) {
         scu_dma_transfer_wait(0);
         mario_gouraud_dirty = false;
     }
-    vdp1_sync_cmdt_list_put(command_list, 0); vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
+    vdp1_sync_cmdt_list_put(command_list, 0);
+    command_ticks = cpu_frt_count_get();
+    cpu_frt_count_set(0);
+    vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
+    wait_ticks = cpu_frt_count_get();
 }
 
 static void vblank_out_handler(void *work __unused) {
@@ -756,6 +787,9 @@ void user_init(void) {
 #endif
         upload_texture_bank(&partitions);
     }
+    /* A 16-bit /128 FRT spans ~312 ms: enough to measure the current ~8 FPS
+     * prototype and the 15-20 FPS acceptance band without overflow. */
+    cpu_frt_init(CPU_FRT_CLOCK_DIV_128);
     for (uint32_t frame = 0;; frame++) {
         cpu_frt_count_set(0);
         update_source_input();
@@ -774,30 +808,33 @@ void user_init(void) {
              * preserving the source mesh and visible material gradients. */
             if ((frame % GOURAUD_UPDATE_PERIOD) == 0U) build_mario_gouraud();
         }
-        cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
+        update_ticks = cpu_frt_count_get();
+        cpu_frt_count_set(0); sort_scene(); sort_ticks = cpu_frt_count_get();
+        cpu_frt_count_set(0); draw_scene();
+        frame_ticks = (uint32_t)update_ticks + sort_ticks + command_ticks + wait_ticks;
         if ((frame % FRAME_STATS_PERIOD) == 0) {
-            const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            const uint32_t loop_fps_x10 = loop_ticks == 0 ? 0 : 33528000UL / loop_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB/%lu B/%lu ticks | textures %lu + %lu bytes | render %u.%u / loop %u.%u FPS\n",
+            const uint32_t fps_x10 = frame_ticks == 0 ? 0 : FRT_TICKS_PER_SECOND_X10 / frame_ticks;
+            const uint32_t loop_fps_x10 = loop_ticks == 0 ? 0 : FRT_TICKS_PER_SECOND_X10 / loop_ticks;
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u cull %u\nVDP1 quads %u | costs U%u S%u C%u W%u V%u | cart %s %lu KiB/%lu B | render %u.%u / loop %u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
                 mario_world_x, mario_world_y, mario_world_z,
                 mario_walking ? "walk" : "idle", animation_frame, animation_count,
                 source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
-                rejected_items,
+                rejected_items, culled_items,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
-                castle_tile_depth_evaluations,
+                update_ticks, sort_ticks, command_ticks, wait_ticks, vblank_ticks,
                 cartridge_present ? "4M" : "WRAM",
                 (uint32_t)(cartridge_bank.capacity / 1024U),
                 cartridge_staged_bytes,
-                cartridge_stage_ticks,
-                (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles),
                 fps_x10 / 10U, fps_x10 % 10U, loop_fps_x10 / 10U, loop_fps_x10 % 10U);
             dbgio_flush();
         }
+        cpu_frt_count_set(0);
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
-        loop_ticks = cpu_frt_count_get();
+        vblank_ticks = cpu_frt_count_get();
+        loop_ticks = frame_ticks + vblank_ticks;
     }
 }
 int main(void) { user_init(); return 0; }

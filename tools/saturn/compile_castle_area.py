@@ -31,6 +31,8 @@ def _build_primitives(
     tile_state: list[dict[str, object] | None],
     roots: list[int],
     layers: list[int],
+    cull_back: list[bool],
+    cull_front: list[bool],
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     """Pair only source-identical, rectangular-UV triangles into VDP1 quads.
 
@@ -41,6 +43,7 @@ def _build_primitives(
     """
     material_keys = [
         (roots[index], layers[index], texture_indices[index], sources[index],
+         cull_back[index], cull_front[index],
          json.dumps(tile_state[index], sort_keys=True))
         for index in range(len(triangles))
     ]
@@ -93,6 +96,8 @@ def _build_primitives(
             "root": roots[triangle_index],
             "layer": layers[triangle_index],
             "texture_index": texture_indices[triangle_index],
+            "cull_back": cull_back[triangle_index],
+            "cull_front": cull_front[triangle_index],
         })
         emitted.add(triangle_index)
         if option is not None:
@@ -128,6 +133,8 @@ def compile_scene(area: Path, selected_layers: set[str] | None = None) -> dict[s
     triangle_tiles: list[dict[str, object] | None] = []
     triangle_roots: list[int] = []
     triangle_layers: list[int] = []
+    triangle_cull_back: list[bool] = []
+    triangle_cull_front: list[bool] = []
     for triangle in scene["triangles"]:
         layer = str(triangle["layer"])
         if selected_layers is not None and layer not in selected_layers:
@@ -148,11 +155,14 @@ def compile_scene(area: Path, selected_layers: set[str] | None = None) -> dict[s
         triangle_tiles.append(triangle["tile"])
         triangle_roots.append(roots.index(str(triangle["root_display_list"])))
         triangle_layers.append(LAYERS[layer])
+        triangle_cull_back.append(bool(triangle["cull_back"]))
+        triangle_cull_front.append(bool(triangle["cull_front"]))
     textures = sorted({texture for texture in triangle_textures if texture is not None})
     texture_indices = [0xFF if texture is None else textures.index(texture) for texture in triangle_textures]
     primitives, pairing = _build_primitives(
         positions, triangles, sources, texture_indices, triangle_uv,
         triangle_tiles, triangle_roots, triangle_layers,
+        triangle_cull_back, triangle_cull_front,
     )
     return {
         "schema": "sm64-saturn-castle-static-ir",
@@ -170,6 +180,8 @@ def compile_scene(area: Path, selected_layers: set[str] | None = None) -> dict[s
         "texture_indices": texture_indices,
         "triangle_roots": triangle_roots,
         "triangle_layers": triangle_layers,
+        "triangle_cull_back": triangle_cull_back,
+        "triangle_cull_front": triangle_cull_front,
         "positions": positions,
         "triangles": triangles,
         "uv": triangle_uv,
@@ -224,6 +236,12 @@ def write_header(bank: dict[str, object], output: Path) -> None:
     lines.append("};")
     lines.append("static const uint8_t sm64_castle_area1_primitive_layer[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{primitive['layer']}U" for primitive in primitives[offset:offset + 16]) + "," for offset in range(0, len(primitives), 16))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_area1_primitive_cull_back[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {")
+    lines.extend("    " + ", ".join("1U" if primitive["cull_back"] else "0U" for primitive in primitives[offset:offset + 16]) + "," for offset in range(0, len(primitives), 16))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_area1_primitive_cull_front[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {")
+    lines.extend("    " + ", ".join("1U" if primitive["cull_front"] else "0U" for primitive in primitives[offset:offset + 16]) + "," for offset in range(0, len(primitives), 16))
     lines.append("};")
     lines.append("static const uint16_t sm64_castle_area1_triangles[SM64_CASTLE_AREA1_TRIANGLE_COUNT][3] = {")
     lines.extend(f"    {{{a}, {b}, {c}}}," for a, b, c in triangles)
