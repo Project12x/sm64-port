@@ -637,7 +637,9 @@ void user_init(void) {
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE, VDP2_TVMD_HORZ_NORMAL_A, VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 2, 4, 12));
     vdp1_env_t env; vdp1_env_default_init(&env); env.erase_color = RGB1555(1, 2, 4, 12); vdp1_env_set(&env);
-    for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
+    /* Leave the top VDP2 priority for the lightweight dbgio FPS/painter HUD;
+     * VDP1 sprites remain one level below it and still cover the backdrop. */
+    for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 6);
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2); dbgio_dev_font_load(); dbgio_display_set(true);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
