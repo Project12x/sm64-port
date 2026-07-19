@@ -122,7 +122,13 @@ static void update_source_camera(void) {
         camera_position.z = candidate_z;
         camera_position_initialized = true;
     }
-    camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
+    const f32 mario_floor = find_floor_height((f32)mario.x,
+                                               (f32)mario.y + 200.0f,
+                                               (f32)mario.z);
+    if (mario_floor > FLOOR_LOWER_LIMIT)
+        camera_position.y = (int32_t)mario_floor + SM64_CASTLE_CAMERA_BASE_Y;
+    else
+        camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
     /* Source `update_fixed_camera()` first applies
      * calc_y_to_curr_floor(..., focMul=0.9f), then adds the 125-unit focus
      * height. Keep that floor-relative aim instead of looking at a bespoke
@@ -133,6 +139,21 @@ static void update_source_camera(void) {
     const point3_t focus = {mario.x,
                             mario.y + floor_focus_offset + SM64_CASTLE_CAMERA_FOCUS_Y,
                             mario.z};
+    /* update_fixed_camera() limits the camera-to-focus distance to 1000
+     * source units in the lobby. Keep that source rule before constructing
+     * the Saturn view basis; without it, the fixed base leaves Mario too small
+     * and exposes the void at the bottom of the viewport. */
+    const f32 focus_dx = (f32)focus.x - camera_position.x;
+    const f32 focus_dy = (f32)focus.y - camera_position.y;
+    const f32 focus_dz = (f32)focus.z - camera_position.z;
+    const f32 focus_distance = sqrtf(focus_dx * focus_dx +
+                                     focus_dy * focus_dy + focus_dz * focus_dz);
+    if (focus_distance > 1000.0f) {
+        const f32 scale = 1000.0f / focus_distance;
+        camera_position.x = focus.x - (int32_t)(focus_dx * scale);
+        camera_position.y = focus.y - (int32_t)(focus_dy * scale);
+        camera_position.z = focus.z - (int32_t)(focus_dz * scale);
+    }
     camera_forward = normalize_q16((point3_t){focus.x - camera_position.x,
                                               focus.y - camera_position.y,
                                               focus.z - camera_position.z});

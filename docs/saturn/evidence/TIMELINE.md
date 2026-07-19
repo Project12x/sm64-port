@@ -964,6 +964,18 @@ manual check.
 
 Evidence: [capture report](reports/ymir-m4-camera-floor-target-2026-07-19.json).
 
+### M4 source fixed-camera distance cap restored
+
+![Source fixed-camera distance cap](screenshots/ymir-m4-source-camera-distance-cap-2026-07-19.png)
+
+The Saturn camera bridge now follows the original Castle `update_fixed_camera()`
+rules for floor-derived camera height and its 1000-unit camera-to-focus cap.
+This restores the expected Mario scale and checker-floor coverage without
+changing the ROM geometry, texture bank, or camera placement constants. The
+remaining dark/emblem-area coverage is now isolated for the next VDP1 pass.
+
+Evidence: [capture report](reports/ymir-m4-source-camera-distance-cap-2026-07-19.json).
+
 ### M4 material profile: full-resolution source textures accepted
 
 ![Full-resolution source Castle textures after triangle collapse](screenshots/ymir-m4-source-fullres-triangle-collapse-2026-07-19.png)
