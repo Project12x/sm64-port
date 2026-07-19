@@ -17,6 +17,7 @@ CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_090040
 CASTLE_TILE ?= 8
 CASTLE_SOURCE_SCALE ?= 2
 CASTLE_SUBDIVISION ?= 1
+CASTLE_SUBDIVISION_THRESHOLD ?= 0
 MARIO_TEXTURE_TILE ?= 16
 MARIO_TEXTURE_SOURCE_SCALE ?= 1
 
@@ -199,6 +200,7 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  --tile "$(CASTLE_TILE)" \
 	  --source-scale "$(CASTLE_SOURCE_SCALE)" \
 	  --subdivision "$(CASTLE_SUBDIVISION)" \
+	  --subdivision-threshold "$(CASTLE_SUBDIVISION_THRESHOLD)" \
 	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-all-materials-bake-2026-07-18.json"
 

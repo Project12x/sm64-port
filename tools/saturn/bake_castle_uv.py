@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
@@ -47,17 +48,64 @@ def midpoint(a: tuple[int, ...], b: tuple[int, ...]) -> tuple[int, ...]:
     return tuple((left + right) // 2 for left, right in zip(a, b))
 
 
+def should_subdivide(
+        positions: list[tuple[int, int, int]], subdivision: int,
+        threshold: int) -> bool:
+    """Select the PS1-style large-polygon split without camera-specific data."""
+    if subdivision == 4:
+        return True
+    if threshold <= 0:
+        return False
+    diagonal_squared = sum(
+        (max(point[axis] for point in positions) -
+         min(point[axis] for point in positions)) ** 2
+        for axis in range(3)
+    )
+    return diagonal_squared > threshold * threshold
+
+
+def texture_coordinate(
+        raw: float, scale: int, lower: int, extent: int, mask: int,
+        shift: int, clamp: bool, mirror: bool) -> int:
+    """Apply SM64's Fast3D tile-coordinate state in source-texel space."""
+    coordinate = math.floor(raw * scale / (32 * 65536)) - lower // 4
+    if 0 < shift <= 10:
+        coordinate >>= shift
+    elif shift > 10:
+        coordinate <<= 16 - shift
+    if clamp:
+        return max(0, min(extent - 1, coordinate))
+    period = 1 << mask if mask else extent
+    if period <= 0:
+        raise ValueError("texture wrap period must be positive")
+    if mirror:
+        wrapped = coordinate % (period * 2)
+        return period * 2 - 1 - wrapped if wrapped >= period else wrapped
+    return coordinate % period
+
+
 def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]], tile_state: dict[str, object], x: int, y: int, tile: int, source_scale: int) -> int:
     a, b, c = repeated_vertex_weights(x, y, tile, tile)
-    # Match Mario's proven s10.5 truncation, then apply the source display
-    # list's render-tile extent/mode instead of blindly wrapping image bounds.
-    u = int((a * uv[0][0] + b * uv[1][0] + c * uv[2][0]) / (32.0 * source_scale))
-    v = int((a * uv[0][1] + b * uv[1][1] + c * uv[2][1]) / (32.0 * source_scale))
+    # Resolve the complete render tile before downscaling.  The previous
+    # prototype divided first and inferred both axes' clamp state from the
+    # whole gsDPSetTile macro; that turned Castle's T-clamp/S-wrap walls into
+    # horizontally clamped streaks.
+    raw_u = a * uv[0][0] + b * uv[1][0] + c * uv[2][0]
+    raw_v = a * uv[0][1] + b * uv[1][1] + c * uv[2][1]
     width, height, pixels, _digest, _source_bytes = texture
-    tile_width, tile_height = int(tile_state["width"]) // source_scale, int(tile_state["height"]) // source_scale
-    u = max(0, min(tile_width - 1, u)) if tile_state["clamp_s"] else u % tile_width
-    v = max(0, min(tile_height - 1, v)) if tile_state["clamp_t"] else v % tile_height
-    if tile_width > width or tile_height > height:
+    tile_width, tile_height = int(tile_state["width"]), int(tile_state["height"])
+    source_u = texture_coordinate(
+        raw_u, int(tile_state["sp_scale_s"]), int(tile_state["uls"]), tile_width,
+        int(tile_state["mask_s"]), int(tile_state["shift_s"]),
+        bool(tile_state["clamp_s"]), bool(tile_state["mirror_s"]),
+    )
+    source_v = texture_coordinate(
+        raw_v, int(tile_state["sp_scale_t"]), int(tile_state["ult"]), tile_height,
+        int(tile_state["mask_t"]), int(tile_state["shift_t"]),
+        bool(tile_state["clamp_t"]), bool(tile_state["mirror_t"]),
+    )
+    u, v = source_u // source_scale, source_v // source_scale
+    if tile_width // source_scale > width or tile_height // source_scale > height:
         raise ValueError("render tile extent exceeds ROM texture dimensions")
     return pixels[v * width + u]
 
@@ -73,6 +121,8 @@ def main() -> None:
     parser.add_argument("--tile", type=int, default=DEFAULT_TILE)
     parser.add_argument("--source-scale", type=int, default=1)
     parser.add_argument("--subdivision", type=int, choices=(1, 4), default=1)
+    parser.add_argument("--subdivision-threshold", type=int, default=0,
+                        help="split triangles whose source-space diagonal exceeds this value")
     args = parser.parse_args()
     rom, asset_map = rom_bytes(args.rom), json.loads(args.assets.read_text(encoding="utf-8"))
     scene = json.loads(args.intake.read_text(encoding="utf-8"))
@@ -87,6 +137,7 @@ def main() -> None:
     texture_data = {name: rgba16(rom, asset_map[ASSETS[name]], args.source_scale) for name in selected}
     selected_indices = {scene["textures"].index(name) for name in selected}
     starts = [0xFFFF] * int(scene["triangle_count"])
+    counts = [0] * int(scene["triangle_count"])
     positions: list[tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]] = []
     words: list[int] = []
     for index, texture_index in enumerate(scene["texture_indices"]):
@@ -99,18 +150,23 @@ def main() -> None:
         tile_state = scene["tile_state"][index]
         if tile_state is None or "width" not in tile_state or "height" not in tile_state:
             raise ValueError(f"triangle {index} has no complete Fast3D render-tile state")
-        if args.subdivision == 4:
+        if should_subdivide(original, args.subdivision, args.subdivision_threshold):
             ab, bc, ca = midpoint(original[0], original[1]), midpoint(original[1], original[2]), midpoint(original[2], original[0])
             uab, ubc, uca = midpoint(original_uv[0], original_uv[1]), midpoint(original_uv[1], original_uv[2]), midpoint(original_uv[2], original_uv[0])
             parts = (((original[0], ab, ca), (original_uv[0], uab, uca)), ((ab, original[1], bc), (uab, original_uv[1], ubc)), ((ca, bc, original[2]), (uca, ubc, original_uv[2])), ((ab, bc, ca), (uab, ubc, uca)))
         else:
             parts = ((tuple(original), tuple(original_uv)),)
+        counts[index] = len(parts)
         for position_tri, uv_tri in parts:
             positions.append(position_tri)
             texture = texture_data[scene["textures"][texture_index]]
             words.extend(sample(texture, uv_tri, tile_state, x, y, args.tile, args.source_scale) for y in range(args.tile) for x in range(args.tile))
-    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", f"#define SM64_CASTLE_UV_TILES_PER_TRIANGLE {args.subdivision}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {"]
+    textured_count = sum(value != 0xFFFF for value in starts)
+    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {"]
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {")
+    lines.extend("    " + ", ".join(f"{value}U" for value in counts[offset:offset + 16]) + "," for offset in range(0, len(counts), 16))
     lines.append("};")
     lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][3][3] = {")
     lines.extend(f"    {{{{{a}, {b}, {c}}}, {{{d}, {e}, {f}}}, {{{g}, {h}, {i}}}}}," for (a, b, c), (d, e, f), (g, h, i) in positions)
@@ -119,7 +175,7 @@ def main() -> None:
     for offset in range(0, len(words), args.tile * args.tile): lines.append("    {" + ", ".join(f"0x{word:04X}" for word in words[offset:offset + args.tile * args.tile]) + "},")
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_triangles": sum(value != 0xFFFF for value in starts), "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + (len(positions)) + (int(scene["triangle_count"]) - sum(value != 0xFFFF for value in starts)) + 1, "uv_sampling": "Fast3D s10.5 truncation plus extracted render-tile size and clamp/wrap mode; complete VDP1 C/B/A/C repeated-vertex tile", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_triangles": textured_count, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivided_triangles": sum(value == 4 for value in counts), "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + len(positions) + (int(scene["triangle_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 affine sampling resolved in source-texel space before target downscale; complete VDP1 C/B/A/C repeated-vertex tile", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

@@ -7,7 +7,7 @@
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 
-#define COMMAND_COUNT (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT + SM64_CASTLE_UV_TILE_COUNT + SM64_MARIO_PRIMITIVE_COUNT + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
+#define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT - SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT) + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DRAW_ITEM_COUNT (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
 #define DEPTH_BUCKETS 128U
 #define NEAR_DEPTH 128
@@ -76,12 +76,20 @@ static void update_source_camera(void) {
 }
 
 static point3_t world_to_view(int32_t x, int32_t y, int32_t z) {
+#ifdef SM64_SATURN_TEXTURE_PROBE_CAMERA
+    /* Renderer validation only: reproduce the accepted M3 establishing view
+     * so texture-state changes can be compared without conflating the known
+     * rejected standalone camera transplant. The default build still follows
+     * the source-state camera path until the original graph camera is linked. */
+    return (point3_t){x + 1050, y - 720, z + 4200};
+#else
     const point3_t relative = {x - camera_position.x, y - camera_position.y, z - camera_position.z};
     return (point3_t){
         (int32_t)((((int64_t)relative.x * camera_right.x) + ((int64_t)relative.y * camera_right.y) + ((int64_t)relative.z * camera_right.z)) >> 16),
         (int32_t)((((int64_t)relative.x * camera_up.x) + ((int64_t)relative.y * camera_up.y) + ((int64_t)relative.z * camera_up.z)) >> 16),
         (int32_t)((((int64_t)relative.x * camera_forward.x) + ((int64_t)relative.y * camera_forward.y) + ((int64_t)relative.z * camera_forward.z)) >> 16)
     };
+#endif
 }
 static point3_t castle_point(const int16_t *source) {
     return world_to_view(source[0], source[1], source[2]);
@@ -177,7 +185,13 @@ static void sort_scene(void) {
         }
         const int32_t minimum = min3(a.z, b.z, c.z), maximum = max3(a.z, b.z, c.z);
         if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) { rejected_items++; bucket_next[item] = -2; continue; }
-        const uint16_t bucket = (uint16_t)((((a.z + b.z + c.z) / 3) - NEAR_DEPTH) * (DEPTH_BUCKETS - 1U) / (FAR_DEPTH - NEAR_DEPTH));
+        /* A centroid key lets one long wall triangle paint over geometry that
+         * is wholly in front of its far edge.  The PS1 port's ordering-table
+         * path keys opaque polygons by their farthest transformed vertex;
+         * retain that hardware-oriented behavior here while preserving the
+         * source display-list order within equal buckets. */
+        const uint16_t bucket = (uint16_t)((maximum - NEAR_DEPTH) *
+            (DEPTH_BUCKETS - 1U) / (FAR_DEPTH - NEAR_DEPTH));
         bucket_next[item] = -1;
         if (bucket_head[bucket] < 0) bucket_head[bucket] = (int16_t)item;
         else bucket_next[bucket_tail[bucket]] = (int16_t)item;
@@ -191,7 +205,7 @@ static void sort_scene(void) {
 static uint16_t draw_castle(uint16_t source, uint16_t command, const vdp1_vram_partitions_t *partitions) {
     const uint16_t texture_start = sm64_castle_uv_tile_start[source];
     if (texture_start != SM64_CASTLE_UV_TILE_NONE) {
-        for (uint16_t tile = texture_start; tile < texture_start + SM64_CASTLE_UV_TILES_PER_TRIANGLE; tile++) {
+        for (uint16_t tile = texture_start; tile < texture_start + sm64_castle_uv_tile_count[source]; tile++) {
             const int16_vec2_t vertices[4] = {
                 project_point(castle_point(sm64_castle_uv_positions[tile][0])),
                 project_point(castle_point(sm64_castle_uv_positions[tile][1])),

@@ -19,9 +19,10 @@ from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
 from vdp1_texture import downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
-from extract_castle_area import extract  # noqa: E402
+from extract_castle_area import extract, flatten  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
 from compile_castle_area import compile_opaque  # noqa: E402
+from bake_castle_uv import should_subdivide, texture_coordinate  # noqa: E402
 from plan_castle_camera_coverage import plan  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
@@ -243,6 +244,61 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(len(bank["uv"]), bank["triangle_count"])
         self.assertIn("inside_09000000", bank["textures"])
         self.assertTrue(any(tile and tile.get("width") == 32 for tile in bank["tile_state"]))
+        self.assertEqual(bank["texture_state_version"], 2)
+        # Castle's 64x32 walls clamp vertically and wrap horizontally.  The
+        # earlier string-presence parser incorrectly clamped both axes.
+        self.assertEqual(sum(
+            tile["clamp_t"] and not tile["clamp_s"] and tile["width"] == 64
+            for tile in bank["tile_state"]
+        ), 283)
+
+    def test_tmem_bindings_choose_render_tile_not_last_texture_image(self) -> None:
+        display_lists = {
+            "root": """
+                gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 8, 0, G_TX_RENDERTILE, 0,
+                            G_TX_CLAMP, 5, 0, G_TX_WRAP, 5, 0),
+                gsDPSetTileSize(0, 0, 0, (32 - 1) << G_TEXTURE_IMAGE_FRAC,
+                                (32 - 1) << G_TEXTURE_IMAGE_FRAC),
+                gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 8, 256, G_TX_RENDERTILE + 1, 0,
+                            G_TX_CLAMP, 5, 0, G_TX_CLAMP, 5, 0),
+                gsDPSetTileSize(1, 0, 0, 124, 124),
+                gsSPTexture(0xFFFF, 0xFFFF, 1, G_TX_RENDERTILE, G_ON),
+                gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, texture_primary),
+                gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 0, 0, G_TX_LOADTILE, 0,
+                            G_TX_WRAP, G_TX_NOMASK, G_TX_NOLOD,
+                            G_TX_WRAP, G_TX_NOMASK, G_TX_NOLOD),
+                gsDPLoadBlock(G_TX_LOADTILE, 0, 0, 32 * 32 - 1, 0),
+                gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, texture_secondary),
+                gsDPSetTile(G_IM_FMT_RGBA, G_IM_SIZ_16b, 0, 256, G_TX_LOADTILE, 0,
+                            G_TX_WRAP, G_TX_NOMASK, G_TX_NOLOD,
+                            G_TX_WRAP, G_TX_NOMASK, G_TX_NOLOD),
+                gsDPLoadBlock(G_TX_LOADTILE, 0, 0, 32 * 32 - 1, 0),
+                gsSPVertex(vertices, 3, 0),
+                gsSP1Triangle(0, 1, 2, 0),
+                gsSPEndDisplayList(),
+            """,
+        }
+        vertices = {"vertices": [(0, 0, 0, 0, 0), (1, 0, 0, 992, 0), (0, 1, 0, 0, 992)]}
+        triangles: list[dict[str, object]] = []
+        flatten(display_lists, vertices, "root", "LAYER_OPAQUE", triangles)
+        self.assertEqual(triangles[0]["texture"], "texture_primary")
+        self.assertEqual(triangles[0]["textures"], ["texture_primary", "texture_secondary"])
+        self.assertFalse(triangles[0]["tile"]["clamp_s"])
+        self.assertTrue(triangles[0]["tile"]["clamp_t"])
+
+    def test_fast3d_texture_coordinate_wrap_clamp_mirror_and_origin(self) -> None:
+        raw_40_texels = 40 * 32
+        self.assertEqual(texture_coordinate(raw_40_texels, 65536, 0, 32, 5, 0, False, False), 8)
+        self.assertEqual(texture_coordinate(raw_40_texels, 65536, 0, 32, 5, 0, True, False), 31)
+        self.assertEqual(texture_coordinate(raw_40_texels, 65536, 0, 32, 5, 0, False, True), 23)
+        self.assertEqual(texture_coordinate(8 * 32, 65536, 4 * 4, 32, 5, 0, True, False), 4)
+
+    def test_castle_subdivision_uses_source_geometry_not_camera(self) -> None:
+        small = [(0, 0, 0), (64, 0, 0), (0, 64, 0)]
+        large = [(0, 0, 0), (600, 0, 0), (0, 0, 0)]
+        self.assertFalse(should_subdivide(small, 1, 512))
+        self.assertTrue(should_subdivide(large, 1, 512))
+        self.assertTrue(should_subdivide(small, 4, 0))
 
     def test_fixed_camera_coverage_prefers_the_visible_blue_white_material(self) -> None:
         root = TOOLS.parents[1]

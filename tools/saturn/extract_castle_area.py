@@ -9,6 +9,7 @@ It does not pretend to execute level scripts, behavior code, or effects.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 from collections import Counter
@@ -18,17 +19,177 @@ from extract_mario_actor import blocks, ints, vertex_groups
 from inspect_castle_area import root_display_lists
 
 
-def texture_name(args: str) -> str | None:
-    identifiers = re.findall(r"\b[A-Za-z_]\w*\b", args)
-    ignored = {"G_IM_FMT_RGBA", "G_IM_FMT_IA", "G_IM_FMT_CI", "G_IM_SIZ_4b", "G_IM_SIZ_8b", "G_IM_SIZ_16b"}
-    values = [value for value in identifiers if value not in ignored]
-    return values[-1] if values else None
+FAST3D_CONSTANTS = {
+    "G_TX_RENDERTILE": 0,
+    "G_TX_LOADTILE": 7,
+    "G_TX_NOMASK": 0,
+    "G_TX_NOLOD": 0,
+    "G_TX_NOMIRROR": 0,
+    "G_TX_MIRROR": 1,
+    "G_TX_WRAP": 0,
+    "G_TX_CLAMP": 2,
+    "G_TEXTURE_IMAGE_FRAC": 2,
+}
 
 
-def tile_extent(args: str) -> tuple[int, int] | None:
-    """Decode the common SM64 `(<pixels> - 1) << frac` tile-size form."""
-    dimensions = [int(value) for value in re.findall(r"\(\s*(\d+)\s*-\s*1\s*\)", args)]
-    return (dimensions[0], dimensions[1]) if len(dimensions) >= 2 else None
+def split_args(args: str) -> list[str]:
+    """Split a C macro argument list while retaining nested expressions."""
+    values: list[str] = []
+    start = 0
+    depth = 0
+    for index, character in enumerate(args):
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+        elif character == "," and depth == 0:
+            values.append(args[start:index].strip())
+            start = index + 1
+    values.append(args[start:].strip())
+    return values
+
+
+def expression_int(expression: str) -> int:
+    """Evaluate the integer-only Fast3D expressions used by SM64 assets."""
+    rewritten = re.sub(
+        r"\b[A-Za-z_]\w*\b",
+        lambda match: str(FAST3D_CONSTANTS[match.group(0)])
+        if match.group(0) in FAST3D_CONSTANTS else match.group(0),
+        expression,
+    )
+    node = ast.parse(rewritten, mode="eval")
+
+    def evaluate(value: ast.AST) -> int:
+        if isinstance(value, ast.Expression):
+            return evaluate(value.body)
+        if isinstance(value, ast.Constant) and isinstance(value.value, int):
+            return int(value.value)
+        if isinstance(value, ast.UnaryOp) and isinstance(value.op, (ast.UAdd, ast.USub, ast.Invert)):
+            operand = evaluate(value.operand)
+            if isinstance(value.op, ast.UAdd):
+                return operand
+            if isinstance(value.op, ast.USub):
+                return -operand
+            return ~operand
+        if isinstance(value, ast.BinOp) and isinstance(
+            value.op,
+            (ast.Add, ast.Sub, ast.Mult, ast.FloorDiv, ast.LShift, ast.RShift, ast.BitOr, ast.BitAnd),
+        ):
+            left, right = evaluate(value.left), evaluate(value.right)
+            operations = {
+                ast.Add: lambda: left + right,
+                ast.Sub: lambda: left - right,
+                ast.Mult: lambda: left * right,
+                ast.FloorDiv: lambda: left // right,
+                ast.LShift: lambda: left << right,
+                ast.RShift: lambda: left >> right,
+                ast.BitOr: lambda: left | right,
+                ast.BitAnd: lambda: left & right,
+            }
+            return operations[type(value.op)]()
+        raise ValueError(f"unsupported Fast3D integer expression: {expression}")
+
+    return evaluate(node)
+
+
+def texture_image(args: str) -> dict[str, object]:
+    values = split_args(args)
+    if len(values) != 4 or not re.fullmatch(r"[A-Za-z_]\w*", values[3]):
+        raise ValueError(f"unsupported gsDPSetTextureImage: {args}")
+    return {
+        "format": values[0],
+        "size": values[1],
+        "width": expression_int(values[2]),
+        "texture": values[3],
+    }
+
+
+def set_tile(args: str) -> dict[str, object]:
+    values = split_args(args)
+    if len(values) != 12:
+        raise ValueError(f"unsupported gsDPSetTile: {args}")
+    cmt, cms = expression_int(values[6]), expression_int(values[9])
+    return {
+        "format": values[0],
+        "size": values[1],
+        "line": expression_int(values[2]),
+        "tmem": expression_int(values[3]),
+        "tile": expression_int(values[4]),
+        "palette": expression_int(values[5]),
+        "clamp_t": bool(cmt & FAST3D_CONSTANTS["G_TX_CLAMP"]),
+        "mirror_t": bool(cmt & FAST3D_CONSTANTS["G_TX_MIRROR"]),
+        "mask_t": expression_int(values[7]),
+        "shift_t": expression_int(values[8]),
+        "clamp_s": bool(cms & FAST3D_CONSTANTS["G_TX_CLAMP"]),
+        "mirror_s": bool(cms & FAST3D_CONSTANTS["G_TX_MIRROR"]),
+        "mask_s": expression_int(values[10]),
+        "shift_s": expression_int(values[11]),
+    }
+
+
+def set_tile_size(args: str) -> tuple[int, dict[str, int]]:
+    values = split_args(args)
+    if len(values) != 5:
+        raise ValueError(f"unsupported gsDPSetTileSize: {args}")
+    tile, uls, ult, lrs, lrt = map(expression_int, values)
+    return tile, {
+        "uls": uls,
+        "ult": ult,
+        "lrs": lrs,
+        "lrt": lrt,
+        "width": (lrs - uls) // (1 << FAST3D_CONSTANTS["G_TEXTURE_IMAGE_FRAC"]) + 1,
+        "height": (lrt - ult) // (1 << FAST3D_CONSTANTS["G_TEXTURE_IMAGE_FRAC"]) + 1,
+    }
+
+
+def initial_state() -> dict[str, object]:
+    return {
+        "cache": [None] * 32,
+        "image": None,
+        "tiles": {},
+        "tmem": {},
+        "texture_on": False,
+        "texture_scale_s": 0xFFFF,
+        "texture_scale_t": 0xFFFF,
+        "texture_level": 0,
+        "texture_tile": 0,
+        "combine": None,
+        "cycle_type": None,
+        "render_mode": None,
+    }
+
+
+def render_texture_state(state: dict[str, object]) -> tuple[str | None, list[dict[str, object]], dict[str, object] | None]:
+    if not state["texture_on"]:
+        return None, [], None
+    tiles: dict[int, dict[str, object]] = state["tiles"]  # type: ignore[assignment]
+    tmem: dict[int, dict[str, object]] = state["tmem"]  # type: ignore[assignment]
+    first = int(state["texture_tile"])
+    level = int(state["texture_level"])
+    bindings: list[dict[str, object]] = []
+    primary_tile: dict[str, object] | None = None
+    for tile_index in range(first, first + level + 1):
+        tile = tiles.get(tile_index)
+        if tile is None:
+            continue
+        if primary_tile is None:
+            primary_tile = dict(tile)
+        binding = tmem.get(int(tile["tmem"]))
+        if binding is not None:
+            bindings.append({**binding, "render_tile": tile_index})
+    if primary_tile is None:
+        return None, bindings, None
+    primary_tile.update({
+        "sp_scale_s": int(state["texture_scale_s"]),
+        "sp_scale_t": int(state["texture_scale_t"]),
+        "sp_level": level,
+        "sp_tile": first,
+        "combine": state["combine"],
+        "cycle_type": state["cycle_type"],
+        "render_mode": state["render_mode"],
+        "bindings": bindings,
+    })
+    return (str(bindings[0]["texture"]) if bindings else None), bindings, primary_tile
 
 
 def display_list_macros(body: str):
@@ -51,27 +212,62 @@ def display_list_macros(body: str):
 
 
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
-            name: str, layer: str, out: list[dict[str, object]], texture: str | None = None,
-            tile: dict[str, object] | None = None, stack: tuple[str, ...] = ()) -> tuple[str | None, dict[str, object] | None]:
+            name: str, layer: str, out: list[dict[str, object]], state: dict[str, object] | None = None,
+            stack: tuple[str, ...] = ()) -> None:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
     if body is None:
         raise ValueError(f"missing display list {name}")
-    cache: list[tuple[int, int, int, int, int] | None] = [None] * 32
-    current_texture = texture
-    current_tile = tile
+    state = initial_state() if state is None else state
+    cache: list[tuple[int, int, int, int, int] | None] = state["cache"]  # type: ignore[assignment]
     for macro, args in display_list_macros(body):
         if macro == "gsDPSetTextureImage":
-            current_texture = texture_name(args)
-        elif macro == "gsDPSetTile" and "G_TX_RENDERTILE" in args:
-            current_tile = {"clamp_s": "G_TX_CLAMP" in args, "clamp_t": "G_TX_CLAMP" in args}
+            state["image"] = texture_image(args)
+        elif macro == "gsDPSetTile":
+            descriptor = set_tile(args)
+            tiles: dict[int, dict[str, object]] = state["tiles"]  # type: ignore[assignment]
+            previous = tiles.get(int(descriptor["tile"]), {})
+            tiles[int(descriptor["tile"])] = {**previous, **descriptor}
         elif macro == "gsDPSetTileSize":
-            extent = tile_extent(args)
-            if extent is not None:
-                current_tile = {**(current_tile or {}), "width": extent[0], "height": extent[1]}
-        elif macro == "gsSPTexture" and "G_OFF" in args:
-            current_texture = None
+            tile_index, extent = set_tile_size(args)
+            tiles = state["tiles"]  # type: ignore[assignment]
+            tiles[tile_index] = {**tiles.get(tile_index, {"tile": tile_index}), **extent}
+        elif macro in ("gsDPLoadBlock", "gsDPLoadTile"):
+            values = split_args(args)
+            if len(values) < 5:
+                raise ValueError(f"unsupported {macro}: {args}")
+            load_tile = expression_int(values[0])
+            tiles = state["tiles"]  # type: ignore[assignment]
+            descriptor = tiles.get(load_tile)
+            image = state["image"]
+            if descriptor is None or image is None:
+                raise ValueError(f"{macro} without image/load-tile state in {name}")
+            binding = {
+                **image,
+                "load_tile": load_tile,
+                "tmem": int(descriptor["tmem"]),
+                "load_uls": expression_int(values[1]),
+                "load_ult": expression_int(values[2]),
+                "load_lrs": expression_int(values[3]),
+                "load_kind": macro,
+            }
+            state["tmem"][int(descriptor["tmem"])] = binding  # type: ignore[index]
+        elif macro == "gsSPTexture":
+            values = split_args(args)
+            if len(values) != 5:
+                raise ValueError(f"unsupported gsSPTexture: {args}")
+            state["texture_scale_s"] = expression_int(values[0])
+            state["texture_scale_t"] = expression_int(values[1])
+            state["texture_level"] = expression_int(values[2])
+            state["texture_tile"] = expression_int(values[3])
+            state["texture_on"] = "G_OFF" not in values[4]
+        elif macro == "gsDPSetCombineMode":
+            state["combine"] = split_args(args)
+        elif macro == "gsDPSetCycleType":
+            state["cycle_type"] = args.strip()
+        elif macro == "gsDPSetRenderMode":
+            state["render_mode"] = split_args(args)
         elif macro == "gsSPVertex":
             group = re.match(r"\s*(\w+)", args)
             if group is None or group.group(1) not in vertices:
@@ -95,19 +291,20 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
             for triangle in triangles:
                 if len(triangle) != 3 or any(index >= len(cache) or cache[index] is None for index in triangle):
                     raise ValueError(f"invalid triangle in {name}: {args}")
+                texture, bindings, tile = render_texture_state(state)
                 out.append({
                     "source_display_list": name,
                     "layer": layer,
-                    "texture": current_texture,
-                    "tile": current_tile,
+                    "texture": texture,
+                    "textures": [binding["texture"] for binding in bindings],
+                    "tile": tile,
                     "positions": [list(cache[index][0:3]) for index in triangle],
                     "uv": [[cache[index][3], cache[index][4]] for index in triangle],
                 })
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                current_texture, current_tile = flatten(display_lists, vertices, child.group(1), layer, out, current_texture, current_tile, stack + (name,))
-    return current_texture, current_tile
+                flatten(display_lists, vertices, child.group(1), layer, out, state, stack + (name,))
 
 
 def extract(area: Path) -> dict[str, object]:

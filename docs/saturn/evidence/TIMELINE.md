@@ -577,6 +577,58 @@ hold and 60-frame observation window. See
 [the state-bridge evidence note](ymir-m2-sm64-state-bridge-2026-07-18.md) and
 [the machine report](ymir-m2-sm64-state-up-2026-07-18.json).
 
+### M3 preserved: tile-state correction hidden by rejected camera transplant
+
+![Blank default-camera diagnostic](screenshots/ymir-m3-castle-fast3d-tile-state-v2-2026-07-18.png)
+
+The state-complete texture bank boots, but the already-rejected standalone
+camera transplant rejects the visible scene. This frame is preserved so a
+blank field is not incorrectly attributed to VDP1 texture data. It is further
+evidence that the original SM64 graph camera—not copied constants—must own the
+shipping view.
+
+### M3 accepted compiler correction: complete per-axis Fast3D tile state
+
+![Castle lobby with corrected S-wrap/T-clamp state](screenshots/ymir-m3-castle-fast3d-axis-wrap-fixed-camera-2026-07-18.png)
+
+The fixed diagnostic camera isolates the renderer from that camera failure.
+The extractor now retains image/load-tile/TMEM/render-tile bindings, independent
+S and T clamp/wrap/mirror/mask/shift state, tile origin and extent, SP scale,
+and secondary LOD bindings. In particular, 283 real 64×32 lobby triangles are
+S-wrap/T-clamp; the old whole-macro substring test incorrectly clamped both
+axes. All six ROM-derived materials now follow their actual Fast3D state. The
+remaining diagonal crossings are painter/primitive faults, not material
+selection or texture-addressing faults.
+
+### M3 neutral: 16×16 resolution does not fix diagonal crossings
+
+![Higher-resolution Castle texture profile](screenshots/ymir-m3-castle-fast3d-tile16-fixed-camera-2026-07-18.png)
+
+Four times as many texels sharpen the brick and mural samples but preserve the
+same large diagonal faults. The compact 8×8/2×-source profile therefore remains
+the default; texture resolution is ruled out as the cause.
+
+### M3 rejected: blanket large-triangle subdivision
+
+![Rejected adaptive subdivision profile](screenshots/ymir-m3-castle-adaptive-subdivision-fixed-camera-2026-07-18.png)
+
+A PS1-inspired source-diagonal threshold subdivides 193 triangles and emits
+1,156 8×8 tiles without exceeding target residency. It also creates more
+visible triangular painter seams. The 512-unit experiment is rejected as a
+default, while the camera-independent tool control remains available for a
+later projected-error policy after safe quad conversion and the original
+graph camera are linked.
+
+### M3 neutral: farthest-vertex painter key
+
+![Farthest-vertex painter diagnostic](screenshots/ymir-m3-castle-max-depth-tile16-fixed-camera-2026-07-18.png)
+
+Following the PS1 port's ordering-table behavior, opaque primitives use their
+farthest transformed vertex rather than centroid depth and retain source order
+inside equal buckets. This removes a few centroid inversions but cannot order
+surfaces that cross in screen space. It remains a conservative improvement,
+not a substitute for safe quads, clipping, or projected-error splitting.
+
 ## Next visual gates
 
 1. Extend the now-running original controller/Mario intent slice through

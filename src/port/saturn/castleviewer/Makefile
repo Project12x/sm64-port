@@ -14,6 +14,9 @@ SH_CFLAGS += -Os -g -DDEBUG \
   -I$(ROOT)/build/saturn/castlearea/generated \
   -I$(ROOT)/build/saturn/marioturntable/generated \
   -I$(ROOT)/src/port/saturn/marioturntable
+ifeq ($(TEXTURE_PROBE),1)
+SH_CFLAGS += -DSM64_SATURN_TEXTURE_PROBE_CAMERA=1
+endif
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260718
 IP_AREAS := JTUBKAEL

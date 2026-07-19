@@ -3,8 +3,9 @@
 
 This is deliberately a narrow M3 bridge: it consumes the checked source
 display-list flattening, retains only the opaque root layer, and serializes
-the exact source positions/topology in first-use order.  It does not invent a
-replacement level format, interpret level scripts, or claim texture support.
+the exact source positions/topology and Fast3D texture state in first-use
+order. It does not invent a replacement level format or interpret level
+scripts.
 """
 from __future__ import annotations
 
@@ -59,7 +60,8 @@ def compile_opaque(area: Path) -> dict[str, object]:
         "triangles": triangles,
         "uv": triangle_uv,
         "tile_state": triangle_tiles,
-        "limits": ["No textures", "No alpha/decal layers", "No visibility or clipping"],
+        "texture_state_version": 2,
+        "limits": ["Opaque root only", "No alpha/decal layers", "No visibility or clipping"],
     }
 
 

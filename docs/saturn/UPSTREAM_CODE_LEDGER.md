@@ -75,6 +75,13 @@ Implementation commitments:
    manifest and batch/prefetch its texture bank into the 4 MB RAM cart, then
    promote only the visible working set to VDP1 VRAM. The texture tools must
    support per-class 1x/2x/4x source scales and 8/16/32-pixel output profiles.
+7. The behavior study of `src/port/psx/gfx_dl_exec_psx.c` uses the farthest
+   transformed vertex for its opaque ordering-table key. The Castle diagnostic
+   now exercises that conservative key while retaining source order inside a
+   bucket. Its related large-polygon subdivision idea is exposed as an offline
+   source-diagonal control, but the 512-unit blanket experiment is rejected:
+   it increased VDP1 triangle seams. No PSX source is copied; the repository's
+   absent root license keeps both changes behavior-only at pin `3073845688`.
 
 ## M3 onward — inspection and debugging evidence
 
