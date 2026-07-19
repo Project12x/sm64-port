@@ -14,7 +14,7 @@ SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
 SM64_ROM ?=
 CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000 inside_09008800 inside_castle_seg7_texture_07000800 inside_castle_seg7_texture_07002000
-CASTLE_TILE ?= 8
+CASTLE_TILE ?= 16
 CASTLE_SOURCE_SCALE ?= 2
 CASTLE_TEXTURE_FORMAT ?= clut16
 CASTLE_SUBDIVISION ?= 1
