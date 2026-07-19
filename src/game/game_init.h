@@ -74,6 +74,7 @@ extern u32 gGlobalTimer;
 
 void setup_game_memory(void);
 void thread5_game_loop(UNUSED void *arg);
+void game_loop_one_iteration(void);
 void clear_frame_buffer(s32 color);
 void clear_viewport(Vp *viewport, s32 color);
 void make_viewport_clip_rect(Vp *viewport);

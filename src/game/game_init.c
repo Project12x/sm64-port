@@ -21,6 +21,10 @@
 #include "rumble_init.h"
 #include <prevent_bss_reordering.h>
 
+#ifdef TARGET_SATURN
+#include "port/saturn/runtime/saturn_source_runtime.h"
+#endif
+
 // First 3 controller slots
 struct Controller gControllers[3];
 
@@ -389,6 +393,17 @@ void select_gfx_pool(void) {
  * - Selects which framebuffer will be rendered and displayed to next time.
  */
 void display_and_vsync(void) {
+#ifdef TARGET_SATURN
+    /* Preserve the original game-owned display boundary. Saturn replaces only
+     * the N64 message/VI mechanism: exec_display_list() enters the target
+     * front end, then the platform owns the presentation VBlank. */
+    profiler_log_thread5_time(BEFORE_DISPLAY_LISTS);
+    exec_display_list(&gGfxPool->spTask);
+    profiler_log_thread5_time(AFTER_DISPLAY_LISTS);
+    sm64_saturn_source_runtime_wait_vblank();
+    profiler_log_thread5_time(THREAD5_END);
+    gGlobalTimer++;
+#else
     profiler_log_thread5_time(BEFORE_DISPLAY_LISTS);
     osRecvMesg(&gGfxVblankQueue, &gMainReceivedMesg, OS_MESG_BLOCK);
     if (gGoddardVblankCallback != NULL) {
@@ -408,6 +423,7 @@ void display_and_vsync(void) {
         sRenderingFrameBuffer = 0;
     }
     gGlobalTimer++;
+#endif
 }
 
 // Controls
@@ -551,6 +567,10 @@ void read_controller_inputs(void) {
     s32 i;
 
     // If any controllers are plugged in, update the controller information.
+#ifdef TARGET_SATURN
+    sm64_saturn_source_runtime_read_controllers(&gControllerPads[0],
+                                                ARRAY_COUNT(gControllerPads));
+#else
     if (gControllerBits) {
         osRecvMesg(&gSIEventMesgQueue, &gMainReceivedMesg, OS_MESG_BLOCK);
         osContGetReadData(&gControllerPads[0]);
@@ -558,6 +578,7 @@ void read_controller_inputs(void) {
         release_rumble_pak_control();
 #endif
     }
+#endif
     run_demo_inputs();
 
     for (i = 0; i < 2; i++) {
@@ -606,11 +627,17 @@ void init_controllers(void) {
     // init the controllers.
     gControllers[0].statusData = &gControllerStatuses[0];
     gControllers[0].controllerData = &gControllerPads[0];
+#ifdef TARGET_SATURN
+    sm64_saturn_source_runtime_init_controllers(
+        &gControllerBits, &gControllerStatuses[0], ARRAY_COUNT(gControllerStatuses));
+    gEepromProbe = 0;
+#else
     osContInit(&gSIEventMesgQueue, &gControllerBits, &gControllerStatuses[0]);
 
     // Strangely enough, the EEPROM probe for save data is done in this function.
     // Save Pak detection?
     gEepromProbe = osEepromProbe(&gSIEventMesgQueue);
+#endif
 
     // Loop over the 4 ports and link the controller structs to the appropriate
     // status and pad. Interestingly, although there are pointers to 3 controllers,
@@ -645,13 +672,17 @@ void setup_game_memory(void) {
     // Setup general Segment 0
     set_segment_base_addr(0, (void *) 0x80000000);
     // Create Mesg Queues
+#ifndef TARGET_SATURN
     osCreateMesgQueue(&gGfxVblankQueue, gGfxMesgBuf, ARRAY_COUNT(gGfxMesgBuf));
     osCreateMesgQueue(&gGameVblankQueue, gGameMesgBuf, ARRAY_COUNT(gGameMesgBuf));
+#endif
     // Setup z buffer and framebuffer
+#ifndef TARGET_SATURN
     gPhysicalZBuffer = VIRTUAL_TO_PHYSICAL(gZBuffer);
     gPhysicalFrameBuffers[0] = VIRTUAL_TO_PHYSICAL(gFrameBuffer0);
     gPhysicalFrameBuffers[1] = VIRTUAL_TO_PHYSICAL(gFrameBuffer1);
     gPhysicalFrameBuffers[2] = VIRTUAL_TO_PHYSICAL(gFrameBuffer2);
+#endif
     // Setup Mario Animations
     gMarioAnimsMemAlloc = main_pool_alloc(0x4000, MEMORY_POOL_LEFT);
     set_segment_base_addr(17, (void *) gMarioAnimsMemAlloc);
@@ -688,13 +719,17 @@ void thread5_game_loop(UNUSED void *arg) {
 #endif
     save_file_load_all();
 
+#ifndef TARGET_SATURN
     set_vblank_handler(2, &gGameVblankHandler, &gGameVblankQueue, (OSMesg) 1);
+#endif
 
     // Point levelCommandAddr to the entry point into the level script data.
     levelCommandAddr = segmented_to_virtual(level_script_entry);
 
+#ifndef TARGET_SATURN
     play_music(SEQ_PLAYER_SFX, SEQUENCE_ARGS(0, SEQ_SOUND_PLAYER), 0);
     set_sound_mode(save_file_get_sound_mode());
+#endif
 
 #ifdef TARGET_N64
     render_init();
@@ -723,10 +758,18 @@ void game_loop_one_iteration(void) {
 #if ENABLE_RUMBLE
             block_until_rumble_pak_free();
 #endif
+#ifdef TARGET_SATURN
+            sm64_saturn_source_runtime_begin_input();
+#else
             osContStartReadData(&gSIEventMesgQueue);
+#endif
         }
 
+#ifdef TARGET_SATURN
+        sm64_saturn_source_runtime_audio_tick();
+#else
         audio_game_loop_tick();
+#endif
         select_gfx_pool();
         read_controller_inputs();
         levelCommandAddr = level_script_execute(levelCommandAddr);

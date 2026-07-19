@@ -216,6 +216,28 @@ than a renderer responsibility. This is the architecture lesson from the PS1
 port study, not PS1 code reuse; see
 [`PSX_PORT_ARCHITECTURE_LESSONS.md`](PSX_PORT_ARCHITECTURE_LESSONS.md).
 
+Implementation checkpoint (2026-07-19): `game_init.c` now has a
+`TARGET_SATURN` platform seam for controller collection, source-frame audio
+tick accounting, `exec_display_list()` submission, and VBlank presentation.
+`runtime/saturn_source_runtime.c` provides those services without changing
+source loop ownership. `gfx/saturn_fast3d_frontend.c` is the first shared
+consumer: it walks a submitted Fast3D display-list graph with command and call
+depth bounds, retaining source workload telemetry but not yet lowering a task
+into VDP1 commands. The Castle harness registers the consumer only so the
+eventual source loop has no scene-specific submission path. This checkpoint is
+build-proven, but E2 stays open until a Saturn target boots the source loop and
+replaces the harness-owned movement/camera/animation state.
+
+The N64 queue implementation in `src/game/main.c` is explicitly excluded for
+`TARGET_SATURN`; its public `exec_display_list()` symbol is supplied only by
+the target runtime. This prevents a later full-source link from accidentally
+using the N64 SP/DP task queue instead of the Saturn front end.
+
+The current disc calls a one-command, non-visual `G_ENDDL` preflight through
+that public dispatcher at boot. Its only purpose is to retain and verify the
+actual source-task path while E2 is not yet driving the loop; it neither draws
+nor introduces an alternate game/render path.
+
 E2 acceptance additionally requires a deterministic input/state replay: at
 least one idle/run/jump route records source action, Mario position, camera
 mode, and final state against the PC reference. A post-run screenshot alone

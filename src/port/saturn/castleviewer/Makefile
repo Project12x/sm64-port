@@ -7,7 +7,10 @@ SH_SRCS := main.c castle_graph_bridge.c \
   collision_pool.c \
   $(ROOT)/src/port/saturn/cartridge/saturn_cart_bank.c \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
   $(ROOT)/src/game/game_init.c \
+  $(ROOT)/src/game/main.c \
   $(ROOT)/src/game/mario.c \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/engine/geo_layout.c \
@@ -32,6 +35,7 @@ SH_CFLAGS += -Os -g -DDEBUG \
   -I$(ROOT)/src/port/saturn/marioturntable \
   -I$(ROOT)/src/port/saturn/cartridge \
   -I$(ROOT)/src/port/saturn/controller \
+  -I$(ROOT)/src/port/saturn/runtime \
   -I$(ROOT)/src/port/saturn/gfx \
   -I$(ROOT)/src/port/saturn/platform
 ifeq ($(TEXTURE_PROBE),1)

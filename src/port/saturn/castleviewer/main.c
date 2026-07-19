@@ -6,6 +6,7 @@
 #include "saturn_cart_bank.h"
 #include "saturn_frame_profile.h"
 #include "saturn_frame_sample.h"
+#include "saturn_fast3d_frontend.h"
 #include "saturn_gouraud.h"
 #include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
@@ -61,6 +62,7 @@ typedef struct static_render_token {
 #define STATIC_TOKEN_MARIO_LEAF 1U
 
 static sm64_saturn_vdp1_backend_t vdp1_backend;
+static sm64_saturn_fast3d_frontend_t source_fast3d_frontend;
 static sm64_saturn_texture_residency_t texture_residency;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
@@ -1196,6 +1198,10 @@ void user_init(void) {
      * frames, but a target that starts polling before the first VBlank can
      * otherwise retain an all-zero, disconnected OSContPad sample. */
     smpc_peripheral_intback_issue();
+    sm64_saturn_fast3d_frontend_init(&source_fast3d_frontend);
+    sm64_saturn_source_runtime_configure(
+        sm64_saturn_fast3d_frontend_submit, &source_fast3d_frontend);
+    if (!sm64_saturn_source_runtime_preflight_task()) for (;;) {}
     source_graph = sm64_saturn_castle_graph_init();
     if (!source_graph.valid) for (;;) {}
     alloc_surface_pools();
