@@ -138,7 +138,10 @@ def extract(script_path: Path, collision_path: Path, camera_path: Path) -> dict[
             "focus_height": camera_values["focus_height"],
             "focus_floor_scale_q16": camera_values["focus_floor_scale_q16"],
             "fov_degrees": 45,
-            "focal_length_320": round(160 / math.tan(math.radians(45 / 2))),
+            # SM64's 45-degree value is the vertical FOV used by the N64
+            # perspective setup.  Keep the original 4:3 320x240 basis even
+            # though the Saturn capture is letterboxed to 320x224.
+            "focal_length_320": round(120 / math.tan(math.radians(45 / 2))),
         },
         "source": {
             "script": {"path": str(script_path).replace("\\", "/"), "sha256": hashlib.sha256(script.encode()).hexdigest()},

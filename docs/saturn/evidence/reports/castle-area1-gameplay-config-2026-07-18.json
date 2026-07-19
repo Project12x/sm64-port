@@ -47,7 +47,7 @@
     "focus_height": 125,
     "focus_floor_scale_q16": 58982,
     "fov_degrees": 45,
-    "focal_length_320": 386
+    "focal_length_320": 290
   },
   "source": {
     "script": {

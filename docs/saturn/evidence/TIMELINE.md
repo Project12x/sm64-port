@@ -913,3 +913,14 @@ it to Mario's current source-space Y. At the extracted spawn this changes the
 look-at height from 125 to the source-correct ~92 units, keeping floor, emblem,
 doors, and Mario in the same camera relationship as the original code path.
 Evidence: [floor-relative focus capture](screenshots/ymir-m4-source-camera-floor-relative-focus-2026-07-18.png).
+
+### 2026-07-18 — Source projection uses SM64's vertical field of view
+
+The Castle extractor had been converting the source 45° perspective value as a
+horizontal FOV, producing a 386-pixel focal length and an overly tight lobby.
+SM64's perspective setup uses that value vertically on a 4:3 320×240 basis,
+which is a 290-pixel horizontal focal length. The Saturn build now uses the
+source-correct value while retaining its 320×224 letterboxed output. This
+pulls the floor and central emblem back from the doorway relationship without
+changing any room vertices or camera placement. Evidence: [vertical-FOV
+capture](screenshots/ymir-m4-source-camera-vertical-fov-2026-07-18.png).

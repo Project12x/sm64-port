@@ -21,6 +21,11 @@
 #define FAR_DEPTH 8192
 #define VDP1_COORD_MIN (-1024)
 #define VDP1_COORD_MAX 1023
+/* A single VDP1 distorted sprite is not a safe representation for a source
+ * polygon whose projected extent is much larger than the target viewport.
+ * Keep the source tile/UV data intact, but reject that primitive until the
+ * host lowering can split it with interpolated attributes. */
+#define MAX_PROJECTED_SPAN 640
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -204,6 +209,9 @@ static bool quad_intersects_viewport(point3_t a, point3_t b, point3_t c, point3_
         if (y < minimum_y) minimum_y = y;
         if (y > maximum_y) maximum_y = y;
     }
+    if (maximum_x - minimum_x > MAX_PROJECTED_SPAN ||
+        maximum_y - minimum_y > MAX_PROJECTED_SPAN)
+        return false;
     return maximum_x >= 0 && minimum_x <= 319 && maximum_y >= 0 && minimum_y <= 223;
 }
 
