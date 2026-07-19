@@ -20,6 +20,7 @@
 #define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DRAW_ITEM_COUNT (SM64_CASTLE_UV_TILE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
 #define DEPTH_BUCKETS 128U
+#define SCENE_DEPTH_BUCKETS 64U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 8192
 #define VDP1_COORD_MIN (-1024)
@@ -38,6 +39,9 @@ static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS
 static int16_t mario_bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t mario_order[SM64_MARIO_PRIMITIVE_COUNT], mario_visible;
 static uint16_t draw_order[DRAW_ITEM_COUNT];
+static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_DEPTH_BUCKETS];
+static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
+static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
 static bool mario_gouraud_dirty;
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
@@ -345,6 +349,53 @@ static void append_mario(void) {
         draw_order[visible_items++] = SM64_CASTLE_UV_TILE_COUNT + mario_order[index];
 }
 
+/* VDP1 has no depth buffer.  The source BSP is still the authority for
+ * visibility, but a whole BSP leaf can contain a wall, floor, and Mario
+ * whose projected depths interleave.  Re-bucket only the opaque domain with
+ * a coarse, stable transformed-depth key; source traversal remains the
+ * tie-breaker inside each bucket and decals stay in their explicit late pass.
+ */
+static int32_t scene_item_max_depth(uint16_t item) {
+    if (item < SM64_CASTLE_UV_TILE_COUNT) {
+        const int16_t (*indices)[3] = sm64_castle_uv_positions[item];
+        const point3_t a = castle_point(indices[0]);
+        const point3_t b = castle_point(indices[1]);
+        const point3_t c = castle_point(indices[2]);
+        const point3_t d = castle_point(indices[3]);
+        return max4(a.z, b.z, c.z, d.z);
+    }
+    const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
+    const uint16_t *indices = sm64_mario_primitives[primitive];
+    return max4(mario_point(mario_vertex(indices[1])).z,
+                mario_point(mario_vertex(indices[2])).z,
+                mario_point(mario_vertex(indices[3])).z,
+                mario_point(mario_vertex(indices[4])).z);
+}
+
+static void refine_opaque_depth_order(uint16_t opaque_count) {
+    (void)memcpy(scene_order_scratch, draw_order, sizeof(uint16_t) * opaque_count);
+    for (uint16_t bucket = 0; bucket < SCENE_DEPTH_BUCKETS; bucket++)
+        scene_bucket_head[bucket] = scene_bucket_tail[bucket] = -1;
+    for (uint16_t order = 0; order < opaque_count; order++) {
+        const uint16_t item = scene_order_scratch[order];
+        const int32_t depth = clamp32(scene_item_max_depth(item), NEAR_DEPTH, FAR_DEPTH);
+        const uint16_t bucket = (uint16_t)((depth - NEAR_DEPTH) *
+            (SCENE_DEPTH_BUCKETS - 1U) / (FAR_DEPTH - NEAR_DEPTH));
+        scene_bucket_next[order] = -1;
+        if (scene_bucket_head[bucket] < 0)
+            scene_bucket_head[bucket] = scene_bucket_tail[bucket] = (int16_t)order;
+        else {
+            scene_bucket_next[scene_bucket_tail[bucket]] = (int16_t)order;
+            scene_bucket_tail[bucket] = (int16_t)order;
+        }
+    }
+    uint16_t output = 0;
+    for (int16_t bucket = SCENE_DEPTH_BUCKETS - 1; bucket >= 0; bucket--)
+        for (int16_t order = scene_bucket_head[bucket]; order >= 0;
+             order = scene_bucket_next[order])
+            draw_order[output++] = scene_order_scratch[(uint16_t)order];
+}
+
 static int64_t bsp_side(uint16_t node, point3_t point) {
     return ((int64_t)sm64_castle_bsp_normal[node][0] * point.x) +
            ((int64_t)sm64_castle_bsp_normal[node][1] * point.y) +
@@ -376,6 +427,8 @@ static void sort_scene(void) {
     visible_items = 0;
     sort_mario();
     traverse_bsp(0, true);
+    const uint16_t opaque_count = visible_items;
+    refine_opaque_depth_order(opaque_count);
     /* True translucent decals remain a deliberately late source-derived pass. */
     for (uint16_t tile = SM64_CASTLE_BSP_DECAL_START;
          tile < SM64_CASTLE_BSP_DECAL_START + SM64_CASTLE_BSP_DECAL_COUNT; tile++)
