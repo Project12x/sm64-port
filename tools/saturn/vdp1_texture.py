@@ -11,6 +11,9 @@ def downsample_rgb1555(
     Filtering happens in five-bit channel space so the result can be emitted
     directly as a Saturn texture.  Alpha uses majority coverage, which keeps
     cutout edges deterministic without inventing intermediate alpha values.
+    VDP1's transparent direct-color code is exactly 0x0000; an RGB1555 word
+    with bit 15 clear but nonzero RGB channels is still visible character
+    data.  Canonicalize every transparent result to zero, including scale 1.
     """
     if scale not in (1, 2, 4):
         raise ValueError("texture scale must be 1, 2, or 4")
@@ -19,7 +22,7 @@ def downsample_rgb1555(
     if width % scale or height % scale:
         raise ValueError("texture dimensions must be divisible by scale")
     if scale == 1:
-        return width, height, list(pixels)
+        return width, height, [value if value & 0x8000 else 0 for value in pixels]
 
     output: list[int] = []
     sample_count = scale * scale
@@ -34,12 +37,15 @@ def downsample_rgb1555(
                     blue += (value >> 10) & 0x1F
                     alpha += (value >> 15) & 1
             average = lambda total: (total + sample_count // 2) // sample_count
-            output.append(
-                (0x8000 if alpha * 2 >= sample_count else 0)
-                | (average(blue) << 10)
-                | (average(green) << 5)
-                | average(red)
-            )
+            if alpha * 2 < sample_count:
+                output.append(0)
+            else:
+                output.append(
+                    0x8000
+                    | (average(blue) << 10)
+                    | (average(green) << 5)
+                    | average(red)
+                )
     return width // scale, height // scale, output
 
 

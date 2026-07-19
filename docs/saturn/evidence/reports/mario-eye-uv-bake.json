@@ -15,11 +15,18 @@
     16
   ],
   "source_scale": 1,
-  "source_filter": "RGB1555 box filter with majority alpha",
+  "source_filter": "RGB1555 box filter with majority alpha; A1=0 canonicalized to VDP1 0x0000",
   "source_texture_bytes": 10240,
   "resampled_source_bytes": 10240,
   "texture_bytes": 25600,
   "vdp1_default_texture_partition_bytes": 442336,
   "uv_space": "Fast3D source UV / 32",
+  "combine_mode": "G_CC_BLENDRGBFADEA",
+  "lowering": "atomic neutral-base Gouraud polygon plus alpha-keyed CC_REPLACE texture detail",
+  "vdp1_output_alpha": "A1=0 emits exact VDP1 transparent word 0x0000; opaque detail words have RGB1555 bit 15 set",
+  "vdp1_end_code_policy": "disabled for fixed-size source tiles; emitted texture words are constrained to 0x0000 or MSB-set opaque values",
+  "vdp1_transparent_word_count": 7216,
+  "vdp1_opaque_word_count": 5584,
+  "vdp1_nonzero_msb_clear_word_count": 0,
   "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"
 }

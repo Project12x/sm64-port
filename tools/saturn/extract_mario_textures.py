@@ -24,11 +24,16 @@ def saturn_rgb1555(n64: int) -> int:
     # N64 RGBA16 is R5:G5:B5:A1 from most- to least-significant bits.
     # Saturn direct-color RGB1555 is MSB:B5:G5:R5.  The alpha/MSB and green
     # lanes already agree after extraction, but red and blue must exchange
-    # ends; preserving the original lanes turns blue Castle brick red.
+    # ends; preserving the original lanes turns blue Castle brick red. VDP1's
+    # transparent direct-color code is exactly 0x0000, so discard the source
+    # RGB payload when N64 A1 is clear instead of emitting a nonzero
+    # bit-15-clear word (or 0x7FFF for transparent white).
+    if (n64 & 1) == 0:
+        return 0
     red = (n64 >> 11) & 0x1F
     green = (n64 >> 6) & 0x1F
     blue = (n64 >> 1) & 0x1F
-    return ((n64 & 1) << 15) | (blue << 10) | (green << 5) | red
+    return 0x8000 | (blue << 10) | (green << 5) | red
 
 def mio0_decode(image: bytes, offset: int) -> bytes:
     if image[offset:offset + 4] != b"MIO0":

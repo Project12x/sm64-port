@@ -13,7 +13,19 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
-from extract_mario_actor import animation_frame_count, animation_rotations, animation_translation, geo_layout_parts  # noqa: E402
+from extract_mario_actor import (  # noqa: E402
+    animation_frame_count,
+    animation_rotations,
+    animation_translation,
+    c_render_cluster_metadata,
+    c_u8_light_bank,
+    flatten as flatten_mario,
+    flatten_parts,
+    geo_layout_parts,
+    identity_matrix,
+    mario_vertex_light_intensities,
+    mario_render_clusters,
+)
 from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights, split_four  # noqa: E402
@@ -26,6 +38,7 @@ from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
 from bake_castle_uv import (  # noqa: E402
     adaptive_subdivide_triangle,
     adaptive_subdivide_quad,
+    index_position_quads,
     pack_clut16,
     quantize_clut16,
     sample_triangle,
@@ -42,7 +55,7 @@ from static_bsp import (  # noqa: E402
     split_polygon as split_bsp_polygon,
 )
 from plan_castle_camera_coverage import plan  # noqa: E402
-from quad_pairing import QuadCandidate, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
+from quad_pairing import QuadCandidate, RenderPrimitive, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
@@ -162,6 +175,146 @@ class QuadPairingTests(unittest.TestCase):
 
 
 class MarioActorPoseTests(unittest.TestCase):
+    def test_render_clusters_are_stable_compact_leaf_work_lists(self) -> None:
+        triangles = [
+            {"display_list": "mario_leaf_z"},
+            {"display_list": "mario_leaf_a"},
+            {"display_list": "mario_leaf_z"},
+        ]
+        primitives = [
+            {"source_triangles": [0], "indices": [0, 1, 2, 2]},
+            {"source_triangles": [1], "indices": [1, 3, 4, 4]},
+            {"source_triangles": [2], "indices": [2, 4, 5, 5]},
+        ]
+        positions = [
+            [0, 0, 0], [1, 0, 0], [0, 1, 0],
+            [10, 0, 0], [10, 1, 0], [0, 2, 0],
+        ]
+        metadata = mario_render_clusters(triangles, primitives, positions)
+        self.assertEqual(
+            [cluster["name"] for cluster in metadata["clusters"]],
+            ["mario_leaf_a", "mario_leaf_z"],
+        )
+        self.assertEqual(metadata["primitive_offsets"], [0, 1, 3])
+        self.assertEqual(metadata["primitive_indices"], [1, 0, 2])
+        self.assertEqual(metadata["unique_vertex_offsets"], [0, 3, 8])
+        self.assertEqual(metadata["unique_vertex_indices"], [1, 3, 4, 0, 1, 2, 4, 5])
+        self.assertEqual(
+            metadata["clusters"][1]["bounds"],
+            {"min": [0, 0, 0], "max": [10, 2, 0]},
+        )
+        emitted = "\n".join(c_render_cluster_metadata(metadata))
+        self.assertIn("#define SM64_MARIO_RENDER_CLUSTER_COUNT 2U", emitted)
+        self.assertIn("sm64_mario_render_cluster_primitive_offsets", emitted)
+        self.assertIn("sm64_mario_render_cluster_primitive_list", emitted)
+        self.assertIn("sm64_mario_render_cluster_vertex_list", emitted)
+        self.assertIn("sm64_mario_render_cluster_bounds", emitted)
+
+    def test_paired_primitive_cannot_cross_leaf_render_clusters(self) -> None:
+        triangles = [
+            {"display_list": "mario_left_leaf"},
+            {"display_list": "mario_right_leaf"},
+        ]
+        primitives = [
+            {"source_triangles": [0, 1], "indices": [0, 1, 2, 3]},
+        ]
+        with self.assertRaisesRegex(ValueError, "cross render clusters"):
+            mario_render_clusters(
+                triangles,
+                primitives,
+                [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]],
+            )
+
+    def test_offline_vertex_light_matches_runtime_integer_policy(self) -> None:
+        vertices = [
+            [0, 0, 0], [1, 0, 0], [0, 1, 0],
+            [0, 2, 0], [0, 1, 1], [99, 99, 99],
+        ]
+        primitives = [
+            RenderPrimitive(0, (0, 1, 2, 2), 0, None),
+            RenderPrimitive(0, (2, 3, 4, 4), 1, None),
+        ]
+        # The shared vertex receives +Z and +X normals.  A repeated triangle
+        # corner must not add +Z twice: the exact C integer result is 13.
+        self.assertEqual(
+            mario_vertex_light_intensities(vertices, primitives),
+            [27, 27, 13, 8, 8, 20],
+        )
+
+    def test_vertex_light_bank_is_compact_uint8_frame_vertex_data(self) -> None:
+        lines = c_u8_light_bank(
+            "test_light", "TEST_FRAME_COUNT", [[8, 20, 31], [31, 20, 8]]
+        )
+        emitted = "\n".join(lines)
+        self.assertIn(
+            "static const uint8_t test_light[TEST_FRAME_COUNT][SM64_MARIO_VERTEX_COUNT]",
+            emitted,
+        )
+        self.assertIn("8, 20, 31", emitted)
+        self.assertIn("31, 20, 8", emitted)
+        with self.assertRaisesRegex(ValueError, "RGB555 range"):
+            c_u8_light_bank("bad", "BAD_COUNT", [[32]])
+
+    def test_textured_fast3d_combine_mode_is_preserved(self) -> None:
+        display_lists = {
+            "root": """
+                gsDPSetCombineMode(G_CC_BLENDRGBFADEA, G_CC_BLENDRGBFADEA),
+                gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1,
+                                    mario_texture_m_logo),
+                gsSPVertex(vertices, 3, 0),
+                gsSP1Triangle(0, 1, 2, 0),
+            """
+        }
+        vertices = {
+            "vertices": [
+                (0, 0, 0, 0, 0),
+                (1, 0, 0, 992, 0),
+                (0, 1, 0, 0, 992),
+            ]
+        }
+        triangles: list[dict[str, object]] = []
+        flatten_mario(
+            display_lists, vertices, "root", identity_matrix(),
+            "mario_red_lights_group", triangles
+        )
+        self.assertEqual(triangles[0]["texture"], "mario_texture_m_logo")
+        self.assertEqual(triangles[0]["combine_mode"], "G_CC_BLENDRGBFADEA")
+
+    def test_geo_parts_thread_fast3d_material_and_cull_state(self) -> None:
+        display_lists = {
+            "part_a": """
+                gsSPLight(&mario_red_lights_group.l, 1),
+                gsDPSetTextureImage(G_IM_FMT_RGBA, G_IM_SIZ_16b, 1,
+                                    mario_texture_m_logo),
+                gsDPSetCombineMode(G_CC_BLENDRGBFADEA, G_CC_BLENDRGBFADEA),
+                gsSPClearGeometryMode(G_CULL_BACK),
+                gsSPVertex(vertices_a, 3, 0),
+                gsSP1Triangle(0, 1, 2, 0),
+            """,
+            "part_b": """
+                gsSPVertex(vertices_b, 3, 0),
+                gsSP1Triangle(0, 1, 2, 0),
+            """,
+        }
+        vertices = {
+            "vertices_a": [(0, 0, 0, 0, 0), (1, 0, 0, 32, 0), (0, 1, 0, 0, 32)],
+            "vertices_b": [(0, 0, 1, 0, 0), (1, 0, 1, 32, 0), (0, 1, 1, 0, 32)],
+        }
+        triangles: list[dict[str, object]] = []
+        flatten_parts(
+            display_lists,
+            vertices,
+            [("part_a", identity_matrix(), "mario_blue_lights_group"),
+             ("part_b", identity_matrix(), "mario_blue_lights_group")],
+            triangles,
+        )
+        self.assertEqual(len(triangles), 2)
+        self.assertEqual(triangles[0]["rgb"], (31, 0, 0))
+        self.assertEqual(triangles[1]["rgb"], (31, 0, 0))
+        self.assertEqual(triangles[1]["texture"], "mario_texture_m_logo")
+        self.assertEqual(triangles[1]["combine_mode"], "G_CC_BLENDRGBFADEA")
+        self.assertFalse(triangles[1]["cull_back"])
+
     def test_c5_source_frame_count_is_preserved(self) -> None:
         root = TOOLS.parents[1]
         source = (root / "assets/anims/anim_C5.inc.c").read_text(encoding="utf-8")
@@ -177,6 +330,27 @@ class MarioActorPoseTests(unittest.TestCase):
     def test_rgb1555_box_filter_rejects_invalid_scale(self) -> None:
         with self.assertRaisesRegex(ValueError, "scale must be 1, 2, or 4"):
             downsample_rgb1555([0xFFFF], 1, 1, 3)
+
+    def test_vdp1_direct_color_canonicalizes_transparent_rgb_to_zero(self) -> None:
+        # N64 A1=0 texels retain RGB (transparent white is 0x7FFF after lane
+        # conversion), but VDP1 only treats color code 0x0000 as transparent.
+        # Nonzero bit-15-clear words would paint the long-standing dark/white
+        # Mario face patches and 0x7FFF also collides with the default end code.
+        width, height, pixels = downsample_rgb1555(
+            [0x7FFF, 0x0008], 2, 1, 1
+        )
+        self.assertEqual((width, height), (2, 1))
+        self.assertEqual(pixels, [0x0000, 0x0000])
+
+        _, _, reduced = downsample_rgb1555(
+            [0xFFFF, 0x7FFF, 0x0008, 0x0000], 2, 2, 2
+        )
+        self.assertEqual(reduced, [0x0000])
+
+    def test_n64_transparent_rgb1555_payload_is_discarded_at_conversion(self) -> None:
+        self.assertEqual(saturn_rgb1555(0xFFFF), 0xFFFF)
+        self.assertEqual(saturn_rgb1555(0xFFFE), 0x0000)
+        self.assertEqual(saturn_rgb1555(0x0000), 0x0000)
 
     def test_n64_rgba16_channels_map_to_saturn_rgb1555_lanes(self) -> None:
         self.assertEqual(saturn_rgb1555(0xF801), 0x801F)  # opaque red
@@ -241,6 +415,18 @@ class MarioActorPoseTests(unittest.TestCase):
 
 
 class CastleAreaInventoryTests(unittest.TestCase):
+    def test_final_tile_vertices_are_indexed_once(self) -> None:
+        vertices, indices = index_position_quads(
+            [
+                ((0, 0, 0), (8, 0, 0), (0, 8, 0), (-8, 8, 0)),
+                ((8, 0, 0), (8, 8, 0), (0, 8, 0), (0, 0, 0)),
+            ],
+            [True, False],
+        )
+        self.assertEqual(len(vertices), 4)
+        self.assertEqual(indices[0][2], indices[0][3])
+        self.assertEqual(indices[0][1], indices[1][0])
+
     def test_castle_collision_bank_preserves_source_surface_stream(self) -> None:
         root = TOOLS.parents[1]
         source = (root / "levels/castle_inside/areas/1/collision.inc.c").read_text(encoding="utf-8")

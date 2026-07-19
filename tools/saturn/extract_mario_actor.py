@@ -15,8 +15,10 @@ import hashlib
 import json
 import math
 import re
+from collections import Counter
 from pathlib import Path
 
+from quad_pairing import RenderPrimitive
 from saturn_mesh_ir import compile_mesh_ir
 
 
@@ -37,6 +39,12 @@ BRANCH_SELECTIONS = {
     "mario_geo_left_hand": ("mario_left_hand_open", (60, 0, 0)),
     "mario_geo_right_hand": ("mario_right_hand_open", (60, 0, 0)),
 }
+
+MARIO_LIGHT_BAKE_POLICY = (
+    "per-frame source-pose face-normal accumulation; light=(-2,4,5), "
+    "ambient=8/31, diffuse=23/31, degenerate=20/31; one uint8 intensity "
+    "per shared vertex"
+)
 
 
 def blocks(source: str, kind: str) -> dict[str, str]:
@@ -237,7 +245,9 @@ def ints(command: str) -> list[int]:
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
             name: str, matrix: Matrix, light: str,
             out: list[dict[str, object]], texture: str | None = None,
-            stack: tuple[str, ...] = ()) -> tuple[str, str | None]:
+            combine_mode: str | None = None,
+            cull_back: bool = True,
+            stack: tuple[str, ...] = ()) -> tuple[str, str | None, str | None, bool]:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
@@ -250,6 +260,8 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
     cache: list[tuple[int, int, int, int, int] | None] = [None] * 32
     current_light = light
     current_texture = texture
+    current_combine_mode = combine_mode
+    current_cull_back = cull_back
     for macro, args in re.findall(r"(gs\w+)\(([^;]*?)\)", body, re.DOTALL):
         if macro == "gsSPLight":
             found = re.search(r"&(mario_\w+_lights_group)\.", args)
@@ -259,6 +271,12 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
             found = re.search(r"\b(mario_texture_\w+)\b", args)
             if found:
                 current_texture = found.group(1)
+        elif macro == "gsDPSetCombineMode":
+            current_combine_mode = args.split(",", 1)[0].strip()
+        elif macro == "gsSPSetGeometryMode" and "G_CULL_BACK" in args:
+            current_cull_back = True
+        elif macro == "gsSPClearGeometryMode" and "G_CULL_BACK" in args:
+            current_cull_back = False
         elif macro == "gsSPTexture" and "G_OFF" in args:
             current_texture = None
         elif macro == "gsSPVertex":
@@ -285,15 +303,278 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                 ]
                 out.append({"rgb": LIGHTS[current_light], "positions": positions,
                             "uv": [[cache[index][3], cache[index][4]] for index in triangle],
-                            "display_list": name, "texture": current_texture})
+                            "display_list": name, "texture": current_texture,
+                            "combine_mode": current_combine_mode,
+                            "cull_back": current_cull_back})
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                current_light, current_texture = flatten(
+                (current_light, current_texture, current_combine_mode,
+                 current_cull_back) = flatten(
                     display_lists, vertices, child.group(1), matrix, current_light,
-                    out, current_texture, stack + (name,)
+                    out, current_texture, current_combine_mode,
+                    current_cull_back, stack + (name,)
                 )
-    return current_light, current_texture
+    return current_light, current_texture, current_combine_mode, current_cull_back
+
+
+def flatten_parts(
+    display_lists: dict[str, str],
+    vertices: dict[str, list[tuple[int, int, int, int, int]]],
+    parts: list[tuple[str, Matrix, str]],
+    out: list[dict[str, object]],
+) -> tuple[str, str | None, str | None, bool]:
+    """Flatten GeoLayout display lists with one persistent Fast3D state.
+
+    SM64 intentionally lets lights, textures, combine modes, and geometry
+    modes established by one sibling display list feed the following sibling.
+    Resetting every animated part to blue changed Mario's red forearms and the
+    red backing beneath his cap logo.  The game globally enables G_CULL_BACK;
+    selected display lists may explicitly clear or restore it.
+    """
+    if not parts:
+        raise ValueError("Mario GeoLayout contains no render parts")
+    current_light = parts[0][2]
+    current_texture: str | None = None
+    current_combine_mode: str | None = None
+    current_cull_back = True  # src/game/game_init.c enables G_CULL_BACK.
+    for name, matrix, _initial_light in parts:
+        (current_light, current_texture, current_combine_mode,
+         current_cull_back) = flatten(
+            display_lists, vertices, name, matrix, current_light, out,
+            current_texture, current_combine_mode, current_cull_back,
+        )
+    return current_light, current_texture, current_combine_mode, current_cull_back
+
+
+def mario_vertex_light_intensities(
+    pose_vertices: list[list[int]], primitives: list[RenderPrimitive]
+) -> list[int]:
+    """Mirror castleviewer's build_mario_gouraud() intensity pass exactly.
+
+    The target accumulates the normal made by primitive corners a/b/c into
+    each unique primitive corner.  Explicit triangle fallbacks repeat c in d,
+    so that repeated fourth corner must not receive the normal twice.  The
+    resulting 0..31 intensity is material-independent and can therefore be
+    stored once per shared vertex instead of once per VDP1 Gouraud corner.
+    """
+    normals = [[0, 0, 0] for _ in pose_vertices]
+    for primitive in primitives:
+        indices = primitive.vertices
+        if any(index < 0 or index >= len(pose_vertices) for index in indices):
+            raise ValueError("Mario lighting primitive references an invalid vertex")
+        a, b, c = (pose_vertices[index] for index in indices[:3])
+        ux, uy, uz = (b[axis] - a[axis] for axis in range(3))
+        vx, vy, vz = (c[axis] - a[axis] for axis in range(3))
+        nx = uy * vz - uz * vy
+        ny = uz * vx - ux * vz
+        nz = ux * vy - uy * vx
+        for corner, vertex in enumerate(indices):
+            if corner == 3 and vertex == indices[2]:
+                continue
+            normals[vertex][0] += nx
+            normals[vertex][1] += ny
+            normals[vertex][2] += nz
+
+    intensities: list[int] = []
+    for normal_x, normal_y, normal_z in normals:
+        maximum = 6 * (abs(normal_x) + abs(normal_y) + abs(normal_z))
+        dot = (-2 * normal_x) + (4 * normal_y) + (5 * normal_z)
+        intensity = 20 if maximum == 0 else 8 + (max(dot, 0) * 23) // maximum
+        if not 0 <= intensity <= 31:
+            raise ValueError(f"Mario light intensity {intensity} exceeds RGB555 range")
+        intensities.append(intensity)
+    return intensities
+
+
+def c_u8_light_bank(
+    symbol: str, frame_count_macro: str, frames: list[list[int]]
+) -> list[str]:
+    """Format a compact frame/vertex uint8_t bank for the generated header."""
+    if not frames:
+        return []
+    width = len(frames[0])
+    if width == 0 or any(len(frame) != width for frame in frames):
+        raise ValueError("Mario light intensity frames must be non-empty and rectangular")
+    if any(not 0 <= value <= 31 for frame in frames for value in frame):
+        raise ValueError("Mario light intensity bank exceeds RGB555 range")
+    lines = [
+        f"static const uint8_t {symbol}[{frame_count_macro}][SM64_MARIO_VERTEX_COUNT] = {{"
+    ]
+    for frame in frames:
+        lines.append("    {")
+        lines += [
+            "        " + ", ".join(map(str, frame[offset:offset + 24])) + ","
+            for offset in range(0, len(frame), 24)
+        ]
+        lines.append("    },")
+    lines.append("};")
+    return lines
+
+
+def mario_render_clusters(
+    triangles: list[dict[str, object]],
+    compiled_primitives: list[dict[str, object]],
+    positions: list[list[int]],
+) -> dict[str, object]:
+    """Group actor work by the leaf display list that emitted each triangle.
+
+    A GeoLayout part can call several nested Fast3D lists.  ``flatten`` records
+    the list that contains the triangle command, which is the smallest stable
+    source unit we can classify against a scene BSP.  A paired VDP1 quad must
+    never span two of those units: doing so would make its visibility and
+    painter ownership ambiguous.
+
+    The flattened index streams deliberately retain primitive order and first
+    vertex use inside each (lexicographically ordered) cluster.  This gives the
+    target compact caller-owned work lists without coupling Mario to any one
+    level or BSP implementation.
+    """
+    source_leaf = {
+        source: str(triangle["display_list"])
+        for source, triangle in enumerate(triangles)
+    }
+    grouped: dict[str, list[int]] = {}
+    for primitive_index, primitive in enumerate(compiled_primitives):
+        sources = primitive.get("source_triangles")
+        if not isinstance(sources, list) or not sources:
+            raise ValueError(
+                f"Mario primitive {primitive_index} has no source triangles"
+            )
+        try:
+            leaves = {source_leaf[int(source)] for source in sources}
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError(
+                f"Mario primitive {primitive_index} references an unknown source triangle"
+            ) from error
+        if len(leaves) != 1:
+            raise ValueError(
+                "paired Mario source triangles cross render clusters: "
+                f"primitive {primitive_index}, sources {sources}, leaves {sorted(leaves)}"
+            )
+        grouped.setdefault(next(iter(leaves)), []).append(primitive_index)
+
+    primitive_offsets = [0]
+    primitive_indices: list[int] = []
+    vertex_offsets = [0]
+    vertex_indices: list[int] = []
+    clusters: list[dict[str, object]] = []
+    for cluster_id, name in enumerate(sorted(grouped)):
+        cluster_primitives = grouped[name]
+        primitive_indices.extend(cluster_primitives)
+        primitive_offsets.append(len(primitive_indices))
+
+        seen_vertices: set[int] = set()
+        cluster_vertices: list[int] = []
+        for primitive_index in cluster_primitives:
+            indices = compiled_primitives[primitive_index].get("indices")
+            if not isinstance(indices, list) or len(indices) != 4:
+                raise ValueError(
+                    f"Mario primitive {primitive_index} must contain four target indices"
+                )
+            for vertex in indices:
+                if (
+                    isinstance(vertex, bool)
+                    or not isinstance(vertex, int)
+                    or vertex < 0
+                    or vertex >= len(positions)
+                ):
+                    raise ValueError(
+                        f"Mario primitive {primitive_index} references an invalid vertex"
+                    )
+                if vertex not in seen_vertices:
+                    seen_vertices.add(vertex)
+                    cluster_vertices.append(vertex)
+        if not cluster_vertices:
+            raise ValueError(f"Mario render cluster {name} contains no vertices")
+        vertex_indices.extend(cluster_vertices)
+        vertex_offsets.append(len(vertex_indices))
+        minimum = [min(positions[index][axis] for index in cluster_vertices) for axis in range(3)]
+        maximum = [max(positions[index][axis] for index in cluster_vertices) for axis in range(3)]
+        clusters.append({
+            "id": cluster_id,
+            "name": name,
+            "primitive_offset": primitive_offsets[-2],
+            "primitive_count": len(cluster_primitives),
+            "unique_vertex_offset": vertex_offsets[-2],
+            "unique_vertex_count": len(cluster_vertices),
+            "bounds": {"min": minimum, "max": maximum},
+        })
+
+    if len(primitive_indices) != len(compiled_primitives):
+        raise ValueError("Mario render clusters do not cover every compiled primitive")
+    if len(primitive_indices) > 0xFFFF or len(vertex_indices) > 0xFFFF:
+        raise ValueError("Mario render-cluster index stream exceeds uint16_t")
+    return {
+        "policy": "originating leaf Fast3D display list",
+        "bounds_space": (
+            "neutral extracted actor pose; animated runtimes rebuild each AABB "
+            "from its unique-vertex list"
+        ),
+        "count": len(clusters),
+        "primitive_index_count": len(primitive_indices),
+        "unique_vertex_reference_count": len(vertex_indices),
+        "primitive_offsets": primitive_offsets,
+        "primitive_indices": primitive_indices,
+        "unique_vertex_offsets": vertex_offsets,
+        "unique_vertex_indices": vertex_indices,
+        "clusters": clusters,
+    }
+
+
+def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
+    """Format scene-neutral, compact actor cluster tables for the target."""
+    count = int(metadata["count"])
+    primitive_indices = list(metadata["primitive_indices"])
+    vertex_indices = list(metadata["unique_vertex_indices"])
+    primitive_offsets = list(metadata["primitive_offsets"])
+    vertex_offsets = list(metadata["unique_vertex_offsets"])
+    clusters = list(metadata["clusters"])
+    if len(primitive_offsets) != count + 1 or len(vertex_offsets) != count + 1:
+        raise ValueError("Mario render-cluster offsets must contain count + 1 entries")
+
+    def rows(values: list[int], width: int = 16) -> list[str]:
+        return [
+            "    " + ", ".join(f"{value}U" for value in values[offset:offset + width]) + ","
+            for offset in range(0, len(values), width)
+        ]
+
+    lines = [
+        "/* Leaf-display-list render clusters; source names remain in the JSON report. */",
+        f"#define SM64_MARIO_RENDER_CLUSTER_COUNT {count}U",
+        f"#define SM64_MARIO_RENDER_CLUSTER_PRIMITIVE_LIST_COUNT {len(primitive_indices)}U",
+        f"#define SM64_MARIO_RENDER_CLUSTER_VERTEX_LIST_COUNT {len(vertex_indices)}U",
+        "static const uint16_t sm64_mario_render_cluster_primitive_offsets[SM64_MARIO_RENDER_CLUSTER_COUNT + 1U] = {",
+    ]
+    lines += rows(primitive_offsets)
+    lines += [
+        "};",
+        "static const uint16_t sm64_mario_render_cluster_primitive_list[SM64_MARIO_RENDER_CLUSTER_PRIMITIVE_LIST_COUNT] = {",
+    ]
+    lines += rows(primitive_indices)
+    lines += [
+        "};",
+        "static const uint16_t sm64_mario_render_cluster_vertex_offsets[SM64_MARIO_RENDER_CLUSTER_COUNT + 1U] = {",
+    ]
+    lines += rows(vertex_offsets)
+    lines += [
+        "};",
+        "static const uint16_t sm64_mario_render_cluster_vertex_list[SM64_MARIO_RENDER_CLUSTER_VERTEX_LIST_COUNT] = {",
+    ]
+    lines += rows(vertex_indices)
+    lines += [
+        "};",
+        "/* Neutral-pose AABBs. Rebuild animated bounds from each cluster vertex list. */",
+        "static const int16_t sm64_mario_render_cluster_bounds[SM64_MARIO_RENDER_CLUSTER_COUNT][2][3] = {",
+    ]
+    for cluster in clusters:
+        bounds = cluster["bounds"]
+        lines.append(
+            "    {{%s}, {%s}},"
+            % (", ".join(map(str, bounds["min"])), ", ".join(map(str, bounds["max"])))
+        )
+    lines.append("};")
+    return lines
 
 
 def main() -> None:
@@ -317,8 +598,17 @@ def main() -> None:
                                 if args.walking_animation else None)
     rotations = animation_rotations(animation_source, args.animation_frame) if animation_source else []
     parts = geo_layout_parts(geo, rotations, animation_translation(animation_source, args.animation_frame) if animation_source else (0, 0, 0))
-    for name, matrix, light in parts:
-        flatten(display_lists, vertices, name, matrix, light, triangles)
+    flatten_parts(display_lists, vertices, parts, triangles)
+    textured_combine_modes = {
+        str(triangle["combine_mode"])
+        for triangle in triangles
+        if triangle["texture"] is not None
+    }
+    if textured_combine_modes != {"G_CC_BLENDRGBFADEA"}:
+        raise ValueError(
+            "unsupported Mario textured combine modes: "
+            f"{sorted(textured_combine_modes)}"
+        )
     model_hash, geo_hash = hashlib.sha256(model.encode()).hexdigest(), hashlib.sha256(geo.encode()).hexdigest()
     # Build the same versioned interchange document used by the intro face.
     # Position sharing is preserved only when the complete source-space point
@@ -326,15 +616,27 @@ def main() -> None:
     positions: list[list[int]] = []
     position_index: dict[tuple[int, int, int], int] = {}
     materials: list[dict[str, object]] = []
-    material_index: dict[tuple[tuple[int, int, int], str | None], int] = {}
+    material_index: dict[
+        tuple[tuple[int, int, int], str | None, str | None], int
+    ] = {}
     ir_triangles: list[dict[str, object]] = []
     for source, triangle in enumerate(triangles):
         rgb = tuple(triangle["rgb"])
         texture = triangle["texture"]
-        material_key = (rgb, texture if isinstance(texture, str) else None)
+        combine_mode = triangle["combine_mode"]
+        material_key = (
+            rgb,
+            texture if isinstance(texture, str) else None,
+            combine_mode if isinstance(combine_mode, str) else None,
+        )
         if material_key not in material_index:
             material_index[material_key] = len(materials)
-            materials.append({"id": material_index[material_key], "rgb555": list(rgb), "texture": material_key[1]})
+            materials.append({
+                "id": material_index[material_key],
+                "rgb555": list(rgb),
+                "texture": material_key[1],
+                "combine_mode": material_key[2],
+            })
         indices: list[int] = []
         for point in triangle["positions"]:
             key = tuple(point)
@@ -361,13 +663,14 @@ def main() -> None:
             frame_triangles: list[dict[str, object]] = []
             frame_parts = geo_layout_parts(geo, animation_rotations(source, frame),
                                             animation_translation(source, frame))
-            for name, matrix, light in frame_parts:
-                flatten(display_lists, vertices, name, matrix, light, frame_triangles)
+            flatten_parts(display_lists, vertices, frame_parts, frame_triangles)
             if len(frame_triangles) != len(triangles):
                 raise ValueError(f"animation frame {frame} changed source triangle count")
             if any(
-                (current["display_list"], current["texture"])
-                != (neutral["display_list"], neutral["texture"])
+                (current["display_list"], current["texture"],
+                 current["combine_mode"], current["cull_back"])
+                != (neutral["display_list"], neutral["texture"],
+                    neutral["combine_mode"], neutral["cull_back"])
                 for current, neutral in zip(frame_triangles, triangles)
             ):
                 raise ValueError(f"animation frame {frame} changed source topology/material state")
@@ -397,6 +700,30 @@ def main() -> None:
                    "geo": {"path": str(args.geo).replace("\\\\", "/"), "sha256": hashlib.sha256(geo.encode()).hexdigest()}},
     }
     compiled_ir, primitives, quad_report = compile_mesh_ir(source_ir)
+    primitive_cull_back: list[bool] = []
+    for primitive_index, primitive in enumerate(compiled_ir["primitives"]):
+        states = {
+            bool(triangles[int(source)]["cull_back"])
+            for source in primitive["source_triangles"]
+        }
+        if len(states) != 1:
+            raise ValueError(
+                "paired Mario triangles cross G_CULL_BACK state: "
+                f"primitive {primitive_index}"
+            )
+        primitive_cull_back.append(states.pop())
+    render_clusters = mario_render_clusters(
+        triangles, compiled_ir["primitives"], positions
+    )
+    compiled_ir["render_clusters"] = render_clusters
+    animation_light_intensities = [
+        mario_vertex_light_intensities(frame, primitives)
+        for frame in animation_positions
+    ]
+    walking_animation_light_intensities = [
+        mario_vertex_light_intensities(frame, primitives)
+        for frame in walking_animation_positions
+    ]
     textured_source_ids = [index for index, triangle in enumerate(triangles) if triangle["texture"] is not None]
     textured_source_rank = {source: rank for rank, source in enumerate(textured_source_ids)}
     texture_tile_start = [0xFFFF] * len(primitives)
@@ -448,11 +775,43 @@ def main() -> None:
             lines += ["        {" + ", ".join(map(str, point)) + "}," for point in frame_vertices]
             lines.append("    },")
         lines.append("};")
+    if animation_light_intensities:
+        lines.append(
+            "/* Offline equivalent of build_mario_gouraud(): one 0..31 intensity per shared vertex. */"
+        )
+        lines += c_u8_light_bank(
+            "sm64_mario_animation_light_intensity",
+            "SM64_MARIO_ANIMATION_FRAME_COUNT",
+            animation_light_intensities,
+        )
+    if walking_animation_light_intensities:
+        lines.append(
+            "/* Walking-pose vertex light intensities use the identical source-pose policy. */"
+        )
+        lines += c_u8_light_bank(
+            "sm64_mario_walking_animation_light_intensity",
+            "SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT",
+            walking_animation_light_intensities,
+        )
     lines += [f"#define SM64_MARIO_MATERIAL_COUNT {len(materials)}U", "static const uint8_t sm64_mario_material_rgb[SM64_MARIO_MATERIAL_COUNT][3] = {"]
     lines += ["    {" + ", ".join(map(str, material["rgb555"])) + "}," for material in materials]
     lines += ["};", "/* material,a,b,c,d; d repeats c for explicit triangle fallbacks. */", "static const uint16_t sm64_mario_primitives[SM64_MARIO_PRIMITIVE_COUNT][5] = {"]
     lines += ["    {%d, %d, %d, %d, %d}," % (primitive.material, *primitive.vertices) for primitive in primitives]
-    lines += ["};", "/* First UV subtile for a compiled primitive, or TEXTURE_TILE_NONE. */", "static const uint16_t sm64_mario_texture_tile_start[SM64_MARIO_PRIMITIVE_COUNT] = {"]
+    lines += [
+        "};",
+        "/* Source Fast3D geometry mode after persistent display-list state. */",
+        "static const uint8_t sm64_mario_primitive_cull_back[SM64_MARIO_PRIMITIVE_COUNT] = {",
+    ]
+    lines += [
+        "    " + ", ".join(
+            "1" if value else "0"
+            for value in primitive_cull_back[index:index + 24]
+        ) + ","
+        for index in range(0, len(primitive_cull_back), 24)
+    ]
+    lines.append("};")
+    lines += c_render_cluster_metadata(render_clusters)
+    lines += ["/* First UV subtile for a compiled primitive, or TEXTURE_TILE_NONE. */", "static const uint16_t sm64_mario_texture_tile_start[SM64_MARIO_PRIMITIVE_COUNT] = {"]
     lines += ["    " + ", ".join(f"{value}U" for value in texture_tile_start[index:index + 12]) + "," for index in range(0, len(texture_tile_start), 12)]
     lines += [
         "};",
@@ -472,9 +831,20 @@ def main() -> None:
         "triangle_count": len(triangles), "vertex_count": len(positions),
         "primitive_count": len(primitives), "quad_count": quad_report["quad_count"],
         "triangle_fallback_count": quad_report["standalone_triangle_count"],
+        "fast3d_state_scope": "persistent across source-ordered GeoLayout display lists",
+        "cull_back_primitive_count": sum(primitive_cull_back),
+        "render_clusters": render_clusters,
         "triangle_display_lists": sorted({str(item["display_list"]) for item in triangles}),
+        "textured_combine_modes": dict(Counter(
+            str(item["combine_mode"])
+            for item in triangles if item["texture"] is not None
+        )),
         "textured_triangles": [
-            {"source": index, "texture": triangle["texture"], "positions": triangle["positions"], "uv": triangle["uv"]}
+            {"source": index, "texture": triangle["texture"],
+             "rgb": triangle["rgb"], "combine_mode": triangle["combine_mode"],
+             "cull_back": triangle["cull_back"],
+             "positions": triangle["positions"],
+             "uv": triangle["uv"]}
             for index, triangle in enumerate(triangles) if index in textured_source_rank
         ],
         "textured_primitive_count": len(textured_source_ids),
@@ -483,8 +853,27 @@ def main() -> None:
             "implemented": ["GEO_ANIMATED_PART", "GEO_OPEN_NODE", "GEO_CLOSE_NODE", "GEO_BRANCH", "GEO_DISPLAY_LIST", "mario_geo global GEO_SCALE", "Animation index/value rotations", "source xyz matrices"],
             "branch_selections": BRANCH_SELECTIONS,
         },
-        "animation": {"path": str(args.animation).replace("\\\\", "/"), "preview_frame": args.animation_frame, "frame_count": len(animation_positions), "vertex_pose_bytes": len(animation_positions) * len(positions) * 3 * 2} if args.animation else None,
-        "walking_animation": {"path": str(args.walking_animation).replace("\\\\", "/"), "frame_count": len(walking_animation_positions), "vertex_pose_bytes": len(walking_animation_positions) * len(positions) * 3 * 2} if args.walking_animation else None,
+        "animation": {"path": str(args.animation).replace("\\\\", "/"), "preview_frame": args.animation_frame, "frame_count": len(animation_positions), "vertex_pose_bytes": len(animation_positions) * len(positions) * 3 * 2, "vertex_light_intensity_bytes": sum(map(len, animation_light_intensities))} if args.animation else None,
+        "walking_animation": {"path": str(args.walking_animation).replace("\\\\", "/"), "frame_count": len(walking_animation_positions), "vertex_pose_bytes": len(walking_animation_positions) * len(positions) * 3 * 2, "vertex_light_intensity_bytes": sum(map(len, walking_animation_light_intensities))} if args.walking_animation else None,
+        "offline_vertex_lighting": {
+            "policy": MARIO_LIGHT_BAKE_POLICY,
+            "runtime_reference": "src/port/saturn/castleviewer/main.c:build_mario_gouraud",
+            "encoding": "uint8 intensity in RGB555 range 0..31 per shared vertex per frame",
+            "idle": {
+                "frame_count": len(animation_light_intensities),
+                "vertex_count": len(positions),
+                "bytes": sum(map(len, animation_light_intensities)),
+            },
+            "walking": {
+                "frame_count": len(walking_animation_light_intensities),
+                "vertex_count": len(positions),
+                "bytes": sum(map(len, walking_animation_light_intensities)),
+            },
+            "total_bytes": (
+                sum(map(len, animation_light_intensities))
+                + sum(map(len, walking_animation_light_intensities))
+            ),
+        },
         "limits": ["ASM head/torso callbacks remain identity", "Animation poses are pre-evaluated offline until the full runtime GeoLayout evaluator is linked"],
         "mesh_ir": compiled_ir,
     }, indent=2) + "\n", encoding="utf-8")

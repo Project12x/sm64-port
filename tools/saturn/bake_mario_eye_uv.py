@@ -15,10 +15,10 @@ from pathlib import Path
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
 from vdp1_texture import downsample_rgb1555, repeated_vertex_weights
 
-# Four 16×16 RGB1555 tiles per source triangle keep this first source-actor
-# path at 102,400 bytes. A 32×32 trial fitted the partition but did not make a
-# meaningful target-visible improvement at the 320×224 turntable scale, and it
-# would consume texture residency needed by the Castle renderer.
+# One 16×16 RGB1555 tile per source triangle keeps the current source-actor
+# path at 25,600 bytes.  Optional four-way subdivision remains a diagnostic
+# quality tier; a 32×32 trial consumed four times the residency without fixing
+# the then-unresolved target mapping/mode defect.
 TILE = 16
 TEXTURE_ASSETS = {
     "mario_texture_eyes_front": "mario_eyes_center",
@@ -44,6 +44,7 @@ def pixel(texture: list[int], width: int, height: int, u: float, v: float) -> in
     x = max(0, min(width - 1, int(u / 32.0)))
     y = max(0, min(height - 1, int(v / 32.0)))
     return texture[y * width + x]
+
 
 def blend(vertices: list[list[int]], weights: tuple[float, float, float]) -> list[int]:
     return [round(sum(weights[index] * vertices[index][axis] for index in range(3))) for axis in range(len(vertices[0]))]
@@ -91,11 +92,15 @@ def main() -> None:
         scaled_width, scaled_height, scaled = downsample_rgb1555(converted, width, height, args.source_scale)
         textures[texture_name] = (scaled, scaled_width, scaled_height)
     triangles = ([
-        {**subtriangle, "texture": source_triangle["texture"]}
+        {**subtriangle, "texture": source_triangle["texture"],
+         "combine_mode": source_triangle["combine_mode"]}
         for source_triangle in source_triangles
         for subtriangle in split_four(source_triangle)
     ] if args.subdivision == 4 else source_triangles)
     tiles: list[list[int]] = []
+    combine_modes = {str(triangle["combine_mode"]) for triangle in triangles}
+    if combine_modes != {"G_CC_BLENDRGBFADEA"}:
+        raise ValueError(f"unsupported Mario texture combine modes: {sorted(combine_modes)}")
     for triangle in triangles:
         uv = triangle["uv"]
         source, width, height = textures[str(triangle["texture"])]
@@ -107,6 +112,17 @@ def main() -> None:
                 v = (a * uv[0][1] + b * uv[1][1] + c * uv[2][1]) / args.source_scale
                 tile.append(pixel(source, width, height, u, v))
         tiles.append(tile)
+    transparent_word_count = sum(word == 0 for tile in tiles for word in tile)
+    opaque_word_count = sum(bool(word & 0x8000) for tile in tiles for word in tile)
+    invalid_words = [
+        word for tile in tiles for word in tile
+        if word != 0 and not (word & 0x8000)
+    ]
+    if invalid_words:
+        raise ValueError(
+            "VDP1 direct-color bake emitted nonzero bit-15-clear words: "
+            f"{len(invalid_words)}"
+        )
     lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once",
              f"#define SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT {len(triangles)}U",
              f"#define SM64_MARIO_TEXTURE_TILES_PER_SOURCE {args.subdivision}U",
@@ -123,7 +139,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": f"{args.subdivision} affine tile(s) per source triangle", "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": source_texture_bytes, "resampled_source_bytes": sum(width * height * 2 for _pixels, width, height in textures.values()), "texture_bytes": len(tiles) * args.tile * args.tile * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"}, indent=2) + "\n", encoding="utf-8")
+    args.report.write_text(json.dumps({"source": "mario_geo_body normal-cap/front branch", "source_triangle_count": len(source_triangles), "triangle_count": len(triangles), "textures": dict(Counter(str(item["texture"]) for item in source_triangles)), "subdivision": f"{args.subdivision} affine tile(s) per source triangle", "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha; A1=0 canonicalized to VDP1 0x0000", "source_texture_bytes": source_texture_bytes, "resampled_source_bytes": sum(width * height * 2 for _pixels, width, height in textures.values()), "texture_bytes": len(tiles) * args.tile * args.tile * 2, "vdp1_default_texture_partition_bytes": 0x0006BFE0, "uv_space": "Fast3D source UV / 32", "combine_mode": "G_CC_BLENDRGBFADEA", "lowering": "atomic neutral-base Gouraud polygon plus alpha-keyed CC_REPLACE texture detail", "vdp1_output_alpha": "A1=0 emits exact VDP1 transparent word 0x0000; opaque detail words have RGB1555 bit 15 set", "vdp1_end_code_policy": "disabled for fixed-size source tiles; emitted texture words are constrained to 0x0000 or MSB-set opaque values", "vdp1_transparent_word_count": transparent_word_count, "vdp1_opaque_word_count": opaque_word_count, "vdp1_nonzero_msb_clear_word_count": len(invalid_words), "mapping": "complete per-subtriangle UV bake; VDP1 A/B/C/D character corners with repeated destination C receiving both source C and D"}, indent=2) + "\n", encoding="utf-8")
 
 if __name__ == "__main__":
     main()
