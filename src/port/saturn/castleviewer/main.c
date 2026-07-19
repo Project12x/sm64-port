@@ -61,6 +61,7 @@ static int32_t mario_world_y = SM64_CASTLE_SPAWN_Y;
 static int32_t mario_world_z = SM64_CASTLE_SPAWN_Z;
 static f32 mario_vertical_velocity;
 static bool mario_airborne;
+static bool camera_position_initialized;
 static bool controls_ready;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
@@ -103,11 +104,25 @@ static point3_t normalize_q16(point3_t value) {
 
 static void update_source_camera(void) {
     const point3_t mario = {mario_world_x, mario_world_y, mario_world_z};
-    camera_position.x = SM64_CASTLE_CAMERA_BASE_X +
+    const int32_t candidate_x = SM64_CASTLE_CAMERA_BASE_X +
         (((mario.x - SM64_CASTLE_CAMERA_BASE_X) * SM64_CASTLE_CAMERA_FOLLOW_Q16) >> 16);
-    camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
-    camera_position.z = SM64_CASTLE_CAMERA_BASE_Z +
+    const int32_t candidate_z = SM64_CASTLE_CAMERA_BASE_Z +
         (((mario.z - SM64_CASTLE_CAMERA_BASE_Z) * SM64_CASTLE_CAMERA_FOLLOW_Q16) >> 16);
+    /* The original camera is allowed to move in world space, but its target
+     * must remain associated with a loaded Castle surface for this Saturn
+     * slice. Reuse SM64's floor query to reject a camera target in empty void;
+     * no room-specific rectangle or hand-authored clamp is introduced. */
+    const f32 candidate_floor = find_floor_height((f32)candidate_x,
+                                                   (f32)mario.y + 400.0f,
+                                                   (f32)candidate_z);
+    if (!camera_position_initialized ||
+        (candidate_floor > FLOOR_LOWER_LIMIT &&
+         candidate_floor >= (f32)mario.y - 512.0f)) {
+        camera_position.x = candidate_x;
+        camera_position.z = candidate_z;
+        camera_position_initialized = true;
+    }
+    camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
     /* Source `update_fixed_camera()` first applies
      * calc_y_to_curr_floor(..., focMul=0.9f), then adds the 125-unit focus
      * height. Keep that floor-relative aim instead of looking at a bespoke

@@ -951,6 +951,19 @@ this camera/collision correction.
 
 Evidence: [capture report](reports/ymir-m4-source-floor-reachability-2026-07-19.json).
 
+### M4 source-follow camera validates its target against Castle collision
+
+![Source-follow camera floor-target validation](screenshots/ymir-m4-camera-floor-target-2026-07-19.png)
+
+The camera follow candidate now reuses the original Castle floor query before
+advancing its X/Z transform. If the candidate has no nearby source floor, the
+last valid camera position is retained. This keeps camera correctness tied to
+the loaded SM64 collision bank instead of introducing a Saturn-only room box.
+The neutral frame is intentionally unchanged; movement validation is the next
+manual check.
+
+Evidence: [capture report](reports/ymir-m4-camera-floor-target-2026-07-19.json).
+
 ### M4 material profile: full-resolution source textures accepted
 
 ![Full-resolution source Castle textures after triangle collapse](screenshots/ymir-m4-source-fullres-triangle-collapse-2026-07-19.png)
