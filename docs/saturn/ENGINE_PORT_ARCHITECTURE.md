@@ -177,9 +177,12 @@ usage, and overflow state for the Castle collision pool without owning its
 backing address. `gfx/saturn_render_queue.h` now carries source-bank,
 source-primitive, generated-IR, depth, kind, and pass identity through one
 bounded queue; Castle world tiles and Mario actor primitives are its first two
-clients. Command-arena extraction remains open. The target pixel-identity
-capture remains required after the Yaul build environment is available; a
-host-only pass does not close E0.
+clients. `gfx/saturn_command_arena.h` now owns the bounded VDP1 command
+capacity, fixed setup prefix, live upload length, prior END slot, peak use, and
+visible overflow state. Castle is its first backend client and initializes the
+two Yaul setup commands once. The native SH-2 build and deterministic Ymir
+capture exactly match Stage 115's framebuffer and PNG hashes. E0 is closed;
+E1 is the active migration gate.
 
 ### E1 — Shared renderer client
 

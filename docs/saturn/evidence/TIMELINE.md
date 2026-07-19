@@ -1249,3 +1249,17 @@ about 25 to 20 ms, and the sampled full loop improves from 6.6 to 7.5 FPS.
 Evidence: [Stage 115](screenshots/ymir-m4-actor-single-texture-tile-2026-07-19.png),
 [phase report](reports/ymir-m4-actor-single-texture-tile-2026-07-19.json), and
 [command probe](reports/ymir-m4-actor-single-texture-command-2026-07-19.json).
+
+### 2026-07-19 — E0 bounded command arena, pixel-identical
+
+The persistent variable-length list is now owned by the scene-neutral
+`gfx/saturn_command_arena.h` contract rather than Castle-local counters. It
+reserves the fixed two-command Yaul setup prefix and one END slot, reports live
+and peak use, rejects overflow visibly, and retains the exact prior-END clear
+and live-prefix upload behavior. The native SH-2 target builds against pinned
+Yaul `6012f79f`, and a 2,400-sequence USA-BIOS Ymir capture has framebuffer
+hash `d1459d9bf3b71542d22f260c11d04f77` and PNG SHA-256
+`ca1601c54a1c6f2f70fa4958598c9406d0e0194e86d4b11f4b26275c723e22ab`—exactly
+identical to Stage 115. Evidence: [Stage 116](screenshots/ymir-m4-command-arena-e0-2026-07-19.png),
+[capture report](reports/ymir-m4-command-arena-e0-2026-07-19.json), and
+[E0 verification note](m4-command-arena-e0-2026-07-19.md).

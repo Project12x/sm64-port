@@ -454,8 +454,8 @@ to take multiple years.
 
 The original hardware-characterization, classifier, title, Mario actor, and
 Castle Area 1 proof streams now exist. The active order is the engine migration
-in [`ENGINE_PORT_ARCHITECTURE.md`](ENGINE_PORT_ARCHITECTURE.md): finish E0's
-bounded VDP1 command arena and target pixel-identity capture; complete E1 by
+in [`ENGINE_PORT_ARCHITECTURE.md`](ENGINE_PORT_ARCHITECTURE.md): E0 is closed
+by the bounded VDP1 command arena and exact target pixel-identity capture; complete E1 by
 making the turntable and Castle targets clients of one renderer/residency path;
 then implement E2's Saturn `exec_display_list()` handoff and boot the original
 `game_loop_one_iteration()` path. M1 closure evidence remains a bounded visual

@@ -3,6 +3,7 @@
 #include <string.h>
 #include "sm64.h"
 #include "controller_saturn.h"
+#include "saturn_command_arena.h"
 #include "saturn_cart_bank.h"
 #include "saturn_frame_profile.h"
 #include "saturn_render_queue.h"
@@ -47,7 +48,7 @@
 
 typedef sm64_saturn_vec3i_t point3_t;
 static vdp1_cmdt_list_t *command_list;
-static uint16_t previous_command_end = 2U;
+static sm64_saturn_command_arena_t command_arena;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
 static int32_t mario_vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
@@ -580,7 +581,7 @@ static void sort_scene(void) {
         append_static_tile(tile, SM64_SATURN_PASS_TRANSLUCENT);
 }
 
-static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_partitions_t *partitions) {
+static void draw_castle(uint16_t tile, const vdp1_vram_partitions_t *partitions) {
     const uint16_t primitive = sm64_castle_uv_tile_primitive[tile];
     const uint8_t layer = sm64_castle_area1_primitive_layer[primitive];
     const vdp1_cmdt_cc_t color_calculation =
@@ -595,7 +596,9 @@ static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_par
             ? project_point(castle_point(sm64_castle_uv_positions[tile][2]))
             : project_point(castle_point(sm64_castle_uv_positions[tile][3]))
     };
-    vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
+    uint16_t command;
+    if (!sm64_saturn_command_arena_reserve(&command_arena, 1, &command)) return;
+    vdp1_cmdt_t *cmdt = &command_list->cmdts[command];
     vdp1_cmdt_distorted_sprite_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
         .color_mode = SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
@@ -613,14 +616,17 @@ static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_par
     vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
 #endif
     vdp1_cmdt_vtx_set(cmdt, vertices);
-    return command;
 }
 
-static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram_partitions_t *partitions) {
+static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partitions) {
     const uint16_t texture_start = sm64_mario_texture_tile_start[primitive];
     if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE) {
         const uint16_t first_tile = (texture_start / 4U) *
             SM64_MARIO_TEXTURE_TILES_PER_SOURCE;
+        uint16_t command;
+        if (!sm64_saturn_command_arena_reserve(
+                &command_arena, SM64_MARIO_TEXTURE_TILES_PER_SOURCE,
+                &command)) return;
         for (uint16_t tile = first_tile;
              tile < first_tile + SM64_MARIO_TEXTURE_TILES_PER_SOURCE; tile++) {
             int16_vec2_t vertices[4]; mario_texture_tile_vertices(tile, vertices);
@@ -633,7 +639,7 @@ static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram
             vdp1_cmdt_vtx_set(cmdt, vertices);
             vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions->gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
         }
-        return command;
+        return;
     }
     const uint16_t *indices = sm64_mario_primitives[primitive];
     const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];
@@ -643,25 +649,23 @@ static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram
         mario_screen_vertices[indices[3]],
         mario_screen_vertices[indices[4]]
     };
-    vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
+    uint16_t command;
+    if (!sm64_saturn_command_arena_reserve(&command_arena, 1, &command)) return;
+    vdp1_cmdt_t *cmdt = &command_list->cmdts[command];
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){.color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_GOURAUD});
     vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
     vdp1_cmdt_vtx_set(cmdt, vertices);
     vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)partitions->gouraud_base + primitive * sizeof(vdp1_gouraud_table_t));
-    return command;
 }
 
 static void draw_scene(void) {
-    const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223), local = INT16_VEC2_INITIALIZER(0, 0);
     vdp1_vram_partitions_t partitions; vdp1_vram_partitions_get(&partitions);
     /* The command array is initialized once at allocation.  Preserve it like
      * the intro renderer: clear only the prior END marker, overwrite the live
      * commands, then DMA only the used prefix instead of the maximum list. */
-    vdp1_cmdt_end_clear(&command_list->cmdts[previous_command_end]);
-    vdp1_cmdt_system_clip_coord_set(&command_list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&command_list->cmdts[0], clip);
-    vdp1_cmdt_local_coord_set(&command_list->cmdts[1]); vdp1_cmdt_vtx_local_coord_set(&command_list->cmdts[1], local);
-    uint16_t command = 2;
+    vdp1_cmdt_end_clear(&command_list->cmdts[
+        sm64_saturn_command_arena_begin(&command_arena)]);
     /* N64 LAYER_ALPHA is binary cutout geometry that relies on the RDP's
      * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, and Mario must
      * share one far-to-near ordering pass. Only the genuinely translucent
@@ -670,13 +674,13 @@ static void draw_scene(void) {
         const sm64_saturn_render_item_t *item =
             &render_queue.items[render_queue.order[output]];
         if (item->kind == SM64_SATURN_RENDER_WORLD)
-            command = draw_castle(item->lowered_index, command, &partitions);
+            draw_castle(item->lowered_index, &partitions);
         else if (item->kind == SM64_SATURN_RENDER_ACTOR)
-            command = draw_mario(item->lowered_index, command, &partitions);
+            draw_mario(item->lowered_index, &partitions);
     }
-    vdp1_cmdt_end_set(&command_list->cmdts[command]);
-    previous_command_end = command;
-    command_list->count = command + 1U;
+    vdp1_cmdt_end_set(&command_list->cmdts[
+        sm64_saturn_command_arena_finish(&command_arena)]);
+    command_list->count = command_arena.live_count;
     /* Gouraud tables live in VDP1 VRAM. They only change when the source
      * animation frame changes; re-uploading the whole Mario bank every frame
      * was a measurable Saturn bandwidth tax. */
@@ -773,6 +777,16 @@ void user_init(void) {
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     (void)memset(command_list->cmdts, 0, sizeof(vdp1_cmdt_t) * COMMAND_COUNT);
+    sm64_saturn_command_arena_init(&command_arena, COMMAND_COUNT, 2);
+    {
+        const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
+        const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
+        vdp1_cmdt_system_clip_coord_set(&command_list->cmdts[0]);
+        vdp1_cmdt_vtx_system_clip_coord_set(&command_list->cmdts[0], clip);
+        vdp1_cmdt_local_coord_set(&command_list->cmdts[1]);
+        vdp1_cmdt_vtx_local_coord_set(&command_list->cmdts[1], local);
+        vdp1_cmdt_end_set(&command_list->cmdts[2]);
+    }
     sm64_saturn_render_queue_init(&render_queue, render_items, render_order,
                                   DRAW_ITEM_COUNT);
     source_area.camera = &source_camera;
@@ -828,7 +842,7 @@ void user_init(void) {
                 FRT_TICKS_PER_SECOND_X10, frame_profile.render_ticks);
             const uint32_t loop_fps_x10 = sm64_saturn_frame_profile_rate_x10(
                 FRT_TICKS_PER_SECOND_X10, frame_profile.loop_ticks);
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u cull %u\nVDP1 quads %u | costs U%u S%u C%u W%u V%u | cart %s %lu KiB/%lu B | render %u.%u / loop %u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u cull %u\nVDP1 cmd %u/%u%s quads %u | costs U%u S%u C%u W%u V%u | cart %s %lu KiB/%lu B | render %u.%u / loop %u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
@@ -837,6 +851,8 @@ void user_init(void) {
                 source_mario_state.input, render_queue.count,
                 (uint16_t)DRAW_ITEM_COUNT,
                 rejected_items, culled_items,
+                command_arena.live_count, command_arena.peak,
+                command_arena.overflowed ? "!" : "",
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 frame_profile.update_ticks, frame_profile.sort_ticks,
                 frame_profile.command_ticks, frame_profile.wait_ticks,

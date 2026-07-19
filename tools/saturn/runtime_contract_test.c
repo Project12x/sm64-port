@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "saturn_frame_profile.h"
+#include "saturn_command_arena.h"
 #include "saturn_memory_arena.h"
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
@@ -107,6 +108,31 @@ static void test_source_identified_render_queue(void)
     assert(!queue.overflowed);
 }
 
+static void test_bounded_command_arena(void)
+{
+    sm64_saturn_command_arena_t arena;
+    uint16_t first;
+
+    sm64_saturn_command_arena_init(&arena, 6, 2);
+    assert(sm64_saturn_command_arena_begin(&arena) == 2);
+    assert(sm64_saturn_command_arena_reserve(&arena, 2, &first));
+    assert(first == 2);
+    assert(sm64_saturn_command_arena_reserve(&arena, 1, &first));
+    assert(first == 4);
+    assert(!sm64_saturn_command_arena_reserve(&arena, 1, &first));
+    assert(arena.overflowed);
+    assert(sm64_saturn_command_arena_finish(&arena) == 5);
+    assert(arena.live_count == 6);
+    assert(arena.peak == 6);
+
+    assert(sm64_saturn_command_arena_begin(&arena) == 5);
+    assert(!arena.overflowed);
+    assert(sm64_saturn_command_arena_reserve(&arena, 1, &first));
+    assert(sm64_saturn_command_arena_finish(&arena) == 3);
+    assert(arena.live_count == 4);
+    assert(arena.peak == 6);
+}
+
 int main(void)
 {
     test_identity_camera();
@@ -114,5 +140,6 @@ int main(void)
     test_frame_profile();
     test_bounded_memory_arena();
     test_source_identified_render_queue();
+    test_bounded_command_arena();
     return 0;
 }

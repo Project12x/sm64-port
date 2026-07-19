@@ -81,9 +81,9 @@ licensing block, and strict scope control. Re-estimate after M2 and M5.
 
 The visible room-and-actor proof has served its purpose. Further gameplay or
 performance work must now land in scene-neutral stages that survive the
-transition to the original game loop. E0 is active: frame, transform, memory,
-and render-queue contracts are shared; the VDP1 command arena and target
-pixel-identity capture remain. E1 then makes the Castle and turntable targets
+transition to the original game loop. E0 is closed: frame, transform, memory,
+render-queue, and bounded VDP1 command-arena contracts are shared, and the
+native Stage 116 capture exactly matches Stage 115. E1 now makes the Castle and turntable targets
 clients of the same backend, and E2 introduces Saturn `exec_display_list()`.
 
 Mario is now standing from the source C5 idle animation. M2 remains open only
@@ -326,7 +326,7 @@ source-derived model/collision data, with replayable final state and capture.
 Performance acceptance for this slice is explicit: 15 FPS full game-loop is
 the hard floor, 20 FPS is the stretch target, and 30 FPS is expected only for
 simple/low-load views until retail hardware says otherwise. The current
-BIOS-backed Ymir baseline is approximately 5 FPS in the establishing view
+BIOS-backed Ymir baseline is approximately 7.5 FPS in the establishing view
 (the earlier `/8` 16-bit FRT counter wrapped and was invalid). Emulator timing
 is comparative evidence, not a retail claim. Reaching the gate requires:
 
@@ -511,8 +511,9 @@ These run through every milestone:
 The next sequence now retires the successful visual-slice scaffolding while
 preserving its measured gains:
 
-1. E0: extract common timing, transform-cache, render-job, command-arena, and
-   memory-arena records from `castleviewer/main.c` with identical captures;
+1. E0 (**complete, Stage 116**): extract common timing, transform-cache,
+   render-job, command-arena, and memory-arena records from
+   `castleviewer/main.c` with identical captures;
 2. E1: make Castle and Mario independent clients of one scene-neutral render
    queue and VDP1/VDP2 backend;
 3. keep the current one-command Mario texture tier as generated source-derived
