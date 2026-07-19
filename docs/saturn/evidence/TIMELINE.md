@@ -903,3 +903,13 @@ made the floor appear to run beyond the doors. The Castle lowering now rejects a
 primitive whose source-space corners cross `NEAR_DEPTH`; this is a safe interim
 guard while the next pass implements UV-preserving near-plane subdivision. The
 neutral Ymir capture is retained as evidence: [near-plane diagnostic](screenshots/ymir-m4-source-camera-near-plane-reject-2026-07-18.png).
+
+### 2026-07-18 — Source fixed-camera focus follows floor state
+
+`update_fixed_camera()` calls `calc_y_to_curr_floor()` with a 0.9 focus
+multiplier before adding its 125-unit focus height. The generated Castle camera
+configuration now records that source constant and the Saturn lowering applies
+it to Mario's current source-space Y. At the extracted spawn this changes the
+look-at height from 125 to the source-correct ~92 units, keeping floor, emblem,
+doors, and Mario in the same camera relationship as the original code path.
+Evidence: [floor-relative focus capture](screenshots/ymir-m4-source-camera-floor-relative-focus-2026-07-18.png).

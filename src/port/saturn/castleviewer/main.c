@@ -90,7 +90,16 @@ static void update_source_camera(void) {
     camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
     camera_position.z = SM64_CASTLE_CAMERA_BASE_Z +
         (((mario.z - SM64_CASTLE_CAMERA_BASE_Z) * SM64_CASTLE_CAMERA_FOLLOW_Q16) >> 16);
-    const point3_t focus = {mario.x, mario.y + SM64_CASTLE_CAMERA_FOCUS_Y, mario.z};
+    /* Source `update_fixed_camera()` first applies
+     * calc_y_to_curr_floor(..., focMul=0.9f), then adds the 125-unit focus
+     * height. Keep that floor-relative aim instead of looking at a bespoke
+     * fixed Y coordinate. */
+    const int32_t floor_focus_offset =
+        (int32_t)(((int64_t)(SM64_CASTLE_SPAWN_FLOOR_Y - mario.y) *
+                   SM64_CASTLE_CAMERA_FOCUS_FLOOR_SCALE_Q16) >> 16);
+    const point3_t focus = {mario.x,
+                            mario.y + floor_focus_offset + SM64_CASTLE_CAMERA_FOCUS_Y,
+                            mario.z};
     camera_forward = normalize_q16((point3_t){focus.x - camera_position.x,
                                               focus.y - camera_position.y,
                                               focus.z - camera_position.z});

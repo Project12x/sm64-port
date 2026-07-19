@@ -109,6 +109,8 @@ def camera_config(
         },
         "follow_q16": round(float(scale.group(1)) * 65536),
         "focus_height": round(float(focus.group(1))),
+        # update_fixed_camera() passes focMul=0.9f to calc_y_to_curr_floor().
+        "focus_floor_scale_q16": round(0.9 * 65536),
     }
 
 
@@ -134,6 +136,7 @@ def extract(script_path: Path, collision_path: Path, camera_path: Path) -> dict[
             },
             "follow_q16": camera_values["follow_q16"],
             "focus_height": camera_values["focus_height"],
+            "focus_floor_scale_q16": camera_values["focus_floor_scale_q16"],
             "fov_degrees": 45,
             "focal_length_320": round(160 / math.tan(math.radians(45 / 2))),
         },
@@ -169,6 +172,7 @@ def main() -> None:
         f"#define SM64_CASTLE_CAMERA_BASE_Z {camera['base'][2]}",
         f"#define SM64_CASTLE_CAMERA_FOLLOW_Q16 {camera['follow_q16']}",
         f"#define SM64_CASTLE_CAMERA_FOCUS_Y {camera['focus_height']}",
+        f"#define SM64_CASTLE_CAMERA_FOCUS_FLOOR_SCALE_Q16 {camera['focus_floor_scale_q16']}",
         f"#define SM64_CASTLE_CAMERA_FOCAL_LENGTH {camera['focal_length_320']}",
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
