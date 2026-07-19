@@ -6,6 +6,7 @@
 #include "game/memory.h"
 #include "game/mario.h"
 #include "game/object_list_processor.h"
+#include "saturn_memory_arena.h"
 
 /* The original surface loader allocates its pools through main_pool_alloc.
  * Keep that boundary, but put the cold 256 KiB Castle surface arena in the
@@ -14,7 +15,7 @@
  * runtime boundary. Collision queries are sparse compared with rendering. */
 #define CASTLE_COLLISION_POOL_SIZE (256U * 1024U)
 #define CASTLE_COLLISION_POOL ((uint8_t *)LWRAM(0x000C0000U))
-static size_t sCastleCollisionPoolUsed;
+static sm64_saturn_memory_arena_t sCollisionArena;
 
 s32 gSurfaceNodesAllocated;
 s32 gSurfacesAllocated;
@@ -34,12 +35,12 @@ u32 gTimeStopState;
 
 void *main_pool_alloc(u32 size, u32 side) {
     (void)side;
-    const size_t aligned = (sCastleCollisionPoolUsed + 7U) & ~((size_t)7U);
-    if (aligned + size > CASTLE_COLLISION_POOL_SIZE) {
-        return NULL;
+    if (sCollisionArena.base == NULL) {
+        sm64_saturn_memory_arena_init(&sCollisionArena,
+                                      CASTLE_COLLISION_POOL,
+                                      CASTLE_COLLISION_POOL_SIZE);
     }
-    sCastleCollisionPoolUsed = aligned + size;
-    return &CASTLE_COLLISION_POOL[aligned];
+    return sm64_saturn_memory_arena_alloc(&sCollisionArena, size, 8U);
 }
 
 void reset_red_coins_collected(void) {

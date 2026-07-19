@@ -172,9 +172,11 @@ Implementation checkpoint (2026-07-19): the scene-neutral
 `gfx/saturn_transform.h` and `platform/saturn_frame_profile.h` records are now
 used by the Castle harness. Their native C contract test covers integer camera
 transforms, Q16 normalization, phase totals, and zero-safe rate calculation.
-Render-job, command-arena, and memory-arena extraction remains open. The target
-pixel-identity capture remains required after the Yaul build environment is
-available; a host-only pass does not close E0.
+The bounded `platform/saturn_memory_arena.h` now also owns alignment, peak
+usage, and overflow state for the Castle collision pool without owning its
+backing address. Render-job and command-arena extraction remains open. The
+target pixel-identity capture remains required after the Yaul build environment
+is available; a host-only pass does not close E0.
 
 ### E1 — Shared renderer client
 

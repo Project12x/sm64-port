@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "saturn_frame_profile.h"
+#include "saturn_memory_arena.h"
 #include "saturn_transform.h"
 
 static void test_identity_camera(void)
@@ -46,10 +47,32 @@ static void test_frame_profile(void)
     assert(sm64_saturn_frame_profile_rate_x10(1500, 0) == 0);
 }
 
+static void test_bounded_memory_arena(void)
+{
+    uint8_t storage[32];
+    sm64_saturn_memory_arena_t arena;
+    sm64_saturn_memory_arena_init(&arena, storage, sizeof(storage));
+
+    assert(sm64_saturn_memory_arena_alloc(&arena, 3, 8) == &storage[0]);
+    assert(sm64_saturn_memory_arena_alloc(&arena, 8, 8) == &storage[8]);
+    assert(arena.used == 16);
+    assert(arena.peak == 16);
+    assert(!arena.overflowed);
+    assert(sm64_saturn_memory_arena_alloc(&arena, 17, 8) == NULL);
+    assert(arena.overflowed);
+    assert(arena.used == 16);
+
+    sm64_saturn_memory_arena_reset(&arena);
+    assert(arena.used == 0);
+    assert(arena.peak == 16);
+    assert(!arena.overflowed);
+}
+
 int main(void)
 {
     test_identity_camera();
     test_q16_normalization();
     test_frame_profile();
+    test_bounded_memory_arena();
     return 0;
 }
