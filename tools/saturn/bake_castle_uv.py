@@ -434,6 +434,7 @@ def main() -> None:
     starts = [0xFFFF] * int(scene["primitive_count"])
     counts = [0] * int(scene["primitive_count"])
     positions: list[tuple[tuple[int, int, int], ...]] = []
+    tile_triangles: list[bool] = []
     tile_primitives: list[int] = []
     tile_cluts: list[int] = []
     texels: list[int] = []
@@ -504,6 +505,7 @@ def main() -> None:
         tile_cluts.append(clut_index)
         if len(polygon.vertices) == 4:
             positions.append(tuple(rounded))
+            tile_triangles.append(False)
             sampled = [sample_quad(texture, uv, tile_state, x, y, args.tile,
                                    args.source_scale)
                        for y in range(args.tile) for x in range(args.tile)]
@@ -515,6 +517,7 @@ def main() -> None:
             if any(value < -32768 or value > 32767 for value in extrapolated):
                 raise ValueError("triangle affine companion left int16 Castle world domain")
             positions.append((*rounded, extrapolated))
+            tile_triangles.append(True)
             sampled = [sample_triangle(texture, uv, tile_state, x, y,
                                        args.tile, args.source_scale)
                        for y in range(args.tile) for x in range(args.tile)]
@@ -556,6 +559,9 @@ def main() -> None:
     lines.append("};")
     lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][4][3] = {")
     lines.extend("    {" + ", ".join(f"{{{x}, {y}, {z}}}" for x, y, z in quad) + "}," for quad in positions)
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_uv_tile_is_triangle[SM64_CASTLE_UV_TILE_COUNT] = {")
+    lines.extend("    " + ", ".join("1U" if value else "0U" for value in tile_triangles[offset:offset + 32]) + "," for offset in range(0, len(tile_triangles), 32))
     lines.append("};")
     if args.texture_format == "clut16":
         packed = pack_clut16(texels)

@@ -301,7 +301,8 @@ static bool tile_is_visible(uint16_t tile) {
     const point3_t a = castle_point(sm64_castle_uv_positions[tile][0]);
     const point3_t b = castle_point(sm64_castle_uv_positions[tile][1]);
     const point3_t c = castle_point(sm64_castle_uv_positions[tile][2]);
-    const point3_t d = castle_point(sm64_castle_uv_positions[tile][3]);
+    const point3_t d = sm64_castle_uv_tile_is_triangle[tile]
+        ? c : castle_point(sm64_castle_uv_positions[tile][3]);
     const int32_t minimum = min4(a.z, b.z, c.z, d.z);
     const int32_t maximum = max4(a.z, b.z, c.z, d.z);
     return minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH &&
@@ -361,7 +362,8 @@ static int32_t scene_item_max_depth(uint16_t item) {
         const point3_t a = castle_point(indices[0]);
         const point3_t b = castle_point(indices[1]);
         const point3_t c = castle_point(indices[2]);
-        const point3_t d = castle_point(indices[3]);
+        const point3_t d = sm64_castle_uv_tile_is_triangle[item]
+            ? c : castle_point(indices[3]);
         return max4(a.z, b.z, c.z, d.z);
     }
     const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
@@ -446,7 +448,9 @@ static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_par
         project_point(castle_point(sm64_castle_uv_positions[tile][0])),
         project_point(castle_point(sm64_castle_uv_positions[tile][1])),
         project_point(castle_point(sm64_castle_uv_positions[tile][2])),
-        project_point(castle_point(sm64_castle_uv_positions[tile][3]))
+        sm64_castle_uv_tile_is_triangle[tile]
+            ? project_point(castle_point(sm64_castle_uv_positions[tile][2]))
+            : project_point(castle_point(sm64_castle_uv_positions[tile][3]))
     };
     vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
     vdp1_cmdt_distorted_sprite_set(cmdt);
