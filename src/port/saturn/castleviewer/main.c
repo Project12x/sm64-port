@@ -48,7 +48,7 @@ static uint16_t draw_order[DRAW_ITEM_COUNT];
 static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_DEPTH_BUCKETS];
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
-static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
+static uint16_t visible_items, opaque_items, rejected_items, frame_ticks, animation_frame;
 static uint32_t loop_ticks;
 /* Cache only the full-width source depth key.  Projection remains on the
  * proven direct path; this removes the redundant transform pass used by the
@@ -539,6 +539,7 @@ static void sort_scene(void) {
     traverse_bsp(0, true);
     const uint16_t opaque_count = visible_items;
     refine_opaque_depth_order(opaque_count);
+    opaque_items = opaque_count;
     /* True translucent decals remain a deliberately late source-derived pass. */
     for (uint16_t tile = SM64_CASTLE_BSP_DECAL_START;
          tile < SM64_CASTLE_BSP_DECAL_START + SM64_CASTLE_BSP_DECAL_COUNT; tile++)
@@ -628,22 +629,16 @@ static void draw_scene(void) {
      * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, and Mario must
      * share one far-to-near ordering pass. Only the genuinely translucent
      * decal root is submitted afterward with half-transparency. */
-    for (uint8_t pass = 0; pass < 2; pass++) {
-        for (uint16_t output = 0; output < visible_items; output++) {
-            const uint16_t item = draw_order[output];
-            if (item < SM64_CASTLE_UV_TILE_COUNT) {
-                const uint16_t primitive = sm64_castle_uv_tile_primitive[item];
-                const uint8_t layer = sm64_castle_area1_primitive_layer[primitive];
-                const bool translucent =
-                    layer == SM64_CASTLE_LAYER_TRANSPARENT_DECAL;
-                if ((pass == 0 && !translucent) || (pass == 1 && translucent))
-                    command = draw_castle(item, command, &partitions);
-            } else if (pass == 0) {
-                command = draw_mario(item - SM64_CASTLE_UV_TILE_COUNT,
-                                     command, &partitions);
-            }
-        }
+    for (uint16_t output = 0; output < opaque_items; output++) {
+        const uint16_t item = draw_order[output];
+        if (item < SM64_CASTLE_UV_TILE_COUNT)
+            command = draw_castle(item, command, &partitions);
+        else
+            command = draw_mario(item - SM64_CASTLE_UV_TILE_COUNT,
+                                 command, &partitions);
     }
+    for (uint16_t output = opaque_items; output < visible_items; output++)
+        command = draw_castle(draw_order[output], command, &partitions);
     vdp1_cmdt_end_set(&command_list->cmdts[command]);
     previous_command_end = command;
     command_list->count = command + 1U;

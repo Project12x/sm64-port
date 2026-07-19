@@ -1169,3 +1169,14 @@ bytes, or 32%, per frame. The framebuffer hash remains exactly
 `02caa7267473b3a40de371c55044db2c`.
 Evidence: [Stage 107](screenshots/ymir-m4-persistent-command-prefix-2026-07-19.png)
 and [symbol-probe report](reports/ymir-m4-persistent-command-prefix-2026-07-19.json).
+
+### 2026-07-19 — Visible list is submitted once
+
+The source/BSP painter already produces a contiguous opaque/Mario prefix and
+then appends transparent decals. The renderer now retains that exact boundary
+and walks the visible list once, removing the former two-pass full-list scan
+and its repeated primitive-layer tests. Source order and the late decal pass
+remain unchanged. The deterministic framebuffer hash is again exactly
+`02caa7267473b3a40de371c55044db2c`.
+Evidence: [Stage 108](screenshots/ymir-m4-single-pass-layers-2026-07-19.png)
+and [capture report](reports/ymir-m4-single-pass-layers-2026-07-19.json).
