@@ -295,6 +295,14 @@ Work:
 - show position, action, floor, camera, collision, and frame-budget telemetry;
 - record deterministic short movement and jump routes against a PC reference.
 
+Architecture gate: M4 gameplay must converge on the original source loop, not
+accumulate a second implementation in the Castle harness. Follow E0–E2 in
+[`ENGINE_PORT_ARCHITECTURE.md`](ENGINE_PORT_ARCHITECTURE.md): extract the
+shared renderer/runtime records, accept source-identified jobs, then drive the
+slice through `game_loop_one_iteration()` and Saturn `exec_display_list()`.
+The current manual movement, jump, camera, and animation bridge is scaffolding
+and cannot close M4.
+
 Gate: Mario can idle, run, turn, jump, land, and collide with the lobby using
 source-derived model/collision data, with replayable final state and capture.
 
@@ -335,6 +343,11 @@ Gate: the complete route is captured as screenshots and a short deterministic
 video/replay, has a machine-readable budget report, and survives a 10,000-frame
 emulator soak without command, texture, or allocator overflow.
 
+M5 also requires E3: Castle Area 1 is loaded as a versioned, offset-based area
+package through the disc/WRAM/4 MiB cartridge lifecycle. Linked Castle arrays,
+a fixed scene collision arena, or production dependence on
+`castleviewer/main.c` leave M5 open.
+
 Audio is explicitly out of scope for this visual proof; silence is an accepted
 M5 presentation state. The first minimal audio requirement belongs to M6.
 
@@ -342,6 +355,10 @@ M5 presentation state. The first minimal audio requirement belongs to M6.
 
 Goal: expand the proven actor/runtime path into an outdoor course and first
 star route.
+
+M6 begins with architecture gate E4: the additional area and one dynamic
+object actor must use the same source-loop, package, render-job, residency, and
+VDP back ends without scene-named branches in shared runtime code.
 
 Work:
 
@@ -474,20 +491,23 @@ These run through every milestone:
 
 ## Immediate execution queue
 
-The next sequence should stay narrow enough to commit and capture frequently:
+The next sequence now retires the successful visual-slice scaffolding while
+preserving its measured gains:
 
-1. complete M1 face deformation, eye occlusion, title background, and `PRESS
-   START` handoff as independently captured increments;
-2. add duration-aware Ymir input holds plus deformation/update HUD telemetry;
-3. run the M1 10,000-frame deterministic soak and close it with a budget
-   report and accepted gallery entry;
-4. begin M2 by compiling the in-game Mario actor through the general Saturn
-   IR, then prove its textured turntable and one animation;
-5. select the Area 1 Castle geometry/texture/collision subset and generate the
-   M3 source-bank inventory, representation report, and PC reference frames;
-6. build the fixed-camera lobby renderer before enabling Mario control; and
-7. use the first controllable lobby route to establish the M5 title-to-castle
-   evidence sequence before broadening to Battlefield.
+1. E0: extract common timing, transform-cache, render-job, command-arena, and
+   memory-arena records from `castleviewer/main.c` with identical captures;
+2. E1: make Castle and Mario independent clients of one scene-neutral render
+   queue and VDP1/VDP2 backend;
+3. keep the current one-command Mario texture tier as generated source-derived
+   LOD IR, not a renderer special case, while pursuing the 15–20 FPS gate;
+4. E2: add the Saturn `exec_display_list()` front end and boot the original
+   `game_loop_one_iteration()` path;
+5. retire manual movement, jump, camera, and animation ownership as the source
+   action/object/camera/geo code comes online;
+6. E3: package Castle Area 1, collision, textures, and actor dependencies into
+   the versioned disc/WRAM/4 MiB cartridge lifecycle; and
+7. E4: prove the same path with a second area and a dynamic object before
+   broadening the visual slice.
 
 ## Roadmap rules
 
@@ -497,5 +517,8 @@ The next sequence should stay narrow enough to commit and capture frequently:
 - Infrastructure work must name the next visible result it unlocks.
 - Special-case code is acceptable for a bounded proof, but it must be retired
   or explicitly isolated before the following general milestone closes.
+- A performance win is accepted into the production path only when it belongs
+  to a scene-neutral stage defined in `ENGINE_PORT_ARCHITECTURE.md`; a faster
+  Castle-only loop is evidence, not engine completion.
 - When a budget fails, reduce fidelity or scope before hiding the failure.
 - Commit and push coherent increments; preserve instructive failures.

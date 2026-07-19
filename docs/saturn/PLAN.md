@@ -119,6 +119,12 @@ bit-exact N64 output, or speculative use of the SCU DSP.
 
 ## Architecture
 
+The enforceable engine/runtime boundary and harness-retirement gates are in
+[`ENGINE_PORT_ARCHITECTURE.md`](ENGINE_PORT_ARCHITECTURE.md). In particular,
+the production Saturn target must enter through `game_loop_one_iteration()`
+and receive graphics through `exec_display_list()`; the Castle viewer is a
+client harness, not an alternate game implementation.
+
 ### Toolchain and source layout
 
 Use libyaul 0.3.1 at the pinned commit as an external dependency. Preserve its
@@ -137,6 +143,10 @@ tools/saturn/             Asset, level-bank, and disc builders
 include/saturn/           Target-neutral Saturn IR and generated metadata
 docs/saturn/              Budgets, provenance, and hardware measurements
 ```
+
+Directory extraction follows the ownership map in
+`ENGINE_PORT_ARCHITECTURE.md`: platform, graphics, assets, audio, and harness
+code must not collapse back into a scene-specific `main.c`.
 
 Do not apply a blanket license to inherited code the project does not own.
 

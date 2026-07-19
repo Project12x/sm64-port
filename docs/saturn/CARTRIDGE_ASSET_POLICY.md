@@ -47,6 +47,10 @@ stage/read falls back to the proven direct source upload path.
    the deterministic capture report.
 5. Keep a source-textured Castle capture as the visual regression gate after
    each bank-placement change.
+6. Replace linked scene arrays with the versioned, offset-based package and
+   read-only package-view contract in `ENGINE_PORT_ARCHITECTURE.md` before M5.
+7. Prove unload/reload with a second area; no production cartridge allocation
+   or package lookup may be named for Castle or Mario.
 
 This policy follows the Saturn DRAM-cartridge constraints recorded in
 `PLAN.md`, `ROADMAP.md`, and the hardware-test telemetry path; it does not
