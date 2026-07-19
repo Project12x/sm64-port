@@ -8,8 +8,8 @@
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 
-#define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_CASTLE_AREA1_TRIANGLE_COUNT - SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT) + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
-#define DRAW_ITEM_COUNT (SM64_CASTLE_AREA1_TRIANGLE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
+#define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
+#define DRAW_ITEM_COUNT (SM64_CASTLE_UV_TILE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
 #define DEPTH_BUCKETS 128U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 8192
@@ -27,8 +27,13 @@ static fix16_t mario_sine, mario_cosine;
 static point3_t camera_position, camera_right, camera_up, camera_forward;
 static sm64_saturn_castle_graph_state_t source_graph;
 
+_Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
+               "Castle tile painter requires the complete source material bank");
+
 static int32_t min3(int32_t a, int32_t b, int32_t c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
 static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
+static int32_t min4(int32_t a, int32_t b, int32_t c, int32_t d) { const int32_t abc = min3(a, b, c); return abc < d ? abc : d; }
+static int32_t max4(int32_t a, int32_t b, int32_t c, int32_t d) { const int32_t abc = max3(a, b, c); return abc > d ? abc : d; }
 static int32_t abs32(int32_t value) { return value < 0 ? -value : value; }
 
 static uint32_t isqrt_u64(uint64_t value) {
@@ -172,26 +177,28 @@ static void sort_scene(void) {
     for (uint16_t bucket = 0; bucket < DEPTH_BUCKETS; bucket++) bucket_head[bucket] = bucket_tail[bucket] = -1;
     rejected_items = 0;
     for (uint16_t item = 0; item < DRAW_ITEM_COUNT; item++) {
-        point3_t a, b, c;
-        if (item < SM64_CASTLE_AREA1_TRIANGLE_COUNT) {
-            const uint8_t root = sm64_castle_area1_triangle_root[item];
+        point3_t a, b, c, d;
+        if (item < SM64_CASTLE_UV_TILE_COUNT) {
+            const uint16_t primitive = sm64_castle_uv_tile_primitive[item];
+            const uint8_t root = sm64_castle_area1_primitive_root[primitive];
             if ((source_graph.selected_root_mask & (1U << root)) == 0U) {
                 rejected_items++;
                 bucket_next[item] = -2;
                 continue;
             }
-            const uint16_t *triangle = sm64_castle_area1_triangles[item];
-            a = castle_point(sm64_castle_area1_vertices[triangle[0]]);
-            b = castle_point(sm64_castle_area1_vertices[triangle[1]]);
-            c = castle_point(sm64_castle_area1_vertices[triangle[2]]);
+            a = castle_point(sm64_castle_uv_positions[item][0]);
+            b = castle_point(sm64_castle_uv_positions[item][1]);
+            c = castle_point(sm64_castle_uv_positions[item][2]);
+            d = castle_point(sm64_castle_uv_positions[item][3]);
         } else {
-            const uint16_t primitive = item - SM64_CASTLE_AREA1_TRIANGLE_COUNT;
+            const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
             const uint16_t *indices = sm64_mario_primitives[primitive];
             a = mario_point(mario_vertex(indices[1]));
             b = mario_point(mario_vertex(indices[2]));
             c = mario_point(mario_vertex(indices[3]));
+            d = mario_point(mario_vertex(indices[4]));
         }
-        const int32_t minimum = min3(a.z, b.z, c.z), maximum = max3(a.z, b.z, c.z);
+        const int32_t minimum = min4(a.z, b.z, c.z, d.z), maximum = max4(a.z, b.z, c.z, d.z);
         if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) { rejected_items++; bucket_next[item] = -2; continue; }
         /* A centroid key lets one long wall triangle paint over geometry that
          * is wholly in front of its far edge.  The PS1 port's ordering-table
@@ -210,48 +217,28 @@ static void sort_scene(void) {
         for (int16_t item = bucket_head[bucket]; item >= 0; item = bucket_next[item]) draw_order[visible_items++] = (uint16_t)item;
 }
 
-static uint16_t draw_castle(uint16_t source, uint16_t command, const vdp1_vram_partitions_t *partitions) {
-    const uint8_t layer = sm64_castle_area1_triangle_layer[source];
+static uint16_t draw_castle(uint16_t tile, uint16_t command, const vdp1_vram_partitions_t *partitions) {
+    const uint16_t primitive = sm64_castle_uv_tile_primitive[tile];
+    const uint8_t layer = sm64_castle_area1_primitive_layer[primitive];
     const vdp1_cmdt_cc_t color_calculation =
         layer == SM64_CASTLE_LAYER_TRANSPARENT_DECAL
             ? VDP1_CMDT_CC_HALF_TRANSPARENT
             : VDP1_CMDT_CC_REPLACE;
-    const uint16_t texture_start = sm64_castle_uv_tile_start[source];
-    if (texture_start != SM64_CASTLE_UV_TILE_NONE) {
-        for (uint16_t tile = texture_start; tile < texture_start + sm64_castle_uv_tile_count[source]; tile++) {
-            const int16_vec2_t vertices[4] = {
-                project_point(castle_point(sm64_castle_uv_positions[tile][0])),
-                project_point(castle_point(sm64_castle_uv_positions[tile][1])),
-                project_point(castle_point(sm64_castle_uv_positions[tile][2])),
-                project_point(castle_point(sm64_castle_uv_positions[tile][2]))
-            };
-            vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
-            vdp1_cmdt_distorted_sprite_set(cmdt);
-            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-                .color_mode = VDP1_CMDT_CM_RGB_32768,
-                .cc_mode = color_calculation
-            });
-            vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + tile * SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH * sizeof(uint16_t));
-            vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
-            vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
-            vdp1_cmdt_vtx_set(cmdt, vertices);
-        }
-        return command;
-    }
-    const uint16_t *triangle = sm64_castle_area1_triangles[source];
     const int16_vec2_t vertices[4] = {
-        project_point(castle_point(sm64_castle_area1_vertices[triangle[0]])),
-        project_point(castle_point(sm64_castle_area1_vertices[triangle[1]])),
-        project_point(castle_point(sm64_castle_area1_vertices[triangle[2]])),
-        project_point(castle_point(sm64_castle_area1_vertices[triangle[2]]))
+        project_point(castle_point(sm64_castle_uv_positions[tile][0])),
+        project_point(castle_point(sm64_castle_uv_positions[tile][1])),
+        project_point(castle_point(sm64_castle_uv_positions[tile][2])),
+        project_point(castle_point(sm64_castle_uv_positions[tile][3]))
     };
     vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
-    vdp1_cmdt_polygon_set(cmdt);
+    vdp1_cmdt_distorted_sprite_set(cmdt);
     vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
         .color_mode = VDP1_CMDT_CM_RGB_32768,
         .cc_mode = color_calculation
     });
-    vdp1_cmdt_color_set(cmdt, RGB1555(1, 20, 20, 25));
+    vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + tile * SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH * sizeof(uint16_t));
+    vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
+    vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
     vdp1_cmdt_vtx_set(cmdt, vertices);
     return command;
 }
@@ -304,14 +291,15 @@ static void draw_scene(void) {
     for (uint8_t pass = 0; pass < 2; pass++) {
         for (uint16_t output = 0; output < visible_items; output++) {
             const uint16_t item = draw_order[output];
-            if (item < SM64_CASTLE_AREA1_TRIANGLE_COUNT) {
-                const uint8_t layer = sm64_castle_area1_triangle_layer[item];
+            if (item < SM64_CASTLE_UV_TILE_COUNT) {
+                const uint16_t primitive = sm64_castle_uv_tile_primitive[item];
+                const uint8_t layer = sm64_castle_area1_primitive_layer[primitive];
                 const bool translucent =
                     layer == SM64_CASTLE_LAYER_TRANSPARENT_DECAL;
                 if ((pass == 0 && !translucent) || (pass == 1 && translucent))
                     command = draw_castle(item, command, &partitions);
             } else if (pass == 0) {
-                command = draw_mario(item - SM64_CASTLE_AREA1_TRIANGLE_COUNT,
+                command = draw_mario(item - SM64_CASTLE_UV_TILE_COUNT,
                                      command, &partitions);
             }
         }
@@ -329,6 +317,9 @@ void user_init(void) {
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     source_graph = sm64_saturn_castle_graph_init();
     if (!source_graph.valid) for (;;) {}
+    vdp1_vram_partitions_set(COMMAND_COUNT,
+        sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
+        SM64_MARIO_PRIMITIVE_COUNT, 0);
     command_list = vdp1_cmdt_list_alloc(COMMAND_COUNT); if (command_list == NULL) for (;;) {}
     fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
     update_source_camera();
@@ -345,12 +336,13 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source spawn %d,%d,%d\nanim_C5 %u/%u | layered painter %u/%u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source spawn %d,%d,%d\nanim_C5 %u/%u | painter %u/%u | VDP1 quads %u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
                 SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z,
                 animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_items, (uint16_t)DRAW_ITEM_COUNT,
+                (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
             dbgio_flush(); vdp2_sync();
         }

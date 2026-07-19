@@ -17,7 +17,7 @@ from extract_mario_actor import animation_frame_count, animation_rotations, anim
 from extract_mario_textures import saturn_rgb1555  # noqa: E402
 from extract_introface_mesh import goddard_deformation  # noqa: E402
 from bake_mario_eye_uv import TILE, bilinear_weights  # noqa: E402
-from vdp1_texture import downsample_rgb1555, repeated_vertex_weights  # noqa: E402
+from vdp1_texture import distorted_sprite_weights, downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract, flatten  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
@@ -25,7 +25,7 @@ from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: 
 from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
 from bake_castle_uv import should_subdivide, texture_coordinate  # noqa: E402
 from plan_castle_camera_coverage import plan  # noqa: E402
-from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
+from quad_pairing import QuadCandidate, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 
@@ -60,6 +60,14 @@ class AssetClassifierTests(unittest.TestCase):
         self.assertEqual(report["static_triangles"], 3)
         self.assertEqual(report["geometry_macro_counts"]["gsSPVertex"], 1)
         self.assertEqual(report["geometry_macro_counts"]["gsDPSetTextureImage"], 1)
+
+    def test_static_planar_policy_does_not_reject_an_edge_on_wall(self) -> None:
+        vertices = [(0, 0, 0), (0, 10, 0), (0, 10, 10), (0, 0, 10)]
+        faces = [(0, 0, 1, 2), (0, 0, 2, 3)]
+        sampled, _ = candidates(vertices, faces)
+        planar, _ = candidates(vertices, faces, projection_policy="planar")
+        self.assertEqual(sampled, [])
+        self.assertEqual(len(planar), 1)
 
     def test_six_way_representation_counts_are_conservative(self) -> None:
         primitives = [
@@ -195,6 +203,15 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertGreater(bilinear_weights(15, 15)[2], 0.9)
         self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
+    def test_vdp1_native_quad_uses_measured_c_b_a_d_corner_order(self) -> None:
+        for x, y in ((0, 0), (15, 0), (0, 15), (15, 15), (8, 8)):
+            a, b, c, d = distorted_sprite_weights(x, y, 16, 16)
+            self.assertAlmostEqual(a + b + c + d, 1.0)
+            repeated = repeated_vertex_weights(x, y, 16, 16)
+            self.assertEqual(repeated, (a, b, c + d))
+        self.assertGreater(distorted_sprite_weights(0, 0, 16, 16)[2], 0.9)
+        self.assertGreater(distorted_sprite_weights(15, 15, 16, 16)[3], 0.9)
+
 
 class CastleAreaInventoryTests(unittest.TestCase):
     def test_castle_gameplay_config_comes_from_source(self) -> None:
@@ -275,6 +292,19 @@ class CastleAreaInventoryTests(unittest.TestCase):
             "inside_09008800", "inside_castle_seg7_texture_07000800",
             "inside_castle_seg7_texture_07002000",
         })
+        self.assertEqual(bank["primitive_count"], 567)
+        self.assertEqual(bank["pairing"]["quad_count"], 52)
+        self.assertEqual(bank["pairing"]["commands_saved"], 52)
+        self.assertEqual(
+            sum(primitive["second_triangle"] is not None
+                for primitive in bank["primitives"]),
+            52,
+        )
+        self.assertTrue(all(
+            bank["triangle_roots"][primitive["first_triangle"]] == primitive["root"]
+            and bank["triangle_layers"][primitive["first_triangle"]] == primitive["layer"]
+            for primitive in bank["primitives"]
+        ))
 
     def test_area_one_opaque_compiler_preserves_root_topology(self) -> None:
         root = TOOLS.parents[1]

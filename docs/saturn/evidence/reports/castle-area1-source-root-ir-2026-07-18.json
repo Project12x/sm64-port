@@ -1,6 +1,6 @@
 {
   "schema": "sm64-saturn-castle-static-ir",
-  "version": 2,
+  "version": 3,
   "name": "castle_inside_area_1_source_roots",
   "source": "levels/castle_inside/areas/1",
   "layers": {
@@ -28,6 +28,627 @@
     "inside_castle_seg7_dl_0702A300",
     "inside_castle_seg7_dl_0702A548",
     "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702AAD8"
+  ],
+  "triangle_sources": [
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07027DE8",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_07028418",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070286C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_070287C0",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07028A38",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_07029438",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A188",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A300",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A548",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702A998",
+    "inside_castle_seg7_dl_0702AAD8",
     "inside_castle_seg7_dl_0702AAD8"
   ],
   "textures": [
@@ -45211,6 +45832,7401 @@
       ]
     }
   ],
+  "primitive_count": 567,
+  "primitives": [
+    {
+      "vertices": [
+        0,
+        1,
+        2,
+        2
+      ],
+      "first_triangle": 0,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        3,
+        4,
+        5,
+        5
+      ],
+      "first_triangle": 1,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        3,
+        5,
+        6,
+        6
+      ],
+      "first_triangle": 2,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        7,
+        8,
+        9,
+        10
+      ],
+      "first_triangle": 3,
+      "second_triangle": 4,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        11,
+        12,
+        13,
+        13
+      ],
+      "first_triangle": 5,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        11,
+        14,
+        12,
+        12
+      ],
+      "first_triangle": 6,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        15,
+        27,
+        16,
+        17
+      ],
+      "first_triangle": 7,
+      "second_triangle": 13,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        0,
+        18,
+        1,
+        1
+      ],
+      "first_triangle": 8,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        19,
+        20,
+        21,
+        21
+      ],
+      "first_triangle": 9,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        19,
+        22,
+        20,
+        20
+      ],
+      "first_triangle": 10,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        23,
+        24,
+        25,
+        25
+      ],
+      "first_triangle": 11,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        23,
+        26,
+        24,
+        24
+      ],
+      "first_triangle": 12,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        28,
+        29,
+        30,
+        30
+      ],
+      "first_triangle": 14,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        31,
+        32,
+        33,
+        33
+      ],
+      "first_triangle": 15,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        31,
+        34,
+        32,
+        32
+      ],
+      "first_triangle": 16,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        35,
+        36,
+        37,
+        37
+      ],
+      "first_triangle": 17,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        35,
+        38,
+        36,
+        36
+      ],
+      "first_triangle": 18,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        39,
+        42,
+        40,
+        41
+      ],
+      "first_triangle": 19,
+      "second_triangle": 20,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        43,
+        44,
+        45,
+        45
+      ],
+      "first_triangle": 21,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        28,
+        30,
+        46,
+        46
+      ],
+      "first_triangle": 22,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        47,
+        48,
+        49,
+        49
+      ],
+      "first_triangle": 23,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        47,
+        50,
+        48,
+        48
+      ],
+      "first_triangle": 24,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        51,
+        52,
+        53,
+        53
+      ],
+      "first_triangle": 25,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        51,
+        53,
+        54,
+        54
+      ],
+      "first_triangle": 26,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        43,
+        45,
+        55,
+        55
+      ],
+      "first_triangle": 27,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        56,
+        57,
+        58,
+        74
+      ],
+      "first_triangle": 28,
+      "second_triangle": 36,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        59,
+        60,
+        61,
+        62
+      ],
+      "first_triangle": 29,
+      "second_triangle": 30,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        63,
+        64,
+        65,
+        65
+      ],
+      "first_triangle": 31,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        63,
+        66,
+        64,
+        64
+      ],
+      "first_triangle": 32,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        67,
+        70,
+        68,
+        69
+      ],
+      "first_triangle": 33,
+      "second_triangle": 34,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        71,
+        83,
+        72,
+        73
+      ],
+      "first_triangle": 35,
+      "second_triangle": 41,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        75,
+        78,
+        76,
+        77
+      ],
+      "first_triangle": 37,
+      "second_triangle": 38,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        79,
+        82,
+        80,
+        81
+      ],
+      "first_triangle": 39,
+      "second_triangle": 40,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        84,
+        102,
+        85,
+        86
+      ],
+      "first_triangle": 42,
+      "second_triangle": 50,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        87,
+        88,
+        89,
+        90
+      ],
+      "first_triangle": 43,
+      "second_triangle": 44,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        91,
+        94,
+        92,
+        93
+      ],
+      "first_triangle": 45,
+      "second_triangle": 46,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        95,
+        98,
+        96,
+        97
+      ],
+      "first_triangle": 47,
+      "second_triangle": 48,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        99,
+        111,
+        100,
+        101
+      ],
+      "first_triangle": 49,
+      "second_triangle": 55,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        103,
+        104,
+        105,
+        106
+      ],
+      "first_triangle": 51,
+      "second_triangle": 52,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        107,
+        110,
+        108,
+        109
+      ],
+      "first_triangle": 53,
+      "second_triangle": 54,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        112,
+        113,
+        114,
+        130
+      ],
+      "first_triangle": 56,
+      "second_triangle": 64,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        115,
+        118,
+        116,
+        117
+      ],
+      "first_triangle": 57,
+      "second_triangle": 58,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        119,
+        120,
+        121,
+        122
+      ],
+      "first_triangle": 59,
+      "second_triangle": 60,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        123,
+        126,
+        124,
+        125
+      ],
+      "first_triangle": 61,
+      "second_triangle": 62,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        127,
+        139,
+        128,
+        129
+      ],
+      "first_triangle": 63,
+      "second_triangle": 69,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        131,
+        134,
+        132,
+        133
+      ],
+      "first_triangle": 65,
+      "second_triangle": 66,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        135,
+        138,
+        136,
+        137
+      ],
+      "first_triangle": 67,
+      "second_triangle": 68,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        140,
+        143,
+        141,
+        142
+      ],
+      "first_triangle": 70,
+      "second_triangle": 71,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        2,
+        1,
+        14,
+        14
+      ],
+      "first_triangle": 72,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        144,
+        145,
+        146,
+        146
+      ],
+      "first_triangle": 73,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        144,
+        146,
+        147,
+        147
+      ],
+      "first_triangle": 74,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        10,
+        4,
+        3,
+        3
+      ],
+      "first_triangle": 75,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        10,
+        9,
+        4,
+        4
+      ],
+      "first_triangle": 76,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        13,
+        12,
+        8,
+        8
+      ],
+      "first_triangle": 77,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        13,
+        8,
+        7,
+        7
+      ],
+      "first_triangle": 78,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        17,
+        16,
+        26,
+        26
+      ],
+      "first_triangle": 79,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        2,
+        14,
+        11,
+        11
+      ],
+      "first_triangle": 80,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        21,
+        18,
+        0,
+        0
+      ],
+      "first_triangle": 81,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        21,
+        20,
+        18,
+        18
+      ],
+      "first_triangle": 82,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        25,
+        22,
+        19,
+        19
+      ],
+      "first_triangle": 83,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        25,
+        24,
+        22,
+        22
+      ],
+      "first_triangle": 84,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        17,
+        26,
+        23,
+        23
+      ],
+      "first_triangle": 85,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        49,
+        29,
+        28,
+        28
+      ],
+      "first_triangle": 86,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        33,
+        32,
+        27,
+        27
+      ],
+      "first_triangle": 87,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        33,
+        27,
+        15,
+        15
+      ],
+      "first_triangle": 88,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        41,
+        40,
+        38,
+        38
+      ],
+      "first_triangle": 89,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        41,
+        38,
+        35,
+        35
+      ],
+      "first_triangle": 90,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        46,
+        42,
+        39,
+        39
+      ],
+      "first_triangle": 91,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        46,
+        30,
+        42,
+        42
+      ],
+      "first_triangle": 92,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        62,
+        44,
+        43,
+        43
+      ],
+      "first_triangle": 93,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        49,
+        48,
+        29,
+        29
+      ],
+      "first_triangle": 94,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        54,
+        50,
+        47,
+        47
+      ],
+      "first_triangle": 95,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        54,
+        53,
+        50,
+        50
+      ],
+      "first_triangle": 96,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        55,
+        45,
+        52,
+        52
+      ],
+      "first_triangle": 97,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        55,
+        52,
+        51,
+        51
+      ],
+      "first_triangle": 98,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        62,
+        61,
+        44,
+        44
+      ],
+      "first_triangle": 99,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        148,
+        36,
+        149,
+        149
+      ],
+      "first_triangle": 100,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        65,
+        64,
+        60,
+        60
+      ],
+      "first_triangle": 101,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        65,
+        60,
+        59,
+        59
+      ],
+      "first_triangle": 102,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        150,
+        151,
+        152,
+        152
+      ],
+      "first_triangle": 103,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        148,
+        149,
+        150,
+        150
+      ],
+      "first_triangle": 104,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        148,
+        150,
+        152,
+        152
+      ],
+      "first_triangle": 105,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        148,
+        153,
+        36,
+        36
+      ],
+      "first_triangle": 106,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        154,
+        155,
+        156,
+        156
+      ],
+      "first_triangle": 107,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        154,
+        157,
+        155,
+        155
+      ],
+      "first_triangle": 108,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        158,
+        159,
+        160,
+        160
+      ],
+      "first_triangle": 109,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        158,
+        160,
+        161,
+        161
+      ],
+      "first_triangle": 110,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        162,
+        163,
+        164,
+        164
+      ],
+      "first_triangle": 111,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        162,
+        165,
+        163,
+        163
+      ],
+      "first_triangle": 112,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        163,
+        166,
+        164,
+        164
+      ],
+      "first_triangle": 113,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        163,
+        34,
+        166,
+        166
+      ],
+      "first_triangle": 114,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        162,
+        167,
+        165,
+        165
+      ],
+      "first_triangle": 115,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        168,
+        169,
+        170,
+        170
+      ],
+      "first_triangle": 116,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        168,
+        170,
+        171,
+        171
+      ],
+      "first_triangle": 117,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        172,
+        173,
+        174,
+        174
+      ],
+      "first_triangle": 118,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        172,
+        175,
+        173,
+        173
+      ],
+      "first_triangle": 119,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        176,
+        177,
+        178,
+        178
+      ],
+      "first_triangle": 120,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        176,
+        178,
+        179,
+        179
+      ],
+      "first_triangle": 121,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        180,
+        178,
+        177,
+        177
+      ],
+      "first_triangle": 122,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        180,
+        5,
+        178,
+        178
+      ],
+      "first_triangle": 123,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        66,
+        181,
+        179,
+        179
+      ],
+      "first_triangle": 124,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        176,
+        179,
+        181,
+        181
+      ],
+      "first_triangle": 125,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        129,
+        128,
+        70,
+        70
+      ],
+      "first_triangle": 126,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        77,
+        82,
+        79,
+        79
+      ],
+      "first_triangle": 127,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        129,
+        70,
+        67,
+        67
+      ],
+      "first_triangle": 128,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        69,
+        68,
+        57,
+        57
+      ],
+      "first_triangle": 129,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        69,
+        57,
+        56,
+        56
+      ],
+      "first_triangle": 130,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        74,
+        58,
+        78,
+        78
+      ],
+      "first_triangle": 131,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        74,
+        78,
+        75,
+        75
+      ],
+      "first_triangle": 132,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        77,
+        76,
+        82,
+        82
+      ],
+      "first_triangle": 133,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        93,
+        92,
+        98,
+        98
+      ],
+      "first_triangle": 134,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        81,
+        80,
+        83,
+        83
+      ],
+      "first_triangle": 135,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        81,
+        83,
+        71,
+        71
+      ],
+      "first_triangle": 136,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        73,
+        88,
+        87,
+        87
+      ],
+      "first_triangle": 137,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        73,
+        72,
+        88,
+        88
+      ],
+      "first_triangle": 138,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        90,
+        89,
+        94,
+        94
+      ],
+      "first_triangle": 139,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        90,
+        94,
+        91,
+        91
+      ],
+      "first_triangle": 140,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        106,
+        110,
+        107,
+        107
+      ],
+      "first_triangle": 141,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        93,
+        98,
+        95,
+        95
+      ],
+      "first_triangle": 142,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        97,
+        102,
+        84,
+        84
+      ],
+      "first_triangle": 143,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        97,
+        96,
+        102,
+        102
+      ],
+      "first_triangle": 144,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        142,
+        141,
+        104,
+        104
+      ],
+      "first_triangle": 145,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        142,
+        104,
+        103,
+        103
+      ],
+      "first_triangle": 146,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        106,
+        105,
+        110,
+        110
+      ],
+      "first_triangle": 147,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        122,
+        121,
+        126,
+        126
+      ],
+      "first_triangle": 148,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        109,
+        111,
+        99,
+        99
+      ],
+      "first_triangle": 149,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        109,
+        108,
+        111,
+        111
+      ],
+      "first_triangle": 150,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        101,
+        100,
+        118,
+        118
+      ],
+      "first_triangle": 151,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        101,
+        118,
+        115,
+        115
+      ],
+      "first_triangle": 152,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        117,
+        116,
+        120,
+        120
+      ],
+      "first_triangle": 153,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        117,
+        120,
+        119,
+        119
+      ],
+      "first_triangle": 154,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        133,
+        132,
+        138,
+        138
+      ],
+      "first_triangle": 155,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        122,
+        126,
+        123,
+        123
+      ],
+      "first_triangle": 156,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        125,
+        124,
+        113,
+        113
+      ],
+      "first_triangle": 157,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        125,
+        113,
+        112,
+        112
+      ],
+      "first_triangle": 158,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        130,
+        114,
+        134,
+        134
+      ],
+      "first_triangle": 159,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        130,
+        134,
+        131,
+        131
+      ],
+      "first_triangle": 160,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        133,
+        138,
+        135,
+        135
+      ],
+      "first_triangle": 161,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        137,
+        136,
+        139,
+        139
+      ],
+      "first_triangle": 162,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        137,
+        139,
+        127,
+        127
+      ],
+      "first_triangle": 163,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        182,
+        183,
+        143,
+        143
+      ],
+      "first_triangle": 164,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        182,
+        143,
+        140,
+        140
+      ],
+      "first_triangle": 165,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 4
+    },
+    {
+      "vertices": [
+        184,
+        185,
+        186,
+        186
+      ],
+      "first_triangle": 166,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        184,
+        187,
+        185,
+        185
+      ],
+      "first_triangle": 167,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        188,
+        189,
+        190,
+        190
+      ],
+      "first_triangle": 168,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        188,
+        190,
+        191,
+        191
+      ],
+      "first_triangle": 169,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        192,
+        193,
+        194,
+        194
+      ],
+      "first_triangle": 170,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        192,
+        194,
+        195,
+        195
+      ],
+      "first_triangle": 171,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        196,
+        197,
+        194,
+        194
+      ],
+      "first_triangle": 172,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        196,
+        194,
+        193,
+        193
+      ],
+      "first_triangle": 173,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        198,
+        199,
+        200,
+        200
+      ],
+      "first_triangle": 174,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        193,
+        201,
+        196,
+        196
+      ],
+      "first_triangle": 175,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        201,
+        202,
+        196,
+        196
+      ],
+      "first_triangle": 176,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        197,
+        196,
+        203,
+        203
+      ],
+      "first_triangle": 177,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        204,
+        197,
+        203,
+        203
+      ],
+      "first_triangle": 178,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        204,
+        205,
+        197,
+        197
+      ],
+      "first_triangle": 179,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        206,
+        203,
+        207,
+        207
+      ],
+      "first_triangle": 180,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        206,
+        204,
+        203,
+        203
+      ],
+      "first_triangle": 181,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        198,
+        200,
+        208,
+        208
+      ],
+      "first_triangle": 182,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        209,
+        210,
+        206,
+        206
+      ],
+      "first_triangle": 183,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        211,
+        212,
+        210,
+        210
+      ],
+      "first_triangle": 184,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        211,
+        213,
+        212,
+        212
+      ],
+      "first_triangle": 185,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        209,
+        211,
+        210,
+        210
+      ],
+      "first_triangle": 186,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        214,
+        212,
+        213,
+        213
+      ],
+      "first_triangle": 187,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        215,
+        214,
+        213,
+        213
+      ],
+      "first_triangle": 188,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        215,
+        213,
+        216,
+        216
+      ],
+      "first_triangle": 189,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        217,
+        215,
+        216,
+        216
+      ],
+      "first_triangle": 190,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        209,
+        206,
+        207,
+        207
+      ],
+      "first_triangle": 191,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        218,
+        219,
+        220,
+        220
+      ],
+      "first_triangle": 192,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        221,
+        222,
+        223,
+        223
+      ],
+      "first_triangle": 193,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        221,
+        224,
+        222,
+        222
+      ],
+      "first_triangle": 194,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        225,
+        226,
+        227,
+        227
+      ],
+      "first_triangle": 195,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        225,
+        227,
+        228,
+        228
+      ],
+      "first_triangle": 196,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        229,
+        230,
+        231,
+        231
+      ],
+      "first_triangle": 197,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        229,
+        231,
+        232,
+        232
+      ],
+      "first_triangle": 198,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        233,
+        185,
+        234,
+        234
+      ],
+      "first_triangle": 199,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        218,
+        235,
+        219,
+        219
+      ],
+      "first_triangle": 200,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        236,
+        237,
+        238,
+        238
+      ],
+      "first_triangle": 201,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        236,
+        238,
+        239,
+        239
+      ],
+      "first_triangle": 202,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        240,
+        241,
+        233,
+        233
+      ],
+      "first_triangle": 203,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        240,
+        233,
+        234,
+        234
+      ],
+      "first_triangle": 204,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        233,
+        242,
+        185,
+        185
+      ],
+      "first_triangle": 205,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        185,
+        243,
+        186,
+        186
+      ],
+      "first_triangle": 206,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        185,
+        242,
+        243,
+        243
+      ],
+      "first_triangle": 207,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        177,
+        241,
+        240,
+        240
+      ],
+      "first_triangle": 208,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        177,
+        244,
+        241,
+        241
+      ],
+      "first_triangle": 209,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        176,
+        244,
+        177,
+        177
+      ],
+      "first_triangle": 210,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        176,
+        245,
+        244,
+        244
+      ],
+      "first_triangle": 211,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        246,
+        245,
+        176,
+        176
+      ],
+      "first_triangle": 212,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        246,
+        247,
+        245,
+        245
+      ],
+      "first_triangle": 213,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        248,
+        247,
+        246,
+        246
+      ],
+      "first_triangle": 214,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        243,
+        248,
+        186,
+        186
+      ],
+      "first_triangle": 215,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        249,
+        250,
+        251,
+        251
+      ],
+      "first_triangle": 216,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        248,
+        252,
+        247,
+        247
+      ],
+      "first_triangle": 217,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        243,
+        252,
+        248,
+        248
+      ],
+      "first_triangle": 218,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        234,
+        253,
+        254,
+        254
+      ],
+      "first_triangle": 219,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        253,
+        255,
+        254,
+        254
+      ],
+      "first_triangle": 220,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        234,
+        256,
+        253,
+        253
+      ],
+      "first_triangle": 221,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        234,
+        254,
+        180,
+        180
+      ],
+      "first_triangle": 222,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        240,
+        234,
+        180,
+        180
+      ],
+      "first_triangle": 223,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        234,
+        185,
+        256,
+        256
+      ],
+      "first_triangle": 224,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        257,
+        258,
+        259,
+        259
+      ],
+      "first_triangle": 225,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        181,
+        249,
+        248,
+        248
+      ],
+      "first_triangle": 226,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        249,
+        251,
+        248,
+        248
+      ],
+      "first_triangle": 227,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        251,
+        260,
+        248,
+        248
+      ],
+      "first_triangle": 228,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        260,
+        186,
+        248,
+        248
+      ],
+      "first_triangle": 229,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        181,
+        248,
+        246,
+        246
+      ],
+      "first_triangle": 230,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        257,
+        261,
+        262,
+        262
+      ],
+      "first_triangle": 231,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        257,
+        262,
+        263,
+        263
+      ],
+      "first_triangle": 232,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        257,
+        263,
+        258,
+        258
+      ],
+      "first_triangle": 233,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        264,
+        265,
+        266,
+        266
+      ],
+      "first_triangle": 234,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        264,
+        266,
+        267,
+        267
+      ],
+      "first_triangle": 235,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        264,
+        268,
+        265,
+        265
+      ],
+      "first_triangle": 236,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        264,
+        269,
+        268,
+        268
+      ],
+      "first_triangle": 237,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 3
+    },
+    {
+      "vertices": [
+        270,
+        271,
+        272,
+        272
+      ],
+      "first_triangle": 238,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        271,
+        169,
+        272,
+        272
+      ],
+      "first_triangle": 239,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        273,
+        271,
+        270,
+        270
+      ],
+      "first_triangle": 240,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        273,
+        175,
+        271,
+        271
+      ],
+      "first_triangle": 241,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        175,
+        170,
+        271,
+        271
+      ],
+      "first_triangle": 242,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        271,
+        170,
+        169,
+        169
+      ],
+      "first_triangle": 243,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        274,
+        168,
+        171,
+        171
+      ],
+      "first_triangle": 244,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        274,
+        171,
+        270,
+        270
+      ],
+      "first_triangle": 245,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        270,
+        171,
+        172,
+        172
+      ],
+      "first_triangle": 246,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        273,
+        270,
+        275,
+        275
+      ],
+      "first_triangle": 247,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        270,
+        172,
+        275,
+        275
+      ],
+      "first_triangle": 248,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        276,
+        277,
+        278,
+        278
+      ],
+      "first_triangle": 249,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        270,
+        272,
+        274,
+        274
+      ],
+      "first_triangle": 250,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        273,
+        275,
+        279,
+        279
+      ],
+      "first_triangle": 251,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        273,
+        279,
+        277,
+        277
+      ],
+      "first_triangle": 252,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        280,
+        175,
+        273,
+        273
+      ],
+      "first_triangle": 253,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        280,
+        273,
+        276,
+        276
+      ],
+      "first_triangle": 254,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        276,
+        273,
+        277,
+        277
+      ],
+      "first_triangle": 255,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        278,
+        277,
+        279,
+        279
+      ],
+      "first_triangle": 256,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        278,
+        279,
+        281,
+        281
+      ],
+      "first_triangle": 257,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        281,
+        279,
+        275,
+        275
+      ],
+      "first_triangle": 258,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        281,
+        275,
+        282,
+        282
+      ],
+      "first_triangle": 259,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        282,
+        275,
+        172,
+        172
+      ],
+      "first_triangle": 260,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        282,
+        172,
+        283,
+        283
+      ],
+      "first_triangle": 261,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 2
+    },
+    {
+      "vertices": [
+        284,
+        285,
+        286,
+        286
+      ],
+      "first_triangle": 262,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        284,
+        287,
+        285,
+        285
+      ],
+      "first_triangle": 263,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        288,
+        289,
+        290,
+        290
+      ],
+      "first_triangle": 264,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        288,
+        290,
+        291,
+        291
+      ],
+      "first_triangle": 265,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        213,
+        292,
+        293,
+        216
+      ],
+      "first_triangle": 266,
+      "second_triangle": 275,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        294,
+        278,
+        295,
+        295
+      ],
+      "first_triangle": 267,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        294,
+        295,
+        296,
+        296
+      ],
+      "first_triangle": 268,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        295,
+        278,
+        281,
+        281
+      ],
+      "first_triangle": 269,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        295,
+        281,
+        297,
+        297
+      ],
+      "first_triangle": 270,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        297,
+        281,
+        298,
+        298
+      ],
+      "first_triangle": 271,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        299,
+        297,
+        298,
+        298
+      ],
+      "first_triangle": 272,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        216,
+        300,
+        217,
+        217
+      ],
+      "first_triangle": 273,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        216,
+        293,
+        300,
+        300
+      ],
+      "first_triangle": 274,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        211,
+        292,
+        213,
+        213
+      ],
+      "first_triangle": 276,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        301,
+        302,
+        192,
+        192
+      ],
+      "first_triangle": 277,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        302,
+        193,
+        192,
+        192
+      ],
+      "first_triangle": 278,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        195,
+        194,
+        303,
+        303
+      ],
+      "first_triangle": 279,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        195,
+        303,
+        304,
+        304
+      ],
+      "first_triangle": 280,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        305,
+        306,
+        307,
+        307
+      ],
+      "first_triangle": 281,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        303,
+        301,
+        304,
+        304
+      ],
+      "first_triangle": 282,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        303,
+        302,
+        301,
+        301
+      ],
+      "first_triangle": 283,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        200,
+        199,
+        308,
+        308
+      ],
+      "first_triangle": 284,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        200,
+        308,
+        309,
+        309
+      ],
+      "first_triangle": 285,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        308,
+        310,
+        311,
+        311
+      ],
+      "first_triangle": 286,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        308,
+        311,
+        309,
+        309
+      ],
+      "first_triangle": 287,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        198,
+        208,
+        311,
+        310
+      ],
+      "first_triangle": 288,
+      "second_triangle": 289,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        305,
+        307,
+        312,
+        312
+      ],
+      "first_triangle": 290,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        312,
+        232,
+        305,
+        305
+      ],
+      "first_triangle": 291,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        312,
+        229,
+        232,
+        232
+      ],
+      "first_triangle": 292,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        306,
+        231,
+        230,
+        230
+      ],
+      "first_triangle": 293,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        306,
+        230,
+        307,
+        307
+      ],
+      "first_triangle": 294,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        313,
+        314,
+        287,
+        287
+      ],
+      "first_triangle": 295,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        287,
+        314,
+        315,
+        315
+      ],
+      "first_triangle": 296,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        315,
+        314,
+        313,
+        313
+      ],
+      "first_triangle": 297,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        316,
+        317,
+        318,
+        318
+      ],
+      "first_triangle": 298,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        287,
+        315,
+        285,
+        285
+      ],
+      "first_triangle": 299,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        315,
+        313,
+        319,
+        319
+      ],
+      "first_triangle": 300,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        313,
+        287,
+        284,
+        284
+      ],
+      "first_triangle": 301,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        320,
+        288,
+        317,
+        317
+      ],
+      "first_triangle": 302,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        320,
+        289,
+        288,
+        288
+      ],
+      "first_triangle": 303,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        290,
+        289,
+        320,
+        320
+      ],
+      "first_triangle": 304,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        290,
+        320,
+        316,
+        316
+      ],
+      "first_triangle": 305,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        316,
+        320,
+        317,
+        317
+      ],
+      "first_triangle": 306,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        317,
+        288,
+        291,
+        291
+      ],
+      "first_triangle": 307,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        317,
+        291,
+        318,
+        318
+      ],
+      "first_triangle": 308,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        285,
+        315,
+        319,
+        319
+      ],
+      "first_triangle": 309,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        285,
+        319,
+        286,
+        286
+      ],
+      "first_triangle": 310,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        321,
+        322,
+        323,
+        323
+      ],
+      "first_triangle": 311,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        324,
+        321,
+        323,
+        323
+      ],
+      "first_triangle": 312,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        323,
+        202,
+        201,
+        201
+      ],
+      "first_triangle": 313,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        323,
+        201,
+        324,
+        324
+      ],
+      "first_triangle": 314,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        302,
+        321,
+        324,
+        324
+      ],
+      "first_triangle": 315,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        302,
+        324,
+        201,
+        201
+      ],
+      "first_triangle": 316,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        303,
+        197,
+        321,
+        321
+      ],
+      "first_triangle": 317,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        302,
+        303,
+        321,
+        321
+      ],
+      "first_triangle": 318,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        205,
+        322,
+        321,
+        321
+      ],
+      "first_triangle": 319,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        205,
+        321,
+        197,
+        197
+      ],
+      "first_triangle": 320,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        303,
+        194,
+        197,
+        197
+      ],
+      "first_triangle": 321,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        201,
+        193,
+        302,
+        302
+      ],
+      "first_triangle": 322,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        286,
+        325,
+        326,
+        326
+      ],
+      "first_triangle": 323,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        286,
+        326,
+        284,
+        284
+      ],
+      "first_triangle": 324,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        286,
+        327,
+        325,
+        325
+      ],
+      "first_triangle": 325,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        328,
+        290,
+        329,
+        329
+      ],
+      "first_triangle": 326,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        328,
+        330,
+        291,
+        291
+      ],
+      "first_triangle": 327,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        328,
+        291,
+        290,
+        290
+      ],
+      "first_triangle": 328,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        331,
+        332,
+        333,
+        336
+      ],
+      "first_triangle": 329,
+      "second_triangle": 338,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        276,
+        334,
+        173,
+        173
+      ],
+      "first_triangle": 330,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        276,
+        173,
+        280,
+        280
+      ],
+      "first_triangle": 331,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        334,
+        276,
+        294,
+        294
+      ],
+      "first_triangle": 332,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        334,
+        294,
+        296,
+        296
+      ],
+      "first_triangle": 333,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        283,
+        335,
+        282,
+        282
+      ],
+      "first_triangle": 334,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        282,
+        335,
+        299,
+        299
+      ],
+      "first_triangle": 335,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        282,
+        299,
+        298,
+        298
+      ],
+      "first_triangle": 336,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        283,
+        174,
+        335,
+        335
+      ],
+      "first_triangle": 337,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        333,
+        337,
+        339,
+        336
+      ],
+      "first_triangle": 339,
+      "second_triangle": 342,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        332,
+        338,
+        333,
+        333
+      ],
+      "first_triangle": 340,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        338,
+        337,
+        333,
+        333
+      ],
+      "first_triangle": 341,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        338,
+        340,
+        337,
+        337
+      ],
+      "first_triangle": 343,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        337,
+        340,
+        341,
+        339
+      ],
+      "first_triangle": 344,
+      "second_triangle": 345,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        342,
+        343,
+        344,
+        345
+      ],
+      "first_triangle": 346,
+      "second_triangle": 347,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        239,
+        346,
+        347,
+        347
+      ],
+      "first_triangle": 348,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        344,
+        348,
+        351,
+        345
+      ],
+      "first_triangle": 349,
+      "second_triangle": 352,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        344,
+        343,
+        349,
+        349
+      ],
+      "first_triangle": 350,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        348,
+        349,
+        350,
+        350
+      ],
+      "first_triangle": 351,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        348,
+        350,
+        352,
+        351
+      ],
+      "first_triangle": 353,
+      "second_triangle": 355,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        348,
+        344,
+        349,
+        349
+      ],
+      "first_triangle": 354,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        353,
+        239,
+        347,
+        347
+      ],
+      "first_triangle": 356,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        249,
+        181,
+        354,
+        354
+      ],
+      "first_triangle": 357,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        207,
+        353,
+        347,
+        347
+      ],
+      "first_triangle": 358,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        355,
+        218,
+        356,
+        356
+      ],
+      "first_triangle": 359,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        209,
+        355,
+        356,
+        356
+      ],
+      "first_triangle": 360,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        355,
+        357,
+        218,
+        218
+      ],
+      "first_triangle": 361,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        249,
+        153,
+        148,
+        148
+      ],
+      "first_triangle": 362,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        249,
+        354,
+        153,
+        153
+      ],
+      "first_triangle": 363,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        249,
+        148,
+        152,
+        152
+      ],
+      "first_triangle": 364,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        249,
+        152,
+        250,
+        250
+      ],
+      "first_triangle": 365,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        255,
+        164,
+        254,
+        254
+      ],
+      "first_triangle": 366,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        255,
+        162,
+        164,
+        164
+      ],
+      "first_triangle": 367,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        254,
+        164,
+        166,
+        166
+      ],
+      "first_triangle": 368,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        254,
+        166,
+        358,
+        358
+      ],
+      "first_triangle": 369,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        254,
+        358,
+        180,
+        180
+      ],
+      "first_triangle": 370,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        293,
+        359,
+        151,
+        151
+      ],
+      "first_triangle": 371,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        293,
+        151,
+        300,
+        300
+      ],
+      "first_triangle": 372,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        360,
+        223,
+        361,
+        361
+      ],
+      "first_triangle": 373,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        361,
+        293,
+        292,
+        292
+      ],
+      "first_triangle": 374,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        361,
+        362,
+        293,
+        293
+      ],
+      "first_triangle": 375,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        361,
+        223,
+        362,
+        362
+      ],
+      "first_triangle": 376,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        292,
+        251,
+        222,
+        222
+      ],
+      "first_triangle": 377,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        292,
+        222,
+        363,
+        363
+      ],
+      "first_triangle": 378,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        292,
+        363,
+        361,
+        361
+      ],
+      "first_triangle": 379,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        360,
+        221,
+        223,
+        223
+      ],
+      "first_triangle": 380,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        363,
+        224,
+        364,
+        364
+      ],
+      "first_triangle": 381,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        363,
+        222,
+        224,
+        224
+      ],
+      "first_triangle": 382,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        211,
+        365,
+        251,
+        251
+      ],
+      "first_triangle": 383,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        211,
+        251,
+        292,
+        292
+      ],
+      "first_triangle": 384,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        366,
+        365,
+        356,
+        356
+      ],
+      "first_triangle": 385,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        366,
+        367,
+        365,
+        365
+      ],
+      "first_triangle": 386,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        365,
+        235,
+        251,
+        251
+      ],
+      "first_triangle": 387,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        211,
+        356,
+        365,
+        365
+      ],
+      "first_triangle": 388,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        211,
+        209,
+        356,
+        356
+      ],
+      "first_triangle": 389,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        354,
+        65,
+        37,
+        37
+      ],
+      "first_triangle": 390,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        354,
+        37,
+        153,
+        153
+      ],
+      "first_triangle": 391,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        35,
+        37,
+        65,
+        65
+      ],
+      "first_triangle": 392,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        35,
+        65,
+        63,
+        63
+      ],
+      "first_triangle": 393,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        6,
+        31,
+        33,
+        33
+      ],
+      "first_triangle": 394,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        6,
+        3,
+        31,
+        31
+      ],
+      "first_triangle": 395,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        166,
+        31,
+        3,
+        3
+      ],
+      "first_triangle": 396,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        166,
+        3,
+        358,
+        358
+      ],
+      "first_triangle": 397,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        3,
+        6,
+        180,
+        358
+      ],
+      "first_triangle": 398,
+      "second_triangle": 399,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        63,
+        65,
+        354,
+        181
+      ],
+      "first_triangle": 400,
+      "second_triangle": 401,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        203,
+        253,
+        368,
+        368
+      ],
+      "first_triangle": 402,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        253,
+        238,
+        368,
+        368
+      ],
+      "first_triangle": 403,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        203,
+        368,
+        353,
+        353
+      ],
+      "first_triangle": 404,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        353,
+        368,
+        369,
+        369
+      ],
+      "first_triangle": 405,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        207,
+        203,
+        353,
+        353
+      ],
+      "first_triangle": 406,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        370,
+        371,
+        372,
+        372
+      ],
+      "first_triangle": 407,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        364,
+        360,
+        361,
+        361
+      ],
+      "first_triangle": 408,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        370,
+        372,
+        373,
+        373
+      ],
+      "first_triangle": 409,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        156,
+        371,
+        370,
+        370
+      ],
+      "first_triangle": 410,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        156,
+        155,
+        371,
+        371
+      ],
+      "first_triangle": 411,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        373,
+        372,
+        157,
+        157
+      ],
+      "first_triangle": 412,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        373,
+        157,
+        154,
+        154
+      ],
+      "first_triangle": 413,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        364,
+        361,
+        363,
+        363
+      ],
+      "first_triangle": 414,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        196,
+        374,
+        375,
+        375
+      ],
+      "first_triangle": 415,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        376,
+        377,
+        378,
+        378
+      ],
+      "first_triangle": 416,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        376,
+        375,
+        377,
+        377
+      ],
+      "first_triangle": 417,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        375,
+        225,
+        228,
+        228
+      ],
+      "first_triangle": 418,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        375,
+        228,
+        377,
+        377
+      ],
+      "first_triangle": 419,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        378,
+        227,
+        226,
+        226
+      ],
+      "first_triangle": 420,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        378,
+        226,
+        376,
+        376
+      ],
+      "first_triangle": 421,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        374,
+        225,
+        375,
+        375
+      ],
+      "first_triangle": 422,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        203,
+        375,
+        376,
+        376
+      ],
+      "first_triangle": 423,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        203,
+        196,
+        375,
+        375
+      ],
+      "first_triangle": 424,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        203,
+        376,
+        253,
+        253
+      ],
+      "first_triangle": 425,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        376,
+        226,
+        253,
+        253
+      ],
+      "first_triangle": 426,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        161,
+        160,
+        379,
+        379
+      ],
+      "first_triangle": 427,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        161,
+        379,
+        380,
+        380
+      ],
+      "first_triangle": 428,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        381,
+        159,
+        158,
+        158
+      ],
+      "first_triangle": 429,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        381,
+        382,
+        159,
+        159
+      ],
+      "first_triangle": 430,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        380,
+        382,
+        381,
+        381
+      ],
+      "first_triangle": 431,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        380,
+        379,
+        382,
+        382
+      ],
+      "first_triangle": 432,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        202,
+        383,
+        196,
+        196
+      ],
+      "first_triangle": 433,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        202,
+        167,
+        383,
+        383
+      ],
+      "first_triangle": 434,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        356,
+        218,
+        366,
+        366
+      ],
+      "first_triangle": 435,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        384,
+        236,
+        239,
+        239
+      ],
+      "first_triangle": 436,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        218,
+        220,
+        366,
+        366
+      ],
+      "first_triangle": 437,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        367,
+        219,
+        365,
+        365
+      ],
+      "first_triangle": 438,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        219,
+        235,
+        365,
+        365
+      ],
+      "first_triangle": 439,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        368,
+        237,
+        369,
+        369
+      ],
+      "first_triangle": 440,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        368,
+        238,
+        237,
+        237
+      ],
+      "first_triangle": 441,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        384,
+        239,
+        353,
+        353
+      ],
+      "first_triangle": 442,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        262,
+        385,
+        263,
+        263
+      ],
+      "first_triangle": 443,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        353,
+        369,
+        384,
+        384
+      ],
+      "first_triangle": 444,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        207,
+        347,
+        355,
+        209
+      ],
+      "first_triangle": 445,
+      "second_triangle": 446,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        256,
+        258,
+        263,
+        386
+      ],
+      "first_triangle": 447,
+      "second_triangle": 448,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        385,
+        386,
+        263,
+        263
+      ],
+      "first_triangle": 449,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        266,
+        387,
+        267,
+        267
+      ],
+      "first_triangle": 450,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        261,
+        385,
+        262,
+        262
+      ],
+      "first_triangle": 451,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        261,
+        388,
+        385,
+        385
+      ],
+      "first_triangle": 452,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        260,
+        389,
+        265,
+        268
+      ],
+      "first_triangle": 453,
+      "second_triangle": 454,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        265,
+        390,
+        266,
+        266
+      ],
+      "first_triangle": 455,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        266,
+        390,
+        387,
+        387
+      ],
+      "first_triangle": 456,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        265,
+        389,
+        390,
+        390
+      ],
+      "first_triangle": 457,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        325,
+        391,
+        392,
+        392
+      ],
+      "first_triangle": 458,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        325,
+        392,
+        326,
+        326
+      ],
+      "first_triangle": 459,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        391,
+        393,
+        319,
+        319
+      ],
+      "first_triangle": 460,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        391,
+        319,
+        313,
+        313
+      ],
+      "first_triangle": 461,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        391,
+        313,
+        392,
+        392
+      ],
+      "first_triangle": 462,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        326,
+        392,
+        313,
+        313
+      ],
+      "first_triangle": 463,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        326,
+        313,
+        284,
+        284
+      ],
+      "first_triangle": 464,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        394,
+        328,
+        329,
+        329
+      ],
+      "first_triangle": 465,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        394,
+        329,
+        395,
+        395
+      ],
+      "first_triangle": 466,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        318,
+        396,
+        394,
+        394
+      ],
+      "first_triangle": 467,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        395,
+        329,
+        290,
+        290
+      ],
+      "first_triangle": 468,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        395,
+        290,
+        316,
+        316
+      ],
+      "first_triangle": 469,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        318,
+        394,
+        395,
+        395
+      ],
+      "first_triangle": 470,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        318,
+        395,
+        316,
+        316
+      ],
+      "first_triangle": 471,
+      "second_triangle": null,
+      "root": 0,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        397,
+        400,
+        398,
+        399
+      ],
+      "first_triangle": 472,
+      "second_triangle": 473,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        398,
+        400,
+        402,
+        401
+      ],
+      "first_triangle": 474,
+      "second_triangle": 475,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        403,
+        404,
+        405,
+        405
+      ],
+      "first_triangle": 476,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        404,
+        406,
+        405,
+        405
+      ],
+      "first_triangle": 477,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        405,
+        406,
+        407,
+        408
+      ],
+      "first_triangle": 478,
+      "second_triangle": 479,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        409,
+        410,
+        411,
+        411
+      ],
+      "first_triangle": 480,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        407,
+        412,
+        413,
+        408
+      ],
+      "first_triangle": 481,
+      "second_triangle": 482,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        414,
+        415,
+        416,
+        416
+      ],
+      "first_triangle": 483,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        414,
+        416,
+        417,
+        417
+      ],
+      "first_triangle": 484,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        409,
+        414,
+        417,
+        418
+      ],
+      "first_triangle": 485,
+      "second_triangle": 486,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        419,
+        420,
+        421,
+        424
+      ],
+      "first_triangle": 487,
+      "second_triangle": 493,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        409,
+        418,
+        410,
+        410
+      ],
+      "first_triangle": 488,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        402,
+        422,
+        401,
+        401
+      ],
+      "first_triangle": 489,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        402,
+        423,
+        422,
+        422
+      ],
+      "first_triangle": 490,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        399,
+        424,
+        397,
+        397
+      ],
+      "first_triangle": 491,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        399,
+        419,
+        424,
+        424
+      ],
+      "first_triangle": 492,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        425,
+        426,
+        436,
+        427
+      ],
+      "first_triangle": 494,
+      "second_triangle": 503,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        420,
+        429,
+        428,
+        421
+      ],
+      "first_triangle": 495,
+      "second_triangle": 496,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        427,
+        430,
+        431,
+        431
+      ],
+      "first_triangle": 497,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        427,
+        431,
+        425,
+        425
+      ],
+      "first_triangle": 498,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        430,
+        433,
+        432,
+        431
+      ],
+      "first_triangle": 499,
+      "second_triangle": 500,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        433,
+        434,
+        432,
+        432
+      ],
+      "first_triangle": 501,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        433,
+        435,
+        434,
+        434
+      ],
+      "first_triangle": 502,
+      "second_triangle": null,
+      "root": 1,
+      "layer": 2,
+      "texture_index": 6
+    },
+    {
+      "vertices": [
+        437,
+        438,
+        439,
+        439
+      ],
+      "first_triangle": 504,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        440,
+        441,
+        442,
+        442
+      ],
+      "first_triangle": 505,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        438,
+        441,
+        440,
+        440
+      ],
+      "first_triangle": 506,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        438,
+        440,
+        439,
+        439
+      ],
+      "first_triangle": 507,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        443,
+        444,
+        445,
+        445
+      ],
+      "first_triangle": 508,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        322,
+        446,
+        447,
+        447
+      ],
+      "first_triangle": 509,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        322,
+        448,
+        446,
+        446
+      ],
+      "first_triangle": 510,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        322,
+        449,
+        448,
+        448
+      ],
+      "first_triangle": 511,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        449,
+        450,
+        448,
+        448
+      ],
+      "first_triangle": 512,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        450,
+        445,
+        448,
+        448
+      ],
+      "first_triangle": 513,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        448,
+        439,
+        440,
+        440
+      ],
+      "first_triangle": 514,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        451,
+        446,
+        448,
+        448
+      ],
+      "first_triangle": 515,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        451,
+        448,
+        440,
+        440
+      ],
+      "first_triangle": 516,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        448,
+        445,
+        439,
+        439
+      ],
+      "first_triangle": 517,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        450,
+        452,
+        445,
+        445
+      ],
+      "first_triangle": 518,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        452,
+        443,
+        445,
+        445
+      ],
+      "first_triangle": 519,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        453,
+        445,
+        444,
+        444
+      ],
+      "first_triangle": 520,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        437,
+        454,
+        455,
+        455
+      ],
+      "first_triangle": 521,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        446,
+        451,
+        456,
+        456
+      ],
+      "first_triangle": 522,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        447,
+        446,
+        456,
+        456
+      ],
+      "first_triangle": 523,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        456,
+        451,
+        442,
+        442
+      ],
+      "first_triangle": 524,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        451,
+        440,
+        442,
+        442
+      ],
+      "first_triangle": 525,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        457,
+        453,
+        444,
+        444
+      ],
+      "first_triangle": 526,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        455,
+        453,
+        457,
+        457
+      ],
+      "first_triangle": 527,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        455,
+        454,
+        453,
+        453
+      ],
+      "first_triangle": 528,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        445,
+        453,
+        454,
+        454
+      ],
+      "first_triangle": 529,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        445,
+        454,
+        439,
+        439
+      ],
+      "first_triangle": 530,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        437,
+        439,
+        454,
+        454
+      ],
+      "first_triangle": 531,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        458,
+        450,
+        449,
+        449
+      ],
+      "first_triangle": 532,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        450,
+        458,
+        459,
+        452
+      ],
+      "first_triangle": 533,
+      "second_triangle": 534,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        443,
+        452,
+        459,
+        459
+      ],
+      "first_triangle": 535,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 5
+    },
+    {
+      "vertices": [
+        441,
+        460,
+        461,
+        461
+      ],
+      "first_triangle": 536,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        441,
+        438,
+        460,
+        460
+      ],
+      "first_triangle": 537,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        461,
+        460,
+        462,
+        462
+      ],
+      "first_triangle": 538,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        461,
+        462,
+        463,
+        463
+      ],
+      "first_triangle": 539,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        463,
+        462,
+        464,
+        464
+      ],
+      "first_triangle": 540,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        463,
+        464,
+        465,
+        465
+      ],
+      "first_triangle": 541,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        465,
+        464,
+        466,
+        466
+      ],
+      "first_triangle": 542,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        465,
+        466,
+        467,
+        467
+      ],
+      "first_triangle": 543,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        467,
+        437,
+        442,
+        442
+      ],
+      "first_triangle": 544,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        467,
+        466,
+        437,
+        437
+      ],
+      "first_triangle": 545,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        305,
+        210,
+        459,
+        459
+      ],
+      "first_triangle": 546,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        305,
+        232,
+        210,
+        210
+      ],
+      "first_triangle": 547,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        306,
+        305,
+        459,
+        459
+      ],
+      "first_triangle": 548,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        306,
+        459,
+        458,
+        458
+      ],
+      "first_triangle": 549,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        206,
+        231,
+        306,
+        306
+      ],
+      "first_triangle": 550,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        206,
+        306,
+        458,
+        458
+      ],
+      "first_triangle": 551,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        459,
+        210,
+        443,
+        443
+      ],
+      "first_triangle": 552,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        210,
+        214,
+        443,
+        443
+      ],
+      "first_triangle": 553,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        214,
+        215,
+        444,
+        443
+      ],
+      "first_triangle": 554,
+      "second_triangle": 555,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        199,
+        468,
+        457,
+        457
+      ],
+      "first_triangle": 556,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        215,
+        310,
+        444,
+        444
+      ],
+      "first_triangle": 557,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        215,
+        198,
+        310,
+        310
+      ],
+      "first_triangle": 558,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        310,
+        457,
+        444,
+        444
+      ],
+      "first_triangle": 559,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        310,
+        308,
+        457,
+        457
+      ],
+      "first_triangle": 560,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        308,
+        199,
+        457,
+        457
+      ],
+      "first_triangle": 561,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        300,
+        468,
+        199,
+        199
+      ],
+      "first_triangle": 562,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        468,
+        469,
+        455,
+        455
+      ],
+      "first_triangle": 563,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        468,
+        455,
+        457,
+        457
+      ],
+      "first_triangle": 564,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        437,
+        455,
+        469,
+        470
+      ],
+      "first_triangle": 565,
+      "second_triangle": 566,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        470,
+        296,
+        295,
+        295
+      ],
+      "first_triangle": 567,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        470,
+        295,
+        437,
+        437
+      ],
+      "first_triangle": 568,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        295,
+        442,
+        437,
+        437
+      ],
+      "first_triangle": 569,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        295,
+        297,
+        442,
+        442
+      ],
+      "first_triangle": 570,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        447,
+        202,
+        323,
+        323
+      ],
+      "first_triangle": 571,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        297,
+        471,
+        442,
+        442
+      ],
+      "first_triangle": 572,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        297,
+        299,
+        471,
+        471
+      ],
+      "first_triangle": 573,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        442,
+        472,
+        456,
+        456
+      ],
+      "first_triangle": 574,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        442,
+        471,
+        472,
+        472
+      ],
+      "first_triangle": 575,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        473,
+        447,
+        456,
+        456
+      ],
+      "first_triangle": 576,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        473,
+        456,
+        472,
+        472
+      ],
+      "first_triangle": 577,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        449,
+        206,
+        458,
+        458
+      ],
+      "first_triangle": 578,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        447,
+        473,
+        202,
+        202
+      ],
+      "first_triangle": 579,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        204,
+        449,
+        322,
+        205
+      ],
+      "first_triangle": 580,
+      "second_triangle": 581,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        449,
+        204,
+        206,
+        206
+      ],
+      "first_triangle": 582,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 1
+    },
+    {
+      "vertices": [
+        179,
+        470,
+        469,
+        474
+      ],
+      "first_triangle": 583,
+      "second_triangle": 593,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        300,
+        150,
+        468,
+        468
+      ],
+      "first_triangle": 584,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        300,
+        151,
+        150,
+        150
+      ],
+      "first_triangle": 585,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        150,
+        372,
+        468,
+        468
+      ],
+      "first_triangle": 586,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        150,
+        157,
+        372,
+        372
+      ],
+      "first_triangle": 587,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        372,
+        371,
+        469,
+        469
+      ],
+      "first_triangle": 588,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        372,
+        469,
+        468,
+        468
+      ],
+      "first_triangle": 589,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        371,
+        155,
+        149,
+        149
+      ],
+      "first_triangle": 590,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        371,
+        149,
+        469,
+        469
+      ],
+      "first_triangle": 591,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        471,
+        299,
+        335,
+        335
+      ],
+      "first_triangle": 592,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        471,
+        475,
+        472,
+        472
+      ],
+      "first_triangle": 594,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        471,
+        178,
+        475,
+        475
+      ],
+      "first_triangle": 595,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        179,
+        173,
+        334,
+        334
+      ],
+      "first_triangle": 596,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        179,
+        334,
+        470,
+        470
+      ],
+      "first_triangle": 597,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        334,
+        296,
+        470,
+        470
+      ],
+      "first_triangle": 598,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        473,
+        167,
+        202,
+        202
+      ],
+      "first_triangle": 599,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        471,
+        335,
+        178,
+        178
+      ],
+      "first_triangle": 600,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        335,
+        174,
+        178,
+        178
+      ],
+      "first_triangle": 601,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        163,
+        382,
+        472,
+        472
+      ],
+      "first_triangle": 602,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        163,
+        159,
+        382,
+        382
+      ],
+      "first_triangle": 603,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        382,
+        379,
+        473,
+        473
+      ],
+      "first_triangle": 604,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        382,
+        473,
+        472,
+        472
+      ],
+      "first_triangle": 605,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        379,
+        165,
+        473,
+        473
+      ],
+      "first_triangle": 606,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        473,
+        165,
+        167,
+        167
+      ],
+      "first_triangle": 607,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        379,
+        160,
+        165,
+        165
+      ],
+      "first_triangle": 608,
+      "second_triangle": null,
+      "root": 2,
+      "layer": 0,
+      "texture_index": 0
+    },
+    {
+      "vertices": [
+        476,
+        477,
+        478,
+        478
+      ],
+      "first_triangle": 609,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        479,
+        480,
+        481,
+        481
+      ],
+      "first_triangle": 610,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        479,
+        481,
+        482,
+        482
+      ],
+      "first_triangle": 611,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        483,
+        479,
+        482,
+        482
+      ],
+      "first_triangle": 612,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        483,
+        482,
+        476,
+        476
+      ],
+      "first_triangle": 613,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        482,
+        484,
+        477,
+        477
+      ],
+      "first_triangle": 614,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        482,
+        481,
+        484,
+        484
+      ],
+      "first_triangle": 615,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        476,
+        482,
+        477,
+        477
+      ],
+      "first_triangle": 616,
+      "second_triangle": null,
+      "root": 3,
+      "layer": 1,
+      "texture_index": 7
+    },
+    {
+      "vertices": [
+        485,
+        486,
+        487,
+        488
+      ],
+      "first_triangle": 617,
+      "second_triangle": 618,
+      "root": 4,
+      "layer": 2,
+      "texture_index": 8
+    }
+  ],
+  "pairing": {
+    "policy": "source-identical view-stable rectangular-UV VDP1 quads",
+    "projection_policy": "multi-view convexity; large painter-coarse walls remain subdivided triangles",
+    "matcher": "networkx.max_weight_matching",
+    "source_triangle_count": 619,
+    "geometry_candidate_count": 111,
+    "textured_quad_candidate_count": 52,
+    "quad_count": 52,
+    "standalone_triangle_count": 515,
+    "render_primitive_count": 567,
+    "commands_saved": 52,
+    "geometry_rejection_reasons": {
+      "material_mismatch": 110,
+      "normal_divergence": 212,
+      "projection_not_convex": 289
+    },
+    "texture_rejection_reasons": {
+      "shared_uv_mismatch": 5,
+      "uv_domain_not_rectangle": 54
+    }
+  },
   "texture_state_version": 2,
   "limits": [
     "Static geometry payloads only",

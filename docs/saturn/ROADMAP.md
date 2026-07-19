@@ -127,9 +127,15 @@ Saturn IR root through a verified `0x1F` root mask. All nine source materials
 fit a 79,232-byte local texture bank. Because VDP1 has no Z-buffer, opaque and
 binary-alpha source geometry share a far-to-near painter while the eight
 transparent-decal triangles use a late half-transparency pass. The next M4
-task is to replace repeated-vertex triangle coverage with safe quads,
-projected splitting, and clipping, then let the original graph camera,
-collision, action, and animation state own the complete frame.
+renderer checkpoint now compiles 52 source-identical, UV-rectangular,
+multi-view-safe pairs into true VDP1 quads. The remaining 515 source triangles
+are split into 2,060 independently sorted affine fallback tiles; together the
+Castle bank uses 2,112 commands and 270,336 texture bytes. A broader 144-quad
+planar policy was captured and rejected because large legal wall quads are too
+coarse for a painter without a Z-buffer. The next renderer task is therefore
+screen-space intersection/projected-error splitting and near-plane clipping,
+not less conservative merging. After that, the original graph camera,
+collision, action, and animation state must own the complete frame.
 
 ## M0 — Source-face proof
 

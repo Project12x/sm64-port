@@ -675,11 +675,61 @@ late-alpha overpaint while retaining every source root. The remaining diagonal
 faults are now isolated to repeated-vertex triangle coverage, crossing surfaces,
 and the lack of clipping—not missing material or GeoLayout selection.
 
+### M4 neutral: first source-safe textured quads
+
+![First conservative textured quads](screenshots/ymir-m4-native-textured-quads-2026-07-18.png)
+
+The Castle compiler now feeds the existing exact matcher with composite source
+material IDs. A pair must keep the same nested display list, top-level root,
+layer, texture, complete Fast3D tile state, and shared-vertex UVs; its four UV
+corners must form a rectangle and its projected boundary must remain convex in
+the established multi-view gate. Fifty-two pairs pass, reducing 619 source
+triangles to 567 VDP1 primitives and the one-tile profile from 79,232 to 72,576
+bytes. Every rejected triangle remains explicit. This first capture is nearly
+neutral because most room surfaces correctly remain fallbacks.
+
+### M4 rejected: broad planar quads are not painter-safe
+
+![Rejected broad planar quad pass](screenshots/ymir-m4-planar-textured-quads-2026-07-18.png)
+
+A mathematically valid dominant-axis planar proof finds 144 rectangular-UV
+quads. On a Z-buffered renderer those surfaces are legal, but VDP1 must sort
+whole draw commands. Large merged walls become coarse painter units and the
+left side gains a conspicuous blue ordering block. The proof remains available
+as an explicit host-tool experiment; this capture rejects it as the Castle
+default and records that geometry safety alone is insufficient.
+
+### M4 rejected: subdivision cannot rescue broad painter units
+
+![Broad quads with per-tile fallback sorting](screenshots/ymir-m4-per-tile-subdivision-painter-2026-07-18.png)
+
+The next diagnostic splits every remaining source triangle into four affine
+subtriangles and sorts each generated tile independently. It reduces several
+long diagonal spans but retains the broad-quad regression, proving that the
+unsafe painter granularity belongs to the merged walls rather than the new
+per-tile sorting path.
+
+### M4 current: conservative quads plus sorted fallback tiles
+
+![Conservative quads and sorted fallback tiles](screenshots/ymir-m4-conservative-quads-subdivided-painter-2026-07-18.png)
+
+The accepted compiler policy restores the 52 multi-view-safe quads and splits
+the other 515 source triangles four ways. The target sorts 2,112 Castle tiles
+independently in the same domain as source Mario. Generated VDP1 partition
+sizes now cover the exact command, RGB1555 texture, and Gouraud requirements:
+270,336 Castle texture bytes plus the existing Mario bank fit in VDP1 VRAM.
+Large crossings are visibly smaller, but the lobby is not yet correct. The
+remaining work is screen-space intersection splitting, near-plane clipping,
+and the original graph camera—not additional room-specific assets.
+The four configurations, framebuffer hashes, residency figures, and accepted
+selection are preserved in the
+[quad-policy experiment report](reports/castle-vdp1-quad-policy-experiments-2026-07-18.json).
+
 ## Next visual gates
 
-1. Replace the repeated-vertex triangle adapter with safe source-aware quads,
-   projected-error splitting, and near-plane clipping while retaining the
-   graph-selected 619-triangle source bank.
+1. Add screen-space intersection/projected-error splitting and near-plane
+   clipping on top of the 52 native quads and 2,060 fallback tiles while
+   retaining the graph-selected 619-triangle source bank.
 2. Extend the now-running original controller/Mario intent slice through
    source collision, actions, animation, and graph camera; stop adding
    room-specific target state.

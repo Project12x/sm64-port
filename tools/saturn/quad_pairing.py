@@ -128,12 +128,39 @@ def _projection_is_stable(vertices: list[Vertex], cycle: tuple[int, int, int, in
     return True
 
 
+def _is_planar_convex(vertices: list[Vertex], cycle: tuple[int, int, int, int]) -> bool:
+    """Prove a static 3D quad remains convex under valid camera projection.
+
+    A convex polygon on one plane stays convex under a projective transform as
+    long as it does not cross the camera plane. Runtime near clipping enforces
+    the latter. This dominant-axis proof avoids rejecting Castle floors and
+    walls merely because an arbitrary orthographic pose sample sees them
+    exactly edge-on; the sampled policy remains the default for deforming
+    actors.
+    """
+    points = [vertices[index] for index in cycle]
+    normal = _cross(_sub(points[1], points[0]), _sub(points[2], points[0]))
+    normal_length_squared = _dot(normal, normal)
+    if normal_length_squared == 0:
+        return False
+    plane_error = abs(_dot(normal, _sub(points[3], points[0])))
+    # Castle source vertices are integral and intended coplanar. Permit at
+    # most one source-space unit of quantization distance from the plane.
+    if plane_error > math.sqrt(normal_length_squared):
+        return False
+    dominant = max(range(3), key=lambda axis: abs(normal[axis]))
+    axes = tuple(axis for axis in range(3) if axis != dominant)
+    projected = [(float(point[axes[0]]), float(point[axes[1]])) for point in points]
+    return _is_strictly_convex(projected)
+
+
 def candidates(
     vertices: list[Vertex],
     faces: list[Face],
     minimum_normal_alignment: float = 0.80,
     deformation_poses: Iterable[tuple[str, list[Vertex]]] | None = None,
     pairing_forbidden_triangles: set[int] | None = None,
+    projection_policy: str = "sampled",
 ) -> tuple[list[QuadCandidate], dict[str, int]]:
     """Return Saturn-safe shared-edge candidates and rejection counts.
 
@@ -142,6 +169,8 @@ def candidates(
     Pose samples are an offline safety contract; they are not emitted to the
     Saturn binary by this module.
     """
+    if projection_policy not in {"sampled", "planar"}:
+        raise ValueError("projection_policy must be 'sampled' or 'planar'")
     pose_list = list(deformation_poses or [])
     forbidden = pairing_forbidden_triangles or set()
     for name, pose_vertices in pose_list:
@@ -188,8 +217,14 @@ def candidates(
         if alignment < minimum_normal_alignment:
             reject("normal_divergence")
             continue
-        if not _projection_is_stable(vertices, cycle):
-            reject("projection_not_convex")
+        projection_safe = (
+            _is_planar_convex(vertices, cycle)
+            if projection_policy == "planar"
+            else _projection_is_stable(vertices, cycle)
+        )
+        if not projection_safe:
+            reject("planar_quad_not_convex" if projection_policy == "planar"
+                   else "projection_not_convex")
             continue
         pose_rejection = None
         for _pose_name, pose_vertices in pose_list:
@@ -206,7 +241,12 @@ def candidates(
             if pose_alignment < minimum_normal_alignment:
                 pose_rejection = "pose_normal_divergence"
                 break
-            if not _projection_is_stable(pose_vertices, cycle):
+            pose_projection_safe = (
+                _is_planar_convex(pose_vertices, cycle)
+                if projection_policy == "planar"
+                else _projection_is_stable(pose_vertices, cycle)
+            )
+            if not pose_projection_safe:
                 pose_rejection = "pose_projection_not_convex"
                 break
         if pose_rejection is not None:

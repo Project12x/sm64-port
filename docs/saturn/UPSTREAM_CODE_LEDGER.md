@@ -90,6 +90,16 @@ Implementation commitments:
    VDP1 transparent-pixel rejection, while only `LAYER_TRANSPARENT_DECAL`
    selects `VDP1_CMDT_CC_HALF_TRANSPARENT`. No upstream renderer
    implementation is copied.
+9. The textured-quad Castle checkpoint reuses the existing original
+   `tools/saturn/quad_pairing.py` exact NetworkX matching path and the measured
+   C/B/A/C triangle mapping from the repository's BIOS-backed VDP1 probe. For
+   native four-corner commands it generalizes that measured order to C/B/A/D
+   in `tools/saturn/vdp1_texture.py`; no upstream mesh code is copied. The
+   target directly adapts pinned Yaul's MIT-licensed
+   `libyaul/scu/bus/b/vdp/vdp1_vram.c` partition API so generated command,
+   texture, and Gouraud counts—not the default fixed partition—own VDP1 VRAM.
+   The preserved 144-quad failure establishes a local policy constraint:
+   planar-convex validity does not imply painter-safe granularity.
 
 ## M3 onward — inspection and debugging evidence
 

@@ -1,0 +1,63 @@
+{
+  "schema": "sm64-saturn-castle-vdp1-quad-policy-experiments",
+  "version": 1,
+  "source": "levels/castle_inside/areas/1",
+  "source_triangles": 619,
+  "texture_profile": {
+    "tile": [8, 8],
+    "source_scale": 2,
+    "format": "RGB1555"
+  },
+  "experiments": [
+    {
+      "name": "conservative-one-tile",
+      "status": "neutral",
+      "quad_count": 52,
+      "render_primitives": 567,
+      "fallback_subdivision": 1,
+      "tile_count": 567,
+      "texture_bytes": 72576,
+      "screenshot_sha256": "d159f4fe8ef328d92227e3a2ad2e02448d3bd5ef49d6c71827e2b9acf97293c6",
+      "frame_hash": "13817ce71516d55d9f0bc57af7776c62"
+    },
+    {
+      "name": "planar-one-tile",
+      "status": "rejected",
+      "quad_count": 144,
+      "render_primitives": 475,
+      "fallback_subdivision": 1,
+      "tile_count": 475,
+      "texture_bytes": 60800,
+      "rejection": "large legal wall quads are too coarse for VDP1 painter ordering",
+      "screenshot_sha256": "0f7d6f45fd4b92529447841d8b6c84d98d95e67af55b53aee745582ac6c17364",
+      "frame_hash": "e62d516b83fb751b177b4db0ba048396"
+    },
+    {
+      "name": "planar-per-tile-subdivision",
+      "status": "rejected",
+      "quad_count": 144,
+      "render_primitives": 475,
+      "fallback_subdivision": 4,
+      "tile_count": 1468,
+      "texture_bytes": 187904,
+      "rejection": "independent fallback sorting cannot repair broad-quad painter granularity",
+      "screenshot_sha256": "fcff43742519b1b6e8f46b55938eebf0c3282a30cf8e205c6facae67a69ee17d",
+      "frame_hash": "a7d450786d3e317e10cde22d98a30a3b"
+    },
+    {
+      "name": "conservative-per-tile-subdivision",
+      "status": "current",
+      "quad_count": 52,
+      "render_primitives": 567,
+      "fallback_subdivision": 4,
+      "tile_count": 2112,
+      "texture_bytes": 270336,
+      "command_count_with_mario_and_setup": 2909,
+      "vdp1_partition_bytes_with_mario": 470976,
+      "vdp1_available_bytes": 524256,
+      "screenshot_sha256": "57243d645a42a1a66720c9e17d047b8b04c78be29afacde95189681ad91edeef",
+      "frame_hash": "92ab58f288f03b997e65b4c1c23987e3"
+    }
+  ],
+  "selection": "Use conservative multi-view quads and independently sort subdivided fallbacks. Continue with screen-space intersection splitting and clipping; do not broaden static pairing solely to maximize quad count."
+}

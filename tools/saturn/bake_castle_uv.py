@@ -15,7 +15,11 @@ import math
 from pathlib import Path
 
 from extract_mario_textures import mio0_decode, rom_bytes, saturn_rgb1555
-from vdp1_texture import downsample_rgb1555, repeated_vertex_weights
+from vdp1_texture import (
+    distorted_sprite_weights,
+    downsample_rgb1555,
+    repeated_vertex_weights,
+)
 
 DEFAULT_TILE = 16
 DEFAULT_SELECTED = (
@@ -89,14 +93,13 @@ def texture_coordinate(
     return coordinate % period
 
 
-def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]], tile_state: dict[str, object], x: int, y: int, tile: int, source_scale: int) -> int:
-    a, b, c = repeated_vertex_weights(x, y, tile, tile)
+def sample_raw(
+        texture: tuple[int, int, list[int], str, int], raw_u: float,
+        raw_v: float, tile_state: dict[str, object], source_scale: int) -> int:
     # Resolve the complete render tile before downscaling.  The previous
     # prototype divided first and inferred both axes' clamp state from the
     # whole gsDPSetTile macro; that turned Castle's T-clamp/S-wrap walls into
     # horizontally clamped streaks.
-    raw_u = a * uv[0][0] + b * uv[1][0] + c * uv[2][0]
-    raw_v = a * uv[0][1] + b * uv[1][1] + c * uv[2][1]
     width, height, pixels, _digest, _source_bytes = texture
     tile_width, tile_height = int(tile_state["width"]), int(tile_state["height"])
     source_u = texture_coordinate(
@@ -113,6 +116,34 @@ def sample(texture: tuple[int, int, list[int], str], uv: tuple[tuple[int, int], 
     if tile_width // source_scale > width or tile_height // source_scale > height:
         raise ValueError("render tile extent exceeds ROM texture dimensions")
     return pixels[v * width + u]
+
+
+def sample_triangle(
+        texture: tuple[int, int, list[int], str, int],
+        uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int]],
+        tile_state: dict[str, object], x: int, y: int, tile: int,
+        source_scale: int) -> int:
+    a, b, c = repeated_vertex_weights(x, y, tile, tile)
+    return sample_raw(
+        texture,
+        a * uv[0][0] + b * uv[1][0] + c * uv[2][0],
+        a * uv[0][1] + b * uv[1][1] + c * uv[2][1],
+        tile_state, source_scale,
+    )
+
+
+def sample_quad(
+        texture: tuple[int, int, list[int], str, int],
+        uv: tuple[tuple[int, int], tuple[int, int], tuple[int, int], tuple[int, int]],
+        tile_state: dict[str, object], x: int, y: int, tile: int,
+        source_scale: int) -> int:
+    a, b, c, d = distorted_sprite_weights(x, y, tile, tile)
+    return sample_raw(
+        texture,
+        a * uv[0][0] + b * uv[1][0] + c * uv[2][0] + d * uv[3][0],
+        a * uv[0][1] + b * uv[1][1] + c * uv[2][1] + d * uv[3][1],
+        tile_state, source_scale,
+    )
 
 
 def main() -> None:
@@ -141,20 +172,45 @@ def main() -> None:
         raise ValueError(f"unsupported Castle texture(s): {sorted(unknown)}")
     texture_data = {name: rgba16(rom, asset_map[ASSETS[name]], args.source_scale) for name in selected}
     selected_indices = {scene["textures"].index(name) for name in selected}
-    starts = [0xFFFF] * int(scene["triangle_count"])
-    counts = [0] * int(scene["triangle_count"])
-    positions: list[tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]] = []
+    starts = [0xFFFF] * int(scene["primitive_count"])
+    counts = [0] * int(scene["primitive_count"])
+    positions: list[tuple[tuple[int, int, int], ...]] = []
+    tile_primitives: list[int] = []
     words: list[int] = []
-    for index, texture_index in enumerate(scene["texture_indices"]):
+    paired_quads = 0
+    for index, primitive in enumerate(scene["primitives"]):
+        texture_index = int(primitive["texture_index"])
         if texture_index not in selected_indices:
             continue
         starts[index] = len(positions)
-        tri = scene["triangles"][index]
+        source_index = int(primitive["first_triangle"])
+        tri = scene["triangles"][source_index]
         original = [tuple(scene["positions"][vertex]) for vertex in tri]
-        original_uv = [tuple(pair) for pair in scene["uv"][index]]
-        tile_state = scene["tile_state"][index]
+        original_uv = [tuple(pair) for pair in scene["uv"][source_index]]
+        tile_state = scene["tile_state"][source_index]
         if tile_state is None or "width" not in tile_state or "height" not in tile_state:
-            raise ValueError(f"triangle {index} has no complete Fast3D render-tile state")
+            raise ValueError(f"primitive {index} has no complete Fast3D render-tile state")
+        texture = texture_data[scene["textures"][texture_index]]
+        second_index = primitive["second_triangle"]
+        if second_index is not None:
+            vertex_uv: dict[int, tuple[int, int]] = {}
+            for triangle_index in (source_index, int(second_index)):
+                for vertex, pair in zip(scene["triangles"][triangle_index], scene["uv"][triangle_index]):
+                    value = tuple(pair)
+                    if vertex in vertex_uv and vertex_uv[vertex] != value:
+                        raise ValueError(f"primitive {index} crossed a source UV seam")
+                    vertex_uv[vertex] = value
+            quad_vertices = tuple(int(value) for value in primitive["vertices"])
+            position_quad = tuple(tuple(scene["positions"][vertex]) for vertex in quad_vertices)
+            uv_quad = tuple(vertex_uv[vertex] for vertex in quad_vertices)
+            positions.append(position_quad)
+            tile_primitives.append(index)
+            words.extend(sample_quad(texture, uv_quad, tile_state, x, y, args.tile,
+                                     args.source_scale)
+                         for y in range(args.tile) for x in range(args.tile))
+            counts[index] = 1
+            paired_quads += 1
+            continue
         if should_subdivide(original, args.subdivision, args.subdivision_threshold):
             ab, bc, ca = midpoint(original[0], original[1]), midpoint(original[1], original[2]), midpoint(original[2], original[0])
             uab, ubc, uca = midpoint(original_uv[0], original_uv[1]), midpoint(original_uv[1], original_uv[2]), midpoint(original_uv[2], original_uv[0])
@@ -163,24 +219,29 @@ def main() -> None:
             parts = ((tuple(original), tuple(original_uv)),)
         counts[index] = len(parts)
         for position_tri, uv_tri in parts:
-            positions.append(position_tri)
-            texture = texture_data[scene["textures"][texture_index]]
-            words.extend(sample(texture, uv_tri, tile_state, x, y, args.tile, args.source_scale) for y in range(args.tile) for x in range(args.tile))
+            positions.append((*position_tri, position_tri[2]))
+            tile_primitives.append(index)
+            words.extend(sample_triangle(texture, uv_tri, tile_state, x, y,
+                                         args.tile, args.source_scale)
+                         for y in range(args.tile) for x in range(args.tile))
     textured_count = sum(value != 0xFFFF for value in starts)
-    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {"]
+    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_PAIRED_QUAD_COUNT {paired_quads}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {"]
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
     lines.append("};")
-    lines.append("static const uint8_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {")
+    lines.append("static const uint16_t sm64_castle_uv_tile_primitive[SM64_CASTLE_UV_TILE_COUNT] = {")
+    lines.extend("    " + ", ".join(f"{value}U" for value in tile_primitives[offset:offset + 16]) + "," for offset in range(0, len(tile_primitives), 16))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_PRIMITIVE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{value}U" for value in counts[offset:offset + 16]) + "," for offset in range(0, len(counts), 16))
     lines.append("};")
-    lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][3][3] = {")
-    lines.extend(f"    {{{{{a}, {b}, {c}}}, {{{d}, {e}, {f}}}, {{{g}, {h}, {i}}}}}," for (a, b, c), (d, e, f), (g, h, i) in positions)
+    lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][4][3] = {")
+    lines.extend("    {" + ", ".join(f"{{{x}, {y}, {z}}}" for x, y, z in quad) + "}," for quad in positions)
     lines.append("};")
     lines.append("static const uint16_t sm64_castle_uv_tiles[SM64_CASTLE_UV_TILE_COUNT][SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH] = {")
     for offset in range(0, len(words), args.tile * args.tile): lines.append("    {" + ", ".join(f"0x{word:04X}" for word in words[offset:offset + args.tile * args.tile]) + "},")
     lines.append("};")
     args.output.parent.mkdir(parents=True, exist_ok=True); args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    report = {"source": scene["source"], "selected_textures": list(selected), "selected_triangles": textured_count, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivided_triangles": sum(value == 4 for value in counts), "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + len(positions) + (int(scene["triangle_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 affine sampling resolved in source-texel space before target downscale; complete VDP1 C/B/A/C repeated-vertex tile", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
+    report = {"source": scene["source"], "selected_textures": list(selected), "selected_primitives": textured_count, "source_triangles": int(scene["triangle_count"]), "render_primitives": int(scene["primitive_count"]), "paired_textured_quads": paired_quads, "tile": [args.tile, args.tile], "source_scale": args.source_scale, "source_filter": "RGB1555 box filter with majority alpha", "source_texture_bytes": sum(data[4] for data in texture_data.values()), "resampled_source_bytes": sum(data[0] * data[1] * 2 for data in texture_data.values()), "subdivision": args.subdivision, "subdivision_threshold": args.subdivision_threshold, "subdivided_triangles": sum(value == 4 for value in counts), "tile_count": len(positions), "texture_bytes": len(words) * 2, "command_estimate": 2 + len(positions) + (int(scene["primitive_count"]) - textured_count) + 1, "texture_state": "Fast3D image/load-tile/TMEM/render-tile v2: independent S/T clamp, mirror, mask, shift, tile origin/extent, SP scale, and retained LOD bindings", "uv_sampling": "Fast3D s10.5 sampling resolved in source-texel space; native VDP1 quads use measured C/B/A/D character-corner order, fallbacks retain C/B/A/C repeated-vertex tiles", "rom_sha256": hashlib.sha256(rom).hexdigest(), "texture_sha256": {name: data[3] for name, data in texture_data.items()}}
     args.report.parent.mkdir(parents=True, exist_ok=True); args.report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 

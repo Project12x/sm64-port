@@ -51,9 +51,26 @@ def repeated_vertex_weights(x: int, y: int, width: int, height: int) -> tuple[fl
     distorted sprite, so the fourth corner contributes C; it is not an
     invalid half-image that should be made transparent.
     """
+    a, b, c, d = distorted_sprite_weights(x, y, width, height)
+    c += d
+    return a, b, c
+
+
+def distorted_sprite_weights(
+    x: int, y: int, width: int, height: int
+) -> tuple[float, float, float, float]:
+    """Return measured VDP1 A/B/C/D weights for a source-image texel.
+
+    The BIOS-backed corner probe established source-image corner order C/B/A/D
+    for the vertex order passed to ``vdp1_cmdt_vtx_set``.  Keeping this rule in
+    one host helper lets native quads and repeated-vertex triangle fallbacks use
+    the same proven orientation rather than guessing at character flips.
+    """
     s = (x + 0.5) / width
     t = (y + 0.5) / height
-    a = (1.0 - s) * t
-    b = s * (1.0 - t)
-    c = (1.0 - s) * (1.0 - t) + s * t
-    return a, b, c
+    return (
+        (1.0 - s) * t,
+        s * (1.0 - t),
+        (1.0 - s) * (1.0 - t),
+        s * t,
+    )
