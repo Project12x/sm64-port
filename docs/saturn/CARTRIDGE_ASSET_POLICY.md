@@ -30,6 +30,11 @@ cartridge-backed bank. The viewer keeps a host/emulator fallback until the
 `0x5C` detection gate is available; this prevents Ymir's no-cartridge path from
 silently changing rendering behavior.
 
+The Castle viewer now exercises this boundary for its cold texture bank: on a
+validated cart it stages Castle and Mario texture tiles into cartridge DRAM,
+then reads them back through an 8 KiB internal-WRAM ring for VDP1 DMA. A failed
+stage/read falls back to the proven direct source upload path.
+
 ## Integration gates
 
 1. Detect `0x5C` and the full 4 MiB mapping before enabling cartridge banks.
