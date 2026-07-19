@@ -77,6 +77,10 @@ must be tested explicitly rather than inferred from emulator screenshots.
 
 ### The 4 MiB cartridge
 
+The implementation policy and placement table for this tier are maintained in
+[`CARTRIDGE_ASSET_POLICY.md`](CARTRIDGE_ASSET_POLICY.md); keep it beside this
+plan when changing the Castle viewer's memory layout.
+
 The cartridge is mandatory, but it is not equivalent to 4 MiB of fast internal
 work RAM. Sega Technical Bulletin 47 documents cartridge ID `0x5C`, 4 MiB of
 mapped DRAM, ordinary CPU accesses, DMA reads, and an important asymmetry:

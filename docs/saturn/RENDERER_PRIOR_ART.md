@@ -104,6 +104,11 @@ SlaveDriver-style queued/DMA staging remains reserved for cold 4 MiB RAM-Cart
 asset transfers. No source SM64 geometry, material, or collision data is
 replaced by hand-authored Saturn scene data.
 
+The concrete placement and staging rules for that split live in
+[`CARTRIDGE_ASSET_POLICY.md`](CARTRIDGE_ASSET_POLICY.md). Any future move of
+Castle BSP, texture banks, animation data, or LOD blocks into the 4 MiB
+expansion must preserve its internal-WRAM hot-cache and measured-DMA gates.
+
 ## Visual-slice source decisions
 
 The next runtime changes follow the concrete destinations in
