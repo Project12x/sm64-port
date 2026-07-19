@@ -908,6 +908,16 @@ not being relabeled as solved by this correction.
 
 Evidence: [capture report](ymir-m4-source-triangle-collapse-2026-07-19.json),
 [source bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
+
+### M4 neutral repeat: released input is deterministic
+
+![Released-input neutral Castle frame](screenshots/ymir-m4-source-triangle-collapse-neutral-2026-07-19.png)
+
+A second 900-frame USA-BIOS run releases the pad before the screenshot. It
+produces the same 320×224 framebuffer hash as the moving-input capture,
+providing a stable visual baseline for the next material/near-plane pass.
+
+Evidence: [neutral capture report](ymir-m4-source-triangle-collapse-neutral-2026-07-19.json).
 ### 2026-07-18 — M4 geometry diagnosis: near-plane crossing is a real Saturn failure class
 
 The source-camera capture shows that the remaining floor/carpet and central-emblem
