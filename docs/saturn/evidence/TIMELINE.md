@@ -1128,3 +1128,13 @@ comparable source lobby frame. This separates emulator cartridge support from
 the earlier no-cartridge fallback capture; neither is retail timing evidence.
 Evidence: [cart-enabled screenshot](screenshots/ymir-m4-cart-enabled-2026-07-19.png)
 and [capture notes](ymir-cart-enabled-2026-07-19.md).
+
+### 2026-07-19 — Foreground cart run telemetry captured
+
+The cart-enabled Ymir target was relaunched visibly and held in the Castle
+lobby. The title bar reported `Speed 102%/100%`, `VDP2 61 fps`, `VDP1 61 fps`,
+and `61 draws` while the 32 Mbit DRAM profile was active. The capture keeps
+the telemetry attached to the visual frame so later performance work can be
+compared against a known cart-enabled run.
+Evidence: [foreground telemetry screenshot](screenshots/ymir-m4-cart-foreground-2026-07-19.png)
+and [machine-readable report](reports/ymir-m4-cart-foreground-2026-07-19.json).

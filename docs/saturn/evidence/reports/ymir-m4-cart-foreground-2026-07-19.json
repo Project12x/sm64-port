@@ -1,0 +1,18 @@
+{
+  "stage": 104,
+  "date": "2026-07-19",
+  "target": "SM64 SATURN CASTLE M4",
+  "emulator": "Ymir 0.4.0-dev",
+  "profile": "build/ymir-cart-profile/Ymir.toml",
+  "cartridge": { "type": "DRAM", "capacity": "32Mbit", "capacity_bytes": 4194304 },
+  "capture": {
+    "image": "../screenshots/ymir-m4-cart-foreground-2026-07-19.png",
+    "method": "foreground window desktop capture",
+    "title_bar_telemetry": "Speed 102%/100%; VDP2 61 fps; VDP1 61 fps; 61 draws"
+  },
+  "result": "The cart-enabled target remained running in the foreground and reached the Castle lobby.",
+  "caveats": [
+    "This is emulator telemetry, not retail Saturn timing evidence.",
+    "The capture includes the Ymir window chrome and surrounding desktop; the framebuffer-only cart capture remains Stage 103."
+  ]
+}
