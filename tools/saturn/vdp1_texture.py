@@ -46,10 +46,10 @@ def downsample_rgb1555(
 def repeated_vertex_weights(x: int, y: int, width: int, height: int) -> tuple[float, float, float]:
     """Return Fast3D A/B/C weights for a VDP1 (A,B,C,C) texture texel.
 
-    The BIOS-backed corner probe measured source corners as C/B/A/C.  VDP1
-    maps the complete rectangular source image onto the repeated-vertex
-    distorted sprite, so the fourth corner contributes C; it is not an
-    invalid half-image that should be made transparent.
+    The BIOS-backed corner probe, decoded with Saturn's actual RGB1555 lane
+    order, maps source corners to A/B/C/D.  Repeating destination D at C
+    collapses the lower-left character corner onto C, so its weight contributes
+    to C without introducing a crossed or masked half-image.
     """
     a, b, c, d = distorted_sprite_weights(x, y, width, height)
     c += d
@@ -61,16 +61,18 @@ def distorted_sprite_weights(
 ) -> tuple[float, float, float, float]:
     """Return measured VDP1 A/B/C/D weights for a source-image texel.
 
-    The BIOS-backed valid-quad probe established source-image corner order D/B/A/C
-    for the vertex order passed to ``vdp1_cmdt_vtx_set``.  Keeping this rule in
-    one host helper lets native quads and repeated-vertex triangle fallbacks use
-    the same proven orientation rather than guessing at character flips.
+    The BIOS-backed valid-quad probe establishes ordinary source-image corner
+    order A/B/C/D for the vertex order passed to ``vdp1_cmdt_vtx_set``.  The
+    earlier D/B/A/C interpretation had labelled raw 0xFC00 as red and 0x801F as
+    blue; on Saturn those values are blue and red respectively.  Keeping this
+    rule in one host helper prevents that channel-label error from becoming a
+    geometric texture fold.
     """
     s = (x + 0.5) / width
     t = (y + 0.5) / height
     return (
-        (1.0 - s) * t,
+        (1.0 - s) * (1.0 - t),
         s * (1.0 - t),
         s * t,
-        (1.0 - s) * (1.0 - t),
+        (1.0 - s) * t,
     )

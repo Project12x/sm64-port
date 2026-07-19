@@ -835,3 +835,61 @@ test now use the valid-quad result. The probe is reproducible with
    promote the visible working set to VDP1 VRAM without per-texture CD stalls.
 5. Add near-plane clipping and visibility management while retaining the
    source display-list material state.
+
+### M4 correction: RGB1555 labels had inverted the VDP1 corner conclusion
+
+![Correct A-B-C-D Castle texture lowering](screenshots/ymir-m4-abcd-corrected-384-2026-07-18.png)
+
+The valid quad probe itself was sound, but its red and blue RGB1555 constants
+were described backwards. Saturn `0x801F` is opaque red and `0xFC00` is opaque
+blue. Read with the correct lane labels, the captured tile follows ordinary
+character corners A/B/C/D, agreeing with pinned MIT Yaul example
+`vdp1-uv-coords/vdp1-uv-coords.c` at
+`66b648eb059bb8bb7392eac70821605a68205b85`. Repeated destination C receives
+both source C and D. Updating the shared baker removes the giant diagonal fans
+without changing Castle geometry, materials, or BSP ordering.
+
+### M4 accepted storage correction: subdivision is no longer required
+
+![Corrected unsplit exact-BSP Castle bank](screenshots/ymir-m4-abcd-corrected-bsp-2026-07-18.png)
+
+Removing the now-unnecessary adaptive pass reduces the bank from 2,911 to 884
+tiles and from 93,152 to 28,288 four-bit texture bytes. The exact BSP remains
+352 nodes with 144 source-plane splits; adaptive split count is zero and the
+static command estimate is 887. The earlier 384- and 256-unit frames remain
+useful rejected evidence, but neither is the default profile now.
+
+### M4 rejected: source camera without Saturn viewport lowering
+
+![Blank source-camera failure](screenshots/ymir-m4-source-fixed-camera-corrected-2026-07-18.png)
+
+The first source-camera extractor incorrectly treated
+`cam_castle_lobby_entrance` as a global override. Mario's spawn at
+`(-1023, 0, 1152)` is outside that trigger's z extent, so SM64 actually begins
+from the Area 1 fixed base `(-577, 143, 1443)`. Correcting that branch still
+produced a blank frame: live RAM evidence showed 1,297 sorted items and a
+valid fixed-point camera, isolating the remaining failure to off-screen VDP1
+command coordinates rather than missing geometry.
+
+### M4 current: source camera plus Saturn-safe viewport commands
+
+![Source-camera Castle lobby after viewport culling](screenshots/ymir-m4-source-camera-viewport-cull-2026-07-18.png)
+
+The renderer now rejects depth-valid quads whose projected bounds do not touch
+the 320×224 viewport and saturates retained command coordinates to VDP1's
+usable signed domain. The corrected frame places the lobby floor and central
+carpet/emblem in the foreground with Mario instead of compressing them behind
+the doors. This is target-specific lowering of source output: no room vertex,
+camera position, floor, or emblem placement is handwritten. Large residual
+wedges and the extreme close view remain honest near-plane/painter-coverage
+work for the next pass.
+
+## Revised next visual gates
+
+1. Add source-attribute-preserving near-plane clipping so the source fixed
+   camera does not reject or saturate primitives that cross the near plane.
+2. Correct the remaining painter/coverage wedges in the 884-tile BSP path.
+3. Link the existing original controller/Mario intent bridge to collision,
+   action, animation selection, and the source camera update.
+4. Capture deterministic neutral and movement frames from the same source
+   lobby path before expanding to another room.

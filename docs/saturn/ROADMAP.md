@@ -106,8 +106,9 @@ guessing a wall material, inventing coordinates, or hand-selecting room pieces.
 
 M3 has now reached a BIOS-backed fixed-camera render of the 577-triangle
 opaque root with all six original source materials. The shared converter fixes
-the N64/Saturn red-blue lane difference and uses the measured complete
-C/B/A/C repeated-vertex mapping. The initial 16×16 bake occupied 295,424 VDP1
+the N64/Saturn red-blue lane difference and uses ordinary VDP1 A/B/C/D
+character corners, with repeated destination C receiving source C and D. The
+initial 16×16 bake occupied 295,424 VDP1
 texture bytes. A target capture now accepts the 8×8, 2× box-filtered Castle
 profile: it occupies 73,856 bytes with the same roughly 580 commands, freeing
 221,568 bytes for Mario and future room banks while retaining the recognizable
@@ -133,15 +134,17 @@ that painter order is not the primary diagonal texture fault.
 The accepted storage path now quantizes each of the nine original materials to
 one transparent-plus-15-color VDP1 CLUT through pinned Yaul APIs. End-code
 processing is explicitly disabled and index zero retains source binary alpha.
-This funds the current 384-unit exact post-BSP profile: 2,911 tiles, 2,027
-adaptive splits, and 93,152 texture bytes. A 5,253-tile/256-unit stress frame
-still contains the same fold and is rejected, proving that more subdivision is
-not the correction. A valid A-B-C-D hardware probe resolves native texture
-corners as D/B/A/C while repeated C=D triangles remain C/B/A/C. The next
-renderer task is a correct non-folding Saturn triangle lowering plus
-near-plane clipping—not another room-specific asset or painter key. The
-original graph camera, collision, action, and animation state must then own the
-complete moving frame.
+Correcting the probe's previously mislabeled RGB1555 lanes removes the apparent
+corner permutation: native character corners are A/B/C/D. The unsplit exact
+BSP profile now needs only 884 tiles, 28,288 indexed bytes, and roughly 887
+static commands; the diagonal fans disappear without adaptive tessellation.
+The source-camera extractor also distinguishes the lobby fixed base from its
+local entrance trigger, and target lowering rejects off-screen primitives and
+saturates projected coordinates before VDP1 command emission. The resulting
+source-camera frame places the floor and central carpet/emblem in front of the
+doors with Mario. Near-plane clipping, painter coverage, original collision,
+actions, and graph-camera state remain open; no room coordinates are authored
+on the target.
 
 ## M0 — Source-face proof
 

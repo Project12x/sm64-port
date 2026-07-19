@@ -95,11 +95,14 @@ Implementation commitments:
    selects `VDP1_CMDT_CC_HALF_TRANSPARENT`. No upstream renderer
    implementation is copied.
 9. The textured-quad Castle checkpoint reuses the existing original
-   `tools/saturn/quad_pairing.py` exact NetworkX matching path and the measured
-   C/B/A/C triangle mapping from the repository's BIOS-backed VDP1 probe. For
-   native four-corner commands the valid-quad probe resolves the previously
-   ambiguous collapsed corner as D/B/A/C
-   in `tools/saturn/vdp1_texture.py`; no upstream mesh code is copied. The
+   `tools/saturn/quad_pairing.py` exact NetworkX matching path. Re-reading the
+   BIOS-backed probe with Saturn RGB1555 lane order corrected shows ordinary
+   A/B/C/D character corners; repeated C=D triangles merge source D into
+   destination C in `tools/saturn/vdp1_texture.py`. This agrees with pinned
+   MIT Yaul example
+   `vdp1-uv-coords/vdp1-uv-coords.c` at
+   `66b648eb059bb8bb7392eac70821605a68205b85` (**validation/pattern-only**);
+   no upstream mesh code is copied. The
    target directly adapts pinned Yaul's MIT-licensed
    `libyaul/scu/bus/b/vdp/vdp1_vram.c` partition API so generated command,
    texture, and Gouraud counts—not the default fixed partition—own VDP1 VRAM.
@@ -112,21 +115,27 @@ Implementation commitments:
     inserts dynamic Mario at traversal time. A 144-split/884-tile capture
     preserves the unresolved texture fans, proving that painter order is not
     their primary cause.
-11. The PS1 longest-edge lesson is adapted **pattern-only** after BSP lowering,
-    where each child remains in the same node. The 512-unit profile adds 840
-    exact attribute-preserving splits for 1,724 tiles/220,672 RGB1555 bytes;
-    384 units needs 2,911 tiles and exceeds the measured 2,400-tile direct-color
-    policy. No PS1 code is copied. Pinned Yaul CLUT mode reduces that profile to
-    93,152 texture bytes and makes the finer visual trial practical.
+11. The PS1 longest-edge lesson was tested **pattern-only** after BSP lowering,
+    where each child remains in the same node. Those stress profiles were
+    useful diagnosis but became unnecessary after the VDP1 corner correction:
+    the accepted exact BSP bank has 884 tiles, zero adaptive splits, and 28,288
+    CLUT bytes. No PS1 code is copied.
 12. The four-bit Castle path directly uses pinned Yaul's MIT public
     `VDP1_CMDT_CM_CLUT_16`, `vdp1_cmdt_color_mode1_set()`, CLUT partition, and
     `end_code_disable` field. Quantization and nibble packing are original host
     code: each source material receives transparent index zero plus fifteen
     deterministic RGB555 colors. The first end-code failure and corrected
-    frames are both retained. A valid build-flagged A-B-C-D probe resolves
-    native character corners as D/B/A/C; repeated C=D fallbacks remain
-    C/B/A/C. The 5,253-tile 256-unit stress frame shows that brute subdivision
-    does not solve the repeated-sprite fold, so 384 units remains the default.
+    frames are both retained. A valid build-flagged A-B-C-D probe, interpreted
+    with the correct RGB1555 lane labels, resolves native character corners as
+    A/B/C/D; repeated C=D fallbacks merge D into C. The old 5,253-tile stress
+    frame remains failure evidence, while the unsplit 884-tile bank is now the
+    default.
+13. Source-camera extraction is a **close port** of the values and branching in
+    `src/game/camera.c`: the Area 1 spawn lies outside the local
+    `cam_castle_lobby_entrance` trigger, so the generated initial base comes
+    from `set_fixed_cam_axis_sa_lobby`. The target adds original viewport
+    rejection and coordinate saturation as Saturn-specific lowering; it does
+    not change source room vertices or author camera coordinates.
 
 ## M3 onward — inspection and debugging evidence
 

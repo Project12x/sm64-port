@@ -13,6 +13,8 @@
 #define DEPTH_BUCKETS 128U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 8192
+#define VDP1_COORD_MIN (-1024)
+#define VDP1_COORD_MAX 1023
 
 typedef struct { int32_t x, y, z; } point3_t;
 static vdp1_cmdt_list_t *command_list;
@@ -36,6 +38,9 @@ static int32_t max3(int32_t a, int32_t b, int32_t c) { return a > b ? (a > c ? a
 static int32_t min4(int32_t a, int32_t b, int32_t c, int32_t d) { const int32_t abc = min3(a, b, c); return abc < d ? abc : d; }
 static int32_t max4(int32_t a, int32_t b, int32_t c, int32_t d) { const int32_t abc = max3(a, b, c); return abc > d ? abc : d; }
 static int32_t abs32(int32_t value) { return value < 0 ? -value : value; }
+static int32_t clamp32(int32_t value, int32_t minimum, int32_t maximum) {
+    return value < minimum ? minimum : (value > maximum ? maximum : value);
+}
 
 static uint32_t isqrt_u64(uint64_t value) {
     uint64_t root = 0;
@@ -84,7 +89,7 @@ static void update_source_camera(void) {
 }
 
 static point3_t world_to_view(int32_t x, int32_t y, int32_t z) {
-#ifdef SM64_SATURN_TEXTURE_PROBE_CAMERA
+#if defined(SM64_SATURN_TEXTURE_PROBE_CAMERA) || defined(SM64_SATURN_TEXTURE_PROBE_PROJECTION)
     /* Renderer validation only: reproduce the accepted M3 establishing view
      * so texture-state changes can be compared without conflating the known
      * rejected standalone camera transplant. The default build still follows
@@ -100,7 +105,7 @@ static point3_t world_to_view(int32_t x, int32_t y, int32_t z) {
 #endif
 }
 static point3_t painter_camera_position(void) {
-#ifdef SM64_SATURN_TEXTURE_PROBE_CAMERA
+#if defined(SM64_SATURN_TEXTURE_PROBE_CAMERA) || defined(SM64_SATURN_TEXTURE_PROBE_PAINTER)
     return (point3_t){-1050, 720, -4200};
 #else
     return camera_position;
@@ -121,10 +126,29 @@ static point3_t mario_point(const int16_t *source) {
 }
 static int16_vec2_t project_point(point3_t point) {
     const int32_t z = point.z < NEAR_DEPTH ? NEAR_DEPTH : point.z;
+    const int32_t screen_x = 160 + (point.x * SM64_CASTLE_CAMERA_FOCAL_LENGTH) / z;
+    const int32_t screen_y = 112 - (point.y * SM64_CASTLE_CAMERA_FOCAL_LENGTH) / z;
     const int16_vec2_t result = INT16_VEC2_INITIALIZER(
-        (int16_t)(160 + (point.x * SM64_CASTLE_CAMERA_FOCAL_LENGTH) / z),
-        (int16_t)(112 - (point.y * SM64_CASTLE_CAMERA_FOCAL_LENGTH) / z));
+        (int16_t)clamp32(screen_x, VDP1_COORD_MIN, VDP1_COORD_MAX),
+        (int16_t)clamp32(screen_y, VDP1_COORD_MIN, VDP1_COORD_MAX));
     return result;
+}
+
+static bool quad_intersects_viewport(point3_t a, point3_t b, point3_t c, point3_t d) {
+    const point3_t points[4] = {a, b, c, d};
+    int32_t minimum_x = INT32_MAX, minimum_y = INT32_MAX;
+    int32_t maximum_x = INT32_MIN, maximum_y = INT32_MIN;
+    for (uint8_t corner = 0; corner < 4; corner++) {
+        const int32_t x = 160 + (points[corner].x * SM64_CASTLE_CAMERA_FOCAL_LENGTH) /
+                                  points[corner].z;
+        const int32_t y = 112 - (points[corner].y * SM64_CASTLE_CAMERA_FOCAL_LENGTH) /
+                                  points[corner].z;
+        if (x < minimum_x) minimum_x = x;
+        if (x > maximum_x) maximum_x = x;
+        if (y < minimum_y) minimum_y = y;
+        if (y > maximum_y) maximum_y = y;
+    }
+    return maximum_x >= 0 && minimum_x <= 319 && maximum_y >= 0 && minimum_y <= 223;
 }
 
 static void build_mario_gouraud(void) {
@@ -191,7 +215,8 @@ static bool tile_is_visible(uint16_t tile) {
     const point3_t d = castle_point(sm64_castle_uv_positions[tile][3]);
     const int32_t minimum = min4(a.z, b.z, c.z, d.z);
     const int32_t maximum = max4(a.z, b.z, c.z, d.z);
-    return minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH;
+    return minimum >= NEAR_DEPTH && maximum <= FAR_DEPTH &&
+           quad_intersects_viewport(a, b, c, d);
 }
 
 static void append_static_tile(uint16_t tile) {
@@ -210,7 +235,8 @@ static void sort_mario(void) {
         const point3_t d = mario_point(mario_vertex(indices[4]));
         const int32_t minimum = min4(a.z, b.z, c.z, d.z);
         const int32_t maximum = max4(a.z, b.z, c.z, d.z);
-        if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH) {
+        if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH ||
+            !quad_intersects_viewport(a, b, c, d)) {
             mario_bucket_next[primitive] = -2;
             rejected_items++;
             continue;

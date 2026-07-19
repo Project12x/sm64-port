@@ -61,15 +61,55 @@ def collision_floor(collision: str, x: int, y: int, z: int) -> tuple[int, int]:
     return max(candidates)
 
 
-def camera_config(camera: str) -> tuple[tuple[int, int, int], int, int]:
+def camera_config(
+    camera: str, area: int, spawn: tuple[int, int, int]
+) -> dict[str, object]:
+    lobby_axis = re.search(
+        r"void\s+set_fixed_cam_axis_sa_lobby\([^)]*\)\s*\{.*?"
+        r"case AREA_CASTLE_LOBBY:.*?"
+        r"vec3f_set\(sFixedModeBasePosition,\s*(-?\d+)\.f,\s*"
+        r"(-?\d+)\.f,\s*(-?\d+)\.f\)",
+        camera,
+        re.DOTALL,
+    )
+    if lobby_axis is None:
+        raise ValueError("missing Castle lobby fixed-camera base")
     entrance = re.search(r"cam_castle_lobby_entrance.*?vec3f_set\(sCastleEntranceOffset,\s*(-?\d+)\.f\s*-.*?,\s*(-?\d+)\.f\s*-.*?,\s*(-?\d+)\.f\s*-", camera, re.DOTALL)
     if entrance is None:
         raise ValueError("missing Castle lobby entrance camera target")
+    trigger = re.search(
+        r"\{\s*(\d+)\s*,\s*cam_castle_lobby_entrance\s*,\s*"
+        r"(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)\s*,\s*"
+        r"(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,",
+        camera,
+    )
+    if trigger is None:
+        raise ValueError("missing Castle lobby entrance camera trigger")
     scale = re.search(r"case AREA_CASTLE_LOBBY:\s*scaleToMario\s*=\s*([0-9.]+)f", camera)
     focus = re.search(r"focus\[1\]\s*\+=\s*focusFloorOff\s*\+\s*([0-9.]+)f", camera)
     if scale is None or focus is None:
         raise ValueError("missing Castle fixed-camera scale/focus constants")
-    return tuple(map(int, entrance.groups())), round(float(scale.group(1)) * 65536), round(float(focus.group(1)))
+    fixed_base = tuple(map(int, lobby_axis.groups()))
+    entrance_base = tuple(map(int, entrance.groups()))
+    trigger_values = tuple(map(int, trigger.groups()))
+    trigger_area, tx, ty, tz, sx, sy, sz = trigger_values
+    trigger_active = trigger_area == area and all(
+        abs(value - center) <= extent
+        for value, center, extent in zip(spawn, (tx, ty, tz), (sx, sy, sz))
+    )
+    return {
+        "base": entrance_base if trigger_active else fixed_base,
+        "fixed_base": fixed_base,
+        "entrance_base": entrance_base,
+        "entrance_trigger": {
+            "area": trigger_area,
+            "center": (tx, ty, tz),
+            "extent": (sx, sy, sz),
+            "active_at_spawn": trigger_active,
+        },
+        "follow_q16": round(float(scale.group(1)) * 65536),
+        "focus_height": round(float(focus.group(1))),
+    }
 
 
 def extract(script_path: Path, collision_path: Path, camera_path: Path) -> dict[str, object]:
@@ -78,14 +118,22 @@ def extract(script_path: Path, collision_path: Path, camera_path: Path) -> dict[
     camera = camera_path.read_text(encoding="utf-8")
     area, yaw_degrees, x, y, z = source_spawn(script)
     floor_height, floor_triangle = collision_floor(collision, x, y, z)
-    camera_base, follow_q16, focus_height = camera_config(camera)
+    camera_values = camera_config(camera, area, (x, y, z))
     return {
         "spawn": {"area": area, "yaw_degrees": yaw_degrees, "yaw_angle": round(yaw_degrees * 65536 / 360), "position": [x, y, z]},
         "collision": {"floor_height": floor_height, "floor_triangle": floor_triangle},
         "camera": {
-            "entrance_base": list(camera_base),
-            "follow_q16": follow_q16,
-            "focus_height": focus_height,
+            "base": list(camera_values["base"]),
+            "fixed_base": list(camera_values["fixed_base"]),
+            "entrance_base": list(camera_values["entrance_base"]),
+            "entrance_trigger": {
+                "area": camera_values["entrance_trigger"]["area"],
+                "center": list(camera_values["entrance_trigger"]["center"]),
+                "extent": list(camera_values["entrance_trigger"]["extent"]),
+                "active_at_spawn": camera_values["entrance_trigger"]["active_at_spawn"],
+            },
+            "follow_q16": camera_values["follow_q16"],
+            "focus_height": camera_values["focus_height"],
             "fov_degrees": 45,
             "focal_length_320": round(160 / math.tan(math.radians(45 / 2))),
         },
@@ -116,9 +164,9 @@ def main() -> None:
         f"#define SM64_CASTLE_SPAWN_Y {spawn['position'][1]}",
         f"#define SM64_CASTLE_SPAWN_Z {spawn['position'][2]}",
         f"#define SM64_CASTLE_SPAWN_FLOOR_Y {collision['floor_height']}",
-        f"#define SM64_CASTLE_CAMERA_BASE_X {camera['entrance_base'][0]}",
-        f"#define SM64_CASTLE_CAMERA_BASE_Y {camera['entrance_base'][1]}",
-        f"#define SM64_CASTLE_CAMERA_BASE_Z {camera['entrance_base'][2]}",
+        f"#define SM64_CASTLE_CAMERA_BASE_X {camera['base'][0]}",
+        f"#define SM64_CASTLE_CAMERA_BASE_Y {camera['base'][1]}",
+        f"#define SM64_CASTLE_CAMERA_BASE_Z {camera['base'][2]}",
         f"#define SM64_CASTLE_CAMERA_FOLLOW_Q16 {camera['follow_q16']}",
         f"#define SM64_CASTLE_CAMERA_FOCUS_Y {camera['focus_height']}",
         f"#define SM64_CASTLE_CAMERA_FOCAL_LENGTH {camera['focal_length_320']}",

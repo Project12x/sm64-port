@@ -14,11 +14,35 @@
     "floor_triangle": 1604
   },
   "camera": {
+    "base": [
+      -577,
+      143,
+      1443
+    ],
+    "fixed_base": [
+      -577,
+      143,
+      1443
+    ],
     "entrance_base": [
       -813,
       378,
       1103
     ],
+    "entrance_trigger": {
+      "area": 1,
+      "center": [
+        -1023,
+        376,
+        1830
+      ],
+      "extent": [
+        300,
+        400,
+        300
+      ],
+      "active_at_spawn": false
+    },
     "follow_q16": 19661,
     "focus_height": 125,
     "fov_degrees": 45,

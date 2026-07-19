@@ -207,23 +207,23 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertLess(right_foot_y, 20.0)
         self.assertLess(abs(left_foot_y - right_foot_y), 1.0)
 
-    def test_vdp1_repeated_vertex_tile_corner_order_is_c_b_a(self) -> None:
+    def test_vdp1_repeated_vertex_tile_corner_order_is_a_b_c(self) -> None:
         self.assertEqual(TILE, 16)
         self.assertEqual(bilinear_weights(0, 0), repeated_vertex_weights(0, 0, 16, 16))
         for x, y in ((0, 0), (15, 0), (0, 15), (15, 15), (8, 8)):
             self.assertAlmostEqual(sum(bilinear_weights(x, y)), 1.0)
-        # The formerly masked lower-right half contributes the repeated C
-        # corner and therefore contains source texture data.
+        # The lower-left D corner contributes to repeated destination C and
+        # therefore contains source texture data.
         self.assertGreater(bilinear_weights(15, 15)[2], 0.9)
         self.assertLessEqual(200 * TILE * TILE * 2, 0x0006BFE0)
 
-    def test_vdp1_native_quad_uses_measured_d_b_a_c_corner_order(self) -> None:
+    def test_vdp1_native_quad_uses_measured_a_b_c_d_corner_order(self) -> None:
         for x, y in ((0, 0), (15, 0), (0, 15), (15, 15), (8, 8)):
             a, b, c, d = distorted_sprite_weights(x, y, 16, 16)
             self.assertAlmostEqual(a + b + c + d, 1.0)
             repeated = repeated_vertex_weights(x, y, 16, 16)
             self.assertEqual(repeated, (a, b, c + d))
-        self.assertGreater(distorted_sprite_weights(0, 0, 16, 16)[3], 0.9)
+        self.assertGreater(distorted_sprite_weights(0, 0, 16, 16)[0], 0.9)
         self.assertGreater(distorted_sprite_weights(15, 15, 16, 16)[2], 0.9)
 
 
@@ -240,7 +240,11 @@ class CastleAreaInventoryTests(unittest.TestCase):
         # The LevelScript starts Mario at Y=0, while the source collision
         # triangle beneath (-1023, 1152) evaluates to Y=-37.
         self.assertEqual(result["collision"]["floor_height"], -37)
+        self.assertEqual(result["camera"]["fixed_base"], [-577, 143, 1443])
         self.assertEqual(result["camera"]["entrance_base"], [-813, 378, 1103])
+        self.assertEqual(result["camera"]["entrance_trigger"]["center"], [-1023, 376, 1830])
+        self.assertFalse(result["camera"]["entrance_trigger"]["active_at_spawn"])
+        self.assertEqual(result["camera"]["base"], [-577, 143, 1443])
 
     def test_castle_geo_root_preserves_original_layer_selection(self) -> None:
         root = TOOLS.parents[1]
