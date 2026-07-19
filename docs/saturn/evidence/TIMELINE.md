@@ -973,3 +973,15 @@ capture removes the large fan-shaped wedges while preserving the original source
 positions, UVs, BSP ordering, animated Mario, and 830-command tessellated bank.
 Evidence: [complete-triangle capture](screenshots/ymir-m4-complete-tri-2026-07-19.png)
 and [updated bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
+
+### 2026-07-19 — Original Castle collision stream reaches the Saturn movement bridge
+
+The full source `collision.inc.c` stream is now lowered to 11,185 original
+`s16` command words (1,563 vertices, 2,144 triangles, 30 surface groups) and
+loaded by the original SM64 `surface_load.c`/`surface_collision.c` code. The
+controller bridge calls the source wall and floor queries before accepting a
+movement step, so Mario no longer relies on handwritten room bounds. Special
+object records remain intentionally outside this first collision-only bank.
+Evidence: [source-collision capture](screenshots/ymir-m4-source-collision-2026-07-19.png),
+[collision-bank report](reports/castle-area1-collision-bank-2026-07-19.json), and
+[headless run report](reports/ymir-m4-source-collision-2026-07-19.json).

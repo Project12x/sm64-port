@@ -1,0 +1,8 @@
+{
+  "source": "levels/castle_inside/areas/1/collision.inc.c",
+  "vertices": 1563,
+  "surface_groups": 30,
+  "triangles": 2144,
+  "words": 11185,
+  "special_objects": "omitted; collision loader only"
+}

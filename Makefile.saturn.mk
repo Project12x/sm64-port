@@ -27,7 +27,7 @@ MARIO_TEXTURE_SOURCE_SCALE ?= 1
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer vdp2probe verify-vdp2probe verify-tools classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision plan-castle-camera verify-all clean
 
 all: hello
 
@@ -107,7 +107,7 @@ marioturntable: compile-mario-actor check-libyaul check-sdk
 verify-marioturntable: marioturntable
 	$(MAKE) -C "$(MARIOTURNTABLE_DIR)" verify
 
-castleviewer: compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-mario-actor compile-mario-textures check-libyaul check-sdk
+castleviewer: compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-mario-actor compile-mario-textures check-libyaul check-sdk
 	$(MAKE) -C "$(CASTLEVIEWER_DIR)"
 
 verify-castleviewer: castleviewer
@@ -216,6 +216,13 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  --ordering "$(CASTLE_ORDERING)" \
 	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-all-materials-bake-2026-07-18.json"
+
+compile-castle-collision: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_castle_collision.py" \
+	  --source "levels/castle_inside/areas/1/collision.inc.c" \
+	  --surface-header "include/surface_terrains.h" \
+	  --output "build/saturn/castlearea/generated/castle_collision.h" \
+	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
 verify-all: verify-tools classify-source verify-hello verify-hwtest
 

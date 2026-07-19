@@ -9,10 +9,13 @@
 #include "game/mario.h"
 #include "castle_area1.h"
 #include "castle_gameplay_config.h"
+#include "castle_collision.h"
 #include "castle_graph_bridge.h"
 #include "castle_uv_tiles.h"
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
+#include "engine/surface_load.h"
+#include "engine/surface_collision.h"
 
 #define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
 #define DRAW_ITEM_COUNT (SM64_CASTLE_UV_TILE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
@@ -180,9 +183,19 @@ static void update_source_input(void) {
         /* The original SM64 joystick routine owns magnitude and intended
          * direction. This bridge advances the source actor in source units
          * until collision/action execution is linked into this target. */
-        const int32_t speed = (int32_t)source_mario_state.intendedMag / 4;
-        mario_world_x += ((int32_t)mario_sine * speed) >> 16;
-        mario_world_z += ((int32_t)mario_cosine * speed) >> 16;
+        const f32 speed = (f32)source_mario_state.intendedMag / 4.0f;
+        f32 next_x = (f32)mario_world_x + ((f32)mario_sine * speed) / 65536.0f;
+        f32 next_z = (f32)mario_world_z + ((f32)mario_cosine * speed) / 65536.0f;
+        f32 next_y = (f32)mario_world_y;
+        /* Reuse SM64's spatial-partition queries over the original Castle
+         * collision stream.  The Saturn renderer owns only the movement
+         * bridge; floor and wall acceptance remain source engine behavior. */
+        (void)f32_find_wall_collision(&next_x, &next_y, &next_z, 60.0f, 50.0f);
+        const f32 floor = find_floor_height(next_x, next_y + 200.0f, next_z);
+        if (floor > FLOOR_LOWER_LIMIT) next_y = floor;
+        mario_world_x = (int32_t)next_x;
+        mario_world_y = (int32_t)next_y;
+        mario_world_z = (int32_t)next_z;
     }
     update_source_camera();
 }
@@ -494,6 +507,8 @@ void user_init(void) {
     smpc_peripheral_intback_issue();
     source_graph = sm64_saturn_castle_graph_init();
     if (!source_graph.valid) for (;;) {}
+    alloc_surface_pools();
+    load_area_terrain(1, (s16 *)sm64_castle_collision_data, NULL, NULL);
     vdp1_vram_partitions_set(COMMAND_COUNT,
         sizeof(sm64_castle_uv_tiles) + sizeof(sm64_mario_texture_uv_tiles),
         SM64_MARIO_PRIMITIVE_COUNT, SM64_CASTLE_UV_CLUT_COUNT);

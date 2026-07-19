@@ -4,6 +4,7 @@ endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-castle-area1
 SH_SRCS := main.c castle_graph_bridge.c \
+  collision_pool.c \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/game/game_init.c \
   $(ROOT)/src/game/mario.c \
@@ -11,7 +12,9 @@ SH_SRCS := main.c castle_graph_bridge.c \
   $(ROOT)/src/engine/geo_layout.c \
   $(ROOT)/src/engine/graph_node.c \
   $(ROOT)/src/engine/graph_node_manager.c \
-  $(ROOT)/src/engine/math_util.c
+  $(ROOT)/src/engine/math_util.c \
+  $(ROOT)/src/engine/surface_load.c \
+  $(ROOT)/src/engine/surface_collision.c
 SH_BUILD_DIR := $(ROOT)/build/saturn/castlearea/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/castlearea
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/castlearea/cd

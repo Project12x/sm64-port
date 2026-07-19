@@ -33,6 +33,7 @@ from bake_castle_uv import (  # noqa: E402
     texture_coordinate,
 )
 from compile_castle_bsp import compile_bsp  # noqa: E402
+from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
     Polygon as BspPolygon,
     Vertex as BspVertex,
@@ -230,6 +231,15 @@ class MarioActorPoseTests(unittest.TestCase):
 
 
 class CastleAreaInventoryTests(unittest.TestCase):
+    def test_castle_collision_bank_preserves_source_surface_stream(self) -> None:
+        root = TOOLS.parents[1]
+        source = (root / "levels/castle_inside/areas/1/collision.inc.c").read_text(encoding="utf-8")
+        stream, stats = compile_stream(source, surface_values(root / "include/surface_terrains.h"))
+        self.assertEqual(stats["vertices"], 1563)
+        self.assertEqual(stats["triangles"], 2144)
+        self.assertEqual(stream[0:2], [0x40, 1563])
+        self.assertEqual(stream[-2:], [0x41, 0x42])
+
     def test_castle_gameplay_config_comes_from_source(self) -> None:
         root = TOOLS.parents[1]
         result = extract_castle_gameplay_config(
