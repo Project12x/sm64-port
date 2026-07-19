@@ -893,6 +893,21 @@ work for the next pass.
    action, animation selection, and the source camera update.
 4. Capture deterministic neutral and movement frames from the same source
    lobby path before expanding to another room.
+
+### M4 current: source triangles use the same collapsed VDP1 path as Mario
+
+![Castle triangle lowering after A/B/C/C correction](screenshots/ymir-m4-source-triangle-collapse-2026-07-19.png)
+
+The rebuilt Castle disc now marks each source triangle in the generated ROM
+IR and emits its destination corners as `A/B/C/C`, matching the existing
+source-Mario texture adapter. The previous affine companion corner is retained
+only as offline UV-bake context; it is no longer submitted as visible room
+geometry. The Ymir capture keeps animated, moving source Mario in the original
+Castle lobby path. Remaining blue floor/material mismatch is still open and is
+not being relabeled as solved by this correction.
+
+Evidence: [capture report](ymir-m4-source-triangle-collapse-2026-07-19.json),
+[source bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
 ### 2026-07-18 — M4 geometry diagnosis: near-plane crossing is a real Saturn failure class
 
 The source-camera capture shows that the remaining floor/carpet and central-emblem

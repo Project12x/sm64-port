@@ -45,3 +45,17 @@ void spawn_special_objects(s16 areaIndex, s16 **specialObjList) {
     (void)areaIndex;
     (void)specialObjList;
 }
+
+/* Area 1's first Saturn slice loads the original static collision bank only;
+ * macro/special object records are deliberately not instantiated yet.  Keep
+ * the source loader call intact and satisfy its optional object hooks with
+ * no-op boundaries until the object behavior bank is ported. */
+void spawn_macro_objects(s16 areaIndex, s16 *macroObjList) {
+    (void)areaIndex;
+    (void)macroObjList;
+}
+
+void spawn_macro_objects_hardcoded(s16 areaIndex, s16 *macroObjList) {
+    (void)areaIndex;
+    (void)macroObjList;
+}
