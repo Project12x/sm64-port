@@ -1218,3 +1218,21 @@ sample is approximately 2.3/101/63/10/17 ms respectively. Mario accounts for
 four-command textured-triangle lowering as the next high-leverage work.
 Evidence: [Stage 112](screenshots/ymir-m4-phase-budget-2026-07-19.png) and
 [phase report](reports/ymir-m4-phase-budget-compact-2026-07-19.json).
+
+### 2026-07-19 — Low-WRAM collision unlocks transform-once Mario
+
+The original 256 KiB Castle surface allocator moved from scarce high WRAM to
+the upper quarter of Saturn low WRAM. A BIOS-backed Ymir run renders the full
+source lobby and Mario with collision still loaded, establishing the memory
+placement before adding another hot cache. Evidence:
+[Stage 113](screenshots/ymir-m4-lwram-collision-2026-07-19.png) and
+[compact report](reports/ymir-m4-lwram-collision-2026-07-19.json).
+
+With that headroom, all 424 active source Mario vertices are transformed and
+projected once per frame. Actor visibility, scene re-bucketing, textured-tile
+midpoints, and command emission reuse the cached view/screen records. The
+accepted sample improves full-loop throughput from roughly 4.6 to 6.6 FPS;
+sort falls from about 101 to 73 ms and command construction from 63 to 25 ms.
+The source animation, materials, texture path, and collision-backed game state
+remain live. Evidence: [Stage 114](screenshots/ymir-m4-transform-once-2026-07-19.png)
+and [phase report](reports/ymir-m4-transform-once-2026-07-19.json).

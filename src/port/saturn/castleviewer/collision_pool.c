@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <scu/map.h>
 
 #include "sm64.h"
 #include "game/memory.h"
@@ -7,9 +8,12 @@
 #include "game/object_list_processor.h"
 
 /* The original surface loader allocates its pools through main_pool_alloc.
- * Keep that allocator boundary, but provide a fixed Saturn WRAM arena sized
- * for Castle Area 1's source collision (7,000 nodes + 2,300 surfaces). */
-static uint8_t sCastleCollisionPool[256 * 1024] __attribute__((aligned(8)));
+ * Keep that boundary, but put the cold 256 KiB Castle surface arena in the
+ * upper quarter of Saturn low WRAM. The prior HWRAM array consumed a quarter
+ * of the 1 MiB hot/code memory and made a ~7 KiB transform cache cross the
+ * runtime boundary. Collision queries are sparse compared with rendering. */
+#define CASTLE_COLLISION_POOL_SIZE (256U * 1024U)
+#define CASTLE_COLLISION_POOL ((uint8_t *)LWRAM(0x000C0000U))
 static size_t sCastleCollisionPoolUsed;
 
 s32 gSurfaceNodesAllocated;
@@ -31,11 +35,11 @@ u32 gTimeStopState;
 void *main_pool_alloc(u32 size, u32 side) {
     (void)side;
     const size_t aligned = (sCastleCollisionPoolUsed + 7U) & ~((size_t)7U);
-    if (aligned + size > sizeof(sCastleCollisionPool)) {
+    if (aligned + size > CASTLE_COLLISION_POOL_SIZE) {
         return NULL;
     }
     sCastleCollisionPoolUsed = aligned + size;
-    return &sCastleCollisionPool[aligned];
+    return &CASTLE_COLLISION_POOL[aligned];
 }
 
 void reset_red_coins_collected(void) {

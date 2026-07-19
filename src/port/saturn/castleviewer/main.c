@@ -48,6 +48,8 @@ static int32_t mario_vertex_normals[SM64_MARIO_VERTEX_COUNT][3];
 static int16_t mario_bucket_head[DEPTH_BUCKETS], mario_bucket_tail[DEPTH_BUCKETS];
 static int16_t mario_bucket_next[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t mario_order[SM64_MARIO_PRIMITIVE_COUNT], mario_visible;
+static point3_t mario_view_vertices[SM64_MARIO_VERTEX_COUNT];
+static int16_vec2_t mario_screen_vertices[SM64_MARIO_VERTEX_COUNT];
 static uint16_t draw_order[DRAW_ITEM_COUNT];
 static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_DEPTH_BUCKETS];
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
@@ -217,6 +219,7 @@ static point3_t castle_point(const int16_t *source) {
 static const int16_t *mario_vertex(uint16_t index) {
     return mario_frame_vertices[index];
 }
+static int16_vec2_t project_point(point3_t point);
 static void select_mario_animation_frame(void) {
     if (mario_walking)
         mario_frame_vertices = sm64_mario_walking_animation_vertices[animation_frame];
@@ -229,6 +232,13 @@ static point3_t mario_point(const int16_t *source) {
     return world_to_view(x + mario_world_x,
                          (int32_t)source[1] + mario_world_y,
                          z + mario_world_z);
+}
+
+static void cache_mario_vertices(void) {
+    for (uint16_t vertex = 0; vertex < SM64_MARIO_VERTEX_COUNT; vertex++) {
+        mario_view_vertices[vertex] = mario_point(mario_vertex(vertex));
+        mario_screen_vertices[vertex] = project_point(mario_view_vertices[vertex]);
+    }
 }
 
 static void update_source_input(void) {
@@ -396,23 +406,22 @@ static void build_mario_gouraud(void) {
 
 static void mario_texture_tile_vertices(uint16_t tile, int16_vec2_t output[4]) {
     const uint16_t *indices = sm64_mario_textured_source_vertices[tile / 4U];
-    const int16_t *a = mario_vertex(indices[0]), *b = mario_vertex(indices[1]), *c = mario_vertex(indices[2]);
-    int16_t ab[3], bc[3], ca[3];
-    for (uint8_t axis = 0; axis < 3; axis++) {
-        ab[axis] = (int16_t)(((int32_t)a[axis] + b[axis]) / 2);
-        bc[axis] = (int16_t)(((int32_t)b[axis] + c[axis]) / 2);
-        ca[axis] = (int16_t)(((int32_t)c[axis] + a[axis]) / 2);
-    }
-    const int16_t *points[3];
+    const point3_t a = mario_view_vertices[indices[0]];
+    const point3_t b = mario_view_vertices[indices[1]];
+    const point3_t c = mario_view_vertices[indices[2]];
+    const point3_t ab = {(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2};
+    const point3_t bc = {(b.x + c.x) / 2, (b.y + c.y) / 2, (b.z + c.z) / 2};
+    const point3_t ca = {(c.x + a.x) / 2, (c.y + a.y) / 2, (c.z + a.z) / 2};
+    point3_t points[3];
     switch (tile & 3U) {
         case 0: points[0] = a;  points[1] = ab; points[2] = ca; break;
         case 1: points[0] = ab; points[1] = b;  points[2] = bc; break;
         case 2: points[0] = ca; points[1] = bc; points[2] = c;  break;
         default: points[0] = ab; points[1] = bc; points[2] = ca; break;
     }
-    output[0] = project_point(mario_point(points[0]));
-    output[1] = project_point(mario_point(points[1]));
-    output[2] = project_point(mario_point(points[2]));
+    output[0] = project_point(points[0]);
+    output[1] = project_point(points[1]);
+    output[2] = project_point(points[2]);
     output[3] = output[2];
 }
 
@@ -451,10 +460,10 @@ static void sort_mario(void) {
         mario_bucket_head[bucket] = mario_bucket_tail[bucket] = -1;
     for (uint16_t primitive = 0; primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++) {
         const uint16_t *indices = sm64_mario_primitives[primitive];
-        const point3_t a = mario_point(mario_vertex(indices[1]));
-        const point3_t b = mario_point(mario_vertex(indices[2]));
-        const point3_t c = mario_point(mario_vertex(indices[3]));
-        const point3_t d = mario_point(mario_vertex(indices[4]));
+        const point3_t a = mario_view_vertices[indices[1]];
+        const point3_t b = mario_view_vertices[indices[2]];
+        const point3_t c = mario_view_vertices[indices[3]];
+        const point3_t d = mario_view_vertices[indices[4]];
         const int32_t minimum = min4(a.z, b.z, c.z, d.z);
         const int32_t maximum = max4(a.z, b.z, c.z, d.z);
         if (minimum < NEAR_DEPTH || maximum > FAR_DEPTH ||
@@ -500,10 +509,10 @@ static int32_t scene_item_max_depth(uint16_t item) {
     }
     const uint16_t primitive = item - SM64_CASTLE_UV_TILE_COUNT;
     const uint16_t *indices = sm64_mario_primitives[primitive];
-    return max4(mario_point(mario_vertex(indices[1])).z,
-                mario_point(mario_vertex(indices[2])).z,
-                mario_point(mario_vertex(indices[3])).z,
-                mario_point(mario_vertex(indices[4])).z);
+    return max4(mario_view_vertices[indices[1]].z,
+                mario_view_vertices[indices[2]].z,
+                mario_view_vertices[indices[3]].z,
+                mario_view_vertices[indices[4]].z);
 }
 
 static void refine_opaque_depth_order(uint16_t opaque_count) {
@@ -628,10 +637,10 @@ static uint16_t draw_mario(uint16_t primitive, uint16_t command, const vdp1_vram
     const uint16_t *indices = sm64_mario_primitives[primitive];
     const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];
     const int16_vec2_t vertices[4] = {
-        project_point(mario_point(mario_vertex(indices[1]))),
-        project_point(mario_point(mario_vertex(indices[2]))),
-        project_point(mario_point(mario_vertex(indices[3]))),
-        project_point(mario_point(mario_vertex(indices[4])))
+        mario_screen_vertices[indices[1]],
+        mario_screen_vertices[indices[2]],
+        mario_screen_vertices[indices[3]],
+        mario_screen_vertices[indices[4]]
     };
     vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
     vdp1_cmdt_polygon_set(cmdt);
@@ -801,6 +810,7 @@ void user_init(void) {
         const bool animation_changed = next_frame != animation_frame;
         animation_frame = next_frame;
         select_mario_animation_frame();
+        cache_mario_vertices();
         if (animation_changed) {
             /* Gouraud tables are a 28 KiB VDP1 bank for the full source actor.
              * Keep geometry animation at source cadence but update lighting at

@@ -134,6 +134,15 @@ triangles expand to 200 commands. The next accepted work is consequently:
 3. compile source-derived full/medium/far actor LOD banks for the RAM Cart; and
 4. only then prototype Z-Treme-style early slave-SH2 transform jobs.
 
+The first transform-once actor pass is now accepted. Moving the 256 KiB source
+collision allocator from high WRAM to the upper quarter of low WRAM freed the
+hot-memory headroom that the earlier cache lacked. A 424-entry view/projection
+cache then reduced the measured sort phase from roughly 101 to 73 ms and
+command construction from 63 to 25 ms. The sampled full loop improved from
+about 4.6 to 6.6 FPS while the original animation vertices, collision stream,
+materials, and VDP1 commands remained active. This is the new optimization
+baseline; it is progress toward, not satisfaction of, the 15 FPS gate.
+
 Source `G_CULL_BACK`/`G_CULL_FRONT` state is now preserved by the Castle IR.
 The accepted per-fragment Fast3D winding test removes 148 tiles and lowers the
 captured live VDP1 prefix from 1,105 to 1,032 commands without changing the
