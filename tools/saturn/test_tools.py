@@ -22,7 +22,7 @@ from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract, flatten  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
 from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: E402
-from compile_castle_area import compile_opaque  # noqa: E402
+from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
 from bake_castle_uv import should_subdivide, texture_coordinate  # noqa: E402
 from plan_castle_camera_coverage import plan  # noqa: E402
 from quad_pairing import QuadCandidate, maximum_weight_matching, pair_triangles  # noqa: E402
@@ -245,6 +245,36 @@ class CastleAreaInventoryTests(unittest.TestCase):
         self.assertEqual(scene["triangle_count"], sum(scene["layers"].values()))
         self.assertGreater(scene["textured_triangle_count"], 0)
         self.assertIn("LAYER_OPAQUE", scene["layers"])
+        self.assertEqual({triangle["root_display_list"] for triangle in scene["triangles"]},
+                         {root["display_list"] for root in scene["roots"]})
+
+    def test_area_one_compiler_preserves_all_source_roots_and_layers(self) -> None:
+        root = TOOLS.parents[1]
+        bank = compile_scene(root / "levels/castle_inside/areas/1")
+        self.assertEqual(bank["triangle_count"], 619)
+        self.assertEqual(len(bank["triangle_roots"]), 619)
+        self.assertEqual(len(bank["triangle_layers"]), 619)
+        self.assertEqual(bank["roots"], [
+            "inside_castle_seg7_dl_07028FD0",
+            "inside_castle_seg7_dl_07029578",
+            "inside_castle_seg7_dl_0702A650",
+            "inside_castle_seg7_dl_0702AA10",
+            "inside_castle_seg7_dl_0702AB20",
+        ])
+        self.assertEqual({index: bank["triangle_roots"].count(index)
+                          for index in range(5)}, {0: 472, 1: 32, 2: 105, 3: 8, 4: 2})
+        self.assertEqual({layer: bank["triangle_layers"].count(value)
+                          for layer, value in bank["layers"].items()}, {
+                              "LAYER_OPAQUE": 577,
+                              "LAYER_TRANSPARENT_DECAL": 8,
+                              "LAYER_ALPHA": 34,
+                          })
+        self.assertEqual(set(bank["textures"]), {
+            "inside_09000000", "inside_09001000", "inside_09003800",
+            "inside_09004000", "inside_09005000", "inside_09008000",
+            "inside_09008800", "inside_castle_seg7_texture_07000800",
+            "inside_castle_seg7_texture_07002000",
+        })
 
     def test_area_one_opaque_compiler_preserves_root_topology(self) -> None:
         root = TOOLS.parents[1]

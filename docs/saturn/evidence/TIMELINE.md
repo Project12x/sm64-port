@@ -645,11 +645,41 @@ still the compiled Saturn IR. This proves the source graph ownership boundary;
 per-list IR dispatch, alpha/decal submission, and the original graph camera
 remain open.
 
+### M4 rejected: alpha master list copied without an N64 Z-buffer
+
+![Rejected late-alpha source pass](screenshots/ymir-m4-all-source-layers-fixed-camera-2026-07-18.png)
+
+The complete generated bank restores all five source roots, all 619 triangles,
+and all nine ROM-derived materials. The first VDP1 translation submitted the
+34 `LAYER_ALPHA` triangles after all opaque geometry, mirroring the N64 master
+list. Unlike the RDP, VDP1 has no Z-buffer, so distant cutout doors and windows
+painted over nearer walls. The capture is retained as a target-architecture
+failure rather than hidden behind the previous opaque-only bank.
+
+### M4 accepted integration: graph-selected all-layer Castle IR
+
+![All source roots in the shared Saturn painter](screenshots/ymir-m4-source-alpha-shared-painter-2026-07-18.png)
+
+Each triangle now retains the exact top-level display-list identity that
+selected it. The paused SH-2 graph state is `01 05 02 02 01 1F 01 04 01 06 04`:
+valid, five lists, two opaque, two alpha, one transparent decal, all five root
+bits selected, and the original layer IDs. The generated bank contains 489
+indexed positions, 577 opaque triangles, 34 binary-alpha triangles, eight
+transparent-decal triangles, and nine source textures. Its default 8×8/2×
+texture profile costs 79,232 bytes and 619 VDP1 tiles.
+
+For Saturn, opaque and binary-alpha primitives share one far-to-near painter;
+RGB1555 bit 15 retains source one-bit transparency. Only the transparent-decal
+root is submitted late with VDP1 half-transparency. This removes the gross
+late-alpha overpaint while retaining every source root. The remaining diagonal
+faults are now isolated to repeated-vertex triangle coverage, crossing surfaces,
+and the lack of clipping—not missing material or GeoLayout selection.
+
 ## Next visual gates
 
-1. Dispatch each original graph display-list identity and layer into the
-   corresponding Saturn IR payload, including the 34 alpha and eight
-   transparent-decal source triangles.
+1. Replace the repeated-vertex triangle adapter with safe source-aware quads,
+   projected-error splitting, and near-plane clipping while retaining the
+   graph-selected 619-triangle source bank.
 2. Extend the now-running original controller/Mario intent slice through
    source collision, actions, animation, and graph camera; stop adding
    room-specific target state.

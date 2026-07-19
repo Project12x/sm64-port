@@ -13,7 +13,7 @@ else
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 endif
 SM64_ROM ?=
-CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000
+CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000 inside_09008800 inside_castle_seg7_texture_07000800 inside_castle_seg7_texture_07002000
 CASTLE_TILE ?= 8
 CASTLE_SOURCE_SCALE ?= 2
 CASTLE_SUBDIVISION ?= 1
@@ -171,8 +171,8 @@ compile-mario-textures: compile-mario-actor check-host-tools
 compile-castle-area1: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_castle_area.py" \
 	  --area "levels/castle_inside/areas/1" \
-	  --output "build/saturn/castlearea/generated/castle_area1_opaque.h" \
-	  --report "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json"
+	  --output "build/saturn/castlearea/generated/castle_area1.h" \
+	  --report "docs/saturn/evidence/reports/castle-area1-source-root-ir-2026-07-18.json"
 
 compile-castle-gameplay-config: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_castle_gameplay_config.py" \
@@ -190,7 +190,7 @@ compile-castle-geo-root: check-host-tools
 
 plan-castle-camera: compile-castle-area1 check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/plan_castle_camera_coverage.py" \
-	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
+	  --intake "docs/saturn/evidence/reports/castle-area1-source-root-ir-2026-07-18.json" \
 	  --output "docs/saturn/evidence/reports/castle-area1-fixed-camera-coverage-2026-07-18.json"
 
 compile-castle-textures: compile-castle-area1 check-host-tools
@@ -201,7 +201,7 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_castle_uv.py" \
 	  --rom "$(SM64_ROM)" \
 	  --assets "assets.json" \
-	  --intake "docs/saturn/evidence/reports/castle-area1-opaque-ir-2026-07-18.json" \
+	  --intake "docs/saturn/evidence/reports/castle-area1-source-root-ir-2026-07-18.json" \
 	  $(foreach texture,$(CASTLE_TEXTURES),--texture "$(texture)") \
 	  --tile "$(CASTLE_TILE)" \
 	  --source-scale "$(CASTLE_SOURCE_SCALE)" \

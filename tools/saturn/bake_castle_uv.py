@@ -21,6 +21,8 @@ DEFAULT_TILE = 16
 DEFAULT_SELECTED = (
     "inside_09000000", "inside_09001000", "inside_09003800",
     "inside_09004000", "inside_09005000", "inside_09008000",
+    "inside_09008800", "inside_castle_seg7_texture_07000800",
+    "inside_castle_seg7_texture_07002000",
 )
 ASSETS = {
     "inside_09000000": "textures/inside/inside_castle_textures.00000.rgba16.png",
@@ -29,6 +31,9 @@ ASSETS = {
     "inside_09004000": "textures/inside/inside_castle_textures.04000.rgba16.png",
     "inside_09005000": "textures/inside/inside_castle_textures.05000.rgba16.png",
     "inside_09008000": "textures/inside/inside_castle_textures.08000.rgba16.png",
+    "inside_09008800": "textures/inside/inside_castle_textures.08800.rgba16.png",
+    "inside_castle_seg7_texture_07000800": "levels/castle_inside/1.rgba16.png",
+    "inside_castle_seg7_texture_07002000": "levels/castle_inside/3.rgba16.png",
 }
 
 
@@ -162,10 +167,10 @@ def main() -> None:
             texture = texture_data[scene["textures"][texture_index]]
             words.extend(sample(texture, uv_tri, tile_state, x, y, args.tile, args.source_scale) for y in range(args.tile) for x in range(args.tile))
     textured_count = sum(value != 0xFFFF for value in starts)
-    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {"]
+    lines = ["/* Local ROM-derived output: do not commit. */", "#pragma once", "#include <stdint.h>", f"#define SM64_CASTLE_UV_TILE_WIDTH {args.tile}U", "#define SM64_CASTLE_UV_TILE_NONE 0xFFFFU", f"#define SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT {textured_count}U", f"#define SM64_CASTLE_UV_TILE_COUNT {len(positions)}U", "static const uint16_t sm64_castle_uv_tile_start[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {"]
     lines.extend("    " + ", ".join(f"{value}U" for value in starts[offset:offset + 16]) + "," for offset in range(0, len(starts), 16))
     lines.append("};")
-    lines.append("static const uint8_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {")
+    lines.append("static const uint8_t sm64_castle_uv_tile_count[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{value}U" for value in counts[offset:offset + 16]) + "," for offset in range(0, len(counts), 16))
     lines.append("};")
     lines.append("static const int16_t sm64_castle_uv_positions[SM64_CASTLE_UV_TILE_COUNT][3][3] = {")

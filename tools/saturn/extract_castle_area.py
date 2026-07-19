@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Flatten Castle Interior Area 1's static Fast3D display-list subset.
+"""Flatten Castle Interior Area 1's source-selected Fast3D display lists.
 
-The output is an intermediate source record for the forthcoming Saturn world
-IR. It intentionally includes only the target's first fixed-camera root
-lists: vertex cache loads, texture state, nested lists, and triangle macros.
-It does not pretend to execute level scripts, behavior code, or effects.
+The output is the static-geometry half of the Saturn world IR.  SM64's actual
+GeoLayout still chooses the roots at runtime; this pass retains each root's
+identity and layer while resolving vertex cache, texture state, nested lists,
+and triangle macros ahead of time.
 """
 from __future__ import annotations
 
@@ -213,13 +213,14 @@ def display_list_macros(body: str):
 
 def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, int, int, int, int]]],
             name: str, layer: str, out: list[dict[str, object]], state: dict[str, object] | None = None,
-            stack: tuple[str, ...] = ()) -> None:
+            stack: tuple[str, ...] = (), root_display_list: str | None = None) -> None:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
     if body is None:
         raise ValueError(f"missing display list {name}")
     state = initial_state() if state is None else state
+    root_display_list = name if root_display_list is None else root_display_list
     cache: list[tuple[int, int, int, int, int] | None] = state["cache"]  # type: ignore[assignment]
     for macro, args in display_list_macros(body):
         if macro == "gsDPSetTextureImage":
@@ -293,6 +294,7 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                     raise ValueError(f"invalid triangle in {name}: {args}")
                 texture, bindings, tile = render_texture_state(state)
                 out.append({
+                    "root_display_list": root_display_list,
                     "source_display_list": name,
                     "layer": layer,
                     "texture": texture,
@@ -304,7 +306,8 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
-                flatten(display_lists, vertices, child.group(1), layer, out, state, stack + (name,))
+                flatten(display_lists, vertices, child.group(1), layer, out, state,
+                        stack + (name,), root_display_list)
 
 
 def extract(area: Path) -> dict[str, object]:
@@ -313,10 +316,11 @@ def extract(area: Path) -> dict[str, object]:
     roots = root_display_lists((area / "geo.inc.c").read_text(encoding="utf-8"))
     triangles: list[dict[str, object]] = []
     for root in roots:
-        flatten(display_lists, vertices, root["display_list"], root["layer"], triangles)
+        flatten(display_lists, vertices, root["display_list"], root["layer"], triangles,
+                root_display_list=root["display_list"])
     return {
         "schema": "sm64-saturn-static-scene-intake",
-        "version": 1,
+        "version": 2,
         "name": "castle_inside_area_1_root",
         "source": "levels/castle_inside/areas/1",
         "roots": roots,
@@ -325,7 +329,7 @@ def extract(area: Path) -> dict[str, object]:
         "textured_triangle_count": sum(item["texture"] is not None for item in triangles),
         "texture_use": dict(Counter(str(item["texture"]) for item in triangles if item["texture"] is not None)),
         "triangles": triangles,
-        "limits": ["Static Area 1 roots only", "No level-script interpreter", "No texture bytes", "No alpha/decal renderer yet"],
+        "limits": ["Static geometry payloads only", "Runtime GeoLayout selects roots", "No texture bytes"],
     }
 
 

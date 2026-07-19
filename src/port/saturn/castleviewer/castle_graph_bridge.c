@@ -31,6 +31,14 @@ Gfx *geo_exec_inside_castle_light(
 static uint8_t graph_arena[4096] __aligned(8);
 static struct AllocOnlyPool graph_pool;
 
+static const void *const source_root_display_lists[] = {
+    inside_castle_seg7_dl_07028FD0,
+    inside_castle_seg7_dl_07029578,
+    inside_castle_seg7_dl_0702A650,
+    inside_castle_seg7_dl_0702AA10,
+    inside_castle_seg7_dl_0702AB20,
+};
+
 void *alloc_only_pool_alloc(struct AllocOnlyPool *pool, s32 size) {
     if (size <= 0) return NULL;
     const s32 aligned = (size + 3) & ~3;
@@ -53,10 +61,22 @@ static void inspect_nodes(
     do {
         if ((node->type & 0xFFU) == GRAPH_NODE_TYPE_DISPLAY_LIST) {
             const uint8_t layer = (uint8_t)(node->flags >> 8);
+            const void *display_list =
+                ((const struct GraphNodeDisplayList *)node)->displayList;
             state->display_lists++;
             if (layer == LAYER_OPAQUE) state->opaque_lists++;
             else if (layer == LAYER_ALPHA) state->alpha_lists++;
             else if (layer == LAYER_TRANSPARENT_DECAL) state->decal_lists++;
+            for (uint8_t root = 0;
+                 root < (uint8_t)(sizeof(source_root_display_lists) /
+                                  sizeof(source_root_display_lists[0]));
+                 root++) {
+                if (display_list == source_root_display_lists[root]) {
+                    state->selected_root_mask |= (uint8_t)(1U << root);
+                    state->selected_root_layers[root] = layer;
+                    break;
+                }
+            }
         }
         inspect_nodes(node->children, state);
         node = node->next;
@@ -76,6 +96,11 @@ sm64_saturn_castle_graph_state_t sm64_saturn_castle_graph_init(void) {
     state.valid = root != NULL &&
         state.display_lists == SM64_SATURN_CASTLE_GRAPH_DISPLAY_LIST_COUNT &&
         state.opaque_lists == 2U && state.alpha_lists == 2U &&
-        state.decal_lists == 1U;
+        state.decal_lists == 1U && state.selected_root_mask == 0x1FU &&
+        state.selected_root_layers[0] == LAYER_OPAQUE &&
+        state.selected_root_layers[1] == LAYER_ALPHA &&
+        state.selected_root_layers[2] == LAYER_OPAQUE &&
+        state.selected_root_layers[3] == LAYER_TRANSPARENT_DECAL &&
+        state.selected_root_layers[4] == LAYER_ALPHA;
     return state;
 }

@@ -94,20 +94,15 @@ The first root flatten is also checked in as a source-only
 [`static scene intake`](evidence/reports/castle-area1-static-scene-intake-2026-07-18.json):
 the five Area 1 root lists resolve to 619 source triangles (577 opaque, 34
 alpha, and 8 transparent-decal). It preserves per-triangle world positions,
-UVs, texture state, source display-list IDs, and render layer; texture bytes
-remain outside the repository. The next implementation step is to compile its
-opaque subset through the shared Saturn mesh IR and produce the first fixed
-camera frame.
+UVs, texture state, nested display-list IDs, top-level root identity, and
+render layer; texture bytes remain outside the repository.
 
-The initial opaque compiler is `tools/saturn/compile_castle_area.py`, invoked
+The source-root compiler is `tools/saturn/compile_castle_area.py`, invoked
 as `make -f Makefile.saturn.mk compile-castle-area1`. It emits a deterministic
-first-use indexed bank from the actual Area 1 root: 436 positions and 577
-opaque source triangles, plus the source display-list IDs that produced them.
-It is intentionally not yet a room-render claim: texture pixels, alpha/decal
-layers, clipping, visibility, and camera framing remain separate M3 gates.
-The same IR now keeps the original per-triangle texture identifier and Fast3D
-UV triplet. That prevents the first texture conversion from guessing a wall
-material or inventing replacement coordinates.
+first-use indexed bank from the actual Area 1 root: 489 positions and all 619
+source triangles, including per-triangle top-level root, layer, texture key,
+Fast3D UV triplet, and complete tile state. That prevents the target from
+guessing a wall material, inventing coordinates, or hand-selecting room pieces.
 
 M3 has now reached a BIOS-backed fixed-camera render of the 577-triangle
 opaque root with all six original source materials. The shared converter fixes
@@ -122,16 +117,19 @@ per-build material, tile-size, source-scale, and subdivision controls; this is
 the active source-display-list renderer, not a hand-painted lobby substitute.
 The next gate is the source Mario/game-state path inside this textured room.
 
-The next ownership handoff is now running on SH-2: the Castle target links the
+The ownership handoff is now running on SH-2: the Castle target links the
 original `geo_layout.c`, `graph_node.c`, `graph_node_manager.c`, and
 `math_util.c`, and executes an exact generated copy of `castle_geo_000F30`.
 The BIOS-backed Stage 70 capture includes a paused target-memory proof of the
 resulting five display-list nodes (two opaque, two alpha, one transparent
-decal). The current opaque Fast3D IR is still submitted as one bank, so this is
-not yet a complete graph renderer. The immediate M3/M4 task is to bind each
-source GraphNode display-list identity and layer to its generated Saturn IR,
-then let the original graph camera, animation, collision, and action state own
-the frame.
+decal). Each live display-list identity now selects its matching generated
+Saturn IR root through a verified `0x1F` root mask. All nine source materials
+fit a 79,232-byte local texture bank. Because VDP1 has no Z-buffer, opaque and
+binary-alpha source geometry share a far-to-near painter while the eight
+transparent-decal triangles use a late half-transparency pass. The next M4
+task is to replace repeated-vertex triangle coverage with safe quads,
+projected splitting, and clipping, then let the original graph camera,
+collision, action, and animation state own the complete frame.
 
 ## M0 — Source-face proof
 

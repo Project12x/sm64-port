@@ -1,15 +1,15 @@
 /* M4 integration: actual SM64 Castle Area 1 plus source Mario actor/animation. */
 #include <yaul.h>
 #include <string.h>
-#include "castle_area1_opaque.h"
+#include "castle_area1.h"
 #include "castle_gameplay_config.h"
 #include "castle_graph_bridge.h"
 #include "castle_uv_tiles.h"
 #include "mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 
-#define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT - SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT) + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
-#define DRAW_ITEM_COUNT (SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
+#define COMMAND_COUNT (SM64_CASTLE_UV_TILE_COUNT + (SM64_CASTLE_AREA1_TRIANGLE_COUNT - SM64_CASTLE_UV_TEXTURED_TRIANGLE_COUNT) + (SM64_MARIO_PRIMITIVE_COUNT - SM64_MARIO_TEXTURED_SOURCE_TRIANGLE_COUNT) + SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT + 3U)
+#define DRAW_ITEM_COUNT (SM64_CASTLE_AREA1_TRIANGLE_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
 #define DEPTH_BUCKETS 128U
 #define NEAR_DEPTH 128
 #define FAR_DEPTH 8192
@@ -173,13 +173,19 @@ static void sort_scene(void) {
     rejected_items = 0;
     for (uint16_t item = 0; item < DRAW_ITEM_COUNT; item++) {
         point3_t a, b, c;
-        if (item < SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT) {
+        if (item < SM64_CASTLE_AREA1_TRIANGLE_COUNT) {
+            const uint8_t root = sm64_castle_area1_triangle_root[item];
+            if ((source_graph.selected_root_mask & (1U << root)) == 0U) {
+                rejected_items++;
+                bucket_next[item] = -2;
+                continue;
+            }
             const uint16_t *triangle = sm64_castle_area1_triangles[item];
             a = castle_point(sm64_castle_area1_vertices[triangle[0]]);
             b = castle_point(sm64_castle_area1_vertices[triangle[1]]);
             c = castle_point(sm64_castle_area1_vertices[triangle[2]]);
         } else {
-            const uint16_t primitive = item - SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT;
+            const uint16_t primitive = item - SM64_CASTLE_AREA1_TRIANGLE_COUNT;
             const uint16_t *indices = sm64_mario_primitives[primitive];
             a = mario_point(mario_vertex(indices[1]));
             b = mario_point(mario_vertex(indices[2]));
@@ -205,6 +211,11 @@ static void sort_scene(void) {
 }
 
 static uint16_t draw_castle(uint16_t source, uint16_t command, const vdp1_vram_partitions_t *partitions) {
+    const uint8_t layer = sm64_castle_area1_triangle_layer[source];
+    const vdp1_cmdt_cc_t color_calculation =
+        layer == SM64_CASTLE_LAYER_TRANSPARENT_DECAL
+            ? VDP1_CMDT_CC_HALF_TRANSPARENT
+            : VDP1_CMDT_CC_REPLACE;
     const uint16_t texture_start = sm64_castle_uv_tile_start[source];
     if (texture_start != SM64_CASTLE_UV_TILE_NONE) {
         for (uint16_t tile = texture_start; tile < texture_start + sm64_castle_uv_tile_count[source]; tile++) {
@@ -216,7 +227,10 @@ static uint16_t draw_castle(uint16_t source, uint16_t command, const vdp1_vram_p
             };
             vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
             vdp1_cmdt_distorted_sprite_set(cmdt);
-            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){.color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_REPLACE});
+            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                .cc_mode = color_calculation
+            });
             vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + tile * SM64_CASTLE_UV_TILE_WIDTH * SM64_CASTLE_UV_TILE_WIDTH * sizeof(uint16_t));
             vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
             vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
@@ -233,7 +247,10 @@ static uint16_t draw_castle(uint16_t source, uint16_t command, const vdp1_vram_p
     };
     vdp1_cmdt_t *cmdt = &command_list->cmdts[command++];
     vdp1_cmdt_polygon_set(cmdt);
-    vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){.color_mode = VDP1_CMDT_CM_RGB_32768, .cc_mode = VDP1_CMDT_CC_REPLACE});
+    vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+        .color_mode = VDP1_CMDT_CM_RGB_32768,
+        .cc_mode = color_calculation
+    });
     vdp1_cmdt_color_set(cmdt, RGB1555(1, 20, 20, 25));
     vdp1_cmdt_vtx_set(cmdt, vertices);
     return command;
@@ -280,10 +297,24 @@ static void draw_scene(void) {
     vdp1_cmdt_system_clip_coord_set(&command_list->cmdts[0]); vdp1_cmdt_vtx_system_clip_coord_set(&command_list->cmdts[0], clip);
     vdp1_cmdt_local_coord_set(&command_list->cmdts[1]); vdp1_cmdt_vtx_local_coord_set(&command_list->cmdts[1], local);
     uint16_t command = 2;
-    for (uint16_t output = 0; output < visible_items; output++) {
-        const uint16_t item = draw_order[output];
-        if (item < SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT) command = draw_castle(item, command, &partitions);
-        else command = draw_mario(item - SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT, command, &partitions);
+    /* N64 LAYER_ALPHA is binary cutout geometry that relies on the RDP's
+     * Z-buffer. VDP1 has no Z-buffer, so opaque, alpha-test, and Mario must
+     * share one far-to-near ordering pass. Only the genuinely translucent
+     * decal root is submitted afterward with half-transparency. */
+    for (uint8_t pass = 0; pass < 2; pass++) {
+        for (uint16_t output = 0; output < visible_items; output++) {
+            const uint16_t item = draw_order[output];
+            if (item < SM64_CASTLE_AREA1_TRIANGLE_COUNT) {
+                const uint8_t layer = sm64_castle_area1_triangle_layer[item];
+                const bool translucent =
+                    layer == SM64_CASTLE_LAYER_TRANSPARENT_DECAL;
+                if ((pass == 0 && !translucent) || (pass == 1 && translucent))
+                    command = draw_castle(item, command, &partitions);
+            } else if (pass == 0) {
+                command = draw_mario(item - SM64_CASTLE_AREA1_TRIANGLE_COUNT,
+                                     command, &partitions);
+            }
+        }
     }
     vdp1_cmdt_end_set(&command_list->cmdts[command]);
     scu_dma_transfer(0, (void *)partitions.gouraud_base, mario_gouraud, sizeof(mario_gouraud)); scu_dma_transfer_wait(0);
@@ -314,9 +345,10 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % 15U) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u | source spawn %d,%d,%d\nanim_C5 %u/%u | shared painter %u/%u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source spawn %d,%d,%d\nanim_C5 %u/%u | layered painter %u/%u\ntextures %lu + %lu bytes | ~%u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
+                source_graph.selected_root_mask,
                 SM64_CASTLE_SPAWN_X, SM64_CASTLE_SPAWN_Y, SM64_CASTLE_SPAWN_Z,
                 animation_frame, (uint16_t)SM64_MARIO_ANIMATION_FRAME_COUNT, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);

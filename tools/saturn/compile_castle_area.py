@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Compile the first real Castle Area 1 root into a compact Saturn C bank.
+"""Compile the source-selected Castle Area 1 roots into a compact Saturn IR.
 
-This is deliberately a narrow M3 bridge: it consumes the checked source
-display-list flattening, retains only the opaque root layer, and serializes
-the exact source positions/topology and Fast3D texture state in first-use
-order. It does not invent a replacement level format or interpret level
-scripts.
+The original GeoLayout remains authoritative at runtime.  This host pass only
+serializes its static Fast3D payloads and preserves each triangle's root and
+render layer so the SH-2 graph walker can select target-native VDP1 commands.
 """
 from __future__ import annotations
 
@@ -16,9 +14,17 @@ from pathlib import Path
 from extract_castle_area import extract
 
 
-def compile_opaque(area: Path) -> dict[str, object]:
-    """Return a deterministic, indexed representation of Area 1 opaque roots."""
+LAYERS = {
+    "LAYER_OPAQUE": 0,
+    "LAYER_TRANSPARENT_DECAL": 1,
+    "LAYER_ALPHA": 2,
+}
+
+
+def compile_scene(area: Path, selected_layers: set[str] | None = None) -> dict[str, object]:
+    """Return a deterministic indexed representation of selected source roots."""
     scene = extract(area)
+    roots = [str(root["display_list"]) for root in scene["roots"]]
     positions: list[tuple[int, int, int]] = []
     position_index: dict[tuple[int, int, int], int] = {}
     triangles: list[tuple[int, int, int]] = []
@@ -26,8 +32,11 @@ def compile_opaque(area: Path) -> dict[str, object]:
     triangle_textures: list[str | None] = []
     triangle_uv: list[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = []
     triangle_tiles: list[dict[str, object] | None] = []
+    triangle_roots: list[int] = []
+    triangle_layers: list[int] = []
     for triangle in scene["triangles"]:
-        if triangle["layer"] != "LAYER_OPAQUE":
+        layer = str(triangle["layer"])
+        if selected_layers is not None and layer not in selected_layers:
             continue
         indices: list[int] = []
         for raw in triangle["positions"]:
@@ -43,26 +52,40 @@ def compile_opaque(area: Path) -> dict[str, object]:
         triangle_textures.append(None if triangle["texture"] is None else str(triangle["texture"]))
         triangle_uv.append(tuple(tuple(int(value) for value in uv) for uv in triangle["uv"]))
         triangle_tiles.append(triangle["tile"])
+        triangle_roots.append(roots.index(str(triangle["root_display_list"])))
+        triangle_layers.append(LAYERS[layer])
     textures = sorted({texture for texture in triangle_textures if texture is not None})
     texture_indices = [0xFF if texture is None else textures.index(texture) for texture in triangle_textures]
     return {
         "schema": "sm64-saturn-castle-static-ir",
-        "version": 1,
-        "name": "castle_inside_area_1_opaque_root",
+        "version": 2,
+        "name": "castle_inside_area_1_source_roots",
         "source": "levels/castle_inside/areas/1",
-        "layer": "LAYER_OPAQUE",
+        "layers": {name: value for name, value in LAYERS.items()
+                   if selected_layers is None or name in selected_layers},
+        "roots": roots,
         "vertex_count": len(positions),
         "triangle_count": len(triangles),
         "source_display_lists": sorted(set(sources)),
         "textures": textures,
         "texture_indices": texture_indices,
+        "triangle_roots": triangle_roots,
+        "triangle_layers": triangle_layers,
         "positions": positions,
         "triangles": triangles,
         "uv": triangle_uv,
         "tile_state": triangle_tiles,
         "texture_state_version": 2,
-        "limits": ["Opaque root only", "No alpha/decal layers", "No visibility or clipping"],
+        "limits": ["Static geometry payloads only", "Runtime graph selection retained", "No visibility or clipping"],
     }
+
+
+def compile_opaque(area: Path) -> dict[str, object]:
+    """Compatibility view used by established camera-planning tests/tools."""
+    bank = compile_scene(area, {"LAYER_OPAQUE"})
+    bank["name"] = "castle_inside_area_1_opaque_root"
+    bank["layer"] = "LAYER_OPAQUE"
+    return bank
 
 
 def write_header(bank: dict[str, object], output: Path) -> None:
@@ -75,20 +98,30 @@ def write_header(bank: dict[str, object], output: Path) -> None:
         "#pragma once",
         "#include <stdint.h>",
         f"#define SM64_CASTLE_AREA1_VERTEX_COUNT {len(positions)}U",
-        f"#define SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT {len(triangles)}U",
+        f"#define SM64_CASTLE_AREA1_TRIANGLE_COUNT {len(triangles)}U",
         f"#define SM64_CASTLE_AREA1_TEXTURE_COUNT {len(bank['textures'])}U",
+        f"#define SM64_CASTLE_AREA1_ROOT_COUNT {len(bank['roots'])}U",
+        "#define SM64_CASTLE_LAYER_OPAQUE 0U",
+        "#define SM64_CASTLE_LAYER_TRANSPARENT_DECAL 1U",
+        "#define SM64_CASTLE_LAYER_ALPHA 2U",
         "#define SM64_CASTLE_AREA1_TEXTURE_NONE 0xFFU",
         "static const int16_t sm64_castle_area1_vertices[SM64_CASTLE_AREA1_VERTEX_COUNT][3] = {",
     ]
     lines.extend(f"    {{{x}, {y}, {z}}}," for x, y, z in positions)
     lines.append("};")
-    lines.append("static const uint16_t sm64_castle_area1_triangles[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT][3] = {")
+    lines.append("static const uint16_t sm64_castle_area1_triangles[SM64_CASTLE_AREA1_TRIANGLE_COUNT][3] = {")
     lines.extend(f"    {{{a}, {b}, {c}}}," for a, b, c in triangles)
     lines.append("};")
-    lines.append("static const uint8_t sm64_castle_area1_triangle_texture[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT] = {")
+    lines.append("static const uint8_t sm64_castle_area1_triangle_texture[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {")
     lines.extend("    " + ", ".join(f"{value}U" for value in texture_indices[offset:offset + 16]) + "," for offset in range(0, len(texture_indices), 16))
     lines.append("};")
-    lines.append("static const int16_t sm64_castle_area1_triangle_uv[SM64_CASTLE_AREA1_OPAQUE_TRIANGLE_COUNT][3][2] = {")
+    lines.append("static const uint8_t sm64_castle_area1_triangle_root[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {")
+    lines.extend("    " + ", ".join(f"{value}U" for value in bank["triangle_roots"][offset:offset + 16]) + "," for offset in range(0, len(triangles), 16))
+    lines.append("};")
+    lines.append("static const uint8_t sm64_castle_area1_triangle_layer[SM64_CASTLE_AREA1_TRIANGLE_COUNT] = {")
+    lines.extend("    " + ", ".join(f"{value}U" for value in bank["triangle_layers"][offset:offset + 16]) + "," for offset in range(0, len(triangles), 16))
+    lines.append("};")
+    lines.append("static const int16_t sm64_castle_area1_triangle_uv[SM64_CASTLE_AREA1_TRIANGLE_COUNT][3][2] = {")
     lines.extend(f"    {{{{{a}, {b}}}, {{{c}, {d}}}, {{{e}, {f}}}}}," for (a, b), (c, d), (e, f) in uv)
     lines.append("};")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -101,7 +134,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    bank = compile_opaque(args.area)
+    bank = compile_scene(args.area)
     write_header(bank, args.output)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(bank, indent=2) + "\n", encoding="utf-8")

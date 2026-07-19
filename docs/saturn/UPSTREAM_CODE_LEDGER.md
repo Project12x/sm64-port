@@ -82,6 +82,14 @@ Implementation commitments:
    source-diagonal control, but the 512-unit blanket experiment is rejected:
    it increased VDP1 triangle seams. No PSX source is copied; the repository's
    absent root license keeps both changes behavior-only at pin `3073845688`.
+8. The all-layer Castle path uses the pinned Yaul
+   `vdp1_cmdt_draw_mode_t` contract from
+   `libyaul/scu/bus/b/vdp/vdp1/cmdt.h` and the repository's existing
+   `src/port/saturn/hwtest/main.c` half-transparency probe. This is a
+   **dependency/API adaptation**: N64 RGBA16 alpha remains RGB1555 bit 15 for
+   VDP1 transparent-pixel rejection, while only `LAYER_TRANSPARENT_DECAL`
+   selects `VDP1_CMDT_CC_HALF_TRANSPARENT`. No upstream renderer
+   implementation is copied.
 
 ## M3 onward — inspection and debugging evidence
 
