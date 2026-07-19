@@ -48,6 +48,7 @@ static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_D
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
 static uint16_t visible_items, rejected_items, frame_ticks, animation_frame;
+static uint32_t loop_ticks;
 /* Cache only the full-width source depth key.  Projection remains on the
  * proven direct path; this removes the redundant transform pass used by the
  * painter re-bucket without risking quantization of visible coordinates. */
@@ -751,6 +752,7 @@ void user_init(void) {
         upload_texture_bank(&partitions);
     }
     for (uint32_t frame = 0;; frame++) {
+        cpu_frt_count_set(0);
         update_source_input();
         const uint16_t animation_count = mario_walking
             ? SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT
@@ -768,7 +770,8 @@ void user_init(void) {
         cpu_frt_count_set(0); sort_scene(); draw_scene(); frame_ticks = cpu_frt_count_get();
         if ((frame % FRAME_STATS_PERIOD) == 0) {
             const uint32_t fps_x10 = frame_ticks == 0 ? 0 : 33528000UL / frame_ticks;
-            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB/%lu B/%lu ticks | textures %lu + %lu bytes | ~%u.%u FPS\n",
+            const uint32_t loop_fps_x10 = loop_ticks == 0 ? 0 : 33528000UL / loop_ticks;
+            dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u\nVDP1 quads %u | tile depth keys %u | cart %s %lu KiB/%lu B/%lu ticks | textures %lu + %lu bytes | render %u.%u / loop %u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
                 source_graph.selected_root_mask,
@@ -782,10 +785,12 @@ void user_init(void) {
                 (uint32_t)(cartridge_bank.capacity / 1024U),
                 cartridge_staged_bytes,
                 cartridge_stage_ticks,
-                (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles), fps_x10 / 10U, fps_x10 % 10U);
+                (uint32_t)sizeof(sm64_castle_uv_tiles), (uint32_t)sizeof(sm64_mario_texture_uv_tiles),
+                fps_x10 / 10U, fps_x10 % 10U, loop_fps_x10 / 10U, loop_fps_x10 % 10U);
             dbgio_flush();
         }
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
+        loop_ticks = cpu_frt_count_get();
     }
 }
 int main(void) { user_init(); return 0; }
