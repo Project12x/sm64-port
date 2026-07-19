@@ -57,6 +57,8 @@ static struct Camera source_camera;
 static int32_t mario_world_x = SM64_CASTLE_SPAWN_X;
 static int32_t mario_world_y = SM64_CASTLE_SPAWN_Y;
 static int32_t mario_world_z = SM64_CASTLE_SPAWN_Z;
+static f32 mario_vertical_velocity;
+static bool mario_airborne;
 static bool controls_ready;
 
 _Static_assert(SM64_CASTLE_UV_TEXTURED_PRIMITIVE_COUNT == SM64_CASTLE_AREA1_PRIMITIVE_COUNT,
@@ -179,6 +181,25 @@ static void update_source_input(void) {
     source_mario_state.input = 0;
     update_mario_button_inputs(&source_mario_state);
     update_mario_joystick_inputs(&source_mario_state);
+    if (!mario_airborne && (source_controller.buttonPressed & A_BUTTON) != 0U) {
+        /* Use SM64's ordinary jump impulse while the Saturn bridge is still
+         * outside the full action state machine. Floor acceptance remains the
+         * original collision query below, so this is not a bespoke room jump. */
+        mario_vertical_velocity = 52.0f;
+        mario_airborne = true;
+    }
+    if (mario_airborne) {
+        mario_vertical_velocity -= 4.0f;
+        mario_world_y += (int32_t)mario_vertical_velocity;
+        const f32 floor = find_floor_height((f32)mario_world_x,
+                                            (f32)mario_world_y + 200.0f,
+                                            (f32)mario_world_z);
+        if (floor > FLOOR_LOWER_LIMIT && (f32)mario_world_y <= floor) {
+            mario_world_y = (int32_t)floor;
+            mario_vertical_velocity = 0.0f;
+            mario_airborne = false;
+        }
+    }
     mario_walking = (source_mario_state.input & INPUT_NONZERO_ANALOG) != 0U;
     source_camera.yaw = 0;
     if (mario_walking) {
@@ -196,7 +217,7 @@ static void update_source_input(void) {
          * bridge; floor and wall acceptance remain source engine behavior. */
         (void)f32_find_wall_collision(&next_x, &next_y, &next_z, 60.0f, 50.0f);
         const f32 floor = find_floor_height(next_x, next_y + 200.0f, next_z);
-        if (floor > FLOOR_LOWER_LIMIT) next_y = floor;
+        if (!mario_airborne && floor > FLOOR_LOWER_LIMIT) next_y = floor;
         mario_world_x = (int32_t)next_x;
         mario_world_y = (int32_t)next_y;
         mario_world_z = (int32_t)next_z;
