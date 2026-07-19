@@ -680,6 +680,8 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
         !sm64_saturn_cart_bank_stage(&cartridge_bank, castle_bytes,
                                      sm64_mario_texture_uv_tiles, mario_bytes)) {
         cartridge_present = false;
+        cartridge_stage_ticks = 0;
+        cartridge_staged_bytes = 0;
         upload_texture_bank(partitions);
         return;
     }
@@ -690,6 +692,8 @@ upload_texture_bank(const vdp1_vram_partitions_t *partitions)
         if (!sm64_saturn_cart_bank_read(&cartridge_bank, offset,
                                         cartridge_stage, bytes)) {
             cartridge_present = false;
+            cartridge_stage_ticks = 0;
+            cartridge_staged_bytes = 0;
             upload_texture_bank(partitions);
             return;
         }
