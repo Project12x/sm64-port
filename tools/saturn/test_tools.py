@@ -25,6 +25,7 @@ from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: 
 from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
 from bake_castle_uv import (  # noqa: E402
     adaptive_subdivide_triangle,
+    adaptive_subdivide_quad,
     pack_clut16,
     quantize_clut16,
     sample_triangle,
@@ -429,6 +430,21 @@ class CastleAreaInventoryTests(unittest.TestCase):
                 self.assertLessEqual(sum(
                     (right[axis] - left[axis]) ** 2 for axis in range(3)
                 ), 512 * 512)
+
+    def test_post_bsp_quad_subdivision_preserves_four_corner_attributes(self) -> None:
+        polygon = BspPolygon(tuple(BspVertex.make(position, uv) for position, uv in (
+            ((0, 0, 0), (0, 0)),
+            ((1024, 0, 0), (1024, 0)),
+            ((1024, 0, 1024), (1024, 1024)),
+            ((0, 0, 1024), (0, 1024)),
+        )), source=8, texture=4)
+        fragments = adaptive_subdivide_quad(polygon, 1024)
+        self.assertEqual(len(fragments), 4)
+        self.assertTrue(all(len(fragment.vertices) == 4 for fragment in fragments))
+        self.assertIn(
+            BspVertex.make((512, 0, 512), (512, 512)),
+            {vertex for fragment in fragments for vertex in fragment.vertices},
+        )
 
     def test_castle_clut_reserves_transparency_and_is_deterministic(self) -> None:
         pixels = [0x0000, 0x801F, 0x83E0, 0xFC00, 0xFFFF] * 8

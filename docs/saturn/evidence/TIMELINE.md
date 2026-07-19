@@ -950,3 +950,14 @@ streaks. The source-derived bank falls from 884 to 733 textured commands while
 the real animated Mario remains in the scene. Gouraud tables are now DMA'd only
 when the animation frame changes. Evidence: [source-quad capture](screenshots/ymir-m4-source-quads-2026-07-19.png)
 and [bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
+
+### 2026-07-19 — Bounded source-space tessellation improves affine texture fidelity
+
+The Saturn VDP1 path cannot reproduce N64 perspective-correct interpolation on
+an arbitrarily large quad. The offline lowering now subdivides large convex
+source/BSP quads into four children, interpolating their original Fast3D
+position and UV attributes exactly. The default 1024-source-unit diagonal
+threshold produces 830 textured commands (193 native quads) versus the former
+884-command bank, while reducing the large wall/floor affine stretch visible
+in the prior capture. Evidence: [tessellated lobby frame](screenshots/ymir-m4-source-tessellation-1024-2026-07-19.png)
+and [bake report](reports/castle-area1-all-materials-bake-2026-07-18.json).
