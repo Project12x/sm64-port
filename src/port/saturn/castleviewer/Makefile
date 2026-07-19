@@ -31,7 +31,9 @@ SH_CFLAGS += -Os -g -DDEBUG \
   -I$(ROOT)/build/saturn/marioturntable/generated \
   -I$(ROOT)/src/port/saturn/marioturntable \
   -I$(ROOT)/src/port/saturn/cartridge \
-  -I$(ROOT)/src/port/saturn/controller
+  -I$(ROOT)/src/port/saturn/controller \
+  -I$(ROOT)/src/port/saturn/gfx \
+  -I$(ROOT)/src/port/saturn/platform
 ifeq ($(TEXTURE_PROBE),1)
 SH_CFLAGS += -DSM64_SATURN_TEXTURE_PROBE_CAMERA=1
 endif

@@ -1,0 +1,55 @@
+#include <assert.h>
+#include <stdint.h>
+
+#include "saturn_frame_profile.h"
+#include "saturn_transform.h"
+
+static void test_identity_camera(void)
+{
+    const sm64_saturn_camera_transform_t camera = {
+        .position = {10, 20, 30},
+        .right = {1 << 16, 0, 0},
+        .up = {0, 1 << 16, 0},
+        .forward = {0, 0, 1 << 16}
+    };
+    const sm64_saturn_vec3i_t view = sm64_saturn_world_to_view(
+        &camera, (sm64_saturn_vec3i_t){14, 26, 38});
+
+    assert(view.x == 4);
+    assert(view.y == 6);
+    assert(view.z == 8);
+}
+
+static void test_q16_normalization(void)
+{
+    const sm64_saturn_vec3i_t normalized =
+        sm64_saturn_vec3_normalize_q16((sm64_saturn_vec3i_t){3, 4, 0});
+
+    assert(normalized.x == 39321);
+    assert(normalized.y == 52428);
+    assert(normalized.z == 0);
+}
+
+static void test_frame_profile(void)
+{
+    sm64_saturn_frame_profile_t profile = {
+        .update_ticks = 1,
+        .sort_ticks = 2,
+        .command_ticks = 3,
+        .wait_ticks = 4,
+        .vblank_ticks = 5
+    };
+
+    assert(sm64_saturn_frame_profile_render_total(&profile) == 10);
+    assert(sm64_saturn_frame_profile_loop_total(&profile) == 15);
+    assert(sm64_saturn_frame_profile_rate_x10(1500, profile.loop_ticks) == 100);
+    assert(sm64_saturn_frame_profile_rate_x10(1500, 0) == 0);
+}
+
+int main(void)
+{
+    test_identity_camera();
+    test_q16_normalization();
+    test_frame_profile();
+    return 0;
+}

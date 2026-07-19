@@ -168,6 +168,14 @@ Extract frame timing, camera/transform records, render-job records, command
 arena, and memory-arena declarations from `castleviewer/main.c`. The harness
 must build against them with pixel-identical deterministic output.
 
+Implementation checkpoint (2026-07-19): the scene-neutral
+`gfx/saturn_transform.h` and `platform/saturn_frame_profile.h` records are now
+used by the Castle harness. Their native C contract test covers integer camera
+transforms, Q16 normalization, phase totals, and zero-safe rate calculation.
+Render-job, command-arena, and memory-arena extraction remains open. The target
+pixel-identity capture remains required after the Yaul build environment is
+available; a host-only pass does not close E0.
+
 ### E1 — Shared renderer client
 
 Make Castle and Mario submit independent source-identified jobs to the common
@@ -213,4 +221,3 @@ For every Saturn runtime or optimization commit:
 6. record pinned upstream source, license, files inspected, and reuse mode;
 7. capture visible before/after evidence for rendering changes; and
 8. state which harness responsibility moved closer to deletion.
-

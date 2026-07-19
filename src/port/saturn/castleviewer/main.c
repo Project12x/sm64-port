@@ -4,6 +4,8 @@
 #include "sm64.h"
 #include "controller_saturn.h"
 #include "saturn_cart_bank.h"
+#include "saturn_frame_profile.h"
+#include "saturn_transform.h"
 #include "game/area.h"
 #include "game/camera.h"
 #include "game/game_init.h"
@@ -40,7 +42,7 @@
  * and therefore reported nonsense for the observed ~125 ms Castle frame. */
 #define FRT_TICKS_PER_SECOND_X10 2095500UL
 
-typedef struct { int32_t x, y, z; } point3_t;
+typedef sm64_saturn_vec3i_t point3_t;
 static vdp1_cmdt_list_t *command_list;
 static uint16_t previous_command_end = 2U;
 static vdp1_gouraud_table_t mario_gouraud[SM64_MARIO_PRIMITIVE_COUNT];
@@ -55,8 +57,7 @@ static int16_t scene_bucket_head[SCENE_DEPTH_BUCKETS], scene_bucket_tail[SCENE_D
 static int16_t scene_bucket_next[DRAW_ITEM_COUNT];
 static uint16_t scene_order_scratch[DRAW_ITEM_COUNT];
 static uint16_t visible_items, opaque_items, rejected_items, culled_items, animation_frame;
-static uint16_t update_ticks, sort_ticks, command_ticks, wait_ticks, vblank_ticks;
-static uint32_t frame_ticks, loop_ticks;
+static sm64_saturn_frame_profile_t frame_profile;
 /* Cache only the full-width source depth key.  Projection remains on the
  * proven direct path; this removes the redundant transform pass used by the
  * painter re-bucket without risking quantization of visible coordinates. */
@@ -68,7 +69,7 @@ static const int16_t (*mario_frame_vertices)[3];
 static angle_t mario_yaw = SM64_CASTLE_SPAWN_YAW;
 static fix16_t mario_sine, mario_cosine;
 static bool mario_walking;
-static point3_t camera_position, camera_right, camera_up, camera_forward;
+static sm64_saturn_camera_transform_t camera_transform;
 static sm64_saturn_castle_graph_state_t source_graph;
 static OSContPad source_pad;
 static struct Controller source_controller;
@@ -100,32 +101,6 @@ static int32_t clamp32(int32_t value, int32_t minimum, int32_t maximum) {
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
-static uint32_t isqrt_u64(uint64_t value) {
-    uint64_t root = 0;
-    uint64_t bit = (uint64_t)1 << 62;
-    while (bit > value) bit >>= 2;
-    while (bit != 0) {
-        if (value >= root + bit) {
-            value -= root + bit;
-            root = (root >> 1) + bit;
-        } else {
-            root >>= 1;
-        }
-        bit >>= 2;
-    }
-    return (uint32_t)root;
-}
-
-static point3_t normalize_q16(point3_t value) {
-    const uint32_t length = isqrt_u64((uint64_t)((int64_t)value.x * value.x) +
-                                      (uint64_t)((int64_t)value.y * value.y) +
-                                      (uint64_t)((int64_t)value.z * value.z));
-    if (length == 0) return (point3_t){0, 0, 0};
-    return (point3_t){(int32_t)(((int64_t)value.x << 16) / length),
-                      (int32_t)(((int64_t)value.y << 16) / length),
-                      (int32_t)(((int64_t)value.z << 16) / length)};
-}
-
 static void update_source_camera(void) {
     const point3_t mario = {mario_world_x, mario_world_y, mario_world_z};
     const int32_t candidate_x = SM64_CASTLE_CAMERA_BASE_X +
@@ -142,17 +117,17 @@ static void update_source_camera(void) {
     if (!camera_position_initialized ||
         (candidate_floor > FLOOR_LOWER_LIMIT &&
          candidate_floor >= (f32)mario.y - 512.0f)) {
-        camera_position.x = candidate_x;
-        camera_position.z = candidate_z;
+        camera_transform.position.x = candidate_x;
+        camera_transform.position.z = candidate_z;
         camera_position_initialized = true;
     }
     const f32 mario_floor = find_floor_height((f32)mario.x,
                                                (f32)mario.y + 200.0f,
                                                (f32)mario.z);
     if (mario_floor > FLOOR_LOWER_LIMIT)
-        camera_position.y = (int32_t)mario_floor + SM64_CASTLE_CAMERA_BASE_Y;
+        camera_transform.position.y = (int32_t)mario_floor + SM64_CASTLE_CAMERA_BASE_Y;
     else
-        camera_position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
+        camera_transform.position.y = SM64_CASTLE_SPAWN_FLOOR_Y + SM64_CASTLE_CAMERA_BASE_Y;
     /* Source `update_fixed_camera()` first applies
      * calc_y_to_curr_floor(..., focMul=0.9f), then adds the 125-unit focus
      * height. Keep that floor-relative aim instead of looking at a bespoke
@@ -167,26 +142,28 @@ static void update_source_camera(void) {
      * source units in the lobby. Keep that source rule before constructing
      * the Saturn view basis; without it, the fixed base leaves Mario too small
      * and exposes the void at the bottom of the viewport. */
-    const f32 focus_dx = (f32)focus.x - camera_position.x;
-    const f32 focus_dy = (f32)focus.y - camera_position.y;
-    const f32 focus_dz = (f32)focus.z - camera_position.z;
+    const f32 focus_dx = (f32)focus.x - camera_transform.position.x;
+    const f32 focus_dy = (f32)focus.y - camera_transform.position.y;
+    const f32 focus_dz = (f32)focus.z - camera_transform.position.z;
     const f32 focus_distance = sqrtf(focus_dx * focus_dx +
                                      focus_dy * focus_dy + focus_dz * focus_dz);
     if (focus_distance > 1000.0f) {
         const f32 scale = 1000.0f / focus_distance;
-        camera_position.x = focus.x - (int32_t)(focus_dx * scale);
-        camera_position.y = focus.y - (int32_t)(focus_dy * scale);
-        camera_position.z = focus.z - (int32_t)(focus_dz * scale);
+        camera_transform.position.x = focus.x - (int32_t)(focus_dx * scale);
+        camera_transform.position.y = focus.y - (int32_t)(focus_dy * scale);
+        camera_transform.position.z = focus.z - (int32_t)(focus_dz * scale);
     }
-    camera_forward = normalize_q16((point3_t){focus.x - camera_position.x,
-                                              focus.y - camera_position.y,
-                                              focus.z - camera_position.z});
-    camera_right = normalize_q16((point3_t){-camera_forward.z, 0, camera_forward.x});
-    camera_up = (point3_t){
-        (int32_t)((-(int64_t)camera_right.z * camera_forward.y) >> 16),
-        (int32_t)((((int64_t)camera_right.z * camera_forward.x) -
-                   ((int64_t)camera_right.x * camera_forward.z)) >> 16),
-        (int32_t)(((int64_t)camera_right.x * camera_forward.y) >> 16)
+    camera_transform.forward = sm64_saturn_vec3_normalize_q16((point3_t){
+        focus.x - camera_transform.position.x,
+        focus.y - camera_transform.position.y,
+        focus.z - camera_transform.position.z});
+    camera_transform.right = sm64_saturn_vec3_normalize_q16((point3_t){
+        -camera_transform.forward.z, 0, camera_transform.forward.x});
+    camera_transform.up = (point3_t){
+        (int32_t)((-(int64_t)camera_transform.right.z * camera_transform.forward.y) >> 16),
+        (int32_t)((((int64_t)camera_transform.right.z * camera_transform.forward.x) -
+                   ((int64_t)camera_transform.right.x * camera_transform.forward.z)) >> 16),
+        (int32_t)(((int64_t)camera_transform.right.x * camera_transform.forward.y) >> 16)
     };
 }
 
@@ -198,19 +175,15 @@ static point3_t world_to_view(int32_t x, int32_t y, int32_t z) {
      * the source-state camera path until the original graph camera is linked. */
     return (point3_t){x + 1050, y - 720, z + 4200};
 #else
-    const point3_t relative = {x - camera_position.x, y - camera_position.y, z - camera_position.z};
-    return (point3_t){
-        (int32_t)((((int64_t)relative.x * camera_right.x) + ((int64_t)relative.y * camera_right.y) + ((int64_t)relative.z * camera_right.z)) >> 16),
-        (int32_t)((((int64_t)relative.x * camera_up.x) + ((int64_t)relative.y * camera_up.y) + ((int64_t)relative.z * camera_up.z)) >> 16),
-        (int32_t)((((int64_t)relative.x * camera_forward.x) + ((int64_t)relative.y * camera_forward.y) + ((int64_t)relative.z * camera_forward.z)) >> 16)
-    };
+    return sm64_saturn_world_to_view(&camera_transform,
+                                      (point3_t){x, y, z});
 #endif
 }
 static point3_t painter_camera_position(void) {
 #if defined(SM64_SATURN_TEXTURE_PROBE_CAMERA) || defined(SM64_SATURN_TEXTURE_PROBE_PAINTER)
     return (point3_t){-1050, 720, -4200};
 #else
-    return camera_position;
+    return camera_transform.position;
 #endif
 }
 static point3_t castle_point(const int16_t *source) {
@@ -283,7 +256,8 @@ static void update_source_input(void) {
     /* Keep SM64's camera-relative stick semantics.  The old fixed zero yaw
      * made the Saturn pad feel like a tank: up/left were interpreted in the
      * room's world axes instead of the view axes. */
-    source_camera.yaw = atan2s(-camera_forward.z, camera_forward.x);
+    source_camera.yaw = atan2s(-camera_transform.forward.z,
+                               camera_transform.forward.x);
     if (mario_walking) {
         mario_yaw = (angle_t)source_mario_state.intendedYaw;
         fix16_sincos(mario_yaw, &mario_sine, &mario_cosine);
@@ -693,10 +667,10 @@ static void draw_scene(void) {
         mario_gouraud_dirty = false;
     }
     vdp1_sync_cmdt_list_put(command_list, 0);
-    command_ticks = cpu_frt_count_get();
+    frame_profile.command_ticks = cpu_frt_count_get();
     cpu_frt_count_set(0);
     vdp1_sync_render(); vdp1_sync(); vdp2_sync(); vdp2_sync_wait(); vdp1_sync_wait();
-    wait_ticks = cpu_frt_count_get();
+    frame_profile.wait_ticks = cpu_frt_count_get();
 }
 
 static void vblank_out_handler(void *work __unused) {
@@ -824,13 +798,15 @@ void user_init(void) {
              * preserving the source mesh and visible material gradients. */
             if ((frame % GOURAUD_UPDATE_PERIOD) == 0U) build_mario_gouraud();
         }
-        update_ticks = cpu_frt_count_get();
-        cpu_frt_count_set(0); sort_scene(); sort_ticks = cpu_frt_count_get();
+        frame_profile.update_ticks = cpu_frt_count_get();
+        cpu_frt_count_set(0); sort_scene(); frame_profile.sort_ticks = cpu_frt_count_get();
         cpu_frt_count_set(0); draw_scene();
-        frame_ticks = (uint32_t)update_ticks + sort_ticks + command_ticks + wait_ticks;
+        sm64_saturn_frame_profile_render_total(&frame_profile);
         if ((frame % FRAME_STATS_PERIOD) == 0) {
-            const uint32_t fps_x10 = frame_ticks == 0 ? 0 : FRT_TICKS_PER_SECOND_X10 / frame_ticks;
-            const uint32_t loop_fps_x10 = loop_ticks == 0 ? 0 : FRT_TICKS_PER_SECOND_X10 / loop_ticks;
+            const uint32_t fps_x10 = sm64_saturn_frame_profile_rate_x10(
+                FRT_TICKS_PER_SECOND_X10, frame_profile.render_ticks);
+            const uint32_t loop_fps_x10 = sm64_saturn_frame_profile_rate_x10(
+                FRT_TICKS_PER_SECOND_X10, frame_profile.loop_ticks);
             dbgio_printf("\x1B[HSM64 SATURN M4 — SOURCE MARIO IN CASTLE\ngraph %u lists: O%u A%u D%u roots %02X | source pos %d,%d,%d\nanim %s %u/%u | input 0x%08X | painter %u/%u | reject %u cull %u\nVDP1 quads %u | costs U%u S%u C%u W%u V%u | cart %s %lu KiB/%lu B | render %u.%u / loop %u.%u FPS\n",
                 source_graph.display_lists, source_graph.opaque_lists,
                 source_graph.alpha_lists, source_graph.decal_lists,
@@ -840,7 +816,9 @@ void user_init(void) {
                 source_mario_state.input, visible_items, (uint16_t)DRAW_ITEM_COUNT,
                 rejected_items, culled_items,
                 (uint16_t)SM64_CASTLE_UV_PAIRED_QUAD_COUNT,
-                update_ticks, sort_ticks, command_ticks, wait_ticks, vblank_ticks,
+                frame_profile.update_ticks, frame_profile.sort_ticks,
+                frame_profile.command_ticks, frame_profile.wait_ticks,
+                frame_profile.vblank_ticks,
                 cartridge_present ? "4M" : "WRAM",
                 (uint32_t)(cartridge_bank.capacity / 1024U),
                 cartridge_staged_bytes,
@@ -849,8 +827,8 @@ void user_init(void) {
         }
         cpu_frt_count_set(0);
         vdp2_tvmd_vblank_in_wait(); vdp2_tvmd_vblank_out_wait();
-        vblank_ticks = cpu_frt_count_get();
-        loop_ticks = frame_ticks + vblank_ticks;
+        frame_profile.vblank_ticks = cpu_frt_count_get();
+        sm64_saturn_frame_profile_loop_total(&frame_profile);
     }
 }
 int main(void) { user_init(); return 0; }
