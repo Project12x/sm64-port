@@ -46,7 +46,11 @@ static void controller_saturn_read(OSContPad *pad) {
 
     smpc_peripheral_process();
     smpc_peripheral_digital_port(1, &digital);
-    if (!digital.connected) {
+    /* Some Ymir/SMPC handoff frames expose a valid raw report one frame
+     * before the library flips `connected`. Do not throw that report away;
+     * only return no-response when both the connection flag and raw report
+     * are empty. */
+    if (!digital.connected && digital.pressed.raw == 0U) {
         pad->button = 0;
         pad->stick_x = 0;
         pad->stick_y = 0;

@@ -465,6 +465,10 @@ void user_init(void) {
     for (uint8_t priority = 0; priority < 8; priority++) vdp2_sprite_priority_set(priority, 7);
     vdp2_tvmd_display_set(); dbgio_init(); dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC); dbgio_dev_font_load(); vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     vdp_sync_vblank_out_set(vblank_out_handler, NULL);
+    /* Prime the first INTBACK collection. The callback supplies subsequent
+     * frames, but a target that starts polling before the first VBlank can
+     * otherwise retain an all-zero, disconnected OSContPad sample. */
+    smpc_peripheral_intback_issue();
     source_graph = sm64_saturn_castle_graph_init();
     if (!source_graph.valid) for (;;) {}
     vdp1_vram_partitions_set(COMMAND_COUNT,
