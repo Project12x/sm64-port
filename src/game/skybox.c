@@ -72,6 +72,20 @@ struct Skybox sSkyBoxInfo[2];
 
 typedef const u8 *const SkyboxTexture[80];
 
+extern SkyboxTexture water_skybox_ptrlist;
+#ifdef SATURN_SOURCEBOOT
+/* E2 executes only the unmodified Bob script, whose geo layout selects
+ * BACKGROUND_OCEAN_SKY. Keep that real source asset resident while the
+ * remaining skybox banks await the cart-backed source asset package. This
+ * avoids binding nine unrelated level textures into internal work RAM; the
+ * full table is restored for the multi-level package target. */
+SkyboxTexture *sSkyboxTextures[10] = {
+    &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,
+    &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,
+    &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,
+    &water_skybox_ptrlist,
+};
+#else
 extern SkyboxTexture bbh_skybox_ptrlist;
 extern SkyboxTexture bidw_skybox_ptrlist;
 extern SkyboxTexture bitfs_skybox_ptrlist;
@@ -95,6 +109,7 @@ SkyboxTexture *sSkyboxTextures[10] = {
     &clouds_skybox_ptrlist,
     &bits_skybox_ptrlist,
 };
+#endif
 
 /**
  * The skybox color mask.

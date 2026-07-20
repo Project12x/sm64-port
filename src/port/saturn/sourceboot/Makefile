@@ -1,0 +1,113 @@
+ifeq ($(strip $(YAUL_INSTALL_ROOT)),)
+  $(error Undefined YAUL_INSTALL_ROOT; source .yaul.env)
+endif
+
+ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
+SH_PROGRAM := sm64-saturn-sourceboot-e2
+SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
+SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
+SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
+SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
+SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
+SOURCEBOOT_COLLISION_INPUTS := $(shell find "$(ROOT)/levels" \( -name collision.inc.c -o -name trajectory.inc.c \) -print)
+SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
+SOURCEBOOT_BIN_SRCS := $(wildcard $(ROOT)/bin/*.c)
+SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
+# E2 intentionally links one original level, not the full game archive.  The
+# unmodified Bob script invokes source global banks 1, 4, and 15 through
+# levels/scripts.c; the linker then retains their actual actor sections.
+# Future level banks belong in the cart-backed asset package, not in the
+# fixed Yaul executable image.
+SOURCEBOOT_LEVEL_SRCS := $(ROOT)/levels/bob/script.c \
+  $(ROOT)/levels/bob/geo.c $(ROOT)/levels/bob/leveldata.c
+SOURCEBOOT_GU_SRCS := $(wildcard $(ROOT)/lib/src/gu*.c)
+SOURCEBOOT_MATH_SRCS := $(ROOT)/lib/src/math/sinf.c $(ROOT)/lib/src/math/cosf.c
+SOURCEBOOT_ASSET_SOURCES := \
+  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_BIN_SRCS)) src/goddard/renderer.c \
+  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_ACTOR_SRCS) $(SOURCEBOOT_LEVEL_SRCS))
+SOURCEBOOT_GAME_SRCS := $(filter-out $(ROOT)/src/game/crash_screen.c,$(wildcard $(ROOT)/src/game/*.c))
+SOURCEBOOT_ENGINE_SRCS := $(wildcard $(ROOT)/src/engine/*.c)
+SOURCEBOOT_MENU_SRCS := $(wildcard $(ROOT)/src/menu/*.c)
+SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT)/src/goddard/dynlists/*.c)
+
+# This is intentionally a source closure, not a Castle viewer dependency list.
+# The Bob script, Bob level data, shared source actor banks, and generated Mario
+# animation table are all consumed through source LevelScript/GeoLayout state.
+SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c \
+  source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
+  $(ROOT)/src/port/saturn/controller/controller_saturn.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
+  $(ROOT)/src/port/saturn/compat/sqrtf.c \
+  $(ROOT)/src/buffers/buffers.c $(ROOT)/src/buffers/gfx_output_buffer.c \
+  $(SOURCEBOOT_GAME_SRCS) $(SOURCEBOOT_ENGINE_SRCS) $(SOURCEBOOT_MENU_SRCS) \
+  $(SOURCEBOOT_GODDARD_SRCS) \
+  $(SOURCEBOOT_BIN_SRCS) $(ROOT)/data/behavior_data.c \
+  $(SOURCEBOOT_ACTOR_SRCS) $(SOURCEBOOT_LEVEL_SRCS) $(SOURCEBOOT_GU_SRCS) \
+  $(SOURCEBOOT_MATH_SRCS) $(ROOT)/levels/scripts.c \
+  $(SOURCEBOOT_GENERATED)/mario_anim_data.c
+
+# Keep the direct-Bob source closure in its own object/output tree. Yaul's
+# make fragments glob the object directory at link time, so sharing it with a
+# prior all-level experiment would accidentally retain stale level objects.
+SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob/obj
+SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob
+IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob/cd
+export SOURCE_DATE_EPOCH ?= 1784160000
+export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
+
+include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
+
+SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
+  -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+  -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
+  -fno-lto -ffunction-sections -fdata-sections \
+  -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
+  -I$(ROOT)/src/game -I$(ROOT)/src/engine -I$(ROOT)/src/menu \
+  -I$(ROOT)/src/goddard -I$(ROOT)/src/port/saturn/compat \
+  -I$(ROOT)/src/port/saturn/controller -I$(ROOT)/src/port/saturn/runtime \
+  -I$(ROOT)/src/port/saturn/gfx -I$(ROOT)/src/port/saturn/platform \
+  -I$(SOURCEBOOT_PC_BUILD) -I$(SOURCEBOOT_PC_BUILD)/include \
+  -I$(SOURCEBOOT_GENERATED)
+SH_LDFLAGS += -fno-lto -Wl,--gc-sections
+
+IP_VERSION := V0.001
+IP_RELEASE_DATE := 20260719
+IP_AREAS := JTUBKAEL
+IP_PERIPHERALS := JAMKST
+IP_TITLE := SM64 SATURN SOURCEBOOT E2
+IP_MASTER_STACK_ADDR := 0x06004000
+IP_SLAVE_STACK_ADDR := 0x06001E00
+IP_1ST_READ_ADDR := 0x06004000
+IP_1ST_READ_SIZE := 0
+
+$(SOURCEBOOT_GENERATED)/mario_anim_data.c: $(ROOT)/tools/mario_anims_converter.py $(wildcard $(ROOT)/assets/anims/*.inc.c)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" tools/mario_anims_converter.py > "$(SOURCEBOOT_GENERATED)/mario_anim_data.c"
+
+.PHONY: source-data-catalog
+source-data-catalog: $(SOURCEBOOT_COLLISION_CATALOG)
+
+$(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py $(SOURCEBOOT_COLLISION_INPUTS)
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py" \
+	  --root "$(ROOT)" --output "$@"
+
+.PHONY: source-assets
+source-assets: source-data-catalog
+	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
+	  --root $(ROOT) --build-prefix build/us_pc \
+	  --define VERSION_US --define VERSION_JP_US \
+	  $(foreach source,$(SOURCEBOOT_ASSET_SOURCES),--source $(source)))"; \
+	if [ -z "$$targets" ]; then \
+	  printf '%s\n' 'sourceboot: no generated source assets were found' >&2; exit 1; \
+	fi; \
+	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us \
+	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets $(SOURCEBOOT_TEXT_STRINGS) \
+	  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
+	@printf '%s\n' 'sourceboot: local source asset includes are ready'
+
+include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
+
+.PHONY: verify
+verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
+	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -h "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq 'Entry point address:[[:space:]]+0x6004000'

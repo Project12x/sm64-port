@@ -143,6 +143,23 @@ and command data stay in named internal-WRAM arenas. A missing cart may use a
 bounded diagnostic fallback, but a release build must fail visibly when its
 declared 4 MiB target cannot be satisfied.
 
+### Direct-source compatibility bank
+
+Before generated Saturn IR has replaced every original static data reference,
+the direct source-game bootstrap needs a narrower compatibility mechanism.
+Original SM64 source tables contain native pointers to model/display-list data,
+behavior callbacks, and animation records; an offset-only IR package cannot be
+substituted for those symbols transparently. The bootstrap therefore builds a
+separate, read-only source-data image linked for the detected cart address.
+
+The executable remains a compact HWRAM first-read binary. At boot it validates
+the required `DRAM_CART_ID_4MIB`, reads the named source-data file from the
+disc through a bounded WRAM staging ring, copies it to the cartridge, verifies
+the package metadata/hash, and only then enters `thread5_game_loop()`. The
+final code link imports the source-data image's symbols without embedding its
+bytes in the first-read binary. This is a compatibility bridge, not permission
+to use cartridge DRAM as a heap or to make new scene-specific globals.
+
 The current hard-coded Castle collision address and startup copy of linked
 texture arrays are migration scaffolding. They must become named arena and
 package-loader clients before M5 closes.

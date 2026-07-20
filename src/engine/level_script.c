@@ -295,6 +295,14 @@ static void free_for_goddard(void *ptr) {
 #endif
 
 static void level_cmd_load_mario_head(void) {
+#ifdef SATURN_SOURCEBOOT
+    /* The direct Bob source bootstrap never executes LOAD_MARIO_HEAD.  Keep
+     * the original command table intact without reserving the N64-only
+     * framebuffer/Z-buffer scratch allocation on Saturn.  The title/face
+     * path is re-enabled with its Saturn backend in the later intro phase. */
+    sCurrentCmd = CMD_NEXT;
+    return;
+#endif
 #ifdef USE_SYSTEM_MALLOC
     sMemPoolForGoddard = mem_pool_init(0, 0);
     gdm_init(alloc_for_goddard, free_for_goddard);
