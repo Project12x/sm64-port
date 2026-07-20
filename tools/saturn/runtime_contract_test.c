@@ -158,6 +158,62 @@ static void test_matrix_multiply_nontrivial(void)
     assert(result.m[3][0] == (10 << 16));
 }
 
+static void test_matrix_stack_push_pop(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+    sm64_saturn_mtx_t loaded;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    assert(stack.depth == 1); /* starts with one identity entry, matching
+                                * the reference's initial
+                                * modelview_matrix_stack_size == 1 */
+    assert(!stack.overflowed);
+
+    sm64_saturn_matrix_identity(&loaded);
+    loaded.m[3][0] = 5 << 16;
+    sm64_saturn_matrix_stack_load(&stack, &loaded);
+    assert(stack.entries[stack.depth - 1].m[3][0] == (5 << 16));
+
+    assert(sm64_saturn_matrix_stack_push(&stack));
+    assert(stack.depth == 2);
+    /* push copies the current top, matching gfx_pc.c's push semantics
+     * (memcpy of the previous top into the new slot before any load). */
+    assert(stack.entries[1].m[3][0] == (5 << 16));
+
+    sm64_saturn_matrix_stack_pop(&stack, 1);
+    assert(stack.depth == 1);
+}
+
+static void test_matrix_stack_overflow(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    for (int i = 0; i < 10; i++) {
+        assert(sm64_saturn_matrix_stack_push(&stack));
+    }
+    assert(stack.depth == 11);
+    assert(!sm64_saturn_matrix_stack_push(&stack));
+    assert(stack.overflowed);
+    assert(stack.depth == 11); /* push-at-cap is a no-op, not a crash */
+}
+
+static void test_matrix_stack_pop_past_floor(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    /* Matches gfx_pc.c's gfx_sp_pop_matrix in spirit -- popping past the
+     * bottom of the stack is a silent no-op rather than a trap -- but
+     * this port floors at depth 1, not depth 0: stack_top()/stack_load()
+     * unconditionally index entries[depth - 1], and depth is a uint8_t,
+     * so letting depth reach 0 would underflow that index into a wild
+     * out-of-bounds access with no MMU to catch it on real SH-2 hardware.
+     * A balanced display list never triggers this path anyway. */
+    sm64_saturn_matrix_stack_pop(&stack, 5);
+    assert(stack.depth == 1);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -338,5 +394,8 @@ int main(void)
     test_matrix_multiply_overflow_guard();
     test_matrix_multiply_accumulator_overflow_guard();
     test_matrix_multiply_nontrivial();
+    test_matrix_stack_push_pop();
+    test_matrix_stack_overflow();
+    test_matrix_stack_pop_past_floor();
     return 0;
 }

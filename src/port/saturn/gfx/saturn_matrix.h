@@ -137,4 +137,75 @@ sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
     return overflowed;
 }
 
+#define SM64_SATURN_MATRIX_STACK_DEPTH 11U
+
+typedef struct sm64_saturn_matrix_stack {
+    sm64_saturn_mtx_t entries[SM64_SATURN_MATRIX_STACK_DEPTH];
+    uint8_t depth;
+    bool overflowed;
+} sm64_saturn_matrix_stack_t;
+
+static inline void
+sm64_saturn_matrix_stack_init(sm64_saturn_matrix_stack_t *stack)
+{
+    sm64_saturn_matrix_identity(&stack->entries[0]);
+    stack->depth = 1;
+    stack->overflowed = false;
+}
+
+/* Matches gfx_pc.c's gfx_sp_matrix push guard:
+ * `if ((parameters & G_MTX_PUSH) && modelview_matrix_stack_size < 11)`.
+ * Copies the current top into the new slot, matching the reference's
+ * memcpy-before-any-load push semantics. Push at depth 11 is a counted
+ * no-op, not a trap. */
+static inline bool
+sm64_saturn_matrix_stack_push(sm64_saturn_matrix_stack_t *stack)
+{
+    if (stack->depth >= SM64_SATURN_MATRIX_STACK_DEPTH) {
+        stack->overflowed = true;
+        return false;
+    }
+    stack->entries[stack->depth] = stack->entries[stack->depth - 1];
+    stack->depth++;
+    return true;
+}
+
+/* Matches gfx_pc.c's gfx_sp_pop_matrix: pops `count` levels, silently
+ * stopping rather than trapping when the requested count would pop past
+ * the bottom of the stack (the reference guards with
+ * `if (modelview_matrix_stack_size > 0)` inside its while loop). This
+ * port floors at depth 1, not depth 0: unlike the reference -- which
+ * re-checks `modelview_matrix_stack_size > 0` before every subsequent
+ * array access after a pop -- this port's stack_top()/stack_load()
+ * unconditionally index entries[depth - 1]. On real SH-2 hardware
+ * there's no MMU: letting depth reach 0 would underflow that index
+ * (as uint8_t, depth - 1 wraps to 255) into a wild out-of-bounds write,
+ * not a caught fault. Flooring at 1 keeps the invariant "entries[depth-1]
+ * is always the valid base identity matrix" intact, matching the
+ * reference's real-world behavior anyway since gfx_sp_reset() never lets
+ * the stack size drop below the base entry in a balanced display list.
+ * Callers must pre-divide the raw G_POPMTX data word by 64 -- see
+ * saturn_fast3d_frontend.c's G_POPMTX decode (a later task). */
+static inline void
+sm64_saturn_matrix_stack_pop(sm64_saturn_matrix_stack_t *stack,
+                             uint32_t count)
+{
+    while (count-- > 0 && stack->depth > 1) {
+        stack->depth--;
+    }
+}
+
+static inline void
+sm64_saturn_matrix_stack_load(sm64_saturn_matrix_stack_t *stack,
+                              const sm64_saturn_mtx_t *m)
+{
+    stack->entries[stack->depth - 1] = *m;
+}
+
+static inline sm64_saturn_mtx_t *
+sm64_saturn_matrix_stack_top(sm64_saturn_matrix_stack_t *stack)
+{
+    return &stack->entries[stack->depth - 1];
+}
+
 #endif
