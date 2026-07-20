@@ -1328,7 +1328,14 @@ static void test_frontend_g_movemem_viewport(void)
     assert(frontend.viewport.width == 320);
     assert(frontend.viewport.height == 224);
     assert(frontend.viewport.x == 0);
-    assert(frontend.viewport.y == 0);
+    /* Corrected during implementation: the decode always anchors on the
+     * real N64 240-line space and applies a fixed 8-line letterbox crop
+     * -- it has no way to know this synthetic Vp_t was chosen to already
+     * "look" 224-native, so it gets the same treatment as any other
+     * input. Hand-derivation: source_y = 240 - (448/4 + 224/2) = 16,
+     * y = source_y - 8 = 8, not 0 as an earlier draft of this test
+     * assumed. */
+    assert(frontend.viewport.y == 8);
 }
 
 static void test_frontend_g_movemem_viewport_real_default(void)
