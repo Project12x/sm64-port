@@ -430,6 +430,211 @@ static void test_frontend_rdp_vs_sp_opcode_classification(void)
     assert(frontend.profile.other_commands == 2);
 }
 
+/* The four tests below close a coverage gap left by
+ * test_frontend_g_mtx_load_modelview: that test deliberately decodes to
+ * LOAD-only (no push), so it never exercises the G_MTX_PUSH branch, the
+ * G_MTX_PROJECTION branch (either sub-case), the modelview-multiply
+ * (no-load) branch, or max_modelview_depth_reached's high-water-mark
+ * behavior. The push-XOR bit is called out in the design spec as the
+ * single most likely place to introduce a silent bug, and three more
+ * tasks are about to add more opcodes to this same switch, so this
+ * coverage is added now while it is cheap. */
+
+static void test_frontend_g_mtx_push_before_load(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const float translate_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        7.0f, 0.0f, 0.0f, 1.0f
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    /* Decoded semantics wanted: PUSH | LOAD | MODELVIEW. Per make_g_mtx's
+     * contract, pre-XOR with G_MTX_PUSH so the frontend's own decode-time
+     * XOR (raw ^ G_MTX_PUSH) cancels back to that value -- note this
+     * simplifies to a raw wire byte of plain G_MTX_LOAD, since XORing a
+     * value that already has the PUSH bit set, by PUSH again, clears it. */
+    list[0] = make_g_mtx(
+        (uint8_t)((G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+        translate_floats);
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    assert(frontend.matrix_stack.depth == 1);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* Push must happen before load (matches the reference's ordering and
+     * sm64_saturn_matrix_stack_push's own copy-then-load semantics):
+     * entries[0] -- the level pushed FROM -- must remain untouched
+     * identity, and the loaded matrix must land in entries[1] -- the new
+     * top -- not entries[0]. If push were skipped (XOR bug swallowing
+     * the PUSH bit), depth would stay 1 and entries[0] would hold the
+     * translation instead. */
+    assert(frontend.matrix_stack.depth == 2);
+    assert(frontend.matrix_stack.entries[0].m[0][0] == (1 << 16));
+    assert(frontend.matrix_stack.entries[0].m[3][0] == 0);
+    assert(frontend.matrix_stack.entries[1].m[3][0] == (7 << 16));
+}
+
+static void test_frontend_g_mtx_projection_load_and_multiply(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* Translation by (10.0, 5.0), loaded first. */
+    static const float translate_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        10.0f, 5.0f, 0.0f, 1.0f
+    };
+    /* Scale by (2.0, 3.0), multiplied in second (no LOAD bit). */
+    static const float scale_floats[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 3.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    Gfx list[3];
+    struct SPTask task;
+
+    /* First: G_MTX_PROJECTION | G_MTX_LOAD sets the projection outright
+     * (exercises the G_MTX_PROJECTION + load sub-branch). */
+    list[0] = make_g_mtx(
+        (uint8_t)((G_MTX_PROJECTION | G_MTX_LOAD) ^ G_MTX_PUSH),
+        translate_floats);
+    /* Second: G_MTX_PROJECTION only, no LOAD, multiplies the new matrix
+     * into the existing projection (exercises the G_MTX_PROJECTION +
+     * multiply sub-branch): composed = mul(decoded=scale,
+     * projection=translate), the same mul(new, old) order the modelview
+     * multiply branch uses (gfx_pc.c's gfx_sp_matrix). */
+    list[1] = make_g_mtx((uint8_t)(G_MTX_PROJECTION ^ G_MTX_PUSH), scale_floats);
+    list[2] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* Neither projection command should touch the modelview stack. */
+    assert(frontend.matrix_stack.depth == 1);
+    assert(frontend.matrix_stack.entries[0].m[0][0] == (1 << 16));
+
+    /* Hand-derived: mul(scale, translate)[i][j] = sum_k scale[i][k] *
+     * translate[k][j]. scale is diagonal, so for i<3 the only nonzero
+     * scale[i][k] is k==i, giving row i = scale[i][i] * translate[i][*].
+     * Row 3 (the translation row) passes through unchanged because
+     * scale[3][3]==1 and scale[3][k]==0 for k!=3, so row 3 of the
+     * product equals translate's row 3 verbatim: [10, 5, 0, 1]. */
+    assert(frontend.matrix_stack.projection.m[0][0] == (2 << 16));
+    assert(frontend.matrix_stack.projection.m[1][1] == (3 << 16));
+    assert(frontend.matrix_stack.projection.m[2][2] == (1 << 16));
+    assert(frontend.matrix_stack.projection.m[3][0] == (10 << 16));
+    assert(frontend.matrix_stack.projection.m[3][1] == (5 << 16));
+    assert(frontend.matrix_stack.projection.m[3][3] == (1 << 16));
+}
+
+static void test_frontend_g_mtx_modelview_multiply(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* Translation by (10.0, 5.0), loaded first. */
+    static const float translate_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        10.0f, 5.0f, 0.0f, 1.0f
+    };
+    /* Scale by (2.0, 3.0), multiplied in second (no LOAD, no PUSH). */
+    static const float scale_floats[16] = {
+        2.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 3.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    Gfx list[3];
+    struct SPTask task;
+
+    /* First command: LOAD the translation matrix into modelview (no
+     * push). */
+    list[0] = make_g_mtx((uint8_t)((G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+                          translate_floats);
+    /* Second command: MODELVIEW only, no LOAD and no PUSH -- exercises
+     * the "multiply into current top" branch. Decode computes
+     * composed = mul(decoded=scale, top=translate), i.e. new_top =
+     * scale * translate. */
+    list[1] = make_g_mtx((uint8_t)(G_MTX_MODELVIEW ^ G_MTX_PUSH), scale_floats);
+    list[2] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.matrix_stack.depth == 1);
+    /* Hand-derived exactly as in the projection-multiply test above:
+     * mul(scale, translate) leaves scaled diagonal entries for i<3 and
+     * passes the translation row (row 3: [10, 5, 0, 1]) through
+     * unchanged. Not just "some values changed" -- these are the exact
+     * expected entries of the product, verified by direct computation
+     * from sm64_saturn_matrix_mul's row-major definition (out[i][j] =
+     * sum_k a[i][k]*b[k][j]), the same way Task 2's multiply tests were
+     * hand-derived. */
+    assert(frontend.matrix_stack.entries[0].m[0][0] == (2 << 16));
+    assert(frontend.matrix_stack.entries[0].m[1][1] == (3 << 16));
+    assert(frontend.matrix_stack.entries[0].m[2][2] == (1 << 16));
+    assert(frontend.matrix_stack.entries[0].m[3][0] == (10 << 16));
+    assert(frontend.matrix_stack.entries[0].m[3][1] == (5 << 16));
+    assert(frontend.matrix_stack.entries[0].m[3][3] == (1 << 16));
+}
+
+static void test_frontend_g_mtx_high_water_mark(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const float identity_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    Gfx list[4];
+    struct SPTask task;
+
+    /* Two PUSH|LOAD commands (depth 1 -> 2 -> 3), then a POPMTX(1)
+     * (depth 3 -> 2). */
+    list[0] = make_g_mtx(
+        (uint8_t)((G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+        identity_floats);
+    list[1] = make_g_mtx(
+        (uint8_t)((G_MTX_PUSH | G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+        identity_floats);
+    list[2].words.w0 = (uint32_t)G_POPMTX << 24;
+    list[2].words.w1 = 1U * 64U;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    assert(frontend.matrix_stack.depth == 1);
+    assert(frontend.profile.max_modelview_depth_reached == 0);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* Final depth is 2 (1 -> push -> 2 -> push -> 3 -> pop(1) -> 2), but
+     * the peak reached mid-walk was 3. max_modelview_depth_reached is
+     * only updated inside the G_MTX case (not G_POPMTX), so it must
+     * still read 3 here -- a high-water mark, not the current value. */
+    assert(frontend.matrix_stack.depth == 2);
+    assert(frontend.profile.max_modelview_depth_reached == 3);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -618,5 +823,9 @@ int main(void)
     test_frontend_g_mtx_load_modelview();
     test_frontend_g_popmtx_scales_by_64();
     test_frontend_rdp_vs_sp_opcode_classification();
+    test_frontend_g_mtx_push_before_load();
+    test_frontend_g_mtx_projection_load_and_multiply();
+    test_frontend_g_mtx_modelview_multiply();
+    test_frontend_g_mtx_high_water_mark();
     return 0;
 }
