@@ -76,3 +76,6 @@ sm64config.txt
 !/sound/**/*custom*/**/*.aiff
 !/assets/**/*custom*.bin
 !/assets/**/*custom*/**/*.bin
+
+# Local git worktrees for isolated implementation work (not part of the repo).
+/.worktrees/
