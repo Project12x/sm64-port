@@ -113,13 +113,18 @@ sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
                 if (term >= 0) {
                     if (sum > INT64_MAX - term) {
                         overflowed = true;
+                        sum = INT64_MAX;
+                    } else {
+                        sum += term;
                     }
                 } else {
                     if (sum < INT64_MIN - term) {
                         overflowed = true;
+                        sum = INT64_MIN;
+                    } else {
+                        sum += term;
                     }
                 }
-                sum += term;
             }
             const int64_t narrowed = sum >> 16;
             if (narrowed > INT32_MAX || narrowed < INT32_MIN) {
