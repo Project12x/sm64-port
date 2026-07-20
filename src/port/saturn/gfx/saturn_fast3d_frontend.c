@@ -250,11 +250,27 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         }
     }
 
+    /* Clamp before narrowing to int16_t -- a small positive w (camera
+     * very close to geometry) makes cx/cy enormous, and this port has
+     * no downstream hardware clipper to catch it (unlike the reference,
+     * which relies on the host GPU's own clip stage). Raising the
+     * near-plane threshold alone doesn't fully close this: a large
+     * model-space x with a "safe" w still overflows int16_t. Clamping
+     * converts what would be UB into a saturated, visually-wrong-but-
+     * defined value -- the triangle's true visibility is still decided
+     * correctly afterward by the near/far quad check below, which uses
+     * the unclamped cw. */
     for (int c = 0; c < 3; c++) {
-        screen_x[c] = (int16_t)(frontend->viewport.x +
-            (cx[c] * 0.5f + 0.5f) * frontend->viewport.width);
-        screen_y[c] = (int16_t)(frontend->viewport.y +
-            (1.0f - (cy[c] * 0.5f + 0.5f)) * frontend->viewport.height);
+        const float screen_x_f = frontend->viewport.x +
+            (cx[c] * 0.5f + 0.5f) * frontend->viewport.width;
+        const float screen_y_f = frontend->viewport.y +
+            (1.0f - (cy[c] * 0.5f + 0.5f)) * frontend->viewport.height;
+        screen_x[c] = (int16_t)(screen_x_f < (float)INT16_MIN ? INT16_MIN :
+                                (screen_x_f > (float)INT16_MAX ? INT16_MAX :
+                                 screen_x_f));
+        screen_y[c] = (int16_t)(screen_y_f < (float)INT16_MIN ? INT16_MIN :
+                                (screen_y_f > (float)INT16_MAX ? INT16_MAX :
+                                 screen_y_f));
     }
 
     sm64_saturn_projected_workarea_init(&workarea, projected_storage, 4);

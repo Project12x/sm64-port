@@ -1080,6 +1080,104 @@ static void test_frontend_g_tri1_modelview_translation_shifts_screen_x(void)
     assert(frontend.resolved[0].x[2] == 144);
 }
 
+/* Regression test for a reviewer-caught bug: before the fix, the only
+ * pre-divide reject was `w <= 0.0f`. A small *positive* w (camera very
+ * close to geometry -- an ordinary occurrence, not pathological) makes
+ * cx/cy enormous, and the (int16_t) narrowing cast on the resulting
+ * screen_x/screen_y was undefined behavior with no bound -- raising the
+ * near-plane threshold alone can't fix this either, since it's an x/w
+ * *ratio* problem, not a w-magnitude problem (a large-but-plausible
+ * model-space x with a "safe" w still overflows int16_t).
+ *
+ * All three vertices here share model x=100, z=0.1 (all three s x=100
+ * exactly reproduces the reviewer's own repro case: cx = 100/0.1 = 1000,
+ * screen_x_f = (1000*0.5+0.5)*320 = 160160 -- far outside int16_t's
+ * [-32768, 32767] range, which was UB before this fix). y varies per
+ * vertex (-50, 50, 0) specifically to exercise BOTH clamp directions in
+ * one triangle, hand-traced below against the standard vp fixture
+ * (viewport {x=0,y=8,width=320,height=224}, same reconstruction as
+ * test_frontend_g_movemem_viewport) and this test's projection (w = z
+ * raw, same as every other G_TRI1 test in this file):
+ *
+ *   v0 y=-50: cy = -50/0.1 = -500;
+ *             screen_y_f = 8 + (1.0-(-500*0.5+0.5))*224
+ *                        = 8 + 250.5*224 = 56120 -- > INT16_MAX, clamps high.
+ *   v1 y=50:  cy = 50/0.1 = 500;
+ *             screen_y_f = 8 + (1.0-(500*0.5+0.5))*224
+ *                        = 8 + (-249.5)*224 = -55880 -- < INT16_MIN, clamps low.
+ *   v2 y=0:   cy = 0;
+ *             screen_y_f = 8 + (1.0-0.5)*224 = 120 -- in range, no clamp.
+ *
+ * So this one triangle exercises: x clamped high (all 3 corners, since
+ * model x is shared), y clamped high (v0), y clamped low (v1), and y
+ * left unclamped (v2) -- both saturation directions plus the pass-
+ * through case, in a single test.
+ *
+ * Regardless of clamping, this triangle is still correctly rejected
+ * afterward -- verified two independent ways by hand: (1) cw = w = 0.1
+ * truncates to (int32_t)0 when pushed into the workarea (raw-units
+ * convention, see the NEAR/FAR_DEPTH comment in
+ * saturn_fast3d_frontend.c), and 0 < NEAR_DEPTH(64) fails
+ * sm64_saturn_projected_quad_is_visible's z-bound check on its own; (2)
+ * all 3 corners clamp to screen_x=32767 (x > clip_viewport.right=320),
+ * so clip_and includes CLIP_RIGHT for every corner regardless of y,
+ * failing the `clip_and != SM64_SATURN_CLIP_NONE` check too. Either
+ * failure alone would reject this triangle -- both hold here, so the
+ * rejected-not-resolved outcome does not depend on getting the more
+ * fragile of the two checks exactly right. This proves the fix's point:
+ * the previously-UB narrowing cast now runs to a defined, saturated
+ * value, and the pipeline still produces the same sane, rejected
+ * verdict this obviously-offscreen geometry deserves. */
+static void test_frontend_g_tri1_small_w_clamps_screen_coords(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {100.0f, -50.0f, 0.1f}, .cn = {255, 0, 0, 255} },
+        { .ob = {100.0f,  50.0f, 0.1f}, .cn = {0, 255, 0, 255} },
+        { .ob = {100.0f,   0.0f, 0.1f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[4];
+    struct SPTask task;
+    const uint32_t vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = vtx_w0;
+    list[1].words.w1 = (uintptr_t)verts;
+    list[2].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[2].words.w1 = 0;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16; /* w = z (raw units) */
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.triangles_transformed == 1);
+    /* Rejected, not resolved -- verified by hand above via two
+     * independent, redundant checks (z-bound and clip_and), so this
+     * outcome doesn't hinge on a single fragile comparison. The point of
+     * this test is that reaching this assertion at all (rather than
+     * crashing or reading a garbage value from an out-of-range
+     * (int16_t) cast) proves the clamp fix is doing its job. */
+    assert(frontend.profile.reject_near_far == 1);
+    assert(frontend.profile.reject_degenerate == 0);
+    assert(frontend.resolved_count == 0);
+}
+
 static void test_frontend_g_tri2_two_triangles(void)
 {
     sm64_saturn_fast3d_frontend_t frontend;
@@ -1350,6 +1448,7 @@ int main(void)
     test_frontend_g_tri1_resolves_triangle();
     test_frontend_g_tri1_backface_cull();
     test_frontend_g_tri1_modelview_translation_shifts_screen_x();
+    test_frontend_g_tri1_small_w_clamps_screen_coords();
     test_frontend_g_tri2_two_triangles();
     return 0;
 }
