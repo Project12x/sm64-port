@@ -53,8 +53,11 @@ sm64_saturn_vdp1_backend_init(sm64_saturn_vdp1_backend_t *backend,
 
 /* Caller-supplied (e.g. LWRAM) storage variant of
  * sm64_saturn_vdp1_backend_init. `cmdts` must point to at least
- * `capacity` vdp1_cmdt_t entries and must outlive the backend. Unlike
- * the heap path above, this performs no allocation.
+ * `capacity` vdp1_cmdt_t entries, must be aligned to sizeof(vdp1_cmdt_t)
+ * (32 bytes -- the same alignment the heap path below gets from
+ * memalign()), and must outlive the backend. Unlike the heap path
+ * above, this performs no allocation, so satisfying the alignment
+ * requirement is the caller's responsibility.
  *
  * Zero-init note: neither vdp1_cmdt_list_init() nor any linker-driven
  * zero-init covers caller-supplied storage outside .bss (a new LWRAM
