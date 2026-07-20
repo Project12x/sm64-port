@@ -783,6 +783,51 @@ static void test_frontend_g_geometrymode_clear_and_set(void)
     assert((frontend.geometry_mode & G_CULL_BACK) != 0); /* set */
 }
 
+static void test_frontend_g_vtx_transform(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t one_vertex = {
+        .ob = {0.0f, 0.0f, 0.0f}, /* float under this build's GBI_FLOATS
+                                    * config -- origin, maps to viewport
+                                    * center */
+        .flag = 0,
+        .tc = {0, 0},
+        .cn = {255, 128, 64, 255}
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    Gfx list[3];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    /* gSPVertex(pkt, v, n, v0) under F3DEX_GBI_2:
+     * gDma1p(pkt, G_VTX, v, (n<<10)|(sizeof(Vtx)*n-1), v0*2)
+     * -> w0 = (G_VTX<<24) | ((n<<10)|(sizeof(Vtx)*n-1)), w1 = v.
+     * gfx_sp_vertex's F3DEX_GBI_2 dispatch reads n=C0(12,8),
+     * dest_index=C0(1,7)-n (gfx_pc.c:1408) -- NOT the length field
+     * gSPVertex packs; the frontend must match the dispatch formula,
+     * not the encoding macro, since dest_index is derived differently
+     * on the read side. Solving for n=1, dest_index=0:
+     * C0(12,8)==1 -> bit 12 set; C0(1,7)-1==0 -> C0(1,7)==1 -> bit 1 set
+     * (bit 1 shifted right by 1 in C0(1,7) reads as bit 0 = 1). */
+    list[1].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
+    list[1].words.w1 = (uintptr_t)&one_vertex;
+    list[2] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.vertices[0].r == 255);
+    assert(frontend.vertices[0].g == 128);
+    assert(frontend.vertices[0].b == 64);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -979,5 +1024,6 @@ int main(void)
     test_frontend_g_movemem_viewport_real_default();
     test_frontend_g_geometrymode();
     test_frontend_g_geometrymode_clear_and_set();
+    test_frontend_g_vtx_transform();
     return 0;
 }

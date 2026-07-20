@@ -227,6 +227,39 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
             }
             break;
         }
+        case G_VTX: {
+            /* F3DEX_GBI_2 dispatch formula (gfx_pc.c:1408):
+             * n_vertices = C0(12,8), dest_index = C0(1,7) - n_vertices.
+             * w1 is a raw pointer (this port's display lists reference
+             * final-linked addresses, not N64 segments -- consistent
+             * with the existing G_DL handling in this file), already
+             * uintptr_t (no narrowing to guard against). */
+            const uint32_t n_vertices = SM64_SATURN_C0(w0, 12, 8);
+            const uint32_t dest_index =
+                SM64_SATURN_C0(w0, 1, 7) - n_vertices;
+            const Vtx_t *src =
+                (const Vtx_t *)w1; /* Vtx_t layout, not Vtx_tn */
+
+            for (uint32_t i = 0; i < n_vertices; i++) {
+                const uint32_t dest = dest_index + i;
+                if (dest >= SM64_SATURN_FAST3D_MAX_VERTICES) {
+                    profile->reject_vertex_range++;
+                    continue;
+                }
+                /* src[i].ob is float[3] under GBI_FLOATS (see Task 1's
+                 * note) -- assigned directly, no conversion needed since
+                 * sm64_saturn_fast3d_vertex_t's position fields are also
+                 * float. */
+                frontend->vertices[dest].x = src[i].ob[0];
+                frontend->vertices[dest].y = src[i].ob[1];
+                frontend->vertices[dest].z = src[i].ob[2];
+                frontend->vertices[dest].r = src[i].cn[0];
+                frontend->vertices[dest].g = src[i].cn[1];
+                frontend->vertices[dest].b = src[i].cn[2];
+                frontend->vertices[dest].a = src[i].cn[3];
+            }
+            break;
+        }
         case G_GEOMETRYMODE: {
             /* gfx_pc.c:1428 dispatches gfx_sp_geometry_mode(~C0(0,24),
              * w1); the function body then does `geometry_mode &=
