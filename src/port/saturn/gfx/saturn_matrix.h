@@ -178,9 +178,13 @@ sm64_saturn_matrix_stack_push(sm64_saturn_matrix_stack_t *stack)
  * re-checks `modelview_matrix_stack_size > 0` before every subsequent
  * array access after a pop -- this port's stack_top()/stack_load()
  * unconditionally index entries[depth - 1]. On real SH-2 hardware
- * there's no MMU: letting depth reach 0 would underflow that index
- * (as uint8_t, depth - 1 wraps to 255) into a wild out-of-bounds write,
- * not a caught fault. Flooring at 1 keeps the invariant "entries[depth-1]
+ * there's no MMU: letting depth reach 0 would make that index an
+ * out-of-bounds access (entries[depth - 1] with depth==0 promotes to int
+ * arithmetic and evaluates entries[-1], not entries[255] -- uint8_t's
+ * whole range fits in int, so `depth - 1` is signed int arithmetic, not
+ * an unsigned wraparound), landing before the array in memory rather
+ * than past its end, and either way not a fault the hardware catches.
+ * Flooring at 1 keeps the invariant "entries[depth-1]
  * is always the valid base identity matrix" intact, matching the
  * reference's real-world behavior anyway since gfx_sp_reset() never lets
  * the stack size drop below the base entry in a balanced display list.

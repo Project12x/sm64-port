@@ -206,12 +206,20 @@ static void test_matrix_stack_pop_past_floor(void)
     /* Matches gfx_pc.c's gfx_sp_pop_matrix in spirit -- popping past the
      * bottom of the stack is a silent no-op rather than a trap -- but
      * this port floors at depth 1, not depth 0: stack_top()/stack_load()
-     * unconditionally index entries[depth - 1], and depth is a uint8_t,
-     * so letting depth reach 0 would underflow that index into a wild
-     * out-of-bounds access with no MMU to catch it on real SH-2 hardware.
-     * A balanced display list never triggers this path anyway. */
+     * unconditionally index entries[depth - 1] (depth == 0 promotes to
+     * int arithmetic and evaluates entries[-1], not entries[255] -- not
+     * an unsigned wraparound), a wild out-of-bounds access with no MMU
+     * to catch it on real SH-2 hardware. A balanced display list never
+     * triggers this path anyway. */
     sm64_saturn_matrix_stack_pop(&stack, 5);
     assert(stack.depth == 1);
+
+    /* Confirms the stack resumes normal push behavior after being
+     * driven to the floor -- no lingering corruption from the
+     * pop-past-floor path (Task 4's mp-dirty tracking leans on this
+     * same stack staying coherent across a pop-to-floor). */
+    assert(sm64_saturn_matrix_stack_push(&stack));
+    assert(stack.depth == 2);
 }
 
 static void test_frame_profile(void)
