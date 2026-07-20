@@ -737,6 +737,52 @@ static void test_frontend_g_geometrymode(void)
     assert((frontend.geometry_mode & G_CULL_BACK) != 0);
 }
 
+/* test_frontend_g_geometrymode above only ever ANDs against a
+ * geometry_mode of 0, so 0 & anything == 0 regardless of the
+ * clear-mask's polarity -- it cannot catch a sign-inverted clear-mask.
+ * This test chains a second G_GEOMETRYMODE command against a nonzero
+ * prior state (the pattern every real display list uses after its
+ * first frame's setup) to actually exercise clear-then-set semantics:
+ * G_SHADE must survive untouched, G_ZBUFFER must be cleared, and
+ * G_CULL_BACK must be set. Hand-traced: cmd0 sets geometry_mode =
+ * G_SHADE|G_ZBUFFER (0x5) from a starting value of 0. cmd1's w0 low-24
+ * bits are ~G_ZBUFFER & 0xFFFFFF = 0xFFFFFE, the keep-mask that,
+ * ANDed against 0x5, clears bit 0 (G_ZBUFFER) and keeps bit 2
+ * (G_SHADE) -> 0x4; ORing in G_CULL_BACK's bit yields the final state
+ * asserted below. */
+static void test_frontend_g_geometrymode_clear_and_set(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    Gfx list[3];
+    struct SPTask task;
+
+    /* First command: clear-mask = 0 (touches nothing), set-mask =
+     * G_SHADE|G_ZBUFFER. Starting from geometry_mode == 0, this simply
+     * establishes that starting state. */
+    list[0].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0x000000U;
+    list[0].words.w1 = G_SHADE | G_ZBUFFER;
+    /* Second command: keep-mask (w0 bits 0-23) = ~G_ZBUFFER & 0xFFFFFF
+     * -- every bit except G_ZBUFFER's survives the AND, so G_SHADE
+     * (not in the set-mask either) passes through unchanged while
+     * G_ZBUFFER is dropped. Set-mask (w1) = G_CULL_BACK. This is
+     * exactly the scenario a polarity-inverted clear-mask gets
+     * backwards (it would instead clear G_SHADE and keep G_ZBUFFER). */
+    list[1].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) |
+                        (uint32_t)(~(uint32_t)G_ZBUFFER & 0xFFFFFFU);
+    list[1].words.w1 = G_CULL_BACK;
+    list[2] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert((frontend.geometry_mode & G_SHADE) != 0);     /* survived */
+    assert((frontend.geometry_mode & G_ZBUFFER) == 0);   /* cleared */
+    assert((frontend.geometry_mode & G_CULL_BACK) != 0); /* set */
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -932,5 +978,6 @@ int main(void)
     test_frontend_g_movemem_viewport();
     test_frontend_g_movemem_viewport_real_default();
     test_frontend_g_geometrymode();
+    test_frontend_g_geometrymode_clear_and_set();
     return 0;
 }

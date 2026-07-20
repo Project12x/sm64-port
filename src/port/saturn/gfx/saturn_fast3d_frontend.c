@@ -228,9 +228,18 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
             break;
         }
         case G_GEOMETRYMODE: {
-            const uint32_t clear_mask = ~SM64_SATURN_C0(w0, 0, 24);
+            /* gfx_pc.c:1428 dispatches gfx_sp_geometry_mode(~C0(0,24),
+             * w1); the function body then does `geometry_mode &=
+             * ~clear` (gfx_pc.c:932-935). That's ~(~C0(0,24)) =
+             * C0(0,24) net -- the raw wire bits in w0's low 24 bits
+             * are themselves the correct AND-mask to keep, no extra
+             * negation needed. (An earlier draft of this case applied
+             * one anyway, inverting the polarity -- invisible only
+             * because geometry_mode starts at 0, where AND with
+             * anything is still 0; it breaks on the very next
+             * G_GEOMETRYMODE command once state is nonzero.) */
             frontend->geometry_mode =
-                (frontend->geometry_mode & clear_mask) | w1;
+                (frontend->geometry_mode & SM64_SATURN_C0(w0, 0, 24)) | w1;
             break;
         }
         default:
