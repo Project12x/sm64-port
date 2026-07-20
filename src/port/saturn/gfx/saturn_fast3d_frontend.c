@@ -40,11 +40,53 @@ static void sm64_saturn_fast3d_count_command(
         case G_LOADTLUT:
             profile->texture_commands++;
             break;
+        /*
+         * Remaining genuine RDP pass-through commands (include/PR/gbi.h:
+         * 179-205 -- always defined the same way regardless of GBI dialect,
+         * unlike G_MTX/G_VTX/G_DL/etc. above).
+         *
+         * Under the classic (pre-F3DEX_GBI_2) numbering these all satisfied
+         * `opcode >= G_NOOP` by construction: the top two bits of the opcode
+         * byte are the DMA/Immediate/RDP tag (see include/PR/gbi.h:43-51),
+         * and G_NOOP (0xc0) was the lowest value with both bits set. Once
+         * F3DEX_GBI_2E is defined, G_NOOP is redefined to 0x00 (making that
+         * comparison a tautology) and several SP-side commands (G_POPMTX,
+         * G_GEOMETRYMODE, G_MOVEWORD, G_MOVEMEM, G_LOAD_UCODE, G_ENDDL,
+         * G_SPNOOP, G_RDPHALF_1/2, G_SETOTHERMODE_L/H, G_SPECIAL_1/2/3,
+         * G_DMA_IO) are assigned opcode bytes in the very same high range as
+         * these real RDP commands -- so no single numeric threshold can
+         * separate "RDP command" from "SP command" any more under this
+         * dialect. Enumerate the true RDP set explicitly instead (matching
+         * how src/pc/gfx/gfx_pc.c itself dispatches: named case labels, not
+         * a range check). Opcodes the RSP microcode generates internally
+         * (G_TRI_FILL/G_TRI_SHADE/... , include/PR/gbi.h:216-223) are
+         * omitted -- they never appear in an authored source display list.
+         */
+        case G_SETCIMG:
+        case G_SETZIMG:
+        case G_SETCOMBINE:
+        case G_SETENVCOLOR:
+        case G_SETPRIMCOLOR:
+        case G_SETBLENDCOLOR:
+        case G_SETFOGCOLOR:
+        case G_SETFILLCOLOR:
+        case G_FILLRECT:
+        case G_RDPSETOTHERMODE:
+        case G_SETPRIMDEPTH:
+        case G_SETSCISSOR:
+        case G_SETCONVERT:
+        case G_SETKEYR:
+        case G_SETKEYGB:
+        case G_RDPFULLSYNC:
+        case G_RDPTILESYNC:
+        case G_RDPPIPESYNC:
+        case G_RDPLOADSYNC:
+        case G_TEXRECTFLIP:
+        case G_TEXRECT:
+            profile->rdp_commands++;
+            break;
         default:
-            if (opcode >= G_NOOP)
-                profile->rdp_commands++;
-            else
-                profile->other_commands++;
+            profile->other_commands++;
             break;
     }
 }
