@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "saturn_frame_profile.h"
 #include "saturn_gouraud.h"
@@ -9,6 +10,9 @@
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
 #include "saturn_matrix.h"
+#include "types.h"
+#include "saturn_fast3d_frontend.h"
+#include "PR/gbi.h"
 
 static void test_identity_camera(void)
 {
@@ -274,6 +278,158 @@ static void test_matrix_mp_cache_invalidates_across_pop(void)
     assert(mp->m[3][0] == 0);
 }
 
+/* Builds one G_MTX command word pair. `mtx_ptr` must outlive the caller's
+ * use of the returned Gfx (it is embedded as a raw pointer -- this port
+ * treats w1 as a real address, matching the existing G_DL handling in
+ * saturn_fast3d_frontend.c, since SOURCE.DAT's tables are linked at
+ * final addresses rather than N64-segmented). `params` is packed AS-IS
+ * into w0's low byte -- callers must pre-XOR with G_MTX_PUSH themselves
+ * if they want the frontend's decode-time XOR (below) to cancel back to
+ * a specific semantic value, exactly mirroring what the real gSPMatrix
+ * macro does at encode time (include/PR/gbi.h's F3DEX_GBI_2 branch:
+ * gDma2p(pkt, G_MTX, m, sizeof(Mtx), (p)^G_MTX_PUSH, 0)). */
+static Gfx
+make_g_mtx(uint8_t params, const float *mtx_floats)
+{
+    Gfx g;
+    g.words.w0 = ((uint32_t)G_MTX << 24) | params;
+    /* Gwords.w0/w1 are uintptr_t in this port's PR/gbi.h (not the classic
+     * N64 u32), specifically so a real host/target pointer round-trips
+     * through w1 without truncation -- narrowing through (uint32_t) here
+     * would corrupt the address on a 64-bit host. */
+    g.words.w1 = (uintptr_t)mtx_floats;
+    return g;
+}
+
+static Gfx
+make_g_enddl(void)
+{
+    Gfx g;
+    g.words.w0 = (uint32_t)G_ENDDL << 24;
+    g.words.w1 = 0;
+    return g;
+}
+
+static void test_frontend_g_mtx_load_modelview(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const float identity_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    /* The real gSPMatrix(pkt, m, p) macro pre-XORs the parameter byte
+     * with G_MTX_PUSH before writing it to w0. The frontend's decode
+     * XORs it back with G_MTX_PUSH (matching gfx_pc.c:1373's
+     * C0(0,8) ^ G_MTX_PUSH), so this test must apply the same pre-XOR by
+     * hand to get LOAD-only (no push) semantics -- a raw
+     * G_MTX_LOAD|G_MTX_MODELVIEW byte here would decode as
+     * G_MTX_PUSH|G_MTX_LOAD and incorrectly push a stack level. */
+    list[0] = make_g_mtx((uint8_t)((G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+                          identity_floats);
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.fault_flags == SM64_SATURN_FAST3D_FAULT_NONE);
+    assert(frontend.matrix_stack.depth == 1);
+    assert(frontend.matrix_stack.entries[0].m[0][0] == (1 << 16));
+}
+
+static void test_frontend_g_popmtx_scales_by_64(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    Gfx list[2];
+    struct SPTask task;
+
+    /* gSPPopMatrixN(pkt, n, num) encodes num*64 into w1 (include/PR/gbi.h
+     * gSPPopMatrixN macro). A real gSPPopMatrix(1) therefore carries the
+     * raw value 64, not 1. */
+    list[0].words.w0 = (uint32_t)G_POPMTX << 24;
+    list[0].words.w1 = 1U * 64U;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    /* Push three times first (depth 1 -> 4) so there is headroom between
+     * "popped exactly one level" (depth 3) and the stack's depth-1 floor.
+     * A single push (depth 1 -> 2) is NOT enough here: sm64_saturn_
+     * matrix_stack_pop() silently floors at depth 1 rather than trapping
+     * an over-large count (see saturn_matrix.h), so from depth 2 a
+     * correct pop(1) and a buggy, unscaled pop(64) both land on the same
+     * floor of depth 1 -- indistinguishable, and this test would pass
+     * even with the /64 divide missing entirely. Starting from depth 4
+     * makes the two outcomes different: pop(1) -> depth 3, unscaled
+     * pop(64) -> floors at depth 1. */
+    (void)sm64_saturn_matrix_stack_push(&frontend.matrix_stack);
+    (void)sm64_saturn_matrix_stack_push(&frontend.matrix_stack);
+    (void)sm64_saturn_matrix_stack_push(&frontend.matrix_stack);
+    assert(frontend.matrix_stack.depth == 4);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* If the /64 scaling is missing, this would attempt to pop 64
+     * levels instead of 1 and desync the stack all the way down to its
+     * depth-1 floor instead of depth 3 -- asserting depth==3 (exactly
+     * one level popped from 4) catches that directly. */
+    assert(frontend.matrix_stack.depth == 3);
+}
+
+static void test_frontend_rdp_vs_sp_opcode_classification(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    Gfx list[3];
+    struct SPTask task;
+
+    /* G_SETCIMG is a genuine, always-defined-regardless-of-dialect RDP
+     * command (include/PR/gbi.h ~L179-205) -- must land in rdp_commands.
+     * (G_SETTIMG was the originally-proposed opcode here, but verifying
+     * against the actual switch in sm64_saturn_fast3d_count_command
+     * shows it is deliberately bucketed under texture_commands instead,
+     * alongside G_SETTILE/G_LOADBLOCK/etc -- so it would not exercise
+     * the rdp_commands path this test is meant to lock in. G_SETCIMG has
+     * no such special-cased bucket and falls straight into the generic
+     * RDP case list.) */
+    list[0].words.w0 = (uint32_t)G_SETCIMG << 24;
+    list[0].words.w1 = 0;
+    /* G_GEOMETRYMODE is SP-side but, under F3DEX_GBI_2E's opcode
+     * numbering, lands in the same high-byte numeric range as genuine
+     * RDP opcodes -- this is exactly the case a naive threshold-based
+     * classification would get wrong (see Task 5.5's fix). It has no
+     * dedicated counter field in sm64_saturn_fast3d_profile_t, so it
+     * must fall through to other_commands, not rdp_commands. */
+    list[1].words.w0 = (uint32_t)G_GEOMETRYMODE << 24;
+    list[1].words.w1 = 0;
+    list[2] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.rdp_commands == 1);
+    /* Expected count is 2, not 1: G_GEOMETRYMODE lands here as intended,
+     * but the list's own G_ENDDL terminator (required so the walk knows
+     * where to stop) ALSO has no dedicated case in
+     * sm64_saturn_fast3d_count_command today and therefore falls to
+     * this same default branch. Verified directly against the switch --
+     * count_command runs unconditionally for every command including
+     * G_ENDDL, before sm64_saturn_fast3d_frontend_submit's separate
+     * opcode == G_ENDDL check ends the walk. */
+    assert(frontend.profile.other_commands == 2);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -459,5 +615,8 @@ int main(void)
     test_matrix_stack_pop_past_floor();
     test_matrix_mp_lazy_composition();
     test_matrix_mp_cache_invalidates_across_pop();
+    test_frontend_g_mtx_load_modelview();
+    test_frontend_g_popmtx_scales_by_64();
+    test_frontend_rdp_vs_sp_opcode_classification();
     return 0;
 }

@@ -10,6 +10,11 @@
 
 #include "saturn_fast3d_frontend.h"
 
+#define SM64_SATURN_C0(w0, pos, width) \
+    (((w0) >> (pos)) & ((1U << (width)) - 1U))
+#define SM64_SATURN_C1(w1, pos, width) \
+    (((w1) >> (pos)) & ((1U << (width)) - 1U))
+
 static void sm64_saturn_fast3d_count_command(
     sm64_saturn_fast3d_profile_t *profile, uint8_t opcode)
 {
@@ -91,11 +96,103 @@ static void sm64_saturn_fast3d_count_command(
     }
 }
 
+/* Full-command decode for opcodes whose semantics need more than the
+ * opcode byte (matrix/vertex/viewport/geometrymode data lives in w0's
+ * lower bits and/or all of w1). This is intentionally separate from
+ * sm64_saturn_fast3d_count_command, whose (profile, opcode) signature
+ * cannot reach that data -- see the design spec's review finding on this
+ * exact point. */
+static void
+sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
+                                  const Gfx *command)
+{
+    sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
+    const uint32_t w0 = command->words.w0;
+    /* Gwords.w1 is uintptr_t in this port's PR/gbi.h (not the classic N64
+     * u32) specifically so a real host/target pointer round-trips
+     * through it without truncation, matching the existing G_DL handling
+     * a few lines below in sm64_saturn_fast3d_frontend_submit. Keep the
+     * full width here too -- narrowing to uint32_t before reconstructing
+     * the G_MTX float pointer would corrupt the address on a 64-bit
+     * host. The G_POPMTX /64 divide below works identically at this
+     * width since the encoded count is always a small value. */
+    const uintptr_t w1 = command->words.w1;
+    const uint8_t opcode = (uint8_t)(w0 >> 24);
+
+    switch (opcode) {
+        case G_MTX: {
+            /* F3DEX_GBI_2E (this build) inverts the push bit relative to
+             * the raw parameter -- see gfx_pc.c:1373,
+             * `gfx_sp_matrix(C0(0, 8) ^ G_MTX_PUSH, ...)`. */
+            const uint8_t params =
+                (uint8_t)(SM64_SATURN_C0(w0, 0, 8) ^ G_MTX_PUSH);
+            /* w1 points at 16 consecutive row-major floats under this
+             * build's GBI_FLOATS configuration -- NOT a split s15.16
+             * int32 array. */
+            const float *gbi_floats = (const float *)(uintptr_t)w1;
+            sm64_saturn_mtx_t decoded;
+
+            sm64_saturn_matrix_decode(gbi_floats, &decoded);
+
+            if (params & G_MTX_PROJECTION) {
+                if (params & G_MTX_LOAD) {
+                    sm64_saturn_matrix_stack_set_projection(
+                        &frontend->matrix_stack, &decoded);
+                } else {
+                    sm64_saturn_mtx_t composed;
+                    (void)sm64_saturn_matrix_mul(
+                        &decoded, &frontend->matrix_stack.projection,
+                        &composed);
+                    sm64_saturn_matrix_stack_set_projection(
+                        &frontend->matrix_stack, &composed);
+                }
+            } else {
+                if (params & G_MTX_PUSH) {
+                    if (!sm64_saturn_matrix_stack_push(
+                            &frontend->matrix_stack)) {
+                        profile->modelview_stack_overflow++;
+                    }
+                }
+                if (params & G_MTX_LOAD) {
+                    sm64_saturn_matrix_stack_load(&frontend->matrix_stack,
+                                                  &decoded);
+                } else {
+                    sm64_saturn_mtx_t composed;
+                    (void)sm64_saturn_matrix_mul(
+                        &decoded,
+                        sm64_saturn_matrix_stack_top(
+                            &frontend->matrix_stack),
+                        &composed);
+                    sm64_saturn_matrix_stack_load(&frontend->matrix_stack,
+                                                  &composed);
+                }
+            }
+            if (frontend->matrix_stack.depth >
+                profile->max_modelview_depth_reached) {
+                profile->max_modelview_depth_reached =
+                    frontend->matrix_stack.depth;
+            }
+            break;
+        }
+        case (uint8_t)G_POPMTX: {
+            /* gSPPopMatrixN encodes num*64 into w1 (include/PR/gbi.h) --
+             * see the /64 recovery this decode performs, matching
+             * gfx_pc.c:1380, `gfx_sp_pop_matrix(cmd->words.w1 / 64)`. */
+            sm64_saturn_matrix_stack_pop(&frontend->matrix_stack, w1 / 64U);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
 void sm64_saturn_fast3d_frontend_init(
     sm64_saturn_fast3d_frontend_t *frontend)
 {
-    if (frontend != NULL)
+    if (frontend != NULL) {
         (void)memset(frontend, 0, sizeof(*frontend));
+        sm64_saturn_matrix_stack_init(&frontend->matrix_stack);
+    }
 }
 
 void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
@@ -131,6 +228,7 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
 
         profile->command_count++;
         sm64_saturn_fast3d_count_command(profile, opcode);
+        sm64_saturn_fast3d_decode_command(frontend, command);
 
         if (opcode == G_DL) {
             Gfx *target = (Gfx *)(uintptr_t)command->words.w1;
