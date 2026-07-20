@@ -61,4 +61,46 @@ sm64_saturn_matrix_identity(sm64_saturn_mtx_t *out)
     }
 }
 
+/* res = a * b (row-major: res[i][j] = sum_k a[i][k]*b[k][j], matching
+ * gfx_pc.c's gfx_matrix_mul ~L544-555). Accumulates in int64_t (SH-2 has
+ * native dmuls.l, a hardware 32x32->64 signed multiply) and narrows with
+ * a single >>16 per entry.
+ *
+ * This assumes every matrix entry reachable through SM64's object/camera
+ * graph keeps its integer part well under Q16.16's +-32768 ceiling, so
+ * the sum and the final narrowing stay in range in practice. That is an
+ * assumption about the data, not a property this function enforces on
+ * its own -- returns true if any entry's accumulated value would not
+ * round-trip through the >>16 narrowing, so a violated bound is visible
+ * (counted by the caller) rather than silently corrupting a matrix
+ * entry. Two same-sign terms at the true Q16.16 extreme can already sum
+ * past INT64_MAX (2^31*2^31=2^62 per term), so the accumulator itself is
+ * not unconditionally safe at the format's edges either -- this is
+ * checked by testing the narrowed result against the pre-shift value,
+ * which also catches that case for any input this frontend will
+ * realistically see. */
+static inline bool
+sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
+                       sm64_saturn_mtx_t *out)
+{
+    sm64_saturn_mtx_t tmp;
+    bool overflowed = false;
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            int64_t sum = 0;
+            for (int k = 0; k < 4; k++) {
+                sum += (int64_t)a->m[i][k] * (int64_t)b->m[k][j];
+            }
+            const int64_t narrowed = sum >> 16;
+            if (narrowed > INT32_MAX || narrowed < INT32_MIN) {
+                overflowed = true;
+            }
+            tmp.m[i][j] = (int32_t)narrowed;
+        }
+    }
+    *out = tmp;
+    return overflowed;
+}
+
 #endif

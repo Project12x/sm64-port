@@ -79,6 +79,39 @@ static void test_matrix_decode_translation(void)
     assert(out.m[3][3] == (1 << 16));
 }
 
+static void test_matrix_multiply_identity(void)
+{
+    sm64_saturn_mtx_t identity, other, result;
+    bool overflowed;
+
+    sm64_saturn_matrix_identity(&identity);
+    sm64_saturn_matrix_identity(&other);
+    other.m[3][0] = 100 << 16; /* translation X = 100.0 */
+
+    overflowed = sm64_saturn_matrix_mul(&other, &identity, &result);
+
+    assert(!overflowed);
+    assert(result.m[3][0] == (100 << 16));
+    assert(result.m[0][0] == (1 << 16));
+}
+
+static void test_matrix_multiply_overflow_guard(void)
+{
+    sm64_saturn_mtx_t a, b, result;
+    bool overflowed;
+
+    sm64_saturn_matrix_identity(&a);
+    sm64_saturn_matrix_identity(&b);
+    /* Force an entry at the Q16.16 magnitude extreme so the >>16
+     * narrowing store would wrap if unguarded. */
+    a.m[0][0] = INT32_MAX;
+    b.m[0][0] = INT32_MAX;
+
+    overflowed = sm64_saturn_matrix_mul(&a, &b, &result);
+
+    assert(overflowed);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -255,5 +288,7 @@ int main(void)
     test_bounded_command_arena();
     test_matrix_decode_identity();
     test_matrix_decode_translation();
+    test_matrix_multiply_identity();
+    test_matrix_multiply_overflow_guard();
     return 0;
 }
