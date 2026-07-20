@@ -74,6 +74,8 @@ static void test_matrix_decode_translation(void)
     sm64_saturn_matrix_decode(gbi_floats, &out);
 
     assert(out.m[3][0] == ((int32_t)16 << 16));
+    assert(out.m[3][1] == (int32_t)(-8.5f * 65536.0f)); /* -557056 */
+    assert(out.m[3][2] == (int32_t)(0.25f * 65536.0f));  /* 16384 */
     assert(out.m[3][3] == (1 << 16));
 }
 

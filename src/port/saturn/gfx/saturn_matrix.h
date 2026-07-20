@@ -30,7 +30,17 @@ typedef struct sm64_saturn_mtx {
 } sm64_saturn_mtx_t;
 
 /* Decode one N64 Fast3D matrix from its real on-target GBI_FLOATS
- * encoding (16 consecutive row-major floats) into Q16.16. */
+ * encoding (16 consecutive row-major floats) into Q16.16.
+ *
+ * Assumption, not enforced by this function: every entry reachable
+ * through SM64's object/camera graph stays within Q16.16's integer
+ * ceiling of +-32768. `(int32_t)(f * 65536.0f)` is undefined behavior
+ * per C11 6.3.1.4p1 once the scaled value exceeds INT32_MAX/INT32_MIN
+ * (e.g. f == 40000.0f scales to 2621440000.0, past INT32_MAX), so a
+ * matrix entry outside that range is a caller-side data-assumption
+ * violation, not a case this function detects or guards against. This
+ * mirrors the assumption-over-enforcement treatment Task 2's
+ * sm64_saturn_matrix_mul documents for the same fixed-point ceiling. */
 static inline void
 sm64_saturn_matrix_decode(const float *gbi_floats, sm64_saturn_mtx_t *out)
 {
