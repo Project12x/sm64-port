@@ -141,8 +141,12 @@ sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
 
 typedef struct sm64_saturn_matrix_stack {
     sm64_saturn_mtx_t entries[SM64_SATURN_MATRIX_STACK_DEPTH];
+    sm64_saturn_mtx_t projection;
+    sm64_saturn_mtx_t mp;
     uint8_t depth;
     bool overflowed;
+    bool mp_dirty;
+    bool mp_overflowed;
 } sm64_saturn_matrix_stack_t;
 
 static inline void
@@ -151,6 +155,9 @@ sm64_saturn_matrix_stack_init(sm64_saturn_matrix_stack_t *stack)
     sm64_saturn_matrix_identity(&stack->entries[0]);
     stack->depth = 1;
     stack->overflowed = false;
+    sm64_saturn_matrix_identity(&stack->projection);
+    stack->mp_dirty = true;
+    stack->mp_overflowed = false;
 }
 
 /* Matches gfx_pc.c's gfx_sp_matrix push guard:
@@ -167,6 +174,7 @@ sm64_saturn_matrix_stack_push(sm64_saturn_matrix_stack_t *stack)
     }
     stack->entries[stack->depth] = stack->entries[stack->depth - 1];
     stack->depth++;
+    stack->mp_dirty = true;
     return true;
 }
 
@@ -189,11 +197,22 @@ sm64_saturn_matrix_stack_push(sm64_saturn_matrix_stack_t *stack)
  * reference's real-world behavior anyway since gfx_sp_reset() never lets
  * the stack size drop below the base entry in a balanced display list.
  * Callers must pre-divide the raw G_POPMTX data word by 64 -- see
- * saturn_fast3d_frontend.c's G_POPMTX decode (a later task). */
+ * saturn_fast3d_frontend.c's G_POPMTX decode (a later task).
+ *
+ * Marks mp_dirty whenever count > 0 was requested, even if the depth-1
+ * floor clamps the loop to fewer actual pops than requested (including
+ * zero, when already at the floor) -- conservative rather than tracking
+ * a precise "did the top entry actually change" flag. A spurious dirty
+ * mark here costs one redundant sm64_saturn_matrix_mul the next time
+ * stack_mp() is called (recomposing the same top against the same
+ * projection), not a correctness bug. */
 static inline void
 sm64_saturn_matrix_stack_pop(sm64_saturn_matrix_stack_t *stack,
                              uint32_t count)
 {
+    if (count > 0) {
+        stack->mp_dirty = true;
+    }
     while (count-- > 0 && stack->depth > 1) {
         stack->depth--;
     }
@@ -204,12 +223,39 @@ sm64_saturn_matrix_stack_load(sm64_saturn_matrix_stack_t *stack,
                               const sm64_saturn_mtx_t *m)
 {
     stack->entries[stack->depth - 1] = *m;
+    stack->mp_dirty = true;
 }
 
 static inline sm64_saturn_mtx_t *
 sm64_saturn_matrix_stack_top(sm64_saturn_matrix_stack_t *stack)
 {
     return &stack->entries[stack->depth - 1];
+}
+
+static inline void
+sm64_saturn_matrix_stack_set_projection(sm64_saturn_matrix_stack_t *stack,
+                                        const sm64_saturn_mtx_t *m)
+{
+    stack->projection = *m;
+    stack->mp_dirty = true;
+}
+
+/* Recomputes modelview*projection only when dirtied since the last call,
+ * matching the "lazy MP composition" design decision: the reference
+ * (gfx_pc.c) recomputes eagerly after every G_MTX/G_POPMTX, but matrix
+ * commands arrive in bursts before the next G_VTX, so this port composes
+ * once, on demand. */
+static inline const sm64_saturn_mtx_t *
+sm64_saturn_matrix_stack_mp(sm64_saturn_matrix_stack_t *stack)
+{
+    if (stack->mp_dirty) {
+        if (sm64_saturn_matrix_mul(sm64_saturn_matrix_stack_top(stack),
+                                    &stack->projection, &stack->mp)) {
+            stack->mp_overflowed = true;
+        }
+        stack->mp_dirty = false;
+    }
+    return &stack->mp;
 }
 
 #endif

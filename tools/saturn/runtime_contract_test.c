@@ -222,6 +222,33 @@ static void test_matrix_stack_pop_past_floor(void)
     assert(stack.depth == 2);
 }
 
+static void test_matrix_mp_lazy_composition(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+    sm64_saturn_mtx_t projection, loaded;
+    const sm64_saturn_mtx_t *mp1, *mp2;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    sm64_saturn_matrix_identity(&projection);
+    sm64_saturn_matrix_stack_set_projection(&stack, &projection);
+
+    mp1 = sm64_saturn_matrix_stack_mp(&stack);
+    assert(mp1->m[0][0] == (1 << 16));
+
+    /* A second call with nothing dirtied must return the identical
+     * composed matrix without recomputation (observable here only by
+     * correctness, not by a tick count -- the dirty-flag mechanism
+     * itself is exercised by the mutation test in Task 15). */
+    mp2 = sm64_saturn_matrix_stack_mp(&stack);
+    assert(mp2->m[0][0] == (1 << 16));
+
+    sm64_saturn_matrix_identity(&loaded);
+    loaded.m[3][1] = 7 << 16;
+    sm64_saturn_matrix_stack_load(&stack, &loaded);
+    mp2 = sm64_saturn_matrix_stack_mp(&stack);
+    assert(mp2->m[3][1] == (7 << 16));
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -405,5 +432,6 @@ int main(void)
     test_matrix_stack_push_pop();
     test_matrix_stack_overflow();
     test_matrix_stack_pop_past_floor();
+    test_matrix_mp_lazy_composition();
     return 0;
 }
