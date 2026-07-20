@@ -874,6 +874,281 @@ static void test_frontend_g_vtx_rejects_out_of_range_dest(void)
     assert(frontend.vertices[60].x == 1.0f); /* first in-range write succeeded */
 }
 
+static void test_frontend_g_tri1_resolves_triangle(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[4];
+    struct SPTask task;
+    uint32_t vtx_w0;
+
+    /* n=3, dest_index=0: C0(12,8)==3 and C0(1,7)-3==0 -> C0(1,7)==3. */
+    vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = vtx_w0;
+    list[1].words.w1 = (uintptr_t)verts;
+    /* F3DEX_GBI_2 G_TRI1 body (gfx_pc.c:1440):
+     * gfx_sp_tri1(C0(16,8)/2, C0(8,8)/2, C0(0,8)/2) -- indices are
+     * vertex-buffer offsets *2 (see this task's note above). Encoding
+     * v0=0, v1=1, v2=2 requires packing (0, 2, 4). */
+    list[2].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[2].words.w1 = 0;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    /* Default modelview/projection are both identity (Task 4's
+     * sm64_saturn_matrix_stack_init), which makes clip w == 1.0 for
+     * every vertex regardless of model-space z -- identity has no
+     * perspective term. This test's premise (a triangle at z=500, which
+     * should land inside [NEAR_DEPTH=64, FAR_DEPTH=8192] and resolve)
+     * needs a projection matrix whose w-column actually depends on z,
+     * matching how a real Fast3D projection matrix's M[2][3] entry
+     * works. Install one directly so cw == z == 500 for every vertex: */
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16; /* w = z (raw units) */
+    projection.m[3][3] = 0;       /* no constant w term */
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.triangles_transformed == 1);
+    assert(frontend.profile.reject_near_far == 0);
+    assert(frontend.profile.reject_degenerate == 0);
+    assert(frontend.resolved_count == 1);
+    /* Distinct-corner check: catches an index-encoding regression (e.g.
+     * reintroducing the raw-index-not-doubled bug) even if resolved_count
+     * happens to stay 1 for some other reason. */
+    assert(frontend.resolved[0].x[0] != frontend.resolved[0].x[1] ||
+           frontend.resolved[0].y[0] != frontend.resolved[0].y[1]);
+    assert(frontend.resolved[0].x[1] != frontend.resolved[0].x[2] ||
+           frontend.resolved[0].y[1] != frontend.resolved[0].y[2]);
+}
+
+static void test_frontend_g_tri1_backface_cull(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* Same triangle as above but with winding reversed (swap v1/v2) --
+     * under G_CULL_BACK this must be rejected, not resolved. */
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[5];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24);
+    list[1].words.w1 = G_CULL_BACK;
+    list[2].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+    list[2].words.w1 = (uintptr_t)verts;
+    list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[3].words.w1 = 0;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* Whichever winding is actually front-facing under this port's
+     * pre-viewport Y-up convention is an empirical fact to check once
+     * this test runs, not assumed here -- if this specific
+     * cross-product sign turns out to survive culling instead of being
+     * rejected, swap this test's winding (not the implementation) so it
+     * exercises the rejected case, then keep test_frontend_g_tri1_resolves_triangle
+     * as the surviving-case control. The two tests together must show
+     * exactly one winding survives and the other doesn't. */
+    assert(frontend.profile.reject_backface == 1);
+    assert(frontend.resolved_count == 0);
+}
+
+static void test_frontend_g_tri1_modelview_translation_shifts_screen_x(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* Q16.16 modelview matrix: identity plus a +50.0 X translation (row
+     * 3, column 0 in the row-vector convention). Under this build's
+     * GBI_FLOATS config the wire format is 16 plain floats (see Task
+     * 1), so this is written directly as a float array. */
+    static const float translate_x50_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        50.0f, 0.0f, 0.0f, 1.0f
+    };
+    /* All three vertices share model-space x = -100 so the resolved
+     * screen x is independent of which vertex-buffer slot G_TRI1's index
+     * decode actually selects for each corner -- only y differs, so the
+     * triangle stays non-degenerate. */
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = {-100.0f,  100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {-100.0f,    0.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[5];
+    struct SPTask task;
+    const uint32_t vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+
+    list[0] = make_g_mtx((uint8_t)((G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+                          translate_x50_floats);
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[1].words.w1 = (uintptr_t)&vp;
+    list[2].words.w0 = vtx_w0;
+    list[2].words.w1 = (uintptr_t)verts;
+    list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[3].words.w1 = 0;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    /* Projection still needs a z-dependent w column, matching the other
+     * G_TRI1 tests, or every vertex's clip w stays 1.0 and the triangle
+     * fails near-plane rejection regardless of this test's own concern
+     * (the X translation). */
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.reject_near_far == 0);
+    assert(frontend.profile.reject_degenerate == 0);
+    assert(frontend.resolved_count == 1);
+    /* viewport is {x=0,y=8,width=320,height=224} (see
+     * test_frontend_g_movemem_viewport's own derivation for this exact
+     * vp fixture -- the source_y=16/letterbox_crop=8 arithmetic there
+     * applies identically here since both tests share the same vp
+     * values). screen_x only reads viewport.x/width, so the y origin
+     * doesn't affect this assertion.
+     *
+     * screen_x = viewport.x + (cx*0.5+0.5)*viewport.width, where cx is
+     * the PERSPECTIVE-DIVIDED clip x (x/w) per this function's own
+     * transform code -- not the raw pre-divide x. Hand-derived: with the
+     * +50.0 X translation applied, pre-divide x = -100+50 = -50 for
+     * every vertex here (all three share model x=-100); w = z = 500
+     * (same z-dependent projection as the other G_TRI1 tests). So
+     * cx = -50/500 = -0.1, and screen_x = 0 + (-0.1*0.5+0.5)*320 =
+     * 0.45*320 = 144 for all three corners (subject to float rounding,
+     * verified by running this test rather than assumed). This is the
+     * assertion Task 15's Mutation 3 (negate a translation term) must
+     * break -- unlike the other two G_TRI1 tests above, whose display
+     * lists never issue a G_MTX and so leave mp->m[3][0] at exactly 0
+     * (identity*identity), making that same negation an unobservable
+     * no-op there. */
+    assert(frontend.resolved[0].x[0] == 144);
+    assert(frontend.resolved[0].x[1] == 144);
+    assert(frontend.resolved[0].x[2] == 144);
+}
+
+static void test_frontend_g_tri2_two_triangles(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[6] = {
+        /* Triangle A: logical vertex indices 0,1,2, decoded from w0's
+         * C0 fields -- same layout G_TRI1 already exercises. */
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+        /* Triangle B: logical vertex indices 3,4,5, decoded from w1's
+         * C1 fields -- this is the branch this test exists to cover.
+         * Same shape as Triangle A, translated +20 in x and given
+         * distinct colors, so a passing test provably means the C1
+         * reads pulled a different vertex set rather than re-reading
+         * Triangle A's C0 data. */
+        { .ob = {-80.0f, -100.0f, 500.0f}, .cn = {255, 255, 0, 255} },
+        { .ob = {120.0f, -100.0f, 500.0f}, .cn = {0, 255, 255, 255} },
+        { .ob = { 20.0f,  100.0f, 500.0f}, .cn = {255, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[4];
+    struct SPTask task;
+    uint32_t vtx_w0;
+
+    /* n=6, dest_index=0: C0(12,8)==6 and C0(1,7)-6==0. */
+    vtx_w0 = ((uint32_t)G_VTX << 24) | (6U << 12) | (6U << 1);
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = vtx_w0;
+    list[1].words.w1 = (uintptr_t)verts;
+    /* G_TRI2 (gfx_pc.c ~L1448-1451): first triangle from w0's C0 fields
+     * (indices 0,1,2 -> *2 = 0,2,4), second triangle from w1's C1
+     * fields (indices 3,4,5 -> *2 = 6,8,10). */
+    list[2].words.w0 = ((uint32_t)G_TRI2 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[2].words.w1 = (6U << 16) | (8U << 8) | (10U << 0);
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.triangles_transformed == 2);
+    assert(frontend.profile.reject_near_far == 0);
+    assert(frontend.profile.reject_degenerate == 0);
+    assert(frontend.resolved_count == 2);
+    /* Triangle A resolves from w0/C0 first, Triangle B from w1/C1
+     * second -- distinct colors and screen positions confirm the two
+     * triangles came from different vertex slots, not the same C0
+     * fields read twice. */
+    assert(frontend.resolved[0].color_rgb1555 !=
+           frontend.resolved[1].color_rgb1555);
+    assert(frontend.resolved[0].x[0] != frontend.resolved[1].x[0] ||
+           frontend.resolved[0].y[0] != frontend.resolved[1].y[0]);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -1072,5 +1347,9 @@ int main(void)
     test_frontend_g_geometrymode_clear_and_set();
     test_frontend_g_vtx_transform();
     test_frontend_g_vtx_rejects_out_of_range_dest();
+    test_frontend_g_tri1_resolves_triangle();
+    test_frontend_g_tri1_backface_cull();
+    test_frontend_g_tri1_modelview_translation_shifts_screen_x();
+    test_frontend_g_tri2_two_triangles();
     return 0;
 }
