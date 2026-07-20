@@ -235,10 +235,23 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * with the existing G_DL handling in this file), already
              * uintptr_t (no narrowing to guard against). */
             const uint32_t n_vertices = SM64_SATURN_C0(w0, 12, 8);
-            const uint32_t dest_index =
-                SM64_SATURN_C0(w0, 1, 7) - n_vertices;
+            const uint32_t end_index = SM64_SATURN_C0(w0, 1, 7);
             const Vtx_t *src =
                 (const Vtx_t *)w1; /* Vtx_t layout, not Vtx_tn */
+            uint32_t dest_index;
+
+            /* Guard against underflow: a malformed w0 encoding
+             * n_vertices > end_index would otherwise wrap dest_index to
+             * a huge uint32_t value, and the per-vertex bounds check
+             * below could be satisfied again partway through the loop
+             * once dest_index + i wraps back around -- silently
+             * corrupting low vertex slots with an out-of-bounds read of
+             * src[]. Reject the whole command up front instead. */
+            if (n_vertices > end_index) {
+                profile->reject_vertex_range++;
+                break;
+            }
+            dest_index = end_index - n_vertices;
 
             for (uint32_t i = 0; i < n_vertices; i++) {
                 const uint32_t dest = dest_index + i;

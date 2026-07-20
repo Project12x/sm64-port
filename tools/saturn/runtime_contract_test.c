@@ -837,6 +837,43 @@ static void test_frontend_g_vtx_transform(void)
     assert(frontend.vertices[0].a == 200);
 }
 
+static void test_frontend_g_vtx_rejects_out_of_range_dest(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t ten_vertices[10] = {
+        { .ob = {1.0f, 1.0f, 1.0f}, .cn = {255, 255, 255, 255} },
+        /* remaining 9 entries can be zero-initialized by the array's
+         * default; only the destination-range rejection is being
+         * tested here, not per-vertex content */
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    /* dest_index=60, n_vertices=10: writes to slots 60-63 should
+     * succeed (4 slots), slots 64-69 should be rejected (6 rejects) --
+     * SM64_SATURN_FAST3D_MAX_VERTICES is 64, so valid indices are 0-63.
+     * Encode n=10 at C0(12,8) and end_index=70 at C0(1,7) (so
+     * dest_index = 70-10 = 60). Verified: C0(12,8) reads w0 bits 12-19,
+     * (10U<<12) places 10 (0b00001010, 8 bits) exactly there, so
+     * C0(12,8)==10. C0(1,7) reads w0 bits 1-7, (70U<<1) places 70
+     * (0b1000110, 7 bits -- fits exactly in the 7-bit field) exactly
+     * there, so C0(1,7)==70. The two fields (bits 1-7 and bits 12-19)
+     * don't overlap, so neither term corrupts the other. dest_index =
+     * 70-10 = 60, matching the claim above. */
+    list[0].words.w0 = ((uint32_t)G_VTX << 24) | (10U << 12) | (70U << 1);
+    list[0].words.w1 = (uintptr_t)ten_vertices;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.reject_vertex_range == 6);
+    assert(frontend.vertices[60].x == 1.0f); /* first in-range write succeeded */
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -1034,5 +1071,6 @@ int main(void)
     test_frontend_g_geometrymode();
     test_frontend_g_geometrymode_clear_and_set();
     test_frontend_g_vtx_transform();
+    test_frontend_g_vtx_rejects_out_of_range_dest();
     return 0;
 }
