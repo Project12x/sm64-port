@@ -112,6 +112,52 @@ static void test_matrix_multiply_overflow_guard(void)
     assert(overflowed);
 }
 
+static void test_matrix_multiply_accumulator_overflow_guard(void)
+{
+    sm64_saturn_mtx_t a, b, result;
+    bool overflowed;
+
+    sm64_saturn_matrix_identity(&a);
+    sm64_saturn_matrix_identity(&b);
+    /* All four k-terms of entry [0][0] at the extreme -- the
+     * accumulation itself (not just the final narrowed value)
+     * must be caught, since 2^62+2^62 already overflows int64_t
+     * on the second term, well before all four are summed. */
+    for (int k = 0; k < 4; k++) {
+        a.m[0][k] = INT32_MIN;
+        b.m[k][0] = INT32_MIN;
+    }
+
+    overflowed = sm64_saturn_matrix_mul(&a, &b, &result);
+
+    assert(overflowed);
+}
+
+static void test_matrix_multiply_nontrivial(void)
+{
+    sm64_saturn_mtx_t a, b, result;
+    bool overflowed;
+
+    sm64_saturn_matrix_identity(&a);
+    a.m[0][0] = 2 << 16; /* scale X by 2.0 */
+    a.m[1][1] = 3 << 16; /* scale Y by 3.0 */
+
+    sm64_saturn_matrix_identity(&b);
+    b.m[3][0] = 10 << 16; /* translate X by 10.0 */
+    b.m[3][1] = 5 << 16;  /* translate Y by 5.0 */
+
+    overflowed = sm64_saturn_matrix_mul(&a, &b, &result);
+
+    assert(!overflowed);
+    /* res[0][0] = a[0][0]*b[0][0] = 2.0 * 1.0 = 2.0 */
+    assert(result.m[0][0] == (2 << 16));
+    /* res[1][1] = a[1][1]*b[1][1] = 3.0 * 1.0 = 3.0 */
+    assert(result.m[1][1] == (3 << 16));
+    /* res[3][0] = a[3][0]*b[0][0] + a[3][1]*b[1][0] + a[3][2]*b[2][0] + a[3][3]*b[3][0]
+     *           = 0 + 0 + 0 + 1.0*10.0 = 10.0 */
+    assert(result.m[3][0] == (10 << 16));
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -290,5 +336,7 @@ int main(void)
     test_matrix_decode_translation();
     test_matrix_multiply_identity();
     test_matrix_multiply_overflow_guard();
+    test_matrix_multiply_accumulator_overflow_guard();
+    test_matrix_multiply_nontrivial();
     return 0;
 }

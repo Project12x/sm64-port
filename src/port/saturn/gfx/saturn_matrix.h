@@ -73,12 +73,22 @@ sm64_saturn_matrix_identity(sm64_saturn_mtx_t *out)
  * its own -- returns true if any entry's accumulated value would not
  * round-trip through the >>16 narrowing, so a violated bound is visible
  * (counted by the caller) rather than silently corrupting a matrix
- * entry. Two same-sign terms at the true Q16.16 extreme can already sum
- * past INT64_MAX (2^31*2^31=2^62 per term), so the accumulator itself is
- * not unconditionally safe at the format's edges either -- this is
- * checked by testing the narrowed result against the pre-shift value,
- * which also catches that case for any input this frontend will
- * realistically see. */
+ * entry.
+ *
+ * A single term's magnitude (max 2^31*2^31=2^62) always fits int64_t on
+ * its own, but summing four such terms at the format's true extreme can
+ * overflow int64_t *during accumulation*, before any narrowing happens
+ * (2^62+2^62 already equals 2^63, one past INT64_MAX). Letting `sum`
+ * itself cross into signed overflow is undefined behavior, and the
+ * resulting wraparound can coincidentally land back in a value whose
+ * final narrowed form looks in-range -- checking only the final
+ * narrowed value cannot catch that case. Each term is therefore
+ * checked against `sum` immediately before it is added, so `sum` itself
+ * can never cross into UB. The separate final-narrowed-value check
+ * still matters on top of that: a sum can stay safely within int64_t
+ * range while still narrowing to something outside Q16.16's int32_t
+ * range. The two checks catch different failure modes, not redundant
+ * ones. */
 static inline bool
 sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
                        sm64_saturn_mtx_t *out)
@@ -90,7 +100,26 @@ sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b,
         for (int j = 0; j < 4; j++) {
             int64_t sum = 0;
             for (int k = 0; k < 4; k++) {
-                sum += (int64_t)a->m[i][k] * (int64_t)b->m[k][j];
+                const int64_t term = (int64_t)a->m[i][k] * (int64_t)b->m[k][j];
+                /* Check before adding so `sum` itself can never cross
+                 * into signed-overflow UB -- a single term's magnitude
+                 * (max 2^31*2^31=2^62) always fits int64_t on its own,
+                 * but four terms summed at the format's extreme can
+                 * overflow int64_t during accumulation, before any
+                 * narrowing ever happens. Checking only the final
+                 * narrowed value (the previous approach) cannot catch
+                 * this: the wraparound can coincidentally land back in
+                 * a value that looks in-range. */
+                if (term >= 0) {
+                    if (sum > INT64_MAX - term) {
+                        overflowed = true;
+                    }
+                } else {
+                    if (sum < INT64_MIN - term) {
+                        overflowed = true;
+                    }
+                }
+                sum += term;
             }
             const int64_t narrowed = sum >> 16;
             if (narrowed > INT32_MAX || narrowed < INT32_MIN) {
