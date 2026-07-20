@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the direct-Bob closure for source-owned collision support data.
+"""Generate the sourceboot closure for source-owned collision support data.
 
 The original behavior interpreter owns a static table of behavior scripts.  A
 number of those scripts retain pointers to level collision and trajectory
@@ -8,9 +8,10 @@ direct Bob bootstrap therefore compiles those arrays as a small, source-owned
 catalog instead of dragging each level's render geometry and textures into the
 fixed executable image.
 
-Bob's own arrays stay in ``levels/bob/leveldata.c`` and are deliberately
-excluded to avoid duplicate definitions.  The catalog is source data only: it
-does not rewrite collision, fabricate a scene, or inspect a ROM.
+Any level whose ``leveldata.c`` is linked directly must be excluded to avoid
+duplicate definitions.  Bob is the default direct level.  The catalog is
+source data only: it does not rewrite collision, fabricate a scene, or inspect
+a ROM.
 """
 
 from __future__ import annotations
@@ -22,20 +23,20 @@ from pathlib import Path
 PATTERNS = ("collision.inc.c", "trajectory.inc.c")
 
 
-def catalog_paths(root: Path) -> list[Path]:
+def catalog_paths(root: Path, excluded_levels: tuple[str, ...]) -> list[Path]:
     levels = root / "levels"
-    bob = levels / "bob"
+    excluded_roots = tuple((levels / level).resolve() for level in excluded_levels)
     paths = {
         path.resolve()
         for pattern in PATTERNS
         for path in levels.rglob(pattern)
-        if not path.resolve().is_relative_to(bob.resolve())
+        if not any(path.resolve().is_relative_to(excluded) for excluded in excluded_roots)
     }
     return sorted(paths, key=lambda path: path.relative_to(root).as_posix())
 
 
-def write_catalog(root: Path, output: Path) -> None:
-    paths = catalog_paths(root)
+def write_catalog(root: Path, output: Path, excluded_levels: tuple[str, ...]) -> None:
+    paths = catalog_paths(root, excluded_levels)
     if not paths:
         raise RuntimeError("no source collision or trajectory fragments found")
 
@@ -52,8 +53,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--exclude-level", action="append", default=["bob"])
     args = parser.parse_args()
-    write_catalog(args.root.resolve(), args.output)
+    write_catalog(args.root.resolve(), args.output, tuple(args.exclude_level))
     return 0
 
 

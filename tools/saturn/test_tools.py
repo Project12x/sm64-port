@@ -55,6 +55,7 @@ from static_bsp import (  # noqa: E402
     split_polygon as split_bsp_polygon,
 )
 from plan_castle_camera_coverage import plan  # noqa: E402
+from prepare_sourceboot_collision_catalog import catalog_paths  # noqa: E402
 from quad_pairing import QuadCandidate, RenderPrimitive, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
@@ -122,6 +123,24 @@ class AssetClassifierTests(unittest.TestCase):
         report = classify_primitives(primitives)
         self.assertEqual(report["direct_textured_quad_candidates"], 0)
         self.assertEqual(report["rejection_reasons"]["uvs_length_mismatch"], 1)
+
+
+class SourcebootCatalogTests(unittest.TestCase):
+    def test_direct_level_collision_sources_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for level in ("bob", "castle_grounds", "ttc", "ssl"):
+                level_root = root / "levels" / level
+                level_root.mkdir(parents=True)
+                (level_root / "collision.inc.c").write_text("/* source */\n", encoding="utf-8")
+            (root / "levels" / "ssl" / "trajectory.inc.c").write_text("/* source */\n", encoding="utf-8")
+
+            paths = catalog_paths(root, ("bob", "castle_grounds", "ttc"))
+
+        self.assertEqual(
+            [path.relative_to(root).as_posix() for path in paths],
+            ["levels/ssl/collision.inc.c", "levels/ssl/trajectory.inc.c"],
+        )
 
 
 class QuadPairingTests(unittest.TestCase):

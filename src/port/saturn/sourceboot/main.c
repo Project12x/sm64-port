@@ -5,6 +5,7 @@
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_source_runtime.h"
+#include "source_cart.h"
 
 /* This is an internal-WRAM bootstrap arena, deliberately not the 4 MiB cart.
  * E3 packages use the cart for immutable level banks; source allocator demand
@@ -22,11 +23,19 @@ void user_init(void) {
 }
 
 int main(void) {
+    const sm64_saturn_source_cart_status_t cart_status =
+        sm64_saturn_source_cart_load();
+    if (cart_status != SM64_SATURN_SOURCE_CART_OK) {
+        sm64_saturn_source_cart_report_failure(cart_status);
+        for (;;) {}
+    }
+
     dbgio_init();
     dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
     dbgio_dev_font_load();
     dbgio_puts("\x1B[H\x1B[2JSM64 SATURN SOURCEBOOT E2\n"
                "Direct original Bob script\n"
+               "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
 

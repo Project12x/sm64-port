@@ -10,7 +10,9 @@ SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
 SOURCEBOOT_COLLISION_INPUTS := $(shell find "$(ROOT)/levels" \( -name collision.inc.c -o -name trajectory.inc.c \) -print)
+SOURCEBOOT_COLLISION_EXCLUDE_LEVELS := bob castle_grounds ttc
 SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
+SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_BIN_SRCS := $(wildcard $(ROOT)/bin/*.c)
 SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # E2 intentionally links one original level, not the full game archive.  The
@@ -19,7 +21,10 @@ SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # Future level banks belong in the cart-backed asset package, not in the
 # fixed Yaul executable image.
 SOURCEBOOT_LEVEL_SRCS := $(ROOT)/levels/bob/script.c \
-  $(ROOT)/levels/bob/geo.c $(ROOT)/levels/bob/leveldata.c
+  $(ROOT)/levels/bob/geo.c $(ROOT)/levels/bob/leveldata.c \
+  $(ROOT)/levels/menu/leveldata.c \
+  $(ROOT)/levels/castle_grounds/leveldata.c \
+  $(ROOT)/levels/ttc/leveldata.c
 SOURCEBOOT_GU_SRCS := $(wildcard $(ROOT)/lib/src/gu*.c)
 SOURCEBOOT_MATH_SRCS := $(ROOT)/lib/src/math/sinf.c $(ROOT)/lib/src/math/cosf.c
 SOURCEBOOT_ASSET_SOURCES := \
@@ -33,7 +38,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # This is intentionally a source closure, not a Castle viewer dependency list.
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
-SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c \
+SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c source_cart.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
@@ -57,6 +62,13 @@ export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
+
+# Keep the default Yaul binary image contiguous in work RAM.  The source data
+# bank is exported separately from the final ELF and copied into the cart at
+# its already-linked VMA before thread5_game_loop() executes.
+SOURCEBOOT_RAW_OBJCOPY := $(SH_OBJCOPY)
+SH_OBJCOPY := $(SOURCEBOOT_RAW_OBJCOPY) -R .cart_rodata
+SH_SPECS := sourceboot.specs
 
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
@@ -90,7 +102,8 @@ source-data-catalog: $(SOURCEBOOT_COLLISION_CATALOG)
 
 $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py $(SOURCEBOOT_COLLISION_INPUTS)
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py" \
-	  --root "$(ROOT)" --output "$@"
+	  --root "$(ROOT)" --output "$@" \
+	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
 source-assets: source-data-catalog
@@ -108,6 +121,25 @@ source-assets: source-data-catalog
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 
+$(SOURCEBOOT_CART_IMAGE): $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
+	@printf -- "$(V_BEGIN_YELLOW)$(@F)$(V_END)\n"
+	$(ECHO)$(SOURCEBOOT_RAW_OBJCOPY) -O binary --only-section=.cart_rodata $< $@
+	$(ECHO)test $$(wc -c < $@) -le 4194304
+
+.PHONY: source-cart-image
+source-cart-image: $(SOURCEBOOT_CART_IMAGE)
+
+pre-build-iso: $(SOURCEBOOT_CART_IMAGE)
+	$(ECHO)mkdir -p $(IMAGE_DIRECTORY)
+	$(ECHO)cp $(SOURCEBOOT_CART_IMAGE) $(IMAGE_DIRECTORY)/SOURCE.DAT
+
+# ISO freshness must include the separately emitted cartridge image; the Yaul
+# hook copies it into IMAGE_DIRECTORY, but cannot express that dependency by
+# itself.
+$(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso: $(SOURCEBOOT_CART_IMAGE)
+
 .PHONY: verify
 verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -h "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq 'Entry point address:[[:space:]]+0x6004000'
+	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -S "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq '[[:space:]]\.cart_rodata[[:space:]]+PROGBITS[[:space:]]+22400000'
+	@test $$(wc -c < "$(SOURCEBOOT_CART_IMAGE)") -le 4194304

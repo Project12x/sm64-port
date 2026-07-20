@@ -3,7 +3,9 @@
 
 #include <PR/ultratypes.h>
 
-#ifdef VERSION_EU
+#ifdef TARGET_SATURN
+extern u64 gGfxSPTaskOutputBuffer[1];
+#elif defined(VERSION_EU)
 extern u64 gGfxSPTaskOutputBuffer[0x2fc0];
 #else
 extern u64 gGfxSPTaskOutputBuffer[0x3e00];

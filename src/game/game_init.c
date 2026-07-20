@@ -270,15 +270,31 @@ void create_gfx_task_structure(void) {
 #endif
     gGfxSPTask->task.t.ucode_size = SP_UCODE_SIZE; // (this size is ignored)
     gGfxSPTask->task.t.ucode_data_size = SP_UCODE_DATA_SIZE;
+#ifdef TARGET_SATURN
+    /* This target forwards task.t.data_ptr to the Fast3D frontend.  N64 RSP
+     * scratch buffers are intentionally absent from the 1 MiB work-RAM
+     * budget, while the source-owned SPTask and display-list boundary stay
+     * unchanged. */
+    gGfxSPTask->task.t.dram_stack = NULL;
+    gGfxSPTask->task.t.dram_stack_size = 0;
+    gGfxSPTask->task.t.output_buff = NULL;
+    gGfxSPTask->task.t.output_buff_size = NULL;
+#else
     gGfxSPTask->task.t.dram_stack = (u64 *) gGfxSPTaskStack;
     gGfxSPTask->task.t.dram_stack_size = SP_DRAM_STACK_SIZE8;
     gGfxSPTask->task.t.output_buff = gGfxSPTaskOutputBuffer;
     gGfxSPTask->task.t.output_buff_size =
         (u64 *)((u8 *) gGfxSPTaskOutputBuffer + sizeof(gGfxSPTaskOutputBuffer));
+#endif
     gGfxSPTask->task.t.data_ptr = (u64 *) &gGfxPool->buffer;
     gGfxSPTask->task.t.data_size = entries * sizeof(Gfx);
+#ifdef TARGET_SATURN
+    gGfxSPTask->task.t.yield_data_ptr = NULL;
+    gGfxSPTask->task.t.yield_data_size = 0;
+#else
     gGfxSPTask->task.t.yield_data_ptr = (u64 *) gGfxSPTaskYieldBuffer;
     gGfxSPTask->task.t.yield_data_size = OS_YIELD_DATA_SIZE;
+#endif
 }
 
 /**

@@ -19,10 +19,17 @@ ALIGNED8 u8 gThread5Stack[0x2000];
 #if ENABLE_RUMBLE
 ALIGNED8 u8 gThread6Stack[0x2000];
 #endif
+#ifdef TARGET_SATURN
+/* The target task is interpreted by saturn_fast3d_frontend.c, not an RSP.
+ * Retain ABI symbols without allocating N64-only task scratch. */
+ALIGNED8 u8 gGfxSPTaskStack[1];
+ALIGNED8 u8 gGfxSPTaskYieldBuffer[1];
+#else
 // 0x400 bytes
 ALIGNED8 u8 gGfxSPTaskStack[SP_DRAM_STACK_SIZE8];
 // 0xc00 bytes for f3dex, 0x900 otherwise
 ALIGNED8 u8 gGfxSPTaskYieldBuffer[OS_YIELD_DATA_SIZE];
+#endif
 // 0x200 bytes
 ALIGNED8 struct SaveBuffer gSaveBuffer;
 // 0x190a0 bytes

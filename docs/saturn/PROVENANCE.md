@@ -201,6 +201,16 @@ by the pinned MIT-licensed libyaul source. `src/port/saturn/hello/main.c` is an
 original bring-up program written against the public dbgio and VDP2 APIs; it is
 not copied from `libyaul-examples`.
 
+The direct-source E2 loader adds an attributed configuration adaptation of
+`sh-elf/lib/ldscripts/yaul.x` at
+`src/port/saturn/sourceboot/sourceboot-cart.x`. It preserves the normal Yaul
+HWRAM layout, then links source-tree read-only data at the documented 32 Mbit
+DRAM-cart base (`0x22400000`). `source_cart.c` is original project code using
+the public `dram-cart.h`, CD block, and CDFS APIs to stage the separately
+emitted `SOURCE.DAT` file from CD into the cart. The source path and exact
+pin are recorded in `UPSTREAM_CODE_LEDGER.md`; no Yaul loader implementation
+is copied.
+
 The first renderer will use libyaul's hardware APIs but will not use libmic3d
 as a drop-in scene renderer. The inspected mesh/pipeline assumptions do not
 match the required SM64 primitive conversion and near-plane clipping behavior.

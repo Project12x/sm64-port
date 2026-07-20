@@ -1,0 +1,111 @@
+/*
+ * E2 sourceboot split-memory linker script.
+ *
+ * Based on Yaul's MIT-licensed sh-elf/lib/ldscripts/yaul.x at pinned
+ * libyaul revision 6012f79f237773378c8014e70d8998ad95a38d98.  This is a
+ * configuration adaptation, not a runtime fork: it preserves Yaul's normal
+ * work-RAM layout and adds a cartridge VMA for immutable SM64 source data.
+ */
+
+OUTPUT_FORMAT ("elf32-sh")
+OUTPUT_ARCH (sh)
+EXTERN (_start)
+ENTRY (_start)
+SEARCH_DIR ("$YAUL_INSTALL_ROOT/$YAUL_ARCH_SH_PREFIX/lib");
+
+MEMORY {
+  ram  (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
+  cart (R)  : ORIGIN = 0x22400000, LENGTH = 0x00400000
+}
+
+SECTIONS
+{
+  .text :
+  {
+     *(.text)
+     *(.text.*)
+     *(.gnu.linkonce.t.*)
+
+     INCLUDE ldscripts/yaul-c++.x
+
+     . = ALIGN (4);
+  } > ram
+
+  /* These few constants must be available before the cart image has been
+   * copied from CD.  The loader deliberately avoids ordinary string literals
+   * and keeps its ISO filename and failure text here. */
+  .bootdata :
+  {
+     . = ALIGN (16);
+     *(.bootdata)
+     *(.bootdata.*)
+  } > ram
+
+  /* Every object built from this source tree is named *@sm64-port@*.o by
+   * Yaul's build-path conversion.  Put its immutable source data in the cart
+   * bank, but keep libyaul/libgcc constants in work RAM so boot services are
+   * usable before the bank is resident. */
+  .cart_rodata :
+  {
+     . = ALIGN (16);
+     ___sourceboot_cart_rodata_start = .;
+     *sm64-port?*(.rdata)
+     *sm64-port?*(.rodata)
+     *sm64-port?*(.rodata.*)
+     *sm64-port?*(.gnu.linkonce.r.*)
+     . = ALIGN (16);
+     ___sourceboot_cart_rodata_end = .;
+  } > cart
+
+  .rodata :
+  {
+     . = ALIGN (16);
+
+     *(.rdata)
+     *(.rodata)
+     *(.rodata.*)
+     *(.gnu.linkonce.r.*)
+  } > ram
+
+  .data :
+  {
+     . = ALIGN (16);
+
+     *(.data)
+     *(.data.*)
+     *(.gnu.linkonce.d.*)
+     SORT (CONSTRUCTORS)
+     *(.sdata)
+     *(.sdata.*)
+     *(.gnu.linkonce.s.*)
+  } > ram
+
+  .bss :
+  {
+     . = ALIGN (16);
+     PROVIDE (___bss_start = .);
+
+     *(.bss)
+     *(.bss.*)
+     *(.gnu.linkonce.b.*)
+     *(.sbss)
+     *(.sbss.*)
+     *(.gnu.linkonce.sb.*)
+     *(.scommon)
+     *(COMMON)
+
+     . = ALIGN (16);
+     PROVIDE (___bss_end = .);
+  } > ram
+
+  .uncached (0x20000000 | ___bss_end) : AT (___bss_end)
+  {
+     *(.uncached)
+     *(.uncached.*)
+
+     . = ALIGN (4);
+  }
+
+  /* Back to cached addresses */
+  ___end = ___bss_end + SIZEOF (.uncached);
+}

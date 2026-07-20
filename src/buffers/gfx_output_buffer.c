@@ -1,7 +1,13 @@
 #include <ultra64.h>
 #include "gfx_output_buffer.h"
 
-#ifdef VERSION_EU
+#ifdef TARGET_SATURN
+/* Saturn consumes the original Fast3D command list directly.  The N64 RSP
+ * output buffer is not a render queue and must not reserve 127 KiB of the
+ * fixed sourceboot work-RAM image.  The symbol stays present for shared
+ * source declarations; TARGET_SATURN tasks deliberately leave it unused. */
+u64 gGfxSPTaskOutputBuffer[1];
+#elif defined(VERSION_EU)
 // 0x17e00 bytes, aligned to a 0x200-byte boundary through sm64.ld. The alignment
 // wastes 0x100 bytes of space.
 u64 gGfxSPTaskOutputBuffer[0x2fc0];

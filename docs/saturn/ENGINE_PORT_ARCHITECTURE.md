@@ -154,11 +154,21 @@ separate, read-only source-data image linked for the detected cart address.
 
 The executable remains a compact HWRAM first-read binary. At boot it validates
 the required `DRAM_CART_ID_4MIB`, reads the named source-data file from the
-disc through a bounded WRAM staging ring, copies it to the cartridge, verifies
-the package metadata/hash, and only then enters `thread5_game_loop()`. The
-final code link imports the source-data image's symbols without embedding its
-bytes in the first-read binary. This is a compatibility bridge, not permission
-to use cartridge DRAM as a heap or to make new scene-specific globals.
+disc through a bounded WRAM staging ring, copies it to the cartridge, and only
+then enters `thread5_game_loop()`. The first implementation validates exact
+linked file size; it must add content-hash/header validation before accepting
+the transfer as integrity-proven. The final code link imports the source-data
+image's symbols without embedding its bytes in the first-read binary. This is
+a compatibility bridge, not permission to use cartridge DRAM as a heap or to
+make new scene-specific globals.
+
+Implementation checkpoint (2026-07-19): `sourceboot-cart.x` now places
+original immutable source data in `.cart_rodata` at `0x22400000` and the
+sourceboot Makefile emits it as `SOURCE.DAT`. `source_cart.c` performs the
+CDFS-to-16-KiB-HWRAM-stage-to-cart lifecycle before the original game loop,
+and exports a linked work-RAM loader probe for Ymir/hardware diagnostics. This
+is package/build proven; visual E2 stays open until that exact source loop
+submits real VDP1 work.
 
 The current hard-coded Castle collision address and startup copy of linked
 texture arrays are migration scaffolding. They must become named arena and

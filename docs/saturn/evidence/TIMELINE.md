@@ -1305,3 +1305,20 @@ diagnostic, but its post-run sample is neutral, so it is not yet a position
 proof. Evidence: [right-input screenshot](screenshots/ymir-m4-stable-frame-sample-right-held-2026-07-19.png),
 [right-input report](reports/ymir-m4-stable-frame-sample-right-held-2026-07-19.json),
 and [neutral cache report](reports/ymir-m4-input-boundary-cache-2026-07-19.json).
+
+### 2026-07-19 — Direct Bob source data packages for the 4 MiB cart
+
+The actual sourceboot target now links its immutable original SM64 source
+tables at `0x22400000`, emits them as `SOURCE.DAT`, and includes that separate
+file in the Saturn ISO. Before `thread5_game_loop()` can dereference those
+native source pointers, the target requires Yaul's `0x5C` 4 MiB DRAM cart and
+loads the exact linked file through a 16 KiB internal-WRAM CDFS staging block.
+The 1,694,864-byte data bank is within the cart budget; the code/image and
+loader are independently HWRAM-resident. A linked progress probe supports
+Ymir/hardware diagnosis of cart, CD, file, size, or copy failures.
+
+This is an intentionally nonvisual package milestone: no gallery screenshot
+is attached because the Fast3D source submission has not yet been lowered to a
+visible VDP1 frame. The reproducible package evidence and the exact next
+cart-enabled boot gate are in
+[the E2 sourcebank record](e2-sourceboot-cart-bank-2026-07-19.md).
