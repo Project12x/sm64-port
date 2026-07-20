@@ -635,6 +635,108 @@ static void test_frontend_g_mtx_high_water_mark(void)
     assert(frontend.profile.max_modelview_depth_reached == 3);
 }
 
+static void test_frontend_g_movemem_viewport(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0}, /* 2-bit-fraction N64 units,
+                                              * already expressed in
+                                              * Saturn-native 224-line
+                                              * terms -- a synthetic edge
+                                              * case, not real SM64 data.
+                                              * See the second test below
+                                              * for real game data. */
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    /* F3DEX_GBI_2 G_MOVEMEM encoding: gfx_sp_movemem(C0(0,8), C0(8,8)*8,
+     * seg_addr(w1)) per gfx_pc.c:1387. Index (w0 bits 0-7) must equal
+     * G_MV_VIEWPORT (8 under F3DEX_GBI_2, include/PR/gbi.h:1255). */
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.viewport.width == 320);
+    assert(frontend.viewport.height == 224);
+    assert(frontend.viewport.x == 0);
+    /* Hand-derived from the decode's own formula (source_y =
+     * SM64_SATURN_SOURCE_SCREEN_HEIGHT - (vtrans[1]/4 + height/2), y =
+     * source_y - letterbox_crop), NOT the plan draft's original claim of
+     * 0: with vtrans[1]=448, height=224 -> source_y = 240-(112+112) =
+     * 16; letterbox_crop = (240-224)/2 = 8; y = 16-8 = 8. Verified by
+     * running the decode and observing this exact value -- the decode
+     * always anchors on the real N64 240-line space (it has no way to
+     * know this synthetic input was pre-expressed in 224-line terms),
+     * so an "already 224-native" input still gets the same fixed
+     * 240-anchor + 8-line crop applied as any other input, landing on
+     * y=8 rather than y=0. */
+    assert(frontend.viewport.y == 8);
+}
+
+static void test_frontend_g_movemem_viewport_real_default(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* Matches src/game/area.c's real default viewport
+     * (D_8032CF00 = {{640,480,511,0},{640,480,511,0}}), submitted every
+     * frame via gSPViewport in render_game() -- this is what real
+     * gameplay display lists actually send, expressed in the N64's
+     * native 320x240 coordinate space, NOT the Saturn-224-native
+     * synthetic value the test above uses. */
+    static const Vp_t vp = {
+        .vscale = {640, 480, 511, 0},
+        .vtrans = {640, 480, 511, 0}
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* 320x240 reconstructed in the N64's native space, then letterboxed
+     * (8 lines cropped off top and bottom) onto the Saturn's 224 visible
+     * scanlines -- see the decode's own comment for the derivation. */
+    assert(frontend.viewport.width == 320);
+    assert(frontend.viewport.height == 240);
+    assert(frontend.viewport.x == 0);
+    assert(frontend.viewport.y == -8);
+}
+
+static void test_frontend_g_geometrymode(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    Gfx list[2];
+    struct SPTask task;
+
+    /* F3DEX_GBI_2 combined form: gfx_sp_geometry_mode(~C0(0,24), w1) per
+     * gfx_pc.c:1428 -- clear-mask in w0 bits 0-23, set-mask is all of w1. */
+    list[0].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0x000000U;
+    list[0].words.w1 = G_CULL_BACK;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert((frontend.geometry_mode & G_CULL_BACK) != 0);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -827,5 +929,8 @@ int main(void)
     test_frontend_g_mtx_projection_load_and_multiply();
     test_frontend_g_mtx_modelview_multiply();
     test_frontend_g_mtx_high_water_mark();
+    test_frontend_g_movemem_viewport();
+    test_frontend_g_movemem_viewport_real_default();
+    test_frontend_g_geometrymode();
     return 0;
 }

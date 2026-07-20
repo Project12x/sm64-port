@@ -15,6 +15,19 @@
 #define SM64_SATURN_C1(w1, pos, width) \
     (((w1) >> (pos)) & ((1U << (width)) - 1U))
 
+/* N64 Vp_t data is expressed in a 320x240 coordinate space -- see
+ * gfx_pc.c's SCREEN_HEIGHT (gfx_pc.c:30, config.h:38-39) and the
+ * default-viewport formula documented at include/PR/gbi.h:1226-1230,
+ * which src/game/area.c's real D_8032CF00 = {{640,480,511,0},...}
+ * matches exactly. The Saturn's VDP2 output is only 224 visible
+ * scanlines (VDP2_TVMD_VERT_224, castleviewer/main.c:1187), 16 lines
+ * short of the N64's 240 -- so real viewport data must be letterboxed,
+ * not just have its Y-flip anchor swapped for 224 (an earlier draft of
+ * this task did that and produced a 16-line vertical offset error for
+ * every real gameplay viewport). */
+#define SM64_SATURN_SOURCE_SCREEN_HEIGHT 240
+#define SM64_SATURN_TARGET_SCREEN_HEIGHT 224
+
 static void sm64_saturn_fast3d_count_command(
     sm64_saturn_fast3d_profile_t *profile, uint8_t opcode)
 {
@@ -179,6 +192,45 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * see the /64 recovery this decode performs, matching
              * gfx_pc.c:1380, `gfx_sp_pop_matrix(cmd->words.w1 / 64)`. */
             sm64_saturn_matrix_stack_pop(&frontend->matrix_stack, w1 / 64U);
+            break;
+        }
+        case G_MOVEMEM: {
+            const uint8_t index = (uint8_t)SM64_SATURN_C0(w0, 0, 8);
+            if (index == G_MV_VIEWPORT) {
+                const Vp_t *vp = (const Vp_t *)w1;
+                /* N64 viewport fields carry 2 bits of fraction
+                 * (include/PR/gbi.h ~L1222-1230). Reconstruct them
+                 * bit-for-bit like gfx_pc.c's gfx_calc_and_set_viewport
+                 * (gfx_pc.c:937-955) using the real
+                 * SCREEN_HEIGHT=240 anchor, matching real game data
+                 * (src/game/area.c's D_8032CF00), then letterbox the
+                 * 240-line result down onto the Saturn's 224 visible
+                 * lines by cropping 8 lines off top and bottom --
+                 * preserving aspect ratio rather than distorting the
+                 * image or leaving lines off-screen. */
+                const int16_t width = (int16_t)(vp->vscale[0] / 2);
+                const int16_t height = (int16_t)(vp->vscale[1] / 2);
+                const int16_t source_x =
+                    (int16_t)(vp->vtrans[0] / 4 - width / 2);
+                const int16_t source_y = (int16_t)(
+                    SM64_SATURN_SOURCE_SCREEN_HEIGHT -
+                    (vp->vtrans[1] / 4 + height / 2));
+                const int16_t letterbox_crop = (int16_t)(
+                    (SM64_SATURN_SOURCE_SCREEN_HEIGHT -
+                     SM64_SATURN_TARGET_SCREEN_HEIGHT) / 2); /* = 8 */
+
+                frontend->viewport.width = width;
+                frontend->viewport.height = height;
+                frontend->viewport.x = source_x;
+                frontend->viewport.y =
+                    (int16_t)(source_y - letterbox_crop);
+            }
+            break;
+        }
+        case G_GEOMETRYMODE: {
+            const uint32_t clear_mask = ~SM64_SATURN_C0(w0, 0, 24);
+            frontend->geometry_mode =
+                (frontend->geometry_mode & clear_mask) | w1;
             break;
         }
         default:
