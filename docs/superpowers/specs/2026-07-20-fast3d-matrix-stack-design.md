@@ -112,14 +112,29 @@ existing pattern of `saturn_transform.h`/`saturn_projected_workarea.h`
 gate — see "Testing" below) and is what makes host-testing the highest-risk
 math possible before any emulator involvement.
 
-Fixed-point format: **Q16.16**, signed 32-bit. Chosen because:
+Fixed-point format: **Q16.16**, signed 32-bit — chosen as the fixed-point
+target because SH-2 has no FPU. It matches the existing convention in
+`saturn_transform.h` (`sm64_saturn_vec3_normalize_q16`,
+`sm64_saturn_world_to_view`).
 
-- N64 source matrices are natively s15.16, stored as split
-  integer/fraction 16-bit halves (see `gfx_sp_matrix` decode). Q16.16
-  reconstructs them with zero conversion loss — same bit layout, no
-  rounding step introduced by this port.
-- It matches the existing convention in `saturn_transform.h`
-  (`sm64_saturn_vec3_normalize_q16`, `sm64_saturn_world_to_view`).
+**Correction (found during implementation planning, not part of the
+original design dialogue)**: this section originally stated that N64
+source matrices "are natively s15.16, stored as split integer/fraction
+16-bit halves," and that Q16.16 reconstructs them "with zero conversion
+loss." That description is the classic N64 GBI encoding, but it is **not**
+what this project's actual build produces. `src/port/saturn/sourceboot/Makefile:74`
+defines `F3DEX_GBI_2E=1` for every compiled source file, and
+`include/PR/gbi.h:90-94` shows `F3DEX_GBI_2E` unconditionally defines
+`GBI_FLOATS`. Under `GBI_FLOATS`, `Mtx` is a plain
+`struct { float m[4][4]; }` (`gbi.h:1192-1194`), not the split-int
+`typedef s32 Mtx_t[4][4]`. Every real `G_MTX` command's data is therefore
+16 consecutive row-major floats on this target, not a split s15.16
+encoding — the decode is a straightforward `(int32_t)(f * 65536.0f)` per
+entry, not a bit-splice. The Q16.16 **target** format decision above is
+unaffected by this correction; only the description of the wire format
+being decoded was wrong. See
+`docs/superpowers/plans/2026-07-20-fast3d-matrix-lowering.md`'s Task 1
+for the corrected decode.
 
 Matrix products accumulate in `int64_t` (SH-2 has native `dmuls.l`,
 32x32->64 signed multiply — a hardware op, not software-emulated) and shift
@@ -157,8 +172,9 @@ not here):
   (matches the reference's `modelview_matrix_stack_size < 11` guard),
   current depth, overflow flag; plus a separate projection matrix and a
   dirty-flagged MP composite.
-- `sm64_saturn_matrix_decode(const int32_t *gbi_words, sm64_saturn_mtx_t *out)`
-  — implements the split s15.16 decode.
+- `sm64_saturn_matrix_decode(const float *gbi_floats, sm64_saturn_mtx_t *out)`
+  — decodes this build's real GBI_FLOATS wire format (see the correction
+  above), not a split s15.16 encoding.
 - `sm64_saturn_matrix_mul(const sm64_saturn_mtx_t *a, const sm64_saturn_mtx_t *b, sm64_saturn_mtx_t *out)`.
 - `sm64_saturn_matrix_stack_push/pop/load/mul` — modelview stack ops, with
   push guarded at depth 11 and overflow counted rather than trapped (a
