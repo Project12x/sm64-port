@@ -1814,18 +1814,26 @@ static void test_frontend_g_tri1_modelview_translation_shifts_screen_x(void)
     assert(frontend.profile.reject_near_far == 0);
     assert(frontend.profile.reject_degenerate == 0);
     assert(frontend.resolved_count == 1);
-    /* viewport is {x=0,y=0,width=320,height=224}, so screen_x =
-     * 160*cx + 160. With the +50.0 X translation applied, cx = -100+50 =
-     * -50 for every vertex here (all three share model x=-100) ->
-     * screen_x = 160*(-50)+160 = -7840 for all three corners. This is
-     * the assertion Task 15's Mutation 3 (negate a translation term)
-     * must break -- unlike the other two G_TRI1 tests above, whose
-     * display lists never issue a G_MTX and so leave mp->m[3][0] at
-     * exactly 0 (identity*identity), making that same negation an
-     * unobservable no-op there. */
-    assert(frontend.resolved[0].x[0] == -7840);
-    assert(frontend.resolved[0].x[1] == -7840);
-    assert(frontend.resolved[0].x[2] == -7840);
+    /* Corrected during implementation: an earlier draft of this
+     * derivation skipped the perspective divide entirely (asserting
+     * -7840, i.e. treating clip-space x as if it were already the
+     * screen coordinate). The real pipeline divides by w first. With
+     * the +50.0 X translation applied, x_clip = -100+50 = -50 for every
+     * vertex here (all three share model x=-100); w = z = 500 (this
+     * test's projection makes w depend on z, see above); cx = x_clip/w
+     * = -50/500 = -0.1; screen_x = viewport.x + (cx*0.5+0.5)*viewport.width
+     * = 0 + (-0.1*0.5+0.5)*320 = 0.45*320 = 144. Verified in exact
+     * float32 arithmetic (not just symbolically) to land precisely on
+     * 144.0, not 143.999... or 144.000...1, before trusting the
+     * (int16_t) truncation wouldn't land one off. This is the assertion
+     * Task 15's Mutation 3 (negate a translation term) must break --
+     * unlike the other two G_TRI1 tests above, whose display lists
+     * never issue a G_MTX and so leave mp->m[3][0] at exactly 0
+     * (identity*identity), making that same negation an unobservable
+     * no-op there. */
+    assert(frontend.resolved[0].x[0] == 144);
+    assert(frontend.resolved[0].x[1] == 144);
+    assert(frontend.resolved[0].x[2] == 144);
 }
 
 static void test_frontend_g_tri2_two_triangles(void)
@@ -2656,9 +2664,12 @@ In `sm64_saturn_fast3d_resolve_triangle`'s vertex transform, change
 `(mp->m[3][0] / 65536.0f)` to `-(mp->m[3][0] / 65536.0f)`.
 Run: `make -f Makefile.saturn.mk verify-runtime-contracts`
 Expected: FAIL — `test_frontend_g_tri1_modelview_translation_shifts_screen_x`
-(Task 9) asserts `resolved[0].x[0..2] == -7840`; under this mutation the
-loaded +50.0 X translation is applied with the wrong sign, producing
-`screen_x == -23840` instead, which fails that assertion.
+(Task 9) asserts `resolved[0].x[0..2] == 144` (corrected during Task 9's
+implementation from an earlier draft's pre-perspective-divide value of
+-7840 — see that test's own comment). Under this mutation the loaded
++50.0 X translation is applied with the wrong sign, producing
+`screen_x == 112` instead (verified in exact float32 arithmetic), which
+fails that assertion.
 `test_frontend_g_tri1_resolves_triangle` and the backface test do **not**
 catch this mutation: neither display list issues a `G_MTX`, so the
 modelview and projection matrices stay at their identity defaults
