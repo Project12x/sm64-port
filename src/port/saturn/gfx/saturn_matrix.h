@@ -226,7 +226,11 @@ sm64_saturn_matrix_stack_load(sm64_saturn_matrix_stack_t *stack,
     stack->mp_dirty = true;
 }
 
-static inline sm64_saturn_mtx_t *
+/* Read-only: mutate the top entry via sm64_saturn_matrix_stack_load(),
+ * not by writing through this pointer -- a direct write here would
+ * silently desync the cached mp/mp_dirty state, since only _load()
+ * (and _push()/_pop()) mark the MP cache dirty. */
+static inline const sm64_saturn_mtx_t *
 sm64_saturn_matrix_stack_top(sm64_saturn_matrix_stack_t *stack)
 {
     return &stack->entries[stack->depth - 1];

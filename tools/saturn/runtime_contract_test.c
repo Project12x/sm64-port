@@ -249,6 +249,31 @@ static void test_matrix_mp_lazy_composition(void)
     assert(mp2->m[3][1] == (7 << 16));
 }
 
+static void test_matrix_mp_cache_invalidates_across_pop(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+    sm64_saturn_mtx_t projection, loaded;
+    const sm64_saturn_mtx_t *mp;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    sm64_saturn_matrix_identity(&projection);
+    sm64_saturn_matrix_stack_set_projection(&stack, &projection);
+
+    assert(sm64_saturn_matrix_stack_push(&stack));
+    sm64_saturn_matrix_identity(&loaded);
+    loaded.m[3][0] = 42 << 16;
+    sm64_saturn_matrix_stack_load(&stack, &loaded);
+
+    mp = sm64_saturn_matrix_stack_mp(&stack);
+    assert(mp->m[3][0] == (42 << 16)); /* caches the loaded (non-identity) top */
+
+    sm64_saturn_matrix_stack_pop(&stack, 1); /* restores the untouched identity below */
+    mp = sm64_saturn_matrix_stack_mp(&stack);
+    /* If pop() failed to mark mp_dirty, this would incorrectly still
+     * return the stale 42<<16 value cached before the pop. */
+    assert(mp->m[3][0] == 0);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -433,5 +458,6 @@ int main(void)
     test_matrix_stack_overflow();
     test_matrix_stack_pop_past_floor();
     test_matrix_mp_lazy_composition();
+    test_matrix_mp_cache_invalidates_across_pop();
     return 0;
 }
