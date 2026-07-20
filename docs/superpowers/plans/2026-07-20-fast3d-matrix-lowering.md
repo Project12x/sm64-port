@@ -1784,7 +1784,14 @@ static void test_frontend_g_tri1_modelview_translation_shifts_screen_x(void)
     struct SPTask task;
     const uint32_t vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
 
-    list[0] = make_g_mtx((uint8_t)(G_MTX_LOAD | G_MTX_MODELVIEW),
+    /* Pre-XORed with G_MTX_PUSH per make_g_mtx's documented contract
+     * (Task 6) -- an earlier draft of this test omitted the XOR,
+     * inconsistent with every other G_MTX test in this file, though
+     * behaviorally inert here since sm64_saturn_matrix_stack_load
+     * unconditionally overwrites the top entry regardless of whether a
+     * push just ran, and this test only checks resolved screen
+     * position, not stack depth. Found during Task 9's review. */
+    list[0] = make_g_mtx((uint8_t)((G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
                           translate_x50_floats);
     list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
     list[1].words.w1 = (uintptr_t)&vp;
@@ -2050,11 +2057,31 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         }
     }
 
+    /* Clamp before narrowing to int16_t -- found during Task 9's review.
+     * Only w<=0 is rejected above; a small positive w (camera very
+     * close to geometry -- an ordinary SM64 occurrence, not a
+     * pathological extreme) makes cx/cy enormous, and this port has no
+     * downstream hardware clipper to catch it (unlike the reference,
+     * which relies on the host GPU's own clip stage). Raising the
+     * early-reject threshold alone does not fully close this: a large
+     * (but plausible) model-space x combined with a "safe" w still
+     * overflows int16_t (verified: x=100000, w=64 gives screen_x=250160).
+     * Clamping the float value before the cast closes both failure
+     * modes uniformly, converting what would be UB into a saturated,
+     * visually-wrong-but-defined value -- the triangle's true
+     * visibility is still decided correctly afterward by the near/far
+     * quad check below, which uses the unclamped cw. */
     for (int c = 0; c < 3; c++) {
-        screen_x[c] = (int16_t)(frontend->viewport.x +
-            (cx[c] * 0.5f + 0.5f) * frontend->viewport.width);
-        screen_y[c] = (int16_t)(frontend->viewport.y +
-            (1.0f - (cy[c] * 0.5f + 0.5f)) * frontend->viewport.height);
+        const float screen_x_f = frontend->viewport.x +
+            (cx[c] * 0.5f + 0.5f) * frontend->viewport.width;
+        const float screen_y_f = frontend->viewport.y +
+            (1.0f - (cy[c] * 0.5f + 0.5f)) * frontend->viewport.height;
+        screen_x[c] = (int16_t)(screen_x_f < (float)INT16_MIN ? INT16_MIN :
+                                (screen_x_f > (float)INT16_MAX ? INT16_MAX :
+                                 screen_x_f));
+        screen_y[c] = (int16_t)(screen_y_f < (float)INT16_MIN ? INT16_MIN :
+                                (screen_y_f > (float)INT16_MAX ? INT16_MAX :
+                                 screen_y_f));
     }
 
     sm64_saturn_projected_workarea_init(&workarea, projected_storage, 4);
