@@ -787,12 +787,17 @@ static void test_frontend_g_vtx_transform(void)
 {
     sm64_saturn_fast3d_frontend_t frontend;
     static const Vtx_t one_vertex = {
-        .ob = {0.0f, 0.0f, 0.0f}, /* float under this build's GBI_FLOATS
-                                    * config -- origin, maps to viewport
-                                    * center */
+        /* Non-zero, pairwise-distinct position and a distinct alpha --
+         * deliberately NOT all-zero. sm64_saturn_fast3d_frontend_init
+         * memsets the frontend to 0, so an all-zero fixture can't
+         * distinguish a correctly decoded position from a dropped
+         * assignment or a transposed x/y/z axis -- both would silently
+         * read back as (0,0,0) either way. Distinct values per axis
+         * close that gap. */
+        .ob = {1.5f, -2.25f, 3.0f},
         .flag = 0,
         .tc = {0, 0},
-        .cn = {255, 128, 64, 255}
+        .cn = {255, 128, 64, 200}
     };
     static const Vp_t vp = {
         .vscale = {320 * 2, 224 * 2, 0, 0},
@@ -823,9 +828,13 @@ static void test_frontend_g_vtx_transform(void)
     sm64_saturn_fast3d_frontend_init(&frontend);
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
+    assert(frontend.vertices[0].x == 1.5f);
+    assert(frontend.vertices[0].y == -2.25f);
+    assert(frontend.vertices[0].z == 3.0f);
     assert(frontend.vertices[0].r == 255);
     assert(frontend.vertices[0].g == 128);
     assert(frontend.vertices[0].b == 64);
+    assert(frontend.vertices[0].a == 200);
 }
 
 static void test_frame_profile(void)
