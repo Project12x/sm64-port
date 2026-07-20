@@ -88,7 +88,28 @@ the original SM64 source data model intact.
 Use the cart-enabled Ymir SDL profile (`Cartridge.Type = DRAM`, capacity
 `32Mbit`) with the supplied USA BIOS, boot this disc, and inspect the dynamic
 probe. The current headless debugger can read the probe but does not yet apply
-Ymir's nested cartridge configuration, so it cannot substitute for this run.
-After the probe reports `READY` and 1,694,864 copied bytes, proceed to the
-shared Fast3D-to-VDP1 lowering and capture the first genuine source-loop
-frame.
+Ymir's nested cartridge configuration, so it cannot substitute for the
+cart-enabled run.
+
+### Headless no-cart control
+
+The automated USA-BIOS handoff was repeated with the documented non-mutating
+pause/resume yield (`--handoff-yield`, 240 initial + 900 post-yield frames).
+It reached the target loader and produced the expected **negative control**:
+
+| probe field | value | meaning |
+| --- | ---: | --- |
+| `magic` | `0x53434152` (`SCAR`) | target loader executed |
+| `stage` | `6` (`FAILED`) | load deliberately stopped before source startup |
+| `expected_size` | `1,694,864` | exact linked cart-bank extent is visible on target |
+| `copied_size` | `0` | no cart transfer was attempted |
+| `cart_id` / `cart_size` | `0` / `0` | headless instance has no DRAM cart |
+| `status` | `1` (`MISSING_4MIB`) | expected rejection path |
+
+This rules out the BIOS/CD handoff as the reason the earlier headless window
+was zeroed, and proves that the loader runs before any original source data is
+dereferenced. It does **not** prove cart loading or produce a visual frame.
+
+Next, run the SDL profile with the 32 Mbit DRAM cart active and require
+`READY` plus exactly `1,694,864` copied bytes. Only then proceed to shared
+Fast3D-to-VDP1 lowering and capture the first genuine source-loop frame.
