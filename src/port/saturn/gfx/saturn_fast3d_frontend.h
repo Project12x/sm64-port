@@ -109,6 +109,18 @@ typedef struct sm64_saturn_fast3d_vertex {
     uint8_t r, g, b, a;
 } sm64_saturn_fast3d_vertex_t;
 
+/* HWRAM budget note: this struct is ~5,036 bytes (measured via sizeof against
+ * the real F3DEX_GBI_2E build flags), grown from 44 bytes by this task's
+ * addition of matrix_stack/vertices[]/resolved[]. The design spec measured
+ * ~9,628 bytes of free HWRAM for the sourceboot target before this task
+ * landed (docs/superpowers/specs/2026-07-20-fast3d-matrix-stack-design.md),
+ * leaving roughly 4,600 bytes remaining after this struct -- comfortable
+ * margin for the rest of this plan's additions (Task 10's VDP1 command list
+ * goes to LWRAM, not HWRAM, so it doesn't compete with this budget). If a
+ * future change needs more headroom, SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES
+ * (16 bytes/entry) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry) are
+ * the two knobs to shrink first -- see Task 14's build-verification step for
+ * the actual link-time check. */
 typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_fast3d_profile_t profile;
     sm64_saturn_matrix_stack_t matrix_stack;
