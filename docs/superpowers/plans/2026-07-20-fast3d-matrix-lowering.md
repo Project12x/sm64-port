@@ -1922,6 +1922,14 @@ per-triangle pipeline:
 #define SM64_SATURN_FAR_DEPTH 8192
 #define SM64_SATURN_MAX_PROJECTED_SPAN 640
 
+/* Physical screen width -- unlike height, this doesn't differ between
+ * the N64 source (320x240) and the Saturn target (320x224), so there is
+ * no source/target split the way SM64_SATURN_SOURCE_SCREEN_HEIGHT/
+ * SM64_SATURN_TARGET_SCREEN_HEIGHT have (Task 7). Used below for
+ * clip_viewport's true-screen bounds, alongside the existing
+ * SM64_SATURN_TARGET_SCREEN_HEIGHT constant Task 7 already defined. */
+#define SM64_SATURN_TARGET_SCREEN_WIDTH 320
+
 static void
 sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
                                     uint8_t i0, uint8_t i1, uint8_t i2)
@@ -1937,11 +1945,34 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     sm64_saturn_projected_workarea_t workarea;
     uint16_t projected_indices[4];
     sm64_saturn_projected_quad_t quad;
+    /* Deliberately NOT built from frontend->viewport: that struct's
+     * width/height are the NDC-to-pixel scale factors (correct, and
+     * needed unchanged below for screen_x/screen_y), but its y origin
+     * carries Task 7's 8-line letterbox crop applied to a viewport
+     * whose height/width still span the full pre-crop N64 240-line
+     * rect. Reusing those fields here would make clip_viewport's bounds
+     * an 8px-per-edge superset of the Saturn's true visible
+     * [0,320)x[0,224) area, letting triangles that live entirely inside
+     * that dead border strip pass this rejection check and consume a
+     * resolved[]/VDP1-arena slot for geometry that is never actually
+     * drawn. Use the true physical screen bounds instead -- found during
+     * Task 7's review, fixed here since this is the first place
+     * clip_viewport is constructed.
+     *
+     * Known, deliberately deferred limitation (also from Task 7's
+     * review): real SM64 code submits non-full-height viewports outside
+     * ordinary gameplay -- Peach's ending cutscene and the credits-zoom
+     * (both src/game/mario_actions_cutscene.c) and the Goddard face
+     * screen (src/goddard/renderer.c) all use vscale/vtrans shapes this
+     * frontend's letterbox math wasn't designed around. This increment's
+     * scope is gameplay-frame rendering (Bob-omb Battlefield), not those
+     * presentation states, so this is left as a known, documented gap
+     * rather than solved here. */
     const sm64_saturn_viewport_t clip_viewport = {
-        .left = frontend->viewport.x,
-        .top = frontend->viewport.y,
-        .right = (int16_t)(frontend->viewport.x + frontend->viewport.width),
-        .bottom = (int16_t)(frontend->viewport.y + frontend->viewport.height)
+        .left = 0,
+        .top = 0,
+        .right = SM64_SATURN_TARGET_SCREEN_WIDTH,
+        .bottom = SM64_SATURN_TARGET_SCREEN_HEIGHT
     };
     int16_t screen_x[3], screen_y[3];
 
