@@ -1036,7 +1036,7 @@ make_g_mtx(uint8_t params, const float *mtx_floats)
 {
     Gfx g;
     g.words.w0 = ((uint32_t)G_MTX << 24) | params;
-    g.words.w1 = (uint32_t)(uintptr_t)mtx_floats;
+    g.words.w1 = (uintptr_t)mtx_floats;
     return g;
 }
 
@@ -1165,8 +1165,26 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                                   const Gfx *command)
 {
     sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
-    const uint32_t w0 = command->words.w0;
-    const uint32_t w1 = command->words.w1;
+    /* IMPORTANT -- discovered during Task 6's implementation, applies to
+     * every later task that adds a case to this same switch (7, 8, 9):
+     * this repo's Gwords (include/PR/gbi.h:1728-1731) declares w0/w1 as
+     * `uintptr_t`, not the classic N64 SDK's `u32` -- a fork-specific
+     * accommodation so real pointers (G_DL targets, and now G_MTX's
+     * float array, G_VTX's vertex array, etc.) round-trip without
+     * truncation. Narrowing w1 into a local `uint32_t` here, THEN
+     * reconstructing a pointer via `(T *)(uintptr_t)w1`, zero-extends a
+     * truncated 32-bit value back into a 64-bit pointer on any 64-bit
+     * host (this exact bug segfaulted the host test build during Task
+     * 6's implementation). On the real SH-2 target `uintptr_t` is only
+     * 32 bits, so this same bug would silently compile and "work" there
+     * -- meaning a host-only crash is the ONLY signal that would ever
+     * catch it, which is precisely why host-testability matters here.
+     * Keep w0/w1 at their real `uintptr_t` width; the SM64_SATURN_C0/C1
+     * bit-field macros still work correctly on a wider operand (the
+     * encoded opcode/parameter bits only ever occupy the low 32 bits),
+     * so this costs nothing for the existing bitfield-extraction uses. */
+    const uintptr_t w0 = command->words.w0;
+    const uintptr_t w1 = command->words.w1;
     const uint8_t opcode = (uint8_t)(w0 >> 24);
 
     switch (opcode) {
@@ -1178,8 +1196,10 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                 (uint8_t)(SM64_SATURN_C0(w0, 0, 8) ^ G_MTX_PUSH);
             /* w1 points at 16 consecutive row-major floats under this
              * build's GBI_FLOATS configuration (see Task 1's note) --
-             * NOT a split s15.16 int32 array. */
-            const float *gbi_floats = (const float *)(uintptr_t)w1;
+             * NOT a split s15.16 int32 array. w1 is already uintptr_t
+             * (see the note above), so this cast is a no-op width-wise;
+             * kept for clarity, NOT for narrowing. */
+            const float *gbi_floats = (const float *)w1;
             sm64_saturn_mtx_t decoded;
 
             sm64_saturn_matrix_decode(gbi_floats, &decoded);
@@ -1296,7 +1316,7 @@ static void test_frontend_g_movemem_viewport(void)
      * seg_addr(w1)) per gfx_pc.c:1387. Index (w0 bits 0-7) must equal
      * G_MV_VIEWPORT (8 under F3DEX_GBI_2, include/PR/gbi.h:1255). */
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     list[1] = make_g_enddl();
 
     (void)memset(&task, 0, sizeof(task));
@@ -1328,7 +1348,7 @@ static void test_frontend_g_movemem_viewport_real_default(void)
     struct SPTask task;
 
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     list[1] = make_g_enddl();
 
     (void)memset(&task, 0, sizeof(task));
@@ -1484,7 +1504,7 @@ static void test_frontend_g_vtx_transform(void)
     struct SPTask task;
 
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     /* gSPVertex(pkt, v, n, v0) under F3DEX_GBI_2:
      * gDma1p(pkt, G_VTX, v, (n<<10)|(sizeof(Vtx)*n-1), v0*2)
      * -> w0 = (G_VTX<<24) | ((n<<10)|(sizeof(Vtx)*n-1)), w1 = v.
@@ -1496,7 +1516,7 @@ static void test_frontend_g_vtx_transform(void)
      * C0(12,8)==1 -> bit 12 set; C0(1,7)-1==0 -> C0(1,7)==1 -> bit 1 set
      * (bit 1 shifted right by 1 in C0(1,7) reads as bit 0 = 1). */
     list[1].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
-    list[1].words.w1 = (uint32_t)(uintptr_t)&one_vertex;
+    list[1].words.w1 = (uintptr_t)&one_vertex;
     list[2] = make_g_enddl();
 
     (void)memset(&task, 0, sizeof(task));
@@ -1618,9 +1638,9 @@ static void test_frontend_g_tri1_resolves_triangle(void)
     vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
 
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     list[1].words.w0 = vtx_w0;
-    list[1].words.w1 = (uint32_t)(uintptr_t)verts;
+    list[1].words.w1 = (uintptr_t)verts;
     /* F3DEX_GBI_2 G_TRI1 body (gfx_pc.c:1440):
      * gfx_sp_tri1(C0(16,8)/2, C0(8,8)/2, C0(0,8)/2) -- indices are
      * vertex-buffer offsets *2 (see this task's note above). Encoding
@@ -1682,11 +1702,11 @@ static void test_frontend_g_tri1_backface_cull(void)
     struct SPTask task;
 
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     list[1].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24);
     list[1].words.w1 = G_CULL_BACK;
     list[2].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
-    list[2].words.w1 = (uint32_t)(uintptr_t)verts;
+    list[2].words.w1 = (uintptr_t)verts;
     list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
                         (0U << 16) | (2U << 8) | (4U << 0);
     list[3].words.w1 = 0;
@@ -1750,9 +1770,9 @@ static void test_frontend_g_tri1_modelview_translation_shifts_screen_x(void)
     list[0] = make_g_mtx((uint8_t)(G_MTX_LOAD | G_MTX_MODELVIEW),
                           translate_x50_floats);
     list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[1].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[1].words.w1 = (uintptr_t)&vp;
     list[2].words.w0 = vtx_w0;
-    list[2].words.w1 = (uint32_t)(uintptr_t)verts;
+    list[2].words.w1 = (uintptr_t)verts;
     list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
                         (0U << 16) | (2U << 8) | (4U << 0);
     list[3].words.w1 = 0;
@@ -1823,9 +1843,9 @@ static void test_frontend_g_tri2_two_triangles(void)
     vtx_w0 = ((uint32_t)G_VTX << 24) | (6U << 12) | (6U << 1);
 
     list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
-    list[0].words.w1 = (uint32_t)(uintptr_t)&vp;
+    list[0].words.w1 = (uintptr_t)&vp;
     list[1].words.w0 = vtx_w0;
-    list[1].words.w1 = (uint32_t)(uintptr_t)verts;
+    list[1].words.w1 = (uintptr_t)verts;
     /* G_TRI2 (gfx_pc.c ~L1448-1451): first triangle from w0's C0 fields
      * (indices 0,1,2 -> *2 = 0,2,4), second triangle from w1's C1
      * fields (indices 3,4,5 -> *2 = 6,8,10). */
