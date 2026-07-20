@@ -8,6 +8,7 @@
 #include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
+#include "saturn_matrix.h"
 
 static void test_identity_camera(void)
 {
@@ -33,6 +34,47 @@ static void test_q16_normalization(void)
     assert(normalized.x == 39321);
     assert(normalized.y == 52428);
     assert(normalized.z == 0);
+}
+
+static void test_matrix_decode_identity(void)
+{
+    /* Real on-target encoding under GBI_FLOATS (F3DEX_GBI_2E=1, see
+     * include/PR/gbi.h:90-94 and src/port/saturn/sourceboot/Makefile:74):
+     * 16 consecutive row-major floats, matching gbi.h's `Mtx` struct
+     * under that build configuration -- NOT the classic split s15.16
+     * int32 GBI encoding. */
+    const float gbi_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+    sm64_saturn_mtx_t out;
+
+    sm64_saturn_matrix_decode(gbi_floats, &out);
+
+    assert(out.m[0][0] == (1 << 16) && out.m[0][1] == 0);
+    assert(out.m[1][0] == 0 && out.m[1][1] == (1 << 16));
+    assert(out.m[2][2] == (1 << 16));
+    assert(out.m[3][3] == (1 << 16));
+}
+
+static void test_matrix_decode_translation(void)
+{
+    /* Row 3 = translation (16.0, -8.5, 0.25) in the reference's row-vector
+     * convention (gfx_pc.c gfx_sp_vertex: translation lives in M[3][*]). */
+    float gbi_floats[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        16.0f, -8.5f, 0.25f, 1.0f
+    };
+    sm64_saturn_mtx_t out;
+
+    sm64_saturn_matrix_decode(gbi_floats, &out);
+
+    assert(out.m[3][0] == ((int32_t)16 << 16));
+    assert(out.m[3][3] == (1 << 16));
 }
 
 static void test_frame_profile(void)
@@ -209,5 +251,7 @@ int main(void)
     test_source_identified_render_queue();
     test_projected_workarea();
     test_bounded_command_arena();
+    test_matrix_decode_identity();
+    test_matrix_decode_translation();
     return 0;
 }
