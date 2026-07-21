@@ -210,6 +210,19 @@ PYTHON=/c/Users/estee/.cache/codex-runtimes/codex-primary-runtime/dependencies/p
 It runs the host tests, regenerates the classifier report, and verifies both
 the hello and hardware-test ELF headers.
 
+`verify-all` now also builds and runs `verify-runtime-contracts` (native host
+tests for the Fast3D-to-VDP1 matrix/frontend pipeline) in the same `make`
+invocation as the Yaul-cross-compiled targets. If `.yaul.env` is sourced in
+that shell, its `COMPILER_PATH=$YAUL_INSTALL_ROOT/bin` entry takes priority
+over the host compiler's own exec-prefix search, so the native host compile
+step can pick up the SH-2 cross binutils' generically-named `as`/`ld` instead
+of the host's own — producing garbage assembler errors that have nothing to
+do with the actual C code. Run `unset COMPILER_PATH` after sourcing
+`.yaul.env` and before invoking `make -f Makefile.saturn.mk verify-all` in the
+same shell session; this does not affect the Yaul-cross-compiled targets,
+which resolve their toolchain via `$(AS)`/`$(AR)`/`$(RANLIB)` and the
+cross-compiler's own baked-in exec-prefix, not `COMPILER_PATH`.
+
 Copy the pinned template rather than inventing a different environment layout:
 
 ```sh
