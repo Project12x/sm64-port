@@ -1247,6 +1247,61 @@ static void test_frontend_g_tri2_two_triangles(void)
            frontend.resolved[0].y[0] != frontend.resolved[1].y[0]);
 }
 
+static void test_frontend_submit_resets_resolved_count_each_frame(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[4];
+    struct SPTask task;
+    uint32_t vtx_w0;
+
+    vtx_w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = vtx_w0;
+    list[1].words.w1 = (uintptr_t)verts;
+    list[2].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                        (0U << 16) | (2U << 8) | (4U << 0);
+    list[2].words.w1 = 0;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    /* Same single-triangle display list submitted across two separate
+     * "frames" (two calls to frontend_submit on the same frontend, as a
+     * real per-frame render loop will do from Task 14 onward). If
+     * resolved_count isn't reset between frames, it accumulates forever
+     * -- second frame ends with 2 resolved triangles instead of 1, and
+     * after SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES frames every
+     * subsequent frame silently renders nothing at all
+     * (reject_command_capacity trips permanently). */
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+    assert(frontend.resolved_count == 1);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+    assert(frontend.resolved_count == 1);
+    assert(frontend.profile.triangles_transformed == 1);
+    assert(frontend.profile.reject_command_capacity == 0);
+}
+
 static void test_frame_profile(void)
 {
     sm64_saturn_frame_profile_t profile = {
@@ -1450,5 +1505,6 @@ int main(void)
     test_frontend_g_tri1_modelview_translation_shifts_screen_x();
     test_frontend_g_tri1_small_w_clamps_screen_coords();
     test_frontend_g_tri2_two_triangles();
+    test_frontend_submit_resets_resolved_count_each_frame();
     return 0;
 }

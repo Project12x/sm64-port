@@ -577,6 +577,13 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     frame_serial = profile->frame_serial + 1U;
     (void)memset(profile, 0, sizeof(*profile));
     profile->frame_serial = frame_serial;
+    /* resolved[]/resolved_count are per-frame output, not persistent
+     * state -- without this reset they accumulate across calls until
+     * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES is reached, after which
+     * every subsequent frame permanently rejects all triangles via
+     * reject_command_capacity (caught by code review of Task 11, before
+     * any real per-frame caller existed to make the symptom visible). */
+    frontend->resolved_count = 0U;
 
     if (task == NULL) {
         profile->fault_flags = SM64_SATURN_FAST3D_FAULT_NULL_TASK;
