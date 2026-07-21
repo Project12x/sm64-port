@@ -213,10 +213,12 @@ the hello and hardware-test ELF headers.
 `verify-all` now also builds and runs `verify-runtime-contracts` (native host
 tests for the Fast3D-to-VDP1 matrix/frontend pipeline) in the same `make`
 invocation as the Yaul-cross-compiled targets. If `.yaul.env` is sourced in
-that shell, its `COMPILER_PATH=$YAUL_INSTALL_ROOT/bin` entry takes priority
-over the host compiler's own exec-prefix search, so the native host compile
-step can pick up subprograms from the SH-2 cross toolchain (`cc1`, `as`, and/or
-`ld`, depending on which the host `cc` driver happens to resolve first)
+that shell, its `COMPILER_PATH` is set to two colon-separated directories --
+`$YAUL_INSTALL_ROOT/bin` and `$YAUL_INSTALL_ROOT/libexec/gcc/sh-elf/14.3.0`,
+the latter being exactly where the SH-2 cross-compiler's own `cc1` lives --
+and GCC's driver searches `COMPILER_PATH` ahead of its own exec-prefix, so
+the native host compile step can pick up `cc1` (from that second directory)
+and/or `as`/`ld` (from the first) belonging to the SH-2 cross toolchain
 instead of the host's own — producing garbage compile/assembler errors that
 have nothing to do with the actual C code. Run `unset COMPILER_PATH` after sourcing
 `.yaul.env` and before invoking `make -f Makefile.saturn.mk verify-all` in the
