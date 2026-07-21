@@ -14,8 +14,9 @@ ENTRY (_start)
 SEARCH_DIR ("$YAUL_INSTALL_ROOT/$YAUL_ARCH_SH_PREFIX/lib");
 
 MEMORY {
-  ram  (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
-  cart (R)  : ORIGIN = 0x22400000, LENGTH = 0x00400000
+  ram   (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
+  lwram (Wx) : ORIGIN = 0x00200000, LENGTH = 0x00100000
+  cart  (R)  : ORIGIN = 0x22400000, LENGTH = 0x00400000
 }
 
 SECTIONS
@@ -108,4 +109,15 @@ SECTIONS
 
   /* Back to cached addresses */
   ___end = ___bss_end + SIZEOF (.uncached);
+
+  /* VDP1 command staging array (vdp1_cmdt_t[]), resident in LWRAM rather
+   * than HWRAM so it doesn't compete with SM64 game state for cache-backed
+   * work RAM.  NOLOAD: holds no initialized data -- zeroed explicitly at
+   * runtime by sm64_saturn_vdp1_backend_init_with_storage's memset, since
+   * this region (unlike .bss) is never crt0-zeroed. */
+  .lwram_cmdts (NOLOAD) :
+  {
+    . = ALIGN (32); /* vdp1_cmdt_t is __aligned(32) */
+    *(.lwram_cmdts)
+  } > lwram
 }
