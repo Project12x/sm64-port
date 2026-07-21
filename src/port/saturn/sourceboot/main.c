@@ -4,7 +4,9 @@
 #include "game/game_init.h"
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
+#include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_source_runtime.h"
+#include "saturn_vdp1_backend.h"
 #include "source_cart.h"
 
 /* This is an internal-WRAM bootstrap arena, deliberately not the 4 MiB cart.
@@ -13,6 +15,16 @@
 #define SOURCEBOOT_MAIN_POOL_BYTES (0x00030000UL)
 static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES] __aligned(16);
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
+
+#define SOURCEBOOT_VDP1_COMMAND_CAPACITY 512U
+
+/* LWRAM-resident command staging -- see sourceboot-cart.x's new lwram
+ * MEMORY region/.lwram_cmdts section. Zeroed explicitly by
+ * sm64_saturn_vdp1_backend_init_with_storage below, since this section
+ * is not .bss and crt0 never visits it. */
+static vdp1_cmdt_t sourceboot_vdp1_cmdts[SOURCEBOOT_VDP1_COMMAND_CAPACITY]
+    __attribute__((section(".lwram_cmdts")));
+static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 
 void user_init(void) {
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,
@@ -43,6 +55,18 @@ int main(void) {
     sm64_saturn_source_runtime_configure(sm64_saturn_fast3d_frontend_submit,
                                          &sourceboot_fast3d);
 
+    {
+        const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
+        const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
+        if (!sm64_saturn_vdp1_backend_init_with_storage(
+                &sourceboot_vdp1_backend, sourceboot_vdp1_cmdts,
+                SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
+            dbgio_puts("sourceboot: VDP1 backend init failed\n");
+            dbgio_flush();
+            for (;;) {}
+        }
+    }
+
     main_pool_init(sourceboot_main_pool,
                    sourceboot_main_pool + sizeof(sourceboot_main_pool));
     gEffectsMemoryPool = mem_pool_init(0x4000U, MEMORY_POOL_LEFT);
@@ -57,5 +81,7 @@ int main(void) {
     thread5_game_loop(NULL);
     for (;;) {
         game_loop_one_iteration();
+        sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
+                                     &sourceboot_vdp1_backend);
     }
 }

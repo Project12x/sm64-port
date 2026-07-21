@@ -43,6 +43,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/buffers/buffers.c $(ROOT)/src/buffers/gfx_output_buffer.c \
   $(SOURCEBOOT_GAME_SRCS) $(SOURCEBOOT_ENGINE_SRCS) $(SOURCEBOOT_MENU_SRCS) \
