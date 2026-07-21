@@ -83,5 +83,59 @@ int main(void) {
         game_loop_one_iteration();
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend);
+
+        /* VDP1 runs in Yaul's default "auto" (1-cycle) interval mode here
+         * (vdp1_sync_interval_set(0), set unconditionally by libyaul's
+         * __vdp_init() before main() runs; this target never changes it) --
+         * i.e. single-buffered: draw and display share the same VRAM command
+         * table. sm64_saturn_fast3d_vdp1_emit() -> backend_upload() DMAs a
+         * fresh table into that SAME address every frame
+         * (vdp1_sync_cmdt_list_put(..., 0)). Nothing guards that DMA against
+         * landing while VDP1 is still plotting from the PREVIOUS table
+         * unless libyaul's vdp_sync flag state machine (vdp_sync.c) is armed
+         * and given a chance to advance through one VBLANK-IN (presumed
+         * "plot committed") and the following VBLANK-OUT (safe to swap).
+         *
+         * castleviewer/marioturntable arm *and* fully block on that state
+         * machine every frame:
+         *   vdp1_sync_render(); vdp1_sync(); vdp2_sync();
+         *   vdp2_sync_wait(); vdp1_sync_wait();
+         * That block is itself a second, independent VBLANK-IN+OUT wait. For
+         * those targets it's harmless -- it's their ONLY per-frame wait (or
+         * their loop is so CPU-bound the extra wait is noise). It is NOT
+         * harmless here: game_loop_one_iteration() -> display_and_vsync() ->
+         * sm64_saturn_source_runtime_wait_vblank() (saturn_source_runtime.c)
+         * already raw-polls VDP2 TVSTAT for one VBLANK-IN+OUT pair per
+         * iteration to pace the stock game loop. The raw TVMD poll and the
+         * vdp_sync module's ISR-driven flags are two independent
+         * observers of the same physical VBLANK edges, sharing no state;
+         * appending the full castleviewer dance here would make the loop
+         * wait through a SECOND, separate VBLANK-IN+OUT pair every
+         * iteration -- silently halving the effective game loop rate.
+         *
+         * Fix: arm the state machine but do not block on it here.
+         * vdp1_sync_render() only blocks for the command-table DMA this
+         * same emit() call just started (microseconds, not a vblank);
+         * vdp1_sync() just sets flags. The ISR-driven advance to "list
+         * committed" (next VBLANK-IN) and back to idle (the VBLANK-OUT that
+         * follows) then completes for free during the *existing* raw-poll
+         * wait inside the NEXT game_loop_one_iteration() call -- the VBLANK
+         * ISRs fire on the real hardware edges regardless of what the
+         * foreground loop is polling, so by the time that poll returns, the
+         * state machine has already cycled back to idle. If a frame ever
+         * runs long and the state machine hasn't caught up in time,
+         * vdp1_sync_cmdt_list_put()'s own internal wait (_vdp1_sync_put(),
+         * vdp_sync.c) still blocks as a self-correcting fallback -- so this
+         * is safe even under a dropped frame, it just only costs an explicit
+         * wait when one is actually needed instead of unconditionally every
+         * frame.
+         *
+         * vdp2_sync()/vdp2_sync_wait() are omitted entirely: they commit
+         * queued VDP2 register writes, and nothing reachable from this loop
+         * (stock game code, the Fast3D frontend, or the VDP1 backend)
+         * touches a VDP2 register after user_init()'s one-time setup above
+         * -- there is nothing queued to commit. */
+        vdp1_sync_render();
+        vdp1_sync();
     }
 }
