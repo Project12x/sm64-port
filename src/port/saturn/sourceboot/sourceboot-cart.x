@@ -15,7 +15,7 @@ SEARCH_DIR ("$YAUL_INSTALL_ROOT/$YAUL_ARCH_SH_PREFIX/lib");
 
 MEMORY {
   ram   (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
-  lwram (Wx) : ORIGIN = 0x00200000, LENGTH = 0x00100000
+  lwram (W)  : ORIGIN = 0x00200000, LENGTH = 0x00100000
   cart  (R)  : ORIGIN = 0x22400000, LENGTH = 0x00400000
 }
 
@@ -114,7 +114,16 @@ SECTIONS
    * than HWRAM so it doesn't compete with SM64 game state for cache-backed
    * work RAM.  NOLOAD: holds no initialized data -- zeroed explicitly at
    * runtime by sm64_saturn_vdp1_backend_init_with_storage's memset, since
-   * this region (unlike .bss) is never crt0-zeroed. */
+   * this region (unlike .bss) is never crt0-zeroed.
+   *
+   * LWRAM coordination note: castleviewer (a separate binary, never
+   * co-linked with sourceboot) already claims a fixed LWRAM range via a
+   * raw pointer at 0x000C0000 (src/port/saturn/castleviewer/collision_pool.c),
+   * invisible to any linker script. This 1MB region reservation here
+   * doesn't overlap it today, but if LWRAM usage grows or these targets
+   * are ever consolidated, the two conventions (linker-tracked vs.
+   * raw-pointer) will need reconciling -- there is currently no single
+   * source of truth for LWRAM allocation across this codebase's binaries. */
   .lwram_cmdts (NOLOAD) :
   {
     . = ALIGN (32); /* vdp1_cmdt_t is __aligned(32) */
