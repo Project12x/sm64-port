@@ -114,13 +114,23 @@ typedef struct sm64_saturn_fast3d_vertex {
  * addition of matrix_stack/vertices[]/resolved[]. The design spec measured
  * ~9,628 bytes of free HWRAM for the sourceboot target before this task
  * landed (docs/superpowers/specs/2026-07-20-fast3d-matrix-stack-design.md),
- * leaving roughly 4,600 bytes remaining after this struct -- comfortable
- * margin for the rest of this plan's additions (Task 10's VDP1 command list
- * goes to LWRAM, not HWRAM, so it doesn't compete with this budget). If a
- * future change needs more headroom, SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES
+ * initially leaving roughly 4,600 bytes of estimated headroom after this
+ * struct's data alone.
+ *
+ * UPDATE (post Task 14, full cross-compiled link): that 4,600-byte figure
+ * only tracked this one struct's DATA size, not the .text code the rest of
+ * this plan's decode/transform/VDP1-emission logic added afterward -- and
+ * .text/.rodata/.data/.bss all draw from the same shared `ram` MEMORY region
+ * in sourceboot-cart.x (ORIGIN 0x06004000, LENGTH 0xFC000), so there is no
+ * separate "code budget" distinct from this "data budget." The real,
+ * measured margin after Task 14's full link is ~380 bytes (___end vs. the
+ * ram region's top, 0x06100000 - 0x060ffe84) -- under 1% of the region size.
+ * If a future change needs more headroom, SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES
  * (16 bytes/entry) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry) are
- * the two knobs to shrink first -- see Task 14's build-verification step for
- * the actual link-time check. */
+ * the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
+ * not HWRAM, so it doesn't compete with this budget) -- but note the region
+ * is now tight enough that even a modest amount of new .text elsewhere in
+ * sourceboot could overflow it before these knobs are touched at all. */
 typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_fast3d_profile_t profile;
     sm64_saturn_matrix_stack_t matrix_stack;
