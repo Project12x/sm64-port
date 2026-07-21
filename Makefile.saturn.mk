@@ -249,7 +249,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools classify-source verify-hello verify-hwtest
+verify-all: verify-tools verify-runtime-contracts classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean
