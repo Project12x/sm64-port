@@ -110,15 +110,17 @@ static void sm64_saturn_fast3d_count_command(
     }
 }
 
-/* Calibrated in raw, unscaled world/model units -- matching
- * castleviewer's own NEAR_DEPTH=128/FAR_DEPTH=8192 convention
- * (castleviewer/main.c:36-37), where its projected z is stored raw (a
- * single >>16-reduced dot product, never re-multiplied by 65536). This
- * increment's cw (clip-space w, in the same raw units once divided by
- * 65536.0f below) must be stored the same way -- do NOT multiply by
- * 65536.0f again before pushing into the workarea, or every real
- * triangle's depth would appear to be tens of thousands of units out of
- * range and get near/far-rejected. */
+/* Calibrated in raw, unscaled world/model units -- matching the UNIT
+ * convention castleviewer's own NEAR_DEPTH/FAR_DEPTH use (castleviewer/
+ * main.c:36-37: NEAR_DEPTH=128, FAR_DEPTH=8192; its projected z is stored
+ * raw, a single >>16-reduced dot product, never re-multiplied by 65536).
+ * The actual NEAR_DEPTH value below (64) intentionally differs from
+ * castleviewer's 128 -- only the "raw units, not scaled by 65536" storage
+ * convention is shared, not the specific threshold. This increment's cw
+ * (clip-space w, in the same raw units once divided by 65536.0f below)
+ * must be stored the same way -- do NOT multiply by 65536.0f again before
+ * pushing into the workarea, or every real triangle's depth would appear
+ * to be tens of thousands of units out of range and get near/far-rejected. */
 #define SM64_SATURN_NEAR_DEPTH 64
 #define SM64_SATURN_FAR_DEPTH 8192
 #define SM64_SATURN_MAX_PROJECTED_SPAN 640
@@ -584,6 +586,29 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
      * reject_command_capacity (caught by code review of Task 11, before
      * any real per-frame caller existed to make the symptom visible). */
     frontend->resolved_count = 0U;
+    /* KNOWN LIMITATION (flagged by this branch's final whole-implementation
+     * review, not fixed): unlike resolved_count above, matrix_stack.depth/
+     * .overflowed are NOT reset here. Real SM64 display lists always
+     * balance every G_MTX_PUSH with a G_POPMTX, so depth is naturally back
+     * at its floor by the end of a well-formed list and this is a non-issue
+     * in normal operation -- but if a list ever faults mid-processing or
+     * hits SM64_SATURN_FAST3D_MAX_COMMANDS before reaching its own pops, an
+     * elevated depth would silently carry into the next frame, eating into
+     * its push budget and potentially accumulating toward a permanent
+     * sm64_saturn_matrix_stack_t.overflowed across many such frames.
+     *
+     * Not fixed here because a naive per-frame reset of depth/overflowed
+     * (mirroring resolved_count's fix) is incompatible with this test
+     * file's own established convention: several tests here (e.g.
+     * test_frontend_g_popmtx_scales_by_64, test_frontend_g_mtx_high_water_mark)
+     * call sm64_saturn_matrix_stack_push()/set_projection() directly to seed
+     * matrix_stack state BEFORE a single submit() call, as a convenience
+     * standing in for "some prior command already ran" -- an unconditional
+     * reset at the top of submit() would silently wipe that seeded state
+     * before the test's own display list ever decodes, breaking those
+     * tests. A real fix needs those tests restructured to seed state via
+     * actual G_MTX display-list commands instead of direct API calls, which
+     * is a larger, separately-scoped change beyond this review pass. */
 
     if (task == NULL) {
         profile->fault_flags = SM64_SATURN_FAST3D_FAULT_NULL_TASK;
