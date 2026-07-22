@@ -1,0 +1,25 @@
+Sending 58 requests...
+=== ppf20000 ===
+  gGlobalTimer: 0x00000133 (307)
+  gAreaUpdateCounter: 0x0133 (307)
+  sMarioCamState: 0x06094038 (101269560)
+  statusForCamera: 0x06094038 (101269560)
+  cameraEvent: 0x0009 (9)
+  gCamera: 0x0021c864 (2213988)
+  sample0: pc=0x06004f9e pr=0x06070016 sr_ilevel=0
+  sample1: pc=0x06070baa pr=0x06033ace sr_ilevel=0
+  sample2: pc=0x06004bfa pr=0x06004bfc sr_ilevel=0
+  sample3: pc=0x06004d2c pr=0x06004ca2 sr_ilevel=0
+  sample4: pc=0x06005d1a pr=0x060050b0 sr_ilevel=0
+=== ppf24000 ===
+  gGlobalTimer: 0x00000179 (377)
+  gAreaUpdateCounter: 0x0179 (377)
+  sMarioCamState: 0x06094038 (101269560)
+  statusForCamera: 0x06094038 (101269560)
+  cameraEvent: 0x0009 (9)
+  gCamera: 0x0021c864 (2213988)
+  sample0: pc=0x06004a6e pr=0x06004c16 sr_ilevel=0
+  sample1: pc=0x06005d5c pr=0x06004c70 sr_ilevel=0
+  sample2: pc=0x06005e70 pr=0x06005050 sr_ilevel=0
+  sample3: pc=0x06005e2a pr=0x06004ca2 sr_ilevel=0
+  sample4: pc=0x06005e20 pr=0x06004c98 sr_ilevel=0
