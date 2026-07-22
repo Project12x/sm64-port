@@ -88,9 +88,12 @@ int main(void) {
          * (vdp1_sync_interval_set(0), set unconditionally by libyaul's
          * __vdp_init() before main() runs; this target never changes it) --
          * i.e. single-buffered: draw and display share the same VRAM command
-         * table. sm64_saturn_fast3d_vdp1_emit() -> backend_upload() DMAs a
-         * fresh table into that SAME address every frame
-         * (vdp1_sync_cmdt_list_put(..., 0)). Nothing guards that DMA against
+         * table. sm64_saturn_fast3d_vdp1_emit() -> backend_upload() copies a
+         * fresh table into that SAME address every frame (this target's
+         * SM64_SATURN_VDP1_LWRAM_STAGING CPU-copy path in
+         * saturn_vdp1_backend.h -- SCU DMA cannot read this target's
+         * LWRAM staging array; see the dispatch comment there).
+         * Nothing guards that upload against
          * landing while VDP1 is still plotting from the PREVIOUS table
          * unless libyaul's vdp_sync flag state machine (vdp_sync.c) is armed
          * and given a chance to advance through one VBLANK-IN (presumed
@@ -114,9 +117,10 @@ int main(void) {
          * iteration -- silently halving the effective game loop rate.
          *
          * Fix: arm the state machine but do not block on it here.
-         * vdp1_sync_render() only blocks for the command-table DMA this
-         * same emit() call just started (microseconds, not a vblank);
-         * vdp1_sync() just sets flags. The ISR-driven advance to "list
+         * vdp1_sync_render() does not block at all in this configuration --
+         * backend_upload()'s LWRAM path completes its copy synchronously and
+         * leaves LIST_XFERRED already set (vdp1_sync_force_put) before it
+         * returns; vdp1_sync() just sets flags. The ISR-driven advance to "list
          * committed" (next VBLANK-IN) and back to idle (the VBLANK-OUT that
          * follows) then completes for free during the *existing* raw-poll
          * wait inside the NEXT game_loop_one_iteration() call -- the VBLANK
@@ -124,8 +128,9 @@ int main(void) {
          * foreground loop is polling, so by the time that poll returns, the
          * state machine has already cycled back to idle. If a frame ever
          * runs long and the state machine hasn't caught up in time,
-         * vdp1_sync_cmdt_list_put()'s own internal wait (_vdp1_sync_put(),
-         * vdp_sync.c) still blocks as a self-correcting fallback -- so this
+         * backend_upload()'s own pre-copy vdp1_sync_wait() guard
+         * (saturn_vdp1_backend.h) still blocks as a self-correcting
+         * fallback -- so this
          * is safe even under a dropped frame, it just only costs an explicit
          * wait when one is actually needed instead of unconditionally every
          * frame.

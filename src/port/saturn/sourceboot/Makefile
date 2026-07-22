@@ -74,6 +74,7 @@ SH_SPECS := sourceboot.specs
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
+  -DSM64_SATURN_VDP1_LWRAM_STAGING=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
   -I$(ROOT)/src/game -I$(ROOT)/src/engine -I$(ROOT)/src/menu \
