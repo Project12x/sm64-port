@@ -9,25 +9,41 @@
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
 
-/* This is an internal-WRAM bootstrap arena, deliberately not the 4 MiB cart.
- * E3 packages use the cart for immutable level banks; source allocator demand
- * remains measurable here until the multi-arena policy is ready.
+/* SM64's bootstrap main pool, LWRAM-resident. History of this placement:
  *
- * Sized down from 0x30000 after the first cart-profiled boot attempt
- * exposed a boot-time memory corruption: libyaul's __mm_init()
- * (kernel/mm/internal.c) unconditionally creates the user TLSF heap pool
- * over [__end, 0x06100000) when YAUL_OPTION_MALLOC_IMPL=tlsf, and the
- * previous image filled HWRAM to within ~188 bytes of the top -- TLSF's
- * multi-KiB control block then wrote past the physical end of HWRAM,
- * which MIRRORS back to 0x06000000, corrupting low memory before main()
- * and producing an SH-2 exception cascade (observed in Ymir: endless
- * (SR,PC=__end) frame pushes with SP marching down through A-bus space).
- * Freeing 32 KiB here gives the TLSF pool a real region to live in.
- * If SM64's allocator demand outgrows this, reclaim from
- * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES/MAX_VERTICES before growing
- * this pool back toward the heap's minimum viable size. */
-#define SOURCEBOOT_MAIN_POOL_BYTES (0x00028000UL)
-static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES] __aligned(16);
+ * - Originally 0x30000 in HWRAM .bss. That filled HWRAM to within ~188
+ *   bytes of the top, which was boot-fatal: libyaul's __mm_init()
+ *   (kernel/mm/internal.c) creates the user TLSF heap over
+ *   [__end, 0x06100000), and TLSF's multi-KiB control block wrote past
+ *   the physical end of HWRAM, which MIRRORS back to 0x06000000 --
+ *   low-memory corruption before main(), SH-2 exception cascade.
+ * - Emergency-shrunk to 0x28000 to give TLSF room. That was worse in a
+ *   quieter way: Bob-omb Battlefield's collision load needs ~166 KiB of
+ *   pool (surface pool 2300*48 + node pool 7000*8) plus the effects
+ *   pool; alloc_surface_pools()'s surface allocation then failed to
+ *   NULL (unchecked in stock SM64), surfaces were silently written into
+ *   ROM address space, the garbage read-back made every surface span
+ *   ~29 partition cells, and the unchecked node allocator overran its
+ *   56 KiB region straight out of the pool's end through adjacent .bss
+ *   (diagnosed live via the cart-enabled headless rig: sSurfacePool=0,
+ *   gSurfaceNodesAllocated=13,872 of 7,000).
+ * - Now: 0x60000 (384 KiB) in LWRAM, where ~1 MiB sits idle next to
+ *   the 16 KiB VDP1 staging array. The old 0x30000 was itself too small
+ *   for Bob's full load: with level geo/display data allocated first,
+ *   the 110 KiB surface pool still failed (measured live: freeSpace
+ *   77,520 at the failure point). CPU access to LWRAM is unrestricted;
+ *   the one hardware rule is that SCU DMA must never touch it (see
+ *   docs/saturn/SGL_REFERENCE_NOTES.md), so nothing may SCU-DMA pool
+ *   contents -- all current consumers (collision, level/geo data, the
+ *   Fast3D frontend's CPU reads) are CPU-only. LWRAM is the slower RAM
+ *   bank; if profiling later shows hot game state suffering, move the
+ *   hot subset back to HWRAM headroom, which this placement frees up.
+ * - .lwram_bss is NOLOAD (never crt0-zeroed). main_pool_init() writes
+ *   its own block headers and SM64 treats pool contents as
+ *   alloc-then-write, matching N64 boot RAM semantics. */
+#define SOURCEBOOT_MAIN_POOL_BYTES (0x00060000UL)
+static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
+    __attribute__((section(".lwram_bss"))) __aligned(16);
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 512U
@@ -45,6 +61,15 @@ void user_init(void) {
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 0, 0, 0));
+    /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
+     * means "never displayed" (the classic footgun recorded in
+     * docs/saturn/SGL_REFERENCE_NOTES.md). Without this, the whole
+     * Fast3D-to-VDP1 pipeline draws into an invisible layer -- diagnosed
+     * live when the first 18 resolved triangles produced a black frame.
+     * Mirrors castleviewer's proven setup (all 8 groups at 7). */
+    for (uint8_t priority = 0; priority < 8; priority++) {
+        vdp2_sprite_priority_set(priority, 7);
+    }
     vdp2_tvmd_display_set();
 }
 
@@ -59,11 +84,32 @@ int main(void) {
     dbgio_init();
     dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
     dbgio_dev_font_load();
+    /* Layer visibility, after dbgio's own VDP2 setup so nothing below
+     * re-clobbers it -- the ordering castleviewer/marioturntable ship
+     * with. NBG3 carries dbgio's text; the sprite groups carry VDP1's
+     * composited output (priority 0 = invisible; see
+     * docs/saturn/SGL_REFERENCE_NOTES.md). Without these, both the boot
+     * banner and every rendered triangle land in invisible layers. */
+    for (uint8_t priority = 0; priority < 8; priority++) {
+        vdp2_sprite_priority_set(priority, 7);
+    }
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
     dbgio_puts("\x1B[H\x1B[2JSM64 SATURN SOURCEBOOT E2\n"
                "Direct original Bob script\n"
                "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
+    /* Commit everything VDP2-side queued so far -- the layer priorities
+     * above, the back color, and dbgio's text DMA. libyaul buffers VDP2
+     * state in shadow registers that reach hardware only when
+     * vdp2_sync() arms the vblank commit (the same
+     * shadow-then-commit-at-vblank model Sega's own SGL documents; see
+     * SGL_REFERENCE_NOTES.md). Without this, every VDP2 write since
+     * boot -- including this banner -- stays invisible; the proven
+     * hello/hwtest targets all pair dbgio_flush() with exactly this. */
+    vdp2_sync();
+    vdp2_sync_wait();
 
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_source_runtime_configure(sm64_saturn_fast3d_frontend_submit,
@@ -149,12 +195,17 @@ int main(void) {
          * wait when one is actually needed instead of unconditionally every
          * frame.
          *
-         * vdp2_sync()/vdp2_sync_wait() are omitted entirely: they commit
-         * queued VDP2 register writes, and nothing reachable from this loop
-         * (stock game code, the Fast3D frontend, or the VDP1 backend)
-         * touches a VDP2 register after user_init()'s one-time setup above
-         * -- there is nothing queued to commit. */
+         * vdp2_sync() IS armed each frame (a flags-only call, no blocking
+         * -- the vblank-in ISR performs the actual commit, so this adds
+         * no second wait): an earlier revision omitted it on the
+         * reasoning that "nothing queues VDP2 writes after user_init",
+         * which was wrong -- dbgio's async device queues VDP2 VRAM
+         * transfers whenever game code prints, and any future VDP2 state
+         * change (fades, letterboxing) needs the commit armed. The
+         * blocking vdp2_sync_wait() stays out of the loop per the pacing
+         * analysis above. */
         vdp1_sync_render();
         vdp1_sync();
+        vdp2_sync();
     }
 }

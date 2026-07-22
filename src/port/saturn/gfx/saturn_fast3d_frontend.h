@@ -75,6 +75,32 @@ typedef struct sm64_saturn_fast3d_profile {
      * a host-native test of sm64_saturn_fast3d_frontend_submit alone. */
     uint32_t triangles_vdp1_emitted;
     uint32_t reject_vdp1_arena_capacity;
+
+    /* Bring-up diagnostics: attribute reject_near_far's composite check
+     * to its constituent causes (reject_near_far itself still counts the
+     * total, preserving every existing test's expectations). Added when
+     * live Bob-omb Battlefield data showed 100% of forward-facing
+     * triangles dying in the composite check with no way to tell which
+     * limit was responsible. A triangle can trip several conditions;
+     * each tripped condition's counter increments, so these can sum to
+     * more than reject_near_far. */
+    uint32_t reject_w_nonpositive; /* any vertex at clip w <= 0 */
+    uint32_t reject_z_near;        /* quad min_z below the near depth */
+    uint32_t reject_z_far;         /* quad max_z beyond the far depth */
+    uint32_t reject_offscreen;     /* clip_and nonzero: fully outside */
+    uint32_t reject_span;          /* screen-space extent over the cap */
+
+    /* Snapshot of the FIRST composite-rejected quad each frame -- real
+     * magnitudes tell more than counts during bring-up. Valid only when
+     * reject_near_far > reject_w_nonpositive (w-rejects never reach quad
+     * analysis and leave no snapshot). */
+    int32_t dbg_first_reject_min_z;
+    int32_t dbg_first_reject_max_z;
+    int16_t dbg_first_reject_min_x;
+    int16_t dbg_first_reject_max_x;
+    int16_t dbg_first_reject_min_y;
+    int16_t dbg_first_reject_max_y;
+    uint32_t dbg_first_reject_clip_and;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + flat color for one already-transformed,

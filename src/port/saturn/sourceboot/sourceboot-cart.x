@@ -129,4 +129,14 @@ SECTIONS
     . = ALIGN (32); /* vdp1_cmdt_t is __aligned(32) */
     *(.lwram_cmdts)
   } > lwram
+
+  /* LWRAM-resident bulk work data (SM64 main pool). CPU access only --
+   * SCU DMA cannot touch LWRAM (see SGL_REFERENCE_NOTES.md); nothing may
+   * SCU-DMA from data placed here. NOLOAD: never crt0-zeroed; consumers
+   * must not rely on zero-initialized contents. */
+  .lwram_bss (NOLOAD) :
+  {
+    . = ALIGN (16);
+    *(.lwram_bss)
+  } > lwram
 }

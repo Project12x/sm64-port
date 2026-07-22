@@ -1300,11 +1300,13 @@ static void test_frontend_g_tri2_distinct_depth_buckets(void)
     /* Exact expected buckets, from the same formula as
      * saturn_fast3d_frontend.c's depth_bucket computation:
      * (z - NEAR_DEPTH) * (DEPTH_BUCKETS - 1) / (FAR_DEPTH - NEAR_DEPTH),
-     * NEAR_DEPTH=64, FAR_DEPTH=8192, DEPTH_BUCKETS=16.
-     * A: (1000-64)*15/8128 = 14040/8128 = 1 (integer division).
-     * B: (6000-64)*15/8128 = 89040/8128 = 10 (integer division). */
-    assert(frontend.resolved[0].depth_bucket == 1U);
-    assert(frontend.resolved[1].depth_bucket == 10U);
+     * NEAR_DEPTH=1, FAR_DEPTH=16384, DEPTH_BUCKETS=16 (constants
+     * recalibrated 2026-07-21 against live Bob data -- see the comment
+     * at their definition).
+     * A: (1000-1)*15/16383 = 14985/16383 = 0 (integer division).
+     * B: (6000-1)*15/16383 = 89985/16383 = 5 (integer division). */
+    assert(frontend.resolved[0].depth_bucket == 0U);
+    assert(frontend.resolved[1].depth_bucket == 5U);
     /* The property saturn_fast3d_vdp1_emit.c's far-to-near painter's-
      * algorithm walk actually depends on: farther geometry gets a
      * numerically higher bucket than nearer geometry. */

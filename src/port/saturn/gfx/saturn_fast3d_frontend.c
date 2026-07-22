@@ -121,8 +121,20 @@ static void sm64_saturn_fast3d_count_command(
  * must be stored the same way -- do NOT multiply by 65536.0f again before
  * pushing into the workarea, or every real triangle's depth would appear
  * to be tens of thousands of units out of range and get near/far-rejected. */
-#define SM64_SATURN_NEAR_DEPTH 64
-#define SM64_SATURN_FAR_DEPTH 8192
+/* Calibrated against live Bob-omb Battlefield data (2026-07-21 headless
+ * counter/snapshot session, docs/saturn/HANDOFF addendum trail):
+ * - NEAR = 1, not castleviewer's 64/128: SM64 renders HUD and other
+ *   orthographic geometry with w exactly 1.0; a perspective-scaled near
+ *   threshold silently killed all of it (first-reject snapshot showed an
+ *   on-screen quad at z=[1,1], clip_and=0). Perspective geometry
+ *   approaching the camera is still guarded by the strict w>0 reject,
+ *   the VDP1-window coordinate clamp, and the span cap.
+ * - FAR = 16384, not 8192: SM64's stock perspective far plane is 12800;
+ *   8192 wrongly culled 419 of 1431 real triangles in the measured
+ *   frame (distant floor/mountain). 16384 covers stock content with
+ *   headroom. */
+#define SM64_SATURN_NEAR_DEPTH 1
+#define SM64_SATURN_FAR_DEPTH 16384
 #define SM64_SATURN_MAX_PROJECTED_SPAN 640
 
 /* Physical screen width -- unlike height, this doesn't differ between
@@ -154,7 +166,10 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     sm64_saturn_projected_vertex_t projected_storage[4];
     sm64_saturn_projected_workarea_t workarea;
     uint16_t projected_indices[4];
-    sm64_saturn_projected_quad_t quad;
+    /* Zero-initialized so the bring-up diagnostics below read defined
+     * values even on the (structurally unreachable here) analyze-failure
+     * path, where the quad is never populated. */
+    sm64_saturn_projected_quad_t quad = {0};
     /* Deliberately NOT built from frontend->viewport: that struct's
      * width/height are the NDC-to-pixel scale factors (correct, and
      * needed unchanged below for screen_x/screen_y), but its y origin
@@ -218,6 +233,7 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
                         (mp->m[3][3] / 65536.0f);
         if (w <= 0.0f) {
             profile->reject_near_far++;
+            profile->reject_w_nonpositive++;
             return;
         }
         cx[c] = x / w;
@@ -316,6 +332,37 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
             SM64_SATURN_NEAR_DEPTH, SM64_SATURN_FAR_DEPTH,
             SM64_SATURN_MAX_PROJECTED_SPAN)) {
         profile->reject_near_far++;
+        /* Bring-up attribution: mirror is_visible's individual
+         * conditions so live counters can name which limit killed the
+         * triangle (see the profile struct's diagnostics comment). The
+         * conditions are re-evaluated here rather than returned from
+         * is_visible to keep that shared header's contract untouched. */
+        if (quad.min_z < SM64_SATURN_NEAR_DEPTH) {
+            profile->reject_z_near++;
+        }
+        if (quad.max_z > SM64_SATURN_FAR_DEPTH) {
+            profile->reject_z_far++;
+        }
+        if (quad.clip_and != SM64_SATURN_CLIP_NONE) {
+            profile->reject_offscreen++;
+        }
+        if ((int32_t)quad.max_x - quad.min_x >
+                SM64_SATURN_MAX_PROJECTED_SPAN ||
+            (int32_t)quad.max_y - quad.min_y >
+                SM64_SATURN_MAX_PROJECTED_SPAN) {
+            profile->reject_span++;
+        }
+        if (profile->reject_near_far ==
+                profile->reject_w_nonpositive + 1U) {
+            /* First quad-level reject this frame: snapshot magnitudes. */
+            profile->dbg_first_reject_min_z = quad.min_z;
+            profile->dbg_first_reject_max_z = quad.max_z;
+            profile->dbg_first_reject_min_x = quad.min_x;
+            profile->dbg_first_reject_max_x = quad.max_x;
+            profile->dbg_first_reject_min_y = quad.min_y;
+            profile->dbg_first_reject_max_y = quad.max_y;
+            profile->dbg_first_reject_clip_and = quad.clip_and;
+        }
         return;
     }
 
