@@ -387,8 +387,18 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         out->y[c] = screen_y[c];
     }
     /* Flat color: vertex 0's, matching G_SHADE-off flat-shading
-     * convention -- Gouraud is out of scope for this increment. */
-    out->color_rgb1555 = (uint16_t)(
+     * convention -- Gouraud is out of scope for this increment.
+     *
+     * Bit 15 (0x8000) is the RGB flag, not spare: VDP2's sprite-layer
+     * decode treats framebuffer pixels with MSB=1 as RGB1555 and MSB=0
+     * as palette data, so a color packed without it composites as a
+     * (bogus) palette index -- typically invisible. Diagnosed live when
+     * a byte-perfect VDP1 command table with CMDCOLR=0x7FFF plotted to
+     * an all-black sprite layer; castleviewer's own neutral color
+     * constant (0xC210) carries the bit, and the SGL sprite manual's
+     * mixed palette/RGB framebuffer convention is recorded in
+     * docs/saturn/SGL_REFERENCE_NOTES.md. */
+    out->color_rgb1555 = (uint16_t)(0x8000U |
         ((frontend->vertices[idx[0]].r >> 3) << 10) |
         ((frontend->vertices[idx[0]].g >> 3) << 5) |
         (frontend->vertices[idx[0]].b >> 3));

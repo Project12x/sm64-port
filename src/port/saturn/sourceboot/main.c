@@ -207,5 +207,14 @@ int main(void) {
         vdp1_sync_render();
         vdp1_sync();
         vdp2_sync();
+        /* BRING-UP OVERRIDE of the pacing analysis above: block on the
+         * full sync completion each frame, exactly like the
+         * proven-visible hwtest/castleviewer choreography. The measured
+         * game rate is currently ~1 fps (soft-float dominated), so the
+         * extra vblank pair this costs is noise today; remove this (and
+         * re-verify against the non-blocking analysis above) when the
+         * performance work starts. */
+        vdp2_sync_wait();
+        vdp1_sync_wait();
     }
 }

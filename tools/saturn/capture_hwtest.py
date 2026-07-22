@@ -152,8 +152,8 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
-    if not 1 <= args.frames <= 3600 or not 1 <= args.post_poke_frames <= 3600:
-        parser.error("--frames and --post-poke-frames must be between 1 and 3600")
+    if not 1 <= args.frames <= 36000 or not 1 <= args.post_poke_frames <= 36000:
+        parser.error("--frames and --post-poke-frames must be between 1 and 36000")
     if args.event_word_poke is not None and not 0 <= args.event_word_poke <= 0xFFFFFFFF:
         parser.error("--event-word-poke must be an unsigned 32-bit value")
     if args.input_pulse is not None and not 0 <= args.input_pulse <= 0xFFFF:
