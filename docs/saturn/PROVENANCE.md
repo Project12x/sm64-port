@@ -384,6 +384,25 @@ The comparison and resulting renderer decisions are maintained in
 These manuals are documentation references. They are not vendored or
 redistributed by this bootstrap change.
 
+### Sega SGL 3.02j SDK documentation
+
+| Field | Record |
+|---|---|
+| Archive | `SGL302J.ZIP` (user-supplied local copy; not vendored) |
+| SHA-256 | `429d729952b6837e2af221a5a6e0de4ca58d2ed1ce2471bd65411a62954ff811` |
+| License | Proprietary Sega SDK; no license for reuse |
+| Files inspected | `DOC/210A_US/` manual chapters: `MATH.TXT`, `SPRITE.TXT`, `WORKAREA.TXT`, `MEMORY.TXT`, `SGLFAQ_F.TXT`, `SCROLL.TXT`, `PER.DOC`, `INT.TXT`, `EVENT.DOC`, `INIT.DOC`, `DMA.DOC`, `SGL020A.TXT`, `SGL0210.TXT`, `BITMAP.DOC`, `PACKS.TXT`, `MANGFS.TXT` |
+| Reuse mode | Behavior study (documentation only) |
+
+The archive contains no SGL library source (`LIB/LIBSGL.A` is a compiled
+binary); only official documentation chapters were read. No code, headers, or
+samples from the archive are copied, linked, or redistributed. Findings are
+recorded as study notes in `docs/saturn/SGL_REFERENCE_NOTES.md`; any technique
+adopted from the documentation is reimplemented independently against Yaul.
+The study surfaced one hardware constraint with direct code impact (SCU DMA
+cannot access WORKRAM-L, corroborated by libyaul's own `scu/dma.h`), recorded
+there as a critical finding against the current VDP1 upload path.
+
 ## Bootstrap change declaration
 
 The Saturn bootstrap and hardware-test changes contain original integration
