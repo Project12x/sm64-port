@@ -18,6 +18,18 @@ from typing import Any
 
 from telemetry_decode import decode
 
+# Ymir's headless debug service hard-caps a single exec.run_for call at this
+# many frames (kMaxRunForFrames in apps/ymir-headless/src/debug_service.cpp)
+# and returns a JSON-RPC error ("frames must be between 1 and N") for any
+# request above it. This script used to send --frames/--post-poke-frames as
+# one unchecked request: for values above this cap, Ymir's error response was
+# silently ignored (nothing validated exec.run_for's own response), so the
+# emulator never advanced those frames at all and every later read reflected
+# a much shallower, unintended depth. Chunk every exec.run_for call to this
+# size and validate each chunk's response (see response_for() below) so a
+# rejected request raises immediately instead of silently no-opping.
+YMIR_MAX_RUN_FOR_FRAMES = 3600
+
 
 def has_cd_block_copy_limitation(stderr: str) -> bool:
     """Recognize Ymir's current and historical CD-block copy diagnostics."""
@@ -53,6 +65,23 @@ def response_for(messages: list[dict[str, Any]], request_id: int) -> dict[str, A
                 raise RuntimeError(f"Ymir request {request_id} failed: {message['error']}")
             return message
     raise RuntimeError(f"Ymir returned no response for request {request_id}")
+
+
+def run_for_requests(next_id: int, frames: int) -> tuple[list[dict[str, Any]], list[int], int]:
+    """Build one or more exec.run_for requests summing to `frames`, each
+    capped at YMIR_MAX_RUN_FOR_FRAMES. Returns (requests, request_ids,
+    next_free_id) -- request_ids must be validated against Ymir's responses
+    (see response_for) so a rejected chunk is never silently ignored."""
+    chunk_requests: list[dict[str, Any]] = []
+    chunk_ids: list[int] = []
+    remaining = frames
+    while remaining > 0:
+        chunk = min(remaining, YMIR_MAX_RUN_FOR_FRAMES)
+        chunk_requests.append(request("exec.run_for", next_id, {"frames": chunk}))
+        chunk_ids.append(next_id)
+        next_id += 1
+        remaining -= chunk
+    return chunk_requests, chunk_ids, next_id
 
 
 def main() -> int:
@@ -190,6 +219,11 @@ def main() -> int:
         args.screenshot_output = args.screenshot_output.resolve()
 
     requests: list[dict[str, Any]] = []
+    # Every exec.run_for request id lands here so its response can be checked
+    # for a JSON-RPC error below -- Ymir rejects any single call above
+    # YMIR_MAX_RUN_FOR_FRAMES, and an unvalidated rejection used to leave the
+    # emulator silently stuck at whatever depth preceded it.
+    run_for_ids: list[int] = []
     next_id = 1
     if args.bios_input:
         requests.extend(
@@ -203,6 +237,7 @@ def main() -> int:
                 request("exec.run_for", next_id + 4, {"frames": 1200}),
             ]
         )
+        run_for_ids.extend([next_id, next_id + 2, next_id + 4])
         next_id += 5
         for _ in range(5):
             requests.extend(
@@ -211,15 +246,16 @@ def main() -> int:
                     request("exec.run_for", next_id + 1, {"frames": 30}),
                 ]
             )
+            run_for_ids.append(next_id + 1)
             next_id += 2
         # The BIOS macro uses raw active-low states. Explicitly release every
         # pad bit before handing execution to the game so a post-boot neutral
         # capture cannot inherit the last language/clock navigation pulse.
         requests.append(request("input.pulse", next_id, {"buttons": 0xFFF8}))
         next_id += 1
-    run_id = next_id
-    requests.append(request("exec.run_for", run_id, {"frames": args.frames}))
-    next_id += 1
+    frame_requests, frame_ids, next_id = run_for_requests(next_id, args.frames)
+    requests.extend(frame_requests)
+    run_for_ids.extend(frame_ids)
     pre_poke_event_id: int | None = None
     if args.event_word_poke is not None:
         pre_poke_event_id = next_id
@@ -236,11 +272,13 @@ def main() -> int:
             )
         )
         next_id += 1
-        requests.append(request("exec.run_for", next_id, {"frames": args.post_poke_frames}))
-        next_id += 1
+        post_poke_requests, post_poke_ids, next_id = run_for_requests(next_id, args.post_poke_frames)
+        requests.extend(post_poke_requests)
+        run_for_ids.extend(post_poke_ids)
     elif args.handoff_yield:
-        requests.append(request("exec.run_for", next_id, {"frames": args.post_poke_frames}))
-        next_id += 1
+        post_poke_requests, post_poke_ids, next_id = run_for_requests(next_id, args.post_poke_frames)
+        requests.extend(post_poke_requests)
+        run_for_ids.extend(post_poke_ids)
     if args.input_pulse is not None:
         for _ in range(args.input_pulse_count):
             requests.append(
@@ -249,6 +287,7 @@ def main() -> int:
             requests.append(
                 request("exec.run_for", next_id + 1, {"frames": args.input_pulse_frames})
             )
+            run_for_ids.append(next_id + 1)
             next_id += 2
     telemetry_id = next_id
     registers_id = next_id + 1
@@ -303,6 +342,13 @@ def main() -> int:
     for line in completed.stdout.splitlines():
         if line.strip():
             messages.append(json.loads(line))
+    # Validate every exec.run_for chunk before anything else. A rejected
+    # chunk (e.g. a --frames/--post-poke-frames value that wasn't split
+    # small enough, or any other exec.run_for error) must abort the capture
+    # here -- letting it slide silently produces a report that looks valid
+    # but reflects a far shallower depth than requested.
+    for run_for_id in run_for_ids:
+        response_for(messages, run_for_id)
     telemetry_response = response_for(messages, telemetry_id)
     registers_response = response_for(messages, registers_id)
     boot_window_response = response_for(messages, boot_window_id)
