@@ -27,7 +27,15 @@ entry in [`PROVENANCE.md`](PROVENANCE.md).
 
 ## Critical code-facing findings
 
-### 1. SCU DMA cannot touch LWRAM — the current VDP1 upload path locks real hardware
+### 1. SCU DMA cannot touch LWRAM — the VDP1 upload path locked real hardware [FIXED]
+
+**Status: fixed in `263c3f3` (CPU longword copy + `vdp1_sync_force_put()`,
+compile-time-selected for the LWRAM-staged sourceboot target only; SCU path
+retained for HWRAM-staged targets with a runtime assert) and hardened in
+`bc351f7`. Confirmed by an independent verification review (rebuilds, symbol/
+section audits, reconstructed baseline link) and an adversarial review that
+traced all of `vdp_sync.c` and found no hole. Real-hardware confirmation of
+the lockup premise itself remains outstanding — no emulator models it.**
 
 Three independent sources agree:
 
@@ -63,7 +71,14 @@ infeasible (~380 bytes free vs. 16 KiB needed) without shrinking triangle
 capacity. Whatever is chosen must integrate with Yaul's `vdp_sync` flag state
 machine, which assumes its own SCU-DMA end handler sets `LIST_XFERRED`.
 
-### 2. VDP1 coordinate validity is ±2047 x / ±1023 y — the int16 clamp is too wide
+### 2. VDP1 coordinate validity is ±2047 x / ±1023 y — the int16 clamp was too wide [FIXED]
+
+**Status: fixed in `bc351f7` — clamp bounds now the VDP1 window. Analysis
+during the fix showed this was defense-in-depth rather than a live bug: the
+span check (640) plus offscreen-visibility rejection already kept every
+emitted coordinate within roughly ±960, so the old int16 clamp never bound
+on surviving triangles. The new bounds make the hardware-validity guarantee
+local instead of an emergent property of the span constant staying small.**
 
 The FAQ (§3-4(c)) gives VDP1's valid drawing coordinate window as X in
 [-2048, +2047], Y in [-1024, +1023], and separately warns that overflowing
