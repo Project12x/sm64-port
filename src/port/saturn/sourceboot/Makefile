@@ -134,6 +134,16 @@ source-cart-image: $(SOURCEBOOT_CART_IMAGE)
 pre-build-iso: $(SOURCEBOOT_CART_IMAGE)
 	$(ECHO)mkdir -p $(IMAGE_DIRECTORY)
 	$(ECHO)cp $(SOURCEBOOT_CART_IMAGE) $(IMAGE_DIRECTORY)/SOURCE.DAT
+# Patch the disc-header Product ID (IP.BIN offset 0x20, 10 bytes). Yaul's
+# ip.sx template hardcodes "T-99901G  " for every homebrew, but that code
+# belongs to a real title (Real Bout Garou Densetsu Demo) in emulator game
+# databases -- Ymir's DB maps it to an 8Mbit DRAM cart, which silently
+# overrides the configured 32Mbit/4MiB cart and makes the source-cart
+# loader fail with MISSING_4MIB before any display init (observed as a
+# black screen at 100% speed). A unique ID keeps auto-cart heuristics from
+# ever matching this disc. The submodule template stays untouched per the
+# read-only-dependencies rule; this is a post-generation byte patch.
+	$(ECHO)printf 'T-SM64SB01' | dd of=$(SH_BUILD_PATH)/IP.BIN bs=1 seek=32 conv=notrunc status=none
 
 # ISO freshness must include the separately emitted cartridge image; the Yaul
 # hook copies it into IMAGE_DIRECTORY, but cannot express that dependency by
