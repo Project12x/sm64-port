@@ -159,6 +159,51 @@ typedef struct sm64_saturn_fast3d_profile {
      * future fix to the matrix-composition overflow actually worked (it
      * should drop to near 0, leaving only genuine behind-camera rejects). */
     uint32_t reject_w_nonpositive_overflow_suspect;
+
+    /* Bring-up diagnostic, added 2026-07-22 to trace the mp[2][3]==INT32_MIN
+     * root cause back to its source. Hand-derived from guPerspectiveF's
+     * projection matrix (projection[2][3] == -65536 in Q16.16 is the ONLY
+     * nonzero entry in that whole column; every other row's column-3 entry
+     * is exactly 0) that mp[2][3] = top->m[2][2] * projection[2][3] is a
+     * SINGLE-TERM product -- so mp[2][3] can only narrow to exactly
+     * INT32_MIN if top->m[2][2] (the modelview stack's root-slot [2][2]
+     * entry) was ALREADY exactly INT32_MIN before the final MP compose.
+     * This snapshot traces one level further back: it's overwritten on
+     * every non-projection G_MTX command processed while the matrix stack
+     * sits at its un-pushed root depth (1) -- exactly the depth the
+     * corrupted triangle in dbg_first_w_reject_* was found at -- so by
+     * the time a w-reject snapshot is taken, this reflects the actual
+     * root-modelview write that produced the corrupted entry, letting a
+     * live capture tell apart: (a) the RAW SOURCE FLOAT feeding cell
+     * [2][2] already being huge/NaN/Inf before any conversion at all
+     * (implicating the source data itself, or whatever upstream code
+     * produced this matrix), vs (b) the source float being a sane, small
+     * value but sm64_saturn_matrix_decode's or sm64_saturn_matrix_mul's
+     * OWN arithmetic corrupting it during conversion/composition
+     * (implicating this port's own fixed-point code, not its input). */
+    float dbg_root_mtx_source_m22;       /* gbi_floats[2*4+2], raw, pre-conversion */
+    int32_t dbg_root_mtx_decoded_m22;    /* sm64_saturn_matrix_decode's output for that cell */
+    int32_t dbg_root_mtx_post_top_m22;   /* matrix_stack.entries[0].m[2][2] after this command finished (post-load or post-multiply) */
+    uint8_t dbg_root_mtx_params;         /* raw (push-bit-corrected) G_MTX params byte */
+    uint8_t dbg_root_mtx_took_mul_path;  /* 1 if this command multiplied against the existing top rather than a fresh load */
+    uint8_t dbg_root_mtx_mul_overflowed; /* sm64_saturn_matrix_mul's own return value for this command's compose, valid only when dbg_root_mtx_took_mul_path == 1 */
+    uint32_t dbg_root_mtx_command_ordinal; /* profile->matrix_commands value at capture time, for cross-reference against dbg_first_w_reject_triangle_ordinal */
+
+    /* Bring-up diagnostic, added 2026-07-22: surfaces
+     * sm64_saturn_matrix_stack_t.mp_overflowed (saturn_matrix.h), which
+     * sm64_saturn_matrix_stack_mp() already computes via
+     * sm64_saturn_matrix_mul()'s return value but which nothing previously
+     * read. NOT a per-frame count -- mp_overflowed is a one-way latch
+     * (set true once a composed MP narrows out of Q16.16 int32 range,
+     * never cleared, matching this struct's existing documented decision
+     * not to reset matrix_stack state per frame) -- so this field reads
+     * as "has an MP compose overflowed at any point up to and including
+     * this frame", not "did it overflow THIS frame specifically". Still
+     * directly answers whether the final MP compose (as opposed to the
+     * G_MTX decode/multiply chain that built its modelview input, see
+     * dbg_root_mtx_* above) is itself capable of manufacturing an
+     * overflow from otherwise-sane inputs. */
+    uint8_t dbg_mp_compose_overflowed_ever;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + flat color for one already-transformed,

@@ -159,6 +159,10 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
     const sm64_saturn_mtx_t *mp =
         sm64_saturn_matrix_stack_mp(&frontend->matrix_stack);
+    /* Bring-up diagnostic -- see the profile struct's
+     * dbg_mp_compose_overflowed_ever comment (saturn_fast3d_frontend.h). */
+    profile->dbg_mp_compose_overflowed_ever =
+        frontend->matrix_stack.mp_overflowed ? 1U : 0U;
     const uint8_t idx[3] = {i0, i1, i2};
     float cx[3], cy[3], cw[3]; /* pre-viewport clip-space x/w, y/w, and
                                  * raw w (NOT further scaled -- see the
@@ -491,6 +495,9 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                         &frontend->matrix_stack, &composed);
                 }
             } else {
+                bool took_mul_path = false;
+                bool mul_overflowed = false;
+
                 if (params & G_MTX_PUSH) {
                     if (!sm64_saturn_matrix_stack_push(
                             &frontend->matrix_stack)) {
@@ -502,13 +509,34 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                                                   &decoded);
                 } else {
                     sm64_saturn_mtx_t composed;
-                    (void)sm64_saturn_matrix_mul(
+                    took_mul_path = true;
+                    mul_overflowed = sm64_saturn_matrix_mul(
                         &decoded,
                         sm64_saturn_matrix_stack_top(
                             &frontend->matrix_stack),
                         &composed);
                     sm64_saturn_matrix_stack_load(&frontend->matrix_stack,
                                                   &composed);
+                }
+                /* Bring-up diagnostic -- see the profile struct's
+                 * dbg_root_mtx_* comment (saturn_fast3d_frontend.h).
+                 * Overwritten (not gated to "first only") on every
+                 * modelview command that lands at the un-pushed root
+                 * depth, so this always reflects the most recent such
+                 * write -- exactly what a later triangle at that same
+                 * depth would have used as its "top". */
+                if (frontend->matrix_stack.depth == 1U) {
+                    profile->dbg_root_mtx_source_m22 = gbi_floats[2 * 4 + 2];
+                    profile->dbg_root_mtx_decoded_m22 = decoded.m[2][2];
+                    profile->dbg_root_mtx_post_top_m22 =
+                        frontend->matrix_stack.entries[0].m[2][2];
+                    profile->dbg_root_mtx_params = params;
+                    profile->dbg_root_mtx_took_mul_path =
+                        took_mul_path ? 1U : 0U;
+                    profile->dbg_root_mtx_mul_overflowed =
+                        mul_overflowed ? 1U : 0U;
+                    profile->dbg_root_mtx_command_ordinal =
+                        profile->matrix_commands;
                 }
             }
             if (frontend->matrix_stack.depth >
