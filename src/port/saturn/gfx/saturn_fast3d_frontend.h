@@ -101,6 +101,64 @@ typedef struct sm64_saturn_fast3d_profile {
     int16_t dbg_first_reject_min_y;
     int16_t dbg_first_reject_max_y;
     uint32_t dbg_first_reject_clip_and;
+
+    /* Bring-up diagnostic, added 2026-07-22 investigating the 96%
+     * transformed-triangle rejection rate: the FIRST w<=0 reject each
+     * frame. reject_w_nonpositive is the single largest rejection bucket
+     * (51% of transformed triangles in the frame this was added to
+     * investigate) and the existing dbg_first_reject_* snapshot above
+     * cannot see it -- a w<=0 vertex returns before the quad is ever
+     * built. Captures the failing vertex's model-space position, the
+     * computed w, which triangle corner (0/1/2) failed, the live
+     * modelview-stack depth at that moment, and the composed MP matrix's
+     * full w-column (mp[0][3]..mp[3][3], raw Q16.16) -- enough to tell a
+     * genuinely off-camera/behind-camera vertex apart from a corrupted/
+     * overflowed matrix composition producing a bogus w.
+     *
+     * KEPT (not reverted) after the 2026-07-22 investigation: live capture
+     * showed mp[2][3] == INT32_MIN (a Q16.16 narrowing overflow/wraparound
+     * sentinel) recurring bit-for-bit identically across independent
+     * rebuilds, for a triangle at modelview-stack depth 1 whose
+     * model-space coordinates (mx=4864, my=1024, mz=4096) are ordinary
+     * small values -- i.e. a real, reproducible arithmetic defect, not
+     * uninitialized memory or expected off-camera geometry. Whoever fixes
+     * the underlying overflow will want this snapshot to confirm the fix
+     * (mp columns back in a sane +-32768-ish Q16.16 range, computed w no
+     * longer beyond a few tens of thousands in magnitude). Valid only
+     * when reject_w_nonpositive > 0. Intentionally NOT wired to any test
+     * -- bring-up instrumentation, matching the existing dbg_first_reject_*
+     * fields' own convention above. */
+    float dbg_first_w_reject_mx;
+    float dbg_first_w_reject_my;
+    float dbg_first_w_reject_mz;
+    float dbg_first_w_reject_w;
+    int32_t dbg_first_w_reject_mp03;
+    int32_t dbg_first_w_reject_mp13;
+    int32_t dbg_first_w_reject_mp23;
+    int32_t dbg_first_w_reject_mp33;
+    uint32_t dbg_first_w_reject_triangle_ordinal;
+    uint8_t dbg_first_w_reject_corner;
+    uint8_t dbg_first_w_reject_stack_depth;
+
+    /* Bring-up diagnostic, added 2026-07-22 (same investigation as the
+     * dbg_first_w_reject_* block above): aggregate count of w<=0 rejects
+     * whose |w| is orders of magnitude beyond any plausible real SM64
+     * world-unit value for this boot path (measured live: Bob-omb
+     * Battlefield's own static geometry spans roughly +-8192 units, and
+     * this boot's forced intro-cutscene camera/focus spline tops out
+     * around 30,000 units -- see the 2026-07-22 investigation notes).
+     * Distinguishes "genuinely behind/off camera" (small-magnitude
+     * negative w, expected) from "fixed-point overflow producing a bogus
+     * w" (huge-magnitude w, a defect) without needing a snapshot of every
+     * single reject.
+     *
+     * KEPT (not reverted): live capture measured this at 392/399 (98.2%)
+     * of one frame's w<=0 rejects, confirming the overflow (not genuine
+     * off-camera geometry) is the dominant cause of the reject_w_nonpositive
+     * bucket. Re-measuring this counter is the cheapest way to confirm any
+     * future fix to the matrix-composition overflow actually worked (it
+     * should drop to near 0, leaving only genuine behind-camera rejects). */
+    uint32_t reject_w_nonpositive_overflow_suspect;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + flat color for one already-transformed,

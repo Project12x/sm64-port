@@ -234,6 +234,34 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         if (w <= 0.0f) {
             profile->reject_near_far++;
             profile->reject_w_nonpositive++;
+            /* Bring-up diagnostic -- see the profile struct's
+             * reject_w_nonpositive_overflow_suspect comment. w is already
+             * known <= 0.0f on this path; -1.0e6f is ~30x this boot's
+             * largest plausible real coordinate (the forced intro-cutscene
+             * spline tops out near 30,000 units; Bob-omb Battlefield's own
+             * geometry stays within +-8192) -- comfortably beyond any real
+             * value, comfortably short of the hundred-million-plus
+             * magnitudes a fixed-point overflow produces. */
+            if (w <= -1.0e6f) {
+                profile->reject_w_nonpositive_overflow_suspect++;
+            }
+            if (profile->reject_w_nonpositive == 1U) {
+                /* Bring-up diagnostic -- see the profile struct's
+                 * dbg_first_w_reject_* comment (saturn_fast3d_frontend.h). */
+                profile->dbg_first_w_reject_mx = mx;
+                profile->dbg_first_w_reject_my = my;
+                profile->dbg_first_w_reject_mz = mz;
+                profile->dbg_first_w_reject_w = w;
+                profile->dbg_first_w_reject_mp03 = mp->m[0][3];
+                profile->dbg_first_w_reject_mp13 = mp->m[1][3];
+                profile->dbg_first_w_reject_mp23 = mp->m[2][3];
+                profile->dbg_first_w_reject_mp33 = mp->m[3][3];
+                profile->dbg_first_w_reject_triangle_ordinal =
+                    profile->triangles_transformed;
+                profile->dbg_first_w_reject_corner = (uint8_t)c;
+                profile->dbg_first_w_reject_stack_depth =
+                    frontend->matrix_stack.depth;
+            }
             return;
         }
         cx[c] = x / w;
