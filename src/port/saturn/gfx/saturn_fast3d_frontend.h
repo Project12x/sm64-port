@@ -204,6 +204,24 @@ typedef struct sm64_saturn_fast3d_profile {
      * dbg_root_mtx_* above) is itself capable of manufacturing an
      * overflow from otherwise-sane inputs. */
     uint8_t dbg_mp_compose_overflowed_ever;
+
+    /* Bring-up diagnostic, added 2026-07-22 after the gGfxPool two-front
+     * collision theory was measured dead (12 live samples across 23 game
+     * frames: forward command stream 2,552 B, backward alloc front
+     * 8,832 B, of 51,200 B -- a 39.8 KiB standing gap; see
+     * e2-sourceboot-gfxpool-fronts-2026-07-22.txt). The proven corruption
+     * signature (a G_SETOTHERMODE_L opcode word 0xE200001C inside the
+     * float data a G_MTX decode consumed, narrowing m[2][2] to INT32_MIN)
+     * therefore cannot be commands overwriting a pool-resident matrix --
+     * the far more likely mechanism is the G_MTX command's w1 POINTER
+     * itself referencing the wrong memory. Latch the FIRST such command
+     * per frame: its raw w1, its params byte, and the matrix_commands
+     * ordinal at latch time (0 ordinal = nothing latched this frame), so
+     * a follow-up capture can dump the pointed-at bytes and classify the
+     * region (pool forward/backward, LWRAM heap, static data, garbage). */
+    uint32_t dbg_bad_mtx_w1;
+    uint32_t dbg_bad_mtx_ordinal;
+    uint8_t dbg_bad_mtx_params;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + flat color for one already-transformed,

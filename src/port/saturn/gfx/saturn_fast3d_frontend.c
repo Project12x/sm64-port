@@ -482,6 +482,16 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
 
             sm64_saturn_matrix_decode(gbi_floats, &decoded);
 
+            /* Bring-up diagnostic -- see the profile struct's
+             * dbg_bad_mtx_* comment. m[2][2] == INT32_MIN is the proven
+             * live corruption sentinel (0xE200001C source bits). */
+            if (profile->dbg_bad_mtx_ordinal == 0U &&
+                decoded.m[2][2] == INT32_MIN) {
+                profile->dbg_bad_mtx_w1 = (uint32_t)w1;
+                profile->dbg_bad_mtx_ordinal = profile->matrix_commands;
+                profile->dbg_bad_mtx_params = params;
+            }
+
             if (params & G_MTX_PROJECTION) {
                 if (params & G_MTX_LOAD) {
                     sm64_saturn_matrix_stack_set_projection(
