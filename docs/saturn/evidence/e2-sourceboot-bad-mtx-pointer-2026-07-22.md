@@ -98,16 +98,22 @@ some words still look plausible.
 
 The exact mechanism by which *this frame's own* memory ends up partially
 overwritten before the frontend reads it is not yet found. With (1) and (2)
-ruled out, the leading remaining hypotheses are: a same-frame allocation-size
-miscalculation somewhere in the many `alloc_display_list(sizeof(Mtx))` /
-`alloc_display_list(N * sizeof(Gfx))` call sites (a `GBI_FLOATS`-related
-`sizeof(Mtx)` mismatch between what code assumes it allocated and what the
-Fast3D frontend assumes it's reading is a concrete, checkable next lead,
-not yet checked), or a genuine same-frame forward/backward overlap that a
-single head/tail position snapshot doesn't catch (would need either a
-live single-instruction-step trace bracketing an actual allocation and its
-later overwrite, mirroring the technique that found the `animList` NULL
-crash, or byte-level pool diffing across several points within one frame).
+ruled out:
+
+4. **`sizeof(Mtx)` mismatch — also ruled out.** Checked `include/PR/gbi.h:1180-1196`
+   directly: under `GBI_FLOATS` (active in this build via `-DF3DEX_GBI_2E=1`),
+   `Mtx` is `struct { float m[4][4]; }` (64 bytes); the classic non-`GBI_FLOATS`
+   path is `s32[4][4]` (also 64 bytes, different internal packing convention,
+   not in effect here). Both are exactly 64 bytes — `alloc_display_list(sizeof(Mtx))`
+   reserves the same size either way, and this port's frontend already reads
+   16 raw floats (matching the active `GBI_FLOATS` layout). No size mismatch.
+
+The one remaining hypothesis, not yet attempted: a genuine same-frame
+forward/backward allocation overlap too fine-grained for a single head/tail
+position snapshot to catch. Confirming this would need a live
+single-instruction-step trace bracketing an actual allocation and its later
+overwrite — the same scale and technique as the investigation that found the
+`animList` NULL crash, not a quick follow-up check.
 
 Not attempted in this pass: no code changes were made. This is a pure
 evidence-gathering capture, deliberately not guessing at a fix given how
