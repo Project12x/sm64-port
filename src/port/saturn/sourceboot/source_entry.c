@@ -17,38 +17,48 @@ const LevelScript level_script_entry[] = {
     INIT_LEVEL(),
     /* The retail entry reaches a menu before selecting a level.  E2 needs a
      * bounded source-gameplay bootstrap, so select Bob here through the same
-     * source level-state function before executing its unmodified script. */
-    SET_REG(/* value */ LEVEL_BOB),
-    CALL(/* arg */ 0, /* func */ lvl_set_current_level),
-    /* The retail master script (levels/scripts.c's level_main_scripts_entry)
-     * calls lvl_init_from_save_file() exactly once, immediately after its
-     * initial model loading and before any level-specific script ever runs
-     * -- unconditionally, using whatever gCurrSaveFileNum currently holds
-     * (its own static initializer defaults it to 1, src/game/area.c:52;
-     * the real menu/file-select flow that would normally choose a file has
-     * not run yet at this same point in the retail sequence either, so this
-     * matches upstream timing exactly, not a special case invented for E2).
-     * This entry never reaches that call at all, because it never executes
-     * level_main_scripts_entry -- E2 goes straight from the platform's own
-     * boot into level_bob_entry. Without it, gMarioState->animList (and
-     * numCoins/numStars/numKeys/numLives/health/spawnInfo/statusForCamera/
-     * marioBodyState/controller, all set by init_mario_from_save_file())
-     * stay at their cold-boot zero/NULL BSS values. That is latent until
-     * Mario's own animation system is first exercised -- confirmed live
-     * (2026-07-22 crash-root-cause session): the intro cutscene's
-     * "jump out of pipe and land" step calls set_mario_animation() for the
-     * first time, which calls load_patchable_table() on the NULL animList,
-     * reads a garbage struct DmaTable* from address 0, and feeds a garbage
-     * ~1.2 GB size into a memcpy that runs the SH-2 into unmapped memory
-     * and crashes it permanently (confirmed via live register tracing:
-     * PC=0x2, all interrupts masked, fully reproducible).
+     * source level-state functions before executing its unmodified script.
      *
-     * Called via the same level-script CALL mechanism (not a raw C call)
-     * so the interpreter supplies levelNum exactly as it does for
-     * lvl_set_current_level above (CALL passes the interpreter's sRegister,
-     * still LEVEL_BOB from the SET_REG above, as lvl_init_from_save_file's
-     * second parameter -- src/engine/level_script.c:239) -- this is the
-     * literal, unmodified upstream call, not a reimplementation.
+     * The retail master script (levels/scripts.c's level_main_scripts_entry)
+     * calls lvl_init_from_save_file() exactly once, before any level is
+     * ever selected -- unconditionally, using whatever gCurrSaveFileNum
+     * currently holds (its own static initializer defaults it to 1,
+     * src/game/area.c:52; the real menu/file-select flow that would
+     * normally choose a file has not run yet at that same point in the
+     * retail sequence either, so this matches upstream timing exactly, not
+     * a special case invented for E2). This entry never reaches that call
+     * naturally, because it never executes level_main_scripts_entry -- E2
+     * goes straight from the platform's own boot into level_bob_entry.
+     * Without it, gMarioState->animList (and numCoins/numStars/numKeys/
+     * numLives/health/spawnInfo/statusForCamera/marioBodyState/controller,
+     * all set by init_mario_from_save_file()) stay at their cold-boot
+     * zero/NULL BSS values. That is latent until Mario's own animation
+     * system is first exercised -- confirmed live (2026-07-22
+     * crash-root-cause session): the intro cutscene's "jump out of pipe
+     * and land" step calls set_mario_animation() for the first time, which
+     * calls load_patchable_table() on the NULL animList, reads a garbage
+     * struct DmaTable* from address 0, and feeds a garbage ~1.2 GB size
+     * into a memcpy that runs the SH-2 into unmapped memory and crashes it
+     * permanently (confirmed via live register tracing: PC=0x2, all
+     * interrupts masked, fully reproducible).
+     *
+     * CALL ORDER IS LOAD-BEARING (corrected 2026-07-22, second pass, after
+     * the systematic init-gap audit): lvl_init_from_save_file must run
+     * BEFORE lvl_set_current_level, matching retail's global order (the
+     * master script calls it before any per-level SET_REG/
+     * lvl_set_current_level stub ever runs). Both functions are chained
+     * through the interpreter's register: CALL passes sRegister as the
+     * second parameter and stores the return value back into sRegister
+     * (src/engine/level_script.c:239). lvl_init_from_save_file returns its
+     * levelNum argument unchanged (src/game/level_update.c:1283), so
+     * SET_REG(LEVEL_BOB) survives through it into lvl_set_current_level.
+     * The first version of this fix had the two calls REVERSED, which fed
+     * lvl_set_current_level's boolean return (1 for BOB's course) into
+     * lvl_init_from_save_file's levelNum -- silently re-setting
+     * gCurrLevelNum to 1 (LEVEL_UNKNOWN_1) for the whole session
+     * (gCurrLevelArea read 0x11 live instead of BOB's 0x91), which
+     * disabled every gCurrLevelArea-keyed camera behavior including
+     * camera_course_processing's real AREA_BOB case (camera.c:6630).
      *
      * Verified safe before wiring this in: every save-file accessor
      * init_mario_from_save_file()/lvl_init_from_save_file() touch
@@ -61,7 +71,9 @@ const LevelScript level_script_entry[] = {
      * safe on a target with no real save-file hardware. The remaining
      * side effects (disable_warp_checkpoint, select_mario_cam_mode,
      * set_yoshi_as_not_dead) are all single static-flag writes. */
+    SET_REG(/* value */ LEVEL_BOB),
     CALL(/* arg */ 0, /* func */ lvl_init_from_save_file),
+    CALL(/* arg */ 0, /* func */ lvl_set_current_level),
     EXECUTE(/* seg */ 0x0E, /* script */ NULL, /* scriptEnd */ NULL,
             /* entry */ level_bob_entry),
     JUMP(/* target */ level_script_entry),

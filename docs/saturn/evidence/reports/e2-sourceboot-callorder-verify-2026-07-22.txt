@@ -1,0 +1,8 @@
+=== ppf3600 (item-2 verify) ===
+  gCurrLevelNum: 0x0009
+  gCurrCourseNum: 0x0001
+  gCurrLevelArea: 0x00000091
+  gCurrActNum: 0x0000
+  gObjectCounter: 0x00000050
+  gGlobalTimer: 0x00000032
+  gDialogID: 0xffff
