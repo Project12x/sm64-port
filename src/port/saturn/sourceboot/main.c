@@ -11,8 +11,22 @@
 
 /* This is an internal-WRAM bootstrap arena, deliberately not the 4 MiB cart.
  * E3 packages use the cart for immutable level banks; source allocator demand
- * remains measurable here until the multi-arena policy is ready. */
-#define SOURCEBOOT_MAIN_POOL_BYTES (0x00030000UL)
+ * remains measurable here until the multi-arena policy is ready.
+ *
+ * Sized down from 0x30000 after the first cart-profiled boot attempt
+ * exposed a boot-time memory corruption: libyaul's __mm_init()
+ * (kernel/mm/internal.c) unconditionally creates the user TLSF heap pool
+ * over [__end, 0x06100000) when YAUL_OPTION_MALLOC_IMPL=tlsf, and the
+ * previous image filled HWRAM to within ~188 bytes of the top -- TLSF's
+ * multi-KiB control block then wrote past the physical end of HWRAM,
+ * which MIRRORS back to 0x06000000, corrupting low memory before main()
+ * and producing an SH-2 exception cascade (observed in Ymir: endless
+ * (SR,PC=__end) frame pushes with SP marching down through A-bus space).
+ * Freeing 32 KiB here gives the TLSF pool a real region to live in.
+ * If SM64's allocator demand outgrows this, reclaim from
+ * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES/MAX_VERTICES before growing
+ * this pool back toward the heap's minimum viable size. */
+#define SOURCEBOOT_MAIN_POOL_BYTES (0x00028000UL)
 static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES] __aligned(16);
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 

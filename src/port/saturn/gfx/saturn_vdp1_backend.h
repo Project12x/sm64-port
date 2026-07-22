@@ -250,14 +250,11 @@ sm64_saturn_vdp1_backend_upload(sm64_saturn_vdp1_backend_t *backend)
      * (vdp_sync_vblank_in_set/out_set) that touches VDP1 sync state --
      * sourceboot deliberately registers none -- or calling this upload
      * from inside such a callback. If either is ever introduced,
-     * re-verify this whole block's safety argument.
-     *
-     * A runtime `assert(!vdp1_sync_busy())` guard was implemented and
-     * then removed: with the assert machinery compiled in (-DDEBUG),
-     * the E2 link overflows the `ram' region by 16 bytes -- the HWRAM
-     * budget can no longer absorb even a ~200-byte debug net. If the
-     * resolved-triangle/vertex capacity knobs ever free up headroom,
-     * reinstating that assert is the first thing to spend it on. */
+     * re-verify this whole block's safety argument. (This assert was
+     * briefly removed when the image was 16 bytes over the ram region;
+     * reinstated once the main-pool shrink freed real headroom. It is
+     * live under -DDEBUG, which every Saturn target defines.) */
+    assert(!vdp1_sync_busy());
 
     /* Source address as an integer with the SH-2 partition bits
      * stripped (partition 0x0 is the cached alias -- correct and
