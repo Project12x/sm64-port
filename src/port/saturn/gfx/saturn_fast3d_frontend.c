@@ -261,17 +261,32 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * converts what would be UB into a saturated, visually-wrong-but-
      * defined value -- the triangle's true visibility is still decided
      * correctly afterward by the near/far quad check below, which uses
-     * the unclamped cw. */
+     * the unclamped cw.
+     *
+     * The clamp bounds are VDP1's hardware-valid coordinate window --
+     * X in [-2048, +2047], Y in [-1024, +1023] (SGL FAQ 3-4(c); see
+     * docs/saturn/SGL_REFERENCE_NOTES.md) -- not int16 limits:
+     * coordinates beyond that window are not merely offscreen, they can
+     * WRAP drawing back onto the visible screen on real hardware. Today
+     * this is defense-in-depth rather than a live bug: any triangle
+     * with a post-clamp coordinate outside roughly +/-960 is already
+     * rejected below by the span check (SM64_SATURN_MAX_PROJECTED_SPAN)
+     * plus the offscreen visibility check, so nothing outside the VDP1
+     * window can currently be emitted. Clamping to the hardware window
+     * makes that guarantee local and explicit instead of an emergent
+     * property of the span constant staying small -- if the span budget
+     * is ever raised past the window size, this clamp is what keeps
+     * emitted coordinates hardware-valid. */
     for (int c = 0; c < 3; c++) {
         const float screen_x_f = frontend->viewport.x +
             (cx[c] * 0.5f + 0.5f) * frontend->viewport.width;
         const float screen_y_f = frontend->viewport.y +
             (1.0f - (cy[c] * 0.5f + 0.5f)) * frontend->viewport.height;
-        screen_x[c] = (int16_t)(screen_x_f < (float)INT16_MIN ? INT16_MIN :
-                                (screen_x_f > (float)INT16_MAX ? INT16_MAX :
+        screen_x[c] = (int16_t)(screen_x_f < -2048.0f ? -2048 :
+                                (screen_x_f > 2047.0f ? 2047 :
                                  screen_x_f));
-        screen_y[c] = (int16_t)(screen_y_f < (float)INT16_MIN ? INT16_MIN :
-                                (screen_y_f > (float)INT16_MAX ? INT16_MAX :
+        screen_y[c] = (int16_t)(screen_y_f < -1024.0f ? -1024 :
+                                (screen_y_f > 1023.0f ? 1023 :
                                  screen_y_f));
     }
 

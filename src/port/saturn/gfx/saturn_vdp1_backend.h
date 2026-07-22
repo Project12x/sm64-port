@@ -222,9 +222,16 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
  *     the foreground instead of an ISR is safe because the VBLANK
  *     handlers only touch _state.vdp1.flags while SYNC_FLAG_VDP1_SYNC is
  *     set (vdp_sync.c:1179,1208), and that flag cannot be set until the
- *     caller's subsequent vdp1_sync(). libyaul's own libmic3d uses
- *     force_put the same way after delivering commands to VRAM without
- *     SCU DMA (libmic3d/render.c:538).
+ *     caller's subsequent vdp1_sync(). One additional fact this rests
+ *     on: the VBLANK-IN handler DOES unconditionally read-modify-write
+ *     the separate _state.flags byte every field (read at
+ *     vdp_sync.c:1177, write-back at :1196) regardless of the SYNC
+ *     gate -- that is benign here only because _state.flags is a
+ *     distinct byte from the _state.vdp1.flags bitfield word (no SH-2
+ *     storage-unit overlap), and every mainline RMW of _state.flags
+ *     runs at intc mask 15 where the ISR cannot interleave. libyaul's
+ *     own libmic3d uses force_put the same way after delivering
+ *     commands to VRAM without SCU DMA (libmic3d/render.c:538).
  *
  * After this returns, vdp1_sync_render() and vdp1_sync() observe
  * LIST_XFERRED already set and proceed without spinning; the VBLANK-IN
@@ -234,6 +241,23 @@ static inline void
 sm64_saturn_vdp1_backend_upload(sm64_saturn_vdp1_backend_t *backend)
 {
     vdp1_sync_wait();
+
+    /* INVARIANT (adversarial review of this fix): the foreground
+     * force_put below is race-free only while SYNC_FLAG_VDP1_SYNC is
+     * clear. vdp1_sync_wait() above just guaranteed that, and only
+     * mainline vdp1_sync() can set it, so the precondition provably
+     * holds today. What would break it: a sourceboot vblank callback
+     * (vdp_sync_vblank_in_set/out_set) that touches VDP1 sync state --
+     * sourceboot deliberately registers none -- or calling this upload
+     * from inside such a callback. If either is ever introduced,
+     * re-verify this whole block's safety argument.
+     *
+     * A runtime `assert(!vdp1_sync_busy())` guard was implemented and
+     * then removed: with the assert machinery compiled in (-DDEBUG),
+     * the E2 link overflows the `ram' region by 16 bytes -- the HWRAM
+     * budget can no longer absorb even a ~200-byte debug net. If the
+     * resolved-triangle/vertex capacity knobs ever free up headroom,
+     * reinstating that assert is the first thing to spend it on. */
 
     /* Source address as an integer with the SH-2 partition bits
      * stripped (partition 0x0 is the cached alias -- correct and
