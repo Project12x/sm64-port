@@ -1,0 +1,12 @@
+=== before-hold ===
+  buttonDown: 0x0000
+  buttonPressed: 0x0000
+  gGlobalTimer: 0x0000002d
+=== mid-hold ===
+  buttonDown: 0x8000
+  buttonPressed: 0x0000
+  gGlobalTimer: 0x00000037
+=== after-release ===
+  buttonDown: 0x0000
+  buttonPressed: 0x0000
+  gGlobalTimer: 0x00000044

@@ -63,7 +63,26 @@ static vdp1_cmdt_t sourceboot_vdp1_cmdts[SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __attribute__((section(".lwram_cmdts")));
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 
+/* Per-frame SMPC INTBACK request, on the same VBLANK-OUT cadence the two
+ * proven sibling targets use (marioturntable/main.c's vblank_out_handler;
+ * castleviewer registers the identical handler). Without a fresh INTBACK
+ * issued every frame, the SMPC never collects another peripheral report
+ * after boot: controller_saturn.c's read path
+ * (smpc_peripheral_process() + smpc_peripheral_digital_port()) then sees
+ * a permanently empty report, returns CONT_NO_RESPONSE, and gControllers[0]
+ * stays neutral forever -- the game is unplayable even once it reaches
+ * free roam. This target simply never had the service wired up: it is the
+ * only Saturn target that consumes controller state through the real game
+ * loop, and the boot worked without it because the BIOS sequence uses the
+ * BIOS's own pad handling. */
+static void sourceboot_vblank_out_handler(void *work __unused) {
+    smpc_peripheral_intback_issue();
+}
+
 void user_init(void) {
+    /* First, matching both siblings' user_init order (castleviewer
+     * main.c:1186, marioturntable main.c:247). */
+    smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
@@ -78,6 +97,12 @@ void user_init(void) {
         vdp2_sprite_priority_set(priority, 7);
     }
     vdp2_tvmd_display_set();
+    /* Register the per-frame INTBACK cadence and prime the first
+     * collection, mirroring castleviewer verbatim (its comment: a target
+     * that starts polling before the first VBLANK can otherwise retain an
+     * all-zero, disconnected OSContPad sample). */
+    vdp_sync_vblank_out_set(sourceboot_vblank_out_handler, NULL);
+    smpc_peripheral_intback_issue();
 }
 
 int main(void) {
