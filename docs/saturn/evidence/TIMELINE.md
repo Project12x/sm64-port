@@ -1322,3 +1322,25 @@ is attached because the Fast3D source submission has not yet been lowered to a
 visible VDP1 frame. The reproducible package evidence and the exact next
 cart-enabled boot gate are in
 [the E2 sourcebank record](e2-sourceboot-cart-bank-2026-07-19.md).
+
+### 2026-07-22 — First visible original source geometry through the VDP1 pipeline
+
+The visual gate opened by the 2026-07-20 handoff is passed at the emulator
+level: original SM64 source geometry, submitted by the unmodified source loop
+(`thread5_game_loop` -> `exec_display_list`) and lowered by the shared
+Fast3D-to-VDP1 frontend, is visible on screen. The capture is explicitly
+**untextured and flat-shaded** per the gate's labelling requirement.
+
+Evidence: [first-geometry screenshot](screenshots/e2-sourceboot-first-geometry-2026-07-22.png)
+(320x224 internal `video.capture`, frame hash `7e0cf408e7b53a88394b8a8c88876012`),
+[full run report](reports/e2-sourceboot-first-geometry-2026-07-22.json).
+Capture conditions: cart-enabled `ymir-headless` (32 Mbit DRAM support added
+this session), deterministic bounded run, 240 BIOS frames + 14,000 post
+frames (~170 game frames at the current ~1 fps soft-float-bound game rate),
+USA BIOS input macro, disc Product ID `T-SM64SB01`, branch `saturn/bootstrap`
+at the RGB-flag-bit fix commit. The same-session cart `READY` probe record is
+in [the cart-ready record](e2-sourceboot-cart-ready-2026-07-21.md).
+
+Emulator evidence, not retail proof, per the standing rules: Ymir does not
+model every hardware restriction (the SCU-DMA/LWRAM lockup class was fixed by
+source analysis, not emulation). Retail hardware remains the final authority.
