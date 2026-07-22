@@ -7,11 +7,39 @@
  */
 #include <ultra64.h>
 
+#include "macros.h"
 #include "level_commands.h"
 #include "level_table.h"
 #include "game/level_update.h"
+#include "game/save_file.h"
 
 #include "levels/bob/header.h"
+
+/* Retail only ever stages the Peach-letter intro cutscene in castle
+ * grounds; its own skip mechanism is the save file: init_level
+ * (src/game/level_update.c:1198) spawns Mario in ACT_IDLE when
+ * save_file_exists(gCurrSaveFileNum - 1) is true and only falls back to
+ * ACT_INTRO_CUTSCENE for a never-saved file. A no-save boot straight
+ * into BOB stages that cutscene against the wrong world (castle pipe
+ * model/coordinates) and then blocks on its letter dialog
+ * (live-confirmed 2026-07-22: c->cutscene=0x8e, gDialogID=DIALOG_020,
+ * cameraEvent pinned at CAM_EVENT_START_INTRO). Mark file 1 as existing
+ * through the unmodified upstream setter -- save_file_set_flags
+ * (src/game/save_file.c:466) unconditionally ORs SAVE_FLAG_FILE_EXISTS
+ * into gSaveBuffer, a plain zero-initialized static struct; the EEPROM
+ * write path stays untouched (gated behind gEepromProbe elsewhere).
+ *
+ * This adapter exists because the level-script CALL mechanism invokes
+ * targets as s32 (*)(s16, s32) and stores the return value back into the
+ * interpreter register (src/engine/level_script.c:239); calling the
+ * void(u32) setter directly through that pointer type would be a
+ * function-pointer-type mismatch. Returning `value` unchanged preserves
+ * the register mid-chain, the same contract lvl_init_from_save_file
+ * honors (level_update.c:1283). */
+static s32 sourceboot_mark_save_file_exists(UNUSED s16 arg, s32 value) {
+    save_file_set_flags(SAVE_FLAG_FILE_EXISTS);
+    return value;
+}
 
 const LevelScript level_script_entry[] = {
     INIT_LEVEL(),
@@ -90,6 +118,10 @@ const LevelScript level_script_entry[] = {
      * side effects (disable_warp_checkpoint, select_mario_cam_mode,
      * set_yoshi_as_not_dead) are all single static-flag writes. */
     SET_REG(/* value */ LEVEL_BOB),
+    /* Before lvl_init_from_save_file so its gNeverEnteredCastle read
+     * (!save_file_exists) already sees the marked file -- see the adapter's
+     * comment above for the full intro-skip rationale. */
+    CALL(/* arg */ 0, /* func */ sourceboot_mark_save_file_exists),
     CALL(/* arg */ 0, /* func */ lvl_init_from_save_file),
     CALL(/* arg */ 0, /* func */ lvl_set_current_level),
     EXECUTE(/* seg */ 0x0E, /* script */ NULL, /* scriptEnd */ NULL,

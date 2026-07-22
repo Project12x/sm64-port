@@ -1,0 +1,14 @@
+=== ppf3600 ===
+  mario_action: 0x0c400201
+  mario_pos: (-6558.0, -0.0, 6464.0)
+  gGlobalTimer: 0x0000002a
+  gDialogID: 0xffff
+  gCamera: 0x0021c864
+  gCurrLevelArea: 0x00000091
+=== ppf25000 ===
+  mario_action: 0x0c400201
+  mario_pos: (-6558.0, -0.0, 6464.0)
+  gGlobalTimer: 0x00000183
+  gDialogID: 0xffff
+  gCamera: 0x0021c864
+  gCurrLevelArea: 0x00000091
