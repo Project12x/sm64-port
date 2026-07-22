@@ -1335,11 +1335,13 @@ static void test_frontend_resolved_capacity_exceeds_old_192_cap(void)
     };
     sm64_saturn_mtx_t projection;
     struct SPTask task;
-    /* triangle_count drives both the loop bound below and list[]'s size
-     * (a VLA -- legal under this file's -std=c11 host build), so the two
-     * can never drift out of sync the way two separate literals could. */
-    const int triangle_count = 200; /* > old 192 cap, < new 1536 cap */
-    Gfx list[1 + triangle_count * 2 + 1];
+    /* kTriangleCount is a true compile-time constant (enum, not a VLA
+     * extent) that drives both the loop bound below and list[]'s size,
+     * so the two can never drift out of sync the way two separate
+     * literals could -- matching this file's other tests, which all use
+     * plain compile-time-sized literal arrays. */
+    enum { kTriangleCount = 200 }; /* > old 192 cap, < new 1536 cap */
+    Gfx list[1 + kTriangleCount * 2 + 1];
     int cmd = 0;
     int t;
 
@@ -1347,7 +1349,7 @@ static void test_frontend_resolved_capacity_exceeds_old_192_cap(void)
     list[cmd].words.w1 = (uintptr_t)&vp;
     cmd++;
 
-    for (t = 0; t < triangle_count; t++) {
+    for (t = 0; t < kTriangleCount; t++) {
         /* n=3, dest_index=0 every iteration -- the same encoding this
          * file's other G_VTX tests use; overwriting the same 3-vertex
          * decode slot each time is fine since every iteration loads the
@@ -1374,9 +1376,9 @@ static void test_frontend_resolved_capacity_exceeds_old_192_cap(void)
 
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
-    assert(frontend.resolved_count == (uint16_t)triangle_count);
+    assert(frontend.resolved_count == (uint16_t)kTriangleCount);
     assert(frontend.profile.reject_command_capacity == 0);
-    assert(frontend.profile.triangles_transformed == (uint32_t)triangle_count);
+    assert(frontend.profile.triangles_transformed == (uint32_t)kTriangleCount);
 }
 
 static void test_frontend_submit_resets_resolved_count_each_frame(void)
