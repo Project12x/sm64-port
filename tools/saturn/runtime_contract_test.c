@@ -1313,6 +1313,69 @@ static void test_frontend_g_tri2_distinct_depth_buckets(void)
     assert(frontend.resolved[1].depth_bucket > frontend.resolved[0].depth_bucket);
 }
 
+static void test_frontend_resolved_capacity_exceeds_old_192_cap(void)
+{
+    /* Proves the resolved-triangle buffer capacity was actually raised
+     * past the old 192-triangle ceiling by resolving 200 independent,
+     * valid triangles in a single frame and confirming none were
+     * rejected for capacity. The display list is built programmatically
+     * (a for-loop, not a literal fixture) -- each iteration repeats the
+     * exact vertex pattern already proven correct by
+     * test_frontend_g_tri1_resolves_triangle (z=500, identity modelview,
+     * projection.m[2][3]=1<<16 so cw==z). */
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    Gfx list[1 + 200 * 2 + 1];
+    sm64_saturn_mtx_t projection;
+    struct SPTask task;
+    const int kTriangleCount = 200; /* > old 192 cap, < new 1536 cap */
+    int cmd = 0;
+    int t;
+
+    list[cmd].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[cmd].words.w1 = (uintptr_t)&vp;
+    cmd++;
+
+    for (t = 0; t < kTriangleCount; t++) {
+        /* n=3, dest_index=0 every iteration -- the same encoding this
+         * file's other G_VTX tests use; overwriting the same 3-vertex
+         * decode slot each time is fine since every iteration loads the
+         * identical, already-proven vertex data. */
+        list[cmd].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+        list[cmd].words.w1 = (uintptr_t)verts;
+        cmd++;
+        list[cmd].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                              (0U << 16) | (2U << 8) | (4U << 0);
+        list[cmd].words.w1 = 0;
+        cmd++;
+    }
+    list[cmd] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.resolved_count == (uint16_t)kTriangleCount);
+    assert(frontend.profile.reject_command_capacity == 0);
+    assert(frontend.profile.triangles_transformed == (uint32_t)kTriangleCount);
+}
+
 static void test_frontend_submit_resets_resolved_count_each_frame(void)
 {
     sm64_saturn_fast3d_frontend_t frontend;
@@ -1572,6 +1635,7 @@ int main(void)
     test_frontend_g_tri1_small_w_clamps_screen_coords();
     test_frontend_g_tri2_two_triangles();
     test_frontend_g_tri2_distinct_depth_buckets();
+    test_frontend_resolved_capacity_exceeds_old_192_cap();
     test_frontend_submit_resets_resolved_count_each_frame();
     return 0;
 }

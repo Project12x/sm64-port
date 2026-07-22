@@ -22,7 +22,7 @@
 #define SM64_SATURN_FAST3D_MAX_CALL_DEPTH 32U
 #define SM64_SATURN_FAST3D_MAX_COMMANDS 16384U
 #define SM64_SATURN_FAST3D_MAX_VERTICES 64U
-#define SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES 192U
+#define SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES 1536U
 #define SM64_SATURN_FAST3D_DEPTH_BUCKETS 16U
 
 enum sm64_saturn_fast3d_fault {
@@ -156,7 +156,24 @@ typedef struct sm64_saturn_fast3d_vertex {
  * the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
  * not HWRAM, so it doesn't compete with this budget) -- but note the region
  * is now tight enough that even a modest amount of new .text elsewhere in
- * sourceboot could overflow it before these knobs are touched at all. */
+ * sourceboot could overflow it before these knobs are touched at all.
+ *
+ * UPDATE (2026-07-22, capacity increase): the ~380-byte-free HWRAM
+ * figure above is now stale. Earlier the same day, SM64's main pool
+ * (previously 0x30000-0x60000 bytes of HWRAM .bss) moved to LWRAM
+ * (src/port/saturn/sourceboot/main.c) to fix a boot-fatal heap
+ * collision -- that freed ~191 KiB of HWRAM (___end measured at
+ * 0x060D0284 vs. the ram region's top 0x06100000). This struct's
+ * resolved[] array was grown from 192 to 1536 entries (+21,504 bytes)
+ * on the strength of that headroom: 1,536 is grounded in this
+ * project's own captured real Bob-omb Battlefield frame data
+ * (1,365-1,431 triangles/frame, saturn_fast3d_frontend.c's NEAR/FAR
+ * depth comment), stays comfortably under Sega's own SGL 3.02j default
+ * of 1,786 polygons/frame (docs/saturn/SGL_REFERENCE_NOTES.md), and is
+ * far inside this project's own castleviewer precedent (a working
+ * scene with 1,032-1,105 live VDP1 commands, RENDERER_PRIOR_ART.md).
+ * Re-measure HWRAM headroom (nm on ___end) after this change and
+ * before adding any further static HWRAM consumer. */
 typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_fast3d_profile_t profile;
     sm64_saturn_matrix_stack_t matrix_stack;
