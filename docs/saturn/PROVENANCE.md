@@ -328,6 +328,19 @@ submission, and explicit master/slave render records. They are behavior and
 architecture references for the future world renderer only; no additional
 SlaveDriver renderer source was copied.
 
+**2026-07-22 re-consultation** (sourceboot gGfxPool collision investigation,
+`docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`): re-read
+`WALLS.C` lines ~1240–1300 specifically for its slave-side polygon buffer
+discipline. `slaveResult` is a single fixed-capacity array
+(`MAXNMSLAVEPOLYS=1300`) indexed by a monotonic counter `nmSlavePolys`, with
+an explicit bounds check *before* every write (`slave_drawRectWall`:
+`if (height*width+nmSlavePolys+50>MAXNMSLAVEPOLYS) return;`) that drops data
+rather than risking an overflow. No two-ends-growing-toward-each-other
+allocator anywhere in this file. Pattern study only (see
+`UPSTREAM_CODE_LEDGER.md`'s M5 row) — informs the characterization of SM64's
+`gGfxPool`/`alloc_display_list` bump allocator as a ported-pattern fragility,
+not a destination for new code; no source copied.
+
 ### johannes-fetz/joengine
 
 | Field | Record |
@@ -372,6 +385,16 @@ slave SH-2 are valuable measurement targets, not implementation to copy.
 
 The comparison and resulting renderer decisions are maintained in
 `docs/saturn/RENDERER_PRIOR_ART.md`.
+
+**2026-07-22 re-consultation** (sourceboot gGfxPool collision investigation,
+`docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`): inspected
+`Projects/SONIC Z-TREME/ZTE/workarea.c` in full (51 lines, not previously
+read). Every SGL work-area region (`sort_list`, `zbuffer`, `spritebuf`,
+`pbuffer`, `clofstbuf`, `commandbuf`) is a fixed, compile-time,
+non-overlapping slot sized from a `MAX_POLYGONS`/`MAX_VERTICES`-class
+constant via the `AdjWork` cumulative-offset macro chain — never two runtime
+pointers growing toward each other. Pattern study only (see
+`UPSTREAM_CODE_LEDGER.md`'s M5 row); no source copied.
 
 ### Sega hardware documentation
 

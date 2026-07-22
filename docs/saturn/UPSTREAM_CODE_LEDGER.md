@@ -182,3 +182,19 @@ The stable frame probe in `src/port/saturn/platform/saturn_frame_sample.h` is
 new project code. It is deliberately not attributed to an upstream engine: its
 sequence-guarded, all-16-bit layout exists to make the Yaul/Ymir observation
 boundary deterministic.
+
+## M5 — sourceboot gGfxPool collision investigation (2026-07-22)
+
+| Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
+|---|---|---|---|
+| [Maxime-XL2/SONIC-Z-TREME](https://github.com/Maxime-XL2/SONIC-Z-TREME) | `cff75451c1616aac1236fc2b44223902b55c706b` / GPL-3.0 | `Projects/SONIC Z-TREME/ZTE/workarea.c` (the full file — `enum workarea`'s `AdjWork` chain, and the const pointer/size exports below it) | **Pattern study, informing diagnosis, not yet a code destination.** Every work-area region (`sort_list`, `zbuffer`, `spritebuf`, `pbuffer`, `clofstbuf`, `commandbuf`) is a fixed, compile-time, non-overlapping slot sized from a `MAX_POLYGONS`/`MAX_VERTICES`-class constant via a cumulative-offset macro — never two pointers growing toward each other at runtime the way SM64's `alloc_display_list`/`gGfxPool` bump allocator does. Concrete evidence that a real, shipped SGL engine architects this class of per-frame buffer with a structurally different, collision-incapable-by-construction discipline. Directly informs `docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`'s characterization of the bug class; no code copied yet. |
+| [Lobotomy-Software/SlaveDriver-Engine](https://github.com/Lobotomy-Software/SlaveDriver-Engine) | `a8986591557b6e680550d3c23970284d3b38ff8f` / GPL-3.0 | `WALLS.C` lines ~1240–1300 (`MAXNMSLAVEPOLYS`, `slaveResult`/`nmSlavePolys`, `slave_drawRectWall`'s `if (height*width+nmSlavePolys+50>MAXNMSLAVEPOLYS) return;` guard) | **Pattern study, informing diagnosis, not yet a code destination.** A real, shipped retail Saturn title's own slave-side polygon buffer is a single fixed-capacity array (`MAXNMSLAVEPOLYS=1300`) indexed by a monotonic counter, with an explicit bounds check *before* every write that drops the data (not out-of-bounds writes, not a converging second pointer) when the buffer would overflow. Same conclusion as the Z-Treme row: real Saturn engines avoid the two-ends-bump-allocator pattern entirely rather than relying on head/tail never crossing. Already-cited `DMA.C`/`DMA.H`/`SCL_FUNC.C` close-port (`SLAVEDRIVER_ADAPTATION.md`) is unchanged by this row. |
+
+Both rows are consulted for *characterization* of the bug class (is this an
+inherent fragility of the ported N64 allocator pattern, or a bug this port
+introduced) per `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`'s engine-ownership
+boundary — `gGfxPool`/`alloc_display_list`/`select_gfx_pool` are unmodified
+SM64 engine code and are not candidates for adopting either engine's opposite
+allocation discipline. If a fix ships from this investigation, it will be
+scoped to this port's own platform layer, and this row will be updated with
+the concrete destination file at that point.
