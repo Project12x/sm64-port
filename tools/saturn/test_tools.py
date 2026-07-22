@@ -12,7 +12,7 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
-from capture_hwtest import has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from capture_hwtest import cap_stderr, has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
 from extract_mario_actor import (  # noqa: E402
     animation_frame_count,
     animation_rotations,
@@ -858,6 +858,34 @@ class YmirInputTests(unittest.TestCase):
         self.assertEqual(len(fields), 21)
         self.assertIn("#define SM64_SATURN_FRAME_SAMPLE_MAGIC 0x4653U", header)
         self.assertIn("uint16_t sequence;", header)
+
+    def test_short_stderr_is_returned_unchanged(self) -> None:
+        text = "a short boot log\n"
+        capped, original_length = cap_stderr(text, limit=1024)
+        self.assertEqual(capped, text)
+        self.assertEqual(original_length, len(text))
+
+    def test_long_stderr_is_truncated_to_its_tail(self) -> None:
+        # Regression test for a real incident (2026-07-22): a crash-looping
+        # emulated target made Ymir emit unbounded repeating diagnostics,
+        # and capture_hwtest.py used to embed completed.stderr verbatim --
+        # producing multi-gigabyte report files that filled the host disk.
+        head = "boot diagnostics that must not appear in the capped output\n"
+        tail = "crash-loop diagnostic that must survive capping\n"
+        text = head + ("filler\n" * 1000) + tail
+        capped, original_length = cap_stderr(text, limit=64)
+        self.assertEqual(original_length, len(text))
+        self.assertLessEqual(len(capped), 64)
+        self.assertTrue(text.endswith(capped))
+        self.assertNotIn("boot diagnostics", capped)
+
+    def test_default_limit_is_reasonable(self) -> None:
+        # Not so small that a real boot's ordinary diagnostic output would
+        # itself get truncated, not so large that a crash-loop can still
+        # produce a multi-megabyte report.
+        capped, original_length = cap_stderr("x" * 200_000)
+        self.assertEqual(original_length, 200_000)
+        self.assertEqual(len(capped), 64 * 1024)
 
 
 class TelemetryTests(unittest.TestCase):

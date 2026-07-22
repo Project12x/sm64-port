@@ -40,6 +40,46 @@ def has_cd_block_copy_limitation(stderr: str) -> bool:
     )
 
 
+# A real, live-observed failure mode (2026-07-22 crash-boundary investigation,
+# e2-bob sourceboot): once the emulated SH-2 CPU faults into a garbage-address
+# crash loop, Ymir's own logging emits an UNBOUNDED stream of diagnostics
+# (e.g. "Unhandled SMPC write to <addr> = 00", repeated every cycle of the
+# faulted loop, forever). completed.stderr used to be embedded verbatim into
+# both the JSON report file and this script's own stdout printout with no
+# limit -- two real captures at post-poke-frames 12500/13000 produced a
+# 963 MB and a 1.85 GB report file respectively (plus an equally large stdout
+# stream), and a third capture at 13500 failed outright with ENOSPC after
+# these filled the host disk. This is a tooling robustness bug independent of
+# whatever caused the crash: any consumer of this script needs its output
+# size bounded regardless of how badly the emulated target is behaving.
+STDERR_CAPTURE_LIMIT = 64 * 1024  # 64 KiB -- comfortably covers a normal boot's diagnostic log
+
+
+def cap_stderr(stderr: str, limit: int = STDERR_CAPTURE_LIMIT) -> tuple[str, int]:
+    """Bound stderr before it is embedded in a report or printed. Keeps the
+    TAIL, not the head: a crash-looping target's most recent lines show its
+    current (repeating) state, which is what a live investigation needs --
+    the first N KB of an unbounded, mostly-identical repeating dump is not
+    more informative than the last N KB, and keeping the head would still
+    let the file grow without bound as the loop continues. Returns
+    (possibly-truncated text, original length) so callers can report whether
+    truncation happened without re-deriving it from string length alone."""
+    original_length = len(stderr)
+    if original_length <= limit:
+        return stderr, original_length
+    return stderr[-limit:], original_length
+
+
+def _capped_stderr_diagnostics(stderr: str) -> dict[str, Any]:
+    """Build the capped-stderr fields for the report's diagnostics block."""
+    capped, original_length = cap_stderr(stderr)
+    return {
+        "stderr": capped,
+        "stderr_truncated": original_length > len(capped),
+        "stderr_original_bytes": original_length,
+    }
+
+
 def request(method: str, request_id: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": request_id}
     if params is not None:
@@ -336,7 +376,8 @@ def main() -> int:
     except OSError as error:
         parser.error(str(error))
     if completed.returncode != 0:
-        raise SystemExit(f"Ymir exited with status {completed.returncode}: {completed.stderr.strip()}")
+        capped_stderr, _ = cap_stderr(completed.stderr)
+        raise SystemExit(f"Ymir exited with status {completed.returncode}: {capped_stderr.strip()}")
 
     messages: list[dict[str, Any]] = []
     for line in completed.stdout.splitlines():
@@ -425,8 +466,11 @@ def main() -> int:
             pre_poke_event_response.get("result", {}) if pre_poke_event_response else None
         ),
         "diagnostics": {
-            "stderr": completed.stderr,
+            # Checked against the FULL, uncapped stderr -- a real diagnostic
+            # earlier in the log must not be missed just because a crash-loop
+            # later filled the tail with unrelated repeating output.
             "cd_block_copy_unimplemented": has_cd_block_copy_limitation(completed.stderr),
+            **_capped_stderr_diagnostics(completed.stderr),
         },
         "raw_telemetry": raw_telemetry,
         "screenshot": screenshot,
