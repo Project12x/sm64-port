@@ -15,6 +15,24 @@
 
 const LevelScript level_script_entry[] = {
     INIT_LEVEL(),
+    /* Act number, first: retail's star-select screen writes gCurrActNum
+     * through this same script mechanism before a course loads; E2 boots
+     * straight into the level, so nothing ever set it and it stayed at its
+     * BSS zero. That is not benign: level_cmd_place_object
+     * (src/engine/level_script.c:470) computes the act mask as
+     * `1 << (gCurrActNum - 1)`, which with gCurrActNum == 0 is `1 << -1`
+     * -- undefined behavior that yields 0 on this SH-2 build -- so every
+     * OBJECT_WITH_ACTS entry whose act mask is not the special all-acts
+     * 0x1F was silently skipped (King Bob-omb, the act-1 Bob-omb buddies,
+     * and the rest of BOB's act-gated population never spawned). Measured
+     * live before this fix: gObjectCounter = 0x50 (80) objects/frame.
+     * GET_OR_SET(OP_SET, VAR_CURR_ACT_NUM) is the interpreter's own
+     * gCurrActNum store (level_script.c:760); act 1 is star 1, the same
+     * default a fresh file's star select would offer. Placed before the
+     * SET_REG(LEVEL_BOB) sequence below because GET_OR_SET consumes
+     * sRegister. */
+    SET_REG(/* value */ 1),
+    GET_OR_SET(/* op */ OP_SET, /* var */ VAR_CURR_ACT_NUM),
     /* The retail entry reaches a menu before selecting a level.  E2 needs a
      * bounded source-gameplay bootstrap, so select Bob here through the same
      * source level-state functions before executing its unmodified script.
