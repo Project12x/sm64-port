@@ -142,6 +142,15 @@ def main() -> int:
         default=8,
         help="emulated frames to hold each post-run input state (1..120)",
     )
+    parser.add_argument(
+        "--dram-cart",
+        action="store_true",
+        help=(
+            "insert a 32 Mbit (4 MiB) DRAM expansion cartridge at boot "
+            "(requires a ymir-headless build with --dram-cart support; "
+            "needed for the sourceboot source-cart loader)"
+        ),
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= 3600 or not 1 <= args.post_poke_frames <= 3600:
         parser.error("--frames and --post-poke-frames must be between 1 and 3600")
@@ -271,6 +280,8 @@ def main() -> int:
         requests.append(request("video.capture", screenshot_id))
     requests.append(request("instance.shutdown", next_id))
     command = [str(args.ymir), "--ipl", str(args.ipl), "--game", str(args.game)]
+    if args.dram_cart:
+        command.append("--dram-cart")
     try:
         completed = subprocess.run(
             command,
@@ -346,6 +357,7 @@ def main() -> int:
         "game": str(args.game),
         "frames": args.frames,
         "bios_input": args.bios_input,
+        "dram_cart": args.dram_cart,
         "event_word_poke": args.event_word_poke,
         "handoff_yield": args.handoff_yield,
         "post_poke_frames": (
