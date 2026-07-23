@@ -10,6 +10,7 @@
 #include "saturn_render_queue.h"
 #include "saturn_transform.h"
 #include "saturn_matrix.h"
+#include "saturn_matrix_kernels.h"
 #include "types.h"
 #include "saturn_fast3d_frontend.h"
 #include "PR/gbi.h"
@@ -1604,6 +1605,60 @@ static void test_bounded_command_arena(void)
     assert(arena.peak == 6);
 }
 
+static void test_kernels_isqrt64(void)
+{
+    assert(sm64_saturn_isqrt64(0) == 0);
+    assert(sm64_saturn_isqrt64(1) == 1);
+    assert(sm64_saturn_isqrt64(4) == 2);
+    assert(sm64_saturn_isqrt64(15) == 3);   /* floor */
+    assert(sm64_saturn_isqrt64(16) == 4);
+    assert(sm64_saturn_isqrt64(65536) == 256);
+    /* Q16.16 usage shape: sqrt of a Q32 value yields Q16.
+     * (2.25 in Q32) = 9663676416; sqrt = 98304 = 1.5 in Q16.16. */
+    assert(sm64_saturn_isqrt64(9663676416LL) == 98304);
+    /* large world-scale magnitudes stay exact */
+    assert(sm64_saturn_isqrt64((int64_t) 60000 * 60000) == 60000);
+}
+
+static void test_kernels_q16_mul(void)
+{
+    assert(sm64_saturn_q16_mul(1 << 16, 1 << 16) == (1 << 16));
+    assert(sm64_saturn_q16_mul(3 << 16, 1 << 15) == (3 << 15)); /* 3*0.5 */
+    assert(sm64_saturn_q16_mul(-(1 << 16), 1 << 16) == -(1 << 16));
+    assert(sm64_saturn_q16_mul(0, 12345678) == 0);
+}
+
+static void test_kernels_float_q16_roundtrip(void)
+{
+    /* the exact-conversion helpers must use no float multiply/divide --
+     * verified by reading the implementation; these tests pin values. */
+    assert(sm64_saturn_float_to_q16(1.0f) == 65536);
+    assert(sm64_saturn_float_to_q16(-1.0f) == -65536);
+    assert(sm64_saturn_float_to_q16(0.0f) == 0);
+    assert(sm64_saturn_float_to_q16(0.5f) == 32768);
+    assert(sm64_saturn_float_to_q16(4864.0f) == 4864 << 16);
+    assert(sm64_saturn_q16_to_float(65536) == 1.0f);
+    assert(sm64_saturn_q16_to_float(-65536) == -1.0f);
+    assert(sm64_saturn_q16_to_float(0) == 0.0f);
+    assert(sm64_saturn_q16_to_float(4864 << 16) == 4864.0f);
+    /* saturation instead of UB at the format ceiling */
+    assert(sm64_saturn_float_to_q16(40000.0f) == INT32_MAX);
+    assert(sm64_saturn_float_to_q16(-40000.0f) == INT32_MIN);
+}
+
+static void test_kernels_trig_lookup(void)
+{
+    /* sins(0)=0, coss(0)=1; sins(0x4000)=1 (90 deg).
+     * Table layout mirrors math_util.h exactly: index = (u16)angle >> 4,
+     * cosine = sine index + 0x400. */
+    assert(sm64_saturn_sins_q16(0) == 0);
+    assert(sm64_saturn_coss_q16(0) == 65536);
+    assert(sm64_saturn_sins_q16(0x4000) == 65536);
+    assert(sm64_saturn_coss_q16(0x4000) == 0);
+    /* negative angle wraps through u16 exactly like the engine macro */
+    assert(sm64_saturn_sins_q16(-0x4000) == -65536);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -1646,5 +1701,9 @@ int main(void)
     test_frontend_g_tri2_distinct_depth_buckets();
     test_frontend_resolved_capacity_exceeds_old_192_cap();
     test_frontend_submit_resets_resolved_count_each_frame();
+    test_kernels_isqrt64();
+    test_kernels_q16_mul();
+    test_kernels_float_q16_roundtrip();
+    test_kernels_trig_lookup();
     return 0;
 }
