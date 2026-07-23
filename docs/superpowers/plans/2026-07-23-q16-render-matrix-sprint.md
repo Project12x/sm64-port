@@ -234,7 +234,7 @@ git commit -m "feat(saturn): generate Q16.16 mirror of the engine trig tables"
 - Create: `src/port/saturn/gfx/saturn_matrix_kernels.h`
 - Test: `tools/saturn/runtime_contract_test.c` (append)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tools/saturn/runtime_contract_test.c`, after the last existing
 test function and before `main()` (include `"saturn_matrix_kernels.h"` next
@@ -305,12 +305,12 @@ Register in `main()` after the last existing frontend test call:
     test_kernels_trig_lookup();
 ```
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Run (msys2 bash): `cd /d/Code/RetroDev/sm64-saturn-port/sm64-port && export OS=Windows_NT && make -f Makefile.saturn.mk verify-runtime-contracts SATURN_TOOLS_PYTHON=$PWD/.venv-saturn-tools/Scripts/python.exe`
 Expected: FAIL to compile — `saturn_matrix_kernels.h: No such file or directory`.
 
-- [ ] **Step 3: Implement the kernel header**
+- [x] **Step 3: Implement the kernel header**
 
 Create `src/port/saturn/gfx/saturn_matrix_kernels.h`:
 
@@ -319,7 +319,6 @@ Create `src/port/saturn/gfx/saturn_matrix_kernels.h`:
 #define SM64_SATURN_MATRIX_KERNELS_H
 
 #include <stdint.h>
-#include <string.h>
 
 #include "saturn_matrix.h"
 
@@ -421,19 +420,25 @@ static inline int32_t sm64_saturn_float_to_q16(float f)
     }
     exponent = (int32_t) ((bits.u >> 23) & 0xFF);
     /* magnitude >= 2^15 would scale past Q16.16's ceiling: saturate.
-     * (biased exponent 127+15 = 142) */
+     * (biased exponent 127+15 = 142.) This is the only range check
+     * needed -- verified by hand, not just asserted: once this is
+     * false, exponent <= 141, so exponent + 16 <= 157 always lands
+     * inside the valid biased-exponent range (1..254), and no second
+     * guard below it is ever reachable. */
     if (exponent >= 142) {
         return (bits.u & 0x80000000u) ? INT32_MIN : INT32_MAX;
     }
-    /* subnormals and tiny values (< 2^-16 after scaling would still be
-     * fractional): exponent + 16 <= 0 means |f| < 2^-127+... -- after
-     * the +16 scale these are < 1 ulp of Q16.16 only when the scaled
-     * exponent underflows; the bare conversion truncates them to 0,
-     * which is the desired behavior. Guard only against exponent-field
-     * underflow while rebiasing. */
-    if (exponent + 16 > 254) {
-        return (bits.u & 0x80000000u) ? INT32_MIN : INT32_MAX;
-    }
+    /* exponent == 0 here means a subnormal float (exact zero already
+     * returned above) -- magnitude under 2^-126. Rebiasing a subnormal's
+     * zero exponent field to 16 produces a bit pattern that is not the
+     * mathematically correct scaled value (subnormals have no implicit
+     * leading 1, unlike the normals this trick is designed for): the
+     * reinterpreted result lands in [2^-111, 2^-110) instead of the
+     * true, far smaller f*2^16. Both are still many orders of magnitude
+     * below 1, so both truncate to (int32_t)0 below -- the same answer
+     * correct scaling would have given, reached for the wrong bit-level
+     * reason but landing on the right final value. Every subnormal
+     * float is far too small to survive Q16.16 truncation regardless. */
     bits.u = (bits.u & 0x807FFFFFu) | ((uint32_t) (exponent + 16) << 23);
     return (int32_t) bits.f; /* single _fixsfsi, truncates toward zero */
 }
@@ -455,7 +460,7 @@ static inline float sm64_saturn_q16_to_float(int32_t q)
 #endif
 ```
 
-- [ ] **Step 4: Add the table object to the host test build**
+- [x] **Step 4: Add the table object to the host test build**
 
 `saturn_trig_q16.inc.c` defines `gSaturnSineTableQ16`. The host test link
 needs it: in `Makefile.saturn.mk`'s `verify-runtime-contracts` recipe, add
@@ -463,11 +468,11 @@ needs it: in `Makefile.saturn.mk`'s `verify-runtime-contracts` recipe, add
 compiles `saturn_fast3d_frontend.c` alongside the test — add the new file
 the same way).
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Same command as Step 2. Expected: exit 0, silent.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_matrix_kernels.h \
