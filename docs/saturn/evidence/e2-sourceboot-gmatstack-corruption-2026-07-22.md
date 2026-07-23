@@ -274,21 +274,103 @@ produces *any* value with magnitude above `1e10`. This directly matches the
 earlier Python simulation's conclusion, now confirmed against the real C
 engine code and the real trig table data rather than an approximation.
 
-## Conclusion: SH-2-target-specific, not an algorithm bug — stop and report
+## Known-issue search: exact toolchain version and a real, relevant fact — but no confirmed matching bug report
 
-Per the differential test's outcome, this is now settled: **the algorithm
-in `mtxf_lookat`/`mtxf_mul` is exonerated.** The same real inputs, the same
-real unmodified engine code, produce a completely sane result on host and a
-massively corrupted one on the SH-2 target. This points at the SH-2
-cross-compiler's codegen or soft-float library for this exact input
-pattern — not a bug in SM64's own engine algorithm, and not anything in
-this port's platform code.
+Before any disassembly, checked whether this is already a documented,
+known GCC SH/soft-float issue.
 
-Per the explicit instruction accompanying this test: **disassembly
+**Exact pinned toolchain**: `sh-elf-gcc (GCC) 14.3.0` (`sh-elf-gcc --version`,
+`.yaul.env` sourced first), configured `--with-cpu=m2 --with-endian=big`
+(SH2, big-endian, no hardware FPU — matches this project's own documented
+target). Binutils `2.44`. Built via the `marsdev` toolchain-builder scripts
+(`work/upstream/marsdev/sh-gcc-toolchain/`, a local clone, read as
+reference — not modified), whose `Makefile` pins `GCC_DEFAULT_VER := 15.2.0`
+and `BINUTILS_DEFAULT_VER := 2.44` as its *current* defaults, meaning `14.3.0`
+was an explicit, older, deliberately-selected build, not a stale leftover.
+The full GCC 14.3.0 source tree is present locally
+(`.../sh-gcc-toolchain/gcc-14.3.0/`), letting every claim below be checked
+against the actual compiler source rather than secondhand summaries.
+
+**The concrete, verified fact**: this exact target configuration
+(`sh-*-elf*`, matching `sh-elf` precisely) selects the **legacy `fp-bit.c`
+generic soft-float implementation** for every single- and double-precision
+floating-point operation, including the multiply/add that `mtxf_lookat`
+and `mtxf_mul` compile down to. Traced directly through the real build
+system, not assumed:
+`libgcc/config.host`'s `sh-*-elf* | sh[12346l]*-*-elf*)` case sets
+`tmake_file="$tmake_file sh/t-sh t-crtstuff-pic t-fdpbit"`, and
+`libgcc/config/t-fdpbit` sets `FPBIT = true` / `DPBIT = true`, which
+(`libgcc/Makefile.in`'s `ifneq ($(FPBIT),)` block) compiles
+`FPBIT_FUNCS = ... _mul_sf _div_sf ...` directly from `libgcc/fp-bit.c`.
+`fp-bit.c` is GCC's original (early-1990s) generic, portable, bit-manipulation-based
+soft-float library — read its `multiply()`/`_fpmul_parts()` implementation
+in full (`fp-bit.c:753-932`) directly rather than assuming; it is a
+standard extended-mantissa multiply with exponent renormalization loops
+and careful (commented, deliberate) round-to-even handling. One comment
+(`fp-bit.c:891-895`) explains a specific rounding-tie design choice with a
+worked example (`0xfff * 0x3f800400`) — this is **not** a bug report and
+is nowhere near the right order of magnitude to explain a ~21-orders
+corruption (a sub-ULP rounding tradeoff cannot produce `1e20`-scale
+garbage); flagged here explicitly so it is not mistaken for a match to
+this symptom.
+
+**GCC 15 replaced `fp-bit.c` with the modern `soft-fp` library for
+bare-metal `sh-elf` specifically** — confirmed via GCC 15's own release
+notes (`gcc.gnu.org/gcc-15/changes.html`: "Bare metal `sh-elf` targets are
+now using the newer soft-fp library for improved performance of
+floating-point emulation") and the actual patch discussion (`gcc-patches`
+mailing list, July 2024, `[RFC/PATCH] libgcc: sh: Use soft-fp for
+non-hosted SH3/SH4`, fetched directly rather than summarized secondhand).
+Both sources frame this **purely as a performance change**
+(~3x speedup measured via Whetstone on real SH4 hardware, "fp-bit.c is
+quite slow"), with **no mention anywhere in either source of a known
+correctness bug, wrong-code report, or incorrect floating-point result**
+being fixed. Notably, `sh-*-linux*` and `sh-*-rtems*` targets were
+deliberately left on `fp-bit.c` even after this patch — inconsistent with
+`fp-bit.c` having a severe, known-broken correctness defect for SH (the
+GCC maintainers would be unlikely to leave other SH targets on a
+compiler demonstrably producing wrong answers).
+
+**Searched and found no match**: GCC Bugzilla (via search-engine queries —
+direct `bugzilla.gcc.gnu.org` fetches are blocked by bot-protection/Anubis
+for this tool; the one superficially-matching title found, bug 11040
+"Wrong Floating Point Calculations", was checked and is an unrelated
+i386/m68k x87-excess-precision issue, GCC's "bug 323" family — a real,
+verified non-match, not assumed irrelevant); GCC's own bug-fix changelogs
+for 14.x point releases and the 15.x release notes; and `yaul-org/libyaul`'s
+GitHub issues and discussions (`gh api` search across all states for
+"float" in title/body: zero results).
+
+**Honest conclusion for this step**: no specific, confirmed bug report
+matching this exact symptom (a soft-float multiply producing a
+non-degenerate-input, non-NaN, ~21-orders-of-magnitude garbage result) was
+found. What *was* found is real, verifiable technical context: this exact
+toolchain uses a soft-float library GCC's own maintainers subsequently
+replaced (for this exact target) for reasons stated as performance, not
+correctness — so this is suggestive, relevant background, not a confirmed
+match. A GCC 15.2.0 build is available via the same local toolchain-builder
+infrastructure (source tarballs already present) but is **not currently
+built**; building and testing against it would be a genuine, separate
+undertaking (a full cross-compiler bootstrap), not attempted here.
+
+## Conclusion: SH-2-target-specific, algorithm exonerated; no matching known issue found — stop and report
+
+Per the differential test's outcome, this is settled at the algorithm
+level: **`mtxf_lookat`/`mtxf_mul` are exonerated.** The same real inputs,
+the same real unmodified engine code, produce a completely sane result on
+host and a massively corrupted one on the SH-2 target. The known-issue
+search did not turn up a confirmed matching bug report, but did establish
+that this exact configuration runs on a soft-float library GCC's own
+maintainers have since replaced for the same target, for performance
+reasons that were never characterized as a correctness fix in any source
+found.
+
+Per the explicit instruction accompanying this investigation: **disassembly
 forensics of the compiled `mtxf_lookat`/`mtxf_mul` machine code is a
 separate, larger decision, not something to start unilaterally now.** This
-document stops here and reports the finding plainly, rather than
-proceeding into compiler/codegen-level investigation.
+document stops here and reports the finding plainly — including the honest
+"searched and found nothing conclusive" outcome of the known-issue search —
+rather than proceeding into compiler/codegen-level investigation.
 
 No SM64 engine or platform source code was changed in this investigation
 pass — only the new diagnostic test file and its Makefile target were
