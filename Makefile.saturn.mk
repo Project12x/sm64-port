@@ -31,7 +31,7 @@ MARIO_TEXTURE_SUBDIVISION ?= 1
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision plan-castle-camera verify-all clean
 
 all: hello
 
@@ -178,6 +178,30 @@ verify-mtxf-lookat-host-diff:
 	  -lm \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxf-lookat-host-diff-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxf-lookat-host-diff-test$(HOST_EXEEXT)"
+
+# Host differential test for Task 3's Q16.16 render-matrix constructors
+# (saturn_matrix_ctors.h) against the REAL, unmodified src/engine/
+# math_util.c mtxf_* originals. Same shape as verify-mtxf-lookat-host-diff
+# immediately above (and same reasoning for staying a standalone target,
+# not folded into verify-all/verify-runtime-contracts: this tests vanilla
+# SM64 engine math against this port's fixed-point mirror, not this
+# port's platform contracts in isolation). Needs one extra source over
+# the lookat-only precedent: saturn_trig_q16.inc.c, so the test's Q16.16
+# constructors have gSaturnSineTableQ16 to link against.
+verify-mtxq-ctors:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -std=c11 -D_GNU_SOURCE -Wall -Wextra -Werror \
+	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/mtxq_ctor_diff_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/engine/math_util.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
+	  -lm \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
 
 classify-source: check-host-tools
 	@mkdir -p "$(SATURN_REPO_ROOT)/docs/saturn/evidence/reports"
