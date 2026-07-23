@@ -31,7 +31,7 @@ class GenTrigQ16Test(unittest.TestCase):
         self.assertTrue(generated.exists(),
                         "run gen_trig_q16.py before this test")
         values = [int(v) for v in re.findall(
-            r"(-?\d+),", generated.read_text())]
+            r"(-?\d+),", generated.read_text(encoding="utf-8"))]
         floats = gen_trig_q16.parse_trig_tables(
             REPO / "include" / "trig_tables.inc.c")
         self.assertEqual(len(values), 0x1400)
