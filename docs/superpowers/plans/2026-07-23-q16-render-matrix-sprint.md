@@ -27,7 +27,7 @@ SM64's trig is table-driven: `sins(x) = gSineTable[(u16)(x) >> 4]` with `gCosine
 - Modify: `Makefile.saturn.mk`
 - Test: `tools/saturn/test_gen_trig_q16.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tools/saturn/test_gen_trig_q16.py`:
 
@@ -75,15 +75,20 @@ class GenTrigQ16Test(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
 ```
 
-- [ ] **Step 2: Run it to confirm it fails**
+- [x] **Step 2: Run it to confirm it fails**
 
-Run: `./.venv-saturn-tools/Scripts/python.exe -m pytest tools/saturn/test_gen_trig_q16.py -q` (from `sm64-port/`)
-Expected: FAIL — `ModuleNotFoundError: No module named 'gen_trig_q16'`
+Run: `./.venv-saturn-tools/Scripts/python.exe tools/saturn/test_gen_trig_q16.py` (from `sm64-port/`)
+Expected: FAIL — `ModuleNotFoundError: No module named 'gen_trig_q16'`. (This
+project's Saturn tool tests are plain scripts, not pytest — see
+`tools/saturn/test_tools.py`'s `if __name__ == "__main__": unittest.main(verbosity=2)`
+and `Makefile.saturn.mk`'s `verify-tools` target, which runs it directly.
+There is no pytest in `tools/saturn/requirements.txt` and no pytest anywhere
+in this repo — do not add it.)
 
-- [ ] **Step 3: Write the generator**
+- [x] **Step 3: Write the generator**
 
 Create `tools/saturn/gen_trig_q16.py`:
 
@@ -113,9 +118,20 @@ FLOAT_RE = re.compile(r"(-?(?:\d+\.\d*(?:e[+-]?\d+)?f?|0x[0-9a-fA-F.p+-]+f?|\d+f
 
 
 def parse_trig_tables(path):
+    # include/trig_tables.inc.c holds gSineTable then gCosineTable back to
+    # back (0x400 + 0x1000 = 0x1400 f32 entries) -- but immediately after
+    # that comes a THIRD array, gArctanTable (s16, bare hex integers like
+    # 0x000A). That table must never enter this scan: a hex literal with
+    # no A-F letters (e.g. 0x0014) fails FLOAT_RE's "0x" branch as a whole,
+    # but the scanner then resumes right after the failed "0x" and matches
+    # the plain-decimal branch against the trailing digits alone ("0014"
+    # -> 14.0), silently inflating the count. Bounding the scan to end at
+    # gArctanTable's declaration keeps this correct regardless of what any
+    # regex alternative could match on data that was never meant to be read.
     text = path.read_text()
+    region = text[:text.index("gArctanTable")]
     values = []
-    for raw in FLOAT_RE.findall(text):
+    for raw in FLOAT_RE.findall(region):
         raw = raw.rstrip("f")
         values.append(float.fromhex(raw) if raw.startswith(("0x", "-0x"))
                       else float(raw))
@@ -162,26 +178,44 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Generate and re-run the test**
+- [x] **Step 4: Generate and re-run the test**
 
-Run: `./.venv-saturn-tools/Scripts/python.exe tools/saturn/gen_trig_q16.py && ./.venv-saturn-tools/Scripts/python.exe -m pytest tools/saturn/test_gen_trig_q16.py -q`
-Expected: `wrote .../saturn_trig_q16.inc.c (5120 entries)` then `3 passed`.
+Run: `./.venv-saturn-tools/Scripts/python.exe tools/saturn/gen_trig_q16.py && ./.venv-saturn-tools/Scripts/python.exe tools/saturn/test_gen_trig_q16.py`
+Expected: `wrote .../saturn_trig_q16.inc.c (5120 entries)` then unittest's
+verbosity=2 output (each test name + `ok`, ending in `Ran 3 tests in ...s`
+/ `OK`).
 If the parse count is not 0x1400, STOP and inspect `trig_tables.inc.c`'s real
 layout rather than forcing the regex — the count assertion exists to catch
 exactly that.
 
-- [ ] **Step 5: Wire into the tool test suite**
+- [x] **Step 5: Wire into the tool test suite**
 
-In `Makefile.saturn.mk`, find the `verify-tools` target and add the new test
-to its pytest invocation (match the existing style of that recipe — it
-already runs the other `tools/saturn/test_*.py` files; if it uses a
-directory-wide `pytest tools/saturn`, no edit is needed — verify by running
-it and confirming the new test is collected).
+This repo's real convention (confirmed in `Makefile.saturn.mk`) is NOT pytest
+discovery — `verify-tools` runs `tools/saturn/test_tools.py` directly as a
+plain script:
+
+```makefile
+verify-tools: check-host-tools
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
+```
+
+Add a second line for the new test file, in the same style (same quoting,
+same variable usage):
+
+```makefile
+verify-tools: check-host-tools
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_trig_q16.py"
+```
+
+Do not merge `test_gen_trig_q16.py`'s test classes into `test_tools.py` —
+keep it a separate file, per this task's own file list.
 
 Run: `make -f Makefile.saturn.mk verify-tools SATURN_TOOLS_PYTHON=./.venv-saturn-tools/Scripts/python.exe` (msys2 bash, `cd` into `sm64-port` first)
-Expected: exit 0, test count includes the 3 new tests.
+Expected: exit 0, output from both scripts, `test_gen_trig_q16.py`'s 3 tests
+included and passing.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/saturn/gen_trig_q16.py tools/saturn/test_gen_trig_q16.py \
