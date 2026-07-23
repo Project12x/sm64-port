@@ -65,7 +65,7 @@ class GenTrigQ16Test(unittest.TestCase):
         self.assertTrue(generated.exists(),
                         "run gen_trig_q16.py before this test")
         values = [int(v) for v in re.findall(
-            r"(-?\d+),", generated.read_text())]
+            r"(-?\d+),", generated.read_text(encoding="utf-8"))]
         floats = gen_trig_q16.parse_trig_tables(
             REPO / "include" / "trig_tables.inc.c")
         self.assertEqual(len(values), 0x1400)
@@ -106,7 +106,6 @@ include/trig_tables.inc.c ever changes (it is original game data and
 should not).
 """
 import re
-import struct
 import sys
 from pathlib import Path
 
@@ -121,14 +120,18 @@ def parse_trig_tables(path):
     # include/trig_tables.inc.c holds gSineTable then gCosineTable back to
     # back (0x400 + 0x1000 = 0x1400 f32 entries) -- but immediately after
     # that comes a THIRD array, gArctanTable (s16, bare hex integers like
-    # 0x000A). That table must never enter this scan: a hex literal with
-    # no A-F letters (e.g. 0x0014) fails FLOAT_RE's "0x" branch as a whole,
-    # but the scanner then resumes right after the failed "0x" and matches
-    # the plain-decimal branch against the trailing digits alone ("0014"
-    # -> 14.0), silently inflating the count. Bounding the scan to end at
-    # gArctanTable's declaration keeps this correct regardless of what any
-    # regex alternative could match on data that was never meant to be read.
-    text = path.read_text()
+    # 0x000A). That table must never enter this scan: FLOAT_RE's hex
+    # branch (0x[0-9a-fA-F.p+-]+f?) matches any 0x-prefixed run of
+    # hex/decimal digits IN FULL, regardless of whether it contains any
+    # A-F letters, so it swallows every gArctanTable entry whole (e.g.
+    # "0x0014" -> float.fromhex("0x0014") == 20.0) and silently inflates
+    # the parsed count by 1024. Bounding the scan to end at
+    # gArctanTable's declaration keeps this correct regardless of what
+    # any regex alternative could match on data that was never meant to
+    # be read.
+    text = path.read_text(encoding="utf-8")
+    if "gArctanTable" not in text:
+        raise ValueError("could not locate gArctanTable")
     region = text[:text.index("gArctanTable")]
     values = []
     for raw in FLOAT_RE.findall(region):
@@ -169,7 +172,7 @@ def main():
         lines.append(f"    {chunk},")
     lines.append("};")
     lines.append("")
-    OUTPUT.write_text("\n".join(lines))
+    OUTPUT.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {OUTPUT} ({len(floats)} entries)")
     return 0
 
