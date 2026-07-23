@@ -208,41 +208,91 @@ against the code). If `cameraTransform` (mtxf_lookat's output) is clean,
 `mtxf_mul` should pass it through unchanged. No defect visible at the
 C-source level.
 
-## Where this leaves the investigation
+## Host-vs-target differential test: the algorithm is exonerated
 
 With gGfxPool collision, degenerate camera input (exhaustively, not just
 this-instant), never-initialized Lakitu state, sibling-node interference,
-and mtxf_mul's own logic all directly ruled out, the corruption's immediate
-cause is narrowed to one of:
+and mtxf_mul's own logic all directly ruled out at the C-source level, two
+candidates remained: (a) a defect in the *compiled* `mtxf_lookat`/`mtxf_mul`
+machine code specific to this SH-2 soft-float target, not visible from
+source; or (b) a genuine algorithmic edge case in the two functions
+themselves, independent of platform, that a source-level reading missed.
+These are very different investigations, so before starting any
+disassembly, a cheap, highly diagnostic differential test settled which one
+to pursue.
 
-- **(a) A defect in the *compiled* `mtxf_lookat`/`mtxf_mul` machine code on
-  this SH-2 soft-float target**, not visible at the C source level — e.g. a
-  codegen or soft-float-library edge case in `sqrtf`/division specific to
-  this cross-compiler/target, that a source-level reading cannot catch.
-  Confirming this would require disassembling the compiled `mtxf_lookat`/
-  `mtxf_mul` and single-instruction-stepping through the *actual* live
-  computation for this exact frame — a materially deeper investigation than
-  this pass, and one that inspects compiler/library output rather than
-  project source.
-- **(b) Something not yet identified** in how `node->pos`/`node->focus`/
-  `node->roll` (the exact values `geo_process_camera` reads, as opposed to
-  `gLakituState.pos`/`.focus` which are confirmed clean) reach `mtxf_lookat`
-  — e.g. if `update_graph_node_camera`'s sync itself races with something,
-  though no such mechanism was found and none is expected in this
-  single-threaded frame loop.
+**Test**: compile the real, unmodified `src/engine/math_util.c` — the exact
+file containing `mtxf_lookat`/`mtxf_mul`, not a reimplementation — with the
+**host** compiler (`cc`/GCC via MSYS2, not the SH-2 cross-compiler), and
+call `mtxf_lookat`/`mtxf_mul` with the exact real captured
+`gLakituState.pos`/`.focus` values from this investigation
+(`pos=(-7208.26318359375, 264.13934326171875, 7050.0)`,
+`focus=(-6566.8955078125, 124.66311645507812, 6454.2001953125)`), swept
+across the full `s16` roll range (0-65535), reproducing the exact calling
+context (`geo_process_camera`, `rendering_graph_node.c:327-328`:
+`mtxf_lookat(cameraTransform, node->pos, node->focus, node->roll);
+mtxf_mul(gMatStack[gMatStackIndex+1], cameraTransform,
+gMatStack[gMatStackIndex])`, with `gMatStack[gMatStackIndex]` reproduced as
+an explicit `mtxf_identity()` call rather than assumed). This uses the
+*real* `gSineTable`/`gCosineTable` data (`math_util.c` directly
+`#include`s `trig_tables.inc.c`), not an approximation — an improvement
+over the earlier Python re-simulation, which used continuous
+`math.sin`/`math.cos`.
 
-Both remaining candidates point at **unmodified SM64 engine code**
-(`src/engine/math_util.c`'s `mtxf_lookat`/`mtxf_mul`, `src/game/camera.c`'s
-`update_graph_node_camera`, `src/game/rendering_graph_node.c`'s
-`geo_process_camera`) or the cross-compiler's soft-float codegen/library —
-neither is this port's own platform code, and neither is a capacity
-constant or Saturn-specific timing/staging issue. Per
-`docs/saturn/ENGINE_PORT_ARCHITECTURE.md`'s engine-ownership boundary, this
-is the point to stop and report rather than modify protected engine code or
-guess at a fix in code this session did not write and has now spent
-substantial, direct, live-evidence effort trying to narrow down.
+New file: `tools/saturn/mtxf_lookat_host_diff_test.c`. New Makefile target:
+`verify-mtxf-lookat-host-diff` (deliberately **not** wired into
+`verify-all` — this tests vanilla SM64 engine math, not this port's own
+platform contracts, so it stays a standalone, reproducible diagnostic
+rather than a standing gate). Three externals referenced by *other*,
+unrelated functions in `math_util.c`'s translation unit (`find_floor`,
+`guMtxF2L`, `gVec3fZero`) needed link-only stubs, since the linker pulls in
+`math_util.o` at whole-object-file granularity once any symbol from it is
+needed — none of the three are reachable from `mtxf_lookat`/`mtxf_mul`
+themselves. `M_PI` (used by an unrelated function, `atan2f`, elsewhere in
+the same file) needed `-D_GNU_SOURCE` to unlock on the host's libm under
+strict `-std=c11`; that flag is host-toolchain-only and changes nothing
+about the code under test.
 
-No code changes were made in this investigation pass — pure evidence
-gathering. `docs/saturn/PROVENANCE.md`/`UPSTREAM_CODE_LEDGER.md`'s
+**Result** (`make -f Makefile.saturn.mk verify-mtxf-lookat-host-diff`,
+exit 0):
+
+```
+Swept all 65536 roll values.
+Exact 0xe200001c bit-for-bit matches: 0
+Other huge-magnitude (>1e10) anomalies: 0
+
+Sample result at roll=0: composed[2][2] = 0.672123253 (bits 0x3f2c1045)
+composed row2 = (0.732654393, -0.107088104, 0.672123253, 0)
+
+RESULT: HOST NEVER REPRODUCES THE CORRUPTION ACROSS ALL 65536 ROLL VALUES.
+```
+
+Every one of the 65,536 roll values produces a sane, small-magnitude result
+(row2 components in the 0.1-0.7 range — exactly what a valid rotation
+matrix row should look like). Not one produces `0xe200001c`, and not one
+produces *any* value with magnitude above `1e10`. This directly matches the
+earlier Python simulation's conclusion, now confirmed against the real C
+engine code and the real trig table data rather than an approximation.
+
+## Conclusion: SH-2-target-specific, not an algorithm bug — stop and report
+
+Per the differential test's outcome, this is now settled: **the algorithm
+in `mtxf_lookat`/`mtxf_mul` is exonerated.** The same real inputs, the same
+real unmodified engine code, produce a completely sane result on host and a
+massively corrupted one on the SH-2 target. This points at the SH-2
+cross-compiler's codegen or soft-float library for this exact input
+pattern — not a bug in SM64's own engine algorithm, and not anything in
+this port's platform code.
+
+Per the explicit instruction accompanying this test: **disassembly
+forensics of the compiled `mtxf_lookat`/`mtxf_mul` machine code is a
+separate, larger decision, not something to start unilaterally now.** This
+document stops here and reports the finding plainly, rather than
+proceeding into compiler/codegen-level investigation.
+
+No SM64 engine or platform source code was changed in this investigation
+pass — only the new diagnostic test file and its Makefile target were
+added. `docs/saturn/PROVENANCE.md`/`UPSTREAM_CODE_LEDGER.md`'s
 reference-engine re-consultation was committed separately (`48157a5`); this
-document and its underlying capture JSONs are committed alongside it.
+document, its underlying capture JSONs, and the differential test harness
+are committed together.
