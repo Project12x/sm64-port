@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#include "saturn_matrix.h"
-
 /* Q16.16 integer math primitives for the Saturn render-matrix pipeline.
  *
  * WHY THIS EXISTS: live evidence (2026-07-22, see
@@ -44,7 +42,34 @@ static inline int32_t sm64_saturn_coss_q16(int32_t angle)
     return gSaturnSineTableQ16[((uint16_t) angle >> 4) + 0x400];
 }
 
-/* Q16.16 * Q16.16 -> Q16.16 via 64-bit intermediate (SH-2 dmuls.l). */
+/* Q16.16 * Q16.16 -> Q16.16 via 64-bit intermediate (SH-2 dmuls.l).
+ *
+ * Overflow contract: safe whenever |a|,|b| <= (1 << 16) (i.e. both
+ * operands represent magnitudes <= 1.0 in Q16.16) -- the 64-bit product
+ * then satisfies |a*b| <= 1<<32, so the >>16 narrowing back to int32_t
+ * never wraps. Every sin/cos-table lookup (sm64_saturn_sins_q16 /
+ * sm64_saturn_coss_q16) and any direct product of two such lookups
+ * (e.g. this sprint's rotation cross-terms like sxsy/sxcy/cxsy)
+ * provably satisfies this bound.
+ *
+ * NOT every planned caller does, though -- verified against the plan's
+ * own Task 3/4 text, not assumed: this sprint's Q16 mirror of
+ * mtxf_scale_vec3f (sm64_saturn_mtxq_scale_vec3f) multiplies a general
+ * matrix entry (bounded only by this port's +-32768 Q16.16 ceiling, see
+ * saturn_matrix.h's decode note) by a general per-axis scale factor
+ * pulled from real engine data (graph-node/object scale, which SM64
+ * does push above 1x) -- neither operand is sin/cos-shaped, so that
+ * call site's safety is a property of real-world data staying in
+ * range, not a guarantee this function provides. It needs its own
+ * justification (or a checked variant) when it lands, not an appeal to
+ * this comment.
+ *
+ * Larger operands are NOT range-checked here (no bool-overflow return,
+ * unlike sm64_saturn_matrix_mul in saturn_matrix.h) -- deliberately, to
+ * avoid an API-wide signature change for a helper whose majority use is
+ * the provably-bounded sin/cos case. If a future caller needs unbounded
+ * Q16.16 operands with a hard safety guarantee, add an overflow-checked
+ * variant rather than assuming this one covers it. */
 static inline int32_t sm64_saturn_q16_mul(int32_t a, int32_t b)
 {
     return (int32_t) (((int64_t) a * (int64_t) b) >> 16);
@@ -58,6 +83,8 @@ static inline int64_t sm64_saturn_isqrt64(int64_t v)
 {
     int64_t rem = v;
     int64_t root = 0;
+    /* 62 = second-to-top bit of a 64-bit magnitude, mirroring the
+     * classic 32-bit version's 1<<30 (largest power of 4 that fits). */
     int64_t bit = (int64_t) 1 << 62;
 
     if (v <= 0) {
@@ -126,6 +153,10 @@ static inline int32_t sm64_saturn_float_to_q16(float f)
     return (int32_t) bits.f; /* single _fixsfsi, truncates toward zero */
 }
 
+/* Q16.16 -> float, exact, no floating-point arithmetic (see
+ * sm64_saturn_float_to_q16 above for the full rationale). Only ever
+ * divides (exponent decreases), so unlike its inverse there is no
+ * overflow boundary to guard here. */
 static inline float sm64_saturn_q16_to_float(int32_t q)
 {
     union { float f; uint32_t u; } bits;

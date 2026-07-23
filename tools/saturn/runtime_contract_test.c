@@ -1625,6 +1625,7 @@ static void test_kernels_q16_mul(void)
     assert(sm64_saturn_q16_mul(1 << 16, 1 << 16) == (1 << 16));
     assert(sm64_saturn_q16_mul(3 << 16, 1 << 15) == (3 << 15)); /* 3*0.5 */
     assert(sm64_saturn_q16_mul(-(1 << 16), 1 << 16) == -(1 << 16));
+    assert(sm64_saturn_q16_mul(-(1 << 16), -(1 << 16)) == (1 << 16));
     assert(sm64_saturn_q16_mul(0, 12345678) == 0);
 }
 
