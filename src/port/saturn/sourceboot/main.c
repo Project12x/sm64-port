@@ -5,9 +5,16 @@
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
+#include "saturn_gouraud_bank.h"
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
+#include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
+                                           * under src/port/saturn/; matches
+                                           * hwtest's existing include style
+                                           * since no -I path exposes gpl/
+                                           * by bare name (see the Makefile's
+                                           * SH_CFLAGS -I list). */
 
 /* SM64's bootstrap main pool, LWRAM-resident. History of this placement:
  *
@@ -62,6 +69,17 @@ static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __attribute__((section(".lwram_cmdts")));
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
+
+/* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
+ * lockup class the VDP1 backend above already works around (see its
+ * header comment). 1536 * 8 = 12,288 bytes against the ~191 KiB
+ * measured HWRAM margin (this file's SOURCEBOOT_MAIN_POOL_BYTES
+ * comment). One table per resolved triangle, rebuilt every frame
+ * (bank_begin) and uploaded used-prefix-only after emission -- see
+ * saturn_fast3d_vdp1_emit.c. */
+static sm64_saturn_gouraud_table_t
+    sourceboot_gouraud_staging[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
+static sm64_saturn_gouraud_bank_t sourceboot_gouraud_bank;
 
 /* Per-frame SMPC INTBACK request, on the same VBLANK-OUT cadence the two
  * proven sibling targets use (marioturntable/main.c's vblank_out_handler;
@@ -159,6 +177,69 @@ int main(void) {
         }
     }
 
+    {
+        vdp1_vram_partitions_t partitions;
+        uintptr_t cmd_end = (uintptr_t)VDP1_VRAM(0) +
+            (uintptr_t)SOURCEBOOT_VDP1_COMMAND_CAPACITY *
+                sizeof(vdp1_cmdt_t);
+        uint16_t capacity = 0;
+
+        /* Stock Yaul default (__vdp_init(), run by crt0 before main())
+         * only reserves VDP1_VRAM_DEFAULT_GOURAUD_COUNT (1024) tables =
+         * 8192 bytes -- confirmed against the vendored libyaul sources
+         * (work/upstream/libyaul/libyaul/scu/bus/b/vdp/vdp_init.c:50-53
+         * and vdp1_vram.c:22-78), not just the installed headers. Real
+         * captured Bob-omb Battlefield free-roam frames run 1,365-1,431
+         * triangles (SOURCEBOOT_VDP1_COMMAND_CAPACITY's comment above),
+         * so the stock 1024-table cap would push the ORDINARY case into
+         * the flat-fallback path, not a rare edge case. Re-partition
+         * explicitly so gouraud covers the full MAX_RESOLVED_TRIANGLES
+         * (1536) worst case -- see this task's commit message for the
+         * full byte-budget arithmetic against VDP1_VRAM_SIZE.
+         *
+         * texture_size and clut_count go to 0: this backend does not
+         * use Yaul's partition-aware texture or CLUT allocation
+         * anywhere in this target (verified: partitions.texture_base/
+         * clut_base have no consumer in sourceboot's own sources --
+         * only the separate hwtest/castleviewer/marioturntable binaries
+         * reference those fields, each with its own independent
+         * partition setup in its own main()). Freeing that space is
+         * what makes room for the larger gouraud partition.
+         *
+         * cmdt_count stays at SOURCEBOOT_VDP1_COMMAND_CAPACITY so
+         * Yaul's own bookkeeping matches the size of the command region
+         * this backend actually writes (VDP1_VRAM(0) CPU-copy in
+         * sm64_saturn_vdp1_backend_upload, bypassing Yaul's
+         * partition-aware cmdt allocator entirely -- see
+         * saturn_vdp1_backend.h), even though nothing on this path
+         * reads partitions.cmdt_base. */
+        vdp1_vram_partitions_set(SOURCEBOOT_VDP1_COMMAND_CAPACITY, 0U,
+                                 SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES,
+                                 0U);
+
+        saturn_dma_queue_init();
+        vdp1_vram_partitions_get(&partitions);
+        /* The backend CPU-copies its command list to VDP1_VRAM(0)
+         * without consulting Yaul's partition layout -- verify the
+         * gouraud partition clears the command region before trusting
+         * it. Overlap => capacity 0 => every triangle takes the
+         * counted flat fallback (degradation contract), no crash. */
+        if ((uintptr_t)partitions.gouraud_base >= cmd_end &&
+            partitions.gouraud_size >=
+                sizeof(sm64_saturn_gouraud_table_t)) {
+            uint32_t fit = partitions.gouraud_size /
+                sizeof(sm64_saturn_gouraud_table_t);
+            capacity = (uint16_t)(fit >
+                SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES ?
+                SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES : fit);
+        } else {
+            dbgio_puts("sourceboot: gouraud partition unusable\n");
+        }
+        (void)sm64_saturn_gouraud_bank_init(&sourceboot_gouraud_bank,
+            sourceboot_gouraud_staging, capacity,
+            (uintptr_t)partitions.gouraud_base);
+    }
+
     main_pool_init(sourceboot_main_pool,
                    sourceboot_main_pool + sizeof(sourceboot_main_pool));
     gEffectsMemoryPool = mem_pool_init(0x4000U, MEMORY_POOL_LEFT);
@@ -174,7 +255,8 @@ int main(void) {
     for (;;) {
         game_loop_one_iteration();
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
-                                     &sourceboot_vdp1_backend);
+                                     &sourceboot_vdp1_backend,
+                                     &sourceboot_gouraud_bank);
 
         /* VDP1 runs in Yaul's default "auto" (1-cycle) interval mode here
          * (vdp1_sync_interval_set(0), set unconditionally by libyaul's

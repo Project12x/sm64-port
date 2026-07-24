@@ -45,3 +45,11 @@ The host tool tests pass and the image builds with the pinned SH-2 toolchain.
 The queue is intentionally drained synchronously for this bring-up; the
 renderer can later submit work across a frame boundary without changing the
 source-level contract.
+
+The E2 sourceboot target now links the same adapter too (Gouraud-shading
+cycle, 2026-07-24): `saturn_dma_queue_transfer_wait()` uploads each frame's
+used-prefix of Gouraud tables from a CPU-staged HWRAM array to VDP1 VRAM,
+after the sourceboot Fast3D emit pass fills them
+(`src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`) and before the VDP1 backend
+uploads the command list that references them. Same synchronous-drain
+bring-up posture as the hardware-test image above.
