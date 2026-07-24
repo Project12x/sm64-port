@@ -313,7 +313,7 @@ comment fix (`2^39`->`2^40`) in `f4fffc5`.
 - Modify: `src/port/saturn/gfx/saturn_fast3d_frontend.c` (decode cases)
 - Test: `tools/saturn/runtime_contract_test.c` (append)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```c
 static void test_frontend_decodes_lights(void)
@@ -385,11 +385,11 @@ static void test_frontend_counts_unsupported_num_lights(void)
 
 Register both in `main()`. `gdSPDefLights1` availability: it is a gbi.h macro producing a `Lights1` initializer — if it does not expand cleanly in the test TU, hand-write the `Lights1` initializer instead (col/colc duplicated, layout per `gbi.h:1398-1441`) and say so in the commit message.
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Expected: FAIL to compile — `frontend.lights` / `unsupported_num_lights` don't exist yet.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `saturn_fast3d_frontend.h`:
 - Add `#include "saturn_light_q16.h"` next to the existing includes.
@@ -460,16 +460,32 @@ In `saturn_fast3d_frontend.c`:
 - `G_MOVEWORD` needs `memcpy` → confirm `<string.h>` is included in the .c (it is, since Task 5 of the wire-format sprint touched it — verify).
 - Check `count_command`'s comment at `:73` listing G_MOVEWORD as "other" — update the comment (it now has a real decode case).
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Host suite: exit 0, all tests including Task 1's.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_fast3d_frontend.h src/port/saturn/gfx/saturn_fast3d_frontend.c tools/saturn/runtime_contract_test.c
 git commit -m "feat(saturn): decode G_MOVEWORD numLights and G_MV_LIGHT into frontend light state"
 ```
+
+Committed as `30d8d25`. Reading the real reference caught something the
+sketch's bare `else` for the ambient branch missed:
+`rendering_graph_node.c` unconditionally emits `gSPLookAt` every frame
+under this build's dialect, which sends two more `G_MOVEMEM`/`G_MV_LIGHT`
+commands at `lightidx` -2/-1 (matching `gfx_pc.c`'s own `lightidx >= 0`
+"skip lookat" guard) -- the sketch would have let those silently
+overwrite `amb_col` with direction bytes every frame. Fixed with an
+explicit `lightidx == 0 || lightidx == 1` guard, independently
+re-verified by spec-compliance review via an actual revert-and-rebuild.
+Code-quality review then found two of the three new tests asserted
+fields already true from `sm64_saturn_light_state_init`'s own defaults,
+making them unable to detect their own decode logic being deleted --
+fixed in `387bd04` by seeding non-default values before `submit()`,
+confirmed both ways (revert the decode -> test fails; keep the fix ->
+test passes).
 
 ---
 
