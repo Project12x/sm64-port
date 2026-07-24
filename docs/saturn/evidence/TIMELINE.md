@@ -1431,15 +1431,28 @@ and terrain in consistent white/grey with one distinctly colored actor.
 frame has red and blue exchanged. The sprint's final holistic review found
 the RGB1555 pack writing red into bits 14-10, which Yaul's own `union
 rgb1555` (`msb:1; b:5; g:5; r:5`, MSB-first on big-endian SH-2) reserves
-for blue. The "one distinctly colored actor" is Mario, whose overalls are
-blue, not red. The swap was invisible everywhere else in frame because
-`r == g == b` is a fixed point of it and the terrain is achromatic — so
-neither the live capture nor a human looking at the picture could have
-caught it; it took decoding the bitfield union numerically. The defect
-predates this sprint (the old flat-color pack had the same lane order),
-but this sprint amplified it to all three corners, routed it through lit
-geometry for the first time, and its new test asserted the swapped
-constants as correct. Fixed in `12eeca3`.
+for blue.
+
+The frame's one chromatic object is the **cannon**, and the original game
+data settles the question independently of anyone's reading of the
+picture. Both cannon models carry exactly two material groups: an
+achromatic one (`0x4c,0x4c,0x4c` ambient / `0xff,0xff,0xff` directional)
+and a dominant-blue one — `0x0e,0x10,0x4c` / `0x30,0x37,0xff` for
+`cannon_base` (`actors/cannon_base/model.inc.c:4-13`) and
+`0x00,0x00,0x0f` / `0x00,0x00,0x32` for `cannon_barrel`
+(`actors/cannon_barrel/model.inc.c:4-13`). A black-and-blue cannon is
+what the source specifies; the pre-fix capture rendered it dark red,
+which is exactly what a `0xff` blue channel does when packed into the
+red lane.
+
+The swap was invisible everywhere else in frame because `r == g == b` is
+a fixed point of it and the terrain is achromatic — so the live capture
+could not surface it and a human looking at the picture could not be
+expected to catch it. It took decoding the bitfield union numerically.
+The defect predates this sprint (the old flat-color pack had the same
+lane order), but this sprint amplified it to all three corners, routed it
+through lit geometry for the first time, and its new test asserted the
+swapped constants as correct. Fixed in `12eeca3`.
 
 Evidence: [Gouraud free-roam screenshot](screenshots/e2-sourceboot-gouraud-freeroam-2026-07-24.png)
 (320x224 internal `video.capture`, frame 26,740, SHA-256
@@ -1450,6 +1463,57 @@ Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
 post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
 `c6a242b`. Profile offsets were re-ground-truthed with an `offsetof()` probe
 compiled under the host suite's own flags rather than hand-derived.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
+
+### 2026-07-24 — Corrected color lanes: the cannon renders black and blue
+
+The Gouraud entry above shipped with red and blue exchanged. Yaul's
+`union rgb1555` declares its bitfields `msb:1; b:5; g:5; r:5`, and SH-2 is
+big-endian, so allocation runs MSB-first: blue occupies bits 14-10 and red
+bits 4-0. This port's RGB1555 pack put red in bits 14-10. Every chromatic
+surface therefore reached VDP1 with those two channels swapped.
+
+The defect is older than the Gouraud sprint — the previous flat-color pack
+used the same lane order — but it was invisible until now for a specific
+reason: `r == g == b` is a fixed point of an R/B swap, so achromatic
+geometry renders identically either way, and until this sprint routed
+lighting through the pack there was almost nothing chromatic on screen.
+The sprint then amplified it (vertex-0-flat to all three corners, and
+through lit geometry for the first time) and regression-locked it, because
+the new corner-color test's expected constants were written from the
+implementation rather than from the hardware and so asserted the swap as
+correct.
+
+The original game data confirms the fix rather than any reading of the
+picture. Both BOB cannon models carry one achromatic material group and
+one dominant-blue group: `0x30,0x37,0xff` for `cannon_base` and
+`0x00,0x00,0x32` for `cannon_barrel`. A `0xff` blue channel packed into
+the red lane is precisely what rendered as dark red before; with the lanes
+corrected the cannon reads black and blue, as the source specifies.
+
+The two captures are otherwise identical, which is the cleanest possible
+evidence that this changed color and nothing else: same deterministic run,
+same probed frame 228, byte-identical counters (`lit_vertices` 2,426,
+`unlit_vertices` 36, `fog_dropped_triangles` 330), same screenshot
+sequence 26,740 — and a different frame hash
+(`8f3141eb…` → `fdde068b…`). Same geometry, different pixels.
+
+Evidence: [corrected screenshot](screenshots/e2-sourceboot-gouraud-rgbfix-freeroam-2026-07-24.png)
+(320x224 internal `video.capture`, frame 26,740, SHA-256
+`1cfe17fc639c6d358d1b6dbe138ed242a1add8f79a10e7aa177826be325d66d6`),
+[full run report](reports/e2-sourceboot-gouraud-rgbfix-freeroam-2026-07-24.json).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
+post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
+`12eeca3`.
+
+Found by this sprint's final holistic cross-task review, by decoding the
+bitfield union numerically — not by looking at the frame. The standing
+lesson: a visual gate cannot validate anything chromatic on an achromatic
+scene, and expected-value constants must be derived from the hardware
+definition, never transcribed from the implementation they are meant to
+check.
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.

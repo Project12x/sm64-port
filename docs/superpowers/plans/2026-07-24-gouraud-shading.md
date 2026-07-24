@@ -1414,7 +1414,11 @@ The user confirmed the first screenshot directly ("the screenshot looks
 as described"), satisfying the standing visual gate at the time, and the
 TIMELINE.md entry and gallery card (stage 121) followed in `d1c6e8c`.
 **That frame was subsequently found to have red and blue swapped**
-(`12eeca3`) — the confirmed "dark red actor" was Mario in blue overalls,
+(`12eeca3`) — the confirmed "dark red actor" is the BOB cannon, whose two
+models are achromatic plus dominant-blue in the original data
+(`0x30,0x37,0xff` and `0x00,0x00,0x32`; `actors/cannon_base/model.inc.c:4-13`,
+`actors/cannon_barrel/model.inc.c:4-13`), so a `0xff` blue channel packed
+into the red lane is exactly what made it read as red,
 and the swap was invisible on the frame's dominant achromatic terrain
 because `r == g == b` is a fixed point of it. Superseded by the corrected
 re-capture; see the entries following this one.
