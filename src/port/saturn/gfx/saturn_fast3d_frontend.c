@@ -483,18 +483,22 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * consecutive row-major s32 Q16.16 values -- what
              * rendering_graph_node.c's saturn_mtxq_write_wire and the
              * TARGET_SATURN guMtxF2L override actually write there (see
-             * saturn_matrix.h's SATURN_MTX_IS_Q16 note). gbi_floats
-             * stays defined unconditionally: the #else decode path below
-             * still needs it, and so does the dbg_root_mtx_source_m22
-             * diagnostic further down, which is float-path-only bring-up
-             * instrumentation and is not meaningful (and not consulted)
-             * under the Q16 wire format. */
-            const float *gbi_floats = (const float *)(uintptr_t)w1;
+             * saturn_matrix.h's SATURN_MTX_IS_Q16 note). gbi_floats is
+             * declared only in the #else arm below, not unconditionally:
+             * under SATURN_MTX_IS_Q16 the wire buffer's effective type is
+             * int32_t[4][4] (set by saturn_mtxq_write_wire's memcpy, C11
+             * 6.5p6), so reading it through a float-typed lvalue would be
+             * an access through an incompatible type -- real strict-
+             * aliasing UB (C11 6.5p7), not just a style concern. The only
+             * other place this file ever reads gbi_floats (the
+             * dbg_root_mtx_source_m22 diagnostic further down) is guarded
+             * by the same #ifndef for the same reason. */
             sm64_saturn_mtx_t decoded;
 
 #ifdef SATURN_MTX_IS_Q16
             sm64_saturn_matrix_decode_q16((const int32_t *)(uintptr_t)w1, &decoded);
 #else
+            const float *gbi_floats = (const float *)(uintptr_t)w1;
             sm64_saturn_matrix_decode(gbi_floats, &decoded);
 #endif
 
@@ -552,7 +556,16 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                  * write -- exactly what a later triangle at that same
                  * depth would have used as its "top". */
                 if (frontend->matrix_stack.depth == 1U) {
+#ifndef SATURN_MTX_IS_Q16
+                    /* gbi_floats only exists in this (non-Q16) build --
+                     * see the strict-aliasing note where it's declared
+                     * above for why it's guarded out entirely under
+                     * SATURN_MTX_IS_Q16 rather than read via a
+                     * differently-typed cast. This field is also
+                     * admittedly meaningless in Q16 builds regardless,
+                     * since nothing downstream consumes it there. */
                     profile->dbg_root_mtx_source_m22 = gbi_floats[2 * 4 + 2];
+#endif
                     profile->dbg_root_mtx_decoded_m22 = decoded.m[2][2];
                     profile->dbg_root_mtx_post_top_m22 =
                         frontend->matrix_stack.entries[0].m[2][2];
