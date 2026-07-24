@@ -886,7 +886,7 @@ required a fix round.
 - Create: `src/port/saturn/gfx/saturn_gouraud_bank.h`
 - Test: `tools/saturn/runtime_contract_test.c` (append)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```c
 static void test_gouraud_bank_alloc_and_used_prefix(void)
@@ -931,11 +931,11 @@ static void test_gouraud_bank_overflow_returns_null(void)
 
 Register both in `main()`; add `#include "saturn_gouraud_bank.h"` at the top.
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Expected: FAIL to compile — header missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `src/port/saturn/gfx/saturn_gouraud_bank.h`:
 
@@ -1015,16 +1015,48 @@ sm64_saturn_gouraud_bank_used_bytes(const sm64_saturn_gouraud_bank_t *bank)
 #endif
 ```
 
-- [ ] **Step 4: Run tests to verify pass**
+- [x] **Step 4: Run tests to verify pass**
 
 Host suite: exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_gouraud_bank.h tools/saturn/runtime_contract_test.c
 git commit -m "feat(saturn): frame-local Gouraud table staging bank (bookkeeping, host-tested)"
 ```
+
+Committed as `a4ed0c4`. Byte-identical to the sketch; zero deviation.
+Kept strictly to bookkeeping scope as instructed -- no Yaul includes,
+no VRAM partition queries, no DMA queue code (independently grepped by
+both reviewers, not just self-reported).
+
+Two-stage review: spec-compliance ✅ clean, no issues -- independently
+confirmed `_init` configures all fields (including `staging`/`vram_base`)
+unconditionally before the `capacity > 0` return, so a zero-capacity
+bank is fully well-formed rather than partially uninitialized; confirmed
+the `>=` bounds check (not an off-by-one `>`); reproduced two mutations
+(bounds-check flip, `_init` rewritten as an early-return before field
+assignment) and confirmed both correctly break their target assertions;
+ran the host suite with temporary execution markers to prove both new
+tests actually run rather than being silently skipped.
+
+Code-quality review: Ready to merge -- Yes, no Critical or Important
+issues. Went further than the spec-compliance pass with 4 additional
+independent mutations of its own (frozen address computation, hardcoded
+`_used_bytes`, no-op `_begin`, non-advancing `_alloc`) -- 6/6 total
+mutations caught across both reviews, 0% survival. Confirmed this file
+correctly follows the codebase's Yaul-free bookkeeping-header idiom
+(`saturn_light_q16.h`, `saturn_matrix_kernels.h`, `saturn_command_arena.h`)
+rather than the OTHER sibling pattern that exists in this same directory
+(`saturn_texture_residency.h`, which takes a Yaul `vdp1_vram_partitions_t*`
+directly) -- confirmed as the deliberately correct choice for this task's
+host-testability goal, not an oversight. One Minor, forward-looking-only
+note (no fix needed now): Task 6 must remember to add the
+`_Static_assert(sizeof(sm64_saturn_gouraud_table_t) ==
+sizeof(vdp1_gouraud_table_t), ...)` at the emit TU as already sketched in
+Task 6's own plan text below -- nothing on this task's side enforces that
+Task 6 actually keeps it.
 
 ---
 
