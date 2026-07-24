@@ -1,0 +1,73 @@
+#ifndef SM64_SATURN_GOURAUD_BANK_H
+#define SM64_SATURN_GOURAUD_BANK_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/* Frame-local VDP1 Gouraud table staging bank -- pure bookkeeping,
+ * Yaul-free so the accounting is host-testable. One 8-byte table per
+ * emitted primitive per frame (design spec 2026-07-24; per-frame
+ * rebuild by user decision, caching is fidelity-ladder item 1).
+ *
+ * The Yaul-side owner (sourceboot) provides the staging array (which
+ * MUST live in HWRAM, never .lwram_bss -- the SCU-DMA-from-LWRAM
+ * lockup class documented in the VDP1 backend applies to this upload
+ * path too) and the device base address (partitions.gouraud_base),
+ * and performs the actual used-prefix upload after emission. Layout
+ * matches Yaul's vdp1_gouraud_table_t (4 x RGB1555, 8 bytes,
+ * libyaul .../vdp1/vram.h:32-34) -- static-asserted at the emit TU,
+ * which sees both types. */
+typedef struct sm64_saturn_gouraud_table {
+    uint16_t colors[4];
+} sm64_saturn_gouraud_table_t;
+
+typedef struct sm64_saturn_gouraud_bank {
+    sm64_saturn_gouraud_table_t *staging;
+    uintptr_t vram_base;
+    uint16_t capacity;
+    uint16_t used;
+} sm64_saturn_gouraud_bank_t;
+
+/* Returns false (and configures an always-NULL bank) for capacity 0 --
+ * the caller's graceful all-flat fallback when the VRAM partition is
+ * missing or overlaps the command region. */
+static inline bool
+sm64_saturn_gouraud_bank_init(sm64_saturn_gouraud_bank_t *bank,
+                              sm64_saturn_gouraud_table_t *staging,
+                              uint16_t capacity, uintptr_t vram_base)
+{
+    bank->staging = staging;
+    bank->vram_base = vram_base;
+    bank->capacity = capacity;
+    bank->used = 0;
+    return capacity > 0;
+}
+
+static inline void
+sm64_saturn_gouraud_bank_begin(sm64_saturn_gouraud_bank_t *bank)
+{
+    bank->used = 0;
+}
+
+/* Returns the staging slot to fill and writes the table's device
+ * address (for CMDGRDA) to *vram_addr; NULL when exhausted. */
+static inline sm64_saturn_gouraud_table_t *
+sm64_saturn_gouraud_bank_alloc(sm64_saturn_gouraud_bank_t *bank,
+                               uintptr_t *vram_addr)
+{
+    if (bank->used >= bank->capacity) {
+        return NULL;
+    }
+    *vram_addr = bank->vram_base +
+        (uintptr_t)bank->used * sizeof(sm64_saturn_gouraud_table_t);
+    return &bank->staging[bank->used++];
+}
+
+static inline size_t
+sm64_saturn_gouraud_bank_used_bytes(const sm64_saturn_gouraud_bank_t *bank)
+{
+    return (size_t)bank->used * sizeof(sm64_saturn_gouraud_table_t);
+}
+
+#endif

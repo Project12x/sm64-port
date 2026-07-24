@@ -5,6 +5,7 @@
 
 #include "saturn_frame_profile.h"
 #include "saturn_gouraud.h"
+#include "saturn_gouraud_bank.h"
 #include "saturn_command_arena.h"
 #include "saturn_memory_arena.h"
 #include "saturn_projected_workarea.h"
@@ -2279,6 +2280,65 @@ static void test_frontend_counts_dropped_fog(void)
     assert(frontend.profile.fog_dropped_triangles == 1);
 }
 
+/* Task 5: the frame-local Gouraud staging bank is pure bookkeeping
+ * (Yaul-free) that will hold one 8-byte table per emitted triangle.
+ * This test exercises alloc's two return channels together -- the
+ * staging slot pointer AND the device address written to *vram_addr --
+ * and the used-prefix accounting init()/begin() drive. A broken
+ * address computation (e.g. always returning vram_base instead of
+ * advancing by sizeof(table) per slot) is caught by the addr1 assert;
+ * a broken used-bytes count (e.g. hardcoded 0, or not multiplying by
+ * the table size) is caught by the used_bytes asserts; a begin() that
+ * forgets to reset `used` is caught by the post-reset used_bytes == 0
+ * assert immediately after. */
+static void test_gouraud_bank_alloc_and_used_prefix(void)
+{
+    static sm64_saturn_gouraud_table_t staging[4];
+    sm64_saturn_gouraud_bank_t bank;
+    uintptr_t addr0, addr1;
+    sm64_saturn_gouraud_table_t *t;
+
+    assert(sm64_saturn_gouraud_bank_init(&bank, staging, 4, 0x25C7F000u));
+    sm64_saturn_gouraud_bank_begin(&bank);
+    t = sm64_saturn_gouraud_bank_alloc(&bank, &addr0);
+    assert(t == &staging[0]);
+    assert(addr0 == 0x25C7F000u);
+    t = sm64_saturn_gouraud_bank_alloc(&bank, &addr1);
+    assert(t == &staging[1]);
+    assert(addr1 == 0x25C7F000u + sizeof(sm64_saturn_gouraud_table_t));
+    assert(sm64_saturn_gouraud_bank_used_bytes(&bank) ==
+           2 * sizeof(sm64_saturn_gouraud_table_t));
+    sm64_saturn_gouraud_bank_begin(&bank); /* frame reset */
+    assert(sm64_saturn_gouraud_bank_used_bytes(&bank) == 0);
+}
+
+/* Companion test: capacity-boundary enforcement (allocs beyond capacity
+ * return NULL rather than overrunning the caller's staging array) and
+ * the zero-capacity degrade-first contract -- a missing/overlapping
+ * VRAM partition yields a bank that is legal to use but always
+ * exhausted. The zero-capacity alloc-returns-NULL assert specifically
+ * catches an off-by-one `used > capacity` (instead of `>=`) mutation:
+ * under `>`, 0 > 0 is false, so a broken bank would allocate slot 0
+ * instead of refusing -- this exercises that boundary directly, not
+ * just the nonzero-capacity overflow case above it. */
+static void test_gouraud_bank_overflow_returns_null(void)
+{
+    static sm64_saturn_gouraud_table_t staging[2];
+    sm64_saturn_gouraud_bank_t bank;
+    uintptr_t addr;
+
+    assert(sm64_saturn_gouraud_bank_init(&bank, staging, 2, 0x1000u));
+    sm64_saturn_gouraud_bank_begin(&bank);
+    assert(sm64_saturn_gouraud_bank_alloc(&bank, &addr) != NULL);
+    assert(sm64_saturn_gouraud_bank_alloc(&bank, &addr) != NULL);
+    assert(sm64_saturn_gouraud_bank_alloc(&bank, &addr) == NULL);
+    /* zero-capacity init (partition missing/overlapping) is legal and
+     * yields an always-NULL bank -- the graceful all-flat fallback */
+    assert(!sm64_saturn_gouraud_bank_init(&bank, staging, 0, 0x1000u));
+    sm64_saturn_gouraud_bank_begin(&bank);
+    assert(sm64_saturn_gouraud_bank_alloc(&bank, &addr) == NULL);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -2337,5 +2397,7 @@ int main(void)
     test_frontend_unlit_vertex_passes_colors_through();
     test_frontend_resolved_triangle_carries_corner_colors();
     test_frontend_counts_dropped_fog();
+    test_gouraud_bank_alloc_and_used_prefix();
+    test_gouraud_bank_overflow_returns_null();
     return 0;
 }
