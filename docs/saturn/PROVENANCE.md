@@ -1,6 +1,6 @@
 # Saturn Port Provenance and Reuse Ledger
 
-Last updated 2026-07-18.
+Last updated 2026-07-23.
 
 This ledger records the exact prior art inspected for the Saturn port, the
 permission known at the time of inspection, and how the project may use it. It
@@ -341,6 +341,18 @@ allocator anywhere in this file. Pattern study only (see
 `gGfxPool`/`alloc_display_list` bump allocator as a ported-pattern fragility,
 not a destination for new code; no source copied.
 
+**2026-07-23 re-consultation** (Q16.16 render-matrix sprint,
+`docs/superpowers/plans/2026-07-23-q16-render-matrix-sprint.md`): consulted
+`FLASH/SQRTTAB.H` at the same pinned commit as behavior precedent for
+integer square root on the Saturn — a shipped Saturn engine solving the
+same no-FPU problem with table-driven integer sqrt. The sprint's
+`sm64_saturn_isqrt64` (`src/port/saturn/gfx/saturn_matrix_kernels.h`) is a
+clean-room implementation of the standard bit-by-bit shift/compare
+algorithm, not a port of SlaveDriver's table approach; no GPL source was
+copied, and the new kernel/constructor headers deliberately live outside
+`src/port/saturn/gpl/` as GPL-free code (see the clean-room note under
+Sonic Z-Treme below).
+
 ### johannes-fetz/joengine
 
 | Field | Record |
@@ -396,6 +408,20 @@ constant via the `AdjWork` cumulative-offset macro chain — never two runtime
 pointers growing toward each other. Pattern study only (see
 `UPSTREAM_CODE_LEDGER.md`'s M5 row); no source copied.
 
+**2026-07-23 re-consultation** (Q16.16 render-matrix sprint,
+`docs/superpowers/plans/2026-07-23-q16-render-matrix-sprint.md`): Sonic
+Z-Treme served as the sprint's existence proof — a real,
+substantially-complete Saturn 3D game built entirely on SGL's `FIXED`
+(Q16.16) fixed-point API, demonstrating that the exact fixed-point matrix
+approach this sprint adopted carries a shipped-scale Saturn renderer. No
+additional files were read for this and no source was copied. The sprint's
+new headers (`src/port/saturn/gfx/saturn_matrix_kernels.h`,
+`saturn_matrix_ctors.h`) are deliberately GPL-free clean-room
+implementations: although GPL reuse is authorized for this project, GPL
+code is confined to `src/port/saturn/gpl/` and is not mixed next to
+SM64-adjacent source, per the license-isolation discipline already
+established in this ledger.
+
 ### Sega hardware documentation
 
 | Reference | Use |
@@ -425,6 +451,23 @@ adopted from the documentation is reimplemented independently against Yaul.
 The study surfaced one hardware constraint with direct code impact (SCU DMA
 cannot access WORKRAM-L, corroborated by libyaul's own `scu/dma.h`), recorded
 there as a critical finding against the current VDP1 upload path.
+
+**2026-07-23 re-consultation** (Q16.16 render-matrix sprint,
+`docs/superpowers/plans/2026-07-23-q16-render-matrix-sprint.md`):
+documentation study only, per this section's standing reuse mode. SGL's
+`FIXED` type is the identical Q16.16 fixed-point format this sprint
+adopted, and `slLookAt(FIXED*, FIXED*, ANGLE)` is precisely a fixed-point
+camera lookat — the architectural precedent for the sprint's whole
+approach of doing the render-matrix pipeline in Q16.16 on the FPU-less
+SH-2 (`work/upstream/sonic-z-treme/Compiler/SGL_302j/INC/SL_DEF.H:909`,
+`Documentation/DOC/210A_US/MATH.TXT:313`). `slSquart`/`slSquartFX`
+(`SL_DEF.H:869-870`) are the precedent for integer square root. As before,
+no SGL code, headers, or samples were copied, linked, or redistributed:
+the sprint's kernels (`src/port/saturn/gfx/saturn_matrix_kernels.h`,
+`saturn_matrix_ctors.h`) are independent clean-room implementations of
+standard algorithms, behavior-grounded in this documentation, mirroring
+SM64's own `mtxf_*` formulas — not SGL's implementation, which was never
+available to read (`LIB/LIBSGL.A` is a compiled binary).
 
 ## Bootstrap change declaration
 
