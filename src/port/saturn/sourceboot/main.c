@@ -215,7 +215,13 @@ int main(void) {
          * texture code without widening this parameter first will not
          * crash (sm64_saturn_texture_residency_t degrades safely at
          * capacity 0, per its own bounds check) but will silently
-         * upload nothing.
+         * upload nothing. When you do widen it, keep texture_size a
+         * MULTIPLE OF 8: gouraud_base is laid immediately after the
+         * texture region, and an 8-byte-misaligned gouraud_base is
+         * silently truncated by CMDGRDA's >>3 encoding -- see the
+         * alignment guard on the partition check below, which will
+         * catch it into the flat-fallback path rather than corrupting
+         * every lit primitive.
          *
          * cmdt_count stays at SOURCEBOOT_VDP1_COMMAND_CAPACITY so
          * Yaul's own bookkeeping matches the size of the command region
@@ -234,8 +240,23 @@ int main(void) {
          * without consulting Yaul's partition layout -- verify the
          * gouraud partition clears the command region before trusting
          * it. Overlap => capacity 0 => every triangle takes the
-         * counted flat fallback (degradation contract), no crash. */
+         * counted flat fallback (degradation contract), no crash.
+         *
+         * The third clause is an alignment guard, and it matters more
+         * than it looks: vdp1_cmdt_gouraud_base_set() encodes the table
+         * address as (base >> 3) & 0xFFFF (libyaul .../vdp1/cmdt.h:415),
+         * so a gouraud_base that is not 8-byte aligned has its low bits
+         * SILENTLY TRUNCATED -- every lit primitive would then read its
+         * Gouraud table from the wrong address, with no counter, no
+         * fallback, and no boot-time complaint. Today's layout is
+         * aligned only as a consequence of texture_size being 0; the
+         * partition allocator lays gouraud_base immediately after the
+         * texture region, so ANY texture budget the next cycle passes
+         * here moves it. Fail into the counted flat path instead of
+         * corrupting every frame. */
         if ((uintptr_t)partitions.gouraud_base >= cmd_end &&
+            ((uintptr_t)partitions.gouraud_base &
+                (sizeof(sm64_saturn_gouraud_table_t) - 1U)) == 0U &&
             partitions.gouraud_size >=
                 sizeof(sm64_saturn_gouraud_table_t)) {
             uint32_t fit = partitions.gouraud_size /
