@@ -1385,3 +1385,58 @@ post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
+
+### 2026-07-24 — Real vertex lighting: Gouraud shading through VDP1
+
+The colors in the 2026-07-23 capture were never colors. SM64 enables
+`G_LIGHTING` globally (`src/game/game_init.c:131`), and under lighting the
+trailing four bytes of every vertex are a packed s8 **normal** (`Vtx_tn`,
+`include/PR/gbi.h:1134`), not RGBA. The Fast3D frontend had been reading
+those bytes unconditionally as color and flat-shading each triangle with
+vertex 0's — so the previous milestone's garbage-colored patchwork was
+literally misinterpreted normal vectors painted as material. Implementing
+lighting is what makes the frame's colors correct at all; this was a
+correctness fix, not a polish pass.
+
+A seven-task sprint built the real path: a Q16.16 light evaluator mirroring
+`src/pc/gfx/gfx_pc.c`'s lighting semantics formula-for-formula
+(host-differential-tested against a float reference), decode of
+`G_MOVEWORD`/`G_MW_NUMLIGHT` and `G_MOVEMEM`/`G_MV_LIGHT` into frontend
+light state, `G_VTX` gated on `G_LIGHTING` so normals are evaluated instead
+of misread, per-corner colors carried through the resolved triangle
+(replacing the single flat color that discarded corners 1 and 2), a bounded
+frame-local Gouraud table bank, and VDP1 emission with `CC_GOURAUD` plus the
+neutral base color `0xC210`, uploaded once per frame as a used-prefix DMA
+transfer through the SlaveDriver-derived adapter.
+
+Every degradation is deliberate, documented, and counted, per the design's
+degrade-first contract: fog is dropped entirely (330 triangles this frame),
+exactly one directional light plus ambient is supported, and bank exhaustion
+falls back to a counted flat color. This capture reads `lit_vertices` 2,426
+against `unlit_vertices` 36, `unsupported_num_lights` 0, and
+`gouraud_bank_overflow` 0 — the last of those only because the sprint's
+final task re-partitioned VDP1 VRAM for 1,536 Gouraud tables; Yaul's stock
+default reserves 1,024, well under this level's real 1,365–1,431
+triangles-per-frame working set. `triangles_vdp1_emitted` reads 0 at the
+single probed frame for the same one-frame-snapshot reason recorded in the
+2026-07-23 entry: the profile struct resets every frame, and the screenshot
+comes from a different frame in the same 26,740-frame run.
+
+The capture remains explicitly **untextured**, per this project's
+gate-labelling convention — texture work is a separate later cycle. What
+changed is that surfaces now carry coherent shading instead of noise. It
+was reviewed directly and confirmed to show the Bob-omb Battlefield cannon
+and terrain in consistent white/grey with one distinctly colored actor.
+
+Evidence: [Gouraud free-roam screenshot](screenshots/e2-sourceboot-gouraud-freeroam-2026-07-24.png)
+(320x224 internal `video.capture`, frame 26,740, SHA-256
+`bb4de48326578fe09a3c9abdc6f0b1e7b25a49fd9caa85b84a4005af8ff6e7d5`),
+[full run report](reports/e2-sourceboot-gouraud-freeroam-2026-07-24.json),
+[sprint plan with per-task review outcomes](../../superpowers/plans/2026-07-24-gouraud-shading.md).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
+post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
+`c6a242b`. Profile offsets were re-ground-truthed with an `offsetof()` probe
+compiled under the host suite's own flags rather than hand-derived.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
