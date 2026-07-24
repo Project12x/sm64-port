@@ -1299,11 +1299,11 @@ the host suite, both before committing.
 
 **Files:** none (verification; produces evidence).
 
-- [ ] **Step 1: Full regression**
+- [x] **Step 1: Full regression**
 
 All four host targets (`verify-tools`, `verify-runtime-contracts`, `verify-mtxq-ctors`, `verify-mtxf-lookat-host-diff`) exit 0; SH-2 cross-compile + `make verify` exit 0.
 
-- [ ] **Step 2: Capture**
+- [x] **Step 2: Capture**
 
 Standing discipline: fresh `sh-elf-nm` resolve of `_sourceboot_fast3d` (address WILL have shifted), and **re-ground-truth the profile-struct offsets via a fresh `offsetof()` probe compile** — this plan appended 5 counters to the struct; never hand-derive. Then the proven recipe (paths verified in the v0.1.0 capture: ymir at `D:\Code\RetroDev\sm64-saturn-port\ymir-agent\build-agent2\apps\ymir-headless\Release\ymir-headless.exe`, BIOS at `C:\Users\estee\AppData\Local\Temp\Sega Saturn BIOS (USA).bin`):
 
@@ -1319,7 +1319,7 @@ Standing discipline: fresh `sh-elf-nm` resolve of `_sourceboot_fast3d` (address 
 ```
 (`--probe-count 240`: the struct grew by 20 bytes; size it from the fresh `offsetof` probe's `sizeof` output plus margin. `--timeout 580` per the v0.1.0 measurement.)
 
-- [ ] **Step 3: Judge against concrete criteria**
+- [x] **Step 3: Judge against concrete criteria**
 
 | Metric | v0.1.0 baseline | Success threshold |
 | --- | --- | --- |
@@ -1332,7 +1332,7 @@ Standing discipline: fresh `sh-elf-nm` resolve of `_sourceboot_fast3d` (address 
 
 Report raw numbers honestly. Both outcomes acceptable: (a) recognizable shaded BOB — present to the user; (b) counters good but visuals wrong — the counters attribute the next lead; commit the evidence either way. **Do not** write TIMELINE/gallery entries — the user's visual confirmation gates that, per standing rule.
 
-- [ ] **Step 4: Evidence commit**
+- [x] **Step 4: Evidence commit**
 
 ```bash
 git add docs/saturn/evidence/reports/e2-sourceboot-gouraud-freeroam-2026-07-24.json \
@@ -1340,6 +1340,51 @@ git add docs/saturn/evidence/reports/e2-sourceboot-gouraud-freeroam-2026-07-24.j
 git commit -m "test(saturn): Gouraud free-roam capture evidence"
 ```
 Present the screenshot to the user.
+
+Committed as `c6a242b`. Regression: all four host targets
+(`verify-tools`, `verify-runtime-contracts`, `verify-mtxq-ctors`,
+`verify-mtxf-lookat-host-diff`) exit 0; SH-2 cross-compile + `make verify`
+exit 0.
+
+Capture discipline followed as written: fresh `sh-elf-nm` resolve of
+`_sourceboot_fast3d` (**`0x060bddf8`** — genuinely shifted, since Task 6
+added two new file-scope statics to the same TU, so any reused address
+would have decoded garbage), and profile offsets re-ground-truthed with an
+`offsetof()` probe compiled under `verify-runtime-contracts`' exact flags.
+The probe reported `sizeof(sm64_saturn_fast3d_profile_t)` = **228 bytes**,
+which is what sized `--probe-count 240` (the flag is documented in
+`capture_hwtest.py:149` as a BYTE count, confirmed by reading the tool
+rather than assuming); the five new counters land at offsets 208/212/216/
+220/224. Never hand-derived, per the standing lesson in
+`docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`.
+
+**Every success threshold met:**
+
+| Metric | Threshold | Measured |
+| --- | --- | --- |
+| `lit_vertices` | > 0, dominating unlit | **2426** vs 36 unlit (~67x) |
+| `unsupported_num_lights` | small or 0 | **0** |
+| `fog_dropped_triangles` | > 0 | **330** |
+| `gouraud_bank_overflow` | 0 | **0** |
+| `triangles_vdp1_emitted` | ≥ baseline | **0** at the probed frame (same one-frame profile-reset artifact as v0.1.0, not a regression) |
+| Screenshot | real colors, coherent shading | coherent white/grey terrain + one distinctly colored actor; the garbage patchwork is gone |
+
+Also measured: `triangles_transformed` 1307, `triangles_emitted` 437.
+
+Two notes worth carrying forward. First, `gouraud_bank_overflow = 0` is
+**not** trivially satisfied the way this task's own threshold row implied:
+that row said "180 triangles ≪ 1536 tables", but 180 was the v0.1.0
+figure — this capture resolved 437, and this project's recorded BOB
+free-roam working set is 1,365-1,431 triangles/frame. Under Yaul's stock
+1,024-table partition default the ordinary frame would have overflowed by
+the hundreds. It reads 0 only because Task 6 caught that and re-partitioned
+explicitly. Second, the plan's threshold table is left as originally
+written (stale 180 figure and all) rather than retconned, so the record
+shows what was predicted versus what actually happened.
+
+User confirmed the screenshot directly ("the screenshot looks as
+described"), satisfying the standing visual gate; the TIMELINE.md entry and
+gallery card (stage 121) followed in `d1c6e8c`.
 
 ---
 
