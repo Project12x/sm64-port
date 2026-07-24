@@ -428,8 +428,9 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         out->x[c] = screen_x[c];
         out->y[c] = screen_y[c];
     }
-    /* Flat color: vertex 0's, matching G_SHADE-off flat-shading
-     * convention -- Gouraud is out of scope for this increment.
+    /* Per-corner colors for VDP1 Gouraud (design spec 2026-07-24) --
+     * replaces the old vertex-0-only flat pack now that Task 3 makes
+     * every vertex's lit/unlit color correct, not just vertex 0's.
      *
      * Bit 15 (0x8000) is the RGB flag, not spare: VDP2's sprite-layer
      * decode treats framebuffer pixels with MSB=1 as RGB1555 and MSB=0
@@ -439,11 +440,20 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * an all-black sprite layer; castleviewer's own neutral color
      * constant (0xC210) carries the bit, and the SGL sprite manual's
      * mixed palette/RGB framebuffer convention is recorded in
-     * docs/saturn/SGL_REFERENCE_NOTES.md. */
-    out->color_rgb1555 = (uint16_t)(0x8000U |
-        ((frontend->vertices[idx[0]].r >> 3) << 10) |
-        ((frontend->vertices[idx[0]].g >> 3) << 5) |
-        (frontend->vertices[idx[0]].b >> 3));
+     * docs/saturn/SGL_REFERENCE_NOTES.md -- this still applies to every
+     * corner entry below, not just a single flat color. */
+    for (int c = 0; c < 3; c++) {
+        const sm64_saturn_fast3d_vertex_t *v = &frontend->vertices[idx[c]];
+        out->corner_rgb1555[c] = (uint16_t)(0x8000U |
+            ((v->r >> 3) << 10) | ((v->g >> 3) << 5) | (v->b >> 3));
+    }
+    if ((frontend->geometry_mode & G_FOG) != 0U) {
+        /* Degradation contract (design spec 2026-07-24): fog is dropped
+         * entirely this cycle (rendering it is fidelity-ladder item 2,
+         * out of scope) -- the triangle still resolves normally, only
+         * counted so the cost stays visible in captures. */
+        profile->fog_dropped_triangles++;
+    }
     /* max_z buckets correctly for this (i0,i1,i2,i2) convention -- do
      * not switch this to quad.center_z, which reads only indices[0]/[2]
      * and would silently drop i1's depth (see design spec's "Painter

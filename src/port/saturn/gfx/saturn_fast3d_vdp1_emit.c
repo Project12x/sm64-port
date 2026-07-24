@@ -47,7 +47,8 @@ void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
                 .cc_mode = VDP1_CMDT_CC_REPLACE
             });
             vdp1_cmdt_color_set(cmdt, (rgb1555_t){
-                .raw = tri->color_rgb1555
+                /* interim flat: real Gouraud lands with the bank task */
+                .raw = tri->corner_rgb1555[0]
             });
             vdp1_cmdt_vtx_set(cmdt, quad_vertices);
             profile->triangles_vdp1_emitted++;

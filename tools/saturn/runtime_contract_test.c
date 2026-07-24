@@ -1267,9 +1267,14 @@ static void test_frontend_g_tri2_two_triangles(void)
     /* Triangle A resolves from w0/C0 first, Triangle B from w1/C1
      * second -- distinct colors and screen positions confirm the two
      * triangles came from different vertex slots, not the same C0
-     * fields read twice. */
-    assert(frontend.resolved[0].color_rgb1555 !=
-           frontend.resolved[1].color_rgb1555);
+     * fields read twice. corner_rgb1555[0] is corner 0's color (the
+     * same vertex-0 color the old flat color_rgb1555 field carried),
+     * kept here since this test's whole point is distinguishing the
+     * two triangles' vertex sources, not exercising per-corner packing
+     * itself (see test_frontend_resolved_triangle_carries_corner_colors
+     * for that). */
+    assert(frontend.resolved[0].corner_rgb1555[0] !=
+           frontend.resolved[1].corner_rgb1555[0]);
     assert(frontend.resolved[0].x[0] != frontend.resolved[1].x[0] ||
            frontend.resolved[0].y[0] != frontend.resolved[1].y[0]);
 }
@@ -2177,6 +2182,103 @@ static void test_frontend_unlit_vertex_passes_colors_through(void)
     assert(frontend.profile.lit_vertices == 0);
 }
 
+/* Task 4: the resolved triangle must carry all 3 corners' colors, not
+ * just vertex 0's -- the pre-Task-4 pack threw away vertex 1 and 2's
+ * colors, which Task 3 had just made correct upstream. Reuses
+ * test_frontend_g_tri1_resolves_triangle's exact fixture shape (unlit
+ * pure red/green/blue verts) so a pass isolates the resolve step's
+ * corner-color packing itself, not any lighting-evaluator behavior. */
+static void test_frontend_resolved_triangle_carries_corner_colors(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[4];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+    list[1].words.w1 = (uintptr_t)verts;
+    list[2].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                       (0U << 16) | (2U << 8) | (4U << 0);
+    list[2].words.w1 = 0;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.resolved_count == 1);
+    assert(frontend.resolved[0].corner_rgb1555[0] == 0xFC00); /* red   */
+    assert(frontend.resolved[0].corner_rgb1555[1] == 0x83E0); /* green */
+    assert(frontend.resolved[0].corner_rgb1555[2] == 0x801F); /* blue  */
+}
+
+/* Companion test: G_FOG is dropped per the design spec's degradation
+ * contract (fog rendering is out of scope this cycle) but the triangle
+ * must still resolve normally -- only the counter distinguishes this
+ * from the no-fog case above. fog_dropped_triangles lives in `profile`,
+ * which sm64_saturn_fast3d_frontend_submit's own per-frame reset memsets
+ * to 0 (verified by reading that reset code directly, not assumed) --
+ * so, like Task 2's unsupported_num_lights, asserting it == 1 here only
+ * passes if this task's new increment actually ran; it cannot pass on
+ * default-initialized/zeroed state alone. */
+static void test_frontend_counts_dropped_fog(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = {-100.0f, -100.0f, 500.0f}, .cn = {255, 0, 0, 255} },
+        { .ob = { 100.0f, -100.0f, 500.0f}, .cn = {0, 255, 0, 255} },
+        { .ob = {   0.0f,  100.0f, 500.0f}, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[5];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[1].words.w1 = G_FOG;
+    list[2].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+    list[2].words.w1 = (uintptr_t)verts;
+    list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                       (0U << 16) | (2U << 8) | (4U << 0);
+    list[3].words.w1 = 0;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.resolved_count == 1);
+    assert(frontend.profile.fog_dropped_triangles == 1);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -2233,5 +2335,7 @@ int main(void)
     test_frontend_g_mv_light_ignores_lookat_offsets();
     test_frontend_lit_vertex_evaluates_lighting();
     test_frontend_unlit_vertex_passes_colors_through();
+    test_frontend_resolved_triangle_carries_corner_colors();
+    test_frontend_counts_dropped_fog();
     return 0;
 }

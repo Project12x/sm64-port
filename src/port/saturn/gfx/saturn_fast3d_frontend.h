@@ -250,16 +250,27 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t gouraud_bank_overflow;
 } sm64_saturn_fast3d_profile_t;
 
-/* Screen-space position + flat color for one already-transformed,
+/* Screen-space position + per-corner color for one already-transformed,
  * projected, culled, and depth-bucketed triangle. Populated by
  * saturn_fast3d_frontend.c (no Yaul dependency); consumed by
  * saturn_fast3d_vdp1_emit.c (Yaul-dependent) to write real VDP1
  * commands. Corner order is (i0, i1, i2, i2) -- the last vertex
- * duplicated -- ready to hand to VDP1's degenerate-quad polygon command. */
+ * duplicated -- ready to hand to VDP1's degenerate-quad polygon command.
+ *
+ * corner_rgb1555[3] (Gouraud shading, design spec 2026-07-24) replaces
+ * the single flat color this struct carried before: Task 3 made each
+ * vertex's lit/unlit color correct, but this struct was still discarding
+ * corners 1 and 2. Grows the struct 16->20 bytes; x1536 resolved slots
+ * = +6 KiB static, well within the ~191 KiB HWRAM margin measured after
+ * the .lwram_bss relocation (see this file's HWRAM budget comment on
+ * sm64_saturn_fast3d_frontend_t below). The real VDP1 Gouraud table
+ * upload lands in Task 6 -- until then, the emit stage
+ * (saturn_fast3d_vdp1_emit.c) reads only corner_rgb1555[0] as an interim
+ * flat color, matching the old field's exact behavior. */
 typedef struct sm64_saturn_resolved_triangle {
     int16_t x[3];
     int16_t y[3];
-    uint16_t color_rgb1555;
+    uint16_t corner_rgb1555[3];
     uint16_t depth_bucket;
 } sm64_saturn_resolved_triangle_t;
 
