@@ -84,6 +84,29 @@ static void test_matrix_decode_translation(void)
     assert(out.m[3][3] == (1 << 16));
 }
 
+/* Exercises sm64_saturn_matrix_decode_q16 directly -- the native-Q16.16
+ * wire decode Task 5 adds alongside the float decode above. Compiled
+ * unconditionally (not gated on SATURN_MTX_IS_Q16): this host suite
+ * never defines that macro (it exercises the frontend's generic/float
+ * decode path throughout), but the q16 decode function itself is always
+ * available and testable in isolation regardless of which macro the
+ * frontend build happens to key off. */
+static void test_matrix_decode_q16_native(void)
+{
+    int32_t wire[16];
+    sm64_saturn_mtx_t out;
+
+    for (int i = 0; i < 16; i++) {
+        wire[i] = (i + 1) * 1000 - 8000; /* mixed signs, exact */
+    }
+    sm64_saturn_matrix_decode_q16(wire, &out);
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            assert(out.m[i][j] == wire[i * 4 + j]);
+        }
+    }
+}
+
 static void test_matrix_multiply_identity(void)
 {
     sm64_saturn_mtx_t identity, other, result;
@@ -1672,6 +1695,7 @@ int main(void)
     test_bounded_command_arena();
     test_matrix_decode_identity();
     test_matrix_decode_translation();
+    test_matrix_decode_q16_native();
     test_matrix_multiply_identity();
     test_matrix_multiply_overflow_guard();
     test_matrix_multiply_accumulator_overflow_guard();

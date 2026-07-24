@@ -51,6 +51,22 @@ sm64_saturn_matrix_decode(const float *gbi_floats, sm64_saturn_mtx_t *out)
     }
 }
 
+/* SATURN_MTX_IS_Q16: when defined, the on-wire Mtx payload is raw
+ * s32[4][4] Q16.16 (written by rendering_graph_node.c's
+ * saturn_mtxq_write_wire and the TARGET_SATURN guMtxF2L), NOT
+ * GBI_FLOATS floats. Both producer and consumer key off this ONE
+ * define so they cannot desync. The float decode remains for host
+ * tests that exercise the float path explicitly. */
+static inline void
+sm64_saturn_matrix_decode_q16(const int32_t *wire_q16, sm64_saturn_mtx_t *out)
+{
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            out->m[i][j] = wire_q16[i * 4 + j];
+        }
+    }
+}
+
 static inline void
 sm64_saturn_matrix_identity(sm64_saturn_mtx_t *out)
 {

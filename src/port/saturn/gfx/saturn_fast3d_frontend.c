@@ -474,13 +474,29 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * `gfx_sp_matrix(C0(0, 8) ^ G_MTX_PUSH, ...)`. */
             const uint8_t params =
                 (uint8_t)(SM64_SATURN_C0(w0, 0, 8) ^ G_MTX_PUSH);
-            /* w1 points at 16 consecutive row-major floats under this
-             * build's GBI_FLOATS configuration -- NOT a split s15.16
-             * int32 array. */
+            /* Under the float wire format (GBI_FLOATS, the #else path
+             * below -- used off-Saturn and by this file's own host
+             * tests), w1 points at 16 consecutive row-major floats, NOT
+             * a split s15.16 int32 array. Under SATURN_MTX_IS_Q16 (the
+             * #ifdef path below), the SAME w1 pointer instead refers to
+             * the identical 64-byte payload reinterpreted as 16
+             * consecutive row-major s32 Q16.16 values -- what
+             * rendering_graph_node.c's saturn_mtxq_write_wire and the
+             * TARGET_SATURN guMtxF2L override actually write there (see
+             * saturn_matrix.h's SATURN_MTX_IS_Q16 note). gbi_floats
+             * stays defined unconditionally: the #else decode path below
+             * still needs it, and so does the dbg_root_mtx_source_m22
+             * diagnostic further down, which is float-path-only bring-up
+             * instrumentation and is not meaningful (and not consulted)
+             * under the Q16 wire format. */
             const float *gbi_floats = (const float *)(uintptr_t)w1;
             sm64_saturn_mtx_t decoded;
 
+#ifdef SATURN_MTX_IS_Q16
+            sm64_saturn_matrix_decode_q16((const int32_t *)(uintptr_t)w1, &decoded);
+#else
             sm64_saturn_matrix_decode(gbi_floats, &decoded);
+#endif
 
             /* Bring-up diagnostic -- see the profile struct's
              * dbg_bad_mtx_* comment. m[2][2] == INT32_MIN is the proven
