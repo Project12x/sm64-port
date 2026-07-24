@@ -495,7 +495,7 @@ test passes).
 - Modify: `src/port/saturn/gfx/saturn_fast3d_frontend.c` (G_VTX case)
 - Test: `tools/saturn/runtime_contract_test.c` (append)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```c
 static void test_frontend_lit_vertex_evaluates_lighting(void)
@@ -585,11 +585,11 @@ static void test_frontend_unlit_vertex_passes_colors_through(void)
 
 Register both in `main()`.
 
-- [ ] **Step 2: Run to confirm failure**
+- [x] **Step 2: Run to confirm failure**
 
 Expected: `test_frontend_lit_vertex_evaluates_lighting` FAILS at the color assertions (current code stores the raw normal bytes {0,0,127} as color; the lit expectation differs) and at the `lit_vertices` counter. The unlit test may already pass except its counter.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In the `G_VTX` case (`saturn_fast3d_frontend.c:628-673`), before the vertex loop:
 
@@ -638,16 +638,55 @@ Inside the loop, replace the four `cn` copy lines with:
 
 Also update the `Vtx_t` cast comment at `:638` — it currently asserts "Vtx_t layout, not Vtx_tn", which is now only half-true (the byte layout is shared; interpretation is G_LIGHTING-gated).
 
-- [ ] **Step 4: Run tests, then mutation check**
+- [x] **Step 4: Run tests, then mutation check**
 
 Host suite: exit 0, everything green. Mutations (revert each after confirming a test fails): (a) invert the `lit` condition; (b) delete the lazy `recompute` call; (c) store `n[0..2]` raw instead of `rgb[0..2]`. All must fail.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_fast3d_frontend.c tools/saturn/runtime_contract_test.c
 git commit -m "fix(saturn): gate G_VTX on G_LIGHTING -- evaluate normals, stop misreading them as RGB"
 ```
+
+Committed as `d69927a`. Unlike Tasks 1-2, every symbol this sketch
+depended on matched the real code exactly on inspection: `G_LIGHTING`
+(gbi.h:364), `sm64_saturn_matrix_stack_top`'s real signature
+(saturn_matrix.h:250, already used identically in this file's own
+G_MTX case), `sm64_saturn_light_recompute_coeffs`/`_eval_vertex`'s
+signatures (saturn_light_q16.h -- already carrying Task 1's transpose
+fix, so no repeat of that bug here), and the Vtx_t/Vtx_tn shared-byte-
+layout claim (gbi.h:1112-1136) all held as written -- no functional
+deviation this task. Two small, deliberate departures from the sketch's
+literal text: (1) the lazy-recompute block was placed after the
+`n_vertices > end_index` underflow-reject guard rather than at the very
+top of the case, so a malformed/rejected G_VTX command doesn't spend a
+recompute on vertices that will never be processed -- behaviorally
+identical to the sketch for every well-formed command; (2) the first
+test's sketch included a vestigial no-op loop (`for (int i = 0; i < 3;
+i++) { int d = ...r - ...want[0]; (void)d; }`) that never used its own
+loop index and discarded its result unconditionally -- dead code
+asserting nothing, dropped in favor of the three explicit per-channel
+tolerance asserts already immediately following it (same class of
+test-quality issue Task 2's review flagged, fixed proactively here
+instead of waiting for review). TDD followed for real: reverted just
+the `.c` change (keeping the new tests via `git checkout --` +
+`git apply` of a saved patch), confirmed
+`test_frontend_lit_vertex_evaluates_lighting` failed at its first color
+assertion for the expected reason (raw normal byte 0 read back as red
+instead of the ~210 lit value), then reapplied. All three required
+mutations confirmed to fail: (a) (invert `lit`) was actually caught
+first by the pre-existing `test_frontend_g_vtx_transform` rather than
+this task's own new tests, since `assert()` aborts at the first failure
+in `main()`'s call order and that earlier unlit-fixture test
+(`geometry_mode == 0`) is equally misclassified as lit by the same
+inversion -- by inspection the new unlit test here has the identical
+vulnerability and would fail the same way had it run first; (b)
+(delete the recompute) and (c) (store the raw normal instead of the
+evaluated color) both failed directly at this task's new lit-vertex
+test's color assertion, as expected. Every revert verified
+byte-identical via a saved-patch diff, and the full suite (Tasks 1-2
+included) passed clean under `-Wall -Wextra -Werror` before and after.
 
 ---
 
