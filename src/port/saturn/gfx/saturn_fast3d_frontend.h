@@ -263,10 +263,12 @@ typedef struct sm64_saturn_fast3d_profile {
  * corners 1 and 2. Grows the struct 16->20 bytes; x1536 resolved slots
  * = +6 KiB static, well within the ~191 KiB HWRAM margin measured after
  * the .lwram_bss relocation (see this file's HWRAM budget comment on
- * sm64_saturn_fast3d_frontend_t below). The real VDP1 Gouraud table
- * upload lands in Task 6 -- until then, the emit stage
- * (saturn_fast3d_vdp1_emit.c) reads only corner_rgb1555[0] as an interim
- * flat color, matching the old field's exact behavior. */
+ * sm64_saturn_fast3d_frontend_t below). Since Task 6, the emit stage
+ * (saturn_fast3d_vdp1_emit.c) uses corner_rgb1555[0..2] as the real
+ * per-corner VDP1 Gouraud table for every triangle a table could be
+ * allocated for; corner_rgb1555[0] alone is read only in the counted
+ * bank-exhausted/partition-unusable fallback case (CC_REPLACE flat
+ * color, degradation contract). */
 typedef struct sm64_saturn_resolved_triangle {
     int16_t x[3];
     int16_t y[3];

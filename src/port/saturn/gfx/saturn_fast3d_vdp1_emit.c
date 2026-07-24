@@ -12,6 +12,10 @@
 _Static_assert(sizeof(sm64_saturn_gouraud_table_t) ==
                sizeof(vdp1_gouraud_table_t),
                "staging table must match Yaul's VDP1 layout");
+_Static_assert(_Alignof(sm64_saturn_gouraud_table_t) ==
+               _Alignof(vdp1_gouraud_table_t),
+               "staging table must match Yaul's VDP1 alignment -- "
+               "SCU DMA depends on this, see saturn_gouraud_bank.h");
 
 void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
                                   sm64_saturn_vdp1_backend_t *backend,
@@ -56,7 +60,7 @@ void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
                 INT16_VEC2_INITIALIZER(tri->x[2], tri->y[2])
             };
 
-            uintptr_t grda_addr;
+            uintptr_t grda_addr = 0;
             sm64_saturn_gouraud_table_t *table =
                 sm64_saturn_gouraud_bank_alloc(gouraud_bank, &grda_addr);
 

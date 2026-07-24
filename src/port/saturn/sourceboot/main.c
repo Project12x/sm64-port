@@ -207,6 +207,16 @@ int main(void) {
          * partition setup in its own main()). Freeing that space is
          * what makes room for the larger gouraud partition.
          *
+         * NOTE for whoever adds texture support to sourceboot (the
+         * next planned cycle after this one, per this project's own
+         * roadmap -- offline-bake texture pipeline, not hypothetical):
+         * revisit this call FIRST. texture_size=0 means zero VRAM
+         * budget for any Yaul-partition-aware texture upload; adding
+         * texture code without widening this parameter first will not
+         * crash (sm64_saturn_texture_residency_t degrades safely at
+         * capacity 0, per its own bounds check) but will silently
+         * upload nothing.
+         *
          * cmdt_count stays at SOURCEBOOT_VDP1_COMMAND_CAPACITY so
          * Yaul's own bookkeeping matches the size of the command region
          * this backend actually writes (VDP1_VRAM(0) CPU-copy in
