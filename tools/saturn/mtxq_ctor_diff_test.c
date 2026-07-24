@@ -172,6 +172,33 @@ int main(void)
         Vec3f to = { -6558.0f, 0.0f, 5000.0f };
         diff_lookat(from, to, 0);
     }
+    /* Fixture 4: large delta between two individually in-range positions,
+     * swept across roll. from/to are each comfortably inside this port's
+     * documented +-32767 world-unit ceiling, but ~35000+ units apart --
+     * the exact class of input that overflowed sm64_saturn_mtxq_lookat's
+     * plain-int32_t delta computation before it was widened to int64_t
+     * (code-quality review finding: from=-20000/to=15000 on one axis
+     * wrapped to[0]-from[0] to a wrong-sign value that corrupted colZ
+     * and, depending on roll, colY too).
+     *
+     * MUST sweep roll, not just test roll=0: colY[0]=sins(roll)*dz_q and
+     * colY[2]=-sins(roll)*dx_q are the two places dx_q/dz_q (the
+     * overflow-prone horizontal-delta computation) actually feed the
+     * result, and roll=0 makes sins(0)=0, exactly canceling both terms
+     * regardless of whether dx_q/dz_q are corrupted -- ground-truthed
+     * the hard way: a roll=0-only version of this fixture passed even
+     * with the dx_q/dz_q widening deliberately reverted back to
+     * plain-int32_t, because that reverted path only ever reaches the
+     * result through those two now-zeroed terms. The colZ path (vx/vy/vz,
+     * not roll-gated) is exercised at every roll including 0, but colY's
+     * own overflow path needs roll != 0 to actually surface. */
+    {
+        Vec3f from = { -20000.0f, 0.0f, 0.0f };
+        Vec3f to = { 15000.0f, 0.0f, 5000.0f };
+        for (int r = 0; r < 65536; r += 1024) {
+            diff_lookat(from, to, (s16) r);
+        }
+    }
 
     /* rotate_zxy / rotate_xyz: full-turn sweeps on each axis */
     for (int a = 0; a < 65536; a += 4096) {
@@ -197,6 +224,9 @@ int main(void)
             for (int j = 0; j < 3; j++)
                 assert_close(got.m[i][j], want[i][j], Q16_TOL_TRIG * 4,
                              "rot_xyz", i, j);
+        for (int j = 0; j < 3; j++)
+            assert_close(got.m[3][j], want[3][j], Q16_TOL_TRANS,
+                         "rot_xyz_t", 3, j);
     }
 
     /* billboard: uses a camera matrix -- feed the real lookat output */

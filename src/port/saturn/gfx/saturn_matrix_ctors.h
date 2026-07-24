@@ -52,37 +52,53 @@ sm64_saturn_mtxq_lookat(sm64_saturn_mtx_t *mtx, const int32_t from[3],
 {
     int32_t colX[3], colY[3], colZ[3];
     int64_t dxi, dzi, mag;
-    int32_t dx_q = to[0] - from[0];
-    int32_t dz_q = to[2] - from[2];
+    /* from/to individually satisfy this port's documented +-32767
+     * world-unit ceiling (saturn_matrix.h's decode note), but their
+     * DIFFERENCE does not: two independent values each near the
+     * ceiling can differ by up to ~65534 real units, and that
+     * magnitude's Q16.16 representation (~4.29e9 raw) does not fit
+     * int32_t (max ~2.147e9) -- confirmed with a compiled repro
+     * (from=-20000, to=15000 on one axis: to[0]-from[0] as plain
+     * int32_t silently wraps to a wrong-sign value, corrupting every
+     * downstream rotation-column entry). Widen to int64_t before
+     * subtracting; narrow back to int32_t only after dividing by mag,
+     * once the result is unit-range and provably safe -- same
+     * widen-before-combine pattern saturn_matrix.h's
+     * sm64_saturn_matrix_mul already uses for the same class of
+     * problem. */
+    int64_t dx_wide = (int64_t) to[0] - (int64_t) from[0];
+    int64_t dz_wide = (int64_t) to[2] - (int64_t) from[2];
+    int32_t dx_q, dz_q;
 
     /* horizontal direction, integer-unit magnitude (see unit analysis) */
-    dxi = (int64_t) (dx_q >> 16);
-    dzi = (int64_t) (dz_q >> 16);
+    dxi = dx_wide >> 16;
+    dzi = dz_wide >> 16;
     mag = sm64_saturn_isqrt64(dxi * dxi + dzi * dzi);
     if (mag == 0) {
         mag = 1;
     }
     /* float code: d *= -1/len. Negated Q16.16 unit components: */
-    dx_q = (int32_t) (-((int64_t) dx_q) / mag);
-    dz_q = (int32_t) (-((int64_t) dz_q) / mag);
+    dx_q = (int32_t) (-dx_wide / mag);
+    dz_q = (int32_t) (-dz_wide / mag);
 
     colY[0] = sm64_saturn_q16_mul(sm64_saturn_sins_q16(roll), dz_q);
     colY[1] = sm64_saturn_coss_q16(roll);
     colY[2] = -sm64_saturn_q16_mul(sm64_saturn_sins_q16(roll), dx_q);
 
-    /* full look direction, same integer-unit reduction, negated */
+    /* full look direction, same integer-unit reduction, negated --
+     * same int64_t-widened delta as above, same overflow reasoning */
     {
-        int32_t vx = to[0] - from[0];
-        int32_t vy = to[1] - from[1];
-        int32_t vz = to[2] - from[2];
+        int64_t vx = (int64_t) to[0] - (int64_t) from[0];
+        int64_t vy = (int64_t) to[1] - (int64_t) from[1];
+        int64_t vz = (int64_t) to[2] - (int64_t) from[2];
         int64_t xi = vx >> 16, yi = vy >> 16, zi = vz >> 16;
         mag = sm64_saturn_isqrt64(xi * xi + yi * yi + zi * zi);
         if (mag == 0) {
             mag = 1;
         }
-        colZ[0] = (int32_t) (-((int64_t) vx) / mag);
-        colZ[1] = (int32_t) (-((int64_t) vy) / mag);
-        colZ[2] = (int32_t) (-((int64_t) vz) / mag);
+        colZ[0] = (int32_t) (-vx / mag);
+        colZ[1] = (int32_t) (-vy / mag);
+        colZ[2] = (int32_t) (-vz / mag);
     }
 
     /* colX = colY x colZ; renormalize (float code divides by +len) */
@@ -221,12 +237,28 @@ sm64_saturn_mtxq_billboard(sm64_saturn_mtx_t *dest,
         int64_t dot = (int64_t) mtx->m[0][c] * position[0]
                     + (int64_t) mtx->m[1][c] * position[1]
                     + (int64_t) mtx->m[2][c] * position[2];
-        dest->m[3][c] = (int32_t) (dot >> 16) + mtx->m[3][c];
+        /* (dot>>16) and mtx->m[3][c] are each independently bounded
+         * only by this port's +-32767 world-unit ceiling (the rotation
+         * columns are unit-range, but the translation row and
+         * "position" are not) -- same overflow class as
+         * sm64_saturn_mtxq_lookat's delta computation above, just via
+         * `+` instead of `-`. Combine in int64_t and narrow once. */
+        int64_t sum = (dot >> 16) + (int64_t) mtx->m[3][c];
+        dest->m[3][c] = (int32_t) sum;
     }
     dest->m[3][3] = 1 << 16;
 }
 
-/* Mirrors mtxf_scale_vec3f (math_util.c:538-547). */
+/* Mirrors mtxf_scale_vec3f (math_util.c:538-547).
+ *
+ * Overflow note: sm64_saturn_q16_mul's documented safe range (|a|,|b| <=
+ * 1<<16) is NOT guaranteed here -- mtx's entries and s are both general
+ * Q16.16 values, not sin/cos-bounded. In-tree scale usage observed at
+ * rendering_graph_node.c:426,454,457,825,903 runs ~0.1x-9x, far from the
+ * format's ceiling; accepted as a documented assumption for bring-up,
+ * not a proven bound. If a future caller pushes scale or matrix-entry
+ * magnitude toward the +-32767 ceiling simultaneously, this needs an
+ * overflow-checked multiply. */
 static inline void
 sm64_saturn_mtxq_scale_vec3f(sm64_saturn_mtx_t *dest,
                              const sm64_saturn_mtx_t *mtx,
