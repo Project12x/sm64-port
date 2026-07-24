@@ -67,36 +67,56 @@ sm64_saturn_light_state_init(sm64_saturn_light_state_t *st)
  * coeff[i] = sum_j M[i][j] * dir[j] -- then normalized (see the header
  * comment above for the verified index order). The /127 folds gfx_pc's
  * dir[]/127.0f pre-scale; normalization makes any residual scale
- * irrelevant. Products are Q16 * s8 -> at most 2^31 * 127, summed x3:
- * fits int64 trivially. The pre-scale loop bounds the components before
- * vec3_normalize, whose squared-sum contract assumes unit-range inputs
- * (saturn_matrix_ctors.h:28-31) -- scaled modelview entries can exceed
- * that. */
+ * irrelevant.
+ *
+ * Overflow safety: the largest possible |m[i][j]| is INT32_MAX
+ * (~2^31, this port's documented Q16.16 ceiling -- also exactly what
+ * sm64_saturn_float_to_q16's saturation path produces for any
+ * out-of-range float, so this is a realistic input, not a contrived
+ * one), |dir_dir[j]| <= 128 (true int8_t extreme). Three terms
+ * summed before the /127: |sum| < 3 * 2^31 * 128 < 2^39, comfortably
+ * inside int64_t (max ~2^63) with huge margin -- so the raw dot
+ * product AND the /127 result both stay exact in int64_t. The
+ * subsequent bound-to-<=1<<20 halving loop operates entirely in
+ * int64_t (its own abs-value computation is therefore safe: int64_t
+ * can represent the negation of any value this sum can reach, unlike
+ * the previous int32_t version, which hit real signed-overflow UB --
+ * and a real bypass, not just UB in the abstract -- for a modelview
+ * entry at exactly INT32_MIN, confirmed by compiling and running the
+ * case). Only narrow to int32_t once every component is provably
+ * bounded, for vec3_normalize's squared-sum contract
+ * (saturn_matrix_ctors.h's unit-range assumption; 1<<20 leaves
+ * >1000x headroom under that function's own int64 mag2 overflow
+ * boundary, not just barely enough). */
 static inline void
 sm64_saturn_light_recompute_coeffs(sm64_saturn_light_state_t *st,
                                    const sm64_saturn_mtx_t *modelview_top)
 {
+    int64_t sum[3];
     int32_t v[3];
 
     for (int i = 0; i < 3; i++) {
-        int64_t sum = 0;
+        int64_t s = 0;
         for (int j = 0; j < 3; j++) {
-            sum += (int64_t)modelview_top->m[i][j]
-                 * (int64_t)st->dir_dir[j];
+            s += (int64_t)modelview_top->m[i][j]
+               * (int64_t)st->dir_dir[j];
         }
-        v[i] = (int32_t)(sum / 127);
+        sum[i] = s / 127;
     }
     for (;;) {
-        int32_t a0 = v[0] < 0 ? -v[0] : v[0];
-        int32_t a1 = v[1] < 0 ? -v[1] : v[1];
-        int32_t a2 = v[2] < 0 ? -v[2] : v[2];
+        int64_t a0 = sum[0] < 0 ? -sum[0] : sum[0];
+        int64_t a1 = sum[1] < 0 ? -sum[1] : sum[1];
+        int64_t a2 = sum[2] < 0 ? -sum[2] : sum[2];
         if (a0 <= (1 << 20) && a1 <= (1 << 20) && a2 <= (1 << 20)) {
             break;
         }
-        v[0] /= 2;
-        v[1] /= 2;
-        v[2] /= 2;
+        sum[0] /= 2;
+        sum[1] /= 2;
+        sum[2] /= 2;
     }
+    v[0] = (int32_t)sum[0];
+    v[1] = (int32_t)sum[1];
+    v[2] = (int32_t)sum[2];
     sm64_saturn_q16_vec3_normalize(v);
     st->coeff_q16[0] = v[0];
     st->coeff_q16[1] = v[1];

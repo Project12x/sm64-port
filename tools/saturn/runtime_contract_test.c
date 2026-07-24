@@ -1814,6 +1814,125 @@ static void test_light_q16_zero_normal_gets_ambient(void)
     assert(got[0] == 10 && got[1] == 20 && got[2] == 30);
 }
 
+static void test_light_q16_recompute_handles_extreme_matrix_entries(void)
+{
+    /* Regression test for a real signed-overflow UB found by code
+     * review: a modelview entry at the port's documented Q16.16
+     * ceiling (exactly what sm64_saturn_float_to_q16's own saturation
+     * path produces for any out-of-range float) dotted with a
+     * max-magnitude light direction used to make the pre-normalize
+     * halving loop's abs-value computation overflow, silently
+     * bypassing the loop entirely (negating INT32_MIN wrapped back to
+     * INT32_MIN itself, which the buggy int32_t check read as "small
+     * enough"). */
+    sm64_saturn_light_state_t st;
+    sm64_saturn_mtx_t extreme;
+    int64_t mag2;
+
+    sm64_saturn_matrix_identity(&extreme);
+    extreme.m[0][0] = INT32_MIN;
+    extreme.m[1][1] = INT32_MIN;
+    extreme.m[2][2] = INT32_MIN;
+
+    sm64_saturn_light_state_init(&st);
+    st.dir_dir[0] = -128;
+    st.dir_dir[1] = -128;
+    st.dir_dir[2] = -128;
+    st.lights_changed = true;
+    sm64_saturn_light_recompute_coeffs(&st, &extreme);
+
+    /* Must land close to unit magnitude in Q16.16 (~65536), not still
+     * at the ~2^31 scale the broken loop used to leave it at -- a
+     * generous bound (32768..131072) that confirms the catastrophic
+     * ~32768x scale bug is gone, not a tight precision claim. */
+    mag2 = (int64_t)st.coeff_q16[0] * st.coeff_q16[0]
+         + (int64_t)st.coeff_q16[1] * st.coeff_q16[1]
+         + (int64_t)st.coeff_q16[2] * st.coeff_q16[2];
+    assert(mag2 > ((int64_t)32768 * 32768));
+    assert(mag2 < ((int64_t)131072 * 131072));
+
+    /* Sign check: with all-negative dir_dir dotted against an
+     * all-negative-diagonal matrix, every per-axis dot product is
+     * NEGATIVE*NEGATIVE = POSITIVE, so the correctly-computed direction
+     * must come out with all three components positive. The int32_t
+     * version of this function corrupted this specific input by
+     * silently overflowing the premature (int32_t)(sum/127) narrow
+     * (2,164,392,968 does not fit in int32_t) BEFORE the halving loop
+     * ever ran, which flips the sign via implementation-defined
+     * wraparound (2,164,392,968 - 2^32 = -2,130,574,328) -- so this
+     * assertion catches that regression even though it happens not to
+     * be the exact "zero-iterations" bypass path, and even though the
+     * magnitude-only check above passes either way (normalize is
+     * sign-agnostic, so a sign flip alone doesn't move mag2). */
+    assert(st.coeff_q16[0] > 0);
+    assert(st.coeff_q16[1] > 0);
+    assert(st.coeff_q16[2] > 0);
+}
+
+/* Second regression test isolating the TRUE "zero iterations" bypass
+ * the code review's prose specifically described, with the cascade
+ * actually reaching sm64_saturn_q16_vec3_normalize's own overflow --
+ * NOT a single-axis construction. A single axis at exactly INT32_MIN
+ * (with the other two already exactly zero) was tried first and found,
+ * empirically, to produce the IDENTICAL final answer under both the
+ * pre-fix and post-fix code: normalize rescales to unit length
+ * regardless of the input's absolute scale, so when only one component
+ * is ever nonzero, skipping the halving loop entirely is harmless --
+ * mag2 stays at (INT32_MIN)^2 = 2^62, safely inside int64_t, and
+ * isqrt64/division both still land on the same correct-looking answer
+ * either way. That construction was DISCARDED as a non-discriminating
+ * test (confirmed by actually reverting the implementation and
+ * running it -- it passed against the buggy code too, proving
+ * nothing) rather than kept as a false sense of coverage.
+ *
+ * This version puts TWO axes simultaneously at the exact
+ * self-wraparound value (dir_dir[0]=dir_dir[1]=127 against
+ * m[0][0]=m[1][1]=INT32_MIN, each dividing back to exactly INT32_MIN
+ * with zero remainder, so negating either in int32_t arithmetic wraps
+ * back to INT32_MIN itself -- still negative, so the pre-fix
+ * `a0 <= (1<<20)` check incorrectly reads it as "already small enough"
+ * and the loop exits in zero iterations for BOTH axes at once). With
+ * TWO components left at full ~2^31 magnitude, normalize's own
+ * mag2 = v0^2 + v1^2 = 2 * (2^31)^2 = 2^63 -- one past INT64_MAX,
+ * genuinely overflowing the int64_t accumulation (not just narrowing
+ * afterward) -- so isqrt64(mag2 <= 0) returns 0, and normalize's own
+ * `if (mag == 0) return;` leaves v completely UNCHANGED: the pre-fix
+ * code returns raw ~2^31-magnitude values as "coeff_q16", off by
+ * roughly 2^31/65536 = 32768x from the correct ~65536 (Q16.16
+ * unit-length) answer -- the exact cascade the code review described.
+ * Empirically confirmed against the reverted pre-fix implementation
+ * before trusting this as a regression test (see this task's commit
+ * message for the verification transcript). */
+static void test_light_q16_recompute_handles_dual_axis_int32_min_cascade(void)
+{
+    sm64_saturn_light_state_t st;
+    sm64_saturn_mtx_t mv;
+
+    sm64_saturn_matrix_identity(&mv);
+    mv.m[0][0] = INT32_MIN;
+    mv.m[1][1] = INT32_MIN;
+    /* row/col 2 stay identity; dir_dir[2] stays 0 below, so
+     * coeff_q16[2] is unaffected by either version and isn't asserted
+     * on here -- this test isolates axes 0 and 1 only. */
+
+    sm64_saturn_light_state_init(&st);
+    st.dir_dir[0] = 127;
+    st.dir_dir[1] = 127;
+    st.lights_changed = true;
+    sm64_saturn_light_recompute_coeffs(&st, &mv);
+
+    /* Correct answer sits close to Q16.16 unit magnitude split across
+     * two axes (~65536/sqrt(2) = ~46341 each); the pre-fix bug's raw
+     * output sits near -INT32_MIN in magnitude instead. Bounds are
+     * checked as plain integer comparisons, deliberately avoiding any
+     * multiplication in this assertion -- squaring the pre-fix bug's
+     * own ~2^31-magnitude output here would risk re-triggering the
+     * exact int64 overflow this test exists to catch, inside the test
+     * itself. */
+    assert(st.coeff_q16[0] < 0 && st.coeff_q16[0] > -131072);
+    assert(st.coeff_q16[1] < 0 && st.coeff_q16[1] > -131072);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -1863,5 +1982,7 @@ int main(void)
     test_kernels_trig_lookup();
     test_light_q16_matches_float_reference();
     test_light_q16_zero_normal_gets_ambient();
+    test_light_q16_recompute_handles_extreme_matrix_entries();
+    test_light_q16_recompute_handles_dual_axis_int32_min_cascade();
     return 0;
 }
