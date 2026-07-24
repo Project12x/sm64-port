@@ -17,10 +17,24 @@
  * and performs the actual used-prefix upload after emission. Layout
  * matches Yaul's vdp1_gouraud_table_t (4 x RGB1555, 8 bytes,
  * libyaul .../vdp1/vram.h:32-34) -- static-asserted at the emit TU,
- * which sees both types. */
+ * which sees both types.
+ *
+ * __attribute__((aligned(8))) mirrors vdp1_gouraud_table_t's own
+ * alignment exactly (Task 6 code-review finding, 2026-07-24): without
+ * it, nothing source-level guarantees this array's alignment when
+ * SCU-DMA'd out of HWRAM -- the first sourceboot build happened to
+ * link it 4-byte aligned, which is all libyaul's scu_dma_transfer()
+ * actually requires (dnad=0x101, 4-byte address stepping), so there
+ * was no live bug, but that was incidental compiler layout, not a
+ * guarantee -- the exact "works today, invisible on Ymir, breaks
+ * later" class this project's VDP1 backend LWRAM-DMA notes already
+ * warn about elsewhere. Plain GCC attribute syntax, not Yaul's
+ * __aligned() macro (libyaul/libc/sys/cdefs.h) -- this header must
+ * stay Yaul-free to remain host-testable, and the host build (plain
+ * MinGW GCC) never sees that macro's definition. */
 typedef struct sm64_saturn_gouraud_table {
     uint16_t colors[4];
-} sm64_saturn_gouraud_table_t;
+} __attribute__((aligned(8))) sm64_saturn_gouraud_table_t;
 
 typedef struct sm64_saturn_gouraud_bank {
     sm64_saturn_gouraud_table_t *staging;

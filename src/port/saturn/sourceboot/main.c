@@ -187,8 +187,9 @@ int main(void) {
         /* Stock Yaul default (__vdp_init(), run by crt0 before main())
          * only reserves VDP1_VRAM_DEFAULT_GOURAUD_COUNT (1024) tables =
          * 8192 bytes -- confirmed against the vendored libyaul sources
-         * (work/upstream/libyaul/libyaul/scu/bus/b/vdp/vdp_init.c:50-53
-         * and vdp1_vram.c:22-78), not just the installed headers. Real
+         * (third_party/libyaul/libyaul/scu/bus/b/vdp/vdp_init.c:50-53
+         * and vdp1_vram.c:22-78 in that same submodule), not just the
+         * installed headers. Real
          * captured Bob-omb Battlefield free-roam frames run 1,365-1,431
          * triangles (SOURCEBOOT_VDP1_COMMAND_CAPACITY's comment above),
          * so the stock 1024-table cap would push the ORDINARY case into
