@@ -698,14 +698,14 @@ included) passed clean under `-Wall -Wextra -Werror` before and after.
 - Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c` (keep compiling: corner[0] as interim flat color)
 - Test: `tools/saturn/runtime_contract_test.c`
 
-- [ ] **Step 1: Find every consumer of the old field**
+- [x] **Step 1: Find every consumer of the old field**
 
 ```
 grep -rn "color_rgb1555" src/ tools/
 ```
 Expected consumers: the resolve write (`saturn_fast3d_frontend.c:433`), the emit read (`saturn_fast3d_vdp1_emit.c:~50`), possibly test assertions. Every hit must be updated this task — list them in the commit message.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 ```c
 static void test_frontend_resolved_triangle_carries_corner_colors(void)
@@ -799,11 +799,11 @@ static void test_frontend_counts_dropped_fog(void)
 
 Register both in `main()`.
 
-- [ ] **Step 3: Run to confirm failure**
+- [x] **Step 3: Run to confirm failure**
 
 Expected: FAIL to compile — `corner_rgb1555` doesn't exist.
 
-- [ ] **Step 4: Implement**
+- [x] **Step 4: Implement**
 
 In `saturn_fast3d_frontend.h:233-238`, replace `uint16_t color_rgb1555;` with `uint16_t corner_rgb1555[3];` (struct grows 16→20 bytes; ×1536 resolved slots = +6 KiB static, fine against the ~191 KiB HWRAM margin measured after the `.lwram_bss` relocation — note this in the struct comment).
 
@@ -827,16 +827,56 @@ In the resolve function (`saturn_fast3d_frontend.c:425-445`), replace the single
 
 Preserve the original comment block's VDP2 RGB-flag-bit war story (move it onto the loop). In `saturn_fast3d_vdp1_emit.c:~50`, change `tri->color_rgb1555` to `tri->corner_rgb1555[0]` with a `/* interim flat: real Gouraud lands with the bank task */` note. Update any test assertions found in Step 1.
 
-- [ ] **Step 5: Run host tests, then cross-compile**
+- [x] **Step 5: Run host tests, then cross-compile**
 
 Host suite: exit 0. Then the full SH-2 cross-compile + `make verify` (Standing workflow facts) — the emit TU only compiles there. Both exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_fast3d_frontend.h src/port/saturn/gfx/saturn_fast3d_frontend.c src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c tools/saturn/runtime_contract_test.c
 git commit -m "feat(saturn): resolved triangles carry per-corner colors; count dropped fog"
 ```
+
+Committed as `a6e8121`. Like Task 3, no functional deviation from the
+sketch: the real `idx[3]`/`geometry_mode`/`G_FOG` usage all matched
+what was sketched on inspection, and the grep for `color_rgb1555`
+turned up exactly the 5 hits the plan predicted (resolve write, field
+decl, emit read, one test assertion — all updated).
+
+Two-stage review: spec-compliance review independently re-ran the
+`color_rgb1555` grep, re-read the per-frame `memset` reset to confirm
+`fog_dropped_triangles` is genuinely non-vacuous, independently
+reproduced both claimed mutations (each correctly fails its target
+test), and independently reproduced both the host suite and the full
+SH-2 cross-compile + `make verify` (rather than trusting the reported
+exit codes) — all confirmed. It also caught two things worth recording
+here: (1) a separate, older HWRAM-budget comment elsewhere in
+`saturn_fast3d_frontend.h` (line ~313) still cited the struct's old
+16-bytes/entry size after this task grew it to 20 — fixed directly as
+a small follow-up commit `27918e5`, not folded into `a6e8121` per this
+project's no-amend policy; (2) the commit message's build-verification
+note is wrong about which artifact is 640K — that figure belongs to
+the separate program `.bin` (869,956 bytes, from Yaul's own
+`build.post.bin.mk`), not `SOURCE.DAT`. The real, independently
+re-measured `SOURCE.DAT` is **1,715,488 bytes (~1.7 MiB)** — still
+comfortably under the 4 MiB cap, so `make verify`'s pass/fail verdict
+was never wrong, only the number cited for it. Left uncorrected in the
+commit message itself (no amending already-created commits), recorded
+accurately here instead.
+
+Code-quality review: Ready to merge — Yes, no Critical or Important
+issues. Independently re-verified (not just re-read) the "5 consumers"
+grep against the base commit, the corner-index correspondence between
+`corner_rgb1555[c]` and the pre-existing `x[c]`/`y[c]` pipeline, the
+RGB1555 bit-packing by hand for all three test colors, and the
+fog-counter non-vacuousness via the same `memset` trace. Three
+zero-impact Minor notes only (a stylistic two-loop-vs-one-loop
+observation, a "Task 6 vs. Task 5" wording nit in a comment copied
+verbatim from the plan's own text, and a process observation that a
+future plan should tell implementers to grep a whole file for stale
+byte-count comments whenever a struct's `sizeof` changes) — none
+required a fix round.
 
 ---
 
