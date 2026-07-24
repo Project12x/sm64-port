@@ -1478,7 +1478,7 @@ non-blocking nitpicks — no fix round required, unlike Tasks 1-3).
 - Modify: `src/port/saturn/gfx/saturn_fast3d_frontend.c` (decode call site)
 - Modify: `tools/saturn/runtime_contract_test.c` (matrix-decode fixtures)
 
-- [ ] **Step 1: Add the native decode, gated on one shared define**
+- [x] **Step 1: Add the native decode, gated on one shared define**
 
 In `saturn_matrix.h`, next to `sm64_saturn_matrix_decode`:
 
@@ -1500,7 +1500,7 @@ sm64_saturn_matrix_decode_q16(const int32_t *wire_q16, sm64_saturn_mtx_t *out)
 }
 ```
 
-- [ ] **Step 2: Flip the frontend's G_MTX decode**
+- [x] **Step 2: Flip the frontend's G_MTX decode**
 
 In `saturn_fast3d_frontend.c`, the G_MTX handler currently does
 `sm64_saturn_matrix_decode(gbi_floats, &decoded);` (locate via
@@ -1524,7 +1524,7 @@ same place `TARGET_SATURN` builds get their defines for
 for the sourceboot target, so add it to the target-wide CFLAGS, not
 per-file).
 
-- [ ] **Step 3: Update the host contract tests' G_MTX fixtures**
+- [x] **Step 3: Update the host contract tests' G_MTX fixtures**
 
 `runtime_contract_test.c`'s G_MTX tests feed float matrix data. Keep the
 suite testing BOTH decodes: existing float-fixture tests stay (they test
@@ -1554,16 +1554,16 @@ exercising the float wire format — correct, since host tests model the
 generic path; the Q16 wire path's end-to-end proof is the live capture
 (Task 6).
 
-- [ ] **Step 4: Run host suites**
+- [x] **Step 4: Run host suites**
 
 `verify-runtime-contracts` exit 0.
 
-- [ ] **Step 5: Full cross-compile + verify**
+- [x] **Step 5: Full cross-compile + verify**
 
 Forced clean rebuild of the frontend + sourceboot TUs (same mangled-object
 deletion discipline), `make -j2 && make verify` — both exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_matrix.h \
@@ -1572,6 +1572,23 @@ git add src/port/saturn/gfx/saturn_matrix.h \
         tools/saturn/runtime_contract_test.c
 git commit -m "feat(saturn): native Q16.16 Mtx wire format end-to-end (SATURN_MTX_IS_Q16)"
 ```
+
+Committed as `57f2d3b`. Code-quality review found a real strict-aliasing
+violation (C11 6.5p7): a pre-existing bring-up diagnostic read the Q16
+wire buffer through a `float`-typed lvalue after `SATURN_MTX_IS_Q16`
+changed that buffer's effective type to `int32_t[4][4]`. Fixed in
+`074f8c4`, which also caught and avoided a second-order unused-variable
+regression the reviewer's own suggested minimal fix would have
+introduced. Spec-compliance review separately flagged (not blocking) that
+the "producer/consumer cannot desync" guarantee is currently an emergent
+property of matching Makefiles rather than a compile-time one --
+`rendering_graph_node.c`/`guMtxF2L.c` gate on `TARGET_SATURN` alone, not
+`SATURN_MTX_IS_Q16` -- tracked separately, not a Task 5 defect.
+
+With this task done, the Q16.16 pipeline is consistent end-to-end for the
+first time: the render graph composes and writes fixed-point matrices,
+and the frontend decodes them as such. Task 6 is the actual live-hardware
+proof.
 
 ---
 
