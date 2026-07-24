@@ -1130,7 +1130,7 @@ touches protected engine code — the rule making it legitimate: **every
 float code it shadows, and the float code remains compiled and authoritative
 for every other platform.** No gameplay-visible decision changes.
 
-- [ ] **Step 1: Verify the call-site inventory is still exact**
+- [x] **Step 1: Verify the call-site inventory is still exact**
 
 ```
 grep -n "mtxf_lookat\|mtxf_mul(\|mtxf_rotate\|mtxf_billboard\|mtxf_scale\|mtxf_translate\|mtxf_identity\|mtxf_to_mtx\|throwMatrix" src/game/rendering_graph_node.c
@@ -1143,7 +1143,7 @@ root :1076-1077, plus the `Mtx *mtx = gMatStackFixed[...]` reads at
 :186/:271/:276. If any NEW site exists that this plan doesn't cover, STOP
 and report before editing — the plan's edits must cover every site.
 
-- [ ] **Step 2: Add the parallel Q16 stack and bridge helpers**
+- [x] **Step 2: Add the parallel Q16 stack and bridge helpers**
 
 In `rendering_graph_node.c`, directly below the existing
 `Mtx *gMatStackFixed[32];` (line ~41):
@@ -1204,7 +1204,7 @@ static void saturn_mat4_to_q16(sm64_saturn_mtx_t *out, Mat4 in) {
 (`memcpy` needs `<string.h>` — `rendering_graph_node.c` includes it via the
 engine headers; verify with the build, add the include if not.)
 
-- [ ] **Step 3: Shadow every composition site**
+- [x] **Step 3: Shadow every composition site**
 
 The pattern is identical at every site: after (or instead of) the float
 composition, perform the Q16 composition into `gMatStackQ`, refresh the
@@ -1402,7 +1402,7 @@ the shared scale (:825) and refresh+wire-write (:839-840) as usual.
 
 Every site keeps its `gMatStackFixed[...] = mtx;` line untouched.
 
-- [ ] **Step 4: Handle the non-render-graph Mtx producers via guMtxF2L**
+- [x] **Step 4: Handle the non-render-graph Mtx producers via guMtxF2L**
 
 Producers outside the render graph still build float matrices and convert
 via `guMtxF2L`/`mtxf_to_mtx` (perspective node's `guPerspective`, skybox,
@@ -1437,7 +1437,7 @@ void guMtxF2L(float mf[4][4], Mtx *m) {
 This makes EVERY Mtx reaching the display list Q16.16 on Saturn, from
 either producer class.
 
-- [ ] **Step 5: Cross-compile**
+- [x] **Step 5: Cross-compile**
 
 Forced clean rebuild (delete `@`-mangled objects for
 `rendering_graph_node.c`, the `guMtxF2L` TU, `saturn_fast3d_frontend.c`,
@@ -1446,13 +1446,28 @@ plus ELF/ISO/CUE, then `make -j2 && make verify` in
 build. The frontend still decodes Mtx as floats at this point, so a boot
 now would render garbage — that flip is Task 5; do NOT capture-verify yet.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/game/rendering_graph_node.c lib/src/guMtxF2L.c
 git commit -m "feat(saturn): Q16.16 render-graph matrix pipeline under TARGET_SATURN"
 ```
 (adjust the second path to wherever the guMtxF2L edit actually landed)
+
+Committed as `d96008b`. Reading the real code before editing (per this sprint's
+established discipline) found two things this sketch got wrong, both fixed
+and independently re-verified: (1) the held-object site does an
+`mtxf_copy` + translation-column splice the sketch omitted, resolved via a
+new `saturn_mtxq_gmatstack_index()` pointer-arithmetic helper; (2) the
+object site's float-mirror refresh needed to happen immediately after
+composition, not deferred to the wire-write point as sketched --
+`cameraToObject` (positional audio) and `obj_is_in_view` (frustum culling)
+both read the float mirror earlier than that. Also discovered
+`saturn_trig_q16.inc.c` was never linked into the sourceboot build at all;
+added to `SH_SRCS`. Spec-compliance review reproduced the full SH-2
+cross-compile independently (clean, zero warnings, `make verify` exits 0).
+Code-quality review returned APPROVED WITH MINOR NOTES (three optional,
+non-blocking nitpicks — no fix round required, unlike Tasks 1-3).
 
 ---
 
