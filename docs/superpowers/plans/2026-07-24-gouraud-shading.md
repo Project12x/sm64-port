@@ -1365,26 +1365,59 @@ rather than assuming); the five new counters land at offsets 208/212/216/
 | `lit_vertices` | > 0, dominating unlit | **2426** vs 36 unlit (~67x) |
 | `unsupported_num_lights` | small or 0 | **0** |
 | `fog_dropped_triangles` | > 0 | **330** |
-| `gouraud_bank_overflow` | 0 | **0** |
+| `gouraud_bank_overflow` | 0 | **0**, but see the retraction below — this is a *never-written* zero, not a measured one |
 | `triangles_vdp1_emitted` | ≥ baseline | **0** at the probed frame (same one-frame profile-reset artifact as v0.1.0, not a regression) |
 | Screenshot | real colors, coherent shading | coherent white/grey terrain + one distinctly colored actor; the garbage patchwork is gone |
 
 Also measured: `triangles_transformed` 1307, `triangles_emitted` 437.
 
-Two notes worth carrying forward. First, `gouraud_bank_overflow = 0` is
-**not** trivially satisfied the way this task's own threshold row implied:
-that row said "180 triangles ≪ 1536 tables", but 180 was the v0.1.0
-figure — this capture resolved 437, and this project's recorded BOB
-free-roam working set is 1,365-1,431 triangles/frame. Under Yaul's stock
-1,024-table partition default the ordinary frame would have overflowed by
-the hundreds. It reads 0 only because Task 6 caught that and re-partitioned
-explicitly. Second, the plan's threshold table is left as originally
-written (stale 180 figure and all) rather than retconned, so the record
-shows what was predicted versus what actually happened.
+The plan's threshold table is left as originally written (stale 180
+figure and all) rather than retconned, so the record shows what was
+predicted versus what actually happened.
 
-User confirmed the screenshot directly ("the screenshot looks as
-described"), satisfying the standing visual gate; the TIMELINE.md entry and
-gallery card (stage 121) followed in `d1c6e8c`.
+**RETRACTION (added after the sprint's holistic review).** An earlier
+version of this note argued that `gouraud_bank_overflow = 0` was a
+meaningful, hard-won result — that under Yaul's stock 1,024-table default
+the ordinary frame would have overflowed by the hundreds, so the zero
+vindicated Task 6's re-partition. That argument was wrong twice over and
+is withdrawn:
+
+1. **It is a never-written zero, not a measured one.** All three
+   emit-stage counters (`triangles_vdp1_emitted`,
+   `reject_vdp1_arena_capacity`, `gouraud_bank_overflow`) read 0 in this
+   capture while 437 triangles resolved. The first two must sum to 437 if
+   the emit loop ran at all, so the probe sampled between `submit()`'s
+   per-frame `memset` and the emit stage. The counter's only write site
+   had not executed. The row immediately above it already applies exactly
+   this "one-frame profile-reset artifact" caveat to
+   `triangles_vdp1_emitted` — same cause, adjacent rows, opposite
+   treatment.
+2. **It substituted history for measurement.** It cited this project's
+   recorded 1,365-1,431 triangles/frame working set, but *this* capture
+   resolved 437 — comfortably under the stock 1,024-table default. Even a
+   correctly-timed sample of this frame could not have distinguished the
+   shipped 1,536-table partition from Yaul's default.
+
+The *value* 0 is nonetheless correct by construction: bank capacity
+resolves to `SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES` (1536), which is
+also the ceiling on `resolved_count`, so `gouraud_bank_alloc` cannot
+return NULL in the shipped configuration. Only the evidentiary claim was
+wrong. Corollary worth carrying forward: **this counter is not a live
+regression sensor** — its sole reachable path is `capacity == 0`, which
+also prints a dbgio line.
+
+Task 6's re-partition remains correct and necessary on its own merits
+(the arithmetic is verified in its own completion note); it simply is not
+what this capture demonstrated.
+
+The user confirmed the first screenshot directly ("the screenshot looks
+as described"), satisfying the standing visual gate at the time, and the
+TIMELINE.md entry and gallery card (stage 121) followed in `d1c6e8c`.
+**That frame was subsequently found to have red and blue swapped**
+(`12eeca3`) — the confirmed "dark red actor" was Mario in blue overalls,
+and the swap was invisible on the frame's dominant achromatic terrain
+because `r == g == b` is a fixed point of it. Superseded by the corrected
+re-capture; see the entries following this one.
 
 ---
 

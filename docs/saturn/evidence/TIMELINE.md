@@ -1413,20 +1413,33 @@ Every degradation is deliberate, documented, and counted, per the design's
 degrade-first contract: fog is dropped entirely (330 triangles this frame),
 exactly one directional light plus ambient is supported, and bank exhaustion
 falls back to a counted flat color. This capture reads `lit_vertices` 2,426
-against `unlit_vertices` 36, `unsupported_num_lights` 0, and
-`gouraud_bank_overflow` 0 — the last of those only because the sprint's
-final task re-partitioned VDP1 VRAM for 1,536 Gouraud tables; Yaul's stock
-default reserves 1,024, well under this level's real 1,365–1,431
-triangles-per-frame working set. `triangles_vdp1_emitted` reads 0 at the
-single probed frame for the same one-frame-snapshot reason recorded in the
-2026-07-23 entry: the profile struct resets every frame, and the screenshot
-comes from a different frame in the same 26,740-frame run.
+against `unlit_vertices` 36, and `unsupported_num_lights` 0.
+`gouraud_bank_overflow` and `triangles_vdp1_emitted` both read 0 at the
+single probed frame, for the one-frame-snapshot reason recorded in the
+2026-07-23 entry: the profile struct resets every frame and this sample
+landed before the emit stage ran, so those are never-written zeros rather
+than measurements. The screenshot comes from a different frame in the same
+26,740-frame run.
 
 The capture remains explicitly **untextured**, per this project's
 gate-labelling convention — texture work is a separate later cycle. What
 changed is that surfaces now carry coherent shading instead of noise. It
 was reviewed directly and confirmed to show the Bob-omb Battlefield cannon
 and terrain in consistent white/grey with one distinctly colored actor.
+
+**Correction (same day, superseded by the entry below).** That confirmed
+frame has red and blue exchanged. The sprint's final holistic review found
+the RGB1555 pack writing red into bits 14-10, which Yaul's own `union
+rgb1555` (`msb:1; b:5; g:5; r:5`, MSB-first on big-endian SH-2) reserves
+for blue. The "one distinctly colored actor" is Mario, whose overalls are
+blue, not red. The swap was invisible everywhere else in frame because
+`r == g == b` is a fixed point of it and the terrain is achromatic — so
+neither the live capture nor a human looking at the picture could have
+caught it; it took decoding the bitfield union numerically. The defect
+predates this sprint (the old flat-color pack had the same lane order),
+but this sprint amplified it to all three corners, routed it through lit
+geometry for the first time, and its new test asserted the swapped
+constants as correct. Fixed in `12eeca3`.
 
 Evidence: [Gouraud free-roam screenshot](screenshots/e2-sourceboot-gouraud-freeroam-2026-07-24.png)
 (320x224 internal `video.capture`, frame 26,740, SHA-256
