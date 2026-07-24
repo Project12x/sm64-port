@@ -74,7 +74,7 @@ sm64_saturn_light_state_init(sm64_saturn_light_state_t *st)
  * sm64_saturn_float_to_q16's saturation path produces for any
  * out-of-range float, so this is a realistic input, not a contrived
  * one), |dir_dir[j]| <= 128 (true int8_t extreme). Three terms
- * summed before the /127: |sum| < 3 * 2^31 * 128 < 2^39, comfortably
+ * summed before the /127: |sum| < 3 * 2^31 * 128 < 2^40, comfortably
  * inside int64_t (max ~2^63) with huge margin -- so the raw dot
  * product AND the /127 result both stay exact in int64_t. The
  * subsequent bound-to-<=1<<20 halving loop operates entirely in
