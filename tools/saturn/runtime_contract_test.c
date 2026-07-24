@@ -2225,9 +2225,17 @@ static void test_frontend_resolved_triangle_carries_corner_colors(void)
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
     assert(frontend.resolved_count == 1);
-    assert(frontend.resolved[0].corner_rgb1555[0] == 0xFC00); /* red   */
+    /* Expected values derive from Yaul's `union rgb1555` bitfield order
+     * (msb:1; b:5; g:5; r:5, MSB-first on big-endian SH-2), i.e. BLUE
+     * occupies bits 14-10 and RED bits 4-0 -- NOT the intuitive order.
+     * These constants were originally written the other way round, from
+     * the implementation rather than from the hardware, which is what let
+     * an R/B channel swap ship and then certified it as correct. Do not
+     * "fix" these to match the code; check the code against
+     * third_party/libyaul/.../color/rgb1555.h. */
+    assert(frontend.resolved[0].corner_rgb1555[0] == 0x801F); /* red   */
     assert(frontend.resolved[0].corner_rgb1555[1] == 0x83E0); /* green */
-    assert(frontend.resolved[0].corner_rgb1555[2] == 0x801F); /* blue  */
+    assert(frontend.resolved[0].corner_rgb1555[2] == 0xFC00); /* blue  */
 }
 
 /* Companion test: G_FOG is dropped per the design spec's degradation

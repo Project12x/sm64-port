@@ -441,11 +441,29 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * constant (0xC210) carries the bit, and the SGL sprite manual's
      * mixed palette/RGB framebuffer convention is recorded in
      * docs/saturn/SGL_REFERENCE_NOTES.md -- this still applies to every
-     * corner entry below, not just a single flat color. */
+     * corner entry below, not just a single flat color.
+     *
+     * LANE ORDER -- BLUE is the high field, RED the low one. This is not
+     * the intuitive order and it was wrong here from this pack's original
+     * introduction until 2026-07-24. Yaul's own `union rgb1555`
+     * (third_party/libyaul/libyaul/gamemath/gamemath/color/rgb1555.h:19-33)
+     * declares the bitfields `msb:1; b:5; g:5; r:5`, and SH-2 is
+     * big-endian, so allocation runs MSB-first: msb=bit 15, BLUE=bits
+     * 14-10, green=bits 9-5, RED=bits 4-0. Its RGB1555_INITIALIZER
+     * likewise reorders its (r,g,b) arguments to (b,g,r) on the way in.
+     * Packing red into bits 14-10 therefore ships every chromatic surface
+     * with red and blue exchanged -- invisible on achromatic geometry
+     * (r==g==b is a fixed point of the swap), which is why it survived a
+     * live capture and a human visual review of a mostly-grey frame.
+     * This file is deliberately Yaul-free so it stays host-testable, so
+     * it cannot just call RGB1555(); the repo's other packer,
+     * tools/saturn/extract_mario_textures.py:36, independently uses this
+     * same (blue<<10)|(green<<5)|red order. Verify against those two
+     * references, not against intuition, before touching this line. */
     for (int c = 0; c < 3; c++) {
         const sm64_saturn_fast3d_vertex_t *v = &frontend->vertices[idx[c]];
         out->corner_rgb1555[c] = (uint16_t)(0x8000U |
-            ((v->r >> 3) << 10) | ((v->g >> 3) << 5) | (v->b >> 3));
+            ((v->b >> 3) << 10) | ((v->g >> 3) << 5) | (v->r >> 3));
     }
     if ((frontend->geometry_mode & G_FOG) != 0U) {
         /* Degradation contract (design spec 2026-07-24): fog is dropped
