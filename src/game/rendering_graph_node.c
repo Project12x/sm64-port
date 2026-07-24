@@ -46,6 +46,16 @@ Mtx *gMatStackFixed[32];
 #include "port/saturn/gfx/saturn_matrix.h"
 #include "port/saturn/gfx/saturn_matrix_ctors.h"
 
+#ifndef SATURN_MTX_IS_Q16
+/* This TU's Saturn path is a Q16.16 WIRE PRODUCER (saturn_mtxq_write_wire
+ * below writes raw s32[4][4] into display-list Mtx slots). Compiling it
+ * into a target whose frontend decodes the float wire format (no
+ * SATURN_MTX_IS_Q16) would silently feed Q16 integers to a float
+ * decoder. Producer and consumer must share the one define -- see
+ * guMtxF2L.c's matching guard and sourceboot/Makefile's SH_CFLAGS. */
+#error "TARGET_SATURN rendering_graph_node.c writes Q16.16 wire data; this build's frontend would decode floats. Define SATURN_MTX_IS_Q16 target-wide."
+#endif
+
 /* Q16.16 shadow of gMatStack, maintained in lockstep at every
  * composition site below. On Saturn this is the AUTHORITATIVE matrix
  * state: the toolchain's soft-float is proven to corrupt the float

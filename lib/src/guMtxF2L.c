@@ -56,6 +56,17 @@ void guMtxL2F(float mf[4][4], Mtx *m) {
  * here -- per-element exact float->Q16.16 conversion instead of a raw
  * float memcpy -- so every Mtx reaching the display list is Q16.16 on
  * this target, regardless of which producer built it. */
+#ifndef SATURN_MTX_IS_Q16
+/* This TU is a Q16.16 WIRE PRODUCER. Compiling it into a target whose
+ * frontend decodes the float wire format (no SATURN_MTX_IS_Q16) would
+ * silently feed Q16 integers to a float decoder -- exactly the desync
+ * this shared define exists to prevent. This is a real in-tree hazard,
+ * not hypothetical: castleviewer defines TARGET_SATURN without
+ * SATURN_MTX_IS_Q16 and today simply doesn't link this file; the first
+ * person to add it there to fix a link error must get this compile
+ * error, not silent garbage. */
+#error "TARGET_SATURN guMtxF2L writes Q16.16 wire data; this build's frontend would decode floats. Define SATURN_MTX_IS_Q16 target-wide (see sourceboot/Makefile) or do not compile this TU."
+#endif
 #include "port/saturn/gfx/saturn_matrix_kernels.h"
 void guMtxF2L(float mf[4][4], Mtx *m) {
     int32_t q[4][4];
