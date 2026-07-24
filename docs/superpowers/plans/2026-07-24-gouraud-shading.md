@@ -34,11 +34,11 @@
 - Create: `src/port/saturn/gfx/saturn_light_q16.h`
 - Test: `tools/saturn/runtime_contract_test.c` (append)
 
-- [ ] **Step 1: Read the reference before writing anything**
+- [x] **Step 1: Read the reference before writing anything**
 
 Read `src/pc/gfx/gfx_pc.c`: `calculate_normal_dir` (~:534-542), `gfx_transposed_matrix_mul` (just above it — get the EXACT transpose orientation), `gfx_normalize_vector`, and the lighting block in `gfx_sp_vertex` (~:626-657). The float reference test below must be derived from that real code, and the Q16 evaluator written to match the reference — never the reverse; a mutual-inversion bug (both sides transposed the same wrong way) would pass the diff test while diverging from gfx_pc. Also read `levels/bob/areas/1/1/model.inc.c:2` and copy the real `gdSPDefLights1` argument values for use as a test fixture.
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Append to `tools/saturn/runtime_contract_test.c` (after the last `test_kernels_*` function, before `main()`), and add `#include "saturn_light_q16.h"` next to the existing gfx includes at the top:
 
@@ -152,11 +152,11 @@ static void test_light_q16_zero_normal_gets_ambient(void)
 
 Register both in `main()` after `test_kernels_trig_lookup();`. Note the test uses `sqrtf`/`memcpy` — `<math.h>`/`<string.h>` are already included in this file; the recipe links `-lm`? Check: the `verify-runtime-contracts` recipe (`Makefile.saturn.mk:144-156`) does NOT pass `-lm` — add it to the recipe in the same style as `verify-mtxq-ctors` if the link fails on `sqrtf` (glibc-style toolchains often need it; MinGW typically doesn't — ground-truth by building).
 
-- [ ] **Step 3: Run to confirm failure**
+- [x] **Step 3: Run to confirm failure**
 
 Host suite command (see Standing workflow facts). Expected: FAIL to compile — `saturn_light_q16.h: No such file or directory`.
 
-- [ ] **Step 4: Implement the evaluator**
+- [x] **Step 4: Implement the evaluator**
 
 Create `src/port/saturn/gfx/saturn_light_q16.h`:
 
@@ -274,11 +274,11 @@ sm64_saturn_light_eval_vertex(const sm64_saturn_light_state_t *st,
 
 Before running: hand-trace the transpose orientation once against the real `gfx_transposed_matrix_mul` (Step 1) — if gfx_pc's helper is column-major or argument-swapped relative to the sketch above, fix BOTH the reference and the evaluator to match gfx_pc, and say so in the commit message.
 
-- [ ] **Step 5: Run tests to verify pass**
+- [x] **Step 5: Run tests to verify pass**
 
 Host suite command. Expected: exit 0. If the |Δ|≤2 tolerance fails, investigate before loosening (likely a transpose-orientation mismatch or a missed /127) — the tolerance encodes a real precision claim.
 
-- [ ] **Step 6: Mutation check, then commit**
+- [x] **Step 6: Mutation check, then commit**
 
 Apply each mutation to `saturn_light_q16.h`, re-run the host suite, confirm FAIL, revert: (a) remove the `intensity_q16 > 0` clamp; (b) swap `amb_col`/`dir_col` in the evaluator; (c) change `m[j][i]` to `m[i][j]` (transpose flip); (d) delete the `/ 127` in the dot. All four must fail. Restore byte-identical (verify with `git diff` — clean), then:
 
@@ -287,6 +287,22 @@ git add src/port/saturn/gfx/saturn_light_q16.h tools/saturn/runtime_contract_tes
 git commit -m "feat(saturn): Q16 light evaluator mirroring gfx_pc.c, host-differential-tested"
 ```
 (Drop `Makefile.saturn.mk` from the add if Step 2's `-lm` note proved unnecessary.)
+
+Committed as `099b11d` (without `Makefile.saturn.mk` -- `-lm` proved
+unnecessary on this toolchain). Reading the real `gfx_transposed_matrix_mul`
+(Step 1) found the plan's sketch had the light-direction transpose
+backwards (`M[j][i]` instead of the real `M[i][j]`) -- fixed in both the
+float reference and the Q16 evaluator, independently re-verified by
+spec-compliance review. Code-quality review then found a real
+signed-overflow UB in the pre-normalize halving loop (`v[0] == INT32_MIN`
+-- exactly what `sm64_saturn_float_to_q16`'s own saturation produces --
+wraps the abs-value check and silently bypasses the loop). Fixed in
+`a8dc0a4`, widening the whole computation to `int64_t` until safely
+bounded (same idiom as `sm64_saturn_mtxq_lookat`), with two new
+regression tests -- both verified by the implementer building them
+against the *reverted* buggy code first, since the reviewer's own
+originally-proposed test turned out not to discriminate. One cosmetic
+comment fix (`2^39`->`2^40`) in `f4fffc5`.
 
 ---
 
