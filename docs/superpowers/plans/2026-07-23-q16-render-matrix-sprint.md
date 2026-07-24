@@ -1120,7 +1120,9 @@ git commit -m "fix(saturn): widen lookat delta computation, close review finding
 
 **Files:**
 - Modify: `src/game/rendering_graph_node.c`
-- Modify: `src/game/game_init.c` (guMtxF2L替 for non-graph producers — see Step 5)
+- Modify: `lib/src/guMtxF2L.c` (non-render-graph Mtx producers' wire format —
+  see Step 4; confirm the real link location via that step's grep before
+  editing, in case it has moved)
 
 This is the engine-boundary task. The change is mechanical and uniform, but
 touches protected engine code — the rule making it legitimate: **every
