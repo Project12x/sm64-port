@@ -310,8 +310,9 @@ typedef struct sm64_saturn_fast3d_vertex {
  * measured margin after Task 14's full link is ~380 bytes (___end vs. the
  * ram region's top, 0x06100000 - 0x060ffe84) -- under 1% of the region size.
  * If a future change needs more headroom, SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES
- * (16 bytes/entry) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry) are
- * the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
+ * (20 bytes/entry as of the Gouraud design's corner_rgb1555[3] change,
+ * 2026-07-24 -- was 16) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry)
+ * are the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
  * not HWRAM, so it doesn't compete with this budget) -- but note the region
  * is now tight enough that even a modest amount of new .text elsewhere in
  * sourceboot could overflow it before these knobs are touched at all.
