@@ -2080,6 +2080,103 @@ static void test_frontend_g_mv_light_ignores_lookat_offsets(void)
            frontend.lights.dir_col[2] == 220);
 }
 
+/* The normals-as-colors bug fix (this task): under G_LIGHTING, G_VTX's
+ * trailing 4 bytes are a packed s8 normal (Vtx_tn.n[3]/.a), not RGBA
+ * (Vtx_t.cn) -- SM64 runs with G_LIGHTING on globally
+ * (src/game/game_init.c:131), so the pre-fix frontend was misreading
+ * every lit vertex's normal as a garbage color. Normal (0,0,127) is
+ * straight +Z; with an identity modelview (no G_MTX in this display
+ * list) the light coefficient IS the raw light direction, so this
+ * reuses ref_light_eval (defined above for Task 1's differential
+ * tests) as the expected-value oracle instead of hand-computing one. */
+static void test_frontend_lit_vertex_evaluates_lighting(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 0, 0, 127);
+    /* Vtx_tn shape: same bytes as Vtx_t.cn, interpreted as s8 normal
+     * (0,0,127) = straight +Z, alpha 255. */
+    static const Vtx_t vert = {
+        .ob = { 1.0f, 2.0f, 3.0f }, .flag = 0, .tc = { 0, 0 },
+        .cn = { 0, 0, 127, 255 }
+    };
+    Gfx list[6];
+    struct SPTask task;
+    uint8_t want[3];
+    sm64_saturn_mtx_t ident;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 24;
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.a;
+    /* set G_LIGHTING: keep-mask C0(0,24)=0xFFFFFF (clear nothing),
+     * set-bits w1 = G_LIGHTING */
+    list[3].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[3].words.w1 = G_LIGHTING;
+    list[4].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
+    list[4].words.w1 = (uintptr_t)&vert;
+    list[5] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    sm64_saturn_matrix_identity(&ident);
+    ref_light_eval((const int8_t[3]){ 0, 0, 127 },
+                   (const uint8_t[3]){ 200, 210, 220 },
+                   (const uint8_t[3]){ 10, 20, 30 },
+                   &ident, (const int8_t[3]){ 0, 0, 127 }, want);
+    assert((int)frontend.vertices[0].r - (int)want[0] <= 2 &&
+           (int)want[0] - (int)frontend.vertices[0].r <= 2);
+    assert((int)frontend.vertices[0].g - (int)want[1] <= 2 &&
+           (int)want[1] - (int)frontend.vertices[0].g <= 2);
+    assert((int)frontend.vertices[0].b - (int)want[2] <= 2 &&
+           (int)want[2] - (int)frontend.vertices[0].b <= 2);
+    assert(frontend.vertices[0].a == 255);
+    assert(frontend.profile.lit_vertices == 1);
+    assert(frontend.profile.unlit_vertices == 0);
+    assert(!frontend.lights.lights_changed); /* lazy recompute ran */
+}
+
+/* Companion test for the branch above: with no G_GEOMETRYMODE command
+ * at all, geometry_mode is 0 (zeroed by frontend_init), so G_LIGHTING
+ * is off and cn bytes must still be read as literal RGBA -- confirming
+ * this task's gate didn't regress the pre-existing unlit path. The
+ * lit_vertices/unlit_vertices assertions here are the mirror image of
+ * the ones above: an inverted `lit` condition would misclassify THIS
+ * fixture's vertex as lit (since 0 == 0 under an inverted comparison),
+ * so together the two tests catch that mutation from either polarity. */
+static void test_frontend_unlit_vertex_passes_colors_through(void)
+{
+    /* No G_LIGHTING: existing behavior, cn bytes are true RGBA. */
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t vert = {
+        .ob = { 0.0f, 0.0f, 0.0f }, .flag = 0, .tc = { 0, 0 },
+        .cn = { 12, 34, 56, 78 }
+    };
+    Gfx list[2];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
+    list[0].words.w1 = (uintptr_t)&vert;
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.vertices[0].r == 12 && frontend.vertices[0].g == 34 &&
+           frontend.vertices[0].b == 56 && frontend.vertices[0].a == 78);
+    assert(frontend.profile.unlit_vertices == 1);
+    assert(frontend.profile.lit_vertices == 0);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -2134,5 +2231,7 @@ int main(void)
     test_frontend_decodes_lights();
     test_frontend_counts_unsupported_num_lights();
     test_frontend_g_mv_light_ignores_lookat_offsets();
+    test_frontend_lit_vertex_evaluates_lighting();
+    test_frontend_unlit_vertex_passes_colors_through();
     return 0;
 }

@@ -763,8 +763,17 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * uintptr_t (no narrowing to guard against). */
             const uint32_t n_vertices = SM64_SATURN_C0(w0, 12, 8);
             const uint32_t end_index = SM64_SATURN_C0(w0, 1, 7);
-            const Vtx_t *src =
-                (const Vtx_t *)w1; /* Vtx_t layout, not Vtx_tn */
+            /* Vtx_t and Vtx_tn share byte layout (gbi.h:1112-1136): both
+             * lead with ob[3]/flag/tc[2], then 4 trailing bytes -- this
+             * cast is valid either way. Which MEANING those trailing
+             * bytes carry is decided per-vertex below by the `lit` gate,
+             * not fixed by this cast: read as RGBA (Vtx_t.cn) when
+             * unlit, or as a packed s8 normal + alpha (Vtx_tn.n[3]/.a)
+             * under G_LIGHTING -- SM64 runs with G_LIGHTING on globally
+             * (src/game/game_init.c:131), so the lit path is the common
+             * case in real play, not a rare one. */
+            const Vtx_t *src = (const Vtx_t *)w1;
+            const bool lit = (frontend->geometry_mode & G_LIGHTING) != 0U;
             uint32_t dest_index;
 
             /* Guard against underflow: a malformed w0 encoding
@@ -780,6 +789,19 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
             }
             dest_index = end_index - n_vertices;
 
+            if (lit && frontend->lights.lights_changed) {
+                /* Lazy, once per change (gfx_pc.c:627-635): light
+                 * DIRECTIONS re-transform against the current modelview
+                 * top; vertex normals stay raw and are evaluated fresh
+                 * per vertex below. Placed after the underflow guard
+                 * above (not at the very top of the case) so a
+                 * malformed/rejected command doesn't spend a recompute
+                 * for vertices that will never be processed. */
+                sm64_saturn_light_recompute_coeffs(
+                    &frontend->lights,
+                    sm64_saturn_matrix_stack_top(&frontend->matrix_stack));
+            }
+
             for (uint32_t i = 0; i < n_vertices; i++) {
                 const uint32_t dest = dest_index + i;
                 if (dest >= SM64_SATURN_FAST3D_MAX_VERTICES) {
@@ -793,10 +815,32 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                 frontend->vertices[dest].x = src[i].ob[0];
                 frontend->vertices[dest].y = src[i].ob[1];
                 frontend->vertices[dest].z = src[i].ob[2];
-                frontend->vertices[dest].r = src[i].cn[0];
-                frontend->vertices[dest].g = src[i].cn[1];
-                frontend->vertices[dest].b = src[i].cn[2];
-                frontend->vertices[dest].a = src[i].cn[3];
+                if (lit) {
+                    /* Under G_LIGHTING the trailing Vtx bytes are a
+                     * packed s8 normal (Vtx_tn.n, gbi.h:1134), NOT a
+                     * color -- reading them as RGB unconditionally was
+                     * the pre-Gouraud bug this branch fixes. The
+                     * uint8->int8 casts rely on GCC's two's-complement
+                     * conversion (this project is GCC-only, both host
+                     * and SH-2 targets). */
+                    const int8_t n[3] = { (int8_t)src[i].cn[0],
+                                          (int8_t)src[i].cn[1],
+                                          (int8_t)src[i].cn[2] };
+                    uint8_t rgb[3];
+                    sm64_saturn_light_eval_vertex(&frontend->lights, n,
+                                                  rgb);
+                    frontend->vertices[dest].r = rgb[0];
+                    frontend->vertices[dest].g = rgb[1];
+                    frontend->vertices[dest].b = rgb[2];
+                    frontend->vertices[dest].a = src[i].cn[3];
+                    profile->lit_vertices++;
+                } else {
+                    frontend->vertices[dest].r = src[i].cn[0];
+                    frontend->vertices[dest].g = src[i].cn[1];
+                    frontend->vertices[dest].b = src[i].cn[2];
+                    frontend->vertices[dest].a = src[i].cn[3];
+                    profile->unlit_vertices++;
+                }
             }
             break;
         }
