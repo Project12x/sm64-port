@@ -41,9 +41,37 @@ void guMtxL2F(float mf[4][4], Mtx *m) {
     }
 }
 #else
+#ifdef TARGET_SATURN
+/* On Saturn, every Mtx reaching the display list must be Q16.16 raw,
+ * not float bits -- the port's own Fast3D-to-VDP1 frontend is the only
+ * consumer, and it decodes natively under SATURN_MTX_IS_Q16 (a later
+ * task), no float ever touched. rendering_graph_node.c's render-graph
+ * sites write their wire Mtx directly from already-computed Q16 data
+ * (see saturn_mtxq_write_wire there) and never reach this function;
+ * this override exists for the OTHER Mtx producers that still build
+ * genuinely float matrices via normal float math not implicated by the
+ * proven soft-float corruption (guPerspective, skybox/painting/HUD
+ * create_dl_* in ingame_menu.c, intro_geo.c) and convert them via
+ * mtxf_to_mtx/guMtxF2L exactly as before. Only the WIRE FORMAT changes
+ * here -- per-element exact float->Q16.16 conversion instead of a raw
+ * float memcpy -- so every Mtx reaching the display list is Q16.16 on
+ * this target, regardless of which producer built it. */
+#include "port/saturn/gfx/saturn_matrix_kernels.h"
+void guMtxF2L(float mf[4][4], Mtx *m) {
+    int32_t q[4][4];
+    int r, c;
+    for (r = 0; r < 4; r++) {
+        for (c = 0; c < 4; c++) {
+            q[r][c] = sm64_saturn_float_to_q16(mf[r][c]);
+        }
+    }
+    memcpy(m, q, sizeof(q));
+}
+#else
 void guMtxF2L(float mf[4][4], Mtx *m) {
     memcpy(m, mf, sizeof(Mtx));
 }
+#endif
 #endif
 
 void guMtxIdentF(float mf[4][4]) {

@@ -40,6 +40,85 @@ s16 gMatStackIndex;
 Mat4 gMatStack[32];
 Mtx *gMatStackFixed[32];
 
+#ifdef TARGET_SATURN
+#include <string.h>
+
+#include "port/saturn/gfx/saturn_matrix.h"
+#include "port/saturn/gfx/saturn_matrix_ctors.h"
+
+/* Q16.16 shadow of gMatStack, maintained in lockstep at every
+ * composition site below. On Saturn this is the AUTHORITATIVE matrix
+ * state: the toolchain's soft-float is proven to corrupt the float
+ * stack's math (docs/saturn/evidence/
+ * e2-sourceboot-gmatstack-corruption-2026-07-22.md), so the float
+ * gMatStack entries are REFRESHED FROM these Q16 results (exact
+ * conversion, no float arithmetic) for the engine consumers that read
+ * them (shadow positioning, culling, held-object math, positional
+ * audio via cameraToObject). The wire Mtx (gMatStackFixed) is written
+ * from Q16 directly -- see saturn_mtxq_write_wire below and the
+ * frontend's matching native-Q16 decode (SATURN_MTX_IS_Q16, a later
+ * task). */
+static sm64_saturn_mtx_t gMatStackQ[32];
+
+/* The camera's look-at matrix is exposed to descendants (shadow nodes)
+ * through GraphNodeCamera::matrixPtr, a `Mat4 *` into gMatStack. This
+ * is its Q16 twin, set alongside matrixPtr in geo_process_camera and
+ * read in geo_process_shadow. Only one camera is ever active at a time
+ * (gCurGraphNodeCamera is a single global, not a stack), so a single
+ * static pointer mirrors that invariant exactly. */
+static sm64_saturn_mtx_t *sSaturnCameraMatrixQ;
+
+static void saturn_mtxq_refresh_float_mirror(s16 index) {
+    for (s32 i = 0; i < 4; i++) {
+        for (s32 j = 0; j < 4; j++) {
+            gMatStack[index][i][j] =
+                sm64_saturn_q16_to_float(gMatStackQ[index].m[i][j]);
+        }
+    }
+}
+
+/* Write the Q16 matrix into the display-list Mtx slot. Mtx under
+ * GBI_FLOATS is struct { float m[4][4] } -- 64 bytes, same size/shape
+ * as s32[4][4]. On Saturn the wire format IS Q16.16 raw (the port's
+ * own frontend is the only consumer; it decodes natively under
+ * SATURN_MTX_IS_Q16, no float ever touched). memcpy avoids the
+ * type-pun UB. */
+static void saturn_mtxq_write_wire(Mtx *dest, const sm64_saturn_mtx_t *src) {
+    memcpy(dest, src->m, sizeof(src->m));
+}
+
+static void saturn_vec3f_to_q16(int32_t out[3], Vec3f in) {
+    out[0] = sm64_saturn_float_to_q16(in[0]);
+    out[1] = sm64_saturn_float_to_q16(in[1]);
+    out[2] = sm64_saturn_float_to_q16(in[2]);
+}
+
+static void saturn_mat4_to_q16(sm64_saturn_mtx_t *out, Mat4 in) {
+    for (s32 i = 0; i < 4; i++) {
+        for (s32 j = 0; j < 4; j++) {
+            out->m[i][j] = sm64_saturn_float_to_q16(in[i][j]);
+        }
+    }
+}
+
+/* Recovers the gMatStackQ index matching a Mat4* that is known to
+ * point into gMatStack -- e.g. a GraphNodeObject's throwMatrix, which
+ * geo_process_object unconditionally sets to &gMatStack[N] (see the
+ * object site below) before any child, including a held-object node,
+ * can observe it. Pointer subtraction of two pointers into the same
+ * array is well-defined and exact; the caller is responsible for the
+ * "really points into gMatStack" precondition (true for throwMatrix at
+ * the point geo_process_held_object reads it, NOT true in general --
+ * throwMatrix can also be a gameplay-owned float matrix living
+ * entirely outside gMatStack, e.g. mario.c's quicksand adjustment or
+ * obj_behaviors.c's terrain-normal alignment; that case is handled by
+ * converting at the read boundary instead, see the object site's
+ * throwMatrix branch). */
+static s32 saturn_mtxq_gmatstack_index(Mat4 *slot) {
+    return (s32) (slot - gMatStack);
+}
+#endif
+
 /**
  * Animation nodes have state in global variables, so this struct captures
  * the animation state so a 'context switch' can be made when rendering the
@@ -313,25 +392,53 @@ static void geo_process_switch(struct GraphNodeSwitchCase *node) {
  * Process a camera node.
  */
 static void geo_process_camera(struct GraphNodeCamera *node) {
-    Mat4 cameraTransform;
+    UNUSED Mat4 cameraTransform;
     Mtx *rollMtx = alloc_display_list(sizeof(*rollMtx));
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     if (node->fnNode.func != NULL) {
         node->fnNode.func(GEO_CONTEXT_RENDER, &node->fnNode.node, gMatStack[gMatStackIndex]);
     }
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t rollQ;
+        sm64_saturn_mtxq_rotate_xy(&rollQ, node->rollScreen);
+        saturn_mtxq_write_wire(rollMtx, &rollQ);
+    }
+#else
     mtxf_rotate_xy(rollMtx, node->rollScreen);
+#endif
 
     gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(rollMtx), G_MTX_PROJECTION | G_MTX_MUL | G_MTX_NOPUSH);
 
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t camQ;
+        int32_t posQ[3], focusQ[3];
+        saturn_vec3f_to_q16(posQ, node->pos);
+        saturn_vec3f_to_q16(focusQ, node->focus);
+        sm64_saturn_mtxq_lookat(&camQ, posQ, focusQ, node->roll);
+        (void) sm64_saturn_matrix_mul(&camQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
+#else
     mtxf_lookat(cameraTransform, node->pos, node->focus, node->roll);
     mtxf_mul(gMatStack[gMatStackIndex + 1], cameraTransform, gMatStack[gMatStackIndex]);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->fnNode.node.children != 0) {
         gCurGraphNodeCamera = node;
         node->matrixPtr = &gMatStack[gMatStackIndex];
+#ifdef TARGET_SATURN
+        sSaturnCameraMatrixQ = &gMatStackQ[gMatStackIndex];
+#endif
         geo_process_node_and_siblings(node->fnNode.node.children);
         gCurGraphNodeCamera = NULL;
     }
@@ -345,15 +452,32 @@ static void geo_process_camera(struct GraphNodeCamera *node) {
  * For the rest it acts as a normal display list node.
  */
 static void geo_process_translation_rotation(struct GraphNodeTranslationRotation *node) {
-    Mat4 mtxf;
+    UNUSED Mat4 mtxf;
     Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     vec3s_to_vec3f(translation, node->translation);
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t nodeQ;
+        int32_t tQ[3];
+        saturn_vec3f_to_q16(tQ, translation);
+        sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, tQ, node->rotation[0],
+                                                  node->rotation[1], node->rotation[2]);
+        (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
+#else
     mtxf_rotate_zxy_and_translate(mtxf, translation, node->rotation);
     mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -370,15 +494,31 @@ static void geo_process_translation_rotation(struct GraphNodeTranslationRotation
  * For the rest it acts as a normal display list node.
  */
 static void geo_process_translation(struct GraphNodeTranslation *node) {
-    Mat4 mtxf;
+    UNUSED Mat4 mtxf;
     Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     vec3s_to_vec3f(translation, node->translation);
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t nodeQ;
+        int32_t tQ[3];
+        saturn_vec3f_to_q16(tQ, translation);
+        sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, tQ, 0, 0, 0);
+        (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
+#else
     mtxf_rotate_zxy_and_translate(mtxf, translation, gVec3sZero);
     mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -395,13 +535,29 @@ static void geo_process_translation(struct GraphNodeTranslation *node) {
  * For the rest it acts as a normal display list node.
  */
 static void geo_process_rotation(struct GraphNodeRotation *node) {
-    Mat4 mtxf;
+    UNUSED Mat4 mtxf;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t nodeQ;
+        static const int32_t sZeroQ[3] = { 0, 0, 0 };
+        sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, sZeroQ, node->rotation[0],
+                                                  node->rotation[1], node->rotation[2]);
+        (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
+#else
     mtxf_rotate_zxy_and_translate(mtxf, gVec3fZero, node->rotation);
     mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -423,9 +579,23 @@ static void geo_process_scale(struct GraphNodeScale *node) {
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     vec3f_set(scaleVec, node->scale, node->scale, node->scale);
+#ifdef TARGET_SATURN
+    {
+        int32_t sQ[3];
+        saturn_vec3f_to_q16(sQ, scaleVec);
+        sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
+                                     &gMatStackQ[gMatStackIndex], sQ);
+    }
+#else
     mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex], scaleVec);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -448,6 +618,28 @@ static void geo_process_billboard(struct GraphNodeBillboard *node) {
 
     gMatStackIndex++;
     vec3s_to_vec3f(translation, node->translation);
+#ifdef TARGET_SATURN
+    {
+        int32_t tQ[3];
+        saturn_vec3f_to_q16(tQ, translation);
+        sm64_saturn_mtxq_billboard(&gMatStackQ[gMatStackIndex],
+                                   &gMatStackQ[gMatStackIndex - 1], tQ,
+                                   gCurGraphNodeCamera->roll);
+        if (gCurGraphNodeHeldObject != NULL) {
+            int32_t sQ[3];
+            saturn_vec3f_to_q16(sQ, gCurGraphNodeHeldObject->objNode->header.gfx.scale);
+            sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex],
+                                         &gMatStackQ[gMatStackIndex], sQ);
+        } else if (gCurGraphNodeObject != NULL) {
+            int32_t sQ[3];
+            saturn_vec3f_to_q16(sQ, gCurGraphNodeObject->scale);
+            sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex],
+                                         &gMatStackQ[gMatStackIndex], sQ);
+        }
+        saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+        saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+    }
+#else
     mtxf_billboard(gMatStack[gMatStackIndex], gMatStack[gMatStackIndex - 1], translation,
                    gCurGraphNodeCamera->roll);
     if (gCurGraphNodeHeldObject != NULL) {
@@ -459,6 +651,7 @@ static void geo_process_billboard(struct GraphNodeBillboard *node) {
     }
 
     mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = mtx;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -544,7 +737,7 @@ static void geo_process_background(struct GraphNodeBackground *node) {
  * but set in global variables. If an animated part is skipped, everything afterwards desyncs.
  */
 static void geo_process_animated_part(struct GraphNodeAnimatedPart *node) {
-    Mat4 matrix;
+    UNUSED Mat4 matrix;
     Vec3s rotation;
     Vec3f translation;
     Mtx *matrixPtr = alloc_display_list(sizeof(*matrixPtr));
@@ -589,10 +782,27 @@ static void geo_process_animated_part(struct GraphNodeAnimatedPart *node) {
         rotation[1] = gCurAnimData[retrieve_animation_index(gCurrAnimFrame, &gCurrAnimAttribute)];
         rotation[2] = gCurAnimData[retrieve_animation_index(gCurrAnimFrame, &gCurrAnimAttribute)];
     }
+#ifdef TARGET_SATURN
+    {
+        sm64_saturn_mtx_t nodeQ;
+        int32_t tQ[3];
+        saturn_vec3f_to_q16(tQ, translation);
+        sm64_saturn_mtxq_rotate_xyz_and_translate(&nodeQ, tQ, rotation[0], rotation[1],
+                                                  rotation[2]);
+        (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
+#else
     mtxf_rotate_xyz_and_translate(matrix, translation, rotation);
     mtxf_mul(gMatStack[gMatStackIndex + 1], matrix, gMatStack[gMatStackIndex]);
+#endif
     gMatStackIndex++;
+#ifdef TARGET_SATURN
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    saturn_mtxq_write_wire(matrixPtr, &gMatStackQ[gMatStackIndex]);
+#else
     mtxf_to_mtx(matrixPtr, gMatStack[gMatStackIndex]);
+#endif
     gMatStackFixed[gMatStackIndex] = matrixPtr;
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
@@ -643,7 +853,7 @@ void geo_set_animation_globals(struct AnimInfo *node, s32 hasAnimation) {
  */
 static void geo_process_shadow(struct GraphNodeShadow *node) {
     Gfx *shadowList;
-    Mat4 mtxf;
+    UNUSED Mat4 mtxf;
     Vec3f shadowPos;
     Vec3f animOffset;
     f32 objScale;
@@ -695,9 +905,22 @@ static void geo_process_shadow(struct GraphNodeShadow *node) {
         if (shadowList != NULL) {
             mtx = alloc_display_list(sizeof(*mtx));
             gMatStackIndex++;
+#ifdef TARGET_SATURN
+            {
+                sm64_saturn_mtx_t tQm;
+                int32_t tQ[3];
+                saturn_vec3f_to_q16(tQ, shadowPos);
+                sm64_saturn_mtxq_translate(&tQm, tQ);
+                (void) sm64_saturn_matrix_mul(&tQm, sSaturnCameraMatrixQ,
+                                              &gMatStackQ[gMatStackIndex]);
+            }
+            saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+            saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
             mtxf_translate(mtxf, shadowPos);
             mtxf_mul(gMatStack[gMatStackIndex], mtxf, *gCurGraphNodeCamera->matrixPtr);
             mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
             gMatStackFixed[gMatStackIndex] = mtx;
             if (gShadowAboveWaterOrLava == TRUE) {
                 geo_append_display_list((void *) VIRTUAL_TO_PHYSICAL(shadowList), 4);
@@ -807,10 +1030,58 @@ static s32 obj_is_in_view(struct GraphNodeObject *node, Mat4 matrix) {
  * Process an object node.
  */
 static void geo_process_object(struct Object *node) {
-    Mat4 mtxf;
+    UNUSED Mat4 mtxf;
     s32 hasAnimation = (node->header.gfx.node.flags & GRAPH_RENDER_HAS_ANIMATION) != 0;
 
     if (node->header.gfx.areaIndex == gCurGraphNodeRoot->areaIndex) {
+#ifdef TARGET_SATURN
+        if (node->header.gfx.throwMatrix != NULL) {
+            /* throwMatrix here is always gameplay-owned float data
+             * living OUTSIDE gMatStack at this read (mario.c quicksand,
+             * obj_behaviors.c terrain-normal alignment, mario_actions_
+             * moving.c floor align, object_helpers.c, tilting_inverted_
+             * pyramid.inc.c) -- geo_process_object always overwrites the
+             * pointer to alias gMatStack a few lines below, but that
+             * hasn't happened yet at this read. Convert at the boundary
+             * rather than trying to resolve a gMatStackQ index. */
+            sm64_saturn_mtx_t throwQ;
+            saturn_mat4_to_q16(&throwQ, *node->header.gfx.throwMatrix);
+            (void) sm64_saturn_matrix_mul(&throwQ, &gMatStackQ[gMatStackIndex],
+                                          &gMatStackQ[gMatStackIndex + 1]);
+        } else if (node->header.gfx.node.flags & GRAPH_RENDER_BILLBOARD) {
+            int32_t posQ[3];
+            saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
+            sm64_saturn_mtxq_billboard(&gMatStackQ[gMatStackIndex + 1],
+                                       &gMatStackQ[gMatStackIndex], posQ,
+                                       gCurGraphNodeCamera->roll);
+        } else {
+            sm64_saturn_mtx_t nodeQ;
+            int32_t posQ[3];
+            saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
+            sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, posQ, node->header.gfx.angle[0],
+                                                      node->header.gfx.angle[1],
+                                                      node->header.gfx.angle[2]);
+            (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                          &gMatStackQ[gMatStackIndex + 1]);
+        }
+
+        {
+            int32_t sQ[3];
+            saturn_vec3f_to_q16(sQ, node->header.gfx.scale);
+            sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
+                                         &gMatStackQ[gMatStackIndex + 1], sQ);
+        }
+        node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
+        /* Refresh MUST happen here, immediately, not deferred to the
+         * mtxf_to_mtx-equivalent point below: cameraToObject (read for
+         * positional audio via play_sound) and obj_is_in_view (frustum
+         * culling -- a gameplay-visible decision) both read
+         * gMatStack[gMatStackIndex] before this function reaches that
+         * point. Deferring the refresh would leave both reading stale
+         * data left over from whatever previously occupied this stack
+         * slot. */
+        saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+#else
         if (node->header.gfx.throwMatrix != NULL) {
             mtxf_mul(gMatStack[gMatStackIndex + 1], *node->header.gfx.throwMatrix,
                      gMatStack[gMatStackIndex]);
@@ -825,6 +1096,7 @@ static void geo_process_object(struct Object *node) {
         mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex + 1],
                          node->header.gfx.scale);
         node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
+#endif
         node->header.gfx.cameraToObject[0] = gMatStack[gMatStackIndex][3][0];
         node->header.gfx.cameraToObject[1] = gMatStack[gMatStackIndex][3][1];
         node->header.gfx.cameraToObject[2] = gMatStack[gMatStackIndex][3][2];
@@ -836,7 +1108,11 @@ static void geo_process_object(struct Object *node) {
         if (obj_is_in_view(&node->header.gfx, gMatStack[gMatStackIndex])) {
             Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
+#ifdef TARGET_SATURN
+            saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
             mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
             gMatStackFixed[gMatStackIndex] = mtx;
             if (node->header.gfx.sharedChild != NULL) {
                 gCurGraphNodeObject = (struct GraphNodeObject *) node;
@@ -876,7 +1152,9 @@ static void geo_process_object_parent(struct GraphNodeObjectParent *node) {
  * Process a held object node.
  */
 void geo_process_held_object(struct GraphNodeHeldObject *node) {
+#ifndef TARGET_SATURN
     Mat4 mat;
+#endif
     Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
@@ -894,6 +1172,39 @@ void geo_process_held_object(struct GraphNodeHeldObject *node) {
         translation[1] = node->translation[1] / 4.0f;
         translation[2] = node->translation[2] / 4.0f;
 
+#ifdef TARGET_SATURN
+        {
+            sm64_saturn_mtx_t matQ;
+            int32_t tQ[3];
+            int32_t sQ[3];
+            /* gCurGraphNodeObject->throwMatrix is unconditionally set
+             * to &gMatStack[N] by geo_process_object (see that
+             * function) before any child -- including this held-object
+             * node -- can run, so this pointer always aliases gMatStack
+             * here (unlike the object site's OWN throwMatrix read,
+             * which can observe a gameplay-owned external matrix
+             * instead). Recover N to index the Q16 twin exactly. */
+            s32 throwIdx = saturn_mtxq_gmatstack_index(gCurGraphNodeObject->throwMatrix);
+
+            saturn_vec3f_to_q16(tQ, translation);
+            sm64_saturn_mtxq_translate(&matQ, tQ);
+            gMatStackQ[gMatStackIndex + 1] = gMatStackQ[throwIdx];
+            gMatStackQ[gMatStackIndex + 1].m[3][0] = gMatStackQ[gMatStackIndex].m[3][0];
+            gMatStackQ[gMatStackIndex + 1].m[3][1] = gMatStackQ[gMatStackIndex].m[3][1];
+            gMatStackQ[gMatStackIndex + 1].m[3][2] = gMatStackQ[gMatStackIndex].m[3][2];
+            (void) sm64_saturn_matrix_mul(&matQ, &gMatStackQ[gMatStackIndex + 1],
+                                          &gMatStackQ[gMatStackIndex + 1]);
+            saturn_vec3f_to_q16(sQ, node->objNode->header.gfx.scale);
+            sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
+                                         &gMatStackQ[gMatStackIndex + 1], sQ);
+            /* Refresh now, before the GEO_CONTEXT_HELD_OBJ callback
+             * below: graph_node.h documents that a GraphNodeFunc
+             * receives "the top of the float matrix stack with type
+             * Mat4" for this context and may read it as real float
+             * data. */
+            saturn_mtxq_refresh_float_mirror(gMatStackIndex + 1);
+        }
+#else
         mtxf_translate(mat, translation);
         mtxf_copy(gMatStack[gMatStackIndex + 1], *gCurGraphNodeObject->throwMatrix);
         gMatStack[gMatStackIndex + 1][3][0] = gMatStack[gMatStackIndex][3][0];
@@ -902,12 +1213,17 @@ void geo_process_held_object(struct GraphNodeHeldObject *node) {
         mtxf_mul(gMatStack[gMatStackIndex + 1], mat, gMatStack[gMatStackIndex + 1]);
         mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex + 1],
                          node->objNode->header.gfx.scale);
+#endif
         if (node->fnNode.func != NULL) {
             node->fnNode.func(GEO_CONTEXT_HELD_OBJ, &node->fnNode.node,
                               (struct AllocOnlyPool *) gMatStack[gMatStackIndex + 1]);
         }
         gMatStackIndex++;
+#ifdef TARGET_SATURN
+        saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
+#else
         mtxf_to_mtx(mtx, gMatStack[gMatStackIndex]);
+#endif
         gMatStackFixed[gMatStackIndex] = mtx;
         gGeoTempState.type = gCurAnimType;
         gGeoTempState.enabled = gCurAnimEnabled;
@@ -1073,8 +1389,14 @@ void geo_process_root(struct GraphNodeRoot *node, Vp *b, Vp *c, s32 clearColor) 
             make_viewport_clip_rect(c);
         }
 
+#ifdef TARGET_SATURN
+        sm64_saturn_matrix_identity(&gMatStackQ[gMatStackIndex]);
+        saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+        saturn_mtxq_write_wire(initialMatrix, &gMatStackQ[gMatStackIndex]);
+#else
         mtxf_identity(gMatStack[gMatStackIndex]);
         mtxf_to_mtx(initialMatrix, gMatStack[gMatStackIndex]);
+#endif
         gMatStackFixed[gMatStackIndex] = initialMatrix;
         gSPViewport(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(viewport));
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(gMatStackFixed[gMatStackIndex]),
