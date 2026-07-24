@@ -1344,3 +1344,44 @@ in [the cart-ready record](e2-sourceboot-cart-ready-2026-07-21.md).
 Emulator evidence, not retail proof, per the standing rules: Ymir does not
 model every hardware restriction (the SCU-DMA/LWRAM lockup class was fixed by
 source analysis, not emulation). Retail hardware remains the final authority.
+
+### 2026-07-23 — Bob-omb Battlefield cannon and terrain, Q16.16 render-matrix pipeline
+
+The black screen blocking every prior free-roam capture is traced and fixed.
+Live evidence (a host-vs-target differential test compiling the real,
+unmodified `mtxf_lookat`/`mtxf_mul` against captured camera data) proved the
+pinned SH-2 toolchain's soft-float path corrupts the render graph's first
+matrix every frame, rejecting the vast majority of triangles before VDP1 ever
+saw them. A six-task sprint removed the dependency entirely rather than
+chasing the compiler bug further: a Q16.16 mirror of the engine's trig
+tables, fixed-point math kernels (integer sqrt, exact float<->Q16 bridge),
+Q16.16 mirrors of every `mtxf_*` matrix constructor (each host-differential-
+tested against the real float originals), the render graph wired to compose
+in Q16.16 under `TARGET_SATURN`, and the Fast3D-to-VDP1 frontend flipped to
+decode the wire `Mtx` payload as native Q16.16 instead of GBI_FLOATS floats.
+This follows Sega's own SGL precedent (`FIXED` is the identical 16.16
+format `slLookAt` uses for exactly this job), not a novel approach.
+
+The corruption signature is gone: `reject_w_nonpositive_overflow_suspect`
+went from 392 to **0**, and the first-reject sentinel changed from the
+corrupted `INT32_MIN` pattern to an ordinary fixed-point value (`-44070`,
+≈ -0.67 real units) at frame 233 of this capture. Triangles emitted rose
+from 18 to 180. The single-frame `triangles_vdp1_emitted` probe read 0 at
+that same frame 233 — the profile struct resets every frame, so this is a
+one-frame snapshot, not a session total, and is not in tension with the
+screenshot below (captured later in the same 26,740-frame run).
+
+The capture is explicitly **untextured and flat-shaded**, per this
+project's gate-labelling convention. It was reviewed directly and confirmed
+to show the Bob-omb Battlefield cannon and starting terrain.
+
+Evidence: [freeroam screenshot](screenshots/e2-sourceboot-q16-matrix-freeroam-2026-07-23.png)
+(320x224 internal `video.capture`, SHA-256
+`40d9fe61016ecdc7e36d9b4f7abe5e788c666b702d32bba2be423851b4060648`),
+[full run report](reports/e2-sourceboot-q16-matrix-freeroam-2026-07-23.json).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
+post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
+`074f8c4`.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
