@@ -1071,14 +1071,14 @@ Task 6 actually keeps it.
 
 No host test covers this TU (it is not in the `verify-runtime-contracts` compile — Yaul-dependent); verification is compile + `make verify` + Task 7's live capture. Read every touched site before editing; the sketches below were verified against the tree at plan time but this file's conventions rule.
 
-- [ ] **Step 1: Check whether sourceboot links the DMA queue**
+- [x] **Step 1: Check whether sourceboot links the DMA queue**
 
 ```
 grep -n "slavedriver_dma_queue\|gpl/" src/port/saturn/sourceboot/Makefile
 ```
 If absent, add `$(ROOT)/src/port/saturn/gpl/slavedriver_dma_queue.c` to `SH_SRCS` (same list that gained `saturn_trig_q16.inc.c` in the matrix sprint). GPL isolation note: the queue stays in its clearly-GPL `gpl/` component, linked — not copied — exactly as `docs/saturn/SLAVEDRIVER_ADAPTATION.md` already authorizes (hwtest precedent). Update that doc's "Current status" section to say sourceboot now links the adapter for Gouraud-table uploads.
 
-- [ ] **Step 2: Wire partitions + bank into sourceboot init**
+- [x] **Step 2: Wire partitions + bank into sourceboot init**
 
 In `src/port/saturn/sourceboot/main.c`, next to the existing backend init (`:149-160`), add (file-scope statics near `sourceboot_vdp1_cmdts`):
 
@@ -1132,7 +1132,7 @@ and in the init sequence, after the backend init succeeds:
 
 Update the per-frame call (`:175-176`) to pass the bank (new signature, Step 3).
 
-- [ ] **Step 3: Gouraud emission**
+- [x] **Step 3: Gouraud emission**
 
 `saturn_fast3d_vdp1_emit.h`: signature becomes
 
@@ -1208,16 +1208,90 @@ After the bucket loops, BEFORE `sm64_saturn_vdp1_backend_finish/upload` (tables 
     }
 ```
 
-- [ ] **Step 4: Cross-compile + verify**
+- [x] **Step 4: Cross-compile + verify**
 
 Forced clean rebuild (delete the `@`-mangled objects for `saturn_fast3d_vdp1_emit.c`, `saturn_fast3d_frontend.c`, `main.c`, plus ELF/ISO/CUE), then `make -j2 && make verify` in `src/port/saturn/sourceboot` (msys64 pattern). Expected: both exit 0, zero warnings. Also re-run the host suite — it must still pass untouched.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_fast3d_vdp1_emit.h src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c src/port/saturn/sourceboot/main.c src/port/saturn/sourceboot/Makefile docs/saturn/SLAVEDRIVER_ADAPTATION.md
 git commit -m "feat(saturn): VDP1 Gouraud emission -- per-triangle tables, used-prefix DMA upload"
 ```
+
+Committed as `efe1d23`. This is the only task in the whole plan
+touching real Yaul hardware APIs and linking new code into sourceboot,
+and it's also the only task with two deliberate, load-bearing
+deviations from the plan's literal sketch:
+
+1. **Partition sizing.** The sketch only called
+   `vdp1_vram_partitions_get()`, silently relying on whatever sizing
+   was already in effect. Traced into the actual vendored libyaul
+   submodule (`third_party/libyaul/libyaul/scu/bus/b/vdp/vdp_init.c:50-53`,
+   `vdp1_vram.c:22-78`) before dispatching the implementer: Yaul's
+   stock default only reserves 1,024 Gouraud tables, but this
+   project's own measured real Bob-omb Battlefield frames run
+   1,365-1,431 triangles -- a bare `get()` would have pushed the
+   ORDINARY frame into `gouraud_bank_overflow` by the hundreds, not a
+   rare edge case. Fixed with an explicit `vdp1_vram_partitions_set()`
+   call (`cmdt=2048, texture=0, gouraud=1536, clut=0`) before the
+   `get()`, hand-verified against the real partition-computation
+   arithmetic (both by the implementer and, independently, by both
+   reviewers) to fit with ~446 KiB of margin and clear the backend's
+   own command-write region by a clean 32-byte gap.
+2. **Include path.** The sketch's `#include "gpl/slavedriver_dma_queue.h"`
+   doesn't resolve under sourceboot's real `-I` flags; used
+   `"../gpl/slavedriver_dma_queue.h"` instead, matching hwtest's
+   already-proven precedent.
+
+Two-stage review, plus two small follow-up commits (this project's
+"never amend, always a new commit" policy):
+
+**Spec-compliance**: underlying implementation fully compliant (all 5
+files, arithmetic re-derived independently from the real vendored
+source, GPL isolation intact, no scope creep) — but surfaced two real
+inaccuracies, fixed in `3f89286`: (a) the commit's own source comment
+cited `work/upstream/libyaul/...`, a path that only exists in this
+developer's local outer workspace, not inside the `sm64-port` repo
+itself (content was byte-identical to the real submodule, so the
+underlying claim was never wrong -- just the citation); corrected to
+`third_party/libyaul/...`, the real git submodule per `.gitmodules`.
+(b) `sm64_saturn_gouraud_table_t` (a Task 5 type) had no alignment
+attribute, unlike Yaul's own `__aligned(8)` `vdp1_gouraud_table_t`; the
+current build happened to link it 4-byte aligned, which is all
+libyaul's SCU DMA actually requires today, so there was no live bug --
+but nothing source-level guaranteed it. Added
+`__attribute__((aligned(8)))` directly (not Yaul's `__aligned()` macro,
+unavailable to the host build this Yaul-free header must also compile
+under). Also independently caught and corrected the exact same
+"SOURCE.DAT is 640K" mislabeling as Task 4's review (real size measured
+at 1,715,520 bytes / ~1.7 MiB -- the "640K" figure in `efe1d23`'s
+commit message actually belongs to the separate program `.bin`
+artifact, same root cause as Task 4, left uncorrected in the commit
+message per the no-amend policy, recorded accurately here).
+
+**Code-quality**: Ready to merge, with fixes — landed in `3280938`.
+Two Important findings, both documentation-accuracy gaps rather than
+functional defects: a struct comment in
+`saturn_fast3d_frontend.h` still described `corner_rgb1555[0]` as an
+"interim flat color... until Task 6," now stale since Task 6 landed;
+and the new `vdp1_vram_partitions_set()` call's `texture_size=0`
+choice had no explicit forward-warning for whoever adds texture
+support next cycle (this project's own next planned cycle, not
+hypothetical). Two Minor items folded into the same commit: a second
+`_Static_assert` on `_Alignof` equality (closing the exact regression
+class the `3f89286` alignment fix was meant to prevent -- the
+size-only assert wouldn't have caught a future accidental removal of
+that attribute) and a defensive zero-init on `grda_addr` (safe by
+construction today, not by inspection). Two further Minor observations
+(partition arithmetic being Yaul-coupled logic that could live in a
+host-testable helper; `main()` continuing to grow) tracked as
+forward-looking cleanup, not fixed now -- consistent with this
+project's practice of not building ahead of what's needed.
+
+All four review-driven fixes verified against a forced-clean SH-2
+cross-compile + `make verify` (both exit 0, zero new warnings) plus
+the host suite, both before committing.
 
 ---
 
