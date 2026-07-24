@@ -1933,6 +1933,138 @@ static void test_light_q16_recompute_handles_dual_axis_int32_min_cascade(void)
     assert(st.coeff_q16[1] < 0 && st.coeff_q16[1] > -131072);
 }
 
+static void test_frontend_decodes_lights(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* A real Lights1: ambient {10,20,30}, directional {200,210,220}
+     * from direction {40,50,60}. Layout confirmed against the real
+     * structs (gbi.h:1398-1441): Light_t = col[3],pad1,colc[3],pad2,
+     * dir[3](signed),pad3 (12 bytes); Ambient_t = col[3],pad1,
+     * colc[3],pad2 (8 bytes); Lights1 = {Ambient a; Light l[1];} with
+     * the directional Light immediately following the Ambient. */
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 40, 50, 60);
+    Gfx list[4];
+    struct SPTask task;
+
+    /* gSPNumLights(1): F3DEX_GBI_2 G_MOVEWORD dispatch is
+     * gfx_sp_moveword(C0(16,8), C0(0,16), w1) (gfx_pc.c:1394, this
+     * build's dialect per gbi.h:90-92); index=G_MW_NUMLIGHT at
+     * C0(16,8) (gbi.h:1297), offset=G_MWO_NUMLIGHT at C0(0,16)
+     * (gbi.h:1312), data=w1=NUML(1)=24 (gbi.h:2516). */
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 24; /* NUML(1) */
+    /* gSPLight(&lights.l[0], 1): G_MOVEMEM dispatch is
+     * gfx_sp_movemem(C0(0,8), C0(8,8)*8, w1) (gfx_pc.c:1387); idx (w0
+     * bits 0-7) = G_MV_LIGHT (10, gbi.h:1256), w0 bits 8-15 carry
+     * ofs/8 where ofs=(n)*24+24 (gSPLight/gDma2p, gbi.h:2556,
+     * 1801-1807) -- for n=1, ofs=48, ofs/8=6. */
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    /* gSPLight(&lights.a, 2): ofs=(2)*24+24=72, ofs/8=9. */
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.a;
+    list[3] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.lights.num_lights == 2);
+    assert(frontend.lights.dir_col[0] == 200 &&
+           frontend.lights.dir_col[1] == 210 &&
+           frontend.lights.dir_col[2] == 220);
+    assert(frontend.lights.dir_dir[0] == 40 &&
+           frontend.lights.dir_dir[1] == 50 &&
+           frontend.lights.dir_dir[2] == 60);
+    assert(frontend.lights.amb_col[0] == 10 &&
+           frontend.lights.amb_col[1] == 20 &&
+           frontend.lights.amb_col[2] == 30);
+    assert(frontend.lights.lights_changed);
+    assert(frontend.profile.unsupported_num_lights == 0);
+}
+
+static void test_frontend_counts_unsupported_num_lights(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    Gfx list[2];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 48; /* NUML(2): two directionals -> unsupported */
+    list[1] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.unsupported_num_lights == 1);
+    assert(frontend.lights.num_lights == 2); /* clamped to 1 directional */
+}
+
+/* Regression test for a real bug found while verifying this task's
+ * decode against real call sites (not against either test above,
+ * both of which only ever send lightidx 0/1): src/game/
+ * rendering_graph_node.c unconditionally emits gSPLookAt every frame
+ * under F3DEX_GBI_2 (this build's dialect), which expands to two
+ * G_MOVEMEM/G_MV_LIGHT commands at G_MVO_LOOKATX=0 and
+ * G_MVO_LOOKATY=24 (gbi.h:1259-1260) -- lightidx -2 and -1
+ * (offset/24-2). gfx_pc.c's own gfx_sp_movemem guards this with
+ * `lightidx >= 0` (gfx_pc.c:972, comment "skip lookat"); a naive
+ * unconditional `else` on lightidx!=0 for the ambient branch would
+ * instead treat these as ambient writes and corrupt amb_col with
+ * lookat direction bytes reinterpreted as a color, every single
+ * frame. Real ambient state (set first here, as it always is in a
+ * real display list -- the object's own lighting setup runs before
+ * any interleaved lookat refresh) must survive untouched. */
+static void test_frontend_g_mv_light_ignores_lookat_offsets(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 40, 50, 60);
+    /* Recognizable non-zero payload standing in for the real engine's
+     * `LookAt lookAt;` (rendering_graph_node.c:218) -- only needs to
+     * be at least 12 bytes, matching gfx_sp_movemem's own memcpy
+     * width for a Light_t. */
+    static const Light dummy_lookat = {
+        .l = { { 111, 122, 133 }, 0, { 111, 122, 133 }, 0, { 1, 2, 3 }, 0 }
+    };
+    Gfx list[5];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[0].words.w1 = (uintptr_t)&lights.l[0];
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.a;
+    /* gSPLookAtX-shaped command: ofs=G_MVO_LOOKATX=0, ofs/8=0 ->
+     * lightidx = 0/24-2 = -2. */
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (0U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&dummy_lookat;
+    /* gSPLookAtY-shaped command: ofs=G_MVO_LOOKATY=24, ofs/8=3 ->
+     * lightidx = 24/24-2 = -1. */
+    list[3].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (3U << 8) | G_MV_LIGHT;
+    list[3].words.w1 = (uintptr_t)&dummy_lookat;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.lights.amb_col[0] == 10 &&
+           frontend.lights.amb_col[1] == 20 &&
+           frontend.lights.amb_col[2] == 30);
+    assert(frontend.lights.dir_col[0] == 200 &&
+           frontend.lights.dir_col[1] == 210 &&
+           frontend.lights.dir_col[2] == 220);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -1984,5 +2116,8 @@ int main(void)
     test_light_q16_zero_normal_gets_ambient();
     test_light_q16_recompute_handles_extreme_matrix_entries();
     test_light_q16_recompute_handles_dual_axis_int32_min_cascade();
+    test_frontend_decodes_lights();
+    test_frontend_counts_unsupported_num_lights();
+    test_frontend_g_mv_light_ignores_lookat_offsets();
     return 0;
 }

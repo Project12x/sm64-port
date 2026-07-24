@@ -5,6 +5,7 @@
 
 #include "port/saturn/runtime/saturn_source_runtime.h"
 #include "saturn_matrix.h"
+#include "saturn_light_q16.h"
 
 /*
  * Bounded source-display-list intake for the Saturn renderer.
@@ -222,6 +223,31 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t dbg_bad_mtx_w1;
     uint32_t dbg_bad_mtx_ordinal;
     uint8_t dbg_bad_mtx_params;
+
+    /* Added for Gouraud shading (docs/superpowers/specs/2026-07-24-
+     * gouraud-shading-design.md). Degradation contract: every
+     * dropped/simplified feature gets a counter so the cost stays
+     * visible in captures (design spec's "Degradation contract"
+     * table). Appended at the very end of this struct, not
+     * interleaved above -- existing capture-decode scripts hand-map
+     * earlier field offsets, a lesson carried over from the prior
+     * matrix sprint.
+     *
+     * unsupported_num_lights is populated THIS task: it increments
+     * whenever G_MW_NUMLIGHT requests anything other than exactly 1
+     * directional light (state is unconditionally clamped to 1
+     * directional + ambient regardless -- "first light used"). The
+     * remaining four fields are declared here, zero-initialized, so
+     * later tasks in this plan only have to increment an existing
+     * field rather than edit this struct again: lit_vertices/
+     * unlit_vertices (Task 3's G_VTX lighting gate), fog_dropped_
+     * triangles (Task 4's triangle resolve), gouraud_bank_overflow
+     * (Task 6's VDP1 emission). */
+    uint32_t unsupported_num_lights;
+    uint32_t lit_vertices;
+    uint32_t unlit_vertices;
+    uint32_t fog_dropped_triangles;
+    uint32_t gouraud_bank_overflow;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + flat color for one already-transformed,
@@ -300,6 +326,18 @@ typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_matrix_stack_t matrix_stack;
     sm64_saturn_fast3d_viewport_t viewport;
     uint32_t geometry_mode;
+    /* Gouraud shading addition (design spec 2026-07-24): light state
+     * decoded from G_MOVEWORD/G_MOVEMEM (saturn_fast3d_frontend.c),
+     * re-transformed lazily against the modelview top on the next lit
+     * G_VTX (Task 3). Deliberately placed alongside geometry_mode, not
+     * inside profile: it must persist across submit()'s per-frame
+     * profile memset, mirroring gfx_pc.c's own persistent
+     * rsp.current_lights/current_num_lights/lights_changed state.
+     * Confirmed by reading submit()'s reset code (saturn_fast3d_
+     * frontend.c) -- it only memsets profile and zeroes
+     * resolved_count, exactly like matrix_stack/geometry_mode/
+     * vertices[] already aren't touched either. */
+    sm64_saturn_light_state_t lights;
     sm64_saturn_fast3d_vertex_t vertices[SM64_SATURN_FAST3D_MAX_VERTICES];
     sm64_saturn_resolved_triangle_t
         resolved[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];

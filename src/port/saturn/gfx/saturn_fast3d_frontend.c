@@ -80,6 +80,16 @@ static void sm64_saturn_fast3d_count_command(
          * a range check). Opcodes the RSP microcode generates internally
          * (G_TRI_FILL/G_TRI_SHADE/... , include/PR/gbi.h:216-223) are
          * omitted -- they never appear in an authored source display list.
+         *
+         * Note G_MOVEWORD and G_MOVEMEM specifically: this function only
+         * ever buckets them into other_commands below (their opcode bytes
+         * aren't in the enumerated RDP set) -- that classification is
+         * unchanged and correct. Real semantic handling for both (numLights
+         * decode, G_MV_LIGHT light payload decode) lives in the separate
+         * sm64_saturn_fast3d_decode_command below, which this function's
+         * (profile, opcode)-only signature has no way to reach (see that
+         * function's own header comment). The two functions classify and
+         * decode independently; neither implies the other already exists.
          */
         case G_SETCIMG:
         case G_SETZIMG:
@@ -577,6 +587,14 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                     profile->dbg_root_mtx_command_ordinal =
                         profile->matrix_commands;
                 }
+                /* Mirrors gfx_pc.c:590: every modelview (non-
+                 * projection) G_MTX command -- push, pop-adjacent
+                 * load, or multiply alike -- unconditionally marks the
+                 * light direction stale. Task 3's lit G_VTX path
+                 * re-transforms lazily against the matrix_stack top
+                 * (by then fully composed for this command) before
+                 * its next use. */
+                frontend->lights.lights_changed = true;
             }
             if (frontend->matrix_stack.depth >
                 profile->max_modelview_depth_reached) {
@@ -590,6 +608,19 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * see the /64 recovery this decode performs, matching
              * gfx_pc.c:1380, `gfx_sp_pop_matrix(cmd->words.w1 / 64)`. */
             sm64_saturn_matrix_stack_pop(&frontend->matrix_stack, w1 / 64U);
+            /* Deliberate, documented deviation from gfx_pc.c: its own
+             * gfx_sp_pop_matrix (gfx_pc.c:595-604) never sets
+             * lights_changed. That's only safe there because a pop is
+             * always followed by more modelview commands before any
+             * lit vertex uses the popped-to matrix in practice; this
+             * port marks the light direction stale here too, since a
+             * pop genuinely does change the matrix_stack top, and a
+             * stale cached coeff would otherwise be silently wrong if
+             * a lit G_VTX ever ran immediately after a pop with no
+             * intervening G_MTX. Recompute is idempotent and lazy
+             * (Task 3), so this only costs a possible extra
+             * recompute, never a wrong answer. */
+            frontend->lights.lights_changed = true;
             break;
         }
         case G_MOVEMEM: {
@@ -622,6 +653,104 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                 frontend->viewport.x = source_x;
                 frontend->viewport.y =
                     (int16_t)(source_y - letterbox_crop);
+            } else if (index == G_MV_LIGHT) {
+                /* gSPLight wire: w0 bits 8-15 = byte-offset/8 (gDma2p,
+                 * gbi.h:1801-1807, matching the C0(8,8)*8 recovery
+                 * gfx_pc.c:1387 already performs above for `index`
+                 * itself); lightidx = offset/24 - 2 (gfx_pc.c:971).
+                 * idx 0 = the one supported directional; idx 1 = the
+                 * ambient, which always arrives at slot
+                 * num_lights-1 = 1 since this frontend unconditionally
+                 * clamps num_lights to 2 (1 directional + ambient, see
+                 * the G_MOVEWORD case below) regardless of what the
+                 * real display list requested.
+                 *
+                 * Every other lightidx is deliberately ignored,
+                 * matching gfx_pc.c:972's own
+                 * `lightidx >= 0 && lightidx <= MAX_LIGHTS` bounds
+                 * check (its comment: "skip lookat"). This is not a
+                 * theoretical guard: src/game/rendering_graph_node.c
+                 * unconditionally emits gSPLookAt every frame under
+                 * F3DEX_GBI_2 (this build's dialect, gbi.h:90-92;
+                 * confirmed live call sites at rendering_graph_node.c
+                 * :269 and :1172), which itself expands to two
+                 * G_MOVEMEM/G_MV_LIGHT commands at G_MVO_LOOKATX=0 and
+                 * G_MVO_LOOKATY=24 (gbi.h:1259-1260) -- lightidx -2
+                 * and -1. An earlier draft of this case used an
+                 * unconditional `else` for the ambient branch, which
+                 * would let that same-frame gSPLookAt silently
+                 * overwrite amb_col with lookat direction bytes
+                 * reinterpreted as a color; found by reading
+                 * rendering_graph_node.c to verify this decode against
+                 * real call sites, not by either given test (both only
+                 * ever send lightidx 0/1). Guarding the memcpy itself
+                 * below (not just its consumption) also means an
+                 * out-of-range lightidx never dereferences w1 at all. */
+                const uint32_t offset = SM64_SATURN_C0(w0, 8, 8) * 8U;
+                const int32_t lightidx = (int32_t)(offset / 24U) - 2;
+
+                if (lightidx == 0 || lightidx == 1) {
+                    /* Copy the 12-byte Light_t payload via memcpy
+                     * (strict-aliasing-safe, matching this file's
+                     * established discipline elsewhere); for the
+                     * ambient this reads 4 bytes past Ambient_t's own
+                     * 8 -- same as gfx_pc.c:974's documented behavior
+                     * ("NOTE: reads out of bounds if it is an ambient
+                     * light"), safe here because SM64 ambients live
+                     * inside a Lights1 with the directional Light
+                     * contiguous immediately after them
+                     * (gbi.h:1438-1441 -- confirmed: Ambient is 8
+                     * bytes, Light starts right after at struct
+                     * offset 8). Only col[0..2] (Light_t/Ambient_t
+                     * both put col at byte offset 0-2) is ever read
+                     * from the ambient slot, so the extra bytes
+                     * spilling into the neighboring Light are never
+                     * used. Light_t layout confirmed against
+                     * include/PR/gbi.h:1398-1405: col[3],pad1,
+                     * colc[3],pad2,dir[3](signed),pad3 -- dir starts
+                     * at byte offset 8 (3+1+3+1). */
+                    uint8_t raw[12];
+                    (void)memcpy(raw, (const void *)w1, sizeof(raw));
+                    if (lightidx == 0) {
+                        frontend->lights.dir_col[0] = raw[0];
+                        frontend->lights.dir_col[1] = raw[1];
+                        frontend->lights.dir_col[2] = raw[2];
+                        frontend->lights.dir_dir[0] = (int8_t)raw[8];
+                        frontend->lights.dir_dir[1] = (int8_t)raw[9];
+                        frontend->lights.dir_dir[2] = (int8_t)raw[10];
+                    } else {
+                        frontend->lights.amb_col[0] = raw[0];
+                        frontend->lights.amb_col[1] = raw[1];
+                        frontend->lights.amb_col[2] = raw[2];
+                    }
+                    frontend->lights.lights_changed = true;
+                }
+            }
+            break;
+        }
+        case G_MOVEWORD: {
+            /* gfx_pc.c dispatch (F3DEX_GBI_2, this build's dialect --
+             * gbi.h:90-92 makes F3DEX_GBI_2E imply F3DEX_GBI_2):
+             * gfx_sp_moveword(C0(16,8), C0(0,16), w1) (gfx_pc.c:1394);
+             * index=C0(16,8), data=w1 (offset=C0(0,16) is read by the
+             * dispatch but unused by the G_MW_NUMLIGHT handler itself,
+             * gfx_pc.c:989-1000). G_MW_NUMLIGHT (gfx_pc.c:991-993):
+             * num = data/24 + 1 (includes the ambient; NUML(n)=n*24,
+             * gbi.h:2516). Degradation contract: exactly 1 directional
+             * supported; anything else is counted and the state
+             * clamped to 1 directional + ambient, matching this
+             * frontend's fixed dir_col/dir_dir/amb_col shape (no
+             * light array, unlike gfx_pc.c's current_lights[]). */
+            const uint8_t mw_index = (uint8_t)SM64_SATURN_C0(w0, 16, 8);
+
+            if (mw_index == G_MW_NUMLIGHT) {
+                const uint8_t num = (uint8_t)(w1 / 24U + 1U);
+
+                if (num != 2U) {
+                    profile->unsupported_num_lights++;
+                }
+                frontend->lights.num_lights = 2U;
+                frontend->lights.lights_changed = true;
             }
             break;
         }
@@ -727,6 +856,7 @@ void sm64_saturn_fast3d_frontend_init(
     if (frontend != NULL) {
         (void)memset(frontend, 0, sizeof(*frontend));
         sm64_saturn_matrix_stack_init(&frontend->matrix_stack);
+        sm64_saturn_light_state_init(&frontend->lights);
     }
 }
 
