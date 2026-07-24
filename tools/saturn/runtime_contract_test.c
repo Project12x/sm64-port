@@ -1971,6 +1971,15 @@ static void test_frontend_decodes_lights(void)
     (void)memset(&task, 0, sizeof(task));
     task.task.t.data_ptr = (u64 *)list;
     sm64_saturn_fast3d_frontend_init(&frontend);
+    /* Perturb away from sm64_saturn_light_state_init's own defaults
+     * (num_lights=2, lights_changed=true -- saturn_light_q16.h:61-62)
+     * before submit() runs. Without this, the num_lights/lights_changed
+     * assertions below would be vacuously true straight out of init,
+     * never actually proving the G_MOVEWORD decode ran -- caught by
+     * code review, since the mutation pass never exercised these two
+     * specific lines either. */
+    frontend.lights.num_lights = 0;
+    frontend.lights.lights_changed = false;
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
     assert(frontend.lights.num_lights == 2);
@@ -2001,6 +2010,12 @@ static void test_frontend_counts_unsupported_num_lights(void)
     (void)memset(&task, 0, sizeof(task));
     task.task.t.data_ptr = (u64 *)list;
     sm64_saturn_fast3d_frontend_init(&frontend);
+    /* Same perturbation as test_frontend_decodes_lights above, and for
+     * the same reason: num_lights defaults to 2 straight out of init
+     * (saturn_light_q16.h:61), so the assertion below would otherwise
+     * be vacuously true even if the G_MOVEWORD clamp were deleted. */
+    frontend.lights.num_lights = 0;
+    frontend.lights.lights_changed = false;
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
     assert(frontend.profile.unsupported_num_lights == 1);
