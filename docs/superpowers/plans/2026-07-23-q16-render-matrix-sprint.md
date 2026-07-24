@@ -544,7 +544,7 @@ differential-tested on host against the real float original.
 - Create: `tools/saturn/mtxq_ctor_diff_test.c`
 - Modify: `Makefile.saturn.mk`
 
-- [ ] **Step 1: Write the differential test harness (failing)**
+- [x] **Step 1: Write the differential test harness (failing)**
 
 Create `tools/saturn/mtxq_ctor_diff_test.c` — same structure as the proven
 `mtxf_lookat_host_diff_test.c` (compiles the real `src/engine/math_util.c`
@@ -639,6 +639,33 @@ int main(void)
         Vec3f to = { -6558.0f, 0.0f, 5000.0f };
         diff_lookat(from, to, 0);
     }
+    /* Fixture 4: large delta between two individually in-range positions,
+     * swept across roll. from/to are each comfortably inside this port's
+     * documented +-32767 world-unit ceiling, but ~35000+ units apart --
+     * the exact class of input that overflowed sm64_saturn_mtxq_lookat's
+     * plain-int32_t delta computation before it was widened to int64_t
+     * (code-quality review finding: from=-20000/to=15000 on one axis
+     * wrapped to[0]-from[0] to a wrong-sign value that corrupted colZ
+     * and, depending on roll, colY too).
+     *
+     * MUST sweep roll, not just test roll=0: colY[0]=sins(roll)*dz_q and
+     * colY[2]=-sins(roll)*dx_q are the two places dx_q/dz_q (the
+     * overflow-prone horizontal-delta computation) actually feed the
+     * result, and roll=0 makes sins(0)=0, exactly canceling both terms
+     * regardless of whether dx_q/dz_q are corrupted -- ground-truthed
+     * the hard way: a roll=0-only version of this fixture passed even
+     * with the dx_q/dz_q widening deliberately reverted back to
+     * plain-int32_t, because that reverted path only ever reaches the
+     * result through those two now-zeroed terms. The colZ path (vx/vy/vz,
+     * not roll-gated) is exercised at every roll including 0, but colY's
+     * own overflow path needs roll != 0 to actually surface. */
+    {
+        Vec3f from = { -20000.0f, 0.0f, 0.0f };
+        Vec3f to = { 15000.0f, 0.0f, 5000.0f };
+        for (int r = 0; r < 65536; r += 1024) {
+            diff_lookat(from, to, (s16) r);
+        }
+    }
 
     /* rotate_zxy / rotate_xyz: full-turn sweeps on each axis */
     for (int a = 0; a < 65536; a += 4096) {
@@ -664,6 +691,9 @@ int main(void)
             for (int j = 0; j < 3; j++)
                 assert_close(got.m[i][j], want[i][j], Q16_TOL_TRIG * 4,
                              "rot_xyz", i, j);
+        for (int j = 0; j < 3; j++)
+            assert_close(got.m[3][j], want[3][j], Q16_TOL_TRANS,
+                         "rot_xyz_t", 3, j);
     }
 
     /* billboard: uses a camera matrix -- feed the real lookat output */
@@ -724,7 +754,7 @@ int main(void)
 }
 ```
 
-- [ ] **Step 2: Add the Makefile target and confirm compile failure**
+- [x] **Step 2: Add the Makefile target and confirm compile failure**
 
 In `Makefile.saturn.mk`, add `verify-mtxq-ctors` mirroring the existing
 `verify-mtxf-lookat-host-diff` recipe (same flags/includes — it already
@@ -739,7 +769,7 @@ contracts).
 
 Run it. Expected: FAIL — `saturn_matrix_ctors.h: No such file or directory`.
 
-- [ ] **Step 3: Implement the constructors**
+- [x] **Step 3: Implement the constructors**
 
 Create `src/port/saturn/gfx/saturn_matrix_ctors.h`:
 
@@ -798,37 +828,53 @@ sm64_saturn_mtxq_lookat(sm64_saturn_mtx_t *mtx, const int32_t from[3],
 {
     int32_t colX[3], colY[3], colZ[3];
     int64_t dxi, dzi, mag;
-    int32_t dx_q = to[0] - from[0];
-    int32_t dz_q = to[2] - from[2];
+    /* from/to individually satisfy this port's documented +-32767
+     * world-unit ceiling (saturn_matrix.h's decode note), but their
+     * DIFFERENCE does not: two independent values each near the
+     * ceiling can differ by up to ~65534 real units, and that
+     * magnitude's Q16.16 representation (~4.29e9 raw) does not fit
+     * int32_t (max ~2.147e9) -- confirmed with a compiled repro
+     * (from=-20000, to=15000 on one axis: to[0]-from[0] as plain
+     * int32_t silently wraps to a wrong-sign value, corrupting every
+     * downstream rotation-column entry). Widen to int64_t before
+     * subtracting; narrow back to int32_t only after dividing by mag,
+     * once the result is unit-range and provably safe -- same
+     * widen-before-combine pattern saturn_matrix.h's
+     * sm64_saturn_matrix_mul already uses for the same class of
+     * problem. */
+    int64_t dx_wide = (int64_t) to[0] - (int64_t) from[0];
+    int64_t dz_wide = (int64_t) to[2] - (int64_t) from[2];
+    int32_t dx_q, dz_q;
 
     /* horizontal direction, integer-unit magnitude (see unit analysis) */
-    dxi = (int64_t) (dx_q >> 16);
-    dzi = (int64_t) (dz_q >> 16);
+    dxi = dx_wide >> 16;
+    dzi = dz_wide >> 16;
     mag = sm64_saturn_isqrt64(dxi * dxi + dzi * dzi);
     if (mag == 0) {
         mag = 1;
     }
     /* float code: d *= -1/len. Negated Q16.16 unit components: */
-    dx_q = (int32_t) (-((int64_t) dx_q) / mag);
-    dz_q = (int32_t) (-((int64_t) dz_q) / mag);
+    dx_q = (int32_t) (-dx_wide / mag);
+    dz_q = (int32_t) (-dz_wide / mag);
 
     colY[0] = sm64_saturn_q16_mul(sm64_saturn_sins_q16(roll), dz_q);
     colY[1] = sm64_saturn_coss_q16(roll);
     colY[2] = -sm64_saturn_q16_mul(sm64_saturn_sins_q16(roll), dx_q);
 
-    /* full look direction, same integer-unit reduction, negated */
+    /* full look direction, same integer-unit reduction, negated --
+     * same int64_t-widened delta as above, same overflow reasoning */
     {
-        int32_t vx = to[0] - from[0];
-        int32_t vy = to[1] - from[1];
-        int32_t vz = to[2] - from[2];
+        int64_t vx = (int64_t) to[0] - (int64_t) from[0];
+        int64_t vy = (int64_t) to[1] - (int64_t) from[1];
+        int64_t vz = (int64_t) to[2] - (int64_t) from[2];
         int64_t xi = vx >> 16, yi = vy >> 16, zi = vz >> 16;
         mag = sm64_saturn_isqrt64(xi * xi + yi * yi + zi * zi);
         if (mag == 0) {
             mag = 1;
         }
-        colZ[0] = (int32_t) (-((int64_t) vx) / mag);
-        colZ[1] = (int32_t) (-((int64_t) vy) / mag);
-        colZ[2] = (int32_t) (-((int64_t) vz) / mag);
+        colZ[0] = (int32_t) (-vx / mag);
+        colZ[1] = (int32_t) (-vy / mag);
+        colZ[2] = (int32_t) (-vz / mag);
     }
 
     /* colX = colY x colZ; renormalize (float code divides by +len) */
@@ -970,12 +1016,28 @@ sm64_saturn_mtxq_billboard(sm64_saturn_mtx_t *dest,
         int64_t dot = (int64_t) mtx->m[0][c] * position[0]
                     + (int64_t) mtx->m[1][c] * position[1]
                     + (int64_t) mtx->m[2][c] * position[2];
-        dest->m[3][c] = (int32_t) (dot >> 16) + mtx->m[3][c];
+        /* (dot>>16) and mtx->m[3][c] are each independently bounded
+         * only by this port's +-32767 world-unit ceiling (the rotation
+         * columns are unit-range, but the translation row and
+         * "position" are not) -- same overflow class as
+         * sm64_saturn_mtxq_lookat's delta computation above, just via
+         * `+` instead of `-`. Combine in int64_t and narrow once. */
+        int64_t sum = (dot >> 16) + (int64_t) mtx->m[3][c];
+        dest->m[3][c] = (int32_t) sum;
     }
     dest->m[3][3] = 1 << 16;
 }
 
-/* Mirrors mtxf_scale_vec3f (math_util.c:538-547). */
+/* Mirrors mtxf_scale_vec3f (math_util.c:538-547).
+ *
+ * Overflow note: sm64_saturn_q16_mul's documented safe range (|a|,|b| <=
+ * 1<<16) is NOT guaranteed here -- mtx's entries and s are both general
+ * Q16.16 values, not sin/cos-bounded. In-tree scale usage observed at
+ * rendering_graph_node.c:426,454,457,825,903 runs ~0.1x-9x, far from the
+ * format's ceiling; accepted as a documented assumption for bring-up,
+ * not a proven bound. If a future caller pushes scale or matrix-entry
+ * magnitude toward the +-32767 ceiling simultaneously, this needs an
+ * overflow-checked multiply. */
 static inline void
 sm64_saturn_mtxq_scale_vec3f(sm64_saturn_mtx_t *dest,
                              const sm64_saturn_mtx_t *mtx,
@@ -1017,7 +1079,7 @@ sm64_saturn_mtxq_rotate_xy(sm64_saturn_mtx_t *dest, int16_t angle)
 
 Note the stray first `for` loop in `mtxq_lookat` above (`for (int c = 0; c < 3; c++) { mtx->m[0][c] = ... }`) is redundant with the explicit writes that follow — **do not include it**; implement only the explicit column writes. (Called out so the implementer deletes it rather than copying the redundancy.)
 
-- [ ] **Step 4: Run the differential test**
+- [x] **Step 4: Run the differential test**
 
 Run the new `verify-mtxq-ctors` target. Expected: exit 0,
 `mtxq ctor differential: all fixtures within tolerance`.
@@ -1026,17 +1088,30 @@ real precision claims. A lookat unit-vector off by more than ~0.001 means a
 unit-analysis bug (likely the `>>16` reduction or a missed negation), not
 an acceptable rounding difference.
 
-- [ ] **Step 5: Run the full existing suites (no regressions)**
+- [x] **Step 5: Run the full existing suites (no regressions)**
 
 `verify-runtime-contracts` and `verify-mtxf-lookat-host-diff` both still
 exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/port/saturn/gfx/saturn_matrix_ctors.h \
         tools/saturn/mtxq_ctor_diff_test.c Makefile.saturn.mk
 git commit -m "feat(saturn): Q16.16 render-matrix constructors, host-differential-tested"
+```
+
+Code-quality review found a real, confirmed int32_t overflow in `mtxq_lookat`'s
+delta computation (from/to individually in-range, their difference isn't) plus
+the same overflow class in billboard's translation-row combine, and an
+unaddressed overflow-assumption gap in scale_vec3f. Fixed in a follow-up
+commit (code block above already reflects the final widened state) that also
+added a roll-swept regression fixture for the overflow class and the missing
+translation-row assertion in rotate_xyz_and_translate's sweep:
+
+```bash
+git add src/port/saturn/gfx/saturn_matrix_ctors.h tools/saturn/mtxq_ctor_diff_test.c
+git commit -m "fix(saturn): widen lookat delta computation, close review findings"
 ```
 
 ---
