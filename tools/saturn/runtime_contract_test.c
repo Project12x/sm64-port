@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -11,6 +12,8 @@
 #include "saturn_transform.h"
 #include "saturn_matrix.h"
 #include "saturn_matrix_kernels.h"
+#include "saturn_matrix_ctors.h"
+#include "saturn_light_q16.h"
 #include "types.h"
 #include "saturn_fast3d_frontend.h"
 #include "PR/gbi.h"
@@ -1683,6 +1686,134 @@ static void test_kernels_trig_lookup(void)
     assert(sm64_saturn_sins_q16(-0x4000) == -65536);
 }
 
+/* Float mirror of gfx_pc.c's lighting math (calculate_normal_dir at
+ * :534-542 + the gfx_sp_vertex lighting block at :626-657), used as the
+ * differential ground truth for the Q16 evaluator.
+ *
+ * TRANSPOSE ORIENTATION -- verified directly against the real
+ * gfx_transposed_matrix_mul (gfx_pc.c:528-532), NOT the plan draft's
+ * original claim of `coeffs[i] = sum_j M[j][i] * light_dir[j]`. The real
+ * helper is:
+ *   res[0] = a[0]*b[0][0] + a[1]*b[0][1] + a[2]*b[0][2];
+ *   res[1] = a[0]*b[1][0] + a[1]*b[1][1] + a[2]*b[1][2];
+ *   res[2] = a[0]*b[2][0] + a[1]*b[2][1] + a[2]*b[2][2];
+ * i.e. res[i] = sum_j a[j]*b[i][j] -- dot of the light direction with ROW
+ * i of the modelview matrix, so coeffs[i] = sum_j light_dir[j] * M[i][j].
+ * It's called "transposed" relative to THIS SAME FILE's own vertex-
+ * POSITION transform convention (gfx_sp_vertex:616-619: x_i =
+ * sum_j v[j]*MP[j][i], the opposite index order) -- not relative to how
+ * the modelview matrix itself is stored. sm64_saturn_mtx_t.m[row][col]
+ * mirrors gfx_pc.c's float matrix[row][col] one-to-one with no
+ * additional swap (saturn_matrix.h's sm64_saturn_matrix_mul matches
+ * gfx_matrix_mul index-for-index, and saturn_matrix_ctors.h's
+ * mtxq_lookat comment confirms "write in the float code's exact
+ * layout"), so this reference and the Q16 evaluator below both use
+ * mv->m[i][j] (row i, column j), not mv->m[j][i]. */
+static void ref_light_eval(const int8_t light_dir[3],
+                           const uint8_t light_col[3],
+                           const uint8_t amb_col[3],
+                           const sm64_saturn_mtx_t *mv,
+                           const int8_t n[3], uint8_t out_rgb[3])
+{
+    float ld[3] = { light_dir[0] / 127.0f, light_dir[1] / 127.0f,
+                    light_dir[2] / 127.0f };
+    float c[3];
+    float mag;
+    float intensity;
+    int ch[3];
+
+    for (int i = 0; i < 3; i++) {
+        c[i] = ld[0] * sm64_saturn_q16_to_float(mv->m[i][0])
+             + ld[1] * sm64_saturn_q16_to_float(mv->m[i][1])
+             + ld[2] * sm64_saturn_q16_to_float(mv->m[i][2]);
+    }
+    mag = sqrtf(c[0] * c[0] + c[1] * c[1] + c[2] * c[2]);
+    if (mag != 0.0f) {
+        c[0] /= mag; c[1] /= mag; c[2] /= mag;
+    }
+    intensity = (n[0] * c[0] + n[1] * c[1] + n[2] * c[2]) / 127.0f;
+    for (int i = 0; i < 3; i++) {
+        ch[i] = amb_col[i];
+        if (intensity > 0.0f) {
+            ch[i] += (int)(intensity * light_col[i]);
+        }
+        out_rgb[i] = ch[i] > 255 ? 255 : (uint8_t)ch[i];
+    }
+}
+
+static void test_light_q16_matches_float_reference(void)
+{
+    /* Real BOB Lights1 values -- copied from the actual
+     * levels/bob/areas/1/1/model.inc.c:2..5 fixture:
+     *   gdSPDefLights1(0x66, 0x66, 0x66,
+     *                  0xff, 0xff, 0xff, 0x28, 0x28, 0x28)
+     * gdSPDefLights1(ar,ag,ab, r1,g1,b1, x1,y1,z1) (gbi.h:1485) maps to
+     * (ambient color, light color, light direction) -- NOT the plan
+     * draft's placeholder {0x33,0x33,0x33} ambient / {0xcc,0xcc,0xcc}
+     * light color (the direction happened to already match). */
+    static const uint8_t amb[3] = { 0x66, 0x66, 0x66 };
+    static const uint8_t col[3] = { 0xff, 0xff, 0xff };
+    static const int8_t dir[3] = { 0x28, 0x28, 0x28 };
+
+    sm64_saturn_mtx_t mv[3];
+    sm64_saturn_light_state_t st;
+    int mi;
+
+    sm64_saturn_matrix_identity(&mv[0]);
+    sm64_saturn_mtxq_rotate_zxy_and_translate(&mv[1],
+        (const int32_t[3]){ 0, 0, 0 }, 0x1234, -0x0800, 0x4000);
+    /* non-uniform scale exercises the normalize step */
+    sm64_saturn_mtxq_scale_vec3f(&mv[2], &mv[1],
+        (const int32_t[3]){ 3 << 15, 1 << 16, 5 << 14 });
+
+    for (mi = 0; mi < 3; mi++) {
+        sm64_saturn_light_state_init(&st);
+        memcpy(st.dir_col, col, 3);
+        memcpy(st.amb_col, amb, 3);
+        memcpy(st.dir_dir, dir, 3);
+        st.num_lights = 2;
+        st.lights_changed = true;
+        sm64_saturn_light_recompute_coeffs(&st, &mv[mi]);
+        assert(!st.lights_changed);
+
+        for (int nx = -128; nx <= 127; nx += 24) {
+            for (int ny = -128; ny <= 127; ny += 24) {
+                for (int nz = -128; nz <= 127; nz += 24) {
+                    const int8_t n[3] = { (int8_t)nx, (int8_t)ny,
+                                          (int8_t)nz };
+                    uint8_t want[3], got[3];
+                    ref_light_eval(dir, col, amb, &mv[mi], n, want);
+                    sm64_saturn_light_eval_vertex(&st, n, got);
+                    for (int i = 0; i < 3; i++) {
+                        int d = (int)got[i] - (int)want[i];
+                        if (d < 0) { d = -d; }
+                        assert(d <= 2); /* integer sqrt + Q16 rounding */
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void test_light_q16_zero_normal_gets_ambient(void)
+{
+    sm64_saturn_light_state_t st;
+    sm64_saturn_mtx_t ident;
+    static const int8_t zero_n[3] = { 0, 0, 0 };
+    uint8_t got[3];
+
+    sm64_saturn_matrix_identity(&ident);
+    sm64_saturn_light_state_init(&st);
+    st.amb_col[0] = 10; st.amb_col[1] = 20; st.amb_col[2] = 30;
+    st.dir_col[0] = 200; st.dir_col[1] = 200; st.dir_col[2] = 200;
+    st.dir_dir[2] = 127;
+    st.num_lights = 2;
+    st.lights_changed = true;
+    sm64_saturn_light_recompute_coeffs(&st, &ident);
+    sm64_saturn_light_eval_vertex(&st, zero_n, got);
+    assert(got[0] == 10 && got[1] == 20 && got[2] == 30);
+}
+
 int main(void)
 {
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
@@ -1730,5 +1861,7 @@ int main(void)
     test_kernels_q16_mul();
     test_kernels_float_q16_roundtrip();
     test_kernels_trig_lookup();
+    test_light_q16_matches_float_reference();
+    test_light_q16_zero_normal_gets_ambient();
     return 0;
 }
