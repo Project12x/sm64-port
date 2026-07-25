@@ -74,16 +74,39 @@ const LevelScript level_script_entry[] = {
      * between. Anything allocated from the main pool after INIT_LEVEL()
      * would therefore live inside a stack frame that becomes permanently
      * unreachable the next time this script runs, leaking main-pool bytes
-     * on every such cycle. Registering the model before INIT_LEVEL() keeps
-     * the allocation outside any push/pop frame entirely, so it is never
-     * orphaned.
+     * on every such cycle.
      *
-     * This also matches retail's own placement exactly:
-     * level_main_scripts_entry (levels/scripts.c:67-115) calls
-     * ALLOC_LEVEL_POOL() and its model loads before it ever calls
-     * INIT_LEVEL() for any level -- model registration is meant to happen
-     * once, outside any level's push/pop lifecycle, and live for the whole
-     * session.
+     * This reorder closes the leak for the FIRST pass through this array
+     * only -- the boot-time registration this task exists to prove out.
+     * It does NOT close it for the second and later level-exit/reentry
+     * cycles: JUMP(level_script_entry) restarts this entire array from
+     * the top, so on cycle 2 the registration block above runs again
+     * while cycle 1's own INIT_LEVEL() push is STILL on the stack (it was
+     * never popped -- see above), and the re-registration lands inside
+     * that same unpopped frame regardless of its position relative to
+     * THIS cycle's INIT_LEVEL() call. Retail avoids this because its
+     * registration prologue (levels/scripts.c:67-115) is structurally
+     * outside the loop that revisits level scripts -- a separate
+     * LOOP_BEGIN()/JUMP_LINK(script_exec_level_table) construct further
+     * down the same array never re-enters the registration section.
+     * Matching retail's command ORDER inside a self-looping array is not
+     * the same as matching retail's script TOPOLOGY; closing this fully
+     * needs the registration hoisted into a true one-time prologue ahead
+     * of a separate looping body, which this task does not attempt --
+     * verified live (2026-07-25) that this deviation is real, not
+     * theoretical, by tracing the actual push/pop call sequence across
+     * one full level_bob_entry EXECUTE/CLEAR_LEVEL/EXIT round-trip.
+     *
+     * Not fixed here because: (a) this plan's own test methodology is a
+     * single continuous boot with no level-exit/reentry, so the residual
+     * leak is never exercised by anything this plan measures or ships;
+     * (b) lvl_init_or_update (src/game/level_update.c:1234-1247) is real,
+     * unmodified retail transition logic, not stubbed out, so reachability
+     * once warp/star mechanics work end-to-end on this target cannot be
+     * ruled out; and (c) restructuring this script's topology is a larger,
+     * separate change with its own risk to the boot sequence every task
+     * in this plan depends on. Tracked as follow-up work, not silently
+     * accepted.
      *
      * FREE_LEVEL_POOL is shrink-to-fit, not destroy
      * (src/engine/level_script.c:363-369 resizes the pool to usedSpace),
