@@ -389,7 +389,7 @@ diagnosed against.
 **Files:**
 - Modify: `src/port/saturn/sourceboot/source_entry.c` (the registration block from Task 2)
 
-- [ ] **Step 1: Replace the single load with the full block**
+- [x] **Step 1: Replace the single load with the full block**
 
 Replace the lone `LOAD_MODEL_FROM_GEO(MODEL_MARIO, mario_geo),` line with all 47 entries, copied verbatim from `levels/scripts.c:68-114`. Keep `ALLOC_LEVEL_POOL()` before and `FREE_LEVEL_POOL()` after. The full list:
 
@@ -445,18 +445,18 @@ Replace the lone `LOAD_MODEL_FROM_GEO(MODEL_MARIO, mario_geo),` line with all 47
 
 The duplicated `MODEL_MARIOS_CAP` line is present upstream at `levels/scripts.c:103-104`; keep it so the block diffs cleanly against its origin.
 
-- [ ] **Step 2: Verify the count**
+- [x] **Step 2: Verify the count**
 
 ```bash
 grep -c "LOAD_MODEL_FROM" src/port/saturn/sourceboot/source_entry.c
 ```
 Expected: `47`.
 
-- [ ] **Step 3: Cross-compile**
+- [x] **Step 3: Cross-compile**
 
 Same command as Task 2 Step 3. Expected: exit 0 on both. `SOURCE.DAT` grows further; `make verify` enforces the 4 MiB cap. If it now exceeds the cap, that is the degradation trigger — go to Step 5.
 
-- [ ] **Step 4: Measure pool headroom after registration**
+- [x] **Step 4: Measure pool headroom after registration**
 
 Re-resolve `_sPoolFreeSpace`, capture, decode as in Task 1 Step 3.
 
@@ -464,17 +464,31 @@ Re-resolve `_sPoolFreeSpace`, capture, decode as in Task 1 Step 3.
 
 Watch specifically for the failure mode this project has already suffered: an under-sized pool does **not** report an error — `alloc_only_pool_alloc` returns NULL and callers write through it (see the `SOURCEBOOT_MAIN_POOL_BYTES` history comment in `src/port/saturn/sourceboot/main.c`). A boot that still renders is not proof the pool was sufficient. Check the number.
 
-- [ ] **Step 5: Degradation path, only if Step 3 or Step 4 failed**
+- [x] **Step 5: Degradation path, only if Step 3 or Step 4 failed** — not triggered; both gates passed (see completion note below)
 
 Cut the block to a named subset: `MODEL_MARIO` plus the models BOB actually spawns. Do not silently truncate — keep every retained entry and add a comment above the block stating which entries were removed, the measured figure that forced it, and that the full list lives at `levels/scripts.c:68-114`. Then re-run Steps 2-4.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/port/saturn/sourceboot/source_entry.c
 git commit -m "fix(saturn): register the full master-script model set in sourceboot"
 ```
 Record: pool headroom before/after, `SOURCE.DAT` before/after, and whether the full 47 or a subset shipped.
+
+**Completion note (2026-07-25):** Full 47-entry block shipped, no degradation needed. `source_entry.c`'s registration block matches `levels/scripts.c:68-114` byte-for-byte (independently diffed twice — once by spec-compliance review, once by code-quality review), including the upstream `MODEL_MARIOS_CAP` duplicate. `#include "sm64.h"` was added for `LAYER_ALPHA` (traced: no other included header pulls it in transitively; retail's own `levels/scripts.c:2` includes the same header for the same symbol).
+
+Numbers, independently reproduced by the spec-compliance reviewer on a from-scratch rebuild (not just read off the implementer's report):
+- `grep -c "LOAD_MODEL_FROM"` → 47 (after one fix — see below).
+- `make -j2` / `make verify` → exit 0 both.
+- `SOURCE.DAT`: 1,849,904 → 2,049,200 bytes (+199,296 for 46 additional models), 640 KiB well under the 4 MiB cap.
+- `_sPoolFreeSpace` fresh-resolved at `0x060959d8` (moved from Task 1's `0x060952d8` as the binary grew — not trusted stale).
+- Pool headroom: 163,424 bytes (Task 1, 0-model baseline) → 124,128 bytes (47 models registered), independently re-captured and re-decoded, exact match. Clears the ~32 KiB slack gate by ~3.8x.
+- Pool-math reasoning independently re-derived, not just trusted: traced `alloc_surface_pools()` → `level_cmd_free_level_pool()` (`level_script.c:373`) to confirm BOB's own ~166 KiB surface-pool draw fires on BOB's `FREE_LEVEL_POOL()` within the first few frames of level entry (no `SLEEP` precedes it in `levels/bob/script.c`), well before the 25000-post-poke-frame capture point — so the 124,128-byte figure is genuinely post-BOB-load and does not need a further deduction. The implementer's own initial mis-read of this (treating 166 KiB as a separate subtraction) was corrected before commit; the reviewer's independent trace confirms the correction was right.
+
+**One real finding, fixed:** spec-compliance review's mandated `grep -c "LOAD_MODEL_FROM"` gate returned 48, not 47, on first commit — the includes-block comment (added for the `sm64.h`/`LAYER_ALPHA` justification) contained the literal substring `LOAD_MODEL_FROM_DL`, which the pattern matched as a 48th line. The actual code block always had exactly 47 real entries; this was a verification-gate artifact, not a functional bug. Fixed by rewording the comment (commit `2743ea5`) to avoid the substring; re-verified `grep -c` → 47 and re-ran the full cross-compile + `make verify` afterward (both exit 0, output unchanged). Code-quality review then confirmed the reworded comment reads naturally, with no trace of the two-commit fix history visible to a fresh reader of the final file.
+
+Both review stages closed clean: spec-compliance ISSUES_FOUND → fixed → re-verified compliant; code-quality APPROVED with no Important or Minor issues (one non-blocking observation noted: no dedicated docs-sync commit for this task, consistent with Tasks 1-2's pattern — Task 3 was the outlier that got one).
 
 ---
 
