@@ -496,7 +496,7 @@ Both review stages closed clean: spec-compliance ISSUES_FOUND → fixed → re-v
 
 **Files:** evidence only.
 
-- [ ] **Step 1: Full regression**
+- [x] **Step 1: Full regression**
 
 All four host targets:
 ```bash
@@ -509,11 +509,11 @@ done
 ```
 Expected: all four exit 0. Then the SH-2 cross-compile + `make verify`, both exit 0.
 
-- [ ] **Step 2: Live capture at free-roam depth**
+- [x] **Step 2: Live capture at free-roam depth**
 
 Re-resolve `_sourceboot_fast3d`, capture with a screenshot into `docs/saturn/evidence/screenshots/e2-sourceboot-mario-freeroam-2026-07-25.png` and report into `docs/saturn/evidence/reports/e2-sourceboot-mario-freeroam-2026-07-25.json`.
 
-- [ ] **Step 3: Judge honestly**
+- [x] **Step 3: Judge honestly**
 
 | Metric | Expectation |
 | --- | --- |
@@ -525,7 +525,7 @@ Re-resolve `_sourceboot_fast3d`, capture with a screenshot into `docs/saturn/evi
 
 Both outcomes are acceptable completions: Mario renders, or he does not and the counters attribute the next cause. He has never been traversed before, so a second-order failure here is a real result, not a botched task. Report raw numbers either way.
 
-- [ ] **Step 4: Commit the evidence**
+- [x] **Step 4: Commit the evidence**
 
 ```bash
 git add docs/saturn/evidence/reports/e2-sourceboot-mario-freeroam-2026-07-25.json \
@@ -533,11 +533,21 @@ git add docs/saturn/evidence/reports/e2-sourceboot-mario-freeroam-2026-07-25.jso
 git commit -m "test(saturn): Mario free-roam capture evidence"
 ```
 
-- [ ] **Step 5: Present the screenshot to the user — do not write gallery entries**
+- [x] **Step 5: Present the screenshot to the user — do not write gallery entries**
 
 Show the user the screenshot and the raw counters. **Do not** write `docs/saturn/evidence/TIMELINE.md` or `index.html` entries until the user confirms what they see. Standing rule: the user's eyes are the acceptance gate.
 
 Note for whoever presents it: this project has twice had an on-screen object mis-identified from inference rather than evidence. Describe what the counters prove and let the user identify what they see.
+
+**Completion note (2026-07-25):** All four host regression targets, the SH-2 cross-compile, and `make verify` exited 0. The free-roam capture ran at the standard 240+25,000-frame depth with the full 47-model registration from Task 4. Symbols were resolved fresh against the just-built ELF: `_gMarioObject = 0x06096228`, `_sourceboot_fast3d = 0x060be4f8`.
+
+All four gates passed: `sharedChild` resolved non-NULL at `0x00218F20` (via the two-step `gMarioObject` pointer-value → `+0x14` chain; the address itself lands inside the LWRAM main-pool region, which is architecturally sensible corroboration, not just a nonzero value), `triangles_transformed = 2011` (materially above the 1,307 terrain-only baseline), `fault_flags = 0`, `modelview_stack_overflow = 0`.
+
+**A genuine cross-check discrepancy, resolved:** two independent manual byte-counts of `modelview_stack_overflow` against the raw 228-byte probe array disagreed (1 vs 0). A third, programmatic decode of the same raw bytes confirmed 0 — the first manual count was an indexing slip, not a real fault. Recorded here because the controller briefly reported the wrong (failing) number to the user before catching it; worth remembering that hand-counting a large byte array is exactly the kind of step that should be double-checked programmatically rather than trusted on a single pass.
+
+**Execution note, for the plan's own record:** the implementer subagent's nested background-process + Monitor chain for the three sequential capture runs did not reliably surface real completion back to the controller — twice, a capture had already finished (with output files on disk) minutes before the subagent's own turn indicated it was still waiting. The controller ultimately took over the final capture run directly as a plain backgrounded Bash command outside any subagent, which the harness notified on exit as expected. Worth remembering for future tasks in this project that chain multiple long-running captures: prefer a single agent (or the controller directly) driving sequential foreground/backgrounded shell calls over layered subagent-internal monitors, which add a failure-prone indirection hop.
+
+Evidence committed: `docs/saturn/evidence/reports/e2-sourceboot-mario-freeroam-2026-07-25.json`, `docs/saturn/evidence/screenshots/e2-sourceboot-mario-freeroam-2026-07-25.png` (commit `e1e2bcb`). The screenshot and raw counters were presented to the user, who confirmed: "i see mario standing next to the cannon on BOB" — matching the coordinates BOB's own script spawns him at. `docs/saturn/evidence/TIMELINE.md` was updated only after that confirmation (commit `94d8cf9`); `index.html` was left untouched, consistent with this project's established practice of not syncing that gallery for the Q16-matrix or Gouraud sourceboot milestones either.
 
 ---
 
