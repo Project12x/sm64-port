@@ -77,20 +77,20 @@ Pure measurement, no code change. Establishes the gate that decides whether all 
 
 **Files:** none modified.
 
-- [ ] **Step 1: Resolve the pool symbol fresh**
+- [x] **Step 1: Resolve the pool symbol fresh**
 
 ```bash
 /c/msys64/usr/bin/bash.exe -lc 'cd /d/Code/RetroDev/sm64-saturn-port/sm64-port && source .yaul.env && sh-elf-nm build/saturn/sourceboot/e2-bob/obj/sm64-saturn-sourceboot-e2.elf | grep -E "_sPoolFreeSpace|_sPoolStart|_sPoolEnd"'
 ```
 Expected: three addresses. `sPoolFreeSpace` is a `u32` holding remaining main-pool bytes (`src/game/memory.c:315-317`: `main_pool_available()` returns `sPoolFreeSpace - 16`).
 
-- [ ] **Step 2: Capture the baseline pool state**
+- [x] **Step 2: Capture the baseline pool state**
 
 Probe 12 bytes starting at `_sPoolStart` (covers `sPoolStart`, `sPoolEnd`, `sPoolFreeSpace` — they are adjacent at `0x060952d4/d0/d8`; confirm ordering from Step 1's addresses and probe the lowest address for 16 bytes to cover all three).
 
 Run the capture recipe with `--probe-address <lowest of the three>` `--probe-count 16`, output to the session scratchpad (NOT the repo).
 
-- [ ] **Step 3: Decode and record**
+- [x] **Step 3: Decode and record**
 
 ```python
 import json, struct
@@ -102,7 +102,7 @@ for name, addr in [('sPoolStart', 0x060952d4), ('sPoolEnd', 0x060952d0), ('sPool
 ```
 Record `sPoolFreeSpace` — this is the headroom budget for Task 4's decision.
 
-- [ ] **Step 4: Commit the measurement note**
+- [x] **Step 4: Commit the measurement note**
 
 No code changed, so commit only if you add an evidence file. If you do:
 ```bash
@@ -110,6 +110,15 @@ git add docs/saturn/evidence/reports/<baseline pool json>
 git commit -m "test(saturn): baseline LWRAM main-pool headroom before model registration"
 ```
 Otherwise record the number in the Task 2 commit message and skip this step.
+
+Committed as `a49f871`. `sPoolFreeSpace = 163,424` bytes;
+`main_pool_available() = 163,408` (~159.6 KiB) after the function's own
+internal `-16`. Spec-compliance review independently re-derived every
+number down to the 16-byte alignment sentinels in `main_pool_init`
+(`sPoolStart = ALIGN16(start)+16`, `sPoolEnd = ALIGN16(end-15)-16`) and
+confirmed `SOURCEBOOT_MAIN_POOL_BYTES = 0x60000` (exactly 384 KiB)
+accounts for the full observed span — a genuine re-derivation, not a
+re-print of the implementer's numbers.
 
 ---
 
@@ -120,7 +129,7 @@ Smallest change that proves the mechanism end to end.
 **Files:**
 - Modify: `src/port/saturn/sourceboot/source_entry.c` (includes near line 8-16; script body at line 44)
 
-- [ ] **Step 1: Add the actor headers**
+- [x] **Step 1: Add the actor headers**
 
 In `src/port/saturn/sourceboot/source_entry.c`, after the existing `#include "levels/bob/header.h"`, add:
 
@@ -135,7 +144,7 @@ In `src/port/saturn/sourceboot/source_entry.c`, after the existing `#include "le
 #include "model_ids.h"
 ```
 
-- [ ] **Step 2: Add the registration block**
+- [x] **Step 2: Add the registration block** (see completion note — placement changed from the sketch below during review)
 
 In `level_script_entry[]` (`source_entry.c:44`), immediately after `INIT_LEVEL(),` and **before** `SET_REG(/* value */ 1),`, insert:
 
@@ -171,7 +180,7 @@ In `level_script_entry[]` (`source_entry.c:44`), immediately after `INIT_LEVEL()
     FREE_LEVEL_POOL(),
 ```
 
-- [ ] **Step 3: Cross-compile**
+- [x] **Step 3: Cross-compile**
 
 ```bash
 /c/msys64/usr/bin/bash.exe -lc 'cd /d/Code/RetroDev/sm64-saturn-port/sm64-port && source .yaul.env && cd src/port/saturn/sourceboot && make -j2 && make verify'
@@ -180,7 +189,7 @@ Expected: both exit 0. If a geo symbol is undefined, the linker names it — add
 
 Expected side effect: **`SOURCE.DAT` grows**, because `mario_geo` and everything it references stop being garbage-collected. `make verify` enforces the 4 MiB cap; note the new size.
 
-- [ ] **Step 4: Verify `sharedChild` is now non-NULL**
+- [x] **Step 4: Verify `sharedChild` is now non-NULL**
 
 Re-resolve `_gMarioObject` (it will have moved):
 ```bash
@@ -202,13 +211,78 @@ Expected: `sharedChild` non-zero. `flags` still `0x21` (`GRAPH_RENDER_ACTIVE | G
 
 **If `sharedChild` is still `0x0`, stop and report.** The registration did not take effect and nothing downstream is worth measuring.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/port/saturn/sourceboot/source_entry.c
 git commit -m "fix(saturn): register MODEL_MARIO so his geometry reaches the render graph"
 ```
 Record in the message: baseline `sPoolFreeSpace` from Task 1, the new `SOURCE.DAT` size, and the observed `sharedChild` value.
+
+Committed as `a130003`, then revised twice more during review. `sharedChild`
+went from `0x0` to non-zero, hardware-verified: `node.type = 0x18`
+(`GRAPH_NODE_TYPE_OBJECT`), `node.flags = 0x21`
+(`GRAPH_RENDER_ACTIVE | GRAPH_RENDER_HAS_ANIMATION`), `sharedChild` a
+real LWRAM address. `SOURCE.DAT` grew from 1,715,520 to 1,849,904 bytes
+(both under the 4 MiB cap).
+
+**Real deviation from the plan's literal sketch, found during Step 4:**
+`gMarioObject` is a `struct Object *` — a pointer variable, not the
+object struct itself. Probing directly at its `nm`-resolved address (as
+the plan's Step 4 literally describes) reads the pointer's own 4-byte
+storage, not `GraphNodeObject` fields. Every capture in this task and its
+reviews instead resolved the pointer's stored value first, then probed
+that dereferenced address. Confirmed structurally sound by checking
+`struct Object`'s layout (`include/types.h`): its first member is
+`struct ObjectNode header`, whose first member is
+`struct GraphNodeObject gfx` — so one dereference lands exactly on the
+`GraphNodeObject` header at offset 0, no further offset needed.
+Independently reproduced by both the spec-compliance and code-quality
+reviewers, byte-for-byte identical each time.
+
+**Two-stage review, plus a genuine fix-and-reverify loop:**
+
+Spec-compliance ✅ — every comment citation checked against real source
+line numbers, the build reproduced from a forced-clean rebuild
+(`SOURCE.DAT` size matched exactly), and the two-step capture reproduced
+independently with identical results.
+
+Code-quality found a real Important-severity bug: the registration was
+placed AFTER `INIT_LEVEL()`, which calls `main_pool_push_state()`
+(`src/engine/level_script.c:336`). Nothing in this script ever pops that
+frame, so the trailing `JUMP(level_script_entry)` — which re-runs
+`INIT_LEVEL()` on every level-exit/reentry cycle — orphaned the
+registration's allocation every cycle. Not a problem before this commit
+(nothing was allocated in the unpopped frame); a real, non-zero leak
+once something was.
+
+Fixed by moving the registration before `INIT_LEVEL()`, matching
+retail's own `level_main_scripts_entry` (`levels/scripts.c:67-115`),
+which genuinely never calls `INIT_LEVEL()` before its own model loads —
+independently confirmed. Committed as `2f365a9`.
+
+**Re-review of the fix found it incomplete**, not wrong in direction:
+the reorder only closes the leak for the array's FIRST pass. Because
+`main_pool_push_state()`/`pop_state()` track cumulative stack state
+across the WHOLE execution rather than being scoped to array position,
+cycle 2's re-run of the (now-earlier) registration block still lands
+inside cycle 1's own unpopped `INIT_LEVEL()` frame. Retail avoids this
+because its registration prologue is structurally OUTSIDE the loop that
+revisits level scripts; matching retail's command *order* inside a
+self-looping array isn't the same as matching retail's script
+*topology*. A full fix needs the registration hoisted into a true
+one-time prologue ahead of a separate looping body.
+
+**Deliberately not fixed as part of this task** (`f8b4535` corrects the
+comment to say so plainly instead of overclaiming closure): this plan's
+own test methodology is a single continuous boot with no level-exit/
+reentry, so the residual leak is never exercised by anything this plan
+measures or ships; `lvl_init_or_update` is real, unmodified retail
+transition logic, so reachability can't be ruled out once warp/star
+mechanics work end-to-end; and a full topology restructuring is
+separate, larger work with its own risk to the boot sequence every task
+in this plan depends on. Spawned as a tracked background task
+(`task_7109ee0d`) rather than silently accepted.
 
 ---
 
