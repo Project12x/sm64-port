@@ -51,7 +51,6 @@ static s32 sourceboot_mark_save_file_exists(UNUSED s16 arg, s32 value) {
 }
 
 const LevelScript level_script_entry[] = {
-    INIT_LEVEL(),
     /* MODEL REGISTRATION -- restores the stage retail performs in
      * level_main_scripts_entry (levels/scripts.c:67-115) before any level
      * script runs. This target never executes that script (see the
@@ -62,9 +61,29 @@ const LevelScript level_script_entry[] = {
      * geo_process_object (src/game/rendering_graph_node.c:1127) skipped
      * the whole subtree. Mario has never had geometry submitted.
      *
-     * Placed before the act/level SET_REG chain because these commands do
-     * not touch sRegister, so they cannot perturb the load-bearing
-     * ordering documented below.
+     * Placed BEFORE INIT_LEVEL(), not after: INIT_LEVEL()
+     * (level_cmd_init_level, src/engine/level_script.c:331-338) calls
+     * main_pool_push_state() (level_script.c:336), which pushes a
+     * save-point onto the main pool's allocation stack. Nothing in this
+     * script ever calls CLEAR_LEVEL() to pop that frame back off -- the
+     * trailing JUMP(level_script_entry) below re-runs this whole script
+     * (and therefore INIT_LEVEL() again) on every return from
+     * EXECUTE(level_bob_entry), i.e. on every ordinary level-exit/warp
+     * cycle through level_bob_entry's own CLEAR_LEVEL()/EXIT() pair, with
+     * no CLEAR_LEVEL() of this script's own frame ever happening in
+     * between. Anything allocated from the main pool after INIT_LEVEL()
+     * would therefore live inside a stack frame that becomes permanently
+     * unreachable the next time this script runs, leaking main-pool bytes
+     * on every such cycle. Registering the model before INIT_LEVEL() keeps
+     * the allocation outside any push/pop frame entirely, so it is never
+     * orphaned.
+     *
+     * This also matches retail's own placement exactly:
+     * level_main_scripts_entry (levels/scripts.c:67-115) calls
+     * ALLOC_LEVEL_POOL() and its model loads before it ever calls
+     * INIT_LEVEL() for any level -- model registration is meant to happen
+     * once, outside any level's push/pop lifecycle, and live for the whole
+     * session.
      *
      * FREE_LEVEL_POOL is shrink-to-fit, not destroy
      * (src/engine/level_script.c:363-369 resizes the pool to usedSpace),
@@ -81,6 +100,7 @@ const LevelScript level_script_entry[] = {
     ALLOC_LEVEL_POOL(),
     LOAD_MODEL_FROM_GEO(MODEL_MARIO,                   mario_geo),
     FREE_LEVEL_POOL(),
+    INIT_LEVEL(),
     /* Act number, first: retail's star-select screen writes gCurrActNum
      * through this same script mechanism before a course loads; E2 boots
      * straight into the level, so nothing ever set it and it stayed at its
