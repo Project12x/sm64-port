@@ -15,6 +15,15 @@
 
 #include "levels/bob/header.h"
 
+/* Model geo/DL symbols for the registration block below. Retail declares
+ * these in levels/scripts.c, which this target never executes -- see the
+ * block comment on the registration sequence. group0 carries mario_geo;
+ * common0/common1 carry the effect, coin, star, and cap models. */
+#include "actors/common0.h"
+#include "actors/common1.h"
+#include "actors/group0.h"
+#include "model_ids.h"
+
 /* Retail only ever stages the Peach-letter intro cutscene in castle
  * grounds; its own skip mechanism is the save file: init_level
  * (src/game/level_update.c:1198) spawns Mario in ACT_IDLE when
@@ -43,6 +52,35 @@ static s32 sourceboot_mark_save_file_exists(UNUSED s16 arg, s32 value) {
 
 const LevelScript level_script_entry[] = {
     INIT_LEVEL(),
+    /* MODEL REGISTRATION -- restores the stage retail performs in
+     * level_main_scripts_entry (levels/scripts.c:67-115) before any level
+     * script runs. This target never executes that script (see the
+     * lvl_init_from_save_file comment below, which documents the same
+     * gap for a different consequence), so gLoadedGraphNodes stayed
+     * entirely empty: every MARIO()/OBJECT() command read a NULL model
+     * pointer into spawnInfo->unk18, which became a NULL sharedChild, and
+     * geo_process_object (src/game/rendering_graph_node.c:1127) skipped
+     * the whole subtree. Mario has never had geometry submitted.
+     *
+     * Placed before the act/level SET_REG chain because these commands do
+     * not touch sRegister, so they cannot perturb the load-bearing
+     * ordering documented below.
+     *
+     * FREE_LEVEL_POOL is shrink-to-fit, not destroy
+     * (src/engine/level_script.c:363-369 resizes the pool to usedSpace),
+     * so these registrations survive into BOB's own ALLOC_LEVEL_POOL at
+     * levels/bob/script.c:67 -- exactly as they do in retail.
+     *
+     * No LOAD_MIO0/LOAD_RAW segment commands are needed or wanted: this
+     * build defines NO_SEGMENTED_MEMORY, under which segmented_to_virtual
+     * is the identity function (src/game/memory.c:138-140) and
+     * level_cmd_load_model_from_geo passes the geo pointer straight
+     * through (src/engine/level_script.c:427). The segment commands would
+     * call load_segment_decompress -> dma_read against N64 ROM addresses
+     * that do not exist on this target. */
+    ALLOC_LEVEL_POOL(),
+    LOAD_MODEL_FROM_GEO(MODEL_MARIO,                   mario_geo),
+    FREE_LEVEL_POOL(),
     /* Act number, first: retail's star-select screen writes gCurrActNum
      * through this same script mechanism before a course loads; E2 boots
      * straight into the level, so nothing ever set it and it stayed at its
