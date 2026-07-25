@@ -110,6 +110,30 @@ SECTIONS
   /* Back to cached addresses */
   ___end = ___bss_end + SIZEOF (.uncached);
 
+  /* HWRAM floor. The `ram` region's own LENGTH only makes the linker
+   * fail once ___end passes 0x06100000 -- i.e. it enforces a margin of
+   * >= 0, which is NOT the real requirement. libyaul's __mm_init()
+   * (kernel/mm/internal.c) unconditionally builds the user TLSF heap
+   * over [___end, 0x06100000) before main() runs, and TLSF writes a
+   * multi-KiB control_t at the base of that span. With a margin in
+   * (0, sizeof(control_t)) the link succeeds, `make verify` passes, and
+   * the program then corrupts memory before reaching main() -- and
+   * because HWRAM mirrors back to 0x06000000 at the top, the damage
+   * lands in low memory. This project has already been bitten by
+   * exactly that (see the SOURCEBOOT_MAIN_POOL_BYTES history comment in
+   * main.c: an SH-2 exception cascade before main(), diagnosed only
+   * after the fact).
+   *
+   * 4 KiB is a deliberate over-estimate of the measured ~3,188-byte
+   * control block, leaving room for TLSF's own alignment padding. Raise
+   * it, don't lower it. If this fires, the fix is to shrink a static
+   * HWRAM consumer -- see the budget comment on
+   * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES in
+   * src/port/saturn/gfx/saturn_fast3d_frontend.h -- not to weaken this
+   * assert. */
+  ASSERT (0x06100000 - ___end >= 4096,
+          "HWRAM margin below libyaul's TLSF control-block floor: the heap libyaul builds at ___end would overrun the top of HWRAM and mirror into low memory. Shrink a static HWRAM consumer.")
+
   /* VDP1 command staging array (vdp1_cmdt_t[]), resident in LWRAM rather
    * than HWRAM so it doesn't compete with SM64 game state for cache-backed
    * work RAM.  NOLOAD: holds no initialized data -- zeroed explicitly at

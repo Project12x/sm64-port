@@ -261,9 +261,9 @@ typedef struct sm64_saturn_fast3d_profile {
  * the single flat color this struct carried before: Task 3 made each
  * vertex's lit/unlit color correct, but this struct was still discarding
  * corners 1 and 2. Grows the struct 16->20 bytes; x1536 resolved slots
- * = +6 KiB static, well within the ~191 KiB HWRAM margin measured after
- * the .lwram_bss relocation (see this file's HWRAM budget comment on
- * sm64_saturn_fast3d_frontend_t below). Since Task 6, the emit stage
+ * = +6 KiB static (see this file's HWRAM budget comment on
+ * sm64_saturn_fast3d_frontend_t below for the live margin -- do not
+ * re-quote a figure from memory, measure it). Since Task 6, the emit stage
  * (saturn_fast3d_vdp1_emit.c) uses corner_rgb1555[0..2] as the real
  * per-corner VDP1 Gouraud table for every triangle a table could be
  * allocated for; corner_rgb1555[0] alone is read only in the counted
@@ -334,7 +334,21 @@ typedef struct sm64_saturn_fast3d_vertex {
  * far inside this project's own castleviewer precedent (a working
  * scene with 1,032-1,105 live VDP1 commands, RENDERER_PRIOR_ART.md).
  * Re-measure HWRAM headroom (nm on ___end) after this change and
- * before adding any further static HWRAM consumer. */
+ * before adding any further static HWRAM consumer.
+ *
+ * UPDATE (2026-07-24, measured): the live margin is 149,084 bytes
+ * (145.6 KiB) -- ___end at 0x060db9a4 against the ram region's top
+ * 0x06100000. The "~191 KiB" above was already stale before the Gouraud
+ * sprint and then got re-quoted twice more by that sprint's own
+ * additions (+6 KiB for corner_rgb1555, +12 KiB for the Gouraud staging
+ * array), each charging itself against the same figure without
+ * accounting for the other. The lesson is the one already written above
+ * and repeatedly ignored: MEASURE, do not re-quote. Two changes since
+ * make that easier to honor -- sourceboot-cart.x now ASSERTs a 4 KiB
+ * link-time floor for libyaul's TLSF control block (the linker
+ * otherwise only enforces margin >= 0, which silently permits a
+ * pre-main() heap overrun), and this note records the method rather
+ * than only the number. */
 typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_fast3d_profile_t profile;
     sm64_saturn_matrix_stack_t matrix_stack;

@@ -44,7 +44,16 @@ typedef struct sm64_saturn_light_state {
     uint8_t dir_col[3]; /* directional light color (Light_t.col) */
     int8_t dir_dir[3];  /* raw wire direction (Light_t.dir, s8) */
     uint8_t amb_col[3]; /* ambient color (Ambient_t.col) */
-    uint8_t num_lights; /* gfx_pc convention: directional count + 1 */
+    /* The RAW wire value from G_MW_NUMLIGHT, mirroring gfx_pc.c's
+     * rsp.current_num_lights (:91, ":993") -- directional count + 1,
+     * the +1 being the ambient. NOT clamped: the ambient's wire slot is
+     * num_lights-1 (gfx_pc.c:638-640), so clamping this would mislocate
+     * the ambient for any display list carrying more than one
+     * directional. The degradation (only ONE directional is evaluated)
+     * is applied where the lights are USED, not where they are decoded.
+     * Defaults to 2 to match gfx_pc.c:1603's own reset value, which is
+     * also correct for the Lights1 shape SM64 uses almost everywhere. */
+    uint8_t num_lights;
     bool lights_changed;
     int32_t coeff_q16[3]; /* transformed+normalized dir, Q16.16 */
 } sm64_saturn_light_state_t;

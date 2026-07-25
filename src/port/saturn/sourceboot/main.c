@@ -72,11 +72,18 @@ static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
- * header comment). 1536 * 8 = 12,288 bytes against the ~191 KiB
- * measured HWRAM margin (this file's SOURCEBOOT_MAIN_POOL_BYTES
- * comment). One table per resolved triangle, rebuilt every frame
- * (bank_begin) and uploaded used-prefix-only after emission -- see
- * saturn_fast3d_vdp1_emit.c. */
+ * header comment). 1536 * 8 = 12,288 bytes. One table per resolved
+ * triangle, rebuilt every frame (bank_begin) and uploaded
+ * used-prefix-only after emission -- see saturn_fast3d_vdp1_emit.c.
+ *
+ * Budget: the live margin is 149,084 bytes (145.6 KiB), measured
+ * 2026-07-24 as 0x06100000 - ___end with ___end at 0x060db9a4. Earlier
+ * comments here and in saturn_fast3d_frontend.h cited "~191 KiB"; that
+ * figure predates several static consumers and was being re-quoted, not
+ * re-measured, so successive additions each charged themselves against
+ * the same non-decrementing number. Re-measure with sh-elf-nm after any
+ * change to static HWRAM, and note that sourceboot-cart.x now enforces
+ * a 4 KiB floor at link time for libyaul's TLSF control block. */
 static sm64_saturn_gouraud_table_t
     sourceboot_gouraud_staging[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
 static sm64_saturn_gouraud_bank_t sourceboot_gouraud_bank;

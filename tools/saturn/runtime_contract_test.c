@@ -2018,14 +2018,82 @@ static void test_frontend_counts_unsupported_num_lights(void)
     sm64_saturn_fast3d_frontend_init(&frontend);
     /* Same perturbation as test_frontend_decodes_lights above, and for
      * the same reason: num_lights defaults to 2 straight out of init
-     * (saturn_light_q16.h:61), so the assertion below would otherwise
-     * be vacuously true even if the G_MOVEWORD clamp were deleted. */
+     * (saturn_light_q16.h), so the assertion below would otherwise be
+     * vacuously true even if the G_MOVEWORD decode were deleted. */
     frontend.lights.num_lights = 0;
     frontend.lights.lights_changed = false;
     sm64_saturn_fast3d_frontend_submit(&task, &frontend);
 
     assert(frontend.profile.unsupported_num_lights == 1);
-    assert(frontend.lights.num_lights == 2); /* clamped to 1 directional */
+    /* Stored RAW (3 = two directionals + ambient), deliberately NOT
+     * clamped. This assertion used to read "== 2", annotated "clamped
+     * to 1 directional", and that clamp was a real bug: the ambient's
+     * wire slot is num_lights-1, so
+     * clamping the count to 2 made the decode treat slot 1 -- which
+     * under gSPSetLights2 is a second DIRECTIONAL -- as the ambient,
+     * silently overwriting the real ambient color. The degradation to a
+     * single directional happens at evaluation, not at decode. See
+     * test_frontend_lights2_ambient_lands_in_the_right_slot below. */
+    assert(frontend.lights.num_lights == 3);
+}
+
+/* The ambient's wire slot is num_lights-1, not a fixed index. Under
+ * gSPSetLights2 it is slot 2 and slot 1 holds a SECOND DIRECTIONAL.
+ * The decode originally hardcoded "ambient == slot 1", so this exact
+ * list wrote directional #2's color over amb_col and dropped the real
+ * ambient -- strictly worse than the design spec's contract row
+ * ("first directional used"). Pins the slot arithmetic against both
+ * halves of that bug: the ambient must survive intact, AND the second
+ * directional must be ignored rather than replacing the first. */
+static void test_frontend_lights2_ambient_lands_in_the_right_slot(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    /* ambient (11,22,33); directional #1 (200,210,220) dir (40,50,60);
+     * directional #2 (99,98,97) dir (-10,-20,-30) -- deliberately
+     * distinct from every other value so a mix-up is unambiguous. */
+    static const Lights2 lights = gdSPDefLights2(
+        11, 22, 33,
+        200, 210, 220, 40, 50, 60,
+        99, 98, 97, -10, -20, -30);
+    Gfx list[5];
+    struct SPTask task;
+
+    /* gSPNumLights(2): NUML(2) = 48 -> num_lights = 48/24+1 = 3. */
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 48;
+    /* gSPLight(&lights.l[0], 1): ofs=(1)*24+24=48, ofs/8=6 -> idx 0. */
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    /* gSPLight(&lights.l[1], 2): ofs=(2)*24+24=72, ofs/8=9 -> idx 1,
+     * the second directional -- must be IGNORED, not stored as ambient. */
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.l[1];
+    /* gSPLight(&lights.a, 3): ofs=(3)*24+24=96, ofs/8=12 -> idx 2,
+     * which is num_lights-1 and therefore the real ambient. */
+    list[3].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (12U << 8) | G_MV_LIGHT;
+    list[3].words.w1 = (uintptr_t)&lights.a;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.lights.num_lights == 3);
+    /* The real ambient survived -- NOT directional #2's (99,98,97). */
+    assert(frontend.lights.amb_col[0] == 11 &&
+           frontend.lights.amb_col[1] == 22 &&
+           frontend.lights.amb_col[2] == 33);
+    /* Directional #1 still holds the slot; #2 was ignored entirely. */
+    assert(frontend.lights.dir_col[0] == 200 &&
+           frontend.lights.dir_col[1] == 210 &&
+           frontend.lights.dir_col[2] == 220);
+    assert(frontend.lights.dir_dir[0] == 40 &&
+           frontend.lights.dir_dir[1] == 50 &&
+           frontend.lights.dir_dir[2] == 60);
+    /* Counted as a degradation, per the contract. */
+    assert(frontend.profile.unsupported_num_lights == 1);
 }
 
 /* Regression test for a real bug found while verifying this task's
@@ -2149,6 +2217,243 @@ static void test_frontend_lit_vertex_evaluates_lighting(void)
     assert(!frontend.lights.lights_changed); /* lazy recompute ran */
 }
 
+/* Shared fixture for the three light/matrix-coupling tests below.
+ *
+ * The modelview SWAPS X and Y. With a light direction of (127,0,0), the
+ * transformed coefficient is column 0 of that matrix -- (0,1,0), i.e.
+ * +Y -- so the two normals below land on opposite sides of the lighting
+ * result and any error in WHICH matrix is used, or WHEN it is applied,
+ * changes a color rather than just a magnitude:
+ *   normal (0,127,0) -> dot is maximal -> fully lit
+ *   normal (127,0,0) -> dot is zero    -> ambient only
+ * Under an identity modelview those two outcomes are exactly swapped,
+ * which is what makes staleness detectable. */
+static const float swap_xy_modelview_floats[16] = {
+    0.0f, 1.0f, 0.0f, 0.0f,
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
+
+static void fill_swap_xy_modelview(sm64_saturn_mtx_t *out)
+{
+    sm64_saturn_matrix_identity(out);
+    out->m[0][0] = 0;
+    out->m[0][1] = 1 << 16;
+    out->m[1][0] = 1 << 16;
+    out->m[1][1] = 0;
+}
+
+/* The light direction must be re-transformed by the MODELVIEW TOP, not
+ * by the composed modelview-projection. Every pre-existing lit test ran
+ * with an identity projection, which makes top == mp and leaves that
+ * distinction invisible -- swapping one for the other survived the whole
+ * suite. This projection carries a shear (m[1][0]) specifically so the
+ * two differ in DIRECTION and not merely in scale: the evaluator
+ * normalizes its coefficient, so a projection differing only by a
+ * uniform scale would still be undetectable after normalization.
+ *
+ * Column 0 of the modelview is (0,1,0); column 0 of the composed MP is
+ * (1,1,0). The normal (127,0,0) is therefore unlit under the correct
+ * matrix and lit under the wrong one. */
+static void test_frontend_light_coeff_uses_modelview_not_mp(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 127, 0, 0);
+    static const Vtx_t verts[2] = {
+        { .ob = { 1.0f, 2.0f, 3.0f }, .cn = { 0, 127, 0, 255 } },
+        { .ob = { 4.0f, 5.0f, 6.0f }, .cn = { 127, 0, 0, 255 } },
+    };
+    Gfx list[6];
+    struct SPTask task;
+    sm64_saturn_mtx_t modelview;
+    sm64_saturn_mtx_t projection;
+    uint8_t want_lit[3];
+    uint8_t want_dark[3];
+
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 24;
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.a;
+    list[3].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[3].words.w1 = G_LIGHTING;
+    list[4].words.w0 = ((uint32_t)G_VTX << 24) | (2U << 12) | (2U << 1);
+    list[4].words.w1 = (uintptr_t)verts;
+    list[5] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+
+    /* Seed the modelview top directly rather than through a G_MTX
+     * command: this test is about which matrix the recompute READS, and
+     * routing through the decode would also drag in the G_MTX dirty-flag
+     * behavior that the next test covers separately. */
+    fill_swap_xy_modelview(&frontend.matrix_stack.entries[0]);
+    frontend.matrix_stack.mp_dirty = true;
+
+    /* Non-identity projection with a shear, so mp differs from the
+     * modelview in direction. */
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[1][0] = 1 << 16;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    fill_swap_xy_modelview(&modelview);
+    ref_light_eval((const int8_t[3]){ 127, 0, 0 },
+                   (const uint8_t[3]){ 200, 210, 220 },
+                   (const uint8_t[3]){ 10, 20, 30 },
+                   &modelview, (const int8_t[3]){ 0, 127, 0 }, want_lit);
+    ref_light_eval((const int8_t[3]){ 127, 0, 0 },
+                   (const uint8_t[3]){ 200, 210, 220 },
+                   (const uint8_t[3]){ 10, 20, 30 },
+                   &modelview, (const int8_t[3]){ 127, 0, 0 }, want_dark);
+
+    /* The +Y-facing normal is lit by the transformed direction... */
+    assert((int)frontend.vertices[0].r - (int)want_lit[0] <= 2 &&
+           (int)want_lit[0] - (int)frontend.vertices[0].r <= 2);
+    assert((int)frontend.vertices[0].g - (int)want_lit[1] <= 2 &&
+           (int)want_lit[1] - (int)frontend.vertices[0].g <= 2);
+    /* ...and the +X-facing one receives ambient only. Feeding the
+     * evaluator mp instead of the modelview top lights this vertex and
+     * breaks these two assertions. */
+    assert(frontend.vertices[1].r == want_dark[0]);
+    assert(frontend.vertices[1].g == want_dark[1]);
+    assert(frontend.vertices[1].b == want_dark[2]);
+    assert(want_dark[0] == 10 && want_dark[1] == 20 && want_dark[2] == 30);
+    assert(frontend.profile.lit_vertices == 2);
+}
+
+/* A modelview G_MTX must invalidate the cached light coefficient. The
+ * pre-existing lit test issued no G_MTX at all, so deleting
+ * `lights_changed = true` from the G_MTX branch changed nothing it
+ * asserted. Here the first lit vertex is evaluated under an identity
+ * modelview, a G_MTX then loads the swap-XY matrix, and a second lit
+ * vertex must be evaluated under the NEW matrix -- with the normals
+ * chosen so a stale coefficient produces the opposite lighting result,
+ * not a slightly different one. */
+static void test_frontend_g_mtx_invalidates_light_coeff(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 127, 0, 0);
+    /* Both vertices carry the +X normal. Under the initial identity
+     * modelview the light direction is still +X, so vertex 0 is LIT.
+     * After the swap-XY load the direction becomes +Y, so vertex 1 must
+     * fall to ambient only. A missing invalidation leaves vertex 1 lit. */
+    static const Vtx_t vert_a = {
+        .ob = { 1.0f, 2.0f, 3.0f }, .cn = { 127, 0, 0, 255 }
+    };
+    static const Vtx_t vert_b = {
+        .ob = { 4.0f, 5.0f, 6.0f }, .cn = { 127, 0, 0, 255 }
+    };
+    Gfx list[8];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 24;
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.a;
+    list[3].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[3].words.w1 = G_LIGHTING;
+    /* Vertex 0 into slot 0, under the identity modelview. */
+    list[4].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
+    list[4].words.w1 = (uintptr_t)&vert_a;
+    /* Load the swap-XY modelview (LOAD, no push -- see make_g_mtx). */
+    list[5] = make_g_mtx((uint8_t)((G_MTX_LOAD | G_MTX_MODELVIEW) ^ G_MTX_PUSH),
+                         swap_xy_modelview_floats);
+    /* Vertex 1 into slot 1, which must see the NEW matrix. */
+    list[6].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (2U << 1);
+    list[6].words.w1 = (uintptr_t)&vert_b;
+    list[7] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.profile.lit_vertices == 2);
+    /* Vertex 0: +X normal against the untransformed +X light -> lit,
+     * so clearly brighter than the (10,20,30) ambient floor. */
+    assert(frontend.vertices[0].r > 100);
+    /* Vertex 1: same normal, but the light is now +Y -> ambient only. */
+    assert(frontend.vertices[1].r == 10 &&
+           frontend.vertices[1].g == 20 &&
+           frontend.vertices[1].b == 30);
+}
+
+/* G_POPMTX must invalidate the cached coefficient too. This port sets
+ * lights_changed on pop as a deliberate, documented deviation from
+ * gfx_pc.c (which does not) -- and until now that hand-argued deviation
+ * had no test at all, so deleting it was a silent no-op. Mirror image of
+ * the test above: the swap-XY matrix is PUSHED, a lit vertex is
+ * evaluated under it, the pop restores identity, and the final vertex
+ * must be re-evaluated against the restored matrix. */
+static void test_frontend_g_popmtx_invalidates_light_coeff(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Lights1 lights = gdSPDefLights1(10, 20, 30,
+                                                 200, 210, 220,
+                                                 127, 0, 0);
+    static const Vtx_t vert_a = {
+        .ob = { 1.0f, 2.0f, 3.0f }, .cn = { 127, 0, 0, 255 }
+    };
+    static const Vtx_t vert_b = {
+        .ob = { 4.0f, 5.0f, 6.0f }, .cn = { 127, 0, 0, 255 }
+    };
+    Gfx list[9];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEWORD << 24) |
+                       ((uint32_t)G_MW_NUMLIGHT << 16) | G_MWO_NUMLIGHT;
+    list[0].words.w1 = 24;
+    list[1].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (6U << 8) | G_MV_LIGHT;
+    list[1].words.w1 = (uintptr_t)&lights.l[0];
+    list[2].words.w0 = ((uint32_t)G_MOVEMEM << 24) | (9U << 8) | G_MV_LIGHT;
+    list[2].words.w1 = (uintptr_t)&lights.a;
+    list[3].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[3].words.w1 = G_LIGHTING;
+    /* PUSH the swap-XY matrix (raw G_MTX_LOAD|G_MTX_MODELVIEW decodes as
+     * push+load after the frontend's own XOR with G_MTX_PUSH). */
+    list[4] = make_g_mtx((uint8_t)(G_MTX_LOAD | G_MTX_MODELVIEW),
+                         swap_xy_modelview_floats);
+    /* Under the pushed matrix the light is +Y, so this +X normal is
+     * ambient only. */
+    list[5].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (1U << 1);
+    list[5].words.w1 = (uintptr_t)&vert_a;
+    list[6].words.w0 = (uint32_t)G_POPMTX << 24;
+    list[6].words.w1 = 1U * 64U;
+    /* Back on identity: the light is +X again, so this must be lit. */
+    list[7].words.w0 = ((uint32_t)G_VTX << 24) | (1U << 12) | (2U << 1);
+    list[7].words.w1 = (uintptr_t)&vert_b;
+    list[8] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    assert(frontend.matrix_stack.depth == 1); /* pushed then popped */
+    assert(frontend.profile.lit_vertices == 2);
+    assert(frontend.vertices[0].r == 10 &&
+           frontend.vertices[0].g == 20 &&
+           frontend.vertices[0].b == 30);
+    /* Stale coefficients from the pushed matrix would leave this one at
+     * the ambient floor too. */
+    assert(frontend.vertices[1].r > 100);
+}
+
 /* Companion test for the branch above: with no G_GEOMETRYMODE command
  * at all, geometry_mode is 0 (zeroed by frontend_init), so G_LIGHTING
  * is off and cn bytes must still be read as literal RGBA -- confirming
@@ -2236,6 +2541,13 @@ static void test_frontend_resolved_triangle_carries_corner_colors(void)
     assert(frontend.resolved[0].corner_rgb1555[0] == 0x801F); /* red   */
     assert(frontend.resolved[0].corner_rgb1555[1] == 0x83E0); /* green */
     assert(frontend.resolved[0].corner_rgb1555[2] == 0xFC00); /* blue  */
+    /* Negative half of the fog-counter pair (the positive half is
+     * test_frontend_counts_dropped_fog): this fixture sets no G_FOG, so
+     * the counter must stay at 0. Without this, replacing the counter's
+     * `geometry_mode & G_FOG` gate with an unconditional increment
+     * passes the whole suite -- the positive test alone cannot tell a
+     * working gate from no gate at all. */
+    assert(frontend.profile.fog_dropped_triangles == 0);
 }
 
 /* Companion test: G_FOG is dropped per the design spec's degradation
@@ -2286,6 +2598,58 @@ static void test_frontend_counts_dropped_fog(void)
 
     assert(frontend.resolved_count == 1);
     assert(frontend.profile.fog_dropped_triangles == 1);
+}
+
+/* Third fog assertion, pinning the counter's PLACEMENT rather than its
+ * gate. The counter sits alongside the resolve write, after every
+ * reject path, so it counts triangles that actually resolved and were
+ * merely stripped of fog -- not every triangle that carried the G_FOG
+ * bit. Hoisting the increment above the reject returns still satisfies
+ * both other fog tests (their triangles all resolve), so without this
+ * case that move is a silent no-op. Here a degenerate triangle -- all
+ * three vertices at one point -- is rejected before the resolve write,
+ * with G_FOG set: nothing resolves, so nothing may be counted. */
+static void test_frontend_rejected_fog_triangle_is_not_counted(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+    static const Vtx_t verts[3] = {
+        { .ob = { 0.0f, 0.0f, 500.0f }, .cn = {255, 0, 0, 255} },
+        { .ob = { 0.0f, 0.0f, 500.0f }, .cn = {0, 255, 0, 255} },
+        { .ob = { 0.0f, 0.0f, 500.0f }, .cn = {0, 0, 255, 255} },
+    };
+    static const Vp_t vp = {
+        .vscale = {320 * 2, 224 * 2, 0, 0},
+        .vtrans = {320 * 2, 224 * 2, 0, 0}
+    };
+    sm64_saturn_mtx_t projection;
+    Gfx list[5];
+    struct SPTask task;
+
+    list[0].words.w0 = ((uint32_t)G_MOVEMEM << 24) | G_MV_VIEWPORT;
+    list[0].words.w1 = (uintptr_t)&vp;
+    list[1].words.w0 = ((uint32_t)G_GEOMETRYMODE << 24) | 0xFFFFFFU;
+    list[1].words.w1 = G_FOG;
+    list[2].words.w0 = ((uint32_t)G_VTX << 24) | (3U << 12) | (3U << 1);
+    list[2].words.w1 = (uintptr_t)verts;
+    list[3].words.w0 = ((uint32_t)G_TRI1 << 24) |
+                       (0U << 16) | (2U << 8) | (4U << 0);
+    list[3].words.w1 = 0;
+    list[4] = make_g_enddl();
+
+    (void)memset(&task, 0, sizeof(task));
+    task.task.t.data_ptr = (u64 *)list;
+    sm64_saturn_fast3d_frontend_init(&frontend);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[2][3] = 1 << 16;
+    projection.m[3][3] = 0;
+    sm64_saturn_matrix_stack_set_projection(&frontend.matrix_stack,
+                                            &projection);
+    sm64_saturn_fast3d_frontend_submit(&task, &frontend);
+
+    /* Rejected before resolving (which reject bucket caught it is not
+     * this test's contract -- only that nothing resolved). */
+    assert(frontend.resolved_count == 0);
+    assert(frontend.profile.fog_dropped_triangles == 0);
 }
 
 /* Task 5: the frame-local Gouraud staging bank is pure bookkeeping
@@ -2400,11 +2764,16 @@ int main(void)
     test_light_q16_recompute_handles_dual_axis_int32_min_cascade();
     test_frontend_decodes_lights();
     test_frontend_counts_unsupported_num_lights();
+    test_frontend_lights2_ambient_lands_in_the_right_slot();
     test_frontend_g_mv_light_ignores_lookat_offsets();
     test_frontend_lit_vertex_evaluates_lighting();
+    test_frontend_light_coeff_uses_modelview_not_mp();
+    test_frontend_g_mtx_invalidates_light_coeff();
+    test_frontend_g_popmtx_invalidates_light_coeff();
     test_frontend_unlit_vertex_passes_colors_through();
     test_frontend_resolved_triangle_carries_corner_colors();
     test_frontend_counts_dropped_fog();
+    test_frontend_rejected_fog_triangle_is_not_counted();
     test_gouraud_bank_alloc_and_used_prefix();
     test_gouraud_bank_overflow_returns_null();
     return 0;

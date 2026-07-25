@@ -686,12 +686,35 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                  * gbi.h:1801-1807, matching the C0(8,8)*8 recovery
                  * gfx_pc.c:1387 already performs above for `index`
                  * itself); lightidx = offset/24 - 2 (gfx_pc.c:971).
-                 * idx 0 = the one supported directional; idx 1 = the
-                 * ambient, which always arrives at slot
-                 * num_lights-1 = 1 since this frontend unconditionally
-                 * clamps num_lights to 2 (1 directional + ambient, see
-                 * the G_MOVEWORD case below) regardless of what the
-                 * real display list requested.
+                 *
+                 * SLOT ASSIGNMENT -- the ambient's wire slot is
+                 * num_lights-1, read from the display list, NOT a fixed
+                 * index. gfx_pc.c stores every light into
+                 * current_lights[lightidx] and then reads the ambient
+                 * back from current_lights[current_num_lights - 1]
+                 * (:638-640) with directionals at i < num-1 (:628,
+                 * :642). So under gSPSetLights1 the ambient is at idx 1,
+                 * but under gSPSetLights2 it is at idx 2 and idx 1 is a
+                 * SECOND DIRECTIONAL. An earlier version of this decode
+                 * hardcoded "ambient == idx 1", justified by a comment
+                 * arguing that this frontend clamps num_lights to 2 --
+                 * a non-sequitur, since this port's own clamp has no
+                 * influence whatsoever on which slot the display list
+                 * puts the ambient in. The effect was that a
+                 * >1-directional list silently wrote directional #2's
+                 * color over amb_col and dropped the real ambient
+                 * entirely -- strictly more degradation than the design
+                 * spec's contract row promises ("first directional
+                 * used"). Ambient is tested FIRST below so that the
+                 * degenerate num_lights==1 case (ambient at idx 0, no
+                 * directionals) also resolves the way gfx_pc.c would.
+                 *
+                 * Not reachable in any binary shipped today -- the only
+                 * >1-directional emitter in the tree is
+                 * src/goddard/renderer.c, reached solely via
+                 * levels/intro/geo.c, which no Saturn target compiles --
+                 * but it becomes live the moment the intro/menu path is
+                 * enabled, which is planned work.
                  *
                  * Every other lightidx is deliberately ignored,
                  * matching gfx_pc.c:972's own
@@ -717,7 +740,10 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                 const uint32_t offset = SM64_SATURN_C0(w0, 8, 8) * 8U;
                 const int32_t lightidx = (int32_t)(offset / 24U) - 2;
 
-                if (lightidx == 0 || lightidx == 1) {
+                const int32_t ambient_idx =
+                    (int32_t)frontend->lights.num_lights - 1;
+
+                if (lightidx == ambient_idx || lightidx == 0) {
                     /* Copy the 12-byte Light_t payload via memcpy
                      * (strict-aliasing-safe, matching this file's
                      * established discipline elsewhere); for the
@@ -739,18 +765,35 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                      * at byte offset 8 (3+1+3+1). */
                     uint8_t raw[12];
                     (void)memcpy(raw, (const void *)w1, sizeof(raw));
-                    if (lightidx == 0) {
+                    if (lightidx == ambient_idx) {
+                        frontend->lights.amb_col[0] = raw[0];
+                        frontend->lights.amb_col[1] = raw[1];
+                        frontend->lights.amb_col[2] = raw[2];
+                    } else {
                         frontend->lights.dir_col[0] = raw[0];
                         frontend->lights.dir_col[1] = raw[1];
                         frontend->lights.dir_col[2] = raw[2];
                         frontend->lights.dir_dir[0] = (int8_t)raw[8];
                         frontend->lights.dir_dir[1] = (int8_t)raw[9];
                         frontend->lights.dir_dir[2] = (int8_t)raw[10];
-                    } else {
-                        frontend->lights.amb_col[0] = raw[0];
-                        frontend->lights.amb_col[1] = raw[1];
-                        frontend->lights.amb_col[2] = raw[2];
                     }
+                    /* Second deliberate deviation from the anchor (the
+                     * first is G_POPMTX above, documented there):
+                     * gfx_pc.c's own G_MV_LIGHT case (:970-977) only
+                     * memcpys into current_lights[] and never touches
+                     * lights_changed -- it recomputes the light
+                     * direction on matrix changes alone. That is unsafe
+                     * here for the same reason the G_POPMTX deviation
+                     * exists: a display list may change the light
+                     * itself between two lit vertex batches with no
+                     * intervening matrix command, which would leave
+                     * coeff_q16 cached from the PREVIOUS light's
+                     * direction. Real in-tree instance:
+                     * actors/koopa/model.inc.c:2080-2081 emits a
+                     * gSPLight pair mid-list between lit batches.
+                     * Recompute is lazy and idempotent (Task 3), so the
+                     * cost is at most one extra recompute, never a
+                     * wrong color. */
                     frontend->lights.lights_changed = true;
                 }
             }
@@ -765,10 +808,17 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
              * gfx_pc.c:989-1000). G_MW_NUMLIGHT (gfx_pc.c:991-993):
              * num = data/24 + 1 (includes the ambient; NUML(n)=n*24,
              * gbi.h:2516). Degradation contract: exactly 1 directional
-             * supported; anything else is counted and the state
-             * clamped to 1 directional + ambient, matching this
+             * is EVALUATED; anything else is counted here and the extra
+             * directionals are ignored at decode, matching this
              * frontend's fixed dir_col/dir_dir/amb_col shape (no
-             * light array, unlike gfx_pc.c's current_lights[]). */
+             * light array, unlike gfx_pc.c's current_lights[]).
+             *
+             * The raw count is stored unclamped. It is not cosmetic
+             * bookkeeping: the G_MV_LIGHT case above needs it to locate
+             * the ambient, whose wire slot is num_lights-1
+             * (gfx_pc.c:638-640). Clamping it here -- as this code
+             * originally did -- is what made a >1-directional list write
+             * directional #2 over the ambient. */
             const uint8_t mw_index = (uint8_t)SM64_SATURN_C0(w0, 16, 8);
 
             if (mw_index == G_MW_NUMLIGHT) {
@@ -777,7 +827,7 @@ sm64_saturn_fast3d_decode_command(sm64_saturn_fast3d_frontend_t *frontend,
                 if (num != 2U) {
                     profile->unsupported_num_lights++;
                 }
-                frontend->lights.num_lights = 2U;
+                frontend->lights.num_lights = num;
                 frontend->lights.lights_changed = true;
             }
             break;
