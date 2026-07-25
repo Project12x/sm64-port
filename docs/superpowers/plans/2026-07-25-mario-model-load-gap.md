@@ -292,7 +292,7 @@ The measurements that size sub-project 2. Record them even if Mario looks wrong.
 
 **Files:** none modified.
 
-- [ ] **Step 1: Ground-truth the profile offsets**
+- [x] **Step 1: Ground-truth the profile offsets**
 
 The profile struct has not changed since `v0.2.0`, but re-derive rather than trust. Compile an `offsetof()` probe in the scratchpad with the host suite's exact flags:
 
@@ -308,11 +308,11 @@ cc -std=c11 -Wall -Wextra -Werror \
 ```
 The probe prints `offsetof(sm64_saturn_fast3d_profile_t, <field>)` for every field plus `sizeof`. Size `--probe-count` from that `sizeof` plus margin.
 
-- [ ] **Step 2: Capture the frontend profile**
+- [x] **Step 2: Capture the frontend profile**
 
 Re-resolve `_sourceboot_fast3d`, capture with that address and the probe count from Step 1.
 
-- [ ] **Step 3: Difference against the terrain-only baseline**
+- [x] **Step 3: Difference against the terrain-only baseline**
 
 Decode all counters. Compute Mario's contribution:
 
@@ -327,16 +327,60 @@ Decode all counters. Compute Mario's contribution:
 
 The last three are the sensors for whether the **animated-part Q16 matrix path** is sane — this is the first time a skinned actor has ever been traversed in this target. Non-zero values there are a finding, not a nuisance.
 
-- [ ] **Step 4: Record the measurements**
+- [x] **Step 4: Record the measurements**
 
 Write the numbers into the commit message and into `docs/saturn/evidence/` as a report JSON. These are sub-project 2's inputs: Mario's triangle count decides the quad-pairing payoff, and total commands price him against the ~650-command 15 FPS floor / ~450-command 20 FPS stretch (`docs/saturn/ROADMAP.md`).
 
-- [ ] **Step 5: Commit the evidence**
+- [x] **Step 5: Commit the evidence**
 
 ```bash
 git add docs/saturn/evidence/reports/<mario cost json>
 git commit -m "test(saturn): Mario rendering cost through the real Fast3D path"
 ```
+
+Committed as `f83a4a4`. Ground-truthed `sizeof(sm64_saturn_fast3d_profile_t)
+= 228`; captured `_sourceboot_fast3d` fresh with `--probe-count 256`.
+The three "must stay 0" sensors this task exists to check
+(`modelview_stack_overflow`, `reject_w_nonpositive_overflow_suspect`,
+`fault_flags`) **all held at 0** — no evidence the animated/skinned Q16
+matrix path faults on its first-ever traversal.
+
+**The raw triangle-count differencing produced a genuine surprise**: every
+counter went DOWN with Mario present (`triangles_transformed`
+1307→895, `triangles_emitted` 437→301), the opposite of what adding
+geometry should do. The implementer correctly declined to trust the
+naive subtraction and flagged it rather than papering over it, hypothesizing
+a one-time CD-load delay from Mario's larger `SOURCE.DAT` (1,715,520→
+1,849,904 bytes, Task 2) shifting where the fixed `--post-poke-frames`
+budget lands.
+
+**Spec-compliance review tested that hypothesis with a real second
+capture** (same build, +10,000 post-poke-frames) rather than accepting
+it as plausible-sounding: `frame_serial` 151→214, but
+`triangles_transformed` kept *declining* (895→664) instead of recovering
+toward baseline — a durable rate reduction, not a startup artifact. Also
+ruled out a capacity ceiling (`reject_command_capacity`/
+`reject_vdp1_arena_capacity` are 0 in every sample). The three "must stay
+0" sensors held clean at this second, longer-runway sample too — two
+independent confirmations now. Root cause of the durable reduction
+(Mario's own per-frame cost vs. CD-streaming contention) is not
+established; that needs real cycle instrumentation, out of scope for a
+measurement task. Corrected and recorded in `4c50ce5`, with the
+verification capture committed as supporting evidence rather than left
+in scratch.
+
+**Guidance recorded for sub-project 2's sizing work**: do not compare
+single frames at matched `post_poke_frames` across builds — compare at
+matched `frame_serial`, or sample a range and compare steady-state
+rates, since the free-roam camera trajectory is still moving across the
+whole observed window.
+
+Screenshot (scratchpad only, not committed — Task 5 owns the formal
+user-facing capture): Mario visibly rendering, red hat and blue
+overalls, standing on the terrain near the cannon — an independent,
+incidental confirmation that the RGB1555 lane fix from the prior sprint
+holds on genuinely new content, not just the object it was originally
+diagnosed against.
 
 ---
 
