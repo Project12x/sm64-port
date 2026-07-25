@@ -1543,21 +1543,27 @@ bytes free with nothing registered, 124,128 bytes free with all 47 models
 registered — comfortably clear of the ~32 KiB safety gate.
 
 At free-roam depth, `gMarioObject`'s `sharedChild` resolved non-NULL
-(`0x00218F20`, landing inside the LWRAM main pool as expected), triangle
-throughput rose from the terrain-only baseline of 1,307 to 2,011 transformed
-triangles at the probed frame, and `fault_flags` /
-`modelview_stack_overflow` both held at 0.
+(`0x00218F20`, landing inside the LWRAM main pool as expected), via a
+two-step probe: `gMarioObject`'s own pointer value first, then `+0x14` at
+the address that value pointed to. Triangle throughput rose from the
+terrain-only baseline of 1,307 to 2,011 transformed triangles at the probed
+frame, and `fault_flags` / `modelview_stack_overflow` both held at 0.
 
 The user confirmed the capture directly: Mario standing beside the cannon at
 Bob-omb Battlefield's start, matching the coordinates BOB's own script
-spawns him at (`levels/bob/script.c:101`, a few hundred units from the
-cannon at `:40`). Per this project's standing rule, that confirmation — not
-inference from the counters — is what gates this entry.
+spawns him at (`levels/bob/script.c:101`, roughly 1,229 units from the
+cannon at `:40` by straight-line distance — both objects reach the same
+render path in the same frame regardless of separation, which is the point
+the cannon control case actually rests on). Per this project's standing
+rule, that confirmation — not inference from the counters — is what gates
+this entry.
 
 Evidence: [free-roam screenshot](screenshots/e2-sourceboot-mario-freeroam-2026-07-25.png)
 (320x224 internal `video.capture`, frame 26,740, SHA-256
 `95f028a9d3b066a80cfb9ebafbe13921504d89867576ab4d0c4e3b59d1123db0`),
 [full run report](reports/e2-sourceboot-mario-freeroam-2026-07-25.json),
+[gMarioObject pointer probe](reports/e2-sourceboot-mario-gmarioobject-2026-07-25.json),
+[sharedChild probe at the resolved address](reports/e2-sourceboot-mario-sharedchild-2026-07-25.json),
 [implementation plan with per-task review outcomes](../../superpowers/plans/2026-07-25-mario-model-load-gap.md).
 Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
 post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
@@ -1567,6 +1573,12 @@ Textures remain out of scope — Mario renders Gouraud-shaded, like the
 terrain and cannon before him. The quad-optimized Mario mesh IR used by the
 `castleviewer`/`marioturntable` diagnostic targets is a separate,
 not-yet-started sub-project, to be sized from this capture's measurements.
+
+The `sharedChild` probe evidence above was added by this sprint's final
+holistic cross-task review: the original claim was correct but had shipped
+without a committed, re-derivable capture to back it, unlike every other
+key figure in this plan. Re-verified and backfilled rather than left as an
+unsupported assertion in permanent project history.
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
