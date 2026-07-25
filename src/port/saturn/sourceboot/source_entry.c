@@ -65,7 +65,7 @@ const LevelScript level_script_entry[] = {
      * the whole subtree. Mario has never had geometry submitted.
      *
      * Placed BEFORE INIT_LEVEL(), not after: INIT_LEVEL()
-     * (level_cmd_init_level, src/engine/level_script.c:331-338) calls
+     * (level_cmd_init_level, src/engine/level_script.c:332-339) calls
      * main_pool_push_state() (level_script.c:336), which pushes a
      * save-point onto the main pool's allocation stack. Nothing in this
      * script ever calls CLEAR_LEVEL() to pop that frame back off -- the
@@ -82,12 +82,18 @@ const LevelScript level_script_entry[] = {
      * This reorder closes the leak for the FIRST pass through this array
      * only -- the boot-time registration this task exists to prove out.
      * It does NOT close it for the second and later level-exit/reentry
-     * cycles: JUMP(level_script_entry) restarts this entire array from
-     * the top, so on cycle 2 the registration block above runs again
-     * while cycle 1's own INIT_LEVEL() push is STILL on the stack (it was
-     * never popped -- see above), and the re-registration lands inside
-     * that same unpopped frame regardless of its position relative to
-     * THIS cycle's INIT_LEVEL() call. Retail avoids this because its
+     * cycles, and not merely because of frame nesting: this registration
+     * block always runs BEFORE any push/pop bracket, by design, so that
+     * the registered models survive BOB's own per-level ALLOC/FREE pops
+     * (see the FREE_LEVEL_POOL note below). That same property means
+     * JUMP(level_script_entry) re-executes the registration on every
+     * cycle with no pop of its own ever protecting it -- each full trip
+     * through this array permanently consumes another complete copy of
+     * the registration block, measured at ~39 KiB per cycle (the Task
+     * 1->Task 4 baseline-to-47-model delta this plan itself measured).
+     * At the ~124 KiB of headroom this plan measured after one pass, that
+     * exhausts the main pool in roughly three level-exit/reentry cycles,
+     * not some deferred or marginal cost. Retail avoids this because its
      * registration prologue (levels/scripts.c:67-115) is structurally
      * outside the loop that revisits level scripts -- a separate
      * LOOP_BEGIN()/JUMP_LINK(script_exec_level_table) construct further
@@ -98,7 +104,10 @@ const LevelScript level_script_entry[] = {
      * of a separate looping body, which this task does not attempt --
      * verified live (2026-07-25) that this deviation is real, not
      * theoretical, by tracing the actual push/pop call sequence across
-     * one full level_bob_entry EXECUTE/CLEAR_LEVEL/EXIT round-trip.
+     * one full level_bob_entry EXECUTE/CLEAR_LEVEL/EXIT round-trip, and
+     * confirmed again during this sprint's holistic review by tracing
+     * that even a hypothetically balanced INIT_LEVEL()/CLEAR_LEVEL() pair
+     * in this script would not prevent the leak, for the same reason.
      *
      * Not fixed here because: (a) this plan's own test methodology is a
      * single continuous boot with no level-exit/reentry, so the residual
