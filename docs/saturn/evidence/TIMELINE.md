@@ -1517,3 +1517,56 @@ check.
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
+
+### 2026-07-25 — Mario renders through the real engine path
+
+Every prior sourceboot capture ran the real, unmodified SM64 game loop, but
+Mario's geometry never reached VDP1. The cause was a missing boot-time step,
+not a rendering defect: `LOAD_MODEL_FROM_GEO(MODEL_MARIO, mario_geo)` exists
+at exactly one place in the tree, `levels/scripts.c:68`, inside
+`level_main_scripts_entry[]` — the retail model-registration script this
+target's custom boot chain never executed. `gLoadedGraphNodes[MODEL_MARIO]`
+stayed NULL, `sharedChild` stayed NULL, and `geo_process_object`
+(`src/game/rendering_graph_node.c:1127`) skipped the whole subtree. The BOB
+cannon, whose load sits in a script this boot chain does execute, was the
+control case that proved the rest of the pipeline — object list, matrix
+path, Gouraud lighting, VDP1 emission — was already working.
+
+The fix restores that missing stage inside sourceboot's own entry script
+(`src/port/saturn/sourceboot/source_entry.c`), registering all 47 models
+retail's `level_main_scripts_entry` registers before `INIT_LEVEL()` runs —
+Mario plus the stars, coins, caps, and effect models that come with him.
+Engine files stayed untouched, per this port's standing discipline; the
+registration block is a verbatim, diffable copy of `levels/scripts.c:68-114`.
+LWRAM main-pool headroom was measured, not estimated, at every step: 163,424
+bytes free with nothing registered, 124,128 bytes free with all 47 models
+registered — comfortably clear of the ~32 KiB safety gate.
+
+At free-roam depth, `gMarioObject`'s `sharedChild` resolved non-NULL
+(`0x00218F20`, landing inside the LWRAM main pool as expected), triangle
+throughput rose from the terrain-only baseline of 1,307 to 2,011 transformed
+triangles at the probed frame, and `fault_flags` /
+`modelview_stack_overflow` both held at 0.
+
+The user confirmed the capture directly: Mario standing beside the cannon at
+Bob-omb Battlefield's start, matching the coordinates BOB's own script
+spawns him at (`levels/bob/script.c:101`, a few hundred units from the
+cannon at `:40`). Per this project's standing rule, that confirmation — not
+inference from the counters — is what gates this entry.
+
+Evidence: [free-roam screenshot](screenshots/e2-sourceboot-mario-freeroam-2026-07-25.png)
+(320x224 internal `video.capture`, frame 26,740, SHA-256
+`95f028a9d3b066a80cfb9ebafbe13921504d89867576ab4d0c4e3b59d1123db0`),
+[full run report](reports/e2-sourceboot-mario-freeroam-2026-07-25.json),
+[implementation plan with per-task review outcomes](../../superpowers/plans/2026-07-25-mario-model-load-gap.md).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,000
+post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
+`e1e2bcb`.
+
+Textures remain out of scope — Mario renders Gouraud-shaded, like the
+terrain and cannon before him. The quad-optimized Mario mesh IR used by the
+`castleviewer`/`marioturntable` diagnostic targets is a separate,
+not-yet-started sub-project, to be sized from this capture's measurements.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
