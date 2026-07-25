@@ -20,8 +20,8 @@
  * these in levels/scripts.c, which this target never executes -- see the
  * block comment on the registration sequence. group0 carries mario_geo;
  * common0/common1 carry the effect, coin, star, and cap models. sm64.h
- * supplies LAYER_ALPHA for the LOAD_MODEL_FROM_DL entries (retail pulls
- * it in the same way, levels/scripts.c:2). */
+ * supplies LAYER_ALPHA for the display-list model entries below (retail
+ * pulls it in the same way, levels/scripts.c:2). */
 #include "actors/common0.h"
 #include "actors/common1.h"
 #include "actors/group0.h"
