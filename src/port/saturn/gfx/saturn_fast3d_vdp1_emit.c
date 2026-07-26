@@ -50,14 +50,14 @@ void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
                 continue;
             }
 
-            /* (i0, i1, i2, i2) degenerate quad -- last vertex duplicated,
-             * matching the convention this port introduces in the
-             * frontend's triangle resolve step. */
+            /* Four real corners. For a triangle the resolve stage has
+             * already set corner 3 == corner 2, so this stays a degenerate
+             * quad; for a merged pair it is the genuine fourth vertex. */
             const int16_vec2_t quad_vertices[4] = {
                 INT16_VEC2_INITIALIZER(tri->x[0], tri->y[0]),
                 INT16_VEC2_INITIALIZER(tri->x[1], tri->y[1]),
                 INT16_VEC2_INITIALIZER(tri->x[2], tri->y[2]),
-                INT16_VEC2_INITIALIZER(tri->x[2], tri->y[2])
+                INT16_VEC2_INITIALIZER(tri->x[3], tri->y[3])
             };
 
             uintptr_t grda_addr = 0;
@@ -69,12 +69,13 @@ void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
                 /* Table entries ARE the final corner colors: with the
                  * neutral base (0xC210, R=G=B=16) VDP1's signed
                  * correction makes 16 + (entry - 16) == entry
-                 * (saturn_gouraud.h). Corner D duplicates C, matching
-                 * the (i0,i1,i2,i2) degenerate-quad convention. */
+                 * (saturn_gouraud.h). Corner D is the resolve stage's
+                 * explicit fourth corner -- a copy of corner C for a
+                 * triangle, the genuine fourth vertex for a merged pair. */
                 table->colors[0] = tri->corner_rgb1555[0];
                 table->colors[1] = tri->corner_rgb1555[1];
                 table->colors[2] = tri->corner_rgb1555[2];
-                table->colors[3] = tri->corner_rgb1555[2];
+                table->colors[3] = tri->corner_rgb1555[3];
                 vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
                     .color_mode = VDP1_CMDT_CM_RGB_32768,
                     .cc_mode = VDP1_CMDT_CC_GOURAUD

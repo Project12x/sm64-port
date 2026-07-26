@@ -254,8 +254,10 @@ typedef struct sm64_saturn_fast3d_profile {
  * projected, culled, and depth-bucketed triangle. Populated by
  * saturn_fast3d_frontend.c (no Yaul dependency); consumed by
  * saturn_fast3d_vdp1_emit.c (Yaul-dependent) to write real VDP1
- * commands. Corner order is (i0, i1, i2, i2) -- the last vertex
- * duplicated -- ready to hand to VDP1's degenerate-quad polygon command.
+ * commands. Corner order is (i0, i1, i2, i2) for a triangle -- the last
+ * vertex duplicated, now explicitly by the resolve stage rather than
+ * implicitly at emit time -- ready to hand to VDP1's degenerate-quad
+ * polygon command.
  *
  * corner_rgb1555[3] (Gouraud shading, design spec 2026-07-24) replaces
  * the single flat color this struct carried before: Task 3 made each
@@ -269,10 +271,20 @@ typedef struct sm64_saturn_fast3d_profile {
  * allocated for; corner_rgb1555[0] alone is read only in the counted
  * bank-exhausted/partition-unusable fallback case (CC_REPLACE flat
  * color, degradation contract). */
+/* Four corners, not three. VDP1's native primitive is a quadrilateral, so
+ * a triangle and a quad cost the same one command; corner 3 is the real
+ * fourth vertex for a merged quad, or a copy of corner 2 for a triangle.
+ * Making the duplication explicit here (rather than implicit in the emit
+ * adapter) is what lets the resolve stage produce true quads without the
+ * emit stage needing to know which it is looking at.
+ *
+ * HWRAM cost: 26 bytes per entry, up from 20, times
+ * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES -- see the budget comment on
+ * that macro before raising either number. */
 typedef struct sm64_saturn_resolved_triangle {
-    int16_t x[3];
-    int16_t y[3];
-    uint16_t corner_rgb1555[3];
+    int16_t x[4];
+    int16_t y[4];
+    uint16_t corner_rgb1555[4];
     uint16_t depth_bucket;
 } sm64_saturn_resolved_triangle_t;
 
@@ -312,8 +324,9 @@ typedef struct sm64_saturn_fast3d_vertex {
  * measured margin after Task 14's full link is ~380 bytes (___end vs. the
  * ram region's top, 0x06100000 - 0x060ffe84) -- under 1% of the region size.
  * If a future change needs more headroom, SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES
- * (20 bytes/entry as of the Gouraud design's corner_rgb1555[3] change,
- * 2026-07-24 -- was 16) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry)
+ * (26 bytes/entry as of the general-quad-merging design's four-corner
+ * change, 2026-07-25 -- was 20, and 16 before the Gouraud design's
+ * corner_rgb1555[3]) and SM64_SATURN_FAST3D_MAX_VERTICES (16 bytes/entry)
  * are the two knobs to shrink first (Task 10's VDP1 command list lives in LWRAM,
  * not HWRAM, so it doesn't compete with this budget) -- but note the region
  * is now tight enough that even a modest amount of new .text elsewhere in

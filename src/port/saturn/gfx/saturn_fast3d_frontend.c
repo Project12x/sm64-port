@@ -479,6 +479,12 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     out->depth_bucket = (uint16_t)(((int64_t)(quad.max_z - SM64_SATURN_NEAR_DEPTH) *
         (SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1)) /
         (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
+    /* Triangle: corner 3 repeats corner 2, the degenerate-quad convention
+     * VDP1 has always been given here. Task 6 overwrites this for merged
+     * pairs; until then every primitive is still a triangle. */
+    out->x[3] = out->x[2];
+    out->y[3] = out->y[2];
+    out->corner_rgb1555[3] = out->corner_rgb1555[2];
     profile->triangles_emitted++;
 }
 
