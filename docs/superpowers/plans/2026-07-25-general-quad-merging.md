@@ -89,6 +89,27 @@ contain no `gsSPMatrix`, but the **runtime stream does** —
 entry. The retained DL-level handling is live at runtime, and
 "no push without `G_MTX_PUSH`" is exactly the case that occurs.
 
+## Correction 0a-ii: switch cases are grouped, not poisoned
+
+**User decision, 2026-07-25.** The spec said to poison `GEO_SWITCH_CASE`
+subtrees outright. That is replaced by a stronger property: each *direct child*
+of a switch gets its **own rigid group**.
+
+Within one case every triangle shares the parent transform and the case's
+triangles are always drawn together, so merging inside a case is safe.
+Cross-case merges are prevented by group separation rather than by refusing to
+analyze the subtree — separation is the stronger guarantee; poisoning was only
+ever the conservative fallback.
+
+Measured effect on the 788 triangles Mario actually renders: the mergeable
+ceiling rises from **58.4% to a projected 93.7%**, unblocking the face and both
+hands, which sit entirely inside switch cases.
+
+`GEO_ASM` still poisons — it is a runtime callback with arbitrary behaviour and
+the argument above does not extend to it. Unmodelled geo nodes
+(`GEO_HELD_OBJECT`, `GEO_RENDER_RANGE`, `GEO_SHADOW`) still poison. Textured
+sites remain flagged for their own separate reason and stay out of scope.
+
 ## Correction 0b: the test runner is `unittest`, not `pytest`
 
 `pytest` is not installed in `.venv-saturn-tools` and is not in the hash-pinned
