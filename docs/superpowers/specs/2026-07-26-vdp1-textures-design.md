@@ -39,13 +39,20 @@ The approach that two shipping Saturn engines used — bind a shared texture,
 permute the corners — covers a twentieth of this level. It is not an option
 here, because SM64's geometry was not authored for it.
 
-Measured budget: **446,432 bytes of VDP1 VRAM are free today** (§5). A
-16x16 CLUT16 tile per BOB terrain primitive costs **140,928 bytes** — 31.6% of
-that. It fits with room to spare.
+Measured budget: **446,432 bytes of VDP1 VRAM are free today** (§5).
 
-The honest cost is not VRAM, it is **tiling density** (§4.1): a triangle whose
-UVs span k texture periods gets k periods squeezed into one N x N tile, and
-68.3% of BOB's terrain has k > 1.
+The honest cost is **tiling density** (§4.1), and it is the reason this design
+does not simply copy castleviewer's uniform 16x16 tile. A triangle whose UVs
+span `k` texture periods gets `k` periods squeezed into one `N x N` tile.
+Measured over BOB's 1,101 terrain triangles: **median `k` = 1.97, p90 = 6.88,
+max = 29.76**, and only **4.6% of the level's world surface area sits at
+`k <= 1`**. A uniform 16x16 tile undersamples the *median* primitive 4:1.
+
+So milestone 1 ships **two tile classes** — 16x16 for `k <= 2` (567 triangles)
+and 32x32 for `2 < k <= 16` (510) — costing **333,696 bytes**, 74.7% of what is
+free. The 24 triangles at `k > 16` are anisotropic path strips that no
+affordable tile size helps; they stay on the existing Gouraud path and are
+called out as a known, bounded hole rather than papered over.
 
 ---
 
@@ -303,8 +310,8 @@ HWRAM top is `0x06100000` (`sourceboot-cart.x:17,134`), so the margin is
 12:15, so it supersedes the 137,660 B figure in `SEGMENT_ADDRESSING_DECISION.md`
 §4.3 and the stale "~380 bytes" comment in `saturn_fast3d_frontend.h`.
 
-**A 140,928-byte tile bank does not fit in HWRAM.** It belongs in
-`.cart_rodata` (2,140,352 B free per the addressing decision §4.1) and is staged
+**A 333,696-byte tile bank does not fit in HWRAM.** It belongs in
+`.cart_rodata` (2,140,352 B free per `SEGMENT_ADDRESSING_DECISION.md` §4.1) and is staged
 to VDP1 through the internal-WRAM ring, exactly as
 `castleviewer/main.c:1136-1183` already does.
 
@@ -485,8 +492,10 @@ bank on `(display_list, list_ordinal)`.
 **Cost / constraint**
 
 - VRAM scales with **primitive count**, not texture count. For BOB's 1,101
-  terrain triangles at 16x16 CLUT16 that is 140,928 bytes — 31.6% of what is
-  free (§5). At 16x16 RGB1555 it is 563,712 bytes and **does not fit**.
+  terrain triangles a uniform 16x16 CLUT16 tile would be 140,928 bytes — 31.6%
+  of what is free (§5) — but §4.1 shows a uniform 16x16 is too coarse; the
+  recommended two-class layout costs **333,696 bytes**, 74.7%. At 16x16 RGB1555
+  a uniform bank would be 563,712 bytes and **does not fit** at all.
 - Resolution loss. A primitive whose UVs span a full 32x32 source texture is
   resampled to 16x16 — half resolution. A primitive spanning a quarter of the
   texture is upsampled and loses nothing.
@@ -557,9 +566,63 @@ into an `N x N` tile: `N / k` destination texels per period. With `N = 16` and
 `k = 4` that is 4 texels per 32-texel period — an 8:1 undersample, which is
 aliasing, not a texture.
 
-§2.1a measured that **68.3% of BOB's terrain triangles have `k > 1`**. This is
-not a corner case; it is the common case, and it is exactly what wrapped ground
-textures are *for*.
+#### The measured distribution of `k`
+
+Same walk as §2.1a, `k = max(span_s / tile_width, span_t / tile_height)` per
+triangle, over all 1,101. The `k <= 1` count reproduces §2.1a's 349 exactly,
+which cross-validates both walks.
+
+| bucket | triangles | % | cumulative | share of **world surface area** |
+|---|---:|---:|---:|---:|
+| `k <= 0.5` | 91 | 8.3% | 8.3% | 1.3% |
+| `0.5 - 1` | 258 | 23.4% | 31.7% | 3.3% |
+| `1 - 2` | 218 | 19.8% | 51.5% | 11.3% |
+| `2 - 4` | 250 | 22.7% | 74.2% | 21.4% |
+| `4 - 8` | 203 | 18.4% | 92.6% | **39.6%** |
+| `8 - 16` | 57 | 5.2% | 97.8% | 19.2% |
+| `16 - 32` | 24 | 2.2% | 100.0% | 3.9% |
+| `> 32` | 0 | — | — | — |
+
+Percentiles: **p50 = 1.97, p75 = 4.16, p90 = 6.88, p95 = 11.28, p99 = 21.96,
+max = 29.76.** Mean 3.32. The axis split is even (S drives `k` on 529
+triangles, T on 497), so no anisotropic tile shape fixes it.
+
+Three things in that table are load-bearing:
+
+1. **The median triangle spans two texture periods.** A uniform 16x16 tile gives
+   the median primitive 8 destination texels per 32-texel period — a 4:1
+   undersample at the *median*, before considering the tail.
+2. **The area weighting is much worse than the count weighting.** High-`k`
+   triangles are the physically large ones — the tiled ground and hill planes.
+   Only **4.6% of BOB's surface area sits at `k <= 1`** versus 31.7% of triangle
+   count, and 62.7% of surface area is at `k > 4`. (Caveat: this is *world*
+   area, computed from the `Vtx` positions; it is not a screen projection, and a
+   distant hillside weighs the same as near ground. It is a proxy, and it is
+   labelled as one.)
+3. **The `k <= 1` group is not free.** Its median `k` is 0.92 and 52% of it sits
+   in the top eighth-bin (0.875-1.0), i.e. those triangles use nearly the whole
+   texture period. Only **91 triangles (8.3%)** have `k <= 0.5`, the population
+   for which a 16x16 tile genuinely loses nothing. The intuition "they fit in one
+   period, so baking is lossless" is wrong.
+
+Destination texels per source period, by uniform tile size:
+
+| N | `>= 8` texels/period (`k <= N/8`) | `>= 4` texels/period (`k <= N/4`) |
+|---:|---:|---:|
+| 8 | 349 (31.7%) | 567 (51.5%) |
+| 16 | 567 (51.5%) | 817 (74.2%) |
+| 24 | 724 (65.8%) | 956 (86.8%) |
+| 32 | **817 (74.2%)** | **1,020 (92.6%)** |
+
+**No single uniform `N` is right**, and going 16 -> 32 costs 4x the VRAM for
++22.7 points at the 8-texel bar.
+
+The tail (`k > 4`, 284 triangles) is unusually tractable: **154 of the 284 sit
+in just two display lists** (`bob_seg7_dl_07003CA8` on `generic_09005800`, 88;
+`bob_seg7_dl_0700D910` on `generic_09009800`, 66), and the 24 extreme cases
+(`k > 16`) are strongly anisotropic strips — the worst is
+`ps = 29.76, pt = 0.97`, a 952-texel S span against a single-period T span.
+Those are path/ribbon geometry and would subdivide cleanly along one axis.
 
 Four responses exist and they are not equally good:
 
@@ -584,11 +647,27 @@ Four responses exist and they are not equally good:
    of Option C, and §2.1a is the argument that it is a principled choice rather
    than a cop-out.
 
-**Recommendation:** milestone 1 should bake with supersampling (3) and *record
-`k` per primitive in the bake report*, so the distribution is visible before
-anyone chooses between (1), (2) and (4). Do not pre-emptively subdivide — the
-whole point of milestone 1 is to make the artefact observable. The measurement
-that decides this is open question O1.
+**Recommendation, revised by the measurement above:**
+
+- **Supersampling in the baker is mandatory, not optional.** At a median `k` of
+  1.97 and p90 of 6.88, point sampling produces noise. Average
+  `ceil(k * N_source / N)` source samples per destination texel.
+- **Milestone 1 ships two tile classes, not one:** `16x16` for `k <= 2`
+  (567 triangles) and `32x32` for `k > 2` (534 triangles), both CLUT16. Budget:
+  `567 x 128 + 534 x 512 = 345,984 bytes` — 77.5% of the 446,432 free (§5), and
+  it fits with 99,424 bytes to spare after commands, Gouraud and CLUTs. That
+  gives `>= 8` destination texels per period to everything up to `k = 4` (74.2%
+  of triangles) and `>= 4` up to `k = 8` (92.6%).
+  Two classes is deliberately the *smallest* variable-size scheme that answers
+  the measurement, and it is the same shape as SlaveDriver's class pool, which
+  shipped with exactly 32x32 and 64x64 classes (`PIC.C:84-99`).
+- **The 24 `k > 16` strips get nothing that works.** Even a 64x64 tile gives
+  them 2-4 texels per period. Leave them on the existing Gouraud path in
+  milestone 1 (response 4) and revisit with single-axis subdivision in
+  milestone 2. 24 of 1,101 is a visible but bounded hole, and pretending
+  otherwise would be dishonest about what milestone 1 delivers.
+- **Do not add general subdivision in milestone 1.** The point is to make the
+  affine and sampling artefacts observable before choosing a mitigation.
 
 ---
 
@@ -622,6 +701,8 @@ command table at the head and then bump-allocates in the fixed order
 **What 446,432 bytes admits.** Character-pattern width must be a multiple of 8
 and each pattern must start on an 8-byte boundary, so every row below is legal.
 
+Uniform-size reference (the recommended layout is the two-class table below):
+
 | Layout | Bytes/tile | 1,101 tiles | % of free |
 |---|---:|---:|---:|
 | 8x8 CLUT16 (4bpp) | 32 | 35,232 | 7.9% |
@@ -635,17 +716,31 @@ and each pattern must start on an 8-byte boundary, so every row below is legal.
 For comparison, the **shared-texture** bank (Option A) is 38,912 bytes for BOB
 and 83,968 bytes for BOB+Mario — 8.7% and 18.8% of free.
 
-**Proposed milestone-1 partition:**
+**Proposed milestone-1 partition** — two tile classes, sized by the measured
+`k` distribution in §4.1 rather than by a uniform guess:
+
+| Class | Criterion | Triangles | Bytes/tile | Total |
+|---|---|---:|---:|---:|
+| `16x16` CLUT16 | `k <= 2` | 567 | 128 | 72,576 |
+| `32x32` CLUT16 | `2 < k <= 16` | 510 | 512 | 261,120 |
+| (none — Gouraud) | `k > 16` | 24 | 0 | 0 |
+| **Texture partition** | | **1,077** | | **333,696** |
 
 ```
-vdp1_vram_partitions_set(2048,            /* 65,536 B commands, unchanged   */
-                         140928,          /* 1,101 x 16x16 CLUT16 tiles     */
-                         1536,            /* 12,288 B gouraud, unchanged    */
-                         32);             /* 1,024 B = 32 CLUTs (18 needed) */
-/* used 219,776 of 524,256 -> 304,480 B (297.3 KiB) still free */
+vdp1_vram_partitions_set(2048,            /* 65,536 B commands, unchanged    */
+                         333696,          /* 567 x 128 + 510 x 512 tiles     */
+                         1536,            /* 12,288 B gouraud, unchanged     */
+                         32);             /* 1,024 B = 32 CLUTs (18 needed)  */
+/* used 412,544 of 524,256 -> 111,712 B (109.1 KiB) still free */
 ```
 
-`140,928 mod 8 == 0`, so `gouraud_base` stays 8-byte aligned and the guard at
+That is tight but real, and it leaves the headroom milestone 2 needs to promote
+some of the `4 < k <= 8` population to 64x64 in exchange for demoting elsewhere.
+If it proves too tight in practice the first knob is `cmdt_count`: real frames
+run 1,365-1,431 triangles against a 2,048-command arena, so dropping to 1,600
+returns 14,336 bytes without touching fidelity.
+
+`333,696 mod 8 == 0`, so `gouraud_base` stays 8-byte aligned and the guard at
 `sourceboot/main.c:264-276` — which exists precisely to catch this — passes.
 That guard's own comment (`:218-238`) is the instruction this design follows.
 
@@ -655,8 +750,13 @@ partition (`SPR.C:65-94`, `SRUINS.C:1879`
 character patterns after two 46,336-byte command banks, 128 bytes of CLUT and
 two 9,792-byte Gouraud banks. Sonic Z-Treme's
 (`ZTE_DEF.H:63,88`) leaves ~425,920 bytes with CLUTs at `0x7A960`. Both are the
-same order as the 446,432 measured here. The proposed 140,928-byte texture
-partition is a third of what a shipping Saturn 3-D engine spent.
+same order as the 446,432 measured here. The proposed 333,696-byte texture
+partition is 81% of what SlaveDriver spent, and SlaveDriver was streaming its
+textures through an LRU (`PIC.C:250-401`) rather than holding a whole level
+resident. That is the honest read: this design is spending a shipping engine's
+worth of texture VRAM on one level's worth of instanced tiles, and it works only
+because BOB fits. A level with materially more geometry will need either
+milestone 2's budget allocator or SlaveDriver's eviction model.
 
 ---
 
@@ -780,23 +880,35 @@ scheme later.
    baked bank size, with `clut_count` for the CLUTs. Keep it a multiple of 8.
 2. A new host tool (`tools/saturn/bake_source_uv.py`, name provisional) that:
    - parses `levels/bob/**/model.inc.c` with the existing Fast3D vertex-cache
-     semantics from `quad_map.py:resolve_display_list_vertices`;
+     semantics from `quad_map.py:resolve_display_list_vertices`, **extended to
+     carry `Vtx.tc[2]`** (it currently keeps position only) and with a
+     **balanced-paren tokenizer** — `dl_rigid_groups.parse_display_lists`'
+     `r"(gs\w+)\(([^;]*?)\)"` stops at the first `)` and silently truncates
+     `gsDPSetTileSize(0,0,0,(32-1)<<F,(64-1)<<F)` to `0, 0, 0, (32-1`, losing
+     the tile dimensions. Both were found the hard way while measuring §2.1a;
+     see also that `gsDPSetTile`'s argument order is `(..., cmt, maskt, shiftt,
+     cms, masks, shifts)` — **T before S** — which is the exact axis-swap bug
+     `bake_castle_uv.py:205-208` already records having shipped once;
    - resolves the full tile state per binding by reusing
      `bake_castle_uv.py:sample_raw`'s logic verbatim;
+   - computes `k` per primitive and assigns it a tile class (§4.1);
    - resamples one tile per render primitive with
-     `sample_quad`/`sample_triangle` from the same module;
+     `sample_quad`/`sample_triangle` from the same module, **supersampled** at
+     `ceil(k * source_dim / N)` source samples per destination texel;
    - quantizes one 16-colour CLUT per source texture with
      `bake_castle_uv.py:quantize_clut16`;
    - emits a generated `.c`/`.h` pair keyed `(display_list, list_ordinal)` in
-     the same shape as `saturn_quad_map.c`, plus a JSON report.
+     the same shape as `saturn_quad_map.c` — carrying **byte offset and tile
+     class**, not just an index, since tiles are no longer uniform — plus a JSON
+     report that records the per-primitive `k` and the class histogram.
 3. Frontend: extend the per-list bind to also bind a tile row, and carry a tile
    index (plus a "no tile" sentinel) into `sm64_saturn_resolved_triangle_t`.
    Reuse `quad_slot_generation`'s discipline; do not add a second one.
 4. Emit path: when a resolved primitive has a tile, issue
    `vdp1_cmdt_distorted_sprite_set` with `color_mode = VDP1_CMDT_CM_CLUT_16`,
-   `end_code_disable = true`, `char_base` = partition base + index x 128,
-   `char_size = (16,16)`, `color_mode1_set` = the tile's CLUT; otherwise the
-   existing polygon path, unchanged. **Keep `cc_mode = VDP1_CMDT_CC_GOURAUD` and
+   `end_code_disable = true`, `char_base` = partition base + the tile's byte
+   offset, `char_size` = the tile's class dimensions, `color_mode1_set` = the
+   tile's CLUT; otherwise the existing polygon path, unchanged. **Keep `cc_mode = VDP1_CMDT_CC_GOURAUD` and
    the existing per-primitive Gouraud table on the textured path too**: Gouraud
    is CMDPMOD bit 2 and applies to sprites as well as polygons, so one command
    carries texture *and* per-corner shade. It is an additive correction, not the
@@ -829,33 +941,52 @@ scheme later.
   the frontend ignores it today and should keep doing so.
 - Texture animation, mip/LOD, streaming, eviction, and multi-level residency.
 - The IA16 texture's intensity/alpha semantics beyond binary transparency.
-- `adaptive_subdivide_triangle`. Milestone 1 should ship *without* subdivision
-  so that the affine error is observable and can be measured before a mitigation
-  is chosen. Keep the parameter plumbed and default it off.
+- `adaptive_subdivide_triangle` and any geometry subdivision. Milestone 1 ships
+  *without* it so the affine and sampling artefacts are observable and can be
+  measured before a mitigation is chosen. Keep the parameter plumbed, default
+  it off.
+- **The 24 triangles at `k > 16`** (§4.1). They stay on the Gouraud path. This
+  is a deliberate hole, not an oversight, and the capture should be read knowing
+  where it is.
 
-**Why this is the right first milestone.** It produces a fully textured BOB in
-a free-roam capture — a result the human eye can judge in one screenshot. It
-touches the frontend in exactly two places (bind and emit) and adds no GBI
-decoding. Every hard sub-problem it solves (arbitrary UV, wrap/clamp,
-transparent-code canonicalisation, CLUT quantization, cart staging) already has
-working in-tree code. And it is independent of both the streaming sub-project
-and the quad-merge work, so it cannot be blocked by either.
+**Why this is the right first milestone.** It textures 1,077 of BOB's 1,101
+terrain triangles in a free-roam capture — a result the human eye can judge in
+one screenshot. It touches the frontend in exactly two places (bind and emit)
+and adds no GBI decoding. Every hard sub-problem it solves (arbitrary UV,
+wrap/clamp/mask/shift, transparent-code canonicalisation, CLUT quantization,
+cart staging, `(display_list, ordinal)` keying) already has working in-tree
+code. And it is independent of both the streaming sub-project and the
+quad-merge work, so it cannot be blocked by either.
+
+**Why not narrower.** Texturing only the `k <= 1` population (349 triangles,
+4.6% of world surface area) would teach nothing about the problem that actually
+governs SM64 terrain on VDP1 — tiled wrap. **Why not wider.** Adding Mario means
+adding a combiner VDP1 cannot express and a switch-case-selected actor; adding
+subdivision means choosing a mitigation before the artefact has been seen.
 
 ### Milestone 2 — Fidelity and budget
 
-**Variable tile size chosen offline**, per §4.1: allocate a larger N to
-primitives with a high UV span or high screen importance and a smaller N to the
-rest, under a fixed VRAM budget. SlaveDriver's class-based slot pool
-(`PIC.C:84-99`: five fixed geometries, `initPicSystem` pre-allocating
-`{28, 31, 1, 10, 12}` slots per class, `SRUINS.C:1903`) is the model for the
-allocator, and `bake_castle_uv.py`'s existing `--max-tiles` budget logic is the
-model for the policy. This, not DIRECT, is where the fidelity is.
+In decreasing order of measured value:
 
-Then, in decreasing order of value: evaluate 8bpp colour-bank mode against
-CLUT16 (O6); add the DIRECT class for the measured 29 quads (§4, Option A) —
-worth doing only because it is nearly free once the classifier exists; and
-evaluate `adaptive_subdivide_triangle` against the affine error observed in
-milestone 1's capture.
+1. **Single-axis subdivision for the `k > 8` tail** (81 triangles, of which 24
+   are the `k > 16` hole milestone 1 leaves open). §4.1 measured these as
+   strongly anisotropic — the worst is `ps = 29.76, pt = 0.97` — so splitting
+   along the long axis only is cheap: an 8-way split of a `k = 30` strip costs
+   +7 commands and brings each fragment to `k < 4`. Applied to all 81 that is
+   roughly +300 commands, against ~250 saved by milestone 3's merging.
+2. **A real budget allocator**, generalising milestone 1's two classes to a
+   full class pool sized by `k` *and* by a screen-importance proxy better than
+   world area. SlaveDriver's `initPicSystem` (`PIC.C:201-231`, five geometries,
+   `{28, 31, 1, 10, 12}` slots at `SRUINS.C:1903`) is the model for the
+   allocator; `bake_castle_uv.py`'s `--max-tiles` is the model for the policy.
+3. **8bpp colour-bank versus CLUT16** (O6). At 2x the bytes per tile it is only
+   affordable once (1) has reduced the tail, but it removes the 15-colour
+   quantization from the noisiest textures.
+4. **`adaptive_subdivide_triangle`** against whatever affine warp the
+   milestone-1 capture actually shows.
+5. **The DIRECT class** for the measured 29 quads (§4, Option A). Last, and
+   only because it is nearly free once the classifier exists. 5.3% coverage is
+   not a strategy.
 
 ### Milestone 3 — Textured quad merging
 
@@ -881,9 +1012,12 @@ downstream is trusted until the step above it passes.
    clamp for wrap, drop the majority-alpha rule, transpose two corner weights
    in `distorted_sprite_weights`. Each mutation must fail at least one test.
    \>20% survival means the fixtures are not discriminating.
-3. **Build-time assertions.** A `_Static_assert` that
-   `tile_count * tile_bytes <= texture partition size`, and that the partition
-   size is a multiple of `sizeof(vdp1_gouraud_table_t)`. `verify-sourceboot`
+3. **Build-time assertions.** A `_Static_assert` that the generated bank's
+   total byte size (summed over classes, not `count x uniform_size`) is `<=` the
+   texture partition size, that every tile's byte offset is 8-byte aligned
+   (CMDSRCA granularity), that every class width is a multiple of 8 (CMDSIZE),
+   and that the partition size is a multiple of
+   `sizeof(vdp1_gouraud_table_t)`. `verify-sourceboot`
    must still pass its entry-point and `.cart_rodata` VMA checks.
 4. **Runtime counters**, added to `sm64_saturn_fast3d_profile_t` and read from
    a live capture:
@@ -891,6 +1025,10 @@ downstream is trusted until the step above it passes.
    - `texture_tile_missing` — a resolved primitive whose ordinal has no tile;
      expected nonzero only for untextured geometry, and its value must match
      the offline report's untextured count;
+   - `texture_tiles_by_class[2]` — the 16x16 and 32x32 counts, which must match
+     the bake report's class histogram exactly; a mismatch means the runtime and
+     the generated table disagree about tile geometry, which shows as garbled
+     texture rather than as a crash;
    - `texture_bank_overflow` — must read **0**;
    - `texture_map_mismatch` — a corrupt or out-of-range tile index; must read
      **0**, and like `quad_map_mismatch` it is a correctness fault, not a knob;
@@ -918,30 +1056,30 @@ downstream is trusted until the step above it passes.
 
 ## 9. Open questions
 
-**O1 — The per-triangle distribution of `k` (UV span in texture periods) is the
-single most important number still missing.** §2.1a establishes that 68.3% of
-BOB's terrain has `k > 1`, but not by how much. §4.1's whole decision tree turns
-on the shape of that tail:
-
-- if `k` is mostly in `[1, 2]`, a 32x32 tile (or 16x16 with supersampling) is
-  fine and nothing further is needed;
-- if `k` is commonly `4-8`, tile-size classification (milestone 2) is required
-  and worth its complexity;
-- if a large fraction sits above ~16, those primitives should be left flat
-  (§4.1 response 4) and milestone 1's coverage claim must be restated
-  honestly as "the low-`k` majority", not "BOB terrain".
-
-**Measure this before writing the baker.** The walk that produced §2.1a already
-has the data in hand; it is a histogram away. It is cheap, it is offline, and
-getting it wrong costs a milestone.
+**O1 — RESOLVED, and it changed milestone 1.** The per-triangle `k`
+distribution was measured (§4.1): p50 1.97, p90 6.88, max 29.76, with only 4.6%
+of world surface area at `k <= 1`. The uniform 16x16 tile this note originally
+proposed undersamples the median primitive 4:1, so milestone 1 now ships two
+tile classes and leaves 24 triangles untextured. What remains open is the
+*screen*-space version of the same question: world surface area is a proxy, and
+a proper projected-area weighting (from a real free-roam capture rather than
+from geometry alone) could shift the class thresholds either way. Take it from
+milestone 1's capture rather than guessing.
 
 **O2 — VDP1 fill-rate cost is unmeasured on this target.** A textured distorted
-sprite's cost is driven by `W x H` texels, not by projected area, so 1,101
-16x16 sprites is ~281,856 texel operations per frame. Castleviewer's phase probe
+sprite's cost is driven by `W x H` texels, not by projected area, so the
+recommended two-class layout is `567 x 256 + 510 x 1,024` = **~667,000 texel
+operations per frame** if every terrain primitive is visible — roughly 9x a
+320x224 screen. The 32x32 class alone is 78% of that, which is the specific
+number to watch. Castleviewer's phase probe
 (`RENDERER_PRIOR_ART.md:155-163`) found the master SH-2, not VDP1 draw
 completion, to be the bottleneck — but that was ~1,032 mostly-flat commands.
-Nobody has measured VDP1 draw-end time with a majority-textured list. Measure it
-in the milestone-1 capture before treating texturing as free.
+Nobody has measured VDP1 draw-end time with a majority-textured list, and the
+painter-algorithm depth bucketing in `saturn_fast3d_vdp1_emit.c:34-41` means
+there is no early rejection — every command drawn is every command paid for.
+Measure it in the milestone-1 capture before treating texturing as free. If VDP1
+turns out to be the bound, the first lever is demoting the 32x32 class, which
+costs fidelity on exactly the primitives §4.1 says need it most.
 
 **O3 — Magnification behaviour.** Whether VDP1 replicates texels or leaves gaps
 when a small character pattern is stretched over a large screen quad is *not*
