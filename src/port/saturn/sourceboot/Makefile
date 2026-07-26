@@ -13,6 +13,23 @@ SOURCEBOOT_COLLISION_INPUTS := $(shell find "$(ROOT)/levels" \( -name collision.
 SOURCEBOOT_COLLISION_EXCLUDE_LEVELS := bob castle_grounds ttc
 SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
 SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
+SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
+SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
+# The meshes the quad map is compiled from. Listed here so a geometry change
+# regenerates the map inside the build that consumes it -- a stale map is
+# never reachable. The actor list and the tool arguments live once, in
+# Makefile.saturn.mk's compile-quad-map, which the rule below delegates to;
+# keep the two in step.
+SOURCEBOOT_QUAD_MAP_SOURCES := \
+  $(ROOT)/actors/mario/geo.inc.c $(ROOT)/actors/mario/model.inc.c \
+  $(ROOT)/actors/cannon_barrel/geo.inc.c \
+  $(ROOT)/actors/cannon_barrel/model.inc.c \
+  $(ROOT)/actors/cannon_base/geo.inc.c \
+  $(ROOT)/actors/cannon_base/model.inc.c
+SOURCEBOOT_QUAD_MAP_TOOLS := \
+  $(ROOT)/tools/saturn/quad_map.py $(ROOT)/tools/saturn/dl_rigid_groups.py \
+  $(ROOT)/tools/saturn/quad_pairing.py \
+  $(ROOT)/tools/saturn/extract_mario_actor.py
 SOURCEBOOT_BIN_SRCS := $(wildcard $(ROOT)/bin/*.c)
 SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # E2 intentionally links one original level, not the full game archive.  The
@@ -53,7 +70,8 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(SOURCEBOOT_BIN_SRCS) $(ROOT)/data/behavior_data.c \
   $(SOURCEBOOT_ACTOR_SRCS) $(SOURCEBOOT_LEVEL_SRCS) $(SOURCEBOOT_GU_SRCS) \
   $(SOURCEBOOT_MATH_SRCS) $(ROOT)/levels/scripts.c \
-  $(SOURCEBOOT_GENERATED)/mario_anim_data.c
+  $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
+  $(SOURCEBOOT_QUAD_MAP_C)
 
 # Keep the direct-Bob source closure in its own object/output tree. Yaul's
 # make fragments glob the object directory at link time, so sharing it with a
@@ -101,6 +119,19 @@ $(SOURCEBOOT_GENERATED)/mario_anim_data.c: $(ROOT)/tools/mario_anims_converter.p
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" tools/mario_anims_converter.py > "$(SOURCEBOOT_GENERATED)/mario_anim_data.c"
 
+# Grouped target (GNU Make >= 4.3): one run of the tool produces both files,
+# so `&:` keeps make from scheduling the recipe twice under -j.
+$(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_QUAD_MAP_H) &: \
+    $(SOURCEBOOT_QUAD_MAP_TOOLS) $(SOURCEBOOT_QUAD_MAP_SOURCES)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" \
+	  compile-quad-map \
+	  QUAD_MAP_GENERATED="$(SOURCEBOOT_GENERATED)" \
+	  SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+
+.PHONY: source-quad-map
+source-quad-map: $(SOURCEBOOT_QUAD_MAP_C)
+
 .PHONY: source-data-catalog
 source-data-catalog: $(SOURCEBOOT_COLLISION_CATALOG)
 
@@ -124,6 +155,13 @@ source-assets: source-data-catalog
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
+
+# Any translation unit may include the generated quad-map header, so no
+# compile may start before it exists; under -j make would otherwise happily
+# race a consumer against the generator. Order-only, so a regenerated map does
+# not by itself rebuild the world -- the generated .d files carry the real
+# header dependency once a build has run.
+$(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H)
 
 $(SOURCEBOOT_CART_IMAGE): $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@printf -- "$(V_BEGIN_YELLOW)$(@F)$(V_END)\n"

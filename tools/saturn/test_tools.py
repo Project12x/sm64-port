@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -74,6 +75,8 @@ from quad_map import (  # noqa: E402
     REASON_UNRESOLVED_VERTICES,
     QuadMapEntry,
     build_quad_map,
+    render_quad_map_c,
+    render_quad_map_h,
     resolve_display_list_vertices,
 )
 
@@ -1853,6 +1856,263 @@ class QuadMapTests(unittest.TestCase):
         triangle_vertices[("dl", 1)] = (4, 5, 3)
         _, stats = build_quad_map(sites, triangle_vertices, vertices)
         self.assertEqual(stats["quad_count"], 0)
+
+
+class QuadMapCRendererTests(unittest.TestCase):
+    """The generated C table is what the SH-2 actually reads.
+
+    Every assertion here is about the *emitted text*, not about an internal
+    helper, because the text is what ships. The safety invariant the whole
+    encoding is built around: anything the runtime cannot positively decode
+    as a merge -- a zero word, an absent display list, an ordinal past the
+    recorded length -- must mean "emit exactly as today".
+    """
+
+    #: dl_a: ordinal 0 pairs with 3; 1 and 2 stay standalone. The interior
+    #: unpaired ordinals are the point -- trailing ones would be truncated
+    #: away and could not witness the sentinel.
+    FIXTURE = [
+        QuadMapEntry("dl_a", 0, 3, (0, 1, 2, 5)),
+        QuadMapEntry("dl_a", 1, None, None),
+        QuadMapEntry("dl_a", 2, None, None),
+        QuadMapEntry("dl_a", 3, 0, (0, 4, 1, 2)),
+        QuadMapEntry("dl_b", 0, 1, (1, 2, 0, 4)),
+        QuadMapEntry("dl_b", 1, 0, (4, 1, 2, 0)),
+    ]
+
+    @staticmethod
+    def _arrays(text: str) -> dict[str, list[int]]:
+        """Every emitted per-list entry array, by display-list symbol."""
+        found: dict[str, list[int]] = {}
+        pattern = re.compile(
+            r"sm64_saturn_quad_map_entries_(\w+)\[(\d+)\]\s*=\s*\{(.*?)\};",
+            re.DOTALL,
+        )
+        for match in pattern.finditer(text):
+            words = [
+                int(token, 16)
+                for token in re.findall(r"0x([0-9A-Fa-f]{8})U", match.group(3))
+            ]
+            found[match.group(1)] = words
+            if len(words) != int(match.group(2)):
+                raise AssertionError(
+                    f"{match.group(1)}: declared dimension {match.group(2)} "
+                    f"but {len(words)} initialisers"
+                )
+        return found
+
+    @staticmethod
+    def _rows(text: str) -> list[tuple[str, str, int]]:
+        """The lists table, as (display_list symbol, array symbol, count)."""
+        body = re.search(
+            r"sm64_saturn_quad_map_lists\[\d+\]\s*=\s*\{(.*?)\n\};",
+            text, re.DOTALL,
+        )
+        if body is None:
+            raise AssertionError("no sm64_saturn_quad_map_lists definition")
+        return [
+            (match.group(1), match.group(2), int(match.group(3)))
+            for match in re.finditer(
+                r"\{\s*(\w+),\s*sm64_saturn_quad_map_entries_(\w+),\s*(\d+)U",
+                body.group(1),
+            )
+        ]
+
+    @staticmethod
+    def _list_count(text: str) -> int:
+        match = re.search(
+            r"sm64_saturn_quad_map_list_count\s*=\s*(\d+)U;", text)
+        if match is None:
+            raise AssertionError("the table does not carry its own length")
+        return int(match.group(1))
+
+    def test_unpaired_ordinal_never_decodes_as_a_merge(self) -> None:
+        """The sentinel must be distinguishable from "pairs with ordinal 0".
+
+        Ordinal 0 is a perfectly legal partner, so an encoding that wrote a
+        bare partner index would make "unpaired" and "merge with the first
+        triangle of this list" the same word -- silent corrupted geometry.
+        """
+        words = self._arrays(render_quad_map_c(self.FIXTURE))["dl_a"]
+        self.assertEqual(words[1], 0x00000000)
+        self.assertEqual(words[2], 0x00000000)
+        self.assertEqual(words[1] & 0x1, 0, "unpaired must clear the paired bit")
+        self.assertEqual(words[0] & 0x1, 1, "paired must set the paired bit")
+        self.assertEqual(words[3] & 0x1, 1)
+
+    def test_a_zero_filled_word_is_the_do_not_merge_state(self) -> None:
+        """Absence of data decodes as "no merge", never as a merge.
+
+        A truncated map, a zeroed page or an unwritten slot all read as 0.
+        That has to be the safe state, not a merge with ordinal 0.
+        """
+        header = render_quad_map_h()
+        self.assertIn("#define SM64_SATURN_QUAD_MAP_NONE 0x00000000U", header)
+        words = self._arrays(render_quad_map_c(self.FIXTURE))["dl_a"]
+        self.assertIn(0x00000000, words)
+
+    def test_table_and_every_list_carry_their_own_length(self) -> None:
+        text = render_quad_map_c(self.FIXTURE)
+        self.assertEqual(self._list_count(text), 2)
+        rows = self._rows(text)
+        self.assertEqual(len(rows), 2)
+        arrays = self._arrays(text)
+        counts = {row[0]: row[2] for row in rows}
+        self.assertEqual(counts, {"dl_a": 4, "dl_b": 2})
+        for symbol, count in counts.items():
+            self.assertEqual(
+                count, len(arrays[symbol]),
+                f"{symbol}: recorded length must equal the array it guards",
+            )
+
+    def test_corner_cycle_round_trips_in_order(self) -> None:
+        """Order is the whole content: a rotated cycle is a different quad."""
+        words = self._arrays(render_quad_map_c(self.FIXTURE))["dl_a"]
+
+        def corners(word: int) -> tuple[int, ...]:
+            return tuple((word >> (16 + 4 * index)) & 0xF for index in range(4))
+
+        self.assertEqual(corners(words[0]), (0, 1, 2, 5))
+        self.assertEqual(corners(words[3]), (0, 4, 1, 2))
+        self.assertEqual((words[0] >> 1) & 0x7FFF, 3)
+        self.assertEqual((words[3] >> 1) & 0x7FFF, 0)
+
+    def test_two_display_lists_with_the_same_ordinals_do_not_collide(self) -> None:
+        text = render_quad_map_c(self.FIXTURE)
+        arrays = self._arrays(text)
+        self.assertEqual(sorted(arrays), ["dl_a", "dl_b"])
+        self.assertNotEqual(arrays["dl_a"][0], arrays["dl_b"][0],
+                            "ordinal 0 of two lists must encode independently")
+        for display_list, array, _count in self._rows(text):
+            self.assertEqual(display_list, array,
+                             "each row must point at its own list's array")
+
+    def test_a_list_with_no_pair_at_all_is_omitted(self) -> None:
+        """Omission is safe by construction: absent means "do not merge"."""
+        entries = list(self.FIXTURE) + [
+            QuadMapEntry("dl_c", 0, None, None),
+            QuadMapEntry("dl_c", 1, None, None),
+        ]
+        text = render_quad_map_c(entries)
+        self.assertNotIn("dl_c", text)
+        self.assertEqual(self._list_count(text), 2)
+
+    def test_trailing_unpaired_ordinals_are_truncated_not_padded(self) -> None:
+        entries = list(self.FIXTURE) + [QuadMapEntry("dl_b", 2, None, None)]
+        text = render_quad_map_c(entries)
+        self.assertEqual(len(self._arrays(text)["dl_b"]), 2)
+
+    def test_every_referenced_display_list_is_declared(self) -> None:
+        """The generated file names real C symbols; the linker checks them."""
+        text = render_quad_map_c(self.FIXTURE)
+        self.assertIn("extern const Gfx dl_a[];", text)
+        self.assertIn("extern const Gfx dl_b[];", text)
+
+    def test_asymmetric_pairing_is_refused(self) -> None:
+        """A one-way pair would merge one triangle into a stranger."""
+        broken = [
+            QuadMapEntry("dl_a", 0, 1, (0, 1, 2, 5)),
+            QuadMapEntry("dl_a", 1, None, None),
+        ]
+        with self.assertRaisesRegex(ValueError, "not reciprocated"):
+            render_quad_map_c(broken)
+
+    def test_a_triangle_paired_with_itself_is_refused(self) -> None:
+        """Partners are per-list ordinals, so a stray self-pair is expressible.
+
+        Two display lists each naming ordinal 0 as ordinal 0's partner would
+        otherwise look reciprocated: the key is (list, ordinal), and each
+        entry reciprocates itself.
+        """
+        broken = [
+            QuadMapEntry("dl_a", 0, 0, (0, 1, 2, 5)),
+            QuadMapEntry("dl_b", 0, 0, (0, 1, 2, 5)),
+        ]
+        with self.assertRaisesRegex(ValueError, "itself"):
+            render_quad_map_c(broken)
+
+    def test_an_out_of_range_corner_code_is_refused(self) -> None:
+        broken = [
+            QuadMapEntry("dl_a", 0, 1, (0, 1, 2, 6)),
+            QuadMapEntry("dl_a", 1, 0, (0, 1, 2, 5)),
+        ]
+        with self.assertRaisesRegex(ValueError, "corner code"):
+            render_quad_map_c(broken)
+
+    def test_a_paired_entry_without_a_corner_cycle_is_refused(self) -> None:
+        broken = [
+            QuadMapEntry("dl_a", 0, 1, None),
+            QuadMapEntry("dl_a", 1, 0, (0, 1, 2, 5)),
+        ]
+        with self.assertRaisesRegex(ValueError, "corner cycle"):
+            render_quad_map_c(broken)
+
+    def test_a_display_list_name_that_is_not_a_c_identifier_is_refused(self) -> None:
+        broken = [
+            QuadMapEntry("dl_a[0]; evil()", 0, 1, (0, 1, 2, 5)),
+            QuadMapEntry("dl_a[0]; evil()", 1, 0, (0, 4, 1, 2)),
+        ]
+        with self.assertRaisesRegex(ValueError, "identifier"):
+            render_quad_map_c(broken)
+
+    def test_a_duplicate_key_is_refused(self) -> None:
+        broken = [
+            QuadMapEntry("dl_a", 0, 1, (0, 1, 2, 5)),
+            QuadMapEntry("dl_a", 1, 0, (0, 4, 1, 2)),
+            QuadMapEntry("dl_a", 1, None, None),
+        ]
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            render_quad_map_c(broken)
+
+    def test_header_accessors_decode_the_emitted_words(self) -> None:
+        """The header's macros and the encoder must agree bit for bit.
+
+        Decoding is done with the shifts and masks *parsed out of the
+        generated header*, so a drift between the two files fails here rather
+        than silently on hardware.
+        """
+        header = render_quad_map_h()
+        paired_mask = int(re.search(
+            r"SM64_SATURN_QUAD_MAP_IS_PAIRED\(entry\) "
+            r"\(\(\(entry\) & (0x[0-9A-Fa-f]+)U\) != 0U\)", header).group(1), 16)
+        partner = re.search(
+            r"SM64_SATURN_QUAD_MAP_PARTNER\(entry\) "
+            r"\(\(\(entry\) >> (\d+)U\) & (0x[0-9A-Fa-f]+)U\)", header)
+        corner = re.search(
+            r"SM64_SATURN_QUAD_MAP_CORNER\(entry, index\) "
+            r"\(\(\(entry\) >> \((\d+)U \+ (\d+)U \* \(index\)\)\) "
+            r"& (0x[0-9A-Fa-f]+)U\)", header)
+        self.assertIsNotNone(partner)
+        self.assertIsNotNone(corner)
+        partner_shift, partner_mask = int(partner.group(1)), int(partner.group(2), 16)
+        base, stride, corner_mask = (
+            int(corner.group(1)), int(corner.group(2)), int(corner.group(3), 16))
+
+        words = self._arrays(render_quad_map_c(self.FIXTURE))["dl_a"]
+        self.assertTrue(words[0] & paired_mask)
+        self.assertFalse(words[1] & paired_mask)
+        self.assertEqual((words[0] >> partner_shift) & partner_mask, 3)
+        self.assertEqual(
+            tuple((words[0] >> (base + stride * index)) & corner_mask
+                  for index in range(4)),
+            (0, 1, 2, 5),
+        )
+
+    def test_header_and_source_agree_on_the_include_name(self) -> None:
+        header = render_quad_map_h()
+        self.assertIn("SM64_SATURN_QUAD_MAP_H", header)
+        self.assertIn('#include "saturn_quad_map.h"',
+                      render_quad_map_c(self.FIXTURE))
+
+    def test_both_generated_files_are_marked_generated(self) -> None:
+        for text in (render_quad_map_h(), render_quad_map_c(self.FIXTURE)):
+            self.assertIn("tools/saturn/quad_map.py", text)
+            self.assertIn("do not edit", text)
+
+    def test_provenance_is_recorded_in_the_generated_source(self) -> None:
+        text = render_quad_map_c(
+            self.FIXTURE, provenance=["mario_geo_body from actors/mario/geo.inc.c"])
+        self.assertIn("mario_geo_body from actors/mario/geo.inc.c", text)
 
 
 if __name__ == "__main__":

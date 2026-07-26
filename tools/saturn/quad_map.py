@@ -444,39 +444,371 @@ def compile_actor(
     return build_quad_map(sites, triangle_vertices, vertices, **options)  # type: ignore[arg-type]
 
 
+# -- C rendering -------------------------------------------------------------
+#
+# Entry encoding, one uint32_t per triangle command of a display list, indexed
+# by that command's list_ordinal:
+#
+#     bit  0        paired flag -- 1 means "merge", and *only* this means it
+#     bits 1..15    partner list_ordinal
+#     bits 16..31   the four corner codes, 4 bits each, cycle order
+#
+# The flag is bit 0 rather than a magic partner value on purpose. Ordinal 0 is
+# a legal partner, so an encoding that stored a bare partner index would make
+# "unpaired" and "merge with the first triangle of this list" the same word.
+# With the flag at bit 0, the all-zero word is the sentinel: a zeroed page, an
+# unwritten slot, a truncated table and an ordinal past the recorded length all
+# read as "do not merge", which is exactly today's behaviour. There is
+# deliberately no third state in which the runtime infers mergeability.
+#: The only "do not merge" encoding, and the value of any absent entry.
+QUAD_MAP_NONE = 0x00000000
+_ENTRY_PAIRED_MASK = 0x1
+_ENTRY_PARTNER_SHIFT = 1
+_ENTRY_PARTNER_MASK = 0x7FFF
+_ENTRY_CORNER_BASE = 16
+_ENTRY_CORNER_STRIDE = 4
+_ENTRY_CORNER_MASK = 0xF
+#: Corner codes are 0-5 (see :class:`QuadMapEntry`), so 4 bits is ample.
+_CORNER_CODE_LIMIT = 6
+
+#: Generated header the generated source includes. Both land in the build's
+#: generated directory, next to mario_anim_data.c.
+QUAD_MAP_HEADER_NAME = "saturn_quad_map.h"
+_GENERATED_BY = "tools/saturn/quad_map.py"
+_C_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _encode_entry(entry: QuadMapEntry) -> int:
+    """Pack one triangle command's decision into its uint32_t word."""
+    if entry.partner_list_ordinal is None:
+        if entry.corners is not None:
+            raise ValueError(
+                f"{(entry.display_list, entry.list_ordinal)} is unpaired but "
+                f"carries a corner cycle"
+            )
+        return QUAD_MAP_NONE
+    if entry.corners is None:
+        raise ValueError(
+            f"{(entry.display_list, entry.list_ordinal)} is paired but has no "
+            f"corner cycle"
+        )
+    if len(entry.corners) != 4:
+        raise ValueError(
+            f"{(entry.display_list, entry.list_ordinal)}: a quad has four "
+            f"corners, got {len(entry.corners)}"
+        )
+    if not 0 <= entry.partner_list_ordinal <= _ENTRY_PARTNER_MASK:
+        raise ValueError(
+            f"{(entry.display_list, entry.list_ordinal)}: partner "
+            f"{entry.partner_list_ordinal} does not fit the encoding"
+        )
+    word = _ENTRY_PAIRED_MASK | (entry.partner_list_ordinal << _ENTRY_PARTNER_SHIFT)
+    for index, code in enumerate(entry.corners):
+        if not 0 <= code < _CORNER_CODE_LIMIT:
+            raise ValueError(
+                f"{(entry.display_list, entry.list_ordinal)}: corner code "
+                f"{code} is outside 0-{_CORNER_CODE_LIMIT - 1}"
+            )
+        word |= code << (_ENTRY_CORNER_BASE + _ENTRY_CORNER_STRIDE * index)
+    return word
+
+
+def quad_map_tables(
+    entries: Iterable[QuadMapEntry],
+) -> list[tuple[str, list[int]]]:
+    """Group entries into one dense, ordinal-indexed word array per list.
+
+    Returned in display-list symbol order, which makes generation
+    deterministic. Two reductions are applied, both safe because an absent
+    entry means "do not merge":
+
+    * a display list with no pair at all is dropped entirely;
+    * trailing unpaired ordinals are truncated, so ``entry_count`` is the last
+      paired ordinal plus one rather than the list's triangle count.
+
+    Validation is strict rather than best-effort: a one-way pair, a partner in
+    another display list, a duplicate key or an out-of-range corner code all
+    raise. Every one of those would silently draw the wrong polygon at
+    runtime, which is this project's worst failure mode.
+    """
+    by_list: dict[str, dict[int, QuadMapEntry]] = {}
+    for entry in entries:
+        if _C_IDENTIFIER.match(entry.display_list) is None:
+            raise ValueError(
+                f"{entry.display_list!r} is not a C identifier and cannot name "
+                f"a display list symbol"
+            )
+        ordinals = by_list.setdefault(entry.display_list, {})
+        if entry.list_ordinal in ordinals:
+            raise ValueError(
+                f"duplicate entry for {(entry.display_list, entry.list_ordinal)}"
+            )
+        if not 0 <= entry.list_ordinal <= _ENTRY_PARTNER_MASK:
+            raise ValueError(
+                f"{(entry.display_list, entry.list_ordinal)}: ordinal does not "
+                f"fit the encoding"
+            )
+        ordinals[entry.list_ordinal] = entry
+
+    tables: list[tuple[str, list[int]]] = []
+    for display_list in sorted(by_list):
+        ordinals = by_list[display_list]
+        for entry in ordinals.values():
+            partner = entry.partner_list_ordinal
+            if partner is None:
+                continue
+            if partner == entry.list_ordinal:
+                raise ValueError(
+                    f"{(display_list, entry.list_ordinal)} is paired with "
+                    f"itself"
+                )
+            mate = ordinals.get(partner)
+            if mate is None or mate.partner_list_ordinal != entry.list_ordinal:
+                raise ValueError(
+                    f"{(display_list, entry.list_ordinal)} -> {partner} is not "
+                    f"reciprocated within {display_list}"
+                )
+        words = [
+            _encode_entry(ordinals[ordinal]) if ordinal in ordinals
+            else QUAD_MAP_NONE
+            for ordinal in range(max(ordinals) + 1)
+        ]
+        while words and words[-1] == QUAD_MAP_NONE:
+            words.pop()
+        if words:
+            tables.append((display_list, words))
+    return tables
+
+
+def render_quad_map_h() -> str:
+    """Render the generated header: types, sentinel and accessors.
+
+    Generated rather than hand-written so the encoding cannot drift between
+    the compiler that writes the words and the runtime that reads them.
+    """
+    return f"""\
+/* Generated by {_GENERATED_BY} -- do not edit. */
+#ifndef SM64_SATURN_QUAD_MAP_H
+#define SM64_SATURN_QUAD_MAP_H
+
+#include <stdint.h>
+
+#include "types.h"
+
+/* One word per triangle command, indexed by that command's ordinal within
+ * its own display list (gsSP2Triangles counts as two; triangles inside a
+ * nested gsSPDisplayList belong to the child's own count, not the parent's).
+ *
+ *   bit  0        paired -- 1, and only 1, means "merge"
+ *   bits 1..15    partner ordinal, in the same display list
+ *   bits 16..31   four 4-bit corner codes in cycle order; 0-2 name this
+ *                 triangle's own corners in source order, 3-5 the partner's
+ *                 (code - 3)
+ *
+ * SM64_SATURN_QUAD_MAP_NONE is the all-zero word. That is deliberate: a
+ * zeroed page, an unwritten slot, a display list absent from the table and an
+ * ordinal past entry_count all read as "do not merge", which is exactly the
+ * one-command-per-triangle behaviour this port already has. There is no third
+ * state in which mergeability may be inferred. */
+typedef uint32_t sm64_saturn_quad_map_entry_t;
+
+#define SM64_SATURN_QUAD_MAP_NONE {QUAD_MAP_NONE:#010x}U
+#define SM64_SATURN_QUAD_MAP_IS_PAIRED(entry) (((entry) & {_ENTRY_PAIRED_MASK:#x}U) != 0U)
+#define SM64_SATURN_QUAD_MAP_PARTNER(entry) (((entry) >> {_ENTRY_PARTNER_SHIFT}U) & {_ENTRY_PARTNER_MASK:#x}U)
+#define SM64_SATURN_QUAD_MAP_CORNER(entry, index) (((entry) >> ({_ENTRY_CORNER_BASE}U + {_ENTRY_CORNER_STRIDE}U * (index))) & {_ENTRY_CORNER_MASK:#x}U)
+/* Corner codes run 0-5; anything else is a corrupt entry. */
+#define SM64_SATURN_QUAD_MAP_CORNER_LIMIT {_CORNER_CODE_LIMIT}U
+
+/* One row per display list that has at least one merged pair. `display_list`
+ * is the link-time address of the real Gfx array, which is what the frontend
+ * has in hand when it starts interpreting a list -- see the note in the
+ * generated source. Lists with no pair are simply absent. */
+typedef struct sm64_saturn_quad_map_list {{
+    const Gfx *display_list;
+    const sm64_saturn_quad_map_entry_t *entries;
+    uint16_t entry_count;
+    uint16_t reserved;
+}} sm64_saturn_quad_map_list_t;
+
+extern const sm64_saturn_quad_map_list_t sm64_saturn_quad_map_lists[];
+extern const uint16_t sm64_saturn_quad_map_list_count;
+
+#endif /* SM64_SATURN_QUAD_MAP_H */
+"""
+
+
+def render_quad_map_c(
+    entries: Iterable[QuadMapEntry],
+    *,
+    provenance: Sequence[str] = (),
+) -> str:
+    """Render the quad map as a C translation unit.
+
+    ``entries`` may span several actors; :class:`QuadMapEntry` already carries
+    its display list, and display-list symbols are unique across the link, so
+    no per-actor namespacing is needed.
+
+    **How the runtime finds a row.** The frontend never sees a symbol name, it
+    sees a ``Gfx *``. It does not need a name: the display lists are ordinary C
+    symbols, so this file references them directly and each row stores the
+    array's link-time address. ``geo_process_master_list`` emits
+    ``gSPDisplayList(gfx++, node->displayList)``, so the ``w1`` word of the
+    ``G_DL`` the frontend decodes *is* ``&mario_butt_dl[0]`` -- the same
+    address this table holds. Identification is therefore a pointer compare
+    against a table small enough to scan once per display list entered, and the
+    per-triangle lookup that follows is a plain indexed load, no search. Lists
+    the frontend enters that are not in the table (the pool-built master list
+    itself, anything unanalysed) simply find no row and merge nothing.
+    """
+    tables = quad_map_tables(entries)
+    lines = [f"/* Generated by {_GENERATED_BY} -- do not edit. */"]
+    if provenance:
+        lines.append("/*")
+        for note in provenance:
+            lines.append(f" * {note}")
+        lines.append(" */")
+    lines.append(f'#include "{QUAD_MAP_HEADER_NAME}"')
+    lines.append("")
+    lines.append("/* The real display-list symbols. Declaring them here rather")
+    lines.append(" * than including an actor group header keeps this file")
+    lines.append(" * independent of which bank a list happens to live in; a")
+    lines.append(" * symbol that does not exist is a link error, not a silent")
+    lines.append(" * mismatch. */")
+    for display_list, _words in tables:
+        lines.append(f"extern const Gfx {display_list}[];")
+    lines.append("")
+
+    for display_list, words in tables:
+        paired = sum(1 for word in words if word & _ENTRY_PAIRED_MASK) // 2
+        lines.append(
+            f"/* {display_list}: {len(words)} mapped ordinals, "
+            f"{paired} merged pair{'' if paired == 1 else 's'}. */"
+        )
+        lines.append(
+            f"static const sm64_saturn_quad_map_entry_t "
+            f"sm64_saturn_quad_map_entries_{display_list}[{len(words)}] = {{"
+        )
+        for start in range(0, len(words), 4):
+            row = ", ".join(f"{word:#010x}U" for word in words[start:start + 4])
+            lines.append(f"    {row},")
+        lines.append("};")
+        lines.append("")
+
+    if tables:
+        lines.append(
+            f"const sm64_saturn_quad_map_list_t "
+            f"sm64_saturn_quad_map_lists[{len(tables)}] = {{"
+        )
+        for display_list, words in tables:
+            lines.append(
+                f"    {{ {display_list}, "
+                f"sm64_saturn_quad_map_entries_{display_list}, "
+                f"{len(words)}U, 0U }},"
+            )
+        lines.append("};")
+    else:
+        # A zero-length array is not C. One inert row plus a count of zero
+        # keeps the declaration valid and the table unreadable.
+        lines.append("const sm64_saturn_quad_map_list_t "
+                     "sm64_saturn_quad_map_lists[1] = {")
+        lines.append("    { NULL, NULL, 0U, 0U },")
+        lines.append("};")
+    lines.append("")
+    lines.append(
+        f"const uint16_t sm64_saturn_quad_map_list_count = {len(tables)}U;"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> None:
     import argparse
     import json
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description="Compile an actor's quad map.")
-    parser.add_argument("--geo", type=Path, required=True)
-    parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--layout", required=True,
+    parser.add_argument("--geo", type=Path)
+    parser.add_argument("--model", type=Path)
+    parser.add_argument("--layout",
                         help="entry GeoLayout symbol, e.g. mario_geo_body")
+    parser.add_argument("--actor", nargs=3, action="append", default=[],
+                        metavar=("GEO", "MODEL", "LAYOUT"),
+                        help="compile one more model into the same table; "
+                             "repeatable")
     parser.add_argument("--projection-policy", default="sampled",
                         choices=("sampled", "planar"))
     parser.add_argument("--minimum-normal-alignment", type=float, default=0.80)
     parser.add_argument("--dump-entries", type=Path,
                         help="write the full quad map as JSON")
+    parser.add_argument("--emit-c", type=Path,
+                        help="write the generated C table")
+    parser.add_argument("--emit-h", type=Path,
+                        help="write the generated C header")
+    parser.add_argument("--report", type=Path,
+                        help="write the per-model statistics as JSON")
     arguments = parser.parse_args()
-    entries, stats = compile_actor(
-        arguments.geo.read_text(encoding="utf-8"),
-        arguments.model.read_text(encoding="utf-8"),
-        arguments.layout,
-        projection_policy=arguments.projection_policy,
-        minimum_normal_alignment=arguments.minimum_normal_alignment,
-    )
+
+    actors = list(arguments.actor)
+    if arguments.geo is not None or arguments.model is not None \
+            or arguments.layout is not None:
+        if None in (arguments.geo, arguments.model, arguments.layout):
+            parser.error("--geo, --model and --layout must be given together")
+        actors.append((str(arguments.geo), str(arguments.model),
+                       arguments.layout))
+    if not actors:
+        parser.error("give at least one --actor GEO MODEL LAYOUT")
+
+    entries: list[QuadMapEntry] = []
+    report: dict[str, object] = {}
+    provenance: list[str] = []
+    for geo, model, layout in actors:
+        model_paths = [Path(part) for part in str(model).split(",")]
+        model_source = "\n".join(
+            path.read_text(encoding="utf-8") for path in model_paths)
+        actor_entries, stats = compile_actor(
+            Path(geo).read_text(encoding="utf-8"),
+            model_source,
+            layout,
+            projection_policy=arguments.projection_policy,
+            minimum_normal_alignment=arguments.minimum_normal_alignment,
+        )
+        entries.extend(actor_entries)
+        report[layout] = stats
+        provenance.append(
+            f"{layout}: {geo} + {model} -- {stats['keys']} triangle commands, "
+            f"{stats['quad_count']} merged pairs"
+        )
+
     if arguments.dump_entries is not None:
         arguments.dump_entries.write_text(json.dumps([
             {
                 "display_list": entry.display_list,
                 "list_ordinal": entry.list_ordinal,
                 "partner_list_ordinal": entry.partner_list_ordinal,
+                "corners": list(entry.corners) if entry.corners else None,
             }
             for entry in entries
         ], indent=2), encoding="utf-8")
-    print(json.dumps({"layout": arguments.layout, **stats}, indent=2))
+    if arguments.emit_h is not None:
+        arguments.emit_h.parent.mkdir(parents=True, exist_ok=True)
+        arguments.emit_h.write_text(render_quad_map_h(), encoding="utf-8")
+    if arguments.emit_c is not None:
+        arguments.emit_c.parent.mkdir(parents=True, exist_ok=True)
+        arguments.emit_c.write_text(
+            render_quad_map_c(entries, provenance=provenance), encoding="utf-8")
+    if arguments.report is not None:
+        arguments.report.parent.mkdir(parents=True, exist_ok=True)
+        arguments.report.write_text(json.dumps(report, indent=2),
+                                    encoding="utf-8")
+    if arguments.emit_c is None and arguments.report is None:
+        print(json.dumps(report, indent=2))
+        return
+    for layout, stats in report.items():
+        print(
+            f"quad_map: {layout}: {stats['keys']} triangle commands, "  # type: ignore[index]
+            f"{stats['quad_count']} merged pairs, "  # type: ignore[index]
+            f"{stats['render_primitive_count']} VDP1 commands"  # type: ignore[index]
+        )
 
 
 if __name__ == "__main__":

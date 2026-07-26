@@ -28,10 +28,30 @@ MARIO_TEXTURE_TILE ?= 16
 MARIO_TEXTURE_SOURCE_SCALE ?= 1
 MARIO_TEXTURE_SUBDIVISION ?= 1
 
+# Where compile-quad-map writes. Defaults to the sourceboot build's generated
+# directory, the same place src/port/saturn/sourceboot/Makefile puts
+# mario_anim_data.c; that Makefile overrides this when it delegates here.
+QUAD_MAP_GENERATED ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated
+# The models the quad map is compiled for, as --actor GEO MODEL LAYOUT triples.
+# Mario enters at mario_geo_body, not mario_geo: the latter's GEO_SHADOW and
+# GEO_RENDER_RANGE nodes are unmodelled and poison every triangle below them.
+# The two cannon pieces are static geometry and need no extra plumbing --
+# same walk, no animation envelope to validate. BOB's terrain is deliberately
+# absent: every one of its 1101 triangles is textured, and textured triangles
+# are never paired, so its map is empty.
+#
+# Keep this list in step with SOURCEBOOT_QUAD_MAP_SOURCES in
+# src/port/saturn/sourceboot/Makefile, which carries the same files as
+# prerequisites so the map is regenerated when the geometry changes.
+QUAD_MAP_ACTOR_ARGS := \
+  --actor "actors/mario/geo.inc.c" "actors/mario/model.inc.c" "mario_geo_body" \
+  --actor "actors/cannon_barrel/geo.inc.c" "actors/cannon_barrel/model.inc.c" "cannon_barrel_geo" \
+  --actor "actors/cannon_base/geo.inc.c" "actors/cannon_base/model.inc.c" "cannon_base_geo"
+
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map plan-castle-camera verify-all clean
 
 all: hello
 
@@ -291,6 +311,20 @@ compile-castle-textures: compile-castle-area1 check-host-tools
 	  --ordering "$(CASTLE_ORDERING)" \
 	  --output "build/saturn/castlearea/generated/castle_uv_tiles.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-all-materials-bake-2026-07-18.json"
+
+# Which triangle pairs VDP1 may draw as one four-corner command. Emits a
+# generated header (the encoding) and a generated C table (the data), both
+# marked generated, into $(QUAD_MAP_GENERATED). The generated source is linked
+# into the sourceboot image; see SH_SRCS in
+# src/port/saturn/sourceboot/Makefile, which is also where the file-level rule
+# with real prerequisites lives -- it delegates back here so this recipe stays
+# the single definition of what gets compiled.
+compile-quad-map: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/quad_map.py" \
+	  $(QUAD_MAP_ACTOR_ARGS) \
+	  --emit-h "$(QUAD_MAP_GENERATED)/saturn_quad_map.h" \
+	  --emit-c "$(QUAD_MAP_GENERATED)/saturn_quad_map.c" \
+	  --report "$(QUAD_MAP_GENERATED)/saturn_quad_map.json"
 
 compile-castle-collision: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_castle_collision.py" \
