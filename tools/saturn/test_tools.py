@@ -59,6 +59,7 @@ from prepare_sourceboot_collision_catalog import catalog_paths  # noqa: E402
 from quad_pairing import QuadCandidate, RenderPrimitive, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
+from dl_rigid_groups import walk_display_lists, TriangleSite  # noqa: E402,F401
 
 
 class AssetClassifierTests(unittest.TestCase):
@@ -932,6 +933,79 @@ class TelemetryTests(unittest.TestCase):
         data.extend(b"\0" * 48)
         with self.assertRaisesRegex(ValueError, "extended telemetry magic"):
             decode(list(data), require_complete=True)
+
+
+class DisplayListRigidGroupTests(unittest.TestCase):
+    def test_single_list_all_one_rigid_group(self) -> None:
+        lists = {
+            "body": [
+                ("gsSPVertex", "v_body, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSP1Triangle", "0, 2, 1, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "body")
+        self.assertEqual([s.ordinal for s in sites], [0, 1])
+        self.assertEqual(sites[0].rigid_group, sites[1].rigid_group)
+
+    def test_push_pop_creates_distinct_groups(self) -> None:
+        """Triangles under different matrix pushes must never share a group."""
+        lists = {
+            "root": [
+                ("gsSPVertex", "v_a, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPMatrix", "arm_mtx, G_MTX_MODELVIEW | G_MTX_PUSH"),
+                ("gsSPVertex", "v_b, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPPopMatrix", "G_MTX_MODELVIEW"),
+                ("gsSP1Triangle", "0, 2, 1, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertEqual([s.ordinal for s in sites], [0, 1, 2])
+        self.assertNotEqual(sites[0].rigid_group, sites[1].rigid_group)
+        self.assertEqual(sites[0].rigid_group, sites[2].rigid_group,
+                         "pop must restore the prior group")
+
+    def test_gssp2triangles_emits_two_ordinals(self) -> None:
+        lists = {
+            "body": [
+                ("gsSPVertex", "v, 4, 0"),
+                ("gsSP2Triangles", "0, 1, 2, 0, 0, 2, 3, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "body")
+        self.assertEqual([s.ordinal for s in sites], [0, 1])
+        self.assertEqual(sites[0].indices, (0, 1, 2))
+        self.assertEqual(sites[1].indices, (0, 2, 3))
+
+    def test_nested_display_list_continues_ordinals_and_inherits_group(self) -> None:
+        lists = {
+            "root": [
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPDisplayList", "child"),
+            ],
+            "child": [
+                ("gsSPVertex", "v2, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ],
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertEqual([s.ordinal for s in sites], [0, 1])
+        self.assertEqual(sites[0].rigid_group, sites[1].rigid_group)
+
+    def test_unknown_macro_marks_sites_unsafe(self) -> None:
+        """An unmodelled construct must poison the group, never be ignored."""
+        lists = {
+            "root": [
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSPBranchList", "somewhere_else"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertIs(sites[0].unsafe, True)
 
 
 if __name__ == "__main__":
