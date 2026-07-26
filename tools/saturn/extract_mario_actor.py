@@ -238,6 +238,44 @@ def vertex_groups(source: str) -> dict[str, list[tuple[int, int, int, int, int]]
     return result
 
 
+#: Fields in one complete Vtx row: {{{x,y,z}, flag, {u,v}, {n0,n1,n2,n3}}}.
+VTX_ROW_FIELDS = 10
+
+_VTX_ROW = re.compile(
+    r"\{\{\s*\{\s*(-?\w+),\s*(-?\w+),\s*(-?\w+)\s*\}\s*,\s*(-?\w+)\s*,"
+    r"\s*\{\s*(-?\w+),\s*(-?\w+)\s*\}\s*,"
+    r"\s*\{\s*(-?\w+),\s*(-?\w+),\s*(-?\w+),\s*(-?\w+)\s*\}"
+)
+
+
+def _vtx_value(text: str) -> int:
+    # The normal/colour field is written in hex, the rest in decimal. int(x, 0)
+    # would reject a decimal with a leading zero as a bad octal literal.
+    negative, digits = text.startswith("-"), text.lstrip("-")
+    value = int(digits, 16) if digits.lower().startswith("0x") else int(digits, 10)
+    return -value if negative else value
+
+
+def vertex_rows(source: str) -> dict[str, list[tuple[int, ...]]]:
+    """Every Vtx row in full: (x, y, z, flag, u, v, n0, n1, n2, n3).
+
+    :func:`vertex_groups` keeps only position and uv, which is all the mesh
+    exporters need. Proving two source vertices are *interchangeable* needs
+    the dropped fields too: quad merging welds two rows into one vertex only
+    when the whole row matches, because a differing normal shades differently
+    under Gouraud even at an identical position.
+
+    Additive on purpose -- :func:`vertex_groups` and its callers are unchanged.
+    """
+    return {
+        name: [
+            tuple(_vtx_value(value) for value in row)
+            for row in _VTX_ROW.findall(body)
+        ]
+        for name, body in blocks(source, "Vtx").items()
+    }
+
+
 def ints(command: str) -> list[int]:
     return [int(value, 0) for value in re.findall(r"(?<![A-Za-z_])(?:0x[0-9A-Fa-f]+|\d+)", command)]
 

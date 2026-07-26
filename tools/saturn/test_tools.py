@@ -1421,6 +1421,28 @@ class QuadMapTests(unittest.TestCase):
         )
 
     @staticmethod
+    def _row(
+        x: int, y: int, z: int,
+        normal: tuple[int, int, int, int] = (0, 0, 0, 0),
+        uv: tuple[int, int] = (0, 0),
+        flag: int = 0,
+    ) -> tuple[int, ...]:
+        """One complete Vtx row: {{{x,y,z}, flag, {u,v}, {n0,n1,n2,n3}}}."""
+        return (x, y, z, flag, uv[0], uv[1], *normal)
+
+    @staticmethod
+    def _entry(entries: list[QuadMapEntry], display_list: str, list_ordinal: int) -> QuadMapEntry:
+        found = [
+            entry for entry in entries
+            if entry.display_list == display_list and entry.list_ordinal == list_ordinal
+        ]
+        if len(found) != 1:
+            raise AssertionError(
+                f"expected exactly one entry for {(display_list, list_ordinal)}, got {len(found)}"
+            )
+        return found[0]
+
+    @staticmethod
     def _partner(entries: list[QuadMapEntry], display_list: str, list_ordinal: int) -> int | None:
         found = [
             entry for entry in entries
@@ -1627,8 +1649,8 @@ class QuadMapTests(unittest.TestCase):
             ]
         }
         vertex_groups = {
-            "v_a": [(0, 0, 0, 0, 0), (10, 0, 0, 0, 0), (10, 10, 0, 0, 0)],
-            "v_b": [(0, 10, 0, 0, 0)],
+            "v_a": [self._row(0, 0, 0), self._row(10, 0, 0), self._row(10, 10, 0)],
+            "v_b": [self._row(0, 10, 0)],
         }
         vertices, triangle_vertices = resolve_display_list_vertices(lists, vertex_groups)
         first = [vertices[index] for index in triangle_vertices[("dl", 0)]]
@@ -1653,8 +1675,8 @@ class QuadMapTests(unittest.TestCase):
             ]
         }
         vertex_groups = {
-            "v_a": [(0, 0, 0, 0, 0), (10, 0, 0, 0, 0),
-                    (10, 10, 0, 0, 0), (0, 10, 0, 0, 0)],
+            "v_a": [self._row(0, 0, 0), self._row(10, 0, 0),
+                    self._row(10, 10, 0), self._row(0, 10, 0)],
         }
         _, triangle_vertices = resolve_display_list_vertices(lists, vertex_groups)
         walked = [site.list_ordinal for site in walk_display_lists(lists, "dl")]
@@ -1668,8 +1690,164 @@ class QuadMapTests(unittest.TestCase):
         _, triangle_vertices = resolve_display_list_vertices(lists, {})
         self.assertNotIn(("dl", 0), triangle_vertices)
 
+    # -- attribute-exact weld -------------------------------------------
+    #
+    # SM64 re-uploads the same physical vertex into several gsSPVertex
+    # batches, so triangles either side of a batch boundary never share a
+    # source row and never look adjacent. Welding two rows into one vertex is
+    # shading-neutral only when the *whole* row matches -- same position, uv,
+    # flag and normal/colour. Position-only welding would silently change
+    # Gouraud output.
+
+    _TWO_BATCH_SQUARE = {
+        "dl": [
+            ("gsSPVertex", "v_a, 3, 0"),
+            ("gsSP1Triangle", "0, 1, 2, 0"),
+            ("gsSPVertex", "v_b, 3, 0"),
+            ("gsSP1Triangle", "0, 1, 2, 0"),
+        ]
+    }
+
+    def _two_batch_rows(self, corner_normal: tuple[int, int, int, int]):
+        """A square split across two vertex batches.
+
+        v_a holds the first triangle, v_b the second. The (10,10,0) corner is
+        uploaded in both batches; ``corner_normal`` is v_b's copy of it.
+        """
+        return {
+            "v_a": [
+                self._row(0, 0, 0, normal=(0x7e, 0, 0, 0)),
+                self._row(10, 0, 0),
+                self._row(10, 10, 0, normal=(0x7e, 0, 0, 0)),
+            ],
+            "v_b": [
+                self._row(0, 0, 0, normal=(0x7e, 0, 0, 0)),
+                self._row(10, 10, 0, normal=corner_normal),
+                self._row(0, 10, 0),
+            ],
+        }
+
+    def test_byte_identical_rows_in_two_batches_weld(self) -> None:
+        rows = self._two_batch_rows((0x7e, 0, 0, 0))
+        vertices, triangle_vertices = resolve_display_list_vertices(
+            self._TWO_BATCH_SQUARE, rows)
+        self.assertEqual(len(vertices), 4, "6 rows, 2 welded pairs -> 4 vertices")
+        self.assertEqual(triangle_vertices[("dl", 0)], (0, 1, 2))
+        self.assertEqual(triangle_vertices[("dl", 1)], (0, 2, 3),
+                         "the welded corners must reuse the first batch's ids")
+
+    def test_same_position_different_normal_never_welds(self) -> None:
+        """The entire safety property of the weld, stated as a contrast.
+
+        Both fixtures place a vertex at exactly (10,10,0) in both batches.
+        They differ in one byte -- that copy's normal. Position-only welding
+        would merge both; only the byte-identical one may merge, because the
+        differing normal shades differently under Gouraud.
+        """
+        identical = self._two_batch_rows((0x7e, 0, 0, 0))
+        differing = self._two_batch_rows((0x40, 0, 0, 0))
+        self.assertEqual(
+            [row[0:3] for row in identical["v_b"]],
+            [row[0:3] for row in differing["v_b"]],
+            "the two fixtures must differ only in the normal, not in position",
+        )
+
+        sites = [
+            self._site("dl", 0, 1, ordinal=0),
+            self._site("dl", 1, 1, ordinal=1),
+        ]
+        results = {}
+        for label, rows in (("identical", identical), ("differing", differing)):
+            vertices, triangle_vertices = resolve_display_list_vertices(
+                self._TWO_BATCH_SQUARE, rows)
+            _, stats = build_quad_map(sites, triangle_vertices, vertices)
+            results[label] = (len(vertices), stats["quad_count"])
+
+        self.assertEqual(results["identical"], (4, 1),
+                         "byte-identical rows weld and the cross-batch pair merges")
+        self.assertEqual(results["differing"], (5, 0),
+                         "one differing normal byte must block the weld and the merge")
+
+    def test_weld_enables_a_cross_batch_quad(self) -> None:
+        """Welding is what makes the pair reachable at all.
+
+        The control passes the same geometry with per-upload vertex identity,
+        which is what the resolver produced before the weld: no shared edge,
+        so no candidate and no quad.
+        """
+        vertices, triangle_vertices = resolve_display_list_vertices(
+            self._TWO_BATCH_SQUARE, self._two_batch_rows((0x7e, 0, 0, 0)))
+        sites = [
+            self._site("dl", 0, 1, ordinal=0),
+            self._site("dl", 1, 1, ordinal=1),
+        ]
+        _, welded = build_quad_map(sites, triangle_vertices, vertices)
+
+        unwelded_vertices = [
+            (0, 0, 0), (10, 0, 0), (10, 10, 0),      # v_a's uploads
+            (0, 0, 0), (10, 10, 0), (0, 10, 0),      # v_b's uploads, same places
+        ]
+        _, unwelded = build_quad_map(
+            sites,
+            {("dl", 0): (0, 1, 2), ("dl", 1): (3, 4, 5)},
+            unwelded_vertices,
+        )
+        self.assertEqual(unwelded["quad_count"], 0, "pre-weld control must not merge")
+        self.assertEqual(unwelded["candidate_count"], 0, "and must find no shared edge")
+        self.assertEqual(welded["quad_count"], 1, "the weld must unlock the pair")
+
+    def test_vertex_rows_must_be_complete(self) -> None:
+        """A truncated row cannot prove two vertices are interchangeable."""
+        rows = {"v_a": [(0, 0, 0, 0, 0)]}  # vertex_groups()'s 5-field shape
+        with self.assertRaisesRegex(ValueError, "complete Vtx row"):
+            resolve_display_list_vertices(
+                {"dl": [("gsSPVertex", "v_a, 1, 0")]}, rows)
+
+    # -- 4-corner cycle --------------------------------------------------
+
+    def test_quad_corner_cycle_records_winding_order(self) -> None:
+        """The emit stage needs a real 4th corner in the right order.
+
+        `corners` codes 0-2 as this triangle's own corners in source order and
+        3-5 as the partner's (value - 3). Decoding either entry must trace the
+        same perimeter, in order -- not merely name the same four points.
+        """
+        sites, triangle_vertices = self._split_square()
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 1)
+
+        first = self._entry(entries, "dl", 0)
+        second = self._entry(entries, "dl", 1)
+        self.assertEqual(first.corners, (0, 1, 2, 5))
+        self.assertEqual(second.corners, (0, 4, 1, 2))
+
+        def perimeter(entry: QuadMapEntry) -> list[tuple[int, int, int]]:
+            own = triangle_vertices[(entry.display_list, entry.list_ordinal)]
+            mate = triangle_vertices[
+                (entry.display_list, entry.partner_list_ordinal)]
+            return [
+                self.SQUARE[own[code] if code < 3 else mate[code - 3]]
+                for code in entry.corners
+            ]
+
+        expected = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+        self.assertEqual(perimeter(first), expected)
+        self.assertEqual(perimeter(second), expected,
+                         "both entries must describe the same cycle in the same order")
+
+    def test_unpaired_triangles_have_no_corner_cycle(self) -> None:
+        sites, triangle_vertices = self._split_square(groups=(1, 2))
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertTrue(all(entry.corners is None for entry in entries))
+
     def test_distinct_source_vertices_at_one_position_do_not_share_an_edge(self) -> None:
-        """A duplicated seam vertex is a different vertex, not a shared edge."""
+        """Two distinct vertex ids never form a shared edge, same place or not.
+
+        The weld happens in the resolver, on byte-identical rows only. By the
+        time build_quad_map sees ids, two different ids are two different
+        vertices regardless of where they sit.
+        """
         sites, triangle_vertices = self._split_square()
         vertices = self.SQUARE + [(0, 0, 0), (10, 10, 0)]  # duplicates of 0 and 2
         triangle_vertices[("dl", 1)] = (4, 5, 3)

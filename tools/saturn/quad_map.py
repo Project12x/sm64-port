@@ -45,6 +45,14 @@ than relying on the material alone also raises the achievable rate: an edge
 incident on three faces is skipped by ``candidates()``, and partitioning keeps
 faces from other buckets from creating those three-way edges.
 
+Adjacency comes from an **attribute-exact weld**: two source ``Vtx`` rows are
+one vertex only when the whole row matches, normal/colour included. SM64
+re-uploads the same physical vertex into several ``gsSPVertex`` batches, so
+without a weld two triangles either side of a batch boundary never look
+adjacent; welding on position alone would be unsafe, because SM64 stores
+different normals at one position on hard edges. See
+:func:`resolve_display_list_vertices`.
+
 Provenance / reference-code-first: the pairing core is
 ``tools/saturn/quad_pairing.py`` (unmodified), which already wraps NetworkX's
 exact blossom matching. The Fast3D vertex-cache semantics reproduced in
@@ -90,11 +98,20 @@ class QuadMapEntry:
     ``partner_list_ordinal`` is the other triangle of the quad, or ``None``
     when this triangle stays a standalone (degenerate-quad) command. Pairing
     is symmetric: if A names B, B names A, and both are in ``display_list``.
+
+    ``corners`` is the merged quad's boundary cycle in VDP1 winding order, or
+    ``None`` when unpaired. Each code names a corner *relative to this entry*:
+    0-2 are this triangle's own corners in source order, 3-5 are the partner's
+    (``code - 3``). Keeping it here means the emit stage gets a real fourth
+    corner in the right order without recomputing the boundary walk per frame,
+    and the encoding is independent of vertex numbering, so it survives
+    whatever vertex representation the runtime happens to hold.
     """
 
     display_list: str
     list_ordinal: int
     partner_list_ordinal: int | None
+    corners: tuple[int, int, int, int] | None = None
 
 
 def _ints(text: str) -> list[int]:
@@ -103,15 +120,30 @@ def _ints(text: str) -> list[int]:
 
 def resolve_display_list_vertices(
     lists: Mapping[str, Sequence[tuple[str, str]]],
-    vertex_groups: Mapping[str, Sequence[tuple[int, ...]]],
+    vertex_rows: Mapping[str, Sequence[tuple[int, ...]]],
+    *,
+    weld: bool = True,
 ) -> tuple[list[Vertex], dict[Key, tuple[int, int, int]]]:
     """Resolve every triangle command to its three *source* vertices.
 
     Returns a flat vertex table and a ``(display_list, list_ordinal)`` map into
-    it. Vertex identity is the source ``Vtx`` row -- ``(group symbol, index)``
-    -- not the cache slot and not the position. Two distinct rows that happen
-    to share a position (a duplicated UV-seam vertex) stay distinct, so a seam
-    is never mistaken for a shared edge.
+    it. ``vertex_rows`` must hold **complete** ``Vtx`` rows -- use
+    :func:`extract_mario_actor.vertex_rows`, not ``vertex_groups()``, whose
+    5-field rows drop exactly the fields the weld depends on. Truncated rows
+    raise rather than silently welding on too little.
+
+    **Vertex identity is the whole source row**, so two rows weld into one
+    vertex only when they are byte-identical: same position, flag, uv and
+    normal/colour. That is shading-neutral by construction -- the two rows are
+    interchangeable in every field the renderer reads. Welding on position
+    alone would not be: SM64 stores different normals at the same position on
+    hard edges, and merging those changes Gouraud output.
+
+    The weld matters because SM64 re-uploads the same physical vertex into
+    several ``gsSPVertex`` batches. Without it, triangles either side of a
+    batch boundary never share a vertex and so never look adjacent, which
+    blocks the merge for purely bookkeeping reasons. ``mario_right_leg_shared_dl``
+    is the clean example: 20 triangles split across two 16-row batches.
 
     Each display-list body is walked independently and starts with an empty
     cache. That matches :func:`dl_rigid_groups.walk_display_lists`, which gives
@@ -119,23 +151,36 @@ def resolve_display_list_vertices(
     triangle reading a slot this body never loaded is simply left unresolved
     (and therefore never merged) rather than guessed at.
     """
+    from extract_mario_actor import VTX_ROW_FIELDS  # local: keeps this dep-free
+
+    for symbol, rows in vertex_rows.items():
+        for index, row in enumerate(rows):
+            if len(row) != VTX_ROW_FIELDS:
+                raise ValueError(
+                    f"{symbol}[{index}] is not a complete Vtx row: expected "
+                    f"{VTX_ROW_FIELDS} fields, got {len(row)}. Use "
+                    f"extract_mario_actor.vertex_rows(), not vertex_groups()."
+                )
+
     table: list[Vertex] = []
-    identifiers: dict[tuple[str, int], int] = {}
+    identifiers: dict[object, int] = {}
     triangle_vertices: dict[Key, tuple[int, int, int]] = {}
 
     def identify(source: tuple[str, int]) -> int | None:
-        known = identifiers.get(source)
-        if known is not None:
-            return known
-        rows = vertex_groups.get(source[0])
+        rows = vertex_rows.get(source[0])
         if rows is None or not 0 <= source[1] < len(rows):
             return None
-        row = rows[source[1]]
-        if len(row) < 3:
-            return None
-        identifiers[source] = len(table)
-        table.append((int(row[0]), int(row[1]), int(row[2])))
-        return identifiers[source]
+        row = tuple(int(field) for field in rows[source[1]])
+        # Welding keys identity on the row itself, so every upload of a
+        # byte-identical row collapses to one vertex. Without it, identity is
+        # the upload site and no two batches ever share a vertex.
+        key: object = row if weld else source
+        known = identifiers.get(key)
+        if known is not None:
+            return known
+        identifiers[key] = len(table)
+        table.append((row[0], row[1], row[2]))
+        return identifiers[key]
 
     for name, body in lists.items():
         cache: list[tuple[str, int] | None] = [None] * _CACHE_SLOTS
@@ -144,7 +189,7 @@ def resolve_display_list_vertices(
             if macro == "gsSPVertex":
                 symbol = _SYMBOL.match(args)
                 values = _ints(args[symbol.end():]) if symbol is not None else []
-                rows = vertex_groups.get(symbol.group(1)) if symbol is not None else None
+                rows = vertex_rows.get(symbol.group(1)) if symbol is not None else None
                 if symbol is None or rows is None or len(values) != 2:
                     # An unreadable load leaves the cache in an unknown state.
                     cache = [None] * _CACHE_SLOTS
@@ -182,6 +227,25 @@ def resolve_display_list_vertices(
                         resolved[0], resolved[1], resolved[2],
                     )  # type: ignore[assignment]
     return table, triangle_vertices
+
+
+def _corner_code(
+    vertex: int,
+    own: tuple[int, int, int],
+    mate: tuple[int, int, int],
+    key: Key,
+) -> int:
+    """Name one boundary-cycle vertex as a corner of this pair.
+
+    0-2 are ``own``'s corners in source order, 3-5 are ``mate``'s. The two
+    triangles share an edge, so two of the four cycle vertices appear in both;
+    resolving against ``own`` first keeps the encoding deterministic.
+    """
+    if vertex in own:
+        return own.index(vertex)
+    if vertex in mate:
+        return 3 + mate.index(vertex)
+    raise ValueError(f"quad corner {vertex} belongs to neither triangle of {key}")
 
 
 def _instantiations(sites: Iterable[TriangleSite]) -> dict[Key, list[TriangleSite]]:
@@ -292,6 +356,18 @@ def build_quad_map(
                 f"pair spans buckets: {face_keys[face]} -> {face_keys[other]}"
             )
 
+    # The boundary cycle quad_pairing already walked, re-expressed relative to
+    # each triangle so the emit stage never has to recompute it. Both entries
+    # of a pair describe the same cycle in the same order, from their own base.
+    corners: dict[int, tuple[int, int, int, int]] = {}
+    for face, other in partner.items():
+        own = triangle_vertices[face_keys[face]]
+        mate = triangle_vertices[face_keys[other]]
+        corners[face] = tuple(  # type: ignore[assignment]
+            _corner_code(vertex, own, mate, face_keys[face])
+            for vertex in matched[face].vertices
+        )
+
     entries: list[QuadMapEntry] = []
     for key in sorted(grouped):
         index = face_index.get(key)
@@ -300,6 +376,7 @@ def build_quad_map(
             display_list=key[0],
             list_ordinal=key[1],
             partner_list_ordinal=face_keys[other][1] if other is not None else None,
+            corners=corners.get(index) if index is not None else None,
         ))
 
     paired = len(partner)
@@ -356,13 +433,13 @@ def compile_actor(
     from dl_rigid_groups import (  # local: keeps the import graph shallow
         parse_display_lists, parse_geo_layouts, walk_geo_layout,
     )
-    from extract_mario_actor import vertex_groups
+    from extract_mario_actor import vertex_rows
 
     layouts = parse_geo_layouts(geo_source)
     lists = parse_display_lists(model_source)
     sites = walk_geo_layout(layouts, lists, layout)
     vertices, triangle_vertices = resolve_display_list_vertices(
-        lists, vertex_groups(model_source),
+        lists, vertex_rows(model_source),
     )
     return build_quad_map(sites, triangle_vertices, vertices, **options)  # type: ignore[arg-type]
 
