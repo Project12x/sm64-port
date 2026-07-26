@@ -10,6 +10,72 @@
 
 ---
 
+## Correction 0: rigid groups come from the geo layout, not from `gsSPMatrix`
+
+**Found during Task 1 execution, 2026-07-25. This supersedes Task 1 as originally written.**
+
+The plan assumed a triangle's joint is determined by `gsSPMatrix`/`gsSPPopMatrix`
+nesting inside the display list. Measured against the real tree, that is wrong:
+
+```
+$ grep -rho "gsSPMatrix([^)]*)" actors/ levels/bob/ | wc -l
+0
+```
+
+`gsSPMatrix` appears **zero times** in the actor and level display lists. Mario's
+joint hierarchy lives entirely in his **geo layout** (`actors/mario/geo.inc.c`):
+
+| Node | Count | Role |
+|---|---|---|
+| `GEO_ANIMATED_PART` | 336 | a joint — introduces a new transform |
+| `GEO_OPEN_NODE` / `GEO_CLOSE_NODE` | 391 each | the actual push/pop |
+| `GEO_DISPLAY_LIST` | 136 | binds a display list to the current node |
+| `GEO_ROTATION_NODE` / `GEO_TRANSLATE_ROTATE` / `GEO_SCALE` | 36 / 16 / 37 | further transforms |
+| `GEO_SWITCH_CASE` | 45 | costume/cap variant selection |
+| `GEO_BRANCH` / `GEO_RETURN` | 53 / 48 | subroutine structure |
+
+So the rigid-group walk is **two-level**: walk the geo layout to establish the
+transform hierarchy, and where a `GEO_DISPLAY_LIST` binds a list, walk that list
+for triangle ordinals — every triangle in it inheriting the geo node's group.
+
+Precedent for the geo half already exists: `tools/saturn/extract_mario_actor.py`
+has `geo_layout_parts()` (line 144), which parses this exact structure and
+composes the matrices. Reuse its parsing conventions.
+
+Transform-introducing nodes (`GEO_ANIMATED_PART`, `GEO_ROTATION_NODE`,
+`GEO_TRANSLATE_ROTATE`, `GEO_SCALE`) each start a new group; `GEO_OPEN_NODE`
+pushes and `GEO_CLOSE_NODE` pops. `GEO_SWITCH_CASE` and `GEO_ASM` poison their
+subtree — the spec already called for switch-case subtrees to be forced to
+fallback.
+
+The DL-level `gsSPMatrix`/`gsSPPopMatrix` handling stays in the walker: it costs
+nothing, and it is correct if any display list ever does use it.
+
+**Also corrected while here (both flagged by Task 1's implementer, both real):**
+
+- **`gsSPMatrix` without `G_MTX_PUSH` must not push.** Treating every
+  `gsSPMatrix` as a push desyncs the walker's stack from the hardware's by one,
+  which can assign *the same* group to triangles under genuinely different
+  matrices — an unsafe-merge direction. Allocate a new group always (the matrix
+  changed), but push only when `G_MTX_PUSH` is present in the arguments.
+- **`gsSPPopMatrix` on an empty stack must poison,** not silently keep the
+  current group. Same unsafe direction.
+
+## Correction 0b: the test runner is `unittest`, not `pytest`
+
+`pytest` is not installed in `.venv-saturn-tools` and is not in the hash-pinned
+`tools/saturn/requirements.txt`. The canonical runner is:
+
+```bash
+make -f Makefile.saturn.mk OS=Windows_NT verify-tools SATURN_TOOLS_PYTHON=$PWD/.venv-saturn-tools/Scripts/python.exe
+```
+
+which ends in `unittest.main()`. **Bare module-level `test_*` functions are
+silently never executed by `unittest.main()`** — the tests in Tasks 1, 2 and 5 as
+originally written would have been dead code in the only path that runs them.
+Write them as `unittest.TestCase` methods, preserving the test names and
+assertion semantics given in each task. Task 1 already did this.
+
 ## Two corrections to the design spec
 
 The spec was written before the emit adapter was read closely. Both corrections are load-bearing; do not follow the spec where it disagrees with this section.
