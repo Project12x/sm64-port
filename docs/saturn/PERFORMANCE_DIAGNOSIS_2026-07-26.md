@@ -593,6 +593,19 @@ diagnosis dramatically cheaper.
    drifted apart. The profile is currently readable **only** by decoding
    `probe_window` by hand against the ELF, which is how everything in this
    document was obtained. Fixing this is cheap and unblocks everything else.
+
+   **RESOLVED — and the diagnosis above was wrong about the cause.** Nothing
+   drifted: `telemetry_decode.py` reads the hwtest disc's "SAT0" block at the
+   fixed address `0x06030000`, which *only* `src/port/saturn/hwtest/main.c`
+   ever stamps. `capture_hwtest.py` peeks that address for every capture, so a
+   sourceboot report's `decode_error` is the decoder correctly refusing
+   unstamped HWRAM — the renderer profile was never in that block and never
+   had a magic word. `tools/saturn/fast3d_profile_decode.py` now decodes
+   `probe_window` into named counters, deriving every offset by parsing
+   `saturn_fast3d_frontend.h` at run time (cross-checked in `test_tools.py`
+   against a compiled `offsetof()` probe) and refusing, loudly and with both
+   byte counts, any capture whose size disagrees with the header's current
+   `sizeof`. Both captures cited above reproduce their hand-decoded counters.
 6. **No sampling profiler.** The 34-sample histogram in §2 is a fortunate side
    effect of `registers_at_stop` being recorded. A capture mode that stops N
    times at pseudo-random intervals and records only `pc` would give a

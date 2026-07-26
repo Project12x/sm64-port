@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -60,6 +64,17 @@ from prepare_sourceboot_collision_catalog import catalog_paths  # noqa: E402
 from quad_pairing import QuadCandidate, RenderPrimitive, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
+from fast3d_profile_decode import (  # noqa: E402
+    PROFILE_HEADER,
+    STRUCT_TYPEDEF,
+    ProfileSizeMismatch,
+    decode_profile,
+    layout_members,
+    load_probe,
+    parse_members,
+    profile_layout,
+    strip_c_comments,
+)
 from dl_rigid_groups import (  # noqa: E402,F401
     REASON_GEO_ASM,
     REASON_TEXTURED,
@@ -952,6 +967,310 @@ class TelemetryTests(unittest.TestCase):
         data.extend(b"\0" * 48)
         with self.assertRaisesRegex(ValueError, "extended telemetry magic"):
             decode(list(data), require_complete=True)
+
+    def test_sat0_magic_error_points_at_the_profile_decoder(self) -> None:
+        # A sourceboot capture legitimately fails this check -- 0x06030000 is
+        # unstamped HWRAM there. Two independent investigations read that
+        # message as a broken tool and hand-decoded probe_window instead, so
+        # the message must name the tool that does decode the renderer profile.
+        with self.assertRaisesRegex(ValueError, r"fast3d_profile_decode\.py"):
+            decode([0x21, 0x18, 0xDE, 0x5A] + [0] * 116, require_complete=False)
+
+
+REPO_ROOT = TOOLS.parents[1]
+EVIDENCE_REPORTS = REPO_ROOT / "docs" / "saturn" / "evidence" / "reports"
+# Two committed captures, deliberately from different builds. The 2026-07-26
+# one's counters were independently verified by hand; the 2026-07-25 one
+# predates the quad-merge fields and is the version-mismatch case.
+QUADMERGE_CAPTURE = EVIDENCE_REPORTS / "e2-sourceboot-quadmerge-freeroam-2026-07-26.json"
+MARIO_CAPTURE = EVIDENCE_REPORTS / "e2-sourceboot-mario-freeroam-2026-07-25.json"
+MARIO_CAPTURE_BYTES = 228
+
+
+def _host_c_compiler() -> str | None:
+    for candidate in (os.environ.get("CC"), "cc", "gcc", "clang"):
+        if candidate and shutil.which(candidate):
+            return candidate
+    return None
+
+
+def _load_capture(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+class Fast3dProfileLayoutTests(unittest.TestCase):
+    """The layout must be derived from the real header, not written down.
+
+    Counters are appended to sm64_saturn_fast3d_profile_t as features land
+    (five in one week for quad merging alone). A decoder carrying its own copy
+    of the offsets misreads silently the next time that happens, which is how
+    the profile ended up being hand-decoded byte-by-byte twice.
+    """
+
+    def test_offsets_match_a_compiled_offsetof_probe(self) -> None:
+        compiler = _host_c_compiler()
+        if compiler is None:
+            self.skipTest("no host C compiler on PATH (set CC to enable this cross-check)")
+        layout = profile_layout()
+        lines = [
+            "#include <stddef.h>",
+            "#include <stdio.h>",
+            '#include "saturn_fast3d_frontend.h"',
+            "int main(void) {",
+            f'    printf("sizeof %zu\\n", sizeof({STRUCT_TYPEDEF}));',
+        ]
+        for field in layout.fields:
+            lines.append(
+                f'    printf("{field.name} %zu %zu\\n", '
+                f"offsetof({STRUCT_TYPEDEF}, {field.name}), "
+                f"sizeof((({STRUCT_TYPEDEF} *)0)->{field.name}));"
+            )
+        lines.extend(["    return 0;", "}"])
+        with tempfile.TemporaryDirectory() as work_dir:
+            work = Path(work_dir)
+            source = work / "profile_offsets_probe.c"
+            source.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            binary = work / ("probe.exe" if sys.platform == "win32" else "probe")
+            compile_command = [
+                compiler,
+                "-std=c11",
+                "-DNON_MATCHING=1",
+                "-DAVOID_UB=1",
+                "-D_LANGUAGE_C=1",
+                "-DF3DEX_GBI_2E=1",
+                f"-I{REPO_ROOT / 'include'}",
+                f"-I{REPO_ROOT / 'src'}",
+                f"-I{REPO_ROOT / 'src' / 'port' / 'saturn' / 'gfx'}",
+                f"-I{REPO_ROOT / 'src' / 'port' / 'saturn' / 'platform'}",
+                str(source),
+                "-o",
+                str(binary),
+            ]
+            compiled = subprocess.run(compile_command, capture_output=True, text=True)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr)
+            probe = subprocess.run([str(binary)], capture_output=True, text=True, check=True)
+        reported: dict[str, tuple[int, int]] = {}
+        probe_size = None
+        for line in probe.stdout.split("\n"):
+            parts = line.split()
+            if not parts:
+                continue
+            if parts[0] == "sizeof":
+                probe_size = int(parts[1])
+            else:
+                reported[parts[0]] = (int(parts[1]), int(parts[2]))
+        self.assertEqual(probe_size, layout.size)
+        self.assertEqual(len(reported), len(layout.fields))
+        for field in layout.fields:
+            self.assertEqual(
+                reported[field.name], (field.offset, field.size), f"offset drift at {field.name}"
+            )
+
+    def test_fields_are_ordered_naturally_aligned_and_non_overlapping(self) -> None:
+        layout = profile_layout()
+        previous_end = 0
+        for field in layout.fields:
+            self.assertGreaterEqual(field.offset, previous_end, field.name)
+            self.assertEqual(field.offset % field.size, 0, field.name)
+            self.assertLess(field.offset - previous_end, field.size, f"over-padded at {field.name}")
+            previous_end = field.end
+        self.assertGreaterEqual(layout.size, previous_end)
+        self.assertEqual(layout.size % layout.alignment, 0)
+        self.assertEqual(layout.fields[0].offset, 0)
+        self.assertEqual(layout.fields[0].name, "frame_serial")
+
+    def test_committed_capture_sizes_land_on_field_boundaries(self) -> None:
+        # Every committed capture must be either exactly today's struct or an
+        # exact prefix of it. A field INSERTED rather than appended would break
+        # this, which is the drift this whole module is defending against.
+        layout = profile_layout()
+        boundaries = {field.offset for field in layout.fields} | {layout.size}
+        for capture in (QUADMERGE_CAPTURE, MARIO_CAPTURE):
+            captured = len(_load_capture(capture)["probe_window"]["data"])
+            self.assertIn(captured, boundaries, f"{capture.name} is not a prefix of the struct")
+
+    def test_layout_derives_from_the_real_header_path(self) -> None:
+        self.assertTrue(PROFILE_HEADER.is_file())
+        self.assertEqual(profile_layout().header, PROFILE_HEADER.resolve())
+
+    def test_unsupported_members_are_a_loud_parse_error(self) -> None:
+        # Each case pairs the bad member with two good ones, so a parser that
+        # silently SKIPS what it cannot model -- shifting every later offset --
+        # cannot pass by falling through to the "zero members" guard.
+        for member, expected in (
+            ("uint32_t counters[4]", r"counters\[4\]"),
+            ("uint64_t wide_counter", "unmodelled type"),
+            ("uint32_t *pointer", r"\*pointer"),
+            ("struct nested inner", "unsupported member"),
+            ("unsigned int plain", "unsupported member"),
+        ):
+            body = f"uint32_t frame_serial; {member}; uint16_t fault_flags;"
+            with self.assertRaisesRegex(ValueError, expected, msg=member):
+                parse_members(strip_c_comments(body))
+
+    def test_a_body_with_no_members_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "zero members"):
+            parse_members(strip_c_comments("/* nothing but a comment */"))
+
+    def test_comment_text_cannot_be_parsed_as_members(self) -> None:
+        body = """
+            uint32_t frame_serial;
+            /* a comment mentioning uint32_t ghost_counter; and more */
+            uint16_t fault_flags;
+        """
+        self.assertEqual(
+            parse_members(strip_c_comments(body)),
+            (("uint32_t", "frame_serial"), ("uint16_t", "fault_flags")),
+        )
+
+    def test_alignment_padding_is_modelled(self) -> None:
+        layout = layout_members(
+            (("uint8_t", "a"), ("uint32_t", "b"), ("uint16_t", "c"))
+        )
+        self.assertEqual([field.offset for field in layout.fields], [0, 4, 8])
+        self.assertEqual(layout.size, 12)  # tail padded to the 4-byte alignment
+        self.assertEqual(layout.alignment, 4)
+
+
+class Fast3dProfileDecodeTests(unittest.TestCase):
+    def test_quadmerge_capture_reproduces_its_verified_counters(self) -> None:
+        # Independently hand-verified figures from
+        # docs/saturn/PERFORMANCE_DIAGNOSIS_2026-07-26.md. partial=True so
+        # appending a counter to the struct does not invalidate this fixture --
+        # but INSERTING one shifts these values and fails the test, loudly.
+        capture = _load_capture(QUADMERGE_CAPTURE)
+        data, meta = load_probe(capture)
+        self.assertEqual(len(data), 248)
+        self.assertEqual(meta["probe_address"], 0x060BE918)
+        decoded = decode_profile(data, partial=True)
+        fields = decoded["fields"]
+        self.assertEqual(fields["frame_serial"], 143)
+        self.assertEqual(fields["triangles_emitted"], 913)
+        self.assertEqual(fields["quads_merged"], 86)
+        self.assertEqual(fields["triangles_vdp1_emitted"], 827)
+        self.assertEqual(fields["quad_map_mismatch"], 0)
+        self.assertEqual(fields["fault_flags"], 0)
+        # Cross-checks on neighbouring fields, so a whole-struct shift that
+        # happened to preserve one value cannot pass.
+        self.assertEqual(fields["triangles_transformed"], 2311)
+        self.assertEqual(fields["triangle_count"], 2311)
+        self.assertEqual(fields["command_count"], 3453)
+
+    def test_quadmerge_capture_decodes_strictly_against_todays_header(self) -> None:
+        layout = profile_layout()
+        data, _ = load_probe(_load_capture(QUADMERGE_CAPTURE))
+        if len(data) != layout.size:
+            self.skipTest(
+                f"struct has moved on from this capture ({layout.size} vs {len(data)} bytes)"
+            )
+        decoded = decode_profile(data)
+        self.assertTrue(decoded["complete"])
+        self.assertEqual(decoded["fields_missing"], [])
+        self.assertEqual(decoded["captured_bytes"], decoded["layout_bytes"])
+
+    def test_older_capture_is_detectably_older_not_silently_misread(self) -> None:
+        layout = profile_layout()
+        data, _ = load_probe(_load_capture(MARIO_CAPTURE))
+        self.assertEqual(len(data), MARIO_CAPTURE_BYTES)
+        with self.assertRaises(ProfileSizeMismatch) as raised:
+            decode_profile(data)
+        message = str(raised.exception)
+        self.assertIn(str(MARIO_CAPTURE_BYTES), message)
+        self.assertIn(str(layout.size), message)
+        self.assertIn("quads_merged", message)
+        self.assertIn(STRUCT_TYPEDEF, message)
+
+    def test_older_capture_partial_decode_names_what_is_absent(self) -> None:
+        data, _ = load_probe(_load_capture(MARIO_CAPTURE))
+        decoded = decode_profile(data, partial=True)
+        self.assertFalse(decoded["complete"])
+        self.assertEqual(
+            decoded["fields_missing"],
+            [
+                "quads_merged",
+                "quad_map_mismatch",
+                "quad_pair_not_adjacent",
+                "quad_ordinal_past_row",
+                "quad_pairs_declined",
+            ],
+        )
+        # Fields the older build did have still read correctly.
+        self.assertEqual(decoded["fields"]["frame_serial"], 143)
+        self.assertEqual(decoded["fields"]["triangles_emitted"], 771)
+        self.assertEqual(decoded["fields"]["triangles_transformed"], 2011)
+        self.assertNotIn("quads_merged", decoded["fields"])
+
+    def test_trailing_bytes_are_rejected_and_counted(self) -> None:
+        layout = profile_layout()
+        with self.assertRaises(ProfileSizeMismatch) as raised:
+            decode_profile(bytes(layout.size + 8))
+        message = str(raised.exception)
+        self.assertIn(str(layout.size + 8), message)
+        self.assertIn(str(layout.size), message)
+        self.assertIn("8 trailing byte", message)
+
+    def test_empty_capture_is_rejected(self) -> None:
+        with self.assertRaises(ProfileSizeMismatch):
+            decode_profile(b"")
+
+    def test_words_are_big_endian(self) -> None:
+        layout = profile_layout()
+        data = bytearray(layout.size)
+        offset = layout.field("frame_serial").offset
+        data[offset : offset + 4] = b"\x00\x00\x01\x00"
+        # 256 big-endian; 65536 little-endian. Both are plausible frame
+        # serials, so this distinguishes the two without relying on garbage.
+        self.assertEqual(decode_profile(bytes(data))["fields"]["frame_serial"], 256)
+
+    def test_field_types_are_honoured_not_flattened_to_uint32(self) -> None:
+        layout = profile_layout()
+        data = bytearray(layout.size)
+
+        def poke(name: str, payload: bytes) -> None:
+            field = layout.field(name)
+            self.assertEqual(field.size, len(payload), name)
+            data[field.offset : field.end] = payload
+
+        poke("max_call_depth", b"\xff\xff")  # uint16_t
+        poke("dbg_first_reject_min_x", b"\xff\xff")  # int16_t
+        poke("dbg_first_reject_min_z", b"\xff\xff\xff\xff")  # int32_t
+        poke("dbg_first_w_reject_mx", b"\x3f\x80\x00\x00")  # float
+        poke("dbg_bad_mtx_params", b"\xff")  # uint8_t
+        poke("command_count", b"\xff\xff\xff\xff")  # uint32_t
+        fields = decode_profile(bytes(data))["fields"]
+        self.assertEqual(fields["max_call_depth"], 65535)
+        self.assertEqual(fields["dbg_first_reject_min_x"], -1)
+        self.assertEqual(fields["dbg_first_reject_min_z"], -1)
+        self.assertEqual(fields["dbg_first_w_reject_mx"], 1.0)
+        self.assertEqual(fields["dbg_bad_mtx_params"], 255)
+        self.assertEqual(fields["command_count"], 4294967295)
+
+    def test_every_header_field_is_reported(self) -> None:
+        layout = profile_layout()
+        decoded = decode_profile(bytes(layout.size))
+        self.assertEqual(set(decoded["fields"]), {field.name for field in layout.fields})
+        self.assertEqual(len(decoded["fields"]), len(layout.fields))
+
+    def test_load_probe_accepts_every_capture_shape(self) -> None:
+        payload = list(range(8))
+        self.assertEqual(load_probe(payload)[0], payload)
+        report, meta = load_probe(
+            {"probe_window": {"address": 0x060BE918, "data": payload, "target": "sh2.master"}}
+        )
+        self.assertEqual(report, payload)
+        self.assertEqual(meta["probe_address"], 0x060BE918)
+        self.assertEqual(meta["probe_target"], "sh2.master")
+        peek, _ = load_probe({"jsonrpc": "2.0", "result": {"data": payload}})
+        self.assertEqual(peek, payload)
+
+    def test_capture_without_a_probe_window_is_explained(self) -> None:
+        with self.assertRaisesRegex(ValueError, "--probe-address"):
+            load_probe({"probe_window": None, "telemetry": {}})
+
+    def test_out_of_range_bytes_are_rejected(self) -> None:
+        layout = profile_layout()
+        with self.assertRaisesRegex(ValueError, "0\\.\\.255"):
+            decode_profile([300] * layout.size)
 
 
 class DisplayListRigidGroupTests(unittest.TestCase):

@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""Decode the fixed Saturn hardware-test telemetry block.
+"""Decode the fixed Saturn hardware-test ("SAT0") telemetry block.
 
 The input is either a Ymir JSON-RPC response (``result.data``) or a raw JSON
 array of byte values copied from ``mem.peek``.  Saturn words are big-endian.
+
+Scope, because this has been mistaken for a general capture decoder: the block
+this module reads is written ONLY by ``src/port/saturn/hwtest/main.c``, at the
+fixed address ``0x06030000``, and only by the hwtest disc.  A sourceboot
+capture's renderer counters are a different structure
+(``sm64_saturn_fast3d_profile_t``) at a different, link-determined address,
+recorded in the report's ``probe_window`` block -- decode those with
+``tools/saturn/fast3d_profile_decode.py``.  ``capture_hwtest.py`` peeks
+``0x06030000`` unconditionally, so a sourceboot report legitimately carries a
+``telemetry.decode_error`` here: that address holds ordinary, unstamped HWRAM
+in a sourceboot image.
 """
 
 from __future__ import annotations
@@ -99,7 +110,12 @@ def decode(data: list[int], require_complete: bool) -> dict[str, Any]:
     words = [int.from_bytes(bytes(data[offset : offset + 4]), "big") for offset in range(0, BLOCK_BYTES, 4)]
     decoded = dict(zip(FIELD_NAMES, words, strict=True))
     if decoded["magic"] != MAGIC:
-        raise ValueError(f"unexpected telemetry magic 0x{decoded['magic']:08X}")
+        raise ValueError(
+            f"unexpected telemetry magic 0x{decoded['magic']:08X} at 0x{BASE_ADDRESS:08X} "
+            f"(expected 0x{MAGIC:08X}, \"SAT0\"): this address is stamped only by the hwtest "
+            f"disc. For a sourceboot capture, the renderer counters are in the report's "
+            f"probe_window block -- decode them with tools/saturn/fast3d_profile_decode.py"
+        )
     if decoded["version"] != EXPECTED_VERSION:
         raise ValueError(f"unsupported telemetry version {decoded['version']}")
     if decoded["phase"] != EXPECTED_PHASE:

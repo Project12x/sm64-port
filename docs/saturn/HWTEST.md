@@ -49,6 +49,35 @@ printf '%s\n' '{"jsonrpc":"2.0","method":"exec.pause","id":1}' \
 python tools/saturn/telemetry_decode.py ymir-session.jsonl --require-complete
 ```
 
+### This block is not the renderer profile
+
+`0x06030000` is stamped **only by the hwtest disc** (`src/port/saturn/hwtest/
+main.c`). `capture_hwtest.py` peeks it unconditionally, including for
+`sourceboot` captures, so a sourceboot report carries a
+`telemetry.decode_error: unexpected telemetry magic 0x...` — that is the
+decoder correctly reporting that this address holds ordinary, unstamped HWRAM
+in a sourceboot image, not a broken tool. Two separate investigations read it
+as a defect and hand-decoded bytes instead.
+
+A sourceboot capture's renderer counters are a *different* structure at a
+*different*, link-determined address: `sm64_saturn_fast3d_profile_t`
+(`src/port/saturn/gfx/saturn_fast3d_frontend.h`), the first member of
+`_sourceboot_fast3d`, captured by pointing `capture_hwtest.py --probe-address`
+at that symbol. It lands in the report's `probe_window` block and is decoded
+with:
+
+```sh
+python tools/saturn/fast3d_profile_decode.py <capture>.json
+python tools/saturn/fast3d_profile_decode.py --layout-only   # field/offset table
+```
+
+That decoder derives every offset by parsing the header at run time rather than
+hardcoding them, because counters are appended to the struct regularly
+(`sizeof` has gone 228 → 244 → 248). A capture whose `probe_window` byte count
+does not match the header's current `sizeof` is refused with both numbers and
+the name of the first field the capture does not cover; `--partial` opts in to
+decoding an older capture's leading fields and lists what is absent.
+
 The cartridge test rejects both an unexpected ID and any mapped size other than
 exactly 4 MiB before it starts writing the destructive pattern. The decoder
 rejects short reads, bad base/extended magic, and unsupported version/phase
