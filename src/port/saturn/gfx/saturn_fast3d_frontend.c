@@ -10,6 +10,15 @@
 
 #include "saturn_fast3d_frontend.h"
 #include "saturn_projected_workarea.h"
+#include "saturn_quad_map.h"
+
+/* saturn_fast3d_frontend.h stores quad-map entries as plain uint32_t so it
+ * need not include a generated build artifact (see its comment on
+ * quad_entries). Tie the two together here, where the generated header IS
+ * in scope, so a change to the generated encoding's width is a compile
+ * error rather than a silent misread of the table. */
+_Static_assert(sizeof(sm64_saturn_quad_map_entry_t) == sizeof(uint32_t),
+               "quad map entry must stay a 32-bit word");
 
 #define SM64_SATURN_C0(w0, pos, width) \
     (((w0) >> (pos)) & ((1U << (width)) - 1U))
@@ -155,6 +164,72 @@ static void sm64_saturn_fast3d_count_command(
  * SM64_SATURN_TARGET_SCREEN_HEIGHT constant Task 7 already defined. */
 #define SM64_SATURN_TARGET_SCREEN_WIDTH 320
 
+/* Bind the quad map row for `list`, or unbind if the list has no row.
+ *
+ * Called once per display list ENTERED -- the task's own entry list, a
+ * G_DL call, and a G_DL branch (no_push) alike. Resetting triangle_ordinal
+ * here is what makes the key `(display_list, list_ordinal)` rather than a
+ * global count, and it matters on the branch path too: the offline walker
+ * treats gsSPBranchList as an unmodelled macro and poisons it, so a branch
+ * target never has a row at all, but the counter must not carry across or
+ * every ordinal after the branch would be shifted.
+ *
+ * The pending hold is dropped, not carried: a pair is only ever two
+ * consecutive triangle commands of ONE list, so a list transition can only
+ * ever invalidate it. Dropping loses a merge at worst; carrying could pair
+ * two triangles that are not partners at all. This particular drop is
+ * belt-and-braces and survives mutation testing unpunished: a hold always
+ * awaits ordinal >= 1 while an entered list always restarts at 0, so the
+ * awaited-ordinal test alone already refuses it. The equivalent drop on the
+ * G_ENDDL return path is NOT redundant -- there the caller's ordinal is
+ * restored to a value a child's leaked hold really can match -- and is
+ * covered by test_frontend_quad_map_hold_does_not_survive_g_enddl. */
+static void
+sm64_saturn_fast3d_quad_map_bind(sm64_saturn_fast3d_frontend_t *frontend,
+                                 const Gfx *list)
+{
+    frontend->quad_entries = NULL;
+    frontend->quad_entry_count = 0U;
+    frontend->triangle_ordinal = 0U;
+    frontend->quad_pending_valid = 0U;
+
+    for (uint16_t i = 0U; i < sm64_saturn_quad_map_list_count; i++) {
+        if (sm64_saturn_quad_map_lists[i].display_list == list) {
+            frontend->quad_entries =
+                (const uint32_t *)sm64_saturn_quad_map_lists[i].entries;
+            frontend->quad_entry_count =
+                sm64_saturn_quad_map_lists[i].entry_count;
+            break;
+        }
+    }
+}
+
+/* A paired entry's four corner codes must all name a real corner: 0-2 this
+ * triangle's own, 3-5 its partner's. Anything else is a corrupt or stale
+ * word, and this compiler never treats an unrecognised entry as safe. */
+static bool sm64_saturn_fast3d_quad_entry_corners_valid(uint32_t entry)
+{
+    for (uint32_t c = 0U; c < 4U; c++) {
+        if (SM64_SATURN_QUAD_MAP_CORNER(entry, c) >=
+                SM64_SATURN_QUAD_MAP_CORNER_LIMIT) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Painter-ordering bucket for one primitive's furthest corner. Factored out
+ * of the resolve stage because a merged quad must RECOMPUTE its bucket over
+ * all four corners (max of both triangles' max_z) rather than inherit
+ * either side's -- see the max_z-not-center_z note at the original call
+ * site, whose reasoning extends from three corners to four. */
+static uint16_t sm64_saturn_fast3d_depth_bucket(int32_t max_z)
+{
+    return (uint16_t)(((int64_t)(max_z - SM64_SATURN_NEAR_DEPTH) *
+        (SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1)) /
+        (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
+}
+
 /* Per-triangle pipeline for G_TRI1/G_TRI2: transform the three indexed
  * vertices through the current MP (modelview*projection) matrix,
  * perspective-divide, backface-cull in pre-viewport Y-up clip space, map
@@ -214,6 +289,84 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         .bottom = SM64_SATURN_TARGET_SCREEN_HEIGHT
     };
     int16_t screen_x[3], screen_y[3];
+    uint16_t corner_color[3];
+
+    /* ---- Quad map lookup, once per triangle command ------------------
+     *
+     * The ordinal advances for EVERY triangle command that reaches this
+     * function, including the ones rejected below, because the offline
+     * walker counts commands and knows nothing about culling. G_TRI2
+     * therefore advances it twice, once per call, and a nested G_DL's
+     * triangles are counted by the child's own ordinal (reset in
+     * sm64_saturn_fast3d_quad_map_bind), never the parent's. Any
+     * divergence here silently mis-pairs triangles, so the counting rule
+     * is deliberately the simplest one that can match the walker: one
+     * increment per resolve call, no exceptions. */
+    const uint16_t ordinal = frontend->triangle_ordinal;
+    uint32_t entry = SM64_SATURN_QUAD_MAP_NONE;
+    bool merge_into_pending = false;
+    uint16_t merge_slot = 0U;
+    int32_t merge_max_z = 0;
+    bool open_pair = false;
+
+    if (ordinal < frontend->quad_entry_count) {
+        entry = frontend->quad_entries[ordinal];
+    } else if (frontend->quad_entries != NULL) {
+        /* Past the end of this list's row. NOT a fault: quad_map.py trims
+         * each row after its last paired ordinal, and the encoding is
+         * built so a missing tail decodes as "do not merge" -- the
+         * generated header lists this case alongside a zeroed page and an
+         * absent display list. Counted separately from quad_map_mismatch
+         * so the latter can stay a hard must-be-zero gate. */
+        profile->quad_ordinal_past_row++;
+    }
+    frontend->triangle_ordinal++;
+
+    if (SM64_SATURN_QUAD_MAP_IS_PAIRED(entry) &&
+        !sm64_saturn_fast3d_quad_entry_corners_valid(entry)) {
+        profile->quad_map_mismatch++;
+        entry = SM64_SATURN_QUAD_MAP_NONE;
+    }
+
+    if (frontend->quad_pending_valid != 0U) {
+        /* Consume the hold if and only if BOTH sides agree: the held
+         * triangle awaited exactly this ordinal, and this ordinal's own
+         * entry names the held one as its partner. Either way the hold is
+         * released here -- if this triangle is not the partner, or is
+         * rejected further down, the held triangle simply stays the
+         * degenerate quad it was already written as. */
+        if (frontend->quad_pending_partner == ordinal &&
+            SM64_SATURN_QUAD_MAP_IS_PAIRED(entry) &&
+            SM64_SATURN_QUAD_MAP_PARTNER(entry) ==
+                (uint32_t)frontend->quad_pending_ordinal) {
+            merge_into_pending = true;
+            merge_slot = frontend->quad_pending_slot;
+            merge_max_z = frontend->quad_pending_max_z;
+        }
+        frontend->quad_pending_valid = 0U;
+    }
+
+    if (!merge_into_pending && SM64_SATURN_QUAD_MAP_IS_PAIRED(entry)) {
+        const uint32_t partner = SM64_SATURN_QUAD_MAP_PARTNER(entry);
+
+        if (partner >= (uint32_t)frontend->quad_entry_count ||
+            partner == (uint32_t)ordinal) {
+            /* A partner ordinal outside the row it is supposed to index,
+             * or a triangle paired with itself: the table disagrees with
+             * itself. Refuse the merge and say so. */
+            profile->quad_map_mismatch++;
+        } else if (partner == (uint32_t)ordinal + 1U) {
+            open_pair = true;
+        } else if (partner > (uint32_t)ordinal) {
+            /* Counted once per pair, at its lower ordinal. A partner that
+             * is not the very next command cannot be completed by a
+             * one-primitive hold, and an unbounded hold buffer is out of
+             * scope -- so this pair is emitted as two commands. Visible,
+             * not silent. (partner < ordinal is the ordinary other half
+             * of such a pair, already counted, and is not re-counted.) */
+            profile->quad_pair_not_adjacent++;
+        }
+    }
 
     profile->triangles_transformed++;
 
@@ -416,18 +569,19 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         return;
     }
 
-    if (frontend->resolved_count >=
-        SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES) {
+    /* A merge writes back into the partner's existing slot, so it consumes
+     * no new capacity -- that is the entire point of the feature. Only a
+     * genuinely new primitive is charged against the buffer. */
+    if (!merge_into_pending &&
+        frontend->resolved_count >=
+            SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES) {
         profile->reject_command_capacity++;
         return;
     }
 
     sm64_saturn_resolved_triangle_t *out =
-        &frontend->resolved[frontend->resolved_count++];
-    for (int c = 0; c < 3; c++) {
-        out->x[c] = screen_x[c];
-        out->y[c] = screen_y[c];
-    }
+        merge_into_pending ? &frontend->resolved[merge_slot]
+                           : &frontend->resolved[frontend->resolved_count++];
     /* Per-corner colors for VDP1 Gouraud (design spec 2026-07-24) --
      * replaces the old vertex-0-only flat pack now that Task 3 makes
      * every vertex's lit/unlit color correct, not just vertex 0's.
@@ -462,7 +616,7 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * references, not against intuition, before touching this line. */
     for (int c = 0; c < 3; c++) {
         const sm64_saturn_fast3d_vertex_t *v = &frontend->vertices[idx[c]];
-        out->corner_rgb1555[c] = (uint16_t)(0x8000U |
+        corner_color[c] = (uint16_t)(0x8000U |
             ((v->b >> 3) << 10) | ((v->g >> 3) << 5) | (v->r >> 3));
     }
     if ((frontend->geometry_mode & G_FOG) != 0U) {
@@ -472,20 +626,90 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
          * counted so the cost stays visible in captures. */
         profile->fog_dropped_triangles++;
     }
+
+    if (merge_into_pending) {
+        /* The held partner's three source corners are still sitting in
+         * out->[0..2]; snapshot them before overwriting, because the
+         * cycle can name them in any order. */
+        int16_t px[3], py[3];
+        uint16_t pc[3];
+
+        for (int c = 0; c < 3; c++) {
+            px[c] = out->x[c];
+            py[c] = out->y[c];
+            pc[c] = out->corner_rgb1555[c];
+        }
+
+        /* The offline compiler already walked the merged boundary and
+         * wrote its four corners, in VDP1 winding order, into this entry:
+         * codes 0-2 name THIS triangle's own corners in source order,
+         * codes 3-5 the partner's (code - 3). Both halves of a pair carry
+         * the same cycle in the same order, so decoding either one gives
+         * the same quad -- there is deliberately no boundary walk here.
+         * Corner codes were range-checked at lookup time. */
+        for (int c = 0; c < 4; c++) {
+            const uint32_t code =
+                SM64_SATURN_QUAD_MAP_CORNER(entry, (uint32_t)c);
+
+            if (code < 3U) {
+                out->x[c] = screen_x[code];
+                out->y[c] = screen_y[code];
+                out->corner_rgb1555[c] = corner_color[code];
+            } else {
+                const uint32_t k = code - 3U;
+
+                out->x[c] = px[k];
+                out->y[c] = py[k];
+                out->corner_rgb1555[c] = pc[k];
+            }
+        }
+
+        /* RECOMPUTED over both triangles, never inherited: max_z is the
+         * furthest corner, and a merged quad's furthest corner may belong
+         * to either half. (Same reason the original line below refuses
+         * quad.center_z -- that reads only indices[0]/[2] and drops a
+         * corner's depth entirely.) */
+        out->depth_bucket = sm64_saturn_fast3d_depth_bucket(
+            merge_max_z > quad.max_z ? merge_max_z : quad.max_z);
+        profile->quads_merged++;
+        /* triangles_emitted still counts BOTH triangles: it means "source
+         * triangles that survived resolve", which merging does not change.
+         * The command-count saving shows up in triangles_vdp1_emitted and
+         * in quads_merged, not here. */
+        profile->triangles_emitted++;
+        return;
+    }
+
+    for (int c = 0; c < 3; c++) {
+        out->x[c] = screen_x[c];
+        out->y[c] = screen_y[c];
+        out->corner_rgb1555[c] = corner_color[c];
+    }
     /* max_z buckets correctly for this (i0,i1,i2,i2) convention -- do
      * not switch this to quad.center_z, which reads only indices[0]/[2]
      * and would silently drop i1's depth (see design spec's "Painter
      * ordering reuse" finding). */
-    out->depth_bucket = (uint16_t)(((int64_t)(quad.max_z - SM64_SATURN_NEAR_DEPTH) *
-        (SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1)) /
-        (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
+    out->depth_bucket = sm64_saturn_fast3d_depth_bucket(quad.max_z);
     /* Triangle: corner 3 repeats corner 2, the degenerate-quad convention
-     * VDP1 has always been given here. Task 6 overwrites this for merged
-     * pairs; until then every primitive is still a triangle. */
+     * VDP1 has always been given here. A merged pair takes the branch
+     * above instead and writes a genuine fourth corner. */
     out->x[3] = out->x[2];
     out->y[3] = out->y[2];
     out->corner_rgb1555[3] = out->corner_rgb1555[2];
     profile->triangles_emitted++;
+
+    if (open_pair) {
+        /* Hold this primitive open for exactly one more triangle command.
+         * If the next one is not the awaited partner, or is culled, the
+         * hold lapses and this stays the degenerate quad already written
+         * above -- the merge is an overwrite of a complete primitive, not
+         * a deferral of one. */
+        frontend->quad_pending_valid = 1U;
+        frontend->quad_pending_slot = (uint16_t)(frontend->resolved_count - 1U);
+        frontend->quad_pending_ordinal = ordinal;
+        frontend->quad_pending_partner = (uint16_t)(ordinal + 1U);
+        frontend->quad_pending_max_z = quad.max_z;
+    }
 }
 
 /* Full-command decode for opcodes whose semantics need more than the
@@ -994,6 +1218,13 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     sm64_saturn_fast3d_profile_t *profile;
     Gfx *command;
     Gfx *return_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
+    /* Saved alongside return_stack, pushed and popped by the same G_DL /
+     * G_ENDDL handling: the quad map is keyed by ordinal WITHIN a display
+     * list, so a called list gets its own row and its own counter, and the
+     * caller's must come back exactly as it was. */
+    const uint32_t *quad_entries_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
+    uint16_t quad_count_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
+    uint16_t quad_ordinal_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
     uint16_t stack_depth = 0U;
     uint32_t frame_serial;
 
@@ -1045,6 +1276,7 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
         profile->fault_flags = SM64_SATURN_FAST3D_FAULT_NULL_DISPLAY_LIST;
         return;
     }
+    sm64_saturn_fast3d_quad_map_bind(frontend, command);
 
     while (profile->command_count < SM64_SATURN_FAST3D_MAX_COMMANDS) {
         const uint8_t opcode = (uint8_t)(command->words.w0 >> 24);
@@ -1065,17 +1297,26 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
             if (no_push) {
                 profile->display_list_branches++;
                 command = target;
+                /* A branch REPLACES the current list rather than nesting
+                 * into it, so nothing is saved -- but the ordinal must
+                 * still restart, or every triangle past the branch would
+                 * be looked up under the wrong key. */
+                sm64_saturn_fast3d_quad_map_bind(frontend, target);
                 continue;
             }
             if (stack_depth == SM64_SATURN_FAST3D_MAX_CALL_DEPTH) {
                 profile->fault_flags |= SM64_SATURN_FAST3D_FAULT_CALL_DEPTH;
                 return;
             }
+            quad_entries_stack[stack_depth] = frontend->quad_entries;
+            quad_count_stack[stack_depth] = frontend->quad_entry_count;
+            quad_ordinal_stack[stack_depth] = frontend->triangle_ordinal;
             return_stack[stack_depth++] = command + 1;
             if (stack_depth > profile->max_call_depth)
                 profile->max_call_depth = stack_depth;
             profile->display_list_calls++;
             command = target;
+            sm64_saturn_fast3d_quad_map_bind(frontend, target);
             continue;
         }
 
@@ -1083,6 +1324,13 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
             if (stack_depth == 0U)
                 return;
             command = return_stack[--stack_depth];
+            frontend->quad_entries = quad_entries_stack[stack_depth];
+            frontend->quad_entry_count = quad_count_stack[stack_depth];
+            frontend->triangle_ordinal = quad_ordinal_stack[stack_depth];
+            /* Dropped rather than restored: a pair is two consecutive
+             * triangle commands of one list, so a hold cannot legitimately
+             * survive a nested call. */
+            frontend->quad_pending_valid = 0U;
             continue;
         }
 

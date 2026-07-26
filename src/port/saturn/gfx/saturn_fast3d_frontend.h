@@ -248,6 +248,64 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t unlit_vertices;
     uint32_t fog_dropped_triangles;
     uint32_t gouraud_bank_overflow;
+
+    /* Added for general quad merging (docs/superpowers/specs/2026-07-25-
+     * general-quad-merging-design.md). Appended at the very END of this
+     * struct, after the Gouraud block, for the same reason that block
+     * says it was: capture-decode scripts and this project's recorded
+     * offsetof() probe figures hand-map every earlier field, so no
+     * existing field may move. sizeof() grows; that is expected and is
+     * recorded in the quad-merge evidence.
+     *
+     * quads_merged      one increment per PAIR that left the resolve stage
+     *                   as a single four-corner VDP1 primitive instead of
+     *                   two degenerate ones. VDP1 command count drops by
+     *                   exactly this number; triangles_transformed and
+     *                   triangles_emitted do NOT change, because merging
+     *                   changes commands, not geometry.
+     * quad_map_mismatch a map entry that contradicts ITSELF: a corner code
+     *                   outside 0-5, or a partner ordinal that is the
+     *                   entry's own or lies past the end of the very row
+     *                   it indexes. Nothing a well-formed generated table
+     *                   can produce, so this MUST read 0; a nonzero value
+     *                   is a correctness fault, not a tuning knob, and the
+     *                   offending entry is refused rather than merged.
+     *
+     *                   Deliberately does NOT include "live ordinal past
+     *                   entry_count" -- see quad_ordinal_past_row.
+     * quad_ordinal_past_row
+     *                   a triangle whose ordinal is past the end of its
+     *                   display list's row. EXPECTED nonzero, and not a
+     *                   fault: quad_map.py trims each row after its last
+     *                   paired ordinal, because the encoding makes a
+     *                   missing tail decode as "do not merge" anyway (see
+     *                   the generated header's own note listing "an ordinal
+     *                   past entry_count" among the normal all-zero reads).
+     *                   18 of the 27 generated rows are shorter than their
+     *                   list's real triangle-command count for exactly this
+     *                   reason, so treating the case as a fault would make
+     *                   the mismatch counter fire dozens of times a frame
+     *                   on a perfectly healthy build -- measured at 65/frame
+     *                   before this counter was split out. Kept as a
+     *                   separate number because it is still the only coarse
+     *                   cross-check available between row lengths and the
+     *                   live stream.
+     * quad_pair_not_adjacent
+     *                   the map offered a legal pair whose two ordinals
+     *                   are NOT consecutive, counted once per pair (at the
+     *                   lower ordinal). The resolve stage holds exactly one
+     *                   primitive, so only an (N, N+1) pair can be completed
+     *                   without an unbounded hold buffer; everything else is
+     *                   emitted as two commands. This counter is the size of
+     *                   that deliberately-unclaimed remainder -- measured
+     *                   offline as 213 of the map's 284 pairs -- so the cost
+     *                   of the one-primitive hold stays visible rather than
+     *                   silently disappearing. Expected nonzero; not a
+     *                   fault. */
+    uint32_t quads_merged;
+    uint32_t quad_map_mismatch;
+    uint32_t quad_pair_not_adjacent;
+    uint32_t quad_ordinal_past_row;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,
@@ -383,6 +441,48 @@ typedef struct sm64_saturn_fast3d_frontend {
     sm64_saturn_resolved_triangle_t
         resolved[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
     uint16_t resolved_count;
+
+    /* Quad-merge state for the display list currently being interpreted
+     * (general-quad-merging design, 2026-07-25).
+     *
+     * quad_entries points into the generated table
+     * (build/saturn/sourceboot/generated/saturn_quad_map.c), indexed by
+     * triangle_ordinal -- the triangle command's index WITHIN ITS OWN
+     * display list, which is the only key the runtime can reproduce: a
+     * global ordinal would be shifted by GEO_SWITCH_CASE selection and by
+     * the master list's 8-layer bucketing. NULL means this list has no map
+     * row, which decodes exactly like an all-zero entry: do not merge.
+     *
+     * Declared as `const uint32_t *` rather than as the generated
+     * `sm64_saturn_quad_map_entry_t *` on purpose -- this header is
+     * deliberately free of generated-build-artifact includes so it stays
+     * host-includable without running the offline compiler first (see the
+     * file-header note about host-testability). saturn_fast3d_frontend.c
+     * carries a _Static_assert tying the two types together, so a change
+     * to the generated width is a compile error rather than a silent
+     * misread.
+     *
+     * All three are per-display-list, saved and restored across a G_DL
+     * call by sm64_saturn_fast3d_frontend_submit's own stack, alongside
+     * its return_stack. They live here rather than as submit() locals
+     * because the resolve stage, which is where the lookup is consumed,
+     * only ever receives the frontend pointer. */
+    const uint32_t *quad_entries;
+    uint16_t quad_entry_count;
+    uint16_t triangle_ordinal;
+
+    /* One-primitive hold for an (N, N+1) pair: N's resolved[] slot, its
+     * ordinal, the ordinal expected to complete it, and its quad max_z
+     * (needed because a merged quad's depth bucket must be recomputed
+     * over all four corners, never inherited from one side). Cleared on
+     * every display-list transition and whenever the next resolved
+     * triangle is not the awaited partner, so an abandoned hold degrades
+     * to the pre-existing one-command-per-triangle behaviour. */
+    uint16_t quad_pending_slot;
+    uint16_t quad_pending_ordinal;
+    uint16_t quad_pending_partner;
+    uint8_t quad_pending_valid;
+    int32_t quad_pending_max_z;
 } sm64_saturn_fast3d_frontend_t;
 
 void sm64_saturn_fast3d_frontend_init(

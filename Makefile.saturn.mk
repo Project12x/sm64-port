@@ -161,7 +161,17 @@ verify-tools: check-host-tools
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_tools.py"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_trig_q16.py"
 
-verify-runtime-contracts:
+# Depends on compile-quad-map because saturn_fast3d_frontend.c now includes
+# the GENERATED saturn_quad_map.h -- the host test compiles that real
+# translation unit, so it needs the real generated header, not a hand-written
+# stand-in that could drift from the encoding the target actually consumes.
+# The generator is ~0.8 s and writes only into build/, so making it a
+# prerequisite costs nothing and removes the "works only after a cross-build"
+# ordering trap. The test supplies its own sm64_saturn_quad_map_lists[]
+# definition (the generated .c cannot link on the host -- it references real
+# actor display-list symbols), which is what lets it drive the merge path
+# with synthetic maps.
+verify-runtime-contracts: compile-quad-map
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
@@ -169,6 +179,7 @@ verify-runtime-contracts:
 	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  -I"$(QUAD_MAP_GENERATED)" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/runtime_contract_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
