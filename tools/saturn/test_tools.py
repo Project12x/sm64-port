@@ -70,6 +70,12 @@ from dl_rigid_groups import (  # noqa: E402,F401
     walk_display_lists,
     walk_geo_layout,
 )
+from quad_map import (  # noqa: E402
+    REASON_UNRESOLVED_VERTICES,
+    QuadMapEntry,
+    build_quad_map,
+    resolve_display_list_vertices,
+)
 
 
 class AssetClassifierTests(unittest.TestCase):
@@ -1381,6 +1387,294 @@ class GeoLayoutRigidGroupTests(unittest.TestCase):
         self.assertEqual(stats["rigid_groups"], 1)
         self.assertEqual(stats["unsafe_sites"], 1)
         self.assertEqual(stats["unsafe_by_reason"][REASON_GEO_ASM], 1)
+
+
+class QuadMapTests(unittest.TestCase):
+    """The quad map is the intersection of a structural and a geometric gate.
+
+    Structural: both triangles carry the same rigid group in every
+    instantiation of their display list, and neither is unsafe. Geometric:
+    quad_pairing's shared-edge/winding/normal/convexity checks.
+    """
+
+    #: A unit square split along its diagonal: ids 0..3.
+    SQUARE = [(0, 0, 0), (10, 0, 0), (10, 10, 0), (0, 10, 0)]
+
+    @staticmethod
+    def _site(
+        display_list: str,
+        list_ordinal: int,
+        rigid_group: int,
+        indices: tuple[int, int, int] = (0, 1, 2),
+        unsafe: bool = False,
+        reasons: frozenset[str] = frozenset(),
+        ordinal: int = 0,
+    ) -> TriangleSite:
+        return TriangleSite(
+            ordinal=ordinal,
+            rigid_group=rigid_group,
+            indices=indices,
+            unsafe=unsafe,
+            reasons=reasons,
+            display_list=display_list,
+            list_ordinal=list_ordinal,
+        )
+
+    @staticmethod
+    def _partner(entries: list[QuadMapEntry], display_list: str, list_ordinal: int) -> int | None:
+        found = [
+            entry for entry in entries
+            if entry.display_list == display_list and entry.list_ordinal == list_ordinal
+        ]
+        if len(found) != 1:
+            raise AssertionError(
+                f"expected exactly one entry for {(display_list, list_ordinal)}, got {len(found)}"
+            )
+        return found[0].partner_list_ordinal
+
+    def _split_square(self, display_list: str = "dl", groups: tuple[int, int] = (1, 1)):
+        """Two coplanar triangles sharing the 0-2 diagonal of SQUARE."""
+        sites = [
+            self._site(display_list, 0, groups[0], ordinal=0),
+            self._site(display_list, 1, groups[1], ordinal=1),
+        ]
+        triangle_vertices = {
+            (display_list, 0): (0, 1, 2),
+            (display_list, 1): (0, 2, 3),
+        }
+        return sites, triangle_vertices
+
+    def test_same_rigid_group_coplanar_pair_merges(self) -> None:
+        sites, triangle_vertices = self._split_square()
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 1)
+        self.assertEqual(stats["commands_saved"], 1)
+        self.assertEqual(self._partner(entries, "dl", 0), 1)
+        self.assertEqual(self._partner(entries, "dl", 1), 0)
+
+    def test_identical_geometry_in_different_rigid_groups_never_merges(self) -> None:
+        """The core safety property: two joints can pull the quad apart.
+
+        The geometry here is byte-identical to the merging case above; only
+        the rigid group differs. If this ever merges, animation tears it.
+        """
+        merged, triangle_vertices = self._split_square(groups=(1, 1))
+        split, _ = self._split_square(groups=(1, 2))
+        self.assertEqual(
+            [s.indices for s in merged], [s.indices for s in split],
+            "the two fixtures must differ only in rigid group",
+        )
+        _, merged_stats = build_quad_map(merged, triangle_vertices, self.SQUARE)
+        entries, stats = build_quad_map(split, triangle_vertices, self.SQUARE)
+        self.assertEqual(merged_stats["quad_count"], 1, "control case must merge")
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertEqual(stats["commands_saved"], 0)
+        self.assertIsNone(self._partner(entries, "dl", 0))
+        self.assertIsNone(self._partner(entries, "dl", 1))
+
+    def test_unsafe_site_is_never_paired(self) -> None:
+        sites, triangle_vertices = self._split_square()
+        sites[1] = self._site("dl", 1, 1, unsafe=True,
+                              reasons=frozenset({REASON_TEXTURED}), ordinal=1)
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertIsNone(self._partner(entries, "dl", 0))
+        self.assertIsNone(self._partner(entries, "dl", 1))
+        self.assertEqual(stats["ineligible_by_reason"][REASON_TEXTURED], 1)
+
+    def test_unsafe_in_any_instantiation_blocks_the_key(self) -> None:
+        """One display list bound under two geo nodes: unsafe once is unsafe."""
+        sites, triangle_vertices = self._split_square()
+        sites.append(self._site("dl", 0, 7, unsafe=True,
+                                reasons=frozenset({REASON_GEO_ASM}), ordinal=2))
+        sites.append(self._site("dl", 1, 7, ordinal=3))
+        _, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertEqual(stats["ineligible_by_reason"][REASON_GEO_ASM], 1)
+
+    def test_rigid_groups_must_agree_in_every_instantiation(self) -> None:
+        """Same groups per instantiation merges; a divergent one does not."""
+        agree = [
+            self._site("dl", 0, 1, ordinal=0), self._site("dl", 1, 1, ordinal=1),
+            self._site("dl", 0, 5, ordinal=2), self._site("dl", 1, 5, ordinal=3),
+        ]
+        diverge = [
+            self._site("dl", 0, 1, ordinal=0), self._site("dl", 1, 1, ordinal=1),
+            self._site("dl", 0, 5, ordinal=2), self._site("dl", 1, 6, ordinal=3),
+        ]
+        _, triangle_vertices = self._split_square()
+        _, agree_stats = build_quad_map(agree, triangle_vertices, self.SQUARE)
+        _, diverge_stats = build_quad_map(diverge, triangle_vertices, self.SQUARE)
+        self.assertEqual(agree_stats["quad_count"], 1)
+        self.assertEqual(diverge_stats["quad_count"], 0)
+
+    def test_every_site_gets_exactly_one_entry(self) -> None:
+        sites = [
+            self._site("dl_a", 0, 1, ordinal=0),
+            self._site("dl_a", 1, 1, ordinal=1),
+            self._site("dl_b", 0, 2, ordinal=2),
+            self._site("dl_b", 1, 2, ordinal=3),
+            # dl_a bound a second time under another joint: same keys again.
+            self._site("dl_a", 0, 9, ordinal=4),
+            self._site("dl_a", 1, 9, ordinal=5),
+        ]
+        triangle_vertices = {
+            ("dl_a", 0): (0, 1, 2), ("dl_a", 1): (0, 2, 3),
+            ("dl_b", 0): (0, 1, 2), ("dl_b", 1): (0, 2, 3),
+        }
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        keys = [(entry.display_list, entry.list_ordinal) for entry in entries]
+        self.assertEqual(len(keys), len(set(keys)), "entries must be unique per key")
+        for site in sites:
+            self.assertEqual(
+                sum(1 for key in keys
+                    if key == (site.display_list, site.list_ordinal)), 1,
+                f"site {(site.display_list, site.list_ordinal)} needs exactly one entry",
+            )
+        self.assertEqual(stats["keys"], 4)
+
+    def test_pairing_is_symmetric(self) -> None:
+        sites = [
+            self._site("dl", 0, 1, ordinal=0),
+            self._site("dl", 1, 1, ordinal=1),
+            self._site("dl", 2, 1, ordinal=2),
+            self._site("dl", 3, 1, ordinal=3),
+        ]
+        vertices = self.SQUARE + [(20, 0, 0), (20, 10, 0)]
+        triangle_vertices = {
+            ("dl", 0): (0, 1, 2), ("dl", 1): (0, 2, 3),
+            ("dl", 2): (1, 4, 5), ("dl", 3): (1, 5, 2),
+        }
+        entries, stats = build_quad_map(sites, triangle_vertices, vertices)
+        self.assertEqual(stats["quad_count"], 2)
+        by_key = {(e.display_list, e.list_ordinal): e.partner_list_ordinal for e in entries}
+        for (display_list, list_ordinal), partner in by_key.items():
+            if partner is None:
+                continue
+            self.assertEqual(
+                by_key[(display_list, partner)], list_ordinal,
+                f"{(display_list, list_ordinal)} -> {partner} is not reciprocated",
+            )
+
+    def test_pair_never_spans_two_display_lists(self) -> None:
+        """Same rigid group, perfect shared-edge geometry, different lists.
+
+        The runtime buffers triangles within one display list, so a pair
+        across lists could never be resolved even though both gates pass.
+        """
+        sites = [
+            self._site("dl_a", 0, 1, ordinal=0),
+            self._site("dl_b", 0, 1, ordinal=1),
+        ]
+        triangle_vertices = {("dl_a", 0): (0, 1, 2), ("dl_b", 0): (0, 2, 3)}
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertIsNone(self._partner(entries, "dl_a", 0))
+        self.assertIsNone(self._partner(entries, "dl_b", 0))
+        for entry in entries:
+            if entry.partner_list_ordinal is not None:
+                partners = [
+                    other for other in entries
+                    if other.display_list == entry.display_list
+                    and other.list_ordinal == entry.partner_list_ordinal
+                ]
+                self.assertEqual(len(partners), 1)
+
+    def test_same_list_ordinal_in_two_lists_does_not_collide(self) -> None:
+        """Keys are (display_list, list_ordinal), not list_ordinal alone."""
+        sites = [
+            self._site("dl_a", 0, 1, ordinal=0),
+            self._site("dl_a", 1, 1, ordinal=1),
+            self._site("dl_b", 0, 2, ordinal=2),
+            self._site("dl_b", 1, 2, ordinal=3),
+        ]
+        vertices = self.SQUARE + [(0, 0, 50), (10, 0, 50), (40, 40, 90)]
+        triangle_vertices = {
+            ("dl_a", 0): (0, 1, 2), ("dl_a", 1): (0, 2, 3),
+            # dl_b's two triangles share no edge, so they must stay unpaired
+            # even though their list_ordinals match dl_a's merging pair.
+            ("dl_b", 0): (4, 5, 6), ("dl_b", 1): (0, 1, 6),
+        }
+        entries, stats = build_quad_map(sites, triangle_vertices, vertices)
+        self.assertEqual(stats["quad_count"], 1)
+        self.assertEqual(self._partner(entries, "dl_a", 0), 1)
+        self.assertEqual(self._partner(entries, "dl_a", 1), 0)
+        self.assertIsNone(self._partner(entries, "dl_b", 0))
+        self.assertIsNone(self._partner(entries, "dl_b", 1))
+
+    def test_geometric_gate_still_rejects_bad_winding(self) -> None:
+        sites, triangle_vertices = self._split_square()
+        triangle_vertices[("dl", 1)] = (0, 3, 2)  # reversed winding
+        _, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertEqual(stats["geometric_rejection_reasons"], {"winding_or_topology": 1})
+
+    def test_unresolved_vertices_are_never_paired(self) -> None:
+        sites, triangle_vertices = self._split_square()
+        del triangle_vertices[("dl", 1)]
+        entries, stats = build_quad_map(sites, triangle_vertices, self.SQUARE)
+        self.assertEqual(stats["quad_count"], 0)
+        self.assertEqual(stats["ineligible_by_reason"][REASON_UNRESOLVED_VERTICES], 1)
+        self.assertEqual(len(entries), 2)
+
+    def test_vertex_resolution_tracks_the_fast3d_cache(self) -> None:
+        lists = {
+            "dl": [
+                ("gsSPVertex", "v_a, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPVertex", "v_b, 1, 1"),  # overwrite slot 1 only
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ]
+        }
+        vertex_groups = {
+            "v_a": [(0, 0, 0, 0, 0), (10, 0, 0, 0, 0), (10, 10, 0, 0, 0)],
+            "v_b": [(0, 10, 0, 0, 0)],
+        }
+        vertices, triangle_vertices = resolve_display_list_vertices(lists, vertex_groups)
+        first = [vertices[index] for index in triangle_vertices[("dl", 0)]]
+        second = [vertices[index] for index in triangle_vertices[("dl", 1)]]
+        self.assertEqual(first, [(0, 0, 0), (10, 0, 0), (10, 10, 0)])
+        self.assertEqual(second, [(0, 0, 0), (0, 10, 0), (10, 10, 0)])
+
+    def test_resolver_and_walker_agree_on_every_list_ordinal(self) -> None:
+        """The two walks must count triangle commands identically.
+
+        dl_rigid_groups advances list_ordinal for every triangle command. If
+        the resolver skipped the ones it cannot resolve, the two walks would
+        drift and the map would pair the wrong triangles -- a silent
+        corrupted-geometry bug rather than a loud failure.
+        """
+        lists = {
+            "dl": [
+                ("gsSP1Triangle", "0, 1, 2, 0"),  # slots never loaded
+                ("gsSPVertex", "v_a, 4, 0"),
+                ("gsSP2Triangles", "0, 1, 2, 0x0, 0, 2, 3, 0x0"),
+                ("gsSP1Triangle", "0, 1, 3, 0"),
+            ]
+        }
+        vertex_groups = {
+            "v_a": [(0, 0, 0, 0, 0), (10, 0, 0, 0, 0),
+                    (10, 10, 0, 0, 0), (0, 10, 0, 0, 0)],
+        }
+        _, triangle_vertices = resolve_display_list_vertices(lists, vertex_groups)
+        walked = [site.list_ordinal for site in walk_display_lists(lists, "dl")]
+        self.assertEqual(walked, [0, 1, 2, 3])
+        self.assertNotIn(("dl", 0), triangle_vertices, "unresolved, but still counted")
+        self.assertEqual(sorted(triangle_vertices), [("dl", 1), ("dl", 2), ("dl", 3)])
+        self.assertEqual(triangle_vertices[("dl", 3)], (0, 1, 3))
+
+    def test_vertex_resolution_leaves_unloaded_slots_unresolved(self) -> None:
+        lists = {"dl": [("gsSP1Triangle", "0, 1, 2, 0")]}
+        _, triangle_vertices = resolve_display_list_vertices(lists, {})
+        self.assertNotIn(("dl", 0), triangle_vertices)
+
+    def test_distinct_source_vertices_at_one_position_do_not_share_an_edge(self) -> None:
+        """A duplicated seam vertex is a different vertex, not a shared edge."""
+        sites, triangle_vertices = self._split_square()
+        vertices = self.SQUARE + [(0, 0, 0), (10, 10, 0)]  # duplicates of 0 and 2
+        triangle_vertices[("dl", 1)] = (4, 5, 3)
+        _, stats = build_quad_map(sites, triangle_vertices, vertices)
+        self.assertEqual(stats["quad_count"], 0)
 
 
 if __name__ == "__main__":
