@@ -26,6 +26,21 @@
 #define SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES 1536U
 #define SM64_SATURN_FAST3D_DEPTH_BUCKETS 16U
 
+/* Ordinals a single display list's quad-map row may be indexed at. The
+ * resolve stage keeps one resolved[]-slot entry per ordinal so a pair whose
+ * two ordinals are NOT adjacent can still be merged -- only 71 of the
+ * generated table's 284 pairs are consecutive, so an adjacent-only rule
+ * leaves three quarters of the proven-safe merges unclaimed.
+ *
+ * Bounded, not unbounded: it is per-list, and quad_map.py emits the longest
+ * row it generated as SM64_SATURN_QUAD_MAP_MAX_ENTRIES.
+ * saturn_fast3d_frontend.c static-asserts this capacity against that
+ * generated constant, so the bound cannot drift away from the data; the
+ * headroom above it exists only so a regenerated map that grows a little
+ * does not need a source edit. sm64_saturn_fast3d_quad_map_bind() also
+ * refuses, loudly and at runtime, any row longer than this. */
+#define SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY 128U
+
 enum sm64_saturn_fast3d_fault {
     SM64_SATURN_FAST3D_FAULT_NONE = 0U,
     SM64_SATURN_FAST3D_FAULT_NULL_TASK = 1U << 0,
@@ -291,21 +306,32 @@ typedef struct sm64_saturn_fast3d_profile {
      *                   cross-check available between row lengths and the
      *                   live stream.
      * quad_pair_not_adjacent
-     *                   the map offered a legal pair whose two ordinals
-     *                   are NOT consecutive, counted once per pair (at the
-     *                   lower ordinal). The resolve stage holds exactly one
-     *                   primitive, so only an (N, N+1) pair can be completed
-     *                   without an unbounded hold buffer; everything else is
-     *                   emitted as two commands. This counter is the size of
-     *                   that deliberately-unclaimed remainder -- measured
-     *                   offline as 213 of the map's 284 pairs -- so the cost
-     *                   of the one-primitive hold stays visible rather than
-     *                   silently disappearing. Expected nonzero; not a
-     *                   fault. */
+     *                   the map offered a legal pair whose two ordinals are
+     *                   NOT consecutive, counted once per pair at the lower
+     *                   ordinal. This is now purely a SHAPE statistic about
+     *                   the generated table -- since the ordinal->slot side
+     *                   array landed, such pairs merge like any other, so a
+     *                   high value here no longer implies a loss. Kept
+     *                   because it is the number that shows how much of the
+     *                   merge yield depends on the side array existing at
+     *                   all: 213 of the map's 284 pairs are non-adjacent.
+     *                   Expected nonzero; not a fault. Read
+     *                   quad_pairs_declined, not this, for pairs actually
+     *                   lost.
+     * quad_pairs_declined
+     *                   a pair the runtime offered but did not merge,
+     *                   counted at the HIGHER ordinal -- the partner had
+     *                   already been walked but never reached resolved[],
+     *                   because it was backface-culled, clipped, degenerate
+     *                   or hit the buffer ceiling. Expected nonzero (the
+     *                   frame this shipped with culls over half of every
+     *                   triangle it transforms) and not a fault, but it is
+     *                   the honest measure of merges left on the table. */
     uint32_t quads_merged;
     uint32_t quad_map_mismatch;
     uint32_t quad_pair_not_adjacent;
     uint32_t quad_ordinal_past_row;
+    uint32_t quad_pairs_declined;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,
@@ -471,18 +497,48 @@ typedef struct sm64_saturn_fast3d_frontend {
     uint16_t quad_entry_count;
     uint16_t triangle_ordinal;
 
-    /* One-primitive hold for an (N, N+1) pair: N's resolved[] slot, its
-     * ordinal, the ordinal expected to complete it, and its quad max_z
-     * (needed because a merged quad's depth bucket must be recomputed
-     * over all four corners, never inherited from one side). Cleared on
-     * every display-list transition and whenever the next resolved
-     * triangle is not the awaited partner, so an abandoned hold degrades
-     * to the pre-existing one-command-per-triangle behaviour. */
-    uint16_t quad_pending_slot;
-    uint16_t quad_pending_ordinal;
-    uint16_t quad_pending_partner;
-    uint8_t quad_pending_valid;
-    int32_t quad_pending_max_z;
+    /* Ordinal -> resolved[] slot for the display list being walked, so the
+     * second triangle of a pair can merge into the first's primitive no
+     * matter how far apart their ordinals are.
+     *
+     * quad_slot_stamp[] is what makes this safe without ever clearing the
+     * arrays. A slot is live only while its stamp equals the CURRENT
+     * quad_slot_generation, and every display list entered takes a fresh
+     * generation, so a slot index recorded by one list -- or by an earlier
+     * invocation of the same list, or by a previous frame -- can never be
+     * mistaken for a live one. Clearing on entry would be the obvious
+     * alternative and is strictly worse: it costs a memset per G_DL and
+     * still leaves a same-list-reinvoked hole.
+     *
+     * Only triangles that actually reached resolved[] record a slot. A
+     * culled or clipped triangle advances the ordinal (the offline walker
+     * counts commands, not survivors) but leaves no stamp, so its partner
+     * finds nothing live and declines instead of merging into a slot that
+     * belongs to some other primitive.
+     *
+     * quad_slot_generation is the CURRENT list's stamp, saved and restored
+     * across a G_DL call with the ordinal, so a caller's slots survive a
+     * nested list except at the ordinals that list happened to overwrite.
+     *
+     * quad_slot_next_generation is a separate, strictly monotonic allocator
+     * and is deliberately NOT restored. Deriving a new generation by
+     * incrementing the current one instead looks equivalent and is not: a
+     * caller that makes two nested calls restores its own generation
+     * between them, so both children would be handed the SAME stamp and
+     * the second could read the first's slot indices as live -- a
+     * cross-display-list merge into another primitive. That defect was
+     * live in this file for one build and was caught by the
+     * resolved_count range guard firing in a real capture, not by
+     * inspection. Allocate generations here and nowhere else.
+     *
+     * quad_slot_max_z[] rides along because a merged quad's depth bucket is
+     * recomputed over all four corners; the earlier half's furthest-corner
+     * depth has to survive until its partner arrives. */
+    int32_t quad_slot_max_z[SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY];
+    uint16_t quad_slot[SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY];
+    uint16_t quad_slot_stamp[SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY];
+    uint16_t quad_slot_generation;
+    uint16_t quad_slot_next_generation;
 } sm64_saturn_fast3d_frontend_t;
 
 void sm64_saturn_fast3d_frontend_init(

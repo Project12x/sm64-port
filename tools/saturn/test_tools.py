@@ -1951,6 +1951,30 @@ class QuadMapCRendererTests(unittest.TestCase):
         words = self._arrays(render_quad_map_c(self.FIXTURE))["dl_a"]
         self.assertIn(0x00000000, words)
 
+    def test_header_carries_the_longest_row_as_a_bound(self) -> None:
+        """The runtime sizes an ordinal-keyed array by this constant.
+
+        dl_a trims to 4 words and dl_b to 2, so the bound is 4. Deriving it
+        from the same tables the C rows come from is what keeps the runtime
+        array from being sized by a guess that the data can outgrow.
+        """
+        header = render_quad_map_h(self.FIXTURE)
+        self.assertIn("#define SM64_SATURN_QUAD_MAP_MAX_ENTRIES 4U", header)
+
+    def test_header_bound_covers_every_emitted_row(self) -> None:
+        header = render_quad_map_h(self.FIXTURE)
+        match = re.search(
+            r"#define SM64_SATURN_QUAD_MAP_MAX_ENTRIES (\d+)U", header)
+        assert match is not None
+        bound = int(match.group(1))
+        for words in self._arrays(render_quad_map_c(self.FIXTURE)).values():
+            self.assertLessEqual(len(words), bound)
+
+    def test_header_bound_is_never_zero(self) -> None:
+        """An empty table still has to yield a legal C array size."""
+        header = render_quad_map_h()
+        self.assertIn("#define SM64_SATURN_QUAD_MAP_MAX_ENTRIES 1U", header)
+
     def test_table_and_every_list_carry_their_own_length(self) -> None:
         text = render_quad_map_c(self.FIXTURE)
         self.assertEqual(self._list_count(text), 2)

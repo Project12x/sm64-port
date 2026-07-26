@@ -19,6 +19,25 @@
  * error rather than a silent misread of the table. */
 _Static_assert(sizeof(sm64_saturn_quad_map_entry_t) == sizeof(uint32_t),
                "quad map entry must stay a 32-bit word");
+/* The ordinal->slot side array is indexed by a live triangle ordinal, which
+ * is bounded by the longest row the generator actually emitted. Asserting
+ * against the GENERATED constant rather than a remembered number is what
+ * keeps the bound from drifting: regenerate a map with a longer row and the
+ * build stops here instead of writing past the array. */
+_Static_assert(SM64_SATURN_QUAD_MAP_MAX_ENTRIES <=
+                   SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY,
+               "quad map row longer than the frontend's slot array; raise "
+               "SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY");
+/* Every quad_slot_stamp generation still on submit()'s call stack must be
+ * distinct, or a caller could read a nested list's slots as its own. A new
+ * generation is taken once per display list entered, and entering one costs
+ * at least one command, so a single submit() can take at most
+ * SM64_SATURN_FAST3D_MAX_COMMANDS + 1 of them -- far short of the 16-bit
+ * counter's period, which is why the wrap handling in
+ * sm64_saturn_fast3d_quad_map_bind() can never fire mid-list-stack. */
+_Static_assert(SM64_SATURN_FAST3D_MAX_COMMANDS < 0xFFFFU,
+               "generation counter must not be able to wrap within one "
+               "display-list call stack");
 
 #define SM64_SATURN_C0(w0, pos, width) \
     (((w0) >> (pos)) & ((1U << (width)) - 1U))
@@ -174,27 +193,53 @@ static void sm64_saturn_fast3d_count_command(
  * target never has a row at all, but the counter must not carry across or
  * every ordinal after the branch would be shifted.
  *
- * The pending hold is dropped, not carried: a pair is only ever two
- * consecutive triangle commands of ONE list, so a list transition can only
- * ever invalidate it. Dropping loses a merge at worst; carrying could pair
- * two triangles that are not partners at all. This particular drop is
- * belt-and-braces and survives mutation testing unpunished: a hold always
- * awaits ordinal >= 1 while an entered list always restarts at 0, so the
- * awaited-ordinal test alone already refuses it. The equivalent drop on the
- * G_ENDDL return path is NOT redundant -- there the caller's ordinal is
- * restored to a value a child's leaked hold really can match -- and is
- * covered by test_frontend_quad_map_hold_does_not_survive_g_enddl. */
+ * Taking a fresh slot generation here is what retires the previous list's
+ * ordinal->slot entries without touching them. It also covers the case a
+ * per-entry clear would miss: the SAME display list invoked twice in one
+ * frame, where the pointer and every ordinal repeat but the recorded
+ * resolved[] slots belong to the first invocation. */
 static void
 sm64_saturn_fast3d_quad_map_bind(sm64_saturn_fast3d_frontend_t *frontend,
                                  const Gfx *list)
 {
+    sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
+
     frontend->quad_entries = NULL;
     frontend->quad_entry_count = 0U;
     frontend->triangle_ordinal = 0U;
-    frontend->quad_pending_valid = 0U;
+
+    /* Allocate from the monotonic counter, NOT by incrementing the current
+     * generation -- see the quad_slot_next_generation comment in
+     * saturn_fast3d_frontend.h. Incrementing the current one hands two
+     * sibling nested lists the same stamp, because the caller's generation
+     * is restored between them. */
+    frontend->quad_slot_next_generation++;
+    if (frontend->quad_slot_next_generation == 0U) {
+        /* Wrapped. Retire every stamp explicitly and restart at 1, so a
+         * stamp written 65,536 generations ago cannot alias a live one.
+         * A caller's generation may still be on the call stack when this
+         * fires, but it was allocated before the wrap and can never be
+         * reissued within the same submit() -- see the MAX_COMMANDS
+         * assertion at the top of this file -- so that caller simply finds
+         * its own slots retired and declines. */
+        (void)memset(frontend->quad_slot_stamp, 0,
+                     sizeof(frontend->quad_slot_stamp));
+        frontend->quad_slot_next_generation = 1U;
+    }
+    frontend->quad_slot_generation = frontend->quad_slot_next_generation;
 
     for (uint16_t i = 0U; i < sm64_saturn_quad_map_list_count; i++) {
         if (sm64_saturn_quad_map_lists[i].display_list == list) {
+            if (sm64_saturn_quad_map_lists[i].entry_count >
+                    SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY) {
+                /* Cannot be indexed safely, so it is not used at all. The
+                 * _Static_assert above makes this unreachable for the
+                 * table this binary was built against; it exists so a
+                 * mismatched table declines loudly instead of writing past
+                 * quad_slot[]. */
+                profile->quad_map_mismatch++;
+                break;
+            }
             frontend->quad_entries =
                 (const uint32_t *)sm64_saturn_quad_map_lists[i].entries;
             frontend->quad_entry_count =
@@ -328,25 +373,7 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         entry = SM64_SATURN_QUAD_MAP_NONE;
     }
 
-    if (frontend->quad_pending_valid != 0U) {
-        /* Consume the hold if and only if BOTH sides agree: the held
-         * triangle awaited exactly this ordinal, and this ordinal's own
-         * entry names the held one as its partner. Either way the hold is
-         * released here -- if this triangle is not the partner, or is
-         * rejected further down, the held triangle simply stays the
-         * degenerate quad it was already written as. */
-        if (frontend->quad_pending_partner == ordinal &&
-            SM64_SATURN_QUAD_MAP_IS_PAIRED(entry) &&
-            SM64_SATURN_QUAD_MAP_PARTNER(entry) ==
-                (uint32_t)frontend->quad_pending_ordinal) {
-            merge_into_pending = true;
-            merge_slot = frontend->quad_pending_slot;
-            merge_max_z = frontend->quad_pending_max_z;
-        }
-        frontend->quad_pending_valid = 0U;
-    }
-
-    if (!merge_into_pending && SM64_SATURN_QUAD_MAP_IS_PAIRED(entry)) {
+    if (SM64_SATURN_QUAD_MAP_IS_PAIRED(entry)) {
         const uint32_t partner = SM64_SATURN_QUAD_MAP_PARTNER(entry);
 
         if (partner >= (uint32_t)frontend->quad_entry_count ||
@@ -355,16 +382,51 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
              * or a triangle paired with itself: the table disagrees with
              * itself. Refuse the merge and say so. */
             profile->quad_map_mismatch++;
-        } else if (partner == (uint32_t)ordinal + 1U) {
-            open_pair = true;
+        } else if (!SM64_SATURN_QUAD_MAP_IS_PAIRED(
+                       frontend->quad_entries[partner]) ||
+                   SM64_SATURN_QUAD_MAP_PARTNER(
+                       frontend->quad_entries[partner]) !=
+                       (uint32_t)ordinal) {
+            /* Both halves must name each other. A one-sided claim is a
+             * broken table -- quad_map.py refuses to emit one -- and
+             * merging on it would decode the cycle out of a word that was
+             * never written for this pair. */
+            profile->quad_map_mismatch++;
         } else if (partner > (uint32_t)ordinal) {
-            /* Counted once per pair, at its lower ordinal. A partner that
-             * is not the very next command cannot be completed by a
-             * one-primitive hold, and an unbounded hold buffer is out of
-             * scope -- so this pair is emitted as two commands. Visible,
-             * not silent. (partner < ordinal is the ordinary other half
-             * of such a pair, already counted, and is not re-counted.) */
-            profile->quad_pair_not_adjacent++;
+            /* The partner is still ahead of us: leave this triangle's
+             * resolved[] slot behind for it, once we know we have one. */
+            open_pair = true;
+            if (partner != (uint32_t)ordinal + 1U) {
+                /* Shape statistic only, counted once per pair at the lower
+                 * ordinal: since the ordinal->slot array landed these merge
+                 * exactly like adjacent ones. See the header comment. */
+                profile->quad_pair_not_adjacent++;
+            }
+        } else if (frontend->quad_slot_stamp[partner] !=
+                       frontend->quad_slot_generation) {
+            /* The partner was walked earlier in THIS invocation of THIS
+             * list but never reached resolved[] -- culled, clipped,
+             * degenerate, or over the buffer ceiling. There is nothing to
+             * merge into. A stale index from another list, another
+             * invocation or another frame lands here too, because its
+             * stamp belongs to a retired generation. */
+            profile->quad_pairs_declined++;
+        } else if (frontend->quad_slot[partner] >= frontend->resolved_count) {
+            /* Belt and braces, and knowingly so: a live stamp always names
+             * a slot below the current resolved_count, because slots are
+             * only recorded immediately after being written and
+             * resolved_count never shrinks within a frame. This branch
+             * survives mutation testing unpunished for exactly that reason
+             * -- nothing a well-formed run can do reaches it. It is kept
+             * because the failure it guards against is an out-of-range
+             * write into resolved[], and because it is the branch that
+             * turns a broken generation stamp into a counted decline
+             * rather than silent corruption. */
+            profile->quad_map_mismatch++;
+        } else {
+            merge_into_pending = true;
+            merge_slot = frontend->quad_slot[partner];
+            merge_max_z = frontend->quad_slot_max_z[partner];
         }
     }
 
@@ -698,17 +760,17 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     out->corner_rgb1555[3] = out->corner_rgb1555[2];
     profile->triangles_emitted++;
 
-    if (open_pair) {
-        /* Hold this primitive open for exactly one more triangle command.
-         * If the next one is not the awaited partner, or is culled, the
-         * hold lapses and this stays the degenerate quad already written
-         * above -- the merge is an overwrite of a complete primitive, not
-         * a deferral of one. */
-        frontend->quad_pending_valid = 1U;
-        frontend->quad_pending_slot = (uint16_t)(frontend->resolved_count - 1U);
-        frontend->quad_pending_ordinal = ordinal;
-        frontend->quad_pending_partner = (uint16_t)(ordinal + 1U);
-        frontend->quad_pending_max_z = quad.max_z;
+    if (open_pair && ordinal < SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY) {
+        /* Record the slot ONLY here, on the far side of every rejection
+         * path, so a triangle that never reached resolved[] leaves no
+         * stamp for its partner to merge into. The primitive written above
+         * is already complete and correct as a degenerate quad; if the
+         * partner never arrives, or arrives and is itself rejected, this
+         * simply stays a triangle. The merge is an overwrite of a finished
+         * primitive, never a deferral of one. */
+        frontend->quad_slot[ordinal] = (uint16_t)(frontend->resolved_count - 1U);
+        frontend->quad_slot_max_z[ordinal] = quad.max_z;
+        frontend->quad_slot_stamp[ordinal] = frontend->quad_slot_generation;
     }
 }
 
@@ -1225,6 +1287,7 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     const uint32_t *quad_entries_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
     uint16_t quad_count_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
     uint16_t quad_ordinal_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
+    uint16_t quad_generation_stack[SM64_SATURN_FAST3D_MAX_CALL_DEPTH];
     uint16_t stack_depth = 0U;
     uint32_t frame_serial;
 
@@ -1311,6 +1374,7 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
             quad_entries_stack[stack_depth] = frontend->quad_entries;
             quad_count_stack[stack_depth] = frontend->quad_entry_count;
             quad_ordinal_stack[stack_depth] = frontend->triangle_ordinal;
+            quad_generation_stack[stack_depth] = frontend->quad_slot_generation;
             return_stack[stack_depth++] = command + 1;
             if (stack_depth > profile->max_call_depth)
                 profile->max_call_depth = stack_depth;
@@ -1327,10 +1391,12 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
             frontend->quad_entries = quad_entries_stack[stack_depth];
             frontend->quad_entry_count = quad_count_stack[stack_depth];
             frontend->triangle_ordinal = quad_ordinal_stack[stack_depth];
-            /* Dropped rather than restored: a pair is two consecutive
-             * triangle commands of one list, so a hold cannot legitimately
-             * survive a nested call. */
-            frontend->quad_pending_valid = 0U;
+            /* Restoring the generation revives the caller's own recorded
+             * slots. Any ordinal the nested list happened to overwrite now
+             * carries the CHILD's generation, so it reads as retired and
+             * declines -- the caller loses that one merge rather than
+             * inheriting a slot index that belongs to the child. */
+            frontend->quad_slot_generation = quad_generation_stack[stack_depth];
             continue;
         }
 

@@ -2750,6 +2750,13 @@ static Gfx quad_dl_tri2_count[5];
 static Gfx quad_dl_nest_parent[6];
 static Gfx quad_dl_nest_child[2];
 static Gfx quad_dl_asym[4];
+static Gfx quad_dl_rejected[5];
+static Gfx quad_dl_oversized[4];
+static Gfx quad_dl_span_parent[6];
+static Gfx quad_dl_span_child[2];
+static Gfx quad_dl_sib_parent[5];
+static Gfx quad_dl_sib_a[2];
+static Gfx quad_dl_sib_b[3];
 
 /* Square v0,v1,v2,v3 split as (0,1,2) + (0,2,3) across the v0-v2 diagonal.
  * The merged cycle is v0,v1,v2,v3: for the FIRST triangle that reads
@@ -2761,12 +2768,14 @@ static const sm64_saturn_quad_map_entry_t quad_entries_pair[2] = {
     QUAD_TEST_ENTRY(0, 1, 2, 5, 1),
     QUAD_TEST_ENTRY(0, 4, 1, 2, 0),
 };
-/* Same pair, but two ordinals apart: legal in the map, uncompletable by a
- * one-primitive hold. Ordinal 1 is unpaired. */
+/* Two ordinals apart, with an unrelated triangle between them. Ordinal 0
+ * is (v0,v1,v2) and ordinal 2 is (v0,v1,v3), sharing edge v0-v1; the cycle
+ * is still v0,v1,v2,v3, so ordinal 2 reads (self0, self1, partner2, self2)
+ * = codes (0,1,5,2). Ordinal 1 is unpaired. */
 static const sm64_saturn_quad_map_entry_t quad_entries_far[3] = {
     QUAD_TEST_ENTRY(0, 1, 2, 5, 2),
     SM64_SATURN_QUAD_MAP_NONE,
-    QUAD_TEST_ENTRY(0, 4, 1, 2, 0),
+    QUAD_TEST_ENTRY(0, 1, 5, 2, 0),
 };
 /* Corner code 6 is outside the 0-5 range: a corrupt word, which must be
  * refused rather than indexed with. */
@@ -2788,16 +2797,33 @@ static const sm64_saturn_quad_map_entry_t quad_entries_tri2_count[3] = {
     QUAD_TEST_ENTRY(0, 1, 2, 3, 2),
     QUAD_TEST_ENTRY(3, 4, 5, 0, 1),
 };
-/* Ordinal 0 opens a pair that the list never completes -- it ends after
- * one triangle. The hold must not survive the return into the caller. */
+/* Ordinal 0 opens a pair the list never completes -- it ends after one
+ * triangle -- so it leaves a slot recorded at ordinal 0 on the way out.
+ * The caller uses ordinal 0 too, which is what makes the generation stamp
+ * load-bearing rather than decorative. */
 static const sm64_saturn_quad_map_entry_t quad_entries_nest_child[2] = {
     QUAD_TEST_ENTRY(0, 1, 2, 5, 1),
     QUAD_TEST_ENTRY(0, 4, 1, 2, 0),
 };
-/* The caller's ordinal 1 names ordinal 0 as its partner -- exactly the
- * shape a leaked child hold would appear to complete. */
+/* Caller: a well-formed pair at ordinals 0 and 1 with the nested call in
+ * between. The child overwrites ordinal 0's slot, so this pair must be
+ * declined -- a lost merge is the correct, conservative outcome. */
 static const sm64_saturn_quad_map_entry_t quad_entries_nest_parent[2] = {
+    QUAD_TEST_ENTRY(0, 1, 2, 5, 1),
+    QUAD_TEST_ENTRY(0, 4, 1, 2, 0),
+};
+/* Ordinals 0 and 2 pair across an unrelated ordinal 1; ordinal 1 is the
+ * degenerate triangle that gets rejected in the "no stale slot" test, and
+ * is unpaired in the "merges non-adjacent" one. */
+static const sm64_saturn_quad_map_entry_t quad_entries_rejected[3] = {
     SM64_SATURN_QUAD_MAP_NONE,
+    QUAD_TEST_ENTRY(0, 1, 2, 5, 2),
+    QUAD_TEST_ENTRY(0, 4, 1, 2, 1),
+};
+/* Row length is a lie: two live entries described as far more than the
+ * frontend's slot array can index. */
+static const sm64_saturn_quad_map_entry_t quad_entries_oversized[2] = {
+    QUAD_TEST_ENTRY(0, 1, 2, 5, 1),
     QUAD_TEST_ENTRY(0, 4, 1, 2, 0),
 };
 /* Asymmetric: ordinal 0 claims a partner, ordinal 1 denies it. Only the
@@ -2818,8 +2844,14 @@ const sm64_saturn_quad_map_list_t sm64_saturn_quad_map_lists[] = {
     { quad_dl_nest_parent, quad_entries_nest_parent, 2U, 0U },
     { quad_dl_nest_child,  quad_entries_nest_child, 2U, 0U },
     { quad_dl_asym,        quad_entries_asym,       2U, 0U },
+    { quad_dl_rejected,    quad_entries_rejected,   3U, 0U },
+    { quad_dl_oversized,   quad_entries_oversized,
+      SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY + 1U, 0U },
+    { quad_dl_span_parent, quad_entries_pair,       2U, 0U },
+    { quad_dl_sib_a,       quad_entries_pair,       2U, 0U },
+    { quad_dl_sib_b,       quad_entries_pair,       2U, 0U },
 };
-const uint16_t sm64_saturn_quad_map_list_count = 10U;
+const uint16_t sm64_saturn_quad_map_list_count = 15U;
 
 static const Vp_t quad_vp = {
     .vscale = {320 * 2, 224 * 2, 0, 0},
@@ -2969,6 +3001,52 @@ static void quad_build_lists(void)
     quad_dl_asym[1] = quad_make_vtx(quad_square_verts, 4U);
     quad_dl_asym[2] = quad_make_tri2(0, 1, 2, 0, 2, 3);
     quad_dl_asym[3] = make_g_enddl();
+
+    /* Ordinal 0 resolves; ordinal 1 collapses to a single point and is
+     * rejected as degenerate; ordinal 2 is ordinal 1's partner. */
+    quad_dl_rejected[0] = quad_make_viewport();
+    quad_dl_rejected[1] = quad_make_vtx(quad_square_verts, 4U);
+    quad_dl_rejected[2] = quad_make_tri2(0, 1, 2, 0, 0, 0);
+    quad_dl_rejected[3] = quad_make_tri1(0, 1, 3);
+    quad_dl_rejected[4] = make_g_enddl();
+
+    quad_dl_oversized[0] = quad_make_viewport();
+    quad_dl_oversized[1] = quad_make_vtx(quad_square_verts, 4U);
+    quad_dl_oversized[2] = quad_make_tri2(0, 1, 2, 0, 2, 3);
+    quad_dl_oversized[3] = make_g_enddl();
+
+    /* A pair opened before a nested call and completed after it. The child
+     * has no map row, so it records nothing and the caller's slots come
+     * back usable. */
+    quad_dl_span_parent[0] = quad_make_viewport();
+    quad_dl_span_parent[1] = quad_make_vtx(quad_square_verts, 4U);
+    quad_dl_span_parent[2] = quad_make_tri1(0, 1, 2);
+    quad_dl_span_parent[3] = quad_make_dl_call(quad_dl_span_child);
+    quad_dl_span_parent[4] = quad_make_tri1(0, 2, 3);
+    quad_dl_span_parent[5] = make_g_enddl();
+    quad_dl_span_child[0] = quad_make_tri1(1, 2, 3);
+    quad_dl_span_child[1] = make_g_enddl();
+
+    /* Two sibling nested lists, both mapped, both using ordinal 0. The
+     * caller's generation is restored between the calls, so allocating a
+     * child's generation by incrementing the CURRENT one hands both
+     * children the same stamp -- and sibling B, whose own ordinal 0 is
+     * rejected, would then read sibling A's slot as live and merge into a
+     * primitive belonging to a different display list. */
+    quad_dl_sib_parent[0] = quad_make_viewport();
+    quad_dl_sib_parent[1] = quad_make_vtx(quad_square_verts, 4U);
+    quad_dl_sib_parent[2] = quad_make_dl_call(quad_dl_sib_a);
+    quad_dl_sib_parent[3] = quad_make_dl_call(quad_dl_sib_b);
+    quad_dl_sib_parent[4] = make_g_enddl();
+    /* A: one triangle at ordinal 0, whose row says it pairs with an
+     * ordinal 1 that never arrives -- so it leaves a slot behind. */
+    quad_dl_sib_a[0] = quad_make_tri1(0, 1, 2);
+    quad_dl_sib_a[1] = make_g_enddl();
+    /* B: ordinal 0 collapses to a point and is rejected; ordinal 1 then
+     * goes looking for a partner slot at ordinal 0. */
+    quad_dl_sib_b[0] = quad_make_tri2(0, 0, 0, 0, 2, 3);
+    quad_dl_sib_b[1] = make_g_enddl();
+    quad_dl_sib_b[2] = make_g_enddl();
 }
 
 static void quad_submit(sm64_saturn_fast3d_frontend_t *frontend, Gfx *list)
@@ -3007,6 +3085,8 @@ static void test_frontend_quad_map_merges_adjacent_pair(void)
     assert(frontend.profile.triangles_transformed == 2);
     assert(frontend.profile.triangles_emitted == 2);
     assert(frontend.resolved_count == 1);
+    assert(frontend.resolved_count ==
+           frontend.profile.triangles_emitted - frontend.profile.quads_merged);
 
     /* Cycle order v0,v1,v2,v3, read straight out of the corner codes. */
     assert(frontend.resolved[0].corner_rgb1555[0] == 0x801FU); /* v0 red    */
@@ -3046,23 +3126,78 @@ static void test_frontend_quad_map_merged_depth_covers_both_halves(void)
     assert(frontend.resolved[0].depth_bucket > planar_bucket);
 }
 
-static void test_frontend_quad_map_non_adjacent_pair_is_not_merged(void)
+static void test_frontend_quad_map_merges_non_adjacent_pair(void)
 {
     sm64_saturn_fast3d_frontend_t frontend;
 
     quad_submit(&frontend, quad_dl_far);
 
+    /* Ordinals 0 and 2, with an unrelated triangle between them. The
+     * ordinal->slot side array is what lets this merge at all; 213 of the
+     * generated table's 284 pairs have this shape. */
+    assert(frontend.profile.quads_merged == 1);
+    assert(frontend.profile.quad_map_mismatch == 0);
+    assert(frontend.profile.quad_pairs_declined == 0);
+    /* Still counted, as a statistic about the table's shape. */
+    assert(frontend.profile.quad_pair_not_adjacent == 1);
+    assert(frontend.profile.triangles_transformed == 3);
+    assert(frontend.profile.triangles_emitted == 3);
+    assert(frontend.resolved_count == 2);
+    /* The command-count identity the captures are judged against. The emit
+     * stage walks resolved[0..resolved_count) and writes one VDP1 command
+     * per entry, so resolved_count IS the command count: every merge
+     * removes exactly one command and no geometry. */
+    assert(frontend.resolved_count ==
+           frontend.profile.triangles_emitted - frontend.profile.quads_merged);
+
+    /* The merged quad went back into the FIRST triangle's slot, ahead of
+     * the unrelated triangle that resolved between the two halves. */
+    assert(frontend.resolved[0].corner_rgb1555[0] == 0x801FU); /* v0 */
+    assert(frontend.resolved[0].corner_rgb1555[1] == 0x83E0U); /* v1 */
+    assert(frontend.resolved[0].corner_rgb1555[2] == 0xFC00U); /* v2 */
+    assert(frontend.resolved[0].corner_rgb1555[3] == 0x83FFU); /* v3 */
+    /* ...and the in-between triangle is untouched: still degenerate. */
+    assert(frontend.resolved[1].x[3] == frontend.resolved[1].x[2]);
+    assert(frontend.resolved[1].y[3] == frontend.resolved[1].y[2]);
+}
+
+static void test_frontend_quad_map_rejected_partner_leaves_no_slot(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+
+    quad_submit(&frontend, quad_dl_rejected);
+
+    /* Ordinal 0 resolves normally and is unpaired. Ordinal 1 is degenerate
+     * and is rejected before it ever reaches resolved[]. Ordinal 2 is its
+     * partner. If a rejected triangle could still leave a slot behind, the
+     * index it would record is the one belonging to ordinal 0's primitive,
+     * and ordinal 2 would overwrite an unrelated triangle with a quad --
+     * the corruption this stamping exists to prevent. */
+    assert(frontend.profile.reject_degenerate == 1);
     assert(frontend.profile.quads_merged == 0);
     assert(frontend.profile.quad_map_mismatch == 0);
-    /* Counted once, at the lower ordinal of the pair -- not twice, and not
-     * silently dropped. */
-    assert(frontend.profile.quad_pair_not_adjacent == 1);
-    assert(frontend.resolved_count == 3);
-    /* Every primitive is still the degenerate quad it was before. */
-    for (int i = 0; i < 3; i++) {
-        assert(frontend.resolved[i].x[3] == frontend.resolved[i].x[2]);
-        assert(frontend.resolved[i].y[3] == frontend.resolved[i].y[2]);
-    }
+    assert(frontend.profile.quad_pairs_declined == 1);
+    assert(frontend.resolved_count == 2);
+    /* Ordinal 0's primitive survives untouched. */
+    assert(frontend.resolved[0].x[3] == frontend.resolved[0].x[2]);
+    assert(frontend.resolved[0].y[3] == frontend.resolved[0].y[2]);
+    assert(frontend.resolved[0].corner_rgb1555[3] ==
+           frontend.resolved[0].corner_rgb1555[2]);
+}
+
+static void test_frontend_quad_map_row_longer_than_capacity_is_refused(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+
+    quad_submit(&frontend, quad_dl_oversized);
+
+    /* A row that cannot be indexed safely is not bound at all: the bound is
+     * enforced by declining, never by writing past quad_slot[]. */
+    assert(frontend.profile.quad_map_mismatch == 1);
+    assert(frontend.profile.quads_merged == 0);
+    assert(frontend.profile.quad_ordinal_past_row == 0);
+    assert(frontend.resolved_count == 2);
+    assert(frontend.resolved[0].x[3] == frontend.resolved[0].x[2]);
 }
 
 static void test_frontend_quad_map_corrupt_corner_code_refuses_merge(void)
@@ -3147,7 +3282,7 @@ static void test_frontend_quad_map_g_tri2_advances_ordinal_twice(void)
     assert(frontend.resolved[1].corner_rgb1555[3] == 0x83E0U); /* v1 */
 }
 
-static void test_frontend_quad_map_hold_does_not_survive_g_enddl(void)
+static void test_frontend_quad_map_nested_list_cannot_donate_a_slot(void)
 {
     sm64_saturn_fast3d_frontend_t frontend;
 
@@ -3155,11 +3290,58 @@ static void test_frontend_quad_map_hold_does_not_survive_g_enddl(void)
 
     assert(frontend.profile.display_list_calls == 1);
     assert(frontend.profile.triangles_transformed == 3);
-    /* A hold opened inside the child must not be completed by the
-     * caller's next triangle, even though the restored caller ordinal is
-     * numerically the one that hold was waiting for. */
+    /* Caller and child both use ordinal 0, and the child -- which has its
+     * own map row -- records a slot there. When the caller's ordinal 1
+     * comes looking for its partner at ordinal 0 it must find the child's
+     * generation, not its own, and decline. Merging would point a quad at
+     * a primitive belonging to a different display list. */
     assert(frontend.profile.quads_merged == 0);
+    assert(frontend.profile.quad_map_mismatch == 0);
+    assert(frontend.profile.quad_pairs_declined == 1);
     assert(frontend.resolved_count == 3);
+    for (int i = 0; i < 3; i++) {
+        assert(frontend.resolved[i].x[3] == frontend.resolved[i].x[2]);
+    }
+}
+
+static void test_frontend_quad_map_sibling_lists_get_distinct_generations(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+
+    quad_submit(&frontend, quad_dl_sib_parent);
+
+    assert(frontend.profile.display_list_calls == 2);
+    assert(frontend.profile.triangles_transformed == 3);
+    assert(frontend.profile.reject_degenerate == 1);
+    /* Sibling B must not inherit sibling A's slot. Two primitives survive:
+     * A's triangle and B's ordinal 1, neither merged into the other. */
+    assert(frontend.profile.quads_merged == 0);
+    assert(frontend.profile.quad_map_mismatch == 0);
+    assert(frontend.profile.quad_pairs_declined == 1);
+    assert(frontend.resolved_count == 2);
+    for (int i = 0; i < 2; i++) {
+        assert(frontend.resolved[i].x[3] == frontend.resolved[i].x[2]);
+        assert(frontend.resolved[i].y[3] == frontend.resolved[i].y[2]);
+    }
+}
+
+static void test_frontend_quad_map_slots_survive_an_unmapped_nested_list(void)
+{
+    sm64_saturn_fast3d_frontend_t frontend;
+
+    quad_submit(&frontend, quad_dl_span_parent);
+
+    /* The common real shape: a mapped list calls a list with no row of its
+     * own. That child records nothing, so the caller's generation comes
+     * back intact and its pair -- opened before the call, completed after
+     * it -- still merges. */
+    assert(frontend.profile.display_list_calls == 1);
+    assert(frontend.profile.triangles_transformed == 3);
+    assert(frontend.profile.quads_merged == 1);
+    assert(frontend.profile.quad_map_mismatch == 0);
+    assert(frontend.profile.quad_pairs_declined == 0);
+    assert(frontend.resolved_count == 2);
+    assert(frontend.resolved[0].corner_rgb1555[3] == 0x83FFU); /* v3 */
 }
 
 static void test_frontend_quad_map_asymmetric_entry_refuses_merge(void)
@@ -3169,9 +3351,10 @@ static void test_frontend_quad_map_asymmetric_entry_refuses_merge(void)
     quad_submit(&frontend, quad_dl_asym);
 
     /* Both halves must name each other. A one-sided claim is a broken
-     * table, and merging on it would decode the completing triangle's
-     * cycle out of an all-zero word -- four copies of one corner. */
+     * table -- quad_map.py refuses to emit one -- so it is reported as a
+     * self-contradiction, not merely declined. */
     assert(frontend.profile.quads_merged == 0);
+    assert(frontend.profile.quad_map_mismatch == 1);
     assert(frontend.resolved_count == 2);
     assert(frontend.resolved[1].x[3] == frontend.resolved[1].x[2]);
     assert(frontend.resolved[1].y[3] == frontend.resolved[1].y[2]);
@@ -3245,13 +3428,17 @@ int main(void)
     test_gouraud_bank_overflow_returns_null();
     test_frontend_quad_map_merges_adjacent_pair();
     test_frontend_quad_map_merged_depth_covers_both_halves();
-    test_frontend_quad_map_non_adjacent_pair_is_not_merged();
+    test_frontend_quad_map_merges_non_adjacent_pair();
+    test_frontend_quad_map_rejected_partner_leaves_no_slot();
+    test_frontend_quad_map_row_longer_than_capacity_is_refused();
+    test_frontend_quad_map_slots_survive_an_unmapped_nested_list();
+    test_frontend_quad_map_sibling_lists_get_distinct_generations();
     test_frontend_quad_map_corrupt_corner_code_refuses_merge();
     test_frontend_quad_map_short_row_counts_mismatch();
     test_frontend_quad_map_unmapped_list_never_merges();
     test_frontend_quad_map_nested_list_uses_its_own_ordinal();
     test_frontend_quad_map_g_tri2_advances_ordinal_twice();
-    test_frontend_quad_map_hold_does_not_survive_g_enddl();
+    test_frontend_quad_map_nested_list_cannot_donate_a_slot();
     test_frontend_quad_map_asymmetric_entry_refuses_merge();
     return 0;
 }
