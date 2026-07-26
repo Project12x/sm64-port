@@ -61,7 +61,6 @@ from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
 from dl_rigid_groups import (  # noqa: E402,F401
     REASON_GEO_ASM,
-    REASON_SWITCH_CASE,
     REASON_TEXTURED,
     REASON_UNBALANCED_POP,
     REASON_UNKNOWN_GEO_NODE,
@@ -1197,28 +1196,87 @@ class GeoLayoutRigidGroupTests(unittest.TestCase):
         self.assertEqual(len(sites), 2)
         self.assertNotEqual(sites[0].rigid_group, sites[1].rigid_group)
 
-    def test_switch_case_subtree_is_unsafe(self) -> None:
-        """Only one switch child renders, so its shapes are not a guarantee."""
+    def test_each_switch_case_gets_its_own_rigid_group(self) -> None:
+        """Exactly one direct child of a switch renders (and its siblings do
+        not -- rendering_graph_node.c:1288). So a case's own triangles are
+        always drawn together and share the parent transform, while two cases
+        are kept apart by group separation rather than by poisoning."""
         layouts = {
             "root": [
-                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
-                ("GEO_OPEN_NODE", ""),
-                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
                 ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),
                 ("GEO_OPEN_NODE", ""),
-                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
-                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),   # case 0
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),   # child of case 0
                 ("GEO_CLOSE_NODE", ""),
-                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_d"),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),   # case 1
                 ("GEO_CLOSE_NODE", ""),
             ]
         }
-        before, first, second, after = walk_geo_layout(layouts, self.LISTS, "root")
-        self.assertIs(before.unsafe, False)
-        self.assertIs(first.unsafe, True)
-        self.assertIs(second.unsafe, True)
-        self.assertIn(REASON_SWITCH_CASE, first.reasons)
-        self.assertIs(after.unsafe, False, "poison must not leak past the subtree")
+        first, within, other = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertFalse(any(s.unsafe for s in (first, within, other)),
+                         "a switch case is no longer poisoned")
+        self.assertEqual(first.rigid_group, within.rigid_group,
+                         "one case's own subtree shares its group")
+        self.assertNotEqual(first.rigid_group, other.rigid_group,
+                            "two cases must never merge")
+
+    def test_nested_switch_cases_stay_separated(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_cap_on_off"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),  # outer case 0
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),       # inner case 0
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),       # inner case 1
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),       # outer case 1
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        sites = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertFalse(any(s.unsafe for s in sites))
+        self.assertEqual(len({s.rigid_group for s in sites}), 3,
+                         "every case at every depth is its own group")
+
+    def test_group_returns_to_the_parent_joint_after_a_switch(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, dl_a"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        joint, case, after = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertNotEqual(joint.rigid_group, case.rigid_group)
+        self.assertEqual(joint.rigid_group, after.rigid_group,
+                         "the switch must not consume the parent's group")
+
+    def test_geo_asm_still_poisons_inside_a_switch_case(self) -> None:
+        """Per-case grouping does not extend to arbitrary runtime callbacks."""
+        layouts = {
+            "root": [
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_hand"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_ASM", "0, geo_mario_hand_foot_scaler"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        inside, sibling_case = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertIs(inside.unsafe, True)
+        self.assertIn(REASON_GEO_ASM, inside.reasons)
+        self.assertIs(sibling_case.unsafe, False)
+        self.assertNotEqual(inside.rigid_group, sibling_case.rigid_group)
 
     def test_geo_asm_subtree_is_unsafe(self) -> None:
         layouts = {
@@ -1311,7 +1369,7 @@ class GeoLayoutRigidGroupTests(unittest.TestCase):
                 ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
                 ("GEO_OPEN_NODE", ""),
                 ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
-                ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),
+                ("GEO_ASM", "0, geo_mario_head_rotation"),
                 ("GEO_OPEN_NODE", ""),
                 ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
                 ("GEO_CLOSE_NODE", ""),
@@ -1322,7 +1380,7 @@ class GeoLayoutRigidGroupTests(unittest.TestCase):
         self.assertEqual(stats["triangle_sites"], 2)
         self.assertEqual(stats["rigid_groups"], 1)
         self.assertEqual(stats["unsafe_sites"], 1)
-        self.assertEqual(stats["unsafe_by_reason"][REASON_SWITCH_CASE], 1)
+        self.assertEqual(stats["unsafe_by_reason"][REASON_GEO_ASM], 1)
 
 
 if __name__ == "__main__":

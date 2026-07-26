@@ -23,6 +23,11 @@ joint is a ``GEO_ANIMATED_PART`` (or other transform node) in the actor's
    list for triangle ordinals; every triangle in it inherits the geo node's
    rigid group.
 
+``GEO_SWITCH_CASE`` is handled by *separation* rather than by poisoning: each
+direct child is one case, gets its own rigid group, and so can merge freely
+within itself while never merging with a sibling case. ``GEO_ASM`` and any
+unmodelled geo node still poison their subtree.
+
 The display-list level keeps its own ``gsSPMatrix``/``gsSPPopMatrix``
 handling. It costs nothing and stays correct if any list ever does use it.
 
@@ -39,6 +44,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 # Macros the display-list walker understands. Anything else marks its group
 # unsafe rather than being skipped -- an unmodelled construct is an unknown
@@ -77,16 +83,30 @@ _GEO_TRANSFORM_NODES = {
 # Geo-layout nodes that neither transform nor gate visibility.
 _GEO_NEUTRAL_NODES = {"GEO_NODE_START", "GEO_DISPLAY_LIST"}
 
+# GEO_SWITCH_CASE selects exactly one of its direct children. Its cases are
+# not poisoned: each direct child instead becomes its own rigid group.
+#
+# Why that is sound, checked against the real renderer:
+#   * geo_process_switch() (src/game/rendering_graph_node.c:386) walks to the
+#     selectedCase-th child and processes only that node, and
+#     geo_process_node_and_siblings() sets `iterateChildren = (parent->type !=
+#     GRAPH_NODE_TYPE_SWITCH_CASE)` (line 1288), so the chosen child's
+#     siblings are *not* rendered.
+#   * Therefore every triangle inside one case is drawn whenever that case is
+#     drawn, and all of them hang below the same parent transform -- rigid.
+#   * Two different cases are never merged because they hold different group
+#     ids, which is a stronger guarantee than marking them unsafe: it also
+#     survives a case being nested inside another case.
+_GEO_SWITCH_NODES = {"GEO_SWITCH_CASE"}
+
 # Nodes whose subtree is not a rest-pose guarantee.
-#   GEO_SWITCH_CASE: children are costume/cap/eye variants; only one renders,
-#     so two of them must never be merged into one primitive.
 #   GEO_ASM: an arbitrary runtime callback. It can hide its subtree or return
 #     extra geometry. (Where an ASM node only rewrites a *sibling* transform
 #     node's angles -- SM64's usual pattern -- that is rigid-safe by
 #     construction: the whole subtree still shares one matrix. Poisoning the
-#     subtree covers the cases that are not.)
+#     subtree covers the cases that are not.) The switch-case argument above
+#     does not extend to it: an ASM callback is not a fixed set of variants.
 _GEO_POISON_NODES = {
-    "GEO_SWITCH_CASE": "switch_case",
     "GEO_ASM": "geo_asm",
 }
 
@@ -98,13 +118,24 @@ _GEO_NODES_WITH_DISPLAY_LIST = {"GEO_ANIMATED_PART", "GEO_DISPLAY_LIST"} | {
 
 REASON_UNKNOWN_MACRO = "unknown_macro"
 REASON_UNBALANCED_POP = "unbalanced_pop_matrix"
-REASON_SWITCH_CASE = _GEO_POISON_NODES["GEO_SWITCH_CASE"]
 REASON_GEO_ASM = _GEO_POISON_NODES["GEO_ASM"]
 REASON_UNKNOWN_GEO_NODE = "unknown_geo_node"
 REASON_TEXTURED = "textured"
 
 _IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 _SYMBOL = re.compile(r"\s*&?(\w+)")
+
+
+class _Frame(NamedTuple):
+    """State of one geo node, and (when pushed) of one sibling scope."""
+
+    group: int
+    poisoned: bool
+    reasons: frozenset[str]
+    #: True on a GEO_SWITCH_CASE node, and therefore on the scope its children
+    #: live in: every node registered directly in that scope is a separate
+    #: case and gets its own rigid group.
+    switch_scope: bool = False
 
 
 @dataclass(frozen=True)
@@ -160,9 +191,9 @@ class _Walker:
         # lists exactly as extract_mario_actor.flatten_parts models it.
         self._texture: str | None = None
         # Geo-layout node stack (mirrors gCurGraphNodeList/gCurGraphNodeIndex).
-        self._scope: tuple[int, bool, frozenset[str]] = (0, False, frozenset())
+        self._scope = _Frame(0, False, frozenset())
         self._node = self._scope
-        self._node_stack: list[tuple[int, bool, frozenset[str]]] = []
+        self._node_stack: list[_Frame] = []
 
     # -- allocation ------------------------------------------------------
     def _new_group(self) -> int:
@@ -270,13 +301,34 @@ class _Walker:
                     local_ordinal += 1
 
     # -- geo-layout level ------------------------------------------------
-    def _register(self, group: int, poisoned: bool, reasons: frozenset[str]) -> None:
-        self._node = (group, poisoned, reasons)
-
-    def _bind(self, macro: str, args: str, node: tuple[int, bool, frozenset[str]]) -> None:
+    def _register(
+        self,
+        macro: str,
+        args: str,
+        *,
+        transform: bool = False,
+        reason: str | None = None,
+        switch: bool = False,
+    ) -> None:
+        """Register one geo node and walk any display list it binds."""
+        # A transform node always opens a group. So does every direct child of
+        # a GEO_SWITCH_CASE: each one is a separate case, and keeping the cases
+        # in different groups is what stops two variants merging.
+        group = (
+            self._new_group()
+            if transform or self._scope.switch_scope
+            else self._scope.group
+        )
+        self._node = _Frame(
+            group,
+            self._scope.poisoned or reason is not None,
+            self._scope.reasons | ({reason} if reason is not None else set()),
+            switch_scope=switch,
+        )
         name = _bound_display_list(macro, args)
         if name is not None:
-            self.walk_list(name, node[0], node[1], node[2])
+            self.walk_list(name, self._node.group, self._node.poisoned,
+                           self._node.reasons)
 
     def walk_layout(self, name: str, stack: tuple[str, ...] = ()) -> None:
         if name in stack:
@@ -314,17 +366,14 @@ class _Walker:
                 if not link:
                     return  # a type-0 branch is a jump: no return address.
             elif macro in _GEO_TRANSFORM_NODES:
-                self._register(self._new_group(), self._scope[1], self._scope[2])
-                self._bind(macro, args, self._node)
+                self._register(macro, args, transform=True)
+            elif macro in _GEO_SWITCH_NODES:
+                self._register(macro, args, switch=True)
             elif macro in _GEO_NEUTRAL_NODES:
-                self._register(*self._scope)
-                self._bind(macro, args, self._node)
+                self._register(macro, args)
             else:
-                reason = _GEO_POISON_NODES.get(macro, REASON_UNKNOWN_GEO_NODE)
-                self._register(
-                    self._scope[0], True, self._scope[2] | {reason}
-                )
-                self._bind(macro, args, self._node)
+                self._register(macro, args, reason=_GEO_POISON_NODES.get(
+                    macro, REASON_UNKNOWN_GEO_NODE))
 
 
 def walk_display_lists(
