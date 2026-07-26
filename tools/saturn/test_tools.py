@@ -59,7 +59,18 @@ from prepare_sourceboot_collision_catalog import catalog_paths  # noqa: E402
 from quad_pairing import QuadCandidate, RenderPrimitive, candidates, maximum_weight_matching, pair_triangles  # noqa: E402
 from saturn_mesh_ir import compile_mesh_ir, validate_mesh_ir  # noqa: E402
 from telemetry_decode import decode  # noqa: E402
-from dl_rigid_groups import walk_display_lists, TriangleSite  # noqa: E402,F401
+from dl_rigid_groups import (  # noqa: E402,F401
+    REASON_GEO_ASM,
+    REASON_SWITCH_CASE,
+    REASON_TEXTURED,
+    REASON_UNBALANCED_POP,
+    REASON_UNKNOWN_GEO_NODE,
+    REASON_UNKNOWN_MACRO,
+    TriangleSite,
+    rigid_group_stats,
+    walk_display_lists,
+    walk_geo_layout,
+)
 
 
 class AssetClassifierTests(unittest.TestCase):
@@ -1006,6 +1017,312 @@ class DisplayListRigidGroupTests(unittest.TestCase):
         }
         sites = walk_display_lists(lists, "root")
         self.assertIs(sites[0].unsafe, True)
+        self.assertIn(REASON_UNKNOWN_MACRO, sites[0].reasons)
+
+    def test_matrix_without_push_does_not_restore_on_pop(self) -> None:
+        """gsSPMatrix without G_MTX_PUSH must not push the walker's stack.
+
+        Treating every gsSPMatrix as a push desyncs the walker from the
+        hardware by one entry, which lets a later gsSPPopMatrix hand a
+        triangle the group of a matrix that is no longer loaded.
+        """
+        lists = {
+            "root": [
+                ("gsSPVertex", "v_a, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPMatrix", "arm_mtx, G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPPopMatrix", "G_MTX_MODELVIEW"),
+                ("gsSP1Triangle", "0, 2, 1, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertEqual([s.ordinal for s in sites], [0, 1, 2])
+        self.assertNotEqual(sites[0].rigid_group, sites[1].rigid_group,
+                            "a loaded matrix still changes the transform")
+        self.assertNotEqual(sites[2].rigid_group, sites[0].rigid_group,
+                            "a non-pushing matrix must not be restorable")
+        self.assertIs(sites[2].unsafe, True)
+
+    def test_pop_matrix_on_empty_stack_poisons(self) -> None:
+        lists = {
+            "root": [
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSPPopMatrix", "G_MTX_MODELVIEW"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertIs(sites[0].unsafe, True)
+        self.assertIn(REASON_UNBALANCED_POP, sites[0].reasons)
+
+    def test_render_state_macros_are_rigid_group_neutral(self) -> None:
+        """Texture-load macros do not touch the modelview matrix."""
+        lists = {
+            "root": [
+                ("gsDPPipeSync", ""),
+                ("gsDPSetTextureImage", "G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, mario_texture_eye"),
+                ("gsDPSetTile", "G_IM_FMT_RGBA, G_IM_SIZ_16b, 0, 0, G_TX_LOADTILE, 0"),
+                ("gsDPLoadSync", ""),
+                ("gsDPLoadBlock", "G_TX_LOADTILE, 0, 0, 1023, 256"),
+                ("gsDPTileSync", ""),
+                ("gsDPSetTileSize", "0, 0, 0, 124, 124"),
+                ("gsDPSetEnvColor", "255, 255, 255, 255"),
+                ("gsDPSetAlphaCompare", "G_AC_THRESHOLD"),
+                ("gsSPTexture", "0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_OFF"),
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertNotIn(REASON_UNKNOWN_MACRO, sites[0].reasons)
+        self.assertIs(sites[0].unsafe, False)
+
+    def test_textured_triangles_are_unsafe_for_their_own_reason(self) -> None:
+        """Textured sites are excluded, but not because a macro was unknown."""
+        lists = {
+            "root": [
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsDPSetTextureImage", "G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, mario_texture_eye"),
+                ("gsSPTexture", "0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_ON"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+                ("gsSPTexture", "0xFFFF, 0xFFFF, 0, G_TX_RENDERTILE, G_OFF"),
+                ("gsSP1Triangle", "0, 2, 1, 0"),
+            ]
+        }
+        sites = walk_display_lists(lists, "root")
+        self.assertIs(sites[0].unsafe, False)
+        self.assertIs(sites[1].unsafe, True)
+        self.assertEqual(sites[1].reasons, frozenset({REASON_TEXTURED}))
+        self.assertIs(sites[2].unsafe, False)
+
+    def test_load_texture_block_also_marks_triangles_textured(self) -> None:
+        """The compound macro takes its image as the FIRST argument."""
+        lists = {
+            "root": [
+                ("gsDPLoadTextureBlock", "mario_texture_metal, G_IM_FMT_RGBA, "
+                                         "G_IM_SIZ_16b, 64, 32, 0"),
+                ("gsSPVertex", "v, 3, 0"),
+                ("gsSP1Triangle", "0, 1, 2, 0"),
+            ]
+        }
+        site, = walk_display_lists(lists, "root")
+        self.assertIs(site.unsafe, True)
+        self.assertIn(REASON_TEXTURED, site.reasons)
+
+    def test_recursive_display_list_raises(self) -> None:
+        lists = {
+            "root": [("gsSPDisplayList", "child")],
+            "child": [("gsSPDisplayList", "root")],
+        }
+        with self.assertRaisesRegex(ValueError, "recursive display list"):
+            walk_display_lists(lists, "root")
+
+
+_ONE_TRIANGLE = [("gsSPVertex", "v, 3, 0"), ("gsSP1Triangle", "0, 1, 2, 0")]
+
+
+class GeoLayoutRigidGroupTests(unittest.TestCase):
+    """Mario's joints live in the geo layout; actors contain no gsSPMatrix."""
+
+    LISTS = {
+        "dl_a": list(_ONE_TRIANGLE),
+        "dl_b": list(_ONE_TRIANGLE),
+        "dl_c": list(_ONE_TRIANGLE),
+        "dl_d": list(_ONE_TRIANGLE),
+    }
+
+    def test_display_lists_under_one_animated_part_share_a_group(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        sites = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertEqual([s.ordinal for s in sites], [0, 1])
+        self.assertEqual(sites[0].rigid_group, sites[1].rigid_group)
+        self.assertFalse(any(s.unsafe for s in sites))
+
+    def test_display_lists_under_different_animated_parts_differ(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 65, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        sites = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertNotEqual(sites[0].rigid_group, sites[1].rigid_group)
+
+    def test_close_node_restores_the_enclosing_group(self) -> None:
+        """A sibling after GEO_CLOSE_NODE rejoins the parent joint's group."""
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 65, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        outer, inner, after = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertNotEqual(outer.rigid_group, inner.rigid_group)
+        self.assertEqual(outer.rigid_group, after.rigid_group,
+                         "GEO_CLOSE_NODE must restore the prior group")
+
+    def test_animated_part_bound_list_uses_its_own_group(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, dl_a"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 65, 0, 0, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        sites = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertEqual(len(sites), 2)
+        self.assertNotEqual(sites[0].rigid_group, sites[1].rigid_group)
+
+    def test_switch_case_subtree_is_unsafe(self) -> None:
+        """Only one switch child renders, so its shapes are not a guarantee."""
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_d"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        before, first, second, after = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertIs(before.unsafe, False)
+        self.assertIs(first.unsafe, True)
+        self.assertIs(second.unsafe, True)
+        self.assertIn(REASON_SWITCH_CASE, first.reasons)
+        self.assertIs(after.unsafe, False, "poison must not leak past the subtree")
+
+    def test_geo_asm_subtree_is_unsafe(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_ASM", "0, geo_mario_hand_foot_scaler"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        inside, outside = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertIs(inside.unsafe, True)
+        self.assertIn(REASON_GEO_ASM, inside.reasons)
+        self.assertIs(outside.unsafe, False)
+
+    def test_unknown_geo_node_poisons_its_subtree(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_RENDER_RANGE", "-2048, 600"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        site, = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertIs(site.unsafe, True)
+        self.assertIn(REASON_UNKNOWN_GEO_NODE, site.reasons)
+
+    def test_ordinals_are_contiguous_in_walk_order(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, dl_a"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 65, 0, 0, dl_c"),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        lists = {
+            "dl_a": [("gsSPVertex", "v, 4, 0"),
+                     ("gsSP2Triangles", "0, 1, 2, 0, 0, 2, 3, 0")],
+            "dl_b": list(_ONE_TRIANGLE),
+            "dl_c": list(_ONE_TRIANGLE),
+        }
+        sites = walk_geo_layout(layouts, lists, "root")
+        self.assertEqual([s.ordinal for s in sites], [0, 1, 2, 3])
+        self.assertEqual([s.display_list for s in sites],
+                         ["dl_a", "dl_a", "dl_b", "dl_c"])
+        # list_ordinal restarts per display list: it is the only key that
+        # survives switch/LOD selection and per-layer master-list bucketing.
+        self.assertEqual([s.list_ordinal for s in sites], [0, 1, 0, 0])
+
+    def test_branch_returns_to_the_calling_layout(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_BRANCH", "1, sub"),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_c"),
+                ("GEO_CLOSE_NODE", ""),
+            ],
+            "sub": [
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 65, 0, 0, dl_b"),
+                ("GEO_RETURN", ""),
+            ],
+        }
+        shared, joint, after = walk_geo_layout(layouts, self.LISTS, "root")
+        self.assertEqual([s.display_list for s in (shared, joint, after)],
+                         ["dl_a", "dl_b", "dl_c"])
+        self.assertEqual(shared.rigid_group, after.rigid_group,
+                         "a branched layout is inlined at the call site")
+        self.assertNotEqual(joint.rigid_group, shared.rigid_group)
+
+    def test_recursive_geo_layout_raises(self) -> None:
+        layouts = {
+            "root": [("GEO_BRANCH", "1, sub")],
+            "sub": [("GEO_BRANCH", "1, root")],
+        }
+        with self.assertRaisesRegex(ValueError, "recursive geo layout"):
+            walk_geo_layout(layouts, self.LISTS, "root")
+
+    def test_stats_separate_unsafe_reasons(self) -> None:
+        layouts = {
+            "root": [
+                ("GEO_ANIMATED_PART", "LAYER_OPAQUE, 0, 0, 0, NULL"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_a"),
+                ("GEO_SWITCH_CASE", "0, geo_switch_mario_eyes"),
+                ("GEO_OPEN_NODE", ""),
+                ("GEO_DISPLAY_LIST", "LAYER_OPAQUE, dl_b"),
+                ("GEO_CLOSE_NODE", ""),
+                ("GEO_CLOSE_NODE", ""),
+            ]
+        }
+        stats = rigid_group_stats(walk_geo_layout(layouts, self.LISTS, "root"))
+        self.assertEqual(stats["triangle_sites"], 2)
+        self.assertEqual(stats["rigid_groups"], 1)
+        self.assertEqual(stats["unsafe_sites"], 1)
+        self.assertEqual(stats["unsafe_by_reason"][REASON_SWITCH_CASE], 1)
 
 
 if __name__ == "__main__":
