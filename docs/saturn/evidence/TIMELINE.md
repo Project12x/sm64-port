@@ -1582,3 +1582,91 @@ unsupported assertion in permanent project history.
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
+
+### 2026-07-26 — True VDP1 quads: two triangles, one command
+
+VDP1's native primitive is a four-corner quadrilateral, so a triangle and a
+quad cost the same single command. Until now every triangle was emitted as a
+degenerate quad with its last vertex duplicated — one command each, terrain,
+cannon and Mario alike. Two coplanar triangles sharing an edge can occupy one
+command instead of two, but only where that is provably safe.
+
+For animated geometry "safe" means one thing: the same joint must transform
+both triangles, or animation pulls them apart and the merged quad becomes
+garbage. The insight that makes this an offline problem is that a triangle's
+joint is fully determined by its position in a static command sequence.
+Mario's display lists are the same bytes every frame; only the matrix values
+change. So a triangle's identity is stable across every frame and every pose,
+and the safety analysis can be done at build time over bytecode rather than at
+runtime over geometry.
+
+The first attempt walked the wrong structure. The plan assumed `gsSPMatrix`
+push/pop nesting inside the display list determined the joint — the standard
+Fast3D model, and wrong here: `gsSPMatrix` appears **zero** times in `actors/`
+and `levels/bob/`. Mario's hierarchy lives entirely in his geo layout (336
+`GEO_ANIMATED_PART`, 391 `GEO_OPEN_NODE`/`GEO_CLOSE_NODE` pairs, 136
+`GEO_DISPLAY_LIST`). The walk had to become two-level: geo layout for the
+transform hierarchy, nested display-list walk for triangle ordinals inheriting
+each node's group.
+
+Switch cases were initially poisoned wholesale, then given each direct child
+its own rigid group instead — a stronger property, since cross-case merges are
+then prevented by group separation rather than by refusing to analyse. Verified
+against the renderer before being relied on: `geo_process_switch`
+(`rendering_graph_node.c:386`) processes only the selected child, and
+`iterateChildren = (parent->type != GRAPH_NODE_TYPE_SWITCH_CASE)` (`:1288`)
+confirms its siblings are never rendered. That change moved the mergeable
+ceiling from 58.4% to 93.7% of the triangles Mario actually renders, unblocking
+the face and both hands.
+
+An attribute-exact vertex weld recovered the rest. Mario carries 2,460 source
+`Vtx` rows for 980 distinct positions, and the same mesh split across two
+`gsSPVertex` batches shared no rows, so `mario_right_leg_shared_dl` paired at
+0% while `mario_left_leg_shared_dl` paired at 50%. Welding only byte-identical
+rows — position *and* normal/colour — is shading-neutral by construction and
+took the static map from 144 to **260** quads. The unsafe position-only bound
+was 262: safety cost exactly two quads. The 278 attribute-conflicting positions
+stay split, and those are the hard edges welding them would have destroyed.
+
+Two real bugs surfaced, both of the silent-corruption kind. A triangle naming
+itself as its own partner satisfied the reciprocity check trivially — caught by
+a test written before the implementation. And sibling nested display lists were
+handed the same slot-generation stamp, letting one read the other's live slots
+and merge across display lists. That second one was found by neither inspection
+nor the host tests: it appeared as `quad_map_mismatch == 1` in a live capture,
+raised by a range guard that had previously survived mutation testing as
+unreachable defence-in-depth. Keeping that guard is what turned corrupted
+geometry into a counted number.
+
+At the shipped frame: **86 pairs merged, 913 triangles resolved into 827 VDP1
+commands — a 9.42% reduction**, with `quad_map_mismatch` 0, `fault_flags` 0 and
+`modelview_stack_overflow` 0. The identity 913 minus 86 equals 827 holds
+exactly, which is the proof no geometry was added or lost. Geometry invariance
+was confirmed by pixel diff against a same-session capture of the pre-merge
+build: 321 of 71,680 pixels differ (0.45%), confined to one bounding box, with
+non-black coverage of 38,135 against 38,134. Merged quads rasterising as one
+primitive instead of two is exactly why edge pixels shift.
+
+The user confirmed the frame is unchanged. Per this project's standing rule,
+that confirmation — not the counters — is what gates this entry.
+
+**BOB's terrain contributes nothing, and this is measured, not an oversight:**
+all 1,101 of its triangle commands are textured, and textured triangles are
+never paired. The 9.42% is almost entirely Mario and the cannon. Terrain is the
+larger half of the scene and stays on the table until textures land, at which
+point roughly 220-285 further commands become reachable.
+
+Evidence: [free-roam screenshot](screenshots/e2-sourceboot-quadmerge-freeroam-2026-07-26.png)
+(320x224 internal `video.capture`, SHA-256
+`fe2813e3728b4ed555a7992f43a700ee2731393042253582f1e39bd8ce3056bf`),
+[full run report](reports/e2-sourceboot-quadmerge-freeroam-2026-07-26.json),
+[implementation plan with per-task review outcomes](../../superpowers/plans/2026-07-25-general-quad-merging.md),
+[design spec](../../superpowers/specs/2026-07-25-general-quad-merging-design.md).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames + 25,074 post
+frames, USA BIOS input macro, branch `saturn/bootstrap` at commit `312cc49`.
+The complete frame was located by fitting `frame_serial` against four
+known-partial samples to find the gap between submits, rather than by sweeping
+blindly.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
