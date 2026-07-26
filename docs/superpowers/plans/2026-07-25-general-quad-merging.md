@@ -61,6 +61,34 @@ nothing, and it is correct if any display list ever does use it.
 - **`gsSPPopMatrix` on an empty stack must poison,** not silently keep the
   current group. Same unsafe direction.
 
+## Correction 0a: the quad map must be keyed on `(display_list, list_ordinal)`
+
+**Found during Task 1 rework, 2026-07-25. Mandatory — a global ordinal is not a
+valid runtime key, and Tasks 2, 5 and 6 must all use the corrected key.**
+
+The plan keyed the quad map on a single global triangle ordinal produced by a
+static walk of the geo tree. The runtime frontend cannot reproduce that number,
+for two independent reasons:
+
+1. **Switch selection.** A `GEO_SWITCH_CASE` has several children; the static
+   walk visits *all* of them, the runtime executes only the selected one. Every
+   ordinal after the first switch is shifted by however much unselected geometry
+   the static walk counted.
+2. **Layer bucketing.** SM64 sorts display lists into 8 layers in the master
+   list, so runtime execution order is not geo-tree order at all.
+
+The fix, already implemented in Task 1: `TriangleSite.list_ordinal` — the
+triangle's index **within its own display list**. That key survives switch
+selection, LOD selection and layer bucketing, because the runtime always
+executes the same `Gfx` array from its start. Key the map on
+`(display_list, list_ordinal)`.
+
+Related, and confirming the soundness fix was not hypothetical: the static files
+contain no `gsSPMatrix`, but the **runtime stream does** —
+`geo_process_master_list` emits one `G_MTX_LOAD | G_MTX_NOPUSH` per master-list
+entry. The retained DL-level handling is live at runtime, and
+"no push without `G_MTX_PUSH`" is exactly the case that occurs.
+
 ## Correction 0b: the test runner is `unittest`, not `pytest`
 
 `pytest` is not installed in `.venv-saturn-tools` and is not in the hash-pinned
