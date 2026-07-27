@@ -240,9 +240,32 @@ the modules, delete the moved bodies), modify `castleviewer/Makefile`.
 - [ ] Commit(s); update the inventory in `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`'s
   layer table (gfx layer now lists the shared modules).
 
+**Dual-CPU design constraints — bind NOW, at the harvest (owner directive:
+slave underutilization is the project's downfall; do not build this layer
+twice):**
+
+- `saturn_ir_transform`'s public API is **job records**, not calls over
+  shared state: an input batch (bank slice + snapshot of matrix/viewport/
+  light state) in, an output region out. No globals read or written inside
+  the transform. A function with this shape runs identically on either CPU;
+  a function without it forces a Task 5b rewrite.
+- **No shared mutable state between prospective master/slave work.** Output
+  regions are per-job, disjoint, cache-line-aware (SH7604 is write-through,
+  4 KB unified cache per CPU, one shared bus — data placement is where 2
+  CPUs become 2×, or don't; SlaveDriver's work/result discipline is the
+  model).
+- Task 2's bank format must be **sliceable**: contiguous primitive runs with
+  per-slice bounds, so a job is a range, not a traversal.
+- [ ] **Slave smoke gate, in this task:** run the harvested transform on the
+  slave CPU over a fixture bank and compare outputs **bit-exact** against
+  the master running the same job (Yaul dual-CPU API; behaviour reference
+  `work/upstream/libyaul-examples/cpu-dual`, behaviour-only). This proves
+  the module is CPU-agnostic *before* anything depends on it, and surfaces
+  bus/cache surprises months earlier than Task 5b would.
+
 **Gate:** castleviewer renders identically from the shared modules; the
-modules have their own host tests; nothing the bridge needs remains
-harness-private.
+modules have their own host tests; the slave smoke gate passes bit-exact;
+nothing the bridge needs remains harness-private.
 
 **References consumed (AW-3):** `castleviewer/main.c:434-491` and texture
 paths (in-repo harvest, MIT-lineage per its libmic3d ancestry — retain any
@@ -459,11 +482,29 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
 (append-only): `uint32_t slave_jobs_completed`, `uint32_t slave_busy_ticks`,
 `uint32_t master_wait_ticks`, `uint32_t slave_timeouts`.
 
-- [ ] Close-port the worker loop: master partitions bank primitives into
-  bounded jobs; slave transforms/lights/culls its share into its own output
-  region (no shared writes — SlaveDriver's work/result discipline); master
-  joins and links commands. Cache coherency per the write-through SH7604
-  reality (`saturn_vdp1_backend.h:200-203` states it correctly).
+- [ ] **Choose the parallel model from Task 0's numbers — both are in
+  scope; the data decides which is primary:**
+  - **(A) Frame pipeline:** master sims frame N+1 while the slave renders
+    frame N from an **immutable snapshot** (Mario pos/action/anim, camera,
+    copied at the frame boundary — the slave never reads live sim state,
+    which preserves the authority contract by construction). After its sim
+    tick, the master **joins the render** and takes remaining jobs. Ceiling:
+    `(sim + render) / 2` per frame. Adds one frame of render latency —
+    acceptable, state it.
+  - **(B) Per-frame data split:** both CPUs transform the same frame's bank
+    slices, join before linking. Ceiling: `sim + render/2`. No added
+    latency.
+  - If sim and render are comparable, (A) with master-join dominates; if sim
+    is small, they converge. Record the decision and its arithmetic in the
+    completion note.
+- [ ] Close-port the worker loop: bounded jobs from Task 2's sliceable
+  banks; slave transforms/lights/culls into per-job disjoint output regions
+  (no shared writes — SlaveDriver's work/result discipline); master joins
+  and links commands. Cache coherency per the write-through SH7604 reality
+  (`saturn_vdp1_backend.h:200-203` states it correctly). Task 1's slave
+  smoke gate means this task is **wiring and scheduling, not restructuring**
+  — if it turns into restructuring, Task 1's constraints were violated and
+  that is the bug to fix.
 - [ ] The auto-balancer adjusts the split from measured spin counts, exactly
   as upstream does.
 - [ ] **Serial fallback flag** (`SATURN_SLAVE_RENDER ?= 1`, `=0` builds the
@@ -476,11 +517,17 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
   both, checkpoint hash identical in both (the slave touches render data
   only, never sim state).
 
-**Gate:** `slave_busy_ticks > 0` in a committed capture, checkpoint hash
-unchanged, and **measured absolute FPS improvement over the serial build of
-the same commit** — the sprint's gate 8, inherited verbatim. If the split
-doesn't pay on this workload, the honest number is the deliverable and the
-serial flag stays default.
+**Gate:** checkpoint hash unchanged; **measured absolute FPS improvement
+over the serial build of the same commit** (the sprint's gate 8, inherited
+verbatim); and a **slave-share target: slave busy ≥ 50% of frame time** at
+the chosen degradation setting, reported as a percentage in the utilization
+table. `> 0` is not the bar — the owner's directive is *proper* use, and 50%
+is what the frame-pipeline arithmetic predicts when the model fits. If the
+measured share lands below target, the completion note states the limiter
+(bus contention, join stalls, job granularity) with numbers — that analysis
+is the deliverable, not a relabeled gate. If the split doesn't pay at all on
+this workload, the honest number is the deliverable and the serial flag
+stays default.
 
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
