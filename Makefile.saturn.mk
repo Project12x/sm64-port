@@ -179,6 +179,7 @@ verify-runtime-contracts: compile-quad-map
 	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  -I"$(QUAD_MAP_GENERATED)" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/runtime_contract_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c" \

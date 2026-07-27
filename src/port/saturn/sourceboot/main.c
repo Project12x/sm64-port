@@ -1,7 +1,9 @@
 /* E2 sourceboot target: original game-loop ownership, direct Bob source entry. */
 #include <yaul.h>
 
+#include "game/camera.h"
 #include "game/game_init.h"
+#include "game/level_update.h"
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
@@ -9,12 +11,67 @@
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
+#include "source_route_probe.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
                                            * under src/port/saturn/; matches
                                            * hwtest's existing include style
                                            * since no -I path exposes gpl/
                                            * by bare name (see the Makefile's
                                            * SH_CFLAGS -I list). */
+
+#ifndef SATURN_SOURCEBOOT_ROUTE_REPLAY
+#define SATURN_SOURCEBOOT_ROUTE_REPLAY 0
+#endif
+
+static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
+sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
+
+const sm64_saturn_input_replay_sample_t *
+sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
+
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+static uint32_t sourceboot_float_bits(f32 value) {
+    union { f32 f; uint32_t u; } bits;
+    bits.f = value;
+    return bits.u;
+}
+
+static void sourceboot_capture_route_checkpoint(void) {
+    const sm64_saturn_source_runtime_state_t *runtime =
+        sm64_saturn_source_runtime_state();
+    const sm64_saturn_fast3d_profile_t *profile = &sourceboot_fast3d.profile;
+
+    /* Publish the latest source-frame state. The host accepts it only when
+     * replay_ticks is the route's exact 600-tick endpoint, so a stalled
+     * controller cadence is reported as a failed gate rather than omitted. */
+    sourceboot_route_checkpoint.version = SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION;
+    sourceboot_route_checkpoint.replay_ticks = runtime->input_replay_ticks;
+    sourceboot_route_checkpoint.global_timer = gGlobalTimer;
+    if (gMarioState != NULL) {
+        sourceboot_route_checkpoint.mario_action = gMarioState->action;
+        sourceboot_route_checkpoint.mario_pos_x_bits = sourceboot_float_bits(gMarioState->pos[0]);
+        sourceboot_route_checkpoint.mario_pos_y_bits = sourceboot_float_bits(gMarioState->pos[1]);
+        sourceboot_route_checkpoint.mario_pos_z_bits = sourceboot_float_bits(gMarioState->pos[2]);
+    } else {
+        /* Keep the replay completion observable even if an early bootstrap
+         * regression has not produced Mario state yet. The comparator treats
+         * these sentinels as a failed BOB route, rather than hiding it. */
+        sourceboot_route_checkpoint.mario_action = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_pos_x_bits = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_pos_y_bits = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_pos_z_bits = UINT32_MAX;
+    }
+    sourceboot_route_checkpoint.camera_mode =
+        gCamera == NULL ? UINT32_MAX : (uint32_t)(uint16_t)gCamera->mode;
+    sourceboot_route_checkpoint.triangles_transformed = profile->triangles_transformed;
+    sourceboot_route_checkpoint.triangles_vdp1_emitted = profile->triangles_vdp1_emitted;
+    sourceboot_route_checkpoint.fault_flags = profile->fault_flags;
+    sourceboot_route_checkpoint.command_capacity_rejects =
+        profile->reject_command_capacity;
+    /* Publish last: a host that sees the magic sees a complete snapshot. */
+    sourceboot_route_checkpoint.magic = SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC;
+}
+#endif
 
 /* SM64's bootstrap main pool, LWRAM-resident. History of this placement:
  *
@@ -51,7 +108,6 @@
 #define SOURCEBOOT_MAIN_POOL_BYTES (0x00060000UL)
 static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
     __attribute__((section(".lwram_bss"))) __aligned(16);
-static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
 
@@ -171,6 +227,14 @@ int main(void) {
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_source_runtime_configure(sm64_saturn_fast3d_frontend_submit,
                                          &sourceboot_fast3d);
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+    {
+        uint16_t sample_count = 0U;
+        const sm64_saturn_input_replay_sample_t *route =
+            sm64_saturn_sourceboot_bob_parity_v1(&sample_count);
+        sm64_saturn_source_runtime_configure_input_replay(route, sample_count);
+    }
+#endif
 
     {
         const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
@@ -296,6 +360,9 @@ int main(void) {
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend,
                                      &sourceboot_gouraud_bank);
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+        sourceboot_capture_route_checkpoint();
+#endif
 
         /* VDP1 runs in Yaul's default "auto" (1-cycle) interval mode here
          * (vdp1_sync_interval_set(0), set unconditionally by libyaul's

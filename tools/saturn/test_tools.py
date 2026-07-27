@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import cap_stderr, has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from compare_route_reports import compare_reports, load_route  # noqa: E402
 from extract_mario_actor import (  # noqa: E402
     animation_frame_count,
     animation_rotations,
@@ -921,6 +923,34 @@ class YmirInputTests(unittest.TestCase):
         capped, original_length = cap_stderr("x" * 200_000)
         self.assertEqual(original_length, 200_000)
         self.assertEqual(len(capped), 64 * 1024)
+
+
+class BobParityRouteTests(unittest.TestCase):
+    def test_route_is_600_ticks_and_has_movement_jump_and_camera_input(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        self.assertEqual(route["simulation_ticks"], 600)
+        self.assertEqual(sum(sample["ticks"] for sample in route["samples"]), 600)
+        self.assertTrue(any(sample["buttons"] & 0x8000 for sample in route["samples"]))
+        self.assertTrue(any(sample["buttons"] & 0x0003 for sample in route["samples"]))
+        self.assertTrue(any(sample["stick_x"] or sample["stick_y"] for sample in route["samples"]))
+
+    def test_comparator_accepts_identical_complete_checkpoints(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        report = {"probe_window": {"data": list(struct.pack(">13I", *words))}}
+        result = compare_reports(report, report, route)
+        self.assertTrue(result["deterministic"])
+
+    def test_comparator_rejects_checkpoint_state_drift(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        left = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        right = left.copy()
+        right[5] = 4
+        result = compare_reports(
+            {"probe_window": {"data": list(struct.pack(">13I", *left))}},
+            {"probe_window": {"data": list(struct.pack(">13I", *right))}}, route)
+        self.assertFalse(result["deterministic"])
+        self.assertIn("source checkpoint signature differs", result["errors"])
 
 
 class TelemetryTests(unittest.TestCase):

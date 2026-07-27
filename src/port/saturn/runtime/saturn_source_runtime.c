@@ -14,6 +14,7 @@
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
 static sm64_saturn_source_runtime_state_t sState;
+static sm64_saturn_input_replay_t sInputReplay;
 
 /* Matches the original public game/main.h boundary. This target owns the
  * implementation, but the startup preflight invokes it before its definition
@@ -24,6 +25,15 @@ void sm64_saturn_source_runtime_configure(
         sm64_saturn_source_task_submit_fn submit, void *context) {
     sTaskSubmit = submit;
     sTaskSubmitContext = context;
+}
+
+void sm64_saturn_source_runtime_configure_input_replay(
+        const sm64_saturn_input_replay_sample_t *samples, uint16_t sample_count) {
+    sm64_saturn_input_replay_init(&sInputReplay, samples, sample_count);
+    sState.input_replay_ticks = 0U;
+    sState.input_replay_sample = 0U;
+    sState.input_replay_active = sInputReplay.enabled;
+    sState.input_replay_complete = sInputReplay.complete;
 }
 
 void sm64_saturn_source_runtime_init_controllers(
@@ -47,6 +57,14 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
 
     controller_saturn.read(&pads[0]);
     sState.input_polls++;
+    if (sInputReplay.enabled) {
+        sm64_saturn_input_replay_apply(&sInputReplay, &pads[0].button,
+                                       &pads[0].stick_x, &pads[0].stick_y);
+        pads[0].errnum = 0;
+        sState.input_replay_ticks = sInputReplay.ticks_consumed;
+        sState.input_replay_sample = sInputReplay.sample_index;
+        sState.input_replay_complete = sInputReplay.complete;
+    }
     if (count > 1U) {
         (void)memset(&pads[1], 0, sizeof(*pads) * (count - 1U));
         for (uint32_t index = 1; index < count; index++)

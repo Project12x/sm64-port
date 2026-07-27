@@ -15,6 +15,7 @@
 #include "saturn_matrix_kernels.h"
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
+#include "saturn_input_replay.h"
 #include "types.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_quad_map.h"
@@ -305,6 +306,30 @@ static void test_matrix_mp_cache_invalidates_across_pop(void)
     /* If pop() failed to mark mp_dirty, this would incorrectly still
      * return the stale 42<<16 value cached before the pop. */
     assert(mp->m[3][0] == 0);
+}
+
+static void test_input_replay_feeds_only_pads_and_ends_neutral(void)
+{
+    const sm64_saturn_input_replay_sample_t samples[] = {
+        { 2U, 64, 0, 0x8000U },
+        { 1U, 0, -32, 0x0002U },
+    };
+    sm64_saturn_input_replay_t replay;
+    uint16_t buttons = 0U;
+    int8_t stick_x = 0;
+    int8_t stick_y = 0;
+
+    assert(sm64_saturn_input_replay_total_ticks(samples, 2U) == 3U);
+    sm64_saturn_input_replay_init(&replay, samples, 2U);
+    for (int tick = 0; tick < 2; tick++) {
+        sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+        assert(buttons == 0x8000U && stick_x == 64 && stick_y == 0);
+    }
+    sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+    assert(buttons == 0x0002U && stick_x == 0 && stick_y == -32);
+    assert(replay.complete && replay.ticks_consumed == 3U);
+    sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+    assert(buttons == 0U && stick_x == 0 && stick_y == 0);
 }
 
 static uint32_t float_bits(float value)
@@ -3459,6 +3484,7 @@ int main(void)
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
     test_identity_camera();
     test_q16_normalization();
+    test_input_replay_feeds_only_pads_and_ends_neutral();
     test_frame_profile();
     test_bounded_memory_arena();
     test_source_identified_render_queue();

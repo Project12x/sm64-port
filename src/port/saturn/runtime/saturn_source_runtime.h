@@ -6,6 +6,8 @@
 
 #include <ultra64.h>
 
+#include "saturn_input_replay.h"
+
 /* `SPTask` is a tagged source type declared by include/types.h.  The runtime
  * only transports its pointer, but the declaration has to be at file scope:
  * declaring it first in a callback parameter would create a prototype-scoped
@@ -31,10 +33,16 @@ typedef struct sm64_saturn_source_runtime_state {
     uint32_t audio_ticks;
     uint32_t preflight_tasks;
     uint32_t preflight_failures;
+    uint32_t input_replay_ticks;
+    uint16_t input_replay_sample;
+    bool input_replay_active;
+    bool input_replay_complete;
 } sm64_saturn_source_runtime_state_t;
 
 void sm64_saturn_source_runtime_configure(
     sm64_saturn_source_task_submit_fn submit, void *context);
+void sm64_saturn_source_runtime_configure_input_replay(
+    const sm64_saturn_input_replay_sample_t *samples, uint16_t sample_count);
 void sm64_saturn_source_runtime_init_controllers(
     uint8_t *controller_bits, OSContStatus *statuses, uint32_t count);
 void sm64_saturn_source_runtime_begin_input(void);

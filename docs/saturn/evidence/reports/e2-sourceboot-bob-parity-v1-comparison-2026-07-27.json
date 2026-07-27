@@ -1,0 +1,38 @@
+{
+  "deterministic": true,
+  "errors": [],
+  "left": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "global_timer": 744,
+    "magic": 1396855345,
+    "mario_action": 205521409,
+    "mario_pos_x_bits": 3315167764,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167940200,
+    "replay_ticks": 600,
+    "triangles_transformed": 2068,
+    "triangles_vdp1_emitted": 542,
+    "version": 1
+  },
+  "left_checkpoint_sha256": "f068760758aaa3818873ab04203b6f1ab47ff4c4b583f33967f69d9b4865a73f",
+  "right": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "global_timer": 744,
+    "magic": 1396855345,
+    "mario_action": 205521409,
+    "mario_pos_x_bits": 3315167764,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167940200,
+    "replay_ticks": 600,
+    "triangles_transformed": 2068,
+    "triangles_vdp1_emitted": 542,
+    "version": 1
+  },
+  "right_checkpoint_sha256": "f068760758aaa3818873ab04203b6f1ab47ff4c4b583f33967f69d9b4865a73f",
+  "route_version": "bob-parity-v1",
+  "simulation_ticks": 600
+}

@@ -2,6 +2,9 @@
  * the source DmaHandlerList ABI with an empty table until the normal menu
  * package is part of the Saturn level-script closure. */
 #include "game/memory.h"
+#include <PR/os_cont.h>
+
+#include "saturn_input_replay.h"
 
 struct SaturnSourceDemoInputs {
     u32 numEntries;
@@ -14,3 +17,25 @@ const struct SaturnSourceDemoInputs gDemoInputs = {
     NULL,
     { { 0U, 0U } },
 };
+
+/* Test-only BOB parity route.  This feeds OSContPad samples through the
+ * existing Saturn runtime seam; it does not alter source game state.  Keep it
+ * in lockstep with tools/saturn/routes/bob_parity_v1.json. */
+static const sm64_saturn_input_replay_sample_t sBobParityV1[] = {
+    { 120U,   0,   0,          0U }, /* neutral startup */
+    { 120U,  64,   0,          0U }, /* move */
+    {  24U,  64,   0,    A_BUTTON }, /* running jump */
+    {  96U,  64,  20,          0U }, /* arc */
+    {  72U,   0,   0, L_CBUTTONS }, /* normal camera input */
+    {  72U, -48,  48,          0U }, /* return leg */
+    {  48U, -48,  48,    A_BUTTON }, /* second jump */
+    {  48U,   0, -64, R_CBUTTONS }, /* final camera variation */
+};
+
+const sm64_saturn_input_replay_sample_t *
+sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count)
+{
+    if (sample_count != NULL)
+        *sample_count = (uint16_t)(sizeof(sBobParityV1) / sizeof(sBobParityV1[0]));
+    return sBobParityV1;
+}

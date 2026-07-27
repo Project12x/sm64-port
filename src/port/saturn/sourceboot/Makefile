@@ -15,6 +15,7 @@ SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
 SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
+SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -94,6 +95,7 @@ SH_SPECS := sourceboot.specs
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
+  -DSATURN_SOURCEBOOT_ROUTE_REPLAY=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
