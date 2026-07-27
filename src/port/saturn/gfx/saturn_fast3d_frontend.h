@@ -332,6 +332,14 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t quad_pair_not_adjacent;
     uint32_t quad_ordinal_past_row;
     uint32_t quad_pairs_declined;
+
+    /* Demo-path Task 0 timing. Yaul initializes the master FRT at phi/8;
+     * CPU_FRT_NTSC_320_8_COUNT_1MS therefore converts ticks to milliseconds.
+     * Each sample is a modulo-2^16 delta, so one counter wrap is defined. */
+    uint32_t sim_frt_ticks_last;
+    uint32_t sim_frt_ticks_accum;
+    uint32_t sim_tick_count;
+    uint32_t render_frt_ticks_last;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

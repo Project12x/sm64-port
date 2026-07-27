@@ -25,10 +25,17 @@
 #endif
 
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
+static uint32_t sourceboot_sim_ticks_accum;
+static uint32_t sourceboot_sim_tick_count;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
 
 const sm64_saturn_input_replay_sample_t *
 sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
+
+static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
+{
+    return (uint16_t)(end - start);
+}
 
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
 static uint32_t sourceboot_float_bits(f32 value) {
@@ -361,10 +368,24 @@ int main(void) {
      * bootstrap once, then advance exactly one source frame per iteration. */
     thread5_game_loop(NULL);
     for (;;) {
+        const uint16_t sim_start = cpu_frt_count_get();
         game_loop_one_iteration();
+        const uint16_t sim_end = cpu_frt_count_get();
+        sourceboot_fast3d.profile.sim_frt_ticks_last =
+            sourceboot_frt_delta(sim_start, sim_end);
+        sourceboot_sim_ticks_accum +=
+            sourceboot_fast3d.profile.sim_frt_ticks_last;
+        sourceboot_sim_tick_count++;
+        sourceboot_fast3d.profile.sim_frt_ticks_accum =
+            sourceboot_sim_ticks_accum;
+        sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+
+        const uint16_t render_start = cpu_frt_count_get();
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend,
                                      &sourceboot_gouraud_bank);
+        sourceboot_fast3d.profile.render_frt_ticks_last =
+            sourceboot_frt_delta(render_start, cpu_frt_count_get());
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
         sourceboot_capture_route_checkpoint();
 #endif
