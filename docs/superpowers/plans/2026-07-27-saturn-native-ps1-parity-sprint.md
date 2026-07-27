@@ -353,18 +353,19 @@ introduced; v1 does not claim those counters already exist.
 
 **Steps:**
 
-- [ ] First add host reference tests for signed Q16 multiply, saturation,
+- [x] First add host reference tests for signed Q16 multiply, defined
+  narrowing/overflow behavior (rather than saturation),
   negative rounding, divide-by-zero, DVCR overflow, near-W, and extreme legal
   SM64 coordinates.
-- [ ] Add SH-2 target-vector tests that write kernel results to a probe block
+- [x] Add SH-2 target-vector tests that write kernel results to a probe block
   and compare them with the host model.
-- [ ] Split projection into `divide_start()` and `divide_collect()` so callers
+- [x] Split projection into `divide_start()` and `divide_collect()` so callers
   cannot accidentally serialize the 39-cycle hardware divider.
-- [ ] Include an explicit DVCR clear/check and counted fallback for invalid
+- [x] Include an explicit DVCR clear/check and counted fallback for invalid
   projection inputs.
-- [ ] Disassemble the target object and assert the expected `dmuls.l`, `xtrct`,
+- [x] Disassemble the target object and assert the expected `dmuls.l`, `xtrct`,
   DIVU write, intervening work, and delayed quotient read sequence.
-- [ ] Mutation-test operand order, fixed-point shift, and immediate quotient
+- [x] Mutation-test operand order, fixed-point shift, and immediate quotient
   collection.
 
 **Gate:** Bit-exact Q16 multiply and defined divide behavior across the fixture

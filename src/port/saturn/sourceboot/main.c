@@ -11,6 +11,7 @@
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
+#include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
                                            * under src/port/saturn/; matches
@@ -187,6 +188,10 @@ void user_init(void) {
 }
 
 int main(void) {
+    /* Keep the one-shot SH-2 kernel vector observable in headless Ymir's
+     * no-cart negative-control configuration too: cart loading may fail
+     * before the source game loop is available. */
+    sm64_saturn_sourceboot_q16_kernel_probe_run();
     const sm64_saturn_source_cart_status_t cart_status =
         sm64_saturn_source_cart_load();
     if (cart_status != SM64_SATURN_SOURCE_CART_OK) {

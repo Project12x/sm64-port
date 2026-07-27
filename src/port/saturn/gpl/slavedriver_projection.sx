@@ -1,0 +1,25 @@
+/* GPL-3.0-or-later. Close-port of the DIVU launch ordering from
+ * Lobotomy-Software/SlaveDriver-Engine WALLASM.S:283-289, commit
+ * a8986591557b6e680550d3c23970284d3b38ff8f.
+ *
+ * Arguments: r4=Q16.16 dividend, r5=Q16.16 divisor. The Q16 dividend is
+ * split to the SH-2 64/32 DIVU wire format; writing DVDNTL starts division.
+ * The caller must perform independent work before collect reads DVDNTL. */
+        .section .text.sm64_saturn_slavedriver_divu_q16_start_asm,"ax"
+        .align 2
+        .global _sm64_saturn_slavedriver_divu_q16_start_asm
+_sm64_saturn_slavedriver_divu_q16_start_asm:
+        mov     r4,r1
+        swap.w  r1,r1
+        exts.w  r1,r1              ! high signed 32 bits
+        mov     r4,r2
+        shll16  r2                  ! low 32 bits, starts when written
+        mov.l   .Ldivu_base,r0
+        mov.l   r5,@(0,r0)          ! DVSR
+        mov.l   r1,@(16,r0)         ! DVDNTH
+        mov.l   r2,@(20,r0)         ! DVDNTL: launch
+        rts
+        nop
+        .align 2
+.Ldivu_base:
+        .long   0xffffff00

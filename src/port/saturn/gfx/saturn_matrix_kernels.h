@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "saturn_q16_sh2.h"
+
 /* Q16.16 integer math primitives for the Saturn render-matrix pipeline.
  *
  * WHY THIS EXISTS: live evidence (2026-07-22, see
@@ -72,7 +74,7 @@ static inline int32_t sm64_saturn_coss_q16(int32_t angle)
  * variant rather than assuming this one covers it. */
 static inline int32_t sm64_saturn_q16_mul(int32_t a, int32_t b)
 {
-    return (int32_t) (((int64_t) a * (int64_t) b) >> 16);
+    return sm64_saturn_q16_mul_sh2(a, b);
 }
 
 /* Floor integer square root of a non-negative 64-bit value.

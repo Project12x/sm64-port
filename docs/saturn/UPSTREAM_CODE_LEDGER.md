@@ -147,6 +147,14 @@ Implementation commitments:
 
 ## M3 onward — inspection and debugging evidence
 
+## Native parity Task 1 — Q16 kernel reuse (2026-07-27)
+
+| Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
+|---|---|---|---|
+| `johannes-fetz/joengine` | `556d081146211b6a1cfa6591d70f9487d406758b`; MIT root plus BSD-3-Clause-style source notice | `jo_engine/math.c:57-70` (`jo_fixed_mult`) | **Direct adaptation.** The compact `dmuls.l`/`sts`/`xtrct` primitive is adapted in `src/port/saturn/gfx/saturn_q16_sh2.h`; that destination retains the source notice, upstream pin, and material-change note. |
+| `Lobotomy-Software/SlaveDriver-Engine` | `a8986591557b6e680550d3c23970284d3b38ff8f`; GPL-3.0-or-later | `WALLASM.S:253-353` | **Close-port.** `src/port/saturn/gpl/slavedriver_projection.sx/.h` retains the GPL declaration, source path, pin, and change note. It preserves launch → independent work → collect scheduling, not renderer code. |
+| `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98`; MIT | `libyaul/scu/bus/cpu/cpu/map.h`, `cpu/divu.h` | **Dependency/API contract.** Confirms DIVU register addresses and Q16 split semantics for the close-port; no Yaul source is copied. |
+
 | Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
 |---|---|---|---|
 | [VGKintsugi/Ghidra-SegaSaturn-Loader](https://github.com/VGKintsugi/Ghidra-SegaSaturn-Loader) | `c489a190a79d2634b9ecf82e2c0dcec8fd999cf5` / Apache-2.0 | `README.md` and loader layout | **External tool / behavior study.** Use it, if needed, to inspect a generated ISO or emulator save state during M8 debugging. It is not linked to the build and no loader code belongs in the target. |

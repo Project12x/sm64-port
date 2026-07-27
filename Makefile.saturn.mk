@@ -178,6 +178,7 @@ verify-runtime-contracts: compile-quad-map
 	  -I"$(SATURN_REPO_ROOT)/include" \
 	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  -I"$(QUAD_MAP_GENERATED)" \

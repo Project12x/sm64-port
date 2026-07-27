@@ -56,7 +56,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # This is intentionally a source closure, not a Castle viewer dependency list.
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
-SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c source_cart.c \
+SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c source_cart.c source_q16_kernel_probe.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
@@ -64,6 +64,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c \
   $(ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_dma_queue.c \
+  $(ROOT)/src/port/saturn/gpl/slavedriver_projection.sx \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/buffers/buffers.c $(ROOT)/src/buffers/gfx_output_buffer.c \
   $(SOURCEBOOT_GAME_SRCS) $(SOURCEBOOT_ENGINE_SRCS) $(SOURCEBOOT_MENU_SRCS) \
@@ -296,3 +297,5 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	    | grep -Eq "[[:space:]]T[[:space:]]$$sym\$$" || { \
 	    printf '%s\n' "sourceboot: $$sym missing from the linked image" >&2; exit 1; }; \
 	done
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_q16_sh2_disassembly.py" \
+	  "$(SH_BUILD_PATH)/$(SH_PROGRAM).asm"

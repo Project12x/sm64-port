@@ -354,8 +354,8 @@ results remain separate from retail-hardware evidence.
 | Pinned commit inspected | `a8986591557b6e680550d3c23970284d3b38ff8f` |
 | License | GPL-3.0-or-later (`LICENSE.txt`, `README.md`) |
 | Role | Saturn FPS-engine prior art for DMA scheduling, fixed-point world organization, and VDP2 setup |
-| Files inspected | `DMA.C`, `DMA.H`, `SCL_FUNC.C`, `INITMAIN.C`, `MEMCPY.S`, `LINK.S`, `README.md`, `LICENSE.txt` |
-| Reuse mode | Pattern-only in the current Yaul bring-up; direct adaptation is authorized and should live in an explicitly GPL-3.0-or-later component with preserved notices |
+| Files inspected | `DMA.C`, `DMA.H`, `SCL_FUNC.C`, `INITMAIN.C`, `MEMCPY.S`, `LINK.S`, `WALLASM.S:253-353`, `README.md`, `LICENSE.txt` |
+| Reuse mode | Close-port in explicitly GPL-3.0-or-later components with preserved notices: bounded DMA queue and Task 1's DIVU launch/schedule; otherwise pattern-only |
 
 The engine demonstrates a queued DMA abstraction that chooses CPU copying or a
 Saturn-side transfer based on address ranges, waits for completion, and keeps
@@ -378,6 +378,17 @@ clipping that carries shade values through generated vertices, VDP1 Gouraud
 submission, and explicit master/slave render records. They are behavior and
 architecture references for the future world renderer only; no additional
 SlaveDriver renderer source was copied.
+
+**2026-07-27 Task 1 close-port:** `WALLASM.S:253-353` was re-read at the
+pinned commit and narrowly adapted into
+`src/port/saturn/gpl/slavedriver_projection.sx` and
+`src/port/saturn/gpl/slavedriver_projection.h`. Reuse mode is **close-port**:
+the adapted portion retains the GPL-3.0-or-later declaration, upstream path,
+pin, and a material-change note. It preserves the useful schedule only —
+launch SH-2 DIVU, perform independent projection work, then collect — rather
+than copying the wall renderer. The register mapping is checked against the
+pinned MIT `libyaul` CPU-DIVU header; sourceboot's target-vector probe is new
+project code.
 
 **2026-07-22 re-consultation** (sourceboot gGfxPool collision investigation,
 `docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`): re-read
@@ -412,8 +423,8 @@ Sonic Z-Treme below).
 | Pinned commit inspected | `556d081146211b6a1cfa6591d70f9487d406758b` |
 | License | Root `LICENSE` is MIT; inspected engine files also carry a BSD-3-Clause-style source header |
 | Role | Practical Saturn C API and VDP1 command-buffer prior art |
-| Files inspected | `README.md`, `LICENSE`, `jo_engine/jo/3d.h`, `jo_engine/3d.c`, `jo_engine/vdp1_command_pipeline.c`, `jo_engine/jo/vdp1_command_pipeline.h` |
-| Reuse mode | Pattern-only for the current libyaul renderer; direct adaptation remains available if a source file's own notice is preserved |
+| Files inspected | `README.md`, `LICENSE`, `jo_engine/math.c:57-70`, `jo_engine/jo/3d.h`, `jo_engine/3d.c`, `jo_engine/vdp1_command_pipeline.c`, `jo_engine/jo/vdp1_command_pipeline.h` |
+| Reuse mode | Direct adaptation of the file-noticed Q16 `dmuls.l`/`xtrct` primitive in `src/port/saturn/gfx/saturn_q16_sh2.h`; pattern-only for the current libyaul renderer |
 
 The non-SGL command pipeline grows the VDP1 list in small command-table blocks,
 resets it with system/user clipping and local-coordinate commands, then DMA
@@ -423,6 +434,14 @@ allocation, so copying Jo Engine would add an incompatible allocation layer
 without solving a current problem. Its useful lesson is the command lifecycle:
 allocate outside the hot loop, rebuild only active commands, and treat the
 three setup commands as a fixed prefix.
+
+**2026-07-27 Task 1 direct adaptation:** `jo_engine/math.c:57-70`'s
+`jo_fixed_mult` instruction idiom was directly adapted into
+`saturn_q16_sh2.h`. The original BSD-3-Clause-style source notice is retained
+verbatim at that destination; project changes restrict the API to the Q16.16
+primitive, add project names/types, and provide a host-reference fallback.
+No Jo divide routine was adopted because it immediately reads the quotient and
+therefore serializes the SH-2 hardware divider.
 
 ### Maxime-XL2/SONIC-Z-TREME
 

@@ -13,6 +13,7 @@
 #include "saturn_transform.h"
 #include "saturn_matrix.h"
 #include "saturn_matrix_kernels.h"
+#include "slavedriver_projection.h"
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
 #include "saturn_input_replay.h"
@@ -1777,7 +1778,30 @@ static void test_kernels_q16_mul(void)
     assert(sm64_saturn_q16_mul(3 << 16, 1 << 15) == (3 << 15)); /* 3*0.5 */
     assert(sm64_saturn_q16_mul(-(1 << 16), 1 << 16) == -(1 << 16));
     assert(sm64_saturn_q16_mul(-(1 << 16), -(1 << 16)) == (1 << 16));
+    /* Mutation guards: operand order, Q16 shift, and negative truncation. */
+    assert(sm64_saturn_q16_mul(1, -(1 << 15)) == -1);
+    assert(sm64_saturn_q16_mul(INT32_MAX, 1 << 16) == INT32_MAX);
     assert(sm64_saturn_q16_mul(0, 12345678) == 0);
+}
+
+static void test_q16_divu_start_collect_contract(void)
+{
+    sm64_saturn_divu_q16_t op = { 0 };
+    int32_t quotient = 0;
+
+    assert(sm64_saturn_divu_q16_start(&op, 1 << 16, 2 << 16));
+    assert(op.started);
+    /* This work represents transform/lighting work in the DIVU shadow. */
+    assert(sm64_saturn_q16_mul(3 << 16, 1 << 15) == (3 << 15));
+    assert(sm64_saturn_divu_q16_collect(&op, &quotient));
+    assert(quotient == (1 << 15));
+    assert(!op.started);
+    assert(!sm64_saturn_divu_q16_collect(&op, &quotient));
+    assert(!sm64_saturn_divu_q16_start(&op, 1 << 16, 0));
+    assert(!sm64_saturn_divu_q16_start(&op, INT32_MIN, -1));
+    /* Near-W projection input: Q16 scale overflows a signed quotient. */
+    assert(!sm64_saturn_divu_q16_start(&op, 1 << 16, 1));
+    assert(op.invalid_fallback_count == 3U);
 }
 
 static void test_kernels_float_q16_roundtrip(void)
@@ -3526,6 +3550,7 @@ int main(void)
     test_frontend_submit_resets_resolved_count_each_frame();
     test_kernels_isqrt64();
     test_kernels_q16_mul();
+    test_q16_divu_start_collect_contract();
     test_kernels_float_q16_roundtrip();
     test_kernels_trig_lookup();
     test_light_q16_matches_float_reference();

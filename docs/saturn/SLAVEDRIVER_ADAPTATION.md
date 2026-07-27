@@ -4,6 +4,8 @@ SlaveDriver is a valid implementation reference for this port. The pinned
 source revision is `a8986591557b6e680550d3c23970284d3b38ff8f`, licensed
 GPL-3.0-or-later. The files reviewed were `DMA.C`, `DMA.H`, `SCL_FUNC.C`,
 `INITMAIN.C`, `MEMCPY.S`, `LINK.S`, `README.md`, and `LICENSE.txt`.
+Task 1 additionally inspected `WALLASM.S:253-353` for its projection DIVU
+launch/independent-work/collect schedule.
 
 ## What we will reuse
 
@@ -53,3 +55,9 @@ after the sourceboot Fast3D emit pass fills them
 (`src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`) and before the VDP1 backend
 uploads the command list that references them. Same synchronous-drain
 bring-up posture as the hardware-test image above.
+
+Task 1 also adds the isolated `slavedriver_projection.sx/.h` close-port. It
+owns only Q16 DIVU start/collect transport (not a SlaveDriver wall renderer),
+retains the GPL declaration, upstream path, pin, and material-change note,
+and is exercised once at sourceboot startup by a debugger-readable target
+vector. Pinned Yaul public CPU-DIVU headers replace any raw SDK assumptions.
