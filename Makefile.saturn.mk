@@ -188,6 +188,19 @@ verify-runtime-contracts: compile-quad-map
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 
+# Task 2's fixed-point projection differential gate.  The corpus begins with
+# real Bob-omb Battlefield source vertices and is intentionally separate from
+# the broad runtime-contract executable so a precision regression reports a
+# focused failure.  Target-captured route records extend this corpus; see the
+# test header for the current provenance boundary.
+verify-fast3d-q16-diff:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/fast3d_q16_diff_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/fast3d-q16-diff-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/fast3d-q16-diff-test$(HOST_EXEEXT)"
+
 # One-off host-vs-target differential diagnostic, not a standing contract
 # test: compiles the REAL, unmodified src/engine/math_util.c (mtxf_lookat,
 # mtxf_mul) with the host compiler and feeds it the exact real camera
