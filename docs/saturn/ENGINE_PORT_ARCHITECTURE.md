@@ -24,6 +24,46 @@ fidelity of a submitted render workload. It must not become the authoritative
 implementation of Mario actions, camera behavior, object behavior, level
 scripts, or scene transitions.
 
+## Source-authority rule
+
+**Approved by the project owner, 2026-07-27.** The owner's stated reasoning:
+the port is hitting the limits of what can be done without more Saturn-shaped
+rewrites. Recorded here per this project's decision convention (see the
+Z-Treme decision in `THIRD_PARTY_LICENSES.md` for the format) so this reads as
+a deliberate policy change, not drift.
+
+The former shorthand that the engine tree must remain completely unmodified is
+retired. It described a useful preference, not the actual invariant: the
+current target already contains narrow `TARGET_SATURN` seams, and a partial
+fixed-point island can pay more boundary-conversion cost than it saves.
+
+The production rule is now:
+
+1. SM64 gameplay state, object behavior, level scripts, camera behavior,
+   animation semantics, collision, and source assets remain authoritative.
+2. Prefer Saturn changes in `src/port/saturn/`, `tools/saturn/`, generated IR,
+   and the established graphics, audio, input, and platform boundaries.
+3. A change in `src/engine/`, `src/game/`, `levels/`, `actors/`, `lib/src/`, or
+   an inherited header under `include/` is allowed only when measured evidence
+   shows that a port boundary is insufficient or imposes material runtime
+   cost. New target-owned contracts under `include/saturn/` remain part of the
+   port layer.
+4. Every such exception must be minimal, guarded by `TARGET_SATURN`,
+   scene-neutral, documented in the implementing plan or handoff, and covered
+   by a differential or behavior test against the original path.
+5. Saturn-generated fidelity tiers are reproducible derivatives of the source
+   assets. Hand-edited replacement content is not authoritative source data.
+6. A target guard may change representation, precision, residency, or
+   scheduling. It may not silently change game rules or make a Saturn-only
+   scene script the owner of progression.
+
+This is a narrow-delta policy, not permission for a broad engine rewrite. The
+PS1 port remains useful evidence for fixed point, compact display lists, and
+asset preparation, but its wide source fork is not the Saturn integration
+model. Older handoffs, completed plans, and design records that say “the engine
+tree stays unmodified” describe the constraint of those historical tasks; they
+do not override this current contract.
+
 The current `castleviewer` target is therefore a bring-up harness. Its manual
 position, jump, camera, animation-frame, scene traversal, and frame-loop state
 are temporary diagnostics, not production interfaces.
