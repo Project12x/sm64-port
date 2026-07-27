@@ -84,6 +84,13 @@ decoder (`tools/saturn/fast3d_profile_decode.py`), and the disassembly gate
 the demo path. Renderer counters that change meaning get a route-schema
 version bump, not a comparator bypass.
 
+**AW-7 — VDP2 owns flat pixels.** Every pixel VDP2 can draw is VDP1 fill and
+CPU transform not spent. Standing rules: the **HUD never goes through VDP1**
+— when SM64's HUD lands, it goes on an NBG plane above the sprite layer
+(the debug text already proves the path); **screen fades use VDP2 color
+offset**, never rendered geometry; sky is VDP2 (Task 3b). Implementing any
+of these through VDP1 is a plan violation.
+
 **AW-6 — Licence discipline.** GPL adoptions (Z-Treme, SlaveDriver) are
 close-ported **only** into `src/port/saturn/gpl/` with notices and change
 notes, recorded in `docs/saturn/PROVENANCE.md`. Jo Engine BSD file notice
@@ -375,8 +382,14 @@ modify `src/port/saturn/sourceboot/main.c` (NBG0 or NBG1 tilemap/bitmap
 setup + scroll tied to camera yaw/pitch from sim state, read-only),
 generated sky bank as a build dependency.
 
+- [ ] **First step, before any bake: per-line back-screen gradient.** VDP2's
+  back screen accepts a per-line color table — a sky gradient for a few
+  hundred bytes of VRAM and zero per-frame cost. Land it, capture it, then
+  build the textured sky on top. If the textured sky slips, the gradient
+  alone already retires the black void.
 - [ ] Bake BOB's sky to a VDP2-native format (tilemap preferred for VRAM;
-  measure both against remaining VDP2 VRAM and state the budget).
+  measure both against remaining VDP2 VRAM and state the budget — VDP2 has
+  its own 512 KiB, essentially untouched today).
 - [ ] Wire NBG plane behind VDP1 sprites (priority below the 3-D layer,
   above back color). Scroll from camera yaw — the sim's camera, read-only,
   same authority rule as everything else.
@@ -546,6 +559,23 @@ capture is ever compared across unstated settings).
 - [ ] View distance: single clamp on baked-bank spatial groups (the bake
   emits bounds — Mesh IR v2 already carries them from Task 2). Near-to-far
   traversal per the Z-Treme pattern.
+- [ ] **RBG0 horizon-mask spike** (timeboxed; success optional, measurement
+  mandatory): a perspective-correct VDP2 rotation plane at the horizon,
+  rotation parameters computed from the sim camera each frame, filling the
+  world beyond the draw-distance clamp — so cut geometry reads as art
+  direction, not pop-out against void. This is the Saturn-native equalizer
+  for BOB's open sightlines versus Croc's enclosed rooms (Panzer Dragoon /
+  Sonic R precedent). Honest costs, stated up front: the camera→rotation-
+  parameter math is real work; RBG0 consumes VDP2 VRAM access slots that
+  constrain other layers; the polygon/plane seam over hilly terrain needs
+  care. If the spike misses its box, commit the findings and fall back to
+  the gradient horizon — the view-distance clamp still works, it just looks
+  cheaper.
+- [ ] **Fog-band spike via sprite color calculation** (pairs with the
+  horizon mask; only if it survives): bucket far geometry into 2-3 sprite
+  priority groups with VDP2-side color-calc blending toward the sky color.
+  Coarse depth cueing at zero VDP1 fill cost — VDP1 half-transparency
+  halves fill rate and stays banned for this purpose.
 - [ ] Poly degradation hooks: bank-level tier selection (the texture spec's
   near/mid/far variants slot here later; a stub tier switch is enough now).
 - [ ] **Do not** implement viewport shrinking — fill is ~6% of the frame;
