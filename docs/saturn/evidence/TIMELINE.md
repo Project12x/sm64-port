@@ -1670,3 +1670,144 @@ blindly.
 
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
+
+### 2026-07-26 — Soft-float: GCC's `soft-fp` replaces libgcc's `fp-bit`, 0.36 to 0.53 FPS
+
+The SH7604 has no FPU, so every `f32` in SM64's engine is a libgcc call, and
+[the performance diagnosis](../PERFORMANCE_DIAGNOSIS_2026-07-26.md) measured
+those calls at ~82% of SH-2 time. *Which* libgcc matters enormously. GCC 14.3.0
+selects `fp-bit.c`, the portable C reference soft-float, where a single
+`float + float` is four out-of-line calls — `__unpack_f` twice,
+`__fpadd_parts`, `__pack_f` — through a 56-byte stack frame. GCC 15 switched
+bare-metal `sh-elf` to `soft-fp`, which macro-expands unpack/operate/pack
+inline into one function.
+
+The whole of that upstream change (`e95512e2d5a3`, 2024-10-10) is, for this
+target, an 84-line `libgcc/config/sh/sfp-machine.h` plus one line of
+`libgcc/config.host`. The `soft-fp` sources themselves were untouched by it —
+verified here file by file to be **byte-identical between GCC 14.3.0 and
+15.2.0**. So rather than mixing prebuilt objects from a second toolchain, or
+rebuilding libgcc for a day, the 14.3.0 sources are vendored verbatim under
+`third_party/gcc-soft-fp/` alongside GCC 15.2.0's `sfp-machine.h`, compiled by
+this project's own pinned `sh-elf-gcc 14.3.0` into `libsm64softfp.a`, and
+linked ahead of `-lgcc`. **No engine file changed.**
+
+**The link order is the whole trick, and it is not where you would guess.**
+Putting `-lsm64softfp` in the specs file's `*lib` line does nothing: GCC
+expands `%(link_gcc_c_sequence)` as `%G %L %G`, so `-lgcc` precedes the `*lib`
+spec entirely and fp-bit is already resolved by the time the archive is
+reached. The first build after that change produced a **byte-identical ELF**,
+and the `.map` LOAD order said why. `SH_LDFLAGS` lands in `%o` instead — the
+command line's own input list, after the objects and before every
+spec-supplied library — which is the slot this needs.
+
+**Measured**, by differencing `frame_serial` between two captures of the same
+build that differ only in `--post-poke-frames` (12,000 and 36,000):
+
+| build | renders / 24,000 frames | FPS | s per frame |
+|---|---:|---:|---:|
+| HEAD (`fp-bit`) | 144 | 0.3596 | 2.781 |
+| soft-fp | **213** | **0.5320** | **1.880** |
+
+**1.479x, +47.9%.** Against the 75.9 M-cycle frame that is 51.3 M, which
+implies the soft-float subset itself got **1.65x faster, not the ~3x** the
+design note carried over from upstream's Whetstone figure.
+
+**Why the 3x did not transfer, and it is not a mystery.** soft-fp trades call
+overhead for code size, and this CPU cannot afford that trade as well as the
+one upstream measured on. fp-bit's whole float+double surface is 6,326 bytes
+here, with `__pack_f`/`__unpack_f`/`__fpadd_parts` *shared by every operation*;
+soft-fp's is 16,412 bytes with nothing shared — `__addsf3` alone is 1,512 bytes
+against fp-bit's 76. The SH7604 has a **4 KB unified** cache, so a code path
+mixing add, subtract and multiply touches more distinct soft-float code than
+the cache holds, while that cache also has to hold the caller and all its data.
+Upstream's ~3x was measured on **SH4**, which has a 16 KB instruction cache.
+The structural gain is real; the cache eats part of it.
+
+**Correctness: the bar was bit-exactness, not a tolerance.**
+`tools/saturn/softfp_bitexact_diff_test.c`
+(`make -f Makefile.saturn.mk verify-softfp-bitexact`) compiles the same
+vendored sources with the same `sfp-machine.h` for the host and diffs all 36
+routines against the host FPU: every one of the 2^32 inputs for each
+single-argument routine, the full special-value cross product, and 12 million
+seeded random pairs per binary operation — **43,333,704,485 bit comparisons,
+zero failures**. Five mutations (add computing `a-b`, `__fixsfsi` mapping NaN
+to 0, `__lesf2` inverting the unordered result, `__truncdfsf2` keeping the NaN
+sign, `__mulsf3` truncating instead of rounding) were each killed by it.
+
+IEEE-754 stops specifying an answer in exactly two places, and both are pinned
+exactly rather than skipped: NaN payloads for binary operations (6.2 leaves the
+choice open; `_FP_CHOOSENAN` mandates the canonical +qNaN, asserted as such),
+and float-to-integer conversion out of range (C leaves it undefined; soft-fp's
+saturation contract is asserted, and the host conversion is never executed
+there, so the test contains no undefined behaviour of its own). The scoping was
+established by measurement rather than assumed: `__negsf2`, `__negdf2` and
+`__extendsfdf2` do *not* canonicalise, and are held to strict bit equality
+including NaN sign and payload.
+
+**What actually changes in the ROM**, measured by compiling libgcc's own
+`fp-bit.c` for the host alongside soft-fp and diffing all three arms: every
+numeric result is identical. The complete behavioural delta is three
+NaN/undefined-cast cases — binary arithmetic returning a NaN and `__truncdfsf2`
+of a NaN now yield the canonical +qNaN instead of a propagated payload, and
+`(s32)NaN` was 0 under fp-bit and now saturates. SM64 can only observe any of
+them if the engine produces a NaN or casts one to an integer.
+
+**The substitution was proved on the linked ELF, not inferred from the frame
+rate.** No `fp-bit` internal symbol survives; the `.map` shows all 24
+soft-float entry points resolving out of `libsm64softfp.a`; and all 27 linked
+routines are **byte-identical to the archive members** once their 90 relocated
+words are masked. A live PC sample from the ppf-12,000 capture landed inside
+soft-fp's own `___gesf2`. `src/port/saturn/sourceboot/Makefile`'s `verify`
+target now gates on this permanently, and the gate was mutation-checked by
+running it against the pre-change ELF, where it fires.
+
+**HWRAM:** `___end` `0x060dece4` to `0x060e1004`, **+8,992 bytes**; free margin
+135,964 to **126,972**, against the linker's 4,096-byte floor. That still leaves
+39,954 bytes after BOB's 87,018-byte geometry staging — unlike the `-O2`
+experiment reverted the same week, which cost 77,728 bytes and would have left
+staging 28,782 bytes short. Per byte spent, this returns about 200x what that
+experiment did.
+
+**This is one step, and the next one is larger.** The workstream's own ceiling
+is 2.14 FPS — removing *all* soft-float cost, not merely making it faster — and
+0.532 is a quarter of the way there and 3.5% of the way to 15 FPS. The bigger
+remaining item is not a faster soft-float but less float:
+`sm64_saturn_fast3d_resolve_triangle` re-decodes the Q16.16 MVP matrix on every
+triangle *corner*, so a loop-invariant 12-entry conversion runs three times per
+triangle and accounts for a large share of the calls soft-fp is accelerating.
+
+**Render counters: 30 of 34 are bit-identical between the two builds' complete
+frames**, including every camera-dependent one — `reject_offscreen` 157,
+`reject_near_far` 214, `reject_z_far` 48, `reject_w_nonpositive` 10,
+`reject_degenerate` 3, `fog_dropped_triangles` 349, `lit_vertices` 3506,
+`command_count` 3453, `triangles_transformed` 2311, `quad_map_mismatch` 0,
+`fault_flags` 0. The four that move — `reject_backface` -10,
+`triangles_emitted` +10, `quads_merged` +1, `triangles_vdp1_emitted` +9 — are
+exactly the pose-sensitive ones, form a closed trade, and keep the
+923-87=836 identity. The two complete samples are 47 game ticks apart, so
+Mario's idle animation differs between them; arithmetic divergence would
+perturb the marginal projected-position rejects, and not one of those moved.
+
+An exactly frame-matched sample was attempted three times (ppf 17,369 / 17,340
+/ 17,255) and all three landed *inside* a submit rather than after one:
+`frame_serial` is set at the start of the submit, so a mid-submit sample reads
+the right frame number with partial counters. The third did reach frame 143 —
+but at 979 of 2,311 triangles, so it is not comparable, and it is committed
+labelled `-partial-` rather than quietly used.
+
+**The difficulty is itself a result.** At 57% into a render period the display
+list was only 33% processed, and three targeted samples in a row fell inside a
+submit. The fast3d submit is therefore a large fraction of the frame — not the
+~3% the 34-sample PC histogram implied. That histogram counted samples landing
+in `_sm64_saturn_fast3d_resolve_triangle`'s *own* code; the soft-float callees
+it spends its time in were counted separately, which understated the caller.
+
+Evidence: [ppf 12,000](reports/e2-sourceboot-softfp-ppf12000-2026-07-26.json)
+(complete frame 96), [ppf 36,000](reports/e2-sourceboot-softfp-ppf36000-2026-07-26.json),
+[the partial frame-143 attempt](reports/e2-sourceboot-softfp-frame143-partial-2026-07-26.json).
+Capture conditions: cart-enabled `ymir-headless`, 240 BIOS frames plus the
+stated post frames, USA BIOS input macro, branch `saturn/bootstrap`.
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.

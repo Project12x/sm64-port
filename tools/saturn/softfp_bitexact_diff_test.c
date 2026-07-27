@@ -61,7 +61,7 @@
  *      contains no undefined behaviour of its own.
  *
  * WHAT ACTUALLY CHANGES IN THE ROM
- * -------------------------------
+ * --------------------------------
  * Measured by compiling libgcc's fp-bit.c for the host alongside soft-fp and
  * diffing all three arms. Every numeric result is identical. The complete set
  * of behavioural differences between the soft-float being removed and the one
