@@ -131,10 +131,43 @@ The currently recorded GPL references are:
 - `Lobotomy-Software/SlaveDriver-Engine`, GPL-3.0-or-later, used as Saturn
   DMA/VDP2 prior art. Its bounded DMA queue is close-ported into the isolated
   `src/port/saturn/gpl/` component; see `docs/saturn/SLAVEDRIVER_ADAPTATION.md`
-  for the pinned revision, changes, and source obligations.
+  for the pinned revision, changes, and source obligations; and
+- `Maxime-XL2/SONIC-Z-TREME`, GPL-3.0 with an added no-sale clause, used as
+  Saturn renderer prior art. **Adoptable** — see the decision below.
 
 Exact commits, inspected files, and reuse modes are maintained in
 `docs/saturn/PROVENANCE.md`.
+
+### Decision: Sonic Z-Treme is adoptable (project owner, 2026-07-26)
+
+Z-Treme ships GPL-3.0 licence text alongside an added clause forbidding sale.
+Those contradict: GPL-3.0 affirmatively permits sale, and §7 provides that
+added restrictions of that kind may be removed. Read strictly, it is unclear
+which terms govern.
+
+The project owner has decided to accept that ambiguity and treat Z-Treme as
+adoptable prior art. The reasoning, recorded so this reads as a decision and
+not an oversight:
+
+- This project is **non-commercial homebrew** and is not sold, so the
+  restrictive clause is not one this project would ever need to violate.
+- The Z-Treme team's stated purpose in publishing was to **enable others to
+  create Saturn homebrew**, which is precisely this use.
+
+**Both halves of the contradiction are honoured simultaneously.** This project
+complies fully with GPL-3.0 — copyright notices, licence text, change notices
+and corresponding-source obligations retained — *and* does not sell. The
+contradiction only forces a choice for a commercial user; it does not for this
+one.
+
+Practical terms, identical to the SlaveDriver precedent: copied, forked or
+close-ported Z-Treme code is isolated in `src/port/saturn/gpl/`, retains its
+GPL-3.0 notices and attribution to Maxime-XL2, and is recorded in
+`docs/saturn/PROVENANCE.md` with pinned SHA, files inspected, and reuse mode.
+
+**Anyone forking this project commercially inherits the ambiguity and should
+resolve it with the Z-Treme authors before shipping.** Contradictory licences
+are usually accidental; asking is cheap.
 
 ## GCC runtime library: `soft-fp` (`third_party/gcc-soft-fp/`)
 
