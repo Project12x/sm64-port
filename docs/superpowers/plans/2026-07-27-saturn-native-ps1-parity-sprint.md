@@ -92,6 +92,13 @@ Evidence:
 - `docs/saturn/SHIPPING_ENGINE_COMPARISON.md`
 
 The 0.6718 FPS figure is an emulator measurement, not retail-hardware proof.
+The 2.14 FPS ceiling in
+`docs/superpowers/specs/2026-07-26-soft-float-replacement-design.md` is the
+Amdahl bound for eliminating the measured soft-float share while leaving the
+non-float remainder unchanged. Tasks 2–9 deliberately restructure that
+remainder—transform frequency, interpretation, residency, visibility, order,
+DMA, and CPU ownership—so it does not cap this broader sprint. The 15 FPS
+number remains an exit gate, not a forecast.
 
 ---
 
@@ -278,6 +285,8 @@ restoring the implementation.
 - Create: `tools/saturn/routes/bob_parity_v1.json`
 - Create: `tools/saturn/compare_route_reports.py`
 - Modify: `tools/saturn/test_tools.py`
+- Modify after the cache commit lands:
+  `docs/saturn/HANDOFF_2026-07-26.md`
 
 **Steps:**
 
@@ -286,6 +295,10 @@ restoring the implementation.
 - [ ] Run the host contract suite and both retained captures. Confirm
   `frame_serial=392`, 2,311 transformed triangles, 829 VDP1 primitives, zero
   faults, and the measured 0.6718 FPS rate within the established variance.
+- [ ] Only after the cache commit and retained evidence exist, update the
+  handoff's current baseline from the committed-HEAD value of 0.5320 FPS to
+  0.6718 FPS, citing both retained reports. Until then, 0.5320 remains the
+  correct baseline for HEAD.
 - [ ] Add a target-test-only controller replay that feeds `OSContPad` samples;
   it must not write Mario, camera, object, or level state directly.
 - [ ] Define a 600-simulation-tick BOB route with neutral startup, a bounded
@@ -733,7 +746,12 @@ because it wakes.
 - Create: `src/port/saturn/audio/saturn_audio.c`
 - Create: `src/port/saturn/audio/saturn_audio.h`
 - Create: `tools/saturn/compile_pcm_bank.py`
+- Create: `tools/saturn/m68k_smoke.c`
+- Create: `tools/saturn/m68k_smoke.ld`
 - Modify: `tools/saturn/test_tools.py`
+- Modify: `tools/saturn/bootstrap-toolchain.ps1`
+- Modify: `tools/saturn/bootstrap-toolchain.sh`
+- Modify: `Makefile.saturn.mk`
 - Replace: `src/port/saturn/sourceboot/source_audio_stub.c`
 - Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: provenance/license documents named in §4
@@ -750,6 +768,23 @@ because it wakes.
 
 **Steps:**
 
+- [ ] Make `work/upstream/SCSP_poneSound` under the repository root the
+  canonical reference checkout. If absent, clone
+  `https://github.com/ponut64/SCSP_poneSound.git`; then verify the origin,
+  detach at `31782e4c61337327f23eb9aa45ecd37fe0944ea0`, and verify `LICENSE`
+  plus every file named in §4 before adapting code. A checkout in the parent
+  workspace does not satisfy this gate.
+- [ ] Extend both portable bootstrap scripts to require
+  `${YAUL_ARCH_M68K_PREFIX}-gcc`, assembler, linker, and objcopy inside the
+  pinned Yaul Docker image. Print and retain their versions before any audio
+  source is compiled. A prefix variable alone is not proof of a toolchain.
+- [ ] Add `verify-m68k-toolchain` to `Makefile.saturn.mk`. Compile
+  `m68k_smoke.c` as freestanding MC68000 code, link it with `m68k_smoke.ld`,
+  objcopy a nonempty binary, and verify the ELF machine and reset-vector
+  layout. Run this target from the bootstrap container so a host lacking
+  `m68keb-elf-gcc` still has one reproducible build path. If the pinned image
+  lacks any tool, stop before driver work and pin the replacement toolchain
+  source/image in `BUILDING.md` and `PROVENANCE.md`.
 - [ ] Add a host ABI/layout test for the big-endian SH-2/68K mailbox, ring
   indices, voice command, heartbeat, and status words.
 - [ ] Build a position-independent 68K image at the documented sound-RAM
@@ -770,9 +805,12 @@ because it wakes.
 - [ ] Prove a sound request reaches the 68K and SCSP slot in Ymir telemetry,
   then perform an audible user check. Later retail proof remains separate.
 
-**Gate:** Nonzero 68K heartbeat, real source `play_sound()` events start and
-finish PCM voices, zero mailbox drops on the route, and master-SH2 audio work
-is bounded to transport rather than sample mixing.
+**Gate:** The canonical checkout has the expected origin and pin; the
+freestanding compiler/linker/objcopy smoke gate passes in the documented
+bootstrap environment; the 68K heartbeat is nonzero; real source
+`play_sound()` events start and finish PCM voices; mailbox drops are zero on
+the route; and master-SH2 audio work is bounded to transport rather than
+sample mixing.
 
 **Suggested commit:** `feat(saturn): run source sound effects through the SCSP 68K`
 
