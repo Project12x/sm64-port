@@ -290,28 +290,36 @@ restoring the implementation.
 
 **Steps:**
 
-- [ ] Finish and commit the existing 12-entry lazy composed-MVP cache as an
+- [x] Finish and commit the existing 12-entry lazy composed-MVP cache as an
   isolated commit. Do not mix later fixed-point or packet work into it.
-- [ ] Run the host contract suite and both retained captures. Confirm
+- [x] Run the host contract suite and both retained captures. Confirm
   `frame_serial=392`, 2,311 transformed triangles, 829 VDP1 primitives, zero
   faults, and the measured 0.6718 FPS rate within the established variance.
-- [ ] Only after the cache commit and retained evidence exist, update the
+- [x] Only after the cache commit and retained evidence exist, update the
   handoff's current baseline from the committed-HEAD value of 0.5320 FPS to
   0.6718 FPS, citing both retained reports. Until then, 0.5320 remains the
   correct baseline for HEAD.
-- [ ] Add a target-test-only controller replay that feeds `OSContPad` samples;
+- [x] Add a target-test-only controller replay that feeds `OSContPad` samples;
   it must not write Mario, camera, object, or level state directly.
-- [ ] Define a 600-simulation-tick BOB route with neutral startup, a bounded
+- [x] Define a 600-simulation-tick BOB route with neutral startup, a bounded
   movement loop, jump, camera variation through normal input, and a stable end
   marker.
-- [ ] Add a report comparator that checks route version, build hashes, complete
+- [x] Add a report comparator that checks route version, build hashes, complete
   frames, phase timings, memory, primitive counts, overflows, slave counters,
   asset tier, and audio counters.
-- [ ] Prove determinism with two serial runs: matching simulation checkpoint
+- [x] Prove determinism with two serial runs: matching simulation checkpoint
   hashes and primitive counts within documented animation/camera tolerance.
 
 **Gate:** One clean baseline commit and two comparable reports. If replay does
 not reach the same source checkpoint twice, no performance task may begin.
+
+**Completion (2026-07-27):** `56fc031` retained the MVP-cache baseline at
+0.6718 FPS; `ac1382d` retained two serial 600-tick BOB reports whose source
+checkpoint hash is `f068760758aaa3818873ab04203b6f1ab47ff4c4b583f33967f69d9b4865a73f`.
+Route-report schema v1 requires the currently instrumented capture and probe
+fields. Tasks 8–11 must bump that schema and make the comparator reject absent
+phase, memory, slave, asset-tier, audio, and build-identity fields as they are
+introduced; v1 does not claim those counters already exist.
 
 **Suggested commits:**
 

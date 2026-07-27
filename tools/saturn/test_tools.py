@@ -926,6 +926,17 @@ class YmirInputTests(unittest.TestCase):
 
 
 class BobParityRouteTests(unittest.TestCase):
+    @staticmethod
+    def _report(words: list[int]) -> dict[str, object]:
+        return {
+            "evidence_kind": "ymir-emulator",
+            "game": "sourceboot.cue",
+            "frames": 240,
+            "post_poke_frames": 36000,
+            "probe_window": {"data": list(struct.pack(">13I", *words))},
+            "protocol": {"ready": True},
+        }
+
     def test_route_is_600_ticks_and_has_movement_jump_and_camera_input(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         self.assertEqual(route["simulation_ticks"], 600)
@@ -937,7 +948,7 @@ class BobParityRouteTests(unittest.TestCase):
     def test_comparator_accepts_identical_complete_checkpoints(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        report = {"probe_window": {"data": list(struct.pack(">13I", *words))}}
+        report = self._report(words)
         result = compare_reports(report, report, route)
         self.assertTrue(result["deterministic"])
 
@@ -947,10 +958,17 @@ class BobParityRouteTests(unittest.TestCase):
         right = left.copy()
         right[5] = 4
         result = compare_reports(
-            {"probe_window": {"data": list(struct.pack(">13I", *left))}},
-            {"probe_window": {"data": list(struct.pack(">13I", *right))}}, route)
+            self._report(left), self._report(right), route)
         self.assertFalse(result["deterministic"])
         self.assertIn("source checkpoint signature differs", result["errors"])
+
+    def test_comparator_rejects_missing_required_report_schema_field(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        report = self._report(words)
+        del report["protocol"]
+        with self.assertRaisesRegex(ValueError, "required schema fields: protocol"):
+            compare_reports(report, report, route)
 
 
 class TelemetryTests(unittest.TestCase):

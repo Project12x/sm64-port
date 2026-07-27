@@ -17,6 +17,7 @@
     "version": 1
   },
   "left_checkpoint_sha256": "f068760758aaa3818873ab04203b6f1ab47ff4c4b583f33967f69d9b4865a73f",
+  "report_schema_version": "sourceboot-route-v1",
   "right": {
     "camera_mode": 1,
     "command_capacity_rejects": 0,

@@ -2,6 +2,12 @@
   "button_encoding": "N64 OSContPad active-high bitmask",
   "checkpoint_tick": 600,
   "primitive_count_tolerance": 0,
+  "report_schema": {
+    "extension_rule": "When a later task adds a route-relevant counter or metadata field, bump version and add it to the applicable required list; comparator tests must reject its absence.",
+    "required_probe_fields": ["magic", "version", "replay_ticks", "global_timer", "mario_action", "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode", "triangles_transformed", "triangles_vdp1_emitted", "fault_flags", "command_capacity_rejects"],
+    "required_report_fields": ["evidence_kind", "game", "frames", "post_poke_frames", "probe_window", "protocol"],
+    "version": "sourceboot-route-v1"
+  },
   "route_version": "bob-parity-v1",
   "samples": [
     { "buttons": 0, "note": "neutral startup", "stick_x": 0, "stick_y": 0, "ticks": 120 },

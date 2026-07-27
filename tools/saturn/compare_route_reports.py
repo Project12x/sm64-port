@@ -13,6 +13,12 @@ from typing import Any
 MAGIC = 0x53425231
 VERSION = 1
 PROBE_BYTES = 13 * 4
+PROBE_FIELDS = (
+    "magic", "version", "replay_ticks", "global_timer", "mario_action",
+    "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode",
+    "triangles_transformed", "triangles_vdp1_emitted", "fault_flags",
+    "command_capacity_rejects",
+)
 
 
 def load_route(path: Path) -> dict[str, Any]:
@@ -34,6 +40,15 @@ def load_route(path: Path) -> dict[str, Any]:
         total += sample["ticks"]
     if total != route.get("simulation_ticks") or total != route.get("checkpoint_tick"):
         raise ValueError("route tick total must equal simulation_ticks and checkpoint_tick")
+    schema = route.get("report_schema")
+    if not isinstance(schema, dict) or schema.get("version") != "sourceboot-route-v1":
+        raise ValueError("route must declare the sourceboot-route-v1 report schema")
+    for name in ("required_report_fields", "required_probe_fields"):
+        if not isinstance(schema.get(name), list) or not all(
+                isinstance(field, str) for field in schema[name]):
+            raise ValueError(f"route report_schema.{name} must be a list of field names")
+    if tuple(schema["required_probe_fields"]) != PROBE_FIELDS:
+        raise ValueError("route report_schema.required_probe_fields must match the v1 probe")
     return route
 
 
@@ -45,19 +60,18 @@ def decode_probe(report: dict[str, Any]) -> dict[str, int]:
     if len(data) < PROBE_BYTES or not all(isinstance(byte, int) and 0 <= byte <= 255 for byte in data):
         raise ValueError(f"route probe must contain at least {PROBE_BYTES} byte values")
     values = struct.unpack(">13I", bytes(data[:PROBE_BYTES]))
-    names = (
-        "magic", "version", "replay_ticks", "global_timer", "mario_action",
-        "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode",
-        "triangles_transformed", "triangles_vdp1_emitted", "fault_flags",
-        "command_capacity_rejects",
-    )
-    probe = dict(zip(names, values, strict=True))
+    probe = dict(zip(PROBE_FIELDS, values, strict=True))
     if probe["magic"] != MAGIC or probe["version"] != VERSION:
         raise ValueError("route checkpoint is absent or has an unsupported version")
     return probe
 
 
 def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:
+    for label, report in (("left", left), ("right", right)):
+        missing = [field for field in route["report_schema"]["required_report_fields"]
+                   if field not in report]
+        if missing:
+            raise ValueError(f"{label} report lacks required schema fields: {', '.join(missing)}")
     first = decode_probe(left)
     second = decode_probe(right)
     errors: list[str] = []
@@ -85,6 +99,7 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
             errors.append(f"{field} differs beyond tolerance {tolerance}")
     return {
         "route_version": route["route_version"],
+        "report_schema_version": route["report_schema"]["version"],
         "simulation_ticks": expected_ticks,
         "left": first,
         "right": second,
