@@ -53,77 +53,50 @@ static s32 sourceboot_mark_save_file_exists(UNUSED s16 arg, s32 value) {
     return value;
 }
 
+/* Two-array split, mirroring retail's real topology (levels/scripts.c):
+ * `level_script_entry` is a one-time prologue that runs the model
+ * registration exactly once, ever, then hands off permanently to
+ * `sSourcebootLevelLoop` below. `sSourcebootLevelLoop` is the looping body:
+ * it is the only thing JUMP()ed back into on a level-exit/reentry cycle, and
+ * it never re-enters `level_script_entry`. This forward declaration lets
+ * `level_script_entry`'s JUMP() below reference the loop array before its
+ * definition, the same forward-declare-then-define pattern retail's own
+ * levels/scripts.c uses for script_L1/script_L2/goto_mario_head_regular/
+ * goto_mario_head_dizzy/script_L5. */
+static const LevelScript sSourcebootLevelLoop[];
+
 const LevelScript level_script_entry[] = {
-    /* MODEL REGISTRATION -- restores the stage retail performs in
+    /* ONE-TIME MODEL REGISTRATION -- mirrors the stage retail performs in
      * level_main_scripts_entry (levels/scripts.c:67-115) before any level
-     * script runs. This target never executes that script (see the
-     * lvl_init_from_save_file comment below, which documents the same
-     * gap for a different consequence), so gLoadedGraphNodes stayed
-     * entirely empty: every MARIO()/OBJECT() command read a NULL model
-     * pointer into spawnInfo->unk18, which became a NULL sharedChild, and
-     * geo_process_object (src/game/rendering_graph_node.c:1127) skipped
-     * the whole subtree. Mario has never had geometry submitted.
+     * script runs, adapted for this target's simplified boot chain (a single
+     * hardcoded level, not a real level table). This target never executes
+     * level_main_scripts_entry, so without this block gLoadedGraphNodes
+     * stayed entirely empty: every MARIO()/OBJECT() command read a NULL
+     * model pointer into spawnInfo->unk18, which became a NULL sharedChild,
+     * and geo_process_object (src/game/rendering_graph_node.c:1127) skipped
+     * the whole subtree. Mario would have no geometry submitted.
      *
-     * Placed BEFORE INIT_LEVEL(), not after: INIT_LEVEL()
-     * (level_cmd_init_level, src/engine/level_script.c:332-339) calls
-     * main_pool_push_state() (level_script.c:336), which pushes a
-     * save-point onto the main pool's allocation stack. Nothing in this
-     * script ever calls CLEAR_LEVEL() to pop that frame back off -- the
-     * trailing JUMP(level_script_entry) below re-runs this whole script
-     * (and therefore INIT_LEVEL() again) on every return from
-     * EXECUTE(level_bob_entry), i.e. on every ordinary level-exit/warp
-     * cycle through level_bob_entry's own CLEAR_LEVEL()/EXIT() pair, with
-     * no CLEAR_LEVEL() of this script's own frame ever happening in
-     * between. Anything allocated from the main pool after INIT_LEVEL()
-     * would therefore live inside a stack frame that becomes permanently
-     * unreachable the next time this script runs, leaking main-pool bytes
-     * on every such cycle.
-     *
-     * This reorder closes the leak for the FIRST pass through this array
-     * only -- the boot-time registration this task exists to prove out.
-     * It does NOT close it for the second and later level-exit/reentry
-     * cycles, and not merely because of frame nesting: this registration
-     * block always runs BEFORE any push/pop bracket, by design, so that
-     * the registered models survive BOB's own per-level ALLOC/FREE pops
-     * (see the FREE_LEVEL_POOL note below). That same property means
-     * JUMP(level_script_entry) re-executes the registration on every
-     * cycle with no pop of its own ever protecting it -- each full trip
-     * through this array permanently consumes another complete copy of
-     * the registration block, measured at ~39 KiB per cycle (the Task
-     * 1->Task 4 baseline-to-47-model delta this plan itself measured).
-     * At the ~124 KiB of headroom this plan measured after one pass, that
-     * exhausts the main pool in roughly three level-exit/reentry cycles,
-     * not some deferred or marginal cost. Retail avoids this because its
-     * registration prologue (levels/scripts.c:67-115) is structurally
-     * outside the loop that revisits level scripts -- a separate
-     * LOOP_BEGIN()/JUMP_LINK(script_exec_level_table) construct further
-     * down the same array never re-enters the registration section.
-     * Matching retail's command ORDER inside a self-looping array is not
-     * the same as matching retail's script TOPOLOGY; closing this fully
-     * needs the registration hoisted into a true one-time prologue ahead
-     * of a separate looping body, which this task does not attempt --
-     * verified live (2026-07-25) that this deviation is real, not
-     * theoretical, by tracing the actual push/pop call sequence across
-     * one full level_bob_entry EXECUTE/CLEAR_LEVEL/EXIT round-trip, and
-     * confirmed again during this sprint's holistic review by tracing
-     * that even a hypothetically balanced INIT_LEVEL()/CLEAR_LEVEL() pair
-     * in this script would not prevent the leak, for the same reason.
-     *
-     * Not fixed here because: (a) this plan's own test methodology is a
-     * single continuous boot with no level-exit/reentry, so the residual
-     * leak is never exercised by anything this plan measures or ships;
-     * (b) lvl_init_or_update (src/game/level_update.c:1234-1247) is real,
-     * unmodified retail transition logic, not stubbed out, so reachability
-     * once warp/star mechanics work end-to-end on this target cannot be
-     * ruled out; and (c) restructuring this script's topology is a larger,
-     * separate change with its own risk to the boot sequence every task
-     * in this plan depends on. Tracked as follow-up work, not silently
-     * accepted.
+     * This array runs from the top exactly once, for the life of the
+     * program: nothing anywhere JUMPs back into `level_script_entry`. Fixed
+     * 2026-07-25 (was previously a single self-looping array that combined
+     * this registration block with INIT_LEVEL() and a trailing
+     * JUMP(level_script_entry) back to its own top): every level-exit/
+     * reentry cycle used to re-run this entire registration block, each pass
+     * permanently consuming another full copy of it (measured at ~39 KiB per
+     * cycle against ~124 KiB of headroom after one pass -- exhausted in
+     * roughly three cycles), on top of a separate, compounding leak in the
+     * main pool's push/pop stack (see sSourcebootLevelLoop's own comment
+     * below for that half). Splitting the registration into its own
+     * never-revisited array closes this half structurally: there is no path
+     * back into this array at all, at any point, so it cannot re-run
+     * regardless of how many level-exit/reentry cycles occur.
      *
      * FREE_LEVEL_POOL is shrink-to-fit, not destroy
-     * (src/engine/level_script.c:363-369 resizes the pool to usedSpace),
-     * so these registrations survive into BOB's own ALLOC_LEVEL_POOL at
-     * levels/bob/script.c:67 -- exactly as they do in retail.
+     * (src/engine/level_script.c:363-369 resizes the pool to usedSpace), so
+     * these registrations survive into BOB's own ALLOC_LEVEL_POOL at
+     * levels/bob/script.c:67 -- exactly as they do in retail, and now
+     * exactly once per boot, exactly as retail's own registration block only
+     * ever runs once.
      *
      * No LOAD_MIO0/LOAD_RAW segment commands are needed or wanted: this
      * build defines NO_SEGMENTED_MEMORY, under which segmented_to_virtual
@@ -181,6 +154,53 @@ const LevelScript level_script_entry[] = {
     LOAD_MODEL_FROM_GEO(MODEL_DIRT_ANIMATION,          dirt_animation_geo),
     LOAD_MODEL_FROM_GEO(MODEL_CARTOON_STAR,            cartoon_star_geo),
     FREE_LEVEL_POOL(),
+    /* Hand off to the looping body. This deliberately targets
+     * sSourcebootLevelLoop, never level_script_entry itself -- see that
+     * array's own comment for why that distinction is the fix. */
+    JUMP(/* target */ sSourcebootLevelLoop),
+};
+
+static const LevelScript sSourcebootLevelLoop[] = {
+    /* LOOPING BODY -- everything that repeats on a level-exit/reentry cycle.
+     * Fixed 2026-07-25: this array (and CLEAR_LEVEL() specifically) did not
+     * exist before; the single combined level_script_entry array called
+     * INIT_LEVEL() but never CLEAR_LEVEL()d it, so main_pool_push_state()'s
+     * save-point (src/game/memory.c:218) was pushed again on every
+     * JUMP(level_script_entry) loop-back with nothing ever popping it. The
+     * CLEAR_LEVEL() near the bottom of this array is the missing
+     * counterpart: it pops exactly the frame this array's own INIT_LEVEL()
+     * pushed, immediately before the JUMP back to this array's own top -- so
+     * main-pool depth returns to the same level at the start of every pass,
+     * indefinitely, instead of growing by one frame per cycle.
+     *
+     * Nesting during one full pass (outermost to innermost, traced against
+     * the actual push/pop call sites -- level_cmd_init_level/
+     * level_cmd_clear_level, src/engine/level_script.c:332-348, and
+     * level_cmd_load_and_execute/level_cmd_exit, level_script.c:95-104 and
+     * :119-125):
+     *   INIT_LEVEL() (this array)   -> push frame A
+     *   EXECUTE(level_bob_entry)    -> push frame B (level_cmd_load_and_execute
+     *                                   pushes before jumping into bob's script)
+     *     levels/bob/script.c's own INIT_LEVEL()/ALLOC_LEVEL_POOL()/
+     *     FREE_LEVEL_POOL()/CLEAR_LEVEL() push and pop their own frame C,
+     *     entirely inside frame B, independent of this array's frames
+     *   levels/bob/script.c's EXIT() -> pops frame B, returns control here
+     *   CLEAR_LEVEL() (this array)  -> pops frame A
+     *   JUMP(sSourcebootLevelLoop)  -> repeat from the top; net main-pool
+     *                                   depth unchanged from this pass's start
+     *
+     * Verified by code tracing only, not by a live second-cycle capture:
+     * this project's test methodology to date is a single continuous boot
+     * with no level exit
+     * (docs/saturn/evidence/reports/e2-sourceboot-mario-freeroam-2026-07-25.json
+     * is the established baseline), so EXECUTE(level_bob_entry) has never
+     * actually returned control to this array in a live capture --
+     * warp/star mechanics may not be wired up on this target yet. But
+     * lvl_init_or_update (src/game/level_update.c:1234-1247) is real,
+     * unmodified retail transition logic, not stubbed out, so a second pass
+     * through this loop remains a reachable path once those mechanics work
+     * end-to-end; this fix is what makes that path safe when it becomes
+     * reachable, not just theoretically closed. */
     INIT_LEVEL(),
     /* Act number, first: retail's star-select screen writes gCurrActNum
      * through this same script mechanism before a course loads; E2 boots
@@ -243,19 +263,7 @@ const LevelScript level_script_entry[] = {
      * gCurrLevelNum to 1 (LEVEL_UNKNOWN_1) for the whole session
      * (gCurrLevelArea read 0x11 live instead of BOB's 0x91), which
      * disabled every gCurrLevelArea-keyed camera behavior including
-     * camera_course_processing's real AREA_BOB case (camera.c:6630).
-     *
-     * Verified safe before wiring this in: every save-file accessor
-     * init_mario_from_save_file()/lvl_init_from_save_file() touch
-     * (save_file_exists, save_file_get_total_star_count,
-     * save_file_get_cap_pos, save_file_move_cap_to_default_location) only
-     * reads/writes gSaveBuffer (src/buffers/buffers.c:34, a plain
-     * zero-initialized static struct, no pointer indirection) and never
-     * touches the EEPROM read/write path (gated separately behind
-     * gEepromProbe, which this call chain never reaches) -- so this is
-     * safe on a target with no real save-file hardware. The remaining
-     * side effects (disable_warp_checkpoint, select_mario_cam_mode,
-     * set_yoshi_as_not_dead) are all single static-flag writes. */
+     * camera_course_processing's real AREA_BOB case (camera.c:6630). */
     SET_REG(/* value */ LEVEL_BOB),
     /* Before lvl_init_from_save_file so its gNeverEnteredCastle read
      * (!save_file_exists) already sees the marked file -- see the adapter's
@@ -265,5 +273,8 @@ const LevelScript level_script_entry[] = {
     CALL(/* arg */ 0, /* func */ lvl_set_current_level),
     EXECUTE(/* seg */ 0x0E, /* script */ NULL, /* scriptEnd */ NULL,
             /* entry */ level_bob_entry),
-    JUMP(/* target */ level_script_entry),
+    /* Balances this pass's own INIT_LEVEL() above -- see this array's
+     * top-of-block comment for the full push/pop nesting trace. */
+    CLEAR_LEVEL(),
+    JUMP(/* target */ sSourcebootLevelLoop),
 };
