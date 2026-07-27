@@ -1,6 +1,6 @@
 # Saturn Port Provenance and Reuse Ledger
 
-Last updated 2026-07-23.
+Last updated 2026-07-26.
 
 This ledger records the exact prior art inspected for the Saturn port, the
 permission known at the time of inspection, and how the project may use it. It
@@ -254,6 +254,57 @@ documented `SOURCE_DATE_EPOCH`, `--modification-date`, and
 `--set_all_file_dates` contracts to remove current-time and copied-file
 metadata from the ISO; no xorriso source is reused.
 
+**Amendment 2026-07-26.** "None of their source is copied or linked into port
+code" was already imprecise about one thing and is now explicitly qualified:
+GCC's *runtime library* (`libgcc.a`) has always been linked into every target
+image, as it must be on a CPU with no FPU and no hardware divide. That is
+permitted by the GCC Runtime Library Exception, not by the recipe being
+tool-only. The entry immediately below extends the same relationship from a
+prebuilt `libgcc.a` to a small set of libgcc runtime *sources* compiled by the
+same compiler.
+
+### GCC `soft-fp` (vendored, `third_party/gcc-soft-fp/`)
+
+| Field | Record |
+|---|---|
+| Upstream | GCC, <https://gcc.gnu.org/> — `libgcc/soft-fp/`, `include/longlong.h`, `libgcc/config/sh/sfp-machine.h` |
+| Versions pinned | `soft-fp/*` and `longlong.h` from **GCC 14.3.0**; `config/sh/sfp-machine.h` from **GCC 15.2.0** |
+| Upstream change that motivates it | `e95512e2d5a317e8c043f232158df4b38186e51c`, "SH: Use softfp for sh-elf", 2024-10-10 (GCC 15; never backported to 14) |
+| Licences | `soft-fp/*` and `longlong.h`: LGPL-2.1-or-later **with the unlimited linking exception** stated in each file header. `sfp-machine.h`: GPL-3.0-or-later **with the GCC Runtime Library Exception 3.1**. |
+| Reuse mode | **Direct-copy, verbatim and unmodified**, of a runtime library the project already links in prebuilt form |
+| Files vendored | 8 headers + 36 `.c` files under `soft-fp/`, `include/longlong.h`, `config/sh/sfp-machine.h` — 46 files, all byte-identical to upstream |
+| Destination | Compiled by the project's pinned `sh-elf-gcc 14.3.0` into `libsm64softfp.a` and linked ahead of `-lgcc` by `src/port/saturn/sourceboot/Makefile` |
+| Notices preserved | Yes — every file retains its unmodified upstream header; `third_party/gcc-soft-fp/README.md` records origin, versions, and the fact that nothing was modified |
+
+**Why vendored rather than taken as objects from the GCC 15.2.0 toolchain.**
+The design note's option (a1) was to extract prebuilt `.o` files from the
+GCC 15.2.0 `libgcc.a` present on this machine and link those. Those objects
+were checked and are compatible — identical `EF_SH_MACH` (`0x2, sh2`), same
+big-endian ELF32, single multilib (`.;`) on both toolchains, identical
+`--target=sh-elf --with-endian=big --with-cpu=m2 --disable-multilib`
+configuration, and the four integer helpers they import (`__clzsi2`,
+`__ashlsi3_r0`, `__lshrsi3_r0`, `__udiv_qrnnd_16`) all already present in the
+14.3.0 archive, with `_ashiftlt.o`, `_lshiftrt.o` and `_udiv_qrnnd_16.o`
+byte-identical between the two versions.
+
+Vendoring the sources was preferred anyway, for three reasons that cost
+nothing: the `soft-fp` sources are byte-identical between GCC 14.3.0 and
+15.2.0 (verified file by file), so there is no version delta to inherit; the
+shipped code is then built by the one compiler this project is validated
+against, removing cross-version object mixing from the risk surface entirely;
+and the host differential test can compile the *same* files it ships rather
+than a stand-in. It also leaves no prebuilt binary in the repository. The
+GCC 15.2.0 install on this machine is in any case only partly usable — its
+`cc1.exe` fails to start (missing runtime DLL, exit 127), so only its binutils
+and prebuilt archives were ever available.
+
+**Verification.** `make -f Makefile.saturn.mk verify-softfp-bitexact` compiles
+these sources for the host with this same `sfp-machine.h` and diffs every
+routine against the host CPU's IEEE-754 hardware, bit for bit, over all 2^32
+inputs per single-argument routine plus >=1e7 seeded random pairs per binary
+operation. `src/port/saturn/sourceboot/Makefile`'s `verify` target asserts on
+the linked ELF that no `fp-bit.c` internal symbol survives.
+
 ### yaul-org/libyaul-docker and libyaul-packages
 
 | Field | Record |
@@ -504,3 +555,4 @@ source commit, license, substantial modifications, and preserved notices.
 |---|---|---|---|
 | 2026-07-16 | `malucard/sm64-psx` | Not requested/recorded in this repository | Reuse remains behavior-only |
 | 2026-07-16 | `yaul-org/libyaul` | MIT terms present upstream | Full text recorded in `THIRD_PARTY_LICENSES.md` |
+| 2026-07-26 | GCC `libgcc/soft-fp` + `config/sh/sfp-machine.h` | No request needed: both carry an explicit linking exception (LGPL-2.1 unlimited linking exception; GCC Runtime Library Exception 3.1) | Exception text quoted in each vendored file's unmodified header; summarised in `THIRD_PARTY_LICENSES.md` and `third_party/gcc-soft-fp/README.md` |

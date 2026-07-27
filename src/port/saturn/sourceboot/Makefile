@@ -105,6 +105,81 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -I$(SOURCEBOOT_GENERATED)
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections
 
+# --- soft-float: GCC's soft-fp in place of libgcc's fp-bit ------------------
+#
+# WHY: the SH7604 has no FPU, so every f32 operation in the SM64 engine is a
+# libgcc call, and the pinned GCC 14.3.0 selects `fp-bit.c` -- the portable C
+# reference soft-float, and the slowest correct one there is. A float add
+# there is four out-of-line calls (__unpack_f x2, __fpadd_parts, __pack_f)
+# through a 56-byte stack frame. GCC 15 switched sh-elf to `soft-fp`, whose
+# unpack/operate/pack are macro-expanded inline into a single leaf-ish call
+# (upstream commit e95512e2d5a3, 2024-10-10, benchmarked at ~3x on Whetstone).
+# See docs/saturn/PERFORMANCE_DIAGNOSIS_2026-07-26.md (~82% of SH-2 time is in
+# soft-float) and docs/superpowers/specs/2026-07-26-soft-float-replacement-design.md.
+#
+# HOW: the entire GCC 15 change for sh-elf is (a) an 83-line
+# libgcc/config/sh/sfp-machine.h and (b) one line of libgcc/config.host. The
+# soft-fp sources themselves are byte-identical between GCC 14.3.0 and 15.2.0
+# (verified file by file), so rather than mixing objects from a second
+# toolchain -- or spending a day rebuilding libgcc -- this builds the same
+# sources with THIS project's own pinned sh-elf-gcc 14.3.0 into a small
+# archive, and links it ahead of -lgcc (see the LINK ORDER note below).
+# Archive semantics do the rest: the soft-fp members satisfy ___addsf3 and
+# friends first, so fp-bit's members are never pulled in at all.
+#
+# FLAGS: deliberately NOT $(SH_CFLAGS) and deliberately not -specs=sourceboot.specs.
+# This is libgcc-class code and wants libgcc-class flags: -O2 (libgcc's own
+# level; the engine's -Os would penalise the hottest code in the program) and,
+# critically, NO -ffast-math. The specs file adds -ffast-math to every
+# translation unit that goes through it, and -ffinite-math-only is precisely
+# the wrong assumption to hand code whose entire job is classifying NaNs,
+# infinities and subnormals.
+SOFTFP_DIR := $(ROOT)/third_party/gcc-soft-fp
+SOFTFP_BUILD_DIR := $(SH_BUILD_DIR)/softfp
+SOFTFP_LIB := $(SOFTFP_BUILD_DIR)/libsm64softfp.a
+# Exactly the file list GCC's libgcc/config/t-softfp-sfdf + t-softfp generate
+# for softfp_float_modes="sf df" / softfp_int_modes="si di", minus the _BitInt
+# helpers (nothing in this tree uses _BitInt, and fp-bit does not provide them
+# either). Anything omitted here simply falls back to 14.3.0's libgcc.
+SOFTFP_FUNCS := \
+  addsf3 subsf3 mulsf3 divsf3 negsf2 eqsf2 gesf2 lesf2 unordsf2 \
+  fixsfsi fixunssfsi floatsisf floatunsisf \
+  fixsfdi fixunssfdi floatdisf floatundisf \
+  adddf3 subdf3 muldf3 divdf3 negdf2 eqdf2 gedf2 ledf2 unorddf2 \
+  fixdfsi fixunsdfsi floatsidf floatunsidf \
+  fixdfdi fixunsdfdi floatdidf floatundidf \
+  extendsfdf2 truncdfsf2
+SOFTFP_OBJS := $(patsubst %,$(SOFTFP_BUILD_DIR)/%.o,$(SOFTFP_FUNCS))
+SOFTFP_CFLAGS := -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
+  -fomit-frame-pointer -ffunction-sections -fdata-sections \
+  -I$(SOFTFP_DIR)/soft-fp -I$(SOFTFP_DIR)/config/sh -I$(SOFTFP_DIR)/include
+SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \
+  $(SOFTFP_DIR)/config/sh/sfp-machine.h $(SOFTFP_DIR)/include/longlong.h
+
+# LINK ORDER, and this is the whole trick -- it is not where you would guess.
+# Putting `-lsm64softfp` into sourceboot.specs' `*lib` line does NOT work:
+# GCC's link_command expands `%(link_gcc_c_sequence)` as `%G %L %G`, i.e.
+# `-lgcc` comes BEFORE the `*lib` spec, so libgcc's fp-bit members are already
+# pulled in by the time the archive is reached (observed directly in the .map
+# LOAD order: libgcc.a, libgcc-Os-4-200.a, libyaul.a, libsm64softfp.a,
+# libgcc.a, ...). SH_LDFLAGS, by contrast, lands in `%o` -- the command line's
+# own input-file list, after $(SH_OBJS_UNIQ) and before every spec-supplied
+# library -- which is exactly the slot this needs. libyaul is unaffected: it
+# has zero undefined soft-float symbols, so nothing of its is stranded behind
+# the substitution. The four integer helpers soft-fp imports (___clzsi2,
+# ___ashlsi3_r0, ___lshrsi3_r0, ___udiv_qrnnd_16) resolve forward out of the
+# later libgcc, which is a normal archive-ordering resolution.
+SH_LDFLAGS += -L$(SOFTFP_BUILD_DIR) -lsm64softfp
+
+$(SOFTFP_BUILD_DIR)/%.o: $(SOFTFP_DIR)/soft-fp/%.c $(SOFTFP_HEADERS)
+	@mkdir -p "$(@D)"
+	$(ECHO)$(SH_CC) $(SOFTFP_CFLAGS) -c "$<" -o "$@"
+
+$(SOFTFP_LIB): $(SOFTFP_OBJS)
+	@printf -- "$(V_BEGIN_YELLOW)$(@F)$(V_END)\n"
+	$(ECHO)rm -f "$@"
+	$(ECHO)$(SH_AR) rcs "$@" $(SOFTFP_OBJS)
+
 IP_VERSION := V0.001
 IP_RELEASE_DATE := 20260719
 IP_AREAS := JTUBKAEL
@@ -163,6 +238,11 @@ include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 # header dependency once a build has run.
 $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H)
 
+# The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
+# the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,
+# so state the dependency here.
+$(SH_BUILD_PATH)/$(SH_PROGRAM).elf: $(SOFTFP_LIB)
+
 $(SOURCEBOOT_CART_IMAGE): $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@printf -- "$(V_BEGIN_YELLOW)$(@F)$(V_END)\n"
 	$(ECHO)$(SOURCEBOOT_RAW_OBJCOPY) -O binary --only-section=.cart_rodata $< $@
@@ -195,3 +275,22 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -h "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq 'Entry point address:[[:space:]]+0x6004000'
 	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -S "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq '[[:space:]]\.cart_rodata[[:space:]]+PROGBITS[[:space:]]+22400000'
 	@test $$(wc -c < "$(SOURCEBOOT_CART_IMAGE)") -le 4194304
+# The soft-fp substitution is a link-order effect, so it can regress silently
+# the moment anything reorders -lgcc or drops the -L. Gate on it: these seven
+# symbols exist ONLY inside libgcc's fp-bit.c, so their presence in the linked
+# image means fp-bit was pulled in after all, and their absence means every
+# soft-float entry point resolved out of libsm64softfp.a. Checked as a set,
+# because a partial substitution (say, SF from soft-fp and DF from fp-bit) is
+# both possible and worth catching.
+	@if $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-nm "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
+	    | grep -Eq '[[:space:]](___pack_f|___unpack_f|___pack_d|___unpack_d|__fpadd_parts|___fpcmp_parts_f|___fpcmp_parts_d)$$'; then \
+	  printf '%s\n' 'sourceboot: libgcc fp-bit soft-float is linked; expected soft-fp' >&2; \
+	  exit 1; \
+	fi
+# ...and the converse, so an empty/missing archive cannot pass the check above
+# by accident: the soft-fp entry points must actually be present.
+	@for sym in ___addsf3 ___subsf3 ___mulsf3 ___divsf3 ___floatsisf ___fixsfsi; do \
+	  $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-nm "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
+	    | grep -Eq "[[:space:]]T[[:space:]]$$sym\$$" || { \
+	    printf '%s\n' "sourceboot: $$sym missing from the linked image" >&2; exit 1; }; \
+	done

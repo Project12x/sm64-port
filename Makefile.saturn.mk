@@ -51,7 +51,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map plan-castle-camera verify-all clean
 
 all: hello
 
@@ -233,6 +233,74 @@ verify-mtxq-ctors:
 	  -lm \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
+
+# Bit-exactness gate for the soft-float replacement. sourceboot links
+# third_party/gcc-soft-fp (built into libsm64softfp.a) ahead of libgcc, taking
+# every f32/f64 operation in the SM64 engine off libgcc's fp-bit.c. The entire
+# reason that is allowed to happen with zero engine edits is that soft-fp
+# preserves IEEE-754 semantics exactly -- so this compiles the SAME vendored
+# sources, with the SAME libgcc/config/sh/sfp-machine.h, for the host, and
+# diffs every routine against the host's own FPU bit for bit. See the test's
+# header comment for the two places IEEE-754 stops specifying an answer and
+# how each is pinned exactly rather than skipped.
+#
+# Deliberately NOT folded into verify-all, on the same reasoning as
+# verify-mtxq-ctors and verify-mtxf-lookat-host-diff above: it is a standalone
+# differential diagnostic rather than a per-build platform contract, and at the
+# default volume it runs for about twelve minutes. The per-build gate for this
+# change is in src/port/saturn/sourceboot/Makefile's `verify`, which asserts on
+# the linked ELF that fp-bit is gone.
+#
+# HOST COMPILER: sfp-machine.h pairs `_FP_W_TYPE_SIZE 32` with
+# `_FP_W_TYPE unsigned long`, which is true on sh-elf and on MSYS2's mingw64
+# gcc (LLP64) but NOT on its cygwin gcc (LP64, 64-bit long). Building soft-fp
+# with mismatched widths would silently test a different configuration from
+# the one that ships, so the default prefers mingw64 when it is present and
+# the test carries a _Static_assert that refuses the wrong one outright.
+# Override SOFTFP_HOST_CC to use a different 32-bit-long compiler.
+SOFTFP_HOST_CC ?= $(firstword $(wildcard /mingw64/bin/gcc.exe C:/msys64/mingw64/bin/gcc.exe) $(CC))
+SOFTFP_VENDOR := $(SATURN_REPO_ROOT)/third_party/gcc-soft-fp
+SOFTFP_HOST_BUILD := $(SATURN_REPO_ROOT)/build/saturn/host-tests/softfp
+# Same list as SOFTFP_FUNCS in src/port/saturn/sourceboot/Makefile: the test is
+# worth nothing unless it covers exactly what the target links. Keep in step.
+SOFTFP_TEST_FUNCS := \
+  addsf3 subsf3 mulsf3 divsf3 negsf2 eqsf2 gesf2 lesf2 unordsf2 \
+  fixsfsi fixunssfsi floatsisf floatunsisf \
+  fixsfdi fixunssfdi floatdisf floatundisf \
+  adddf3 subdf3 muldf3 divdf3 negdf2 eqdf2 gedf2 ledf2 unorddf2 \
+  fixdfsi fixunsdfsi floatsidf floatunsidf \
+  fixdfdi fixunsdfdi floatdidf floatundidf \
+  extendsfdf2 truncdfsf2
+# Sample volume. The defaults are the full bar from the design note: >=1e7
+# seeded random pairs per binary operation, and a stride of 1 -- i.e. all
+# 2^32 inputs, exhaustively, for every single-argument routine. That is about
+# 12 minutes and ~43 billion bit comparisons. Raise the stride for a quick
+# smoke run while iterating; do not lower the bar to make a failure go away.
+#   make -f Makefile.saturn.mk verify-softfp-bitexact SOFTFP_TEST_PAIRS=200000 SOFTFP_TEST_STRIDE=512
+SOFTFP_TEST_PAIRS ?= 12000000
+SOFTFP_TEST_STRIDE ?= 1
+
+verify-softfp-bitexact:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SOFTFP_HOST_BUILD)').mkdir(parents=True, exist_ok=True)"
+# A native-Windows mingw64 gcc launched from an MSYS2 shell inherits neither a
+# usable TMPDIR (MSYS2 rewrites it on the way across, and the recipe shell's
+# TMP/TEMP may be empty) nor a writable fallback -- it lands on C:\WINDOWS and
+# dies. Point TMP/TEMP at the build directory instead, in whatever spelling the
+# platform wants: `pwd -W` gives the Windows form under MSYS2 and fails
+# harmlessly everywhere else, where plain `pwd` is already correct.
+	@tmp="$$(cd '$(SOFTFP_HOST_BUILD)' && { pwd -W 2>/dev/null || pwd; })"; \
+	export TMP="$$tmp" TEMP="$$tmp" TMPDIR="$$tmp"; \
+	for f in $(SOFTFP_TEST_FUNCS); do \
+	  "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -w -c "$(SOFTFP_VENDOR)/soft-fp/$$f.c" \
+	    -I"$(SOFTFP_VENDOR)/soft-fp" -I"$(SOFTFP_VENDOR)/config/sh" -I"$(SOFTFP_VENDOR)/include" \
+	    -o "$(SOFTFP_HOST_BUILD)/$$f.o" || exit 1; \
+	done; \
+	"$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -Wall -Wextra -Werror -fno-builtin \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/softfp_bitexact_diff_test.c" \
+	  $(patsubst %,"$(SOFTFP_HOST_BUILD)/%.o",$(SOFTFP_TEST_FUNCS)) \
+	  -lm \
+	  -o "$(SOFTFP_HOST_BUILD)/softfp-bitexact-test$(HOST_EXEEXT)"
+	"$(SOFTFP_HOST_BUILD)/softfp-bitexact-test$(HOST_EXEEXT)" $(SOFTFP_TEST_PAIRS) $(SOFTFP_TEST_STRIDE)
 
 classify-source: check-host-tools
 	@mkdir -p "$(SATURN_REPO_ROOT)/docs/saturn/evidence/reports"

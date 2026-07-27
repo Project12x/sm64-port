@@ -1,6 +1,6 @@
 # Third-Party Licenses and Source Boundaries
 
-Last updated 2026-07-16.
+Last updated 2026-07-26.
 
 This file records third-party material planned for or studied by the Sega
 Saturn port. It does not claim to be a complete audit of the inherited SM64
@@ -135,6 +135,52 @@ The currently recorded GPL references are:
 
 Exact commits, inspected files, and reuse modes are maintained in
 `docs/saturn/PROVENANCE.md`.
+
+## GCC runtime library: `soft-fp` (`third_party/gcc-soft-fp/`)
+
+The SH7604 has no FPU and no hardware divide, so GCC's runtime library has
+always been linked into every target image. As of 2026-07-26 a subset of that
+runtime is additionally **vendored in source form** and compiled by the
+project's own pinned `sh-elf-gcc 14.3.0`, so that the engine's floating point
+uses GCC's `soft-fp` rather than the much slower `fp-bit.c` that GCC 14 selects
+for `sh-elf`. Every vendored file is byte-identical to upstream; none is
+modified.
+
+| Files | Upstream | Version | Terms |
+|---|---|---|---|
+| `soft-fp/*.c`, `soft-fp/*.h` (44 files) | `libgcc/soft-fp/` | GCC 14.3.0 | LGPL-2.1-or-later **with the unlimited linking exception** |
+| `include/longlong.h` | `include/longlong.h` | GCC 14.3.0 | LGPL-2.1-or-later with the unlimited linking exception |
+| `config/sh/sfp-machine.h` | `libgcc/config/sh/sfp-machine.h` | GCC 15.2.0 | GPL-3.0-or-later **with the GCC Runtime Library Exception 3.1** |
+
+Both exceptions exist precisely for this use and are quoted verbatim in the
+headers of the vendored files. The `soft-fp` files state:
+
+```text
+   In addition to the permissions in the GNU Lesser General Public
+   License, the Free Software Foundation gives you unlimited
+   permission to link the compiled version of this file into
+   combinations with other programs, and to distribute those
+   combinations without any restriction coming from the use of this
+   file.  (The Lesser General Public License restrictions do apply in
+   other respects; for example, they cover modification of the file,
+   and distribution when not linked into a combine executable.)
+```
+
+and `sfp-machine.h` states:
+
+```text
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+```
+
+Linking these therefore imposes no obligation on the ROM beyond what linking
+`libgcc.a` already did. The obligations that do apply — preserving the notices,
+and stating that the files are unmodified — are discharged by the untouched
+file headers and by `third_party/gcc-soft-fp/README.md`. Because the files are
+unmodified, no change notice is required; if any is ever modified, the LGPL's
+modification terms apply to that file and a change note must be added there and
+in `docs/saturn/PROVENANCE.md`.
 
 ## Permissive visual-slice studies (not included code)
 

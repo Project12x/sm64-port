@@ -79,3 +79,9 @@ sm64config.txt
 
 # Local git worktrees for isolated implementation work (not part of the repo).
 /.worktrees/
+
+# The user's global core.excludesFile ignores third_party/ wholesale, which
+# would silently drop this repository's vendored dependencies from every
+# commit. A repository .gitignore outranks the global one, so re-include the
+# directory here and let the entries above govern what inside it is ignored.
+!/third_party/

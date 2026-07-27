@@ -21,3 +21,12 @@
 *.m64 binary
 *.png binary
 *.aiff binary
+
+# Vendored, unmodified GCC runtime sources. The rules above would check these
+# out with CRLF, which would make the working tree differ byte-for-byte from
+# upstream and undercut the "unmodified" statement in
+# third_party/gcc-soft-fp/README.md and THIRD_PARTY_LICENSES.md. Keep them
+# exactly as they came. (README.md is ours and stays under the normal rules.)
+third_party/gcc-soft-fp/soft-fp/** -text
+third_party/gcc-soft-fp/include/** -text
+third_party/gcc-soft-fp/config/** -text
