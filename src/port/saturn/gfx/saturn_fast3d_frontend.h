@@ -391,6 +391,38 @@ typedef struct sm64_saturn_fast3d_vertex {
     uint8_t r, g, b, a;
 } sm64_saturn_fast3d_vertex_t;
 
+/* Task 2 capture-only differential record. Compiled only into a trace build;
+ * normal sourceboot pays neither the HWRAM footprint nor per-triangle stores.
+ * Records are captured after all three float clip transforms pass w > 0 and
+ * before cull/divide policy, preserving the direct arithmetic oracle. */
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
+#define SM64_SATURN_FAST3D_Q16_TRACE_CAPACITY 16U
+#define SM64_SATURN_FAST3D_Q16_TRACE_MAGIC 0x51363454U /* "Q64T" */
+
+typedef struct sm64_saturn_fast3d_q16_trace_record {
+    int32_t mp[4][4];
+    int16_t viewport[4];
+    uint32_t geometry_mode;
+    float source_xyz[3][3];
+    float float_clip_xyw[3][3];
+    uint8_t dir_col[3];
+    uint8_t amb_col[3];
+    int8_t dir_dir[3];
+    uint8_t num_lights;
+    uint8_t lighting_enabled;
+    uint8_t reserved[2];
+} sm64_saturn_fast3d_q16_trace_record_t;
+
+typedef struct sm64_saturn_fast3d_q16_trace {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t write_count;
+    uint32_t dropped_count;
+    sm64_saturn_fast3d_q16_trace_record_t
+        records[SM64_SATURN_FAST3D_Q16_TRACE_CAPACITY];
+} sm64_saturn_fast3d_q16_trace_t;
+#endif
+
 /* HWRAM budget note: this struct is ~5,036 bytes (measured via sizeof against
  * the real F3DEX_GBI_2E build flags), grown from 44 bytes by this task's
  * addition of matrix_stack/vertices[]/resolved[]. The design spec measured
@@ -539,6 +571,9 @@ typedef struct sm64_saturn_fast3d_frontend {
     uint16_t quad_slot_stamp[SM64_SATURN_FAST3D_QUAD_SLOT_CAPACITY];
     uint16_t quad_slot_generation;
     uint16_t quad_slot_next_generation;
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
+    sm64_saturn_fast3d_q16_trace_t q16_trace;
+#endif
 } sm64_saturn_fast3d_frontend_t;
 
 void sm64_saturn_fast3d_frontend_init(

@@ -275,6 +275,49 @@ static uint16_t sm64_saturn_fast3d_depth_bucket(int32_t max_z)
         (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
 }
 
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
+static void
+sm64_saturn_fast3d_q16_trace_capture(
+    sm64_saturn_fast3d_frontend_t *frontend, const uint8_t idx[3],
+    const float cx[3], const float cy[3], const float cw[3])
+{
+    sm64_saturn_fast3d_q16_trace_t *trace = &frontend->q16_trace;
+    const uint32_t write_count = trace->write_count++;
+    sm64_saturn_fast3d_q16_trace_record_t *record =
+        &trace->records[write_count % SM64_SATURN_FAST3D_Q16_TRACE_CAPACITY];
+    const sm64_saturn_mtx_t *mp =
+        sm64_saturn_matrix_stack_mp(&frontend->matrix_stack);
+
+    if (write_count >= SM64_SATURN_FAST3D_Q16_TRACE_CAPACITY) {
+        trace->dropped_count++;
+    }
+    (void)memcpy(record->mp, mp->m, sizeof(record->mp));
+    record->viewport[0] = frontend->viewport.x;
+    record->viewport[1] = frontend->viewport.y;
+    record->viewport[2] = frontend->viewport.width;
+    record->viewport[3] = frontend->viewport.height;
+    record->geometry_mode = frontend->geometry_mode;
+    for (int c = 0; c < 3; c++) {
+        const sm64_saturn_fast3d_vertex_t *vertex = &frontend->vertices[idx[c]];
+        record->source_xyz[c][0] = vertex->x;
+        record->source_xyz[c][1] = vertex->y;
+        record->source_xyz[c][2] = vertex->z;
+        record->float_clip_xyw[c][0] = cx[c];
+        record->float_clip_xyw[c][1] = cy[c];
+        record->float_clip_xyw[c][2] = cw[c];
+    }
+    (void)memcpy(record->dir_col, frontend->lights.dir_col,
+                 sizeof(record->dir_col));
+    (void)memcpy(record->amb_col, frontend->lights.amb_col,
+                 sizeof(record->amb_col));
+    (void)memcpy(record->dir_dir, frontend->lights.dir_dir,
+                 sizeof(record->dir_dir));
+    record->num_lights = frontend->lights.num_lights;
+    record->lighting_enabled =
+        (frontend->geometry_mode & G_LIGHTING) != 0U ? 1U : 0U;
+}
+#endif
+
 /* Per-triangle pipeline for G_TRI1/G_TRI2: transform the three indexed
  * vertices through the current MP (modelview*projection) matrix,
  * perspective-divide, backface-cull in pre-viewport Y-up clip space, map
@@ -501,6 +544,10 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         cy[c] = y / w;
         cw[c] = w;
     }
+
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
+    sm64_saturn_fast3d_q16_trace_capture(frontend, idx, cx, cy, cw);
+#endif
 
     /* Backface cull in pre-viewport, Y-up clip space -- matching both
      * castleviewer's view_triangle_facing/view_triangle_is_culled
@@ -1275,6 +1322,10 @@ void sm64_saturn_fast3d_frontend_init(
         (void)memset(frontend, 0, sizeof(*frontend));
         sm64_saturn_matrix_stack_init(&frontend->matrix_stack);
         sm64_saturn_light_state_init(&frontend->lights);
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
+        frontend->q16_trace.magic = SM64_SATURN_FAST3D_Q16_TRACE_MAGIC;
+        frontend->q16_trace.version = 1U;
+#endif
     }
 }
 

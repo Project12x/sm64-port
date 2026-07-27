@@ -93,6 +93,14 @@ SOURCEBOOT_RAW_OBJCOPY := $(SH_OBJCOPY)
 SH_OBJCOPY := $(SOURCEBOOT_RAW_OBJCOPY) -R .cart_rodata
 SH_SPECS := sourceboot.specs
 
+# Task 2 evidence-only switch.  It appends a bounded 16-record Fast3D
+# transform trace to _sourceboot_fast3d; default builds remain byte-for-byte
+# free of the trace state and stores.
+SATURN_FAST3D_Q16_TRACE ?= 0
+ifeq ($(SATURN_FAST3D_Q16_TRACE),1)
+SH_CFLAGS += -DSM64_SATURN_FAST3D_Q16_TRACE=1
+endif
+
 SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSION_JP_US=1 \
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
