@@ -391,6 +391,14 @@ typedef struct sm64_saturn_fast3d_vertex {
     uint8_t r, g, b, a;
 } sm64_saturn_fast3d_vertex_t;
 
+typedef struct sm64_saturn_fast3d_cached_vertex {
+    int32_t clip_x;
+    int32_t clip_y;
+    int32_t clip_w;
+    uint32_t generation;
+} sm64_saturn_fast3d_cached_vertex_t;
+
+
 /* Task 2 capture-only differential record. Compiled only into a trace build;
  * normal sourceboot pays neither the HWRAM footprint nor per-triangle stores.
  * Records are captured after all three float clip transforms pass w > 0 and
@@ -496,6 +504,9 @@ typedef struct sm64_saturn_fast3d_frontend {
      * vertices[] already aren't touched either. */
     sm64_saturn_light_state_t lights;
     sm64_saturn_fast3d_vertex_t vertices[SM64_SATURN_FAST3D_MAX_VERTICES];
+    sm64_saturn_fast3d_cached_vertex_t
+        transformed[SM64_SATURN_FAST3D_MAX_VERTICES];
+    uint32_t transform_generation;
     sm64_saturn_resolved_triangle_t
         resolved[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
     uint16_t resolved_count;

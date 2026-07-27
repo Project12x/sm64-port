@@ -275,6 +275,34 @@ static uint16_t sm64_saturn_fast3d_depth_bucket(int32_t max_z)
         (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
 }
 
+static __attribute__((unused)) const sm64_saturn_fast3d_cached_vertex_t *
+sm64_saturn_fast3d_transform_vertex(sm64_saturn_fast3d_frontend_t *frontend,
+                                    uint8_t index)
+{
+    sm64_saturn_fast3d_cached_vertex_t *cached = &frontend->transformed[index];
+
+    if (cached->generation != frontend->transform_generation) {
+        const sm64_saturn_fast3d_vertex_t *vertex = &frontend->vertices[index];
+        const sm64_saturn_mtx_t *mp =
+            sm64_saturn_matrix_stack_mp(&frontend->matrix_stack);
+        const int32_t x = sm64_saturn_float_to_q16(vertex->x);
+        const int32_t y = sm64_saturn_float_to_q16(vertex->y);
+        const int32_t z = sm64_saturn_float_to_q16(vertex->z);
+
+        cached->clip_x = sm64_saturn_q16_mul(x, mp->m[0][0]) +
+                         sm64_saturn_q16_mul(y, mp->m[1][0]) +
+                         sm64_saturn_q16_mul(z, mp->m[2][0]) + mp->m[3][0];
+        cached->clip_y = sm64_saturn_q16_mul(x, mp->m[0][1]) +
+                         sm64_saturn_q16_mul(y, mp->m[1][1]) +
+                         sm64_saturn_q16_mul(z, mp->m[2][1]) + mp->m[3][1];
+        cached->clip_w = sm64_saturn_q16_mul(x, mp->m[0][3]) +
+                         sm64_saturn_q16_mul(y, mp->m[1][3]) +
+                         sm64_saturn_q16_mul(z, mp->m[2][3]) + mp->m[3][3];
+        cached->generation = frontend->transform_generation;
+    }
+    return cached;
+}
+
 #ifdef SM64_SATURN_FAST3D_Q16_TRACE
 static void
 sm64_saturn_fast3d_q16_trace_capture(
