@@ -307,6 +307,99 @@ static void test_matrix_mp_cache_invalidates_across_pop(void)
     assert(mp->m[3][0] == 0);
 }
 
+static uint32_t float_bits(float value)
+{
+    union {
+        float f;
+        uint32_t u;
+    } bits;
+
+    bits.f = value;
+    return bits.u;
+}
+
+static float legacy_project_component(float mx, float my, float mz,
+                                      const int32_t q[4])
+{
+    return mx * (q[0] / 65536.0f) +
+           my * (q[1] / 65536.0f) +
+           mz * (q[2] / 65536.0f) +
+           (q[3] / 65536.0f);
+}
+
+static float cached_project_component(float mx, float my, float mz,
+                                      const int32_t q[4])
+{
+    const float cached[4] = {
+        sm64_saturn_q16_to_float(q[0]),
+        sm64_saturn_q16_to_float(q[1]),
+        sm64_saturn_q16_to_float(q[2]),
+        sm64_saturn_q16_to_float(q[3])
+    };
+
+    return mx * cached[0] +
+           my * cached[1] +
+           mz * cached[2] +
+           cached[3];
+}
+
+static void test_matrix_mp_float_cache_is_bit_exact_and_lazy(void)
+{
+    sm64_saturn_matrix_stack_t stack;
+    sm64_saturn_mtx_t projection;
+    uint32_t random = 0x51A7C0DEU;
+
+    sm64_saturn_matrix_stack_init(&stack);
+    sm64_saturn_matrix_identity(&projection);
+    projection.m[0][0] = INT32_MAX;
+    projection.m[1][1] = INT32_MIN;
+    projection.m[2][3] = 0x12345678;
+    projection.m[3][0] = -0x1234567;
+    sm64_saturn_matrix_stack_set_projection(&stack, &projection);
+    (void)sm64_saturn_matrix_stack_mp(&stack);
+
+    for (int row = 0; row < 4; row++) {
+        assert(float_bits(stack.mp_float.x[row]) ==
+               float_bits(stack.mp.m[row][0] / 65536.0f));
+        assert(float_bits(stack.mp_float.y[row]) ==
+               float_bits(stack.mp.m[row][1] / 65536.0f));
+        assert(float_bits(stack.mp_float.w[row]) ==
+               float_bits(stack.mp.m[row][3] / 65536.0f));
+    }
+
+    /* A clean read must not repeat the decode.  Poisoning one derived
+     * entry makes that property observable and kills a mutation that
+     * refreshes the cache unconditionally. */
+    stack.mp_float.x[0] = 123.25f;
+    (void)sm64_saturn_matrix_stack_mp(&stack);
+    assert(stack.mp_float.x[0] == 123.25f);
+
+    /* Dirtying the MP must repair the poisoned entry. */
+    sm64_saturn_matrix_stack_set_projection(&stack, &projection);
+    (void)sm64_saturn_matrix_stack_mp(&stack);
+    assert(float_bits(stack.mp_float.x[0]) ==
+           float_bits(stack.mp.m[0][0] / 65536.0f));
+
+    /* Differentially exercise the complete old and cached dot products
+     * over real Vtx coordinate range and the full signed Q16.16 bit
+     * domain.  Equality is on IEEE bits, not a numeric tolerance. */
+    for (int sample = 0; sample < 100000; sample++) {
+        int32_t q[4];
+        float v[3];
+
+        for (int i = 0; i < 4; i++) {
+            random = random * 1664525U + 1013904223U;
+            q[i] = (int32_t)random;
+        }
+        for (int i = 0; i < 3; i++) {
+            random = random * 1664525U + 1013904223U;
+            v[i] = (float)(int16_t)(random >> 16);
+        }
+        assert(float_bits(legacy_project_component(v[0], v[1], v[2], q)) ==
+               float_bits(cached_project_component(v[0], v[1], v[2], q)));
+    }
+}
+
 /* Builds one G_MTX command word pair. `mtx_ptr` must outlive the caller's
  * use of the returned Gfx (it is embedded as a raw pointer -- this port
  * treats w1 as a real address, matching the existing G_DL handling in
@@ -3383,6 +3476,7 @@ int main(void)
     test_matrix_stack_pop_past_floor();
     test_matrix_mp_lazy_composition();
     test_matrix_mp_cache_invalidates_across_pop();
+    test_matrix_mp_float_cache_is_bit_exact_and_lazy();
     test_frontend_g_mtx_load_modelview();
     test_frontend_g_popmtx_scales_by_64();
     test_frontend_rdp_vs_sp_opcode_classification();

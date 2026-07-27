@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "saturn_matrix_kernels.h"
+
 /* Q16.16 fixed-point 4x4 matrix stack for the Fast3D-to-VDP1 lowering
  * front end. No Yaul/Saturn dependency by design: this header is
  * compiled directly by tools/saturn/runtime_contract_test.c under the
@@ -28,6 +30,23 @@
 typedef struct sm64_saturn_mtx {
     int32_t m[4][4];
 } sm64_saturn_mtx_t;
+
+/* Float view of the three MP columns consumed by resolve_triangle.
+ *
+ * This is a compatibility cache for the still-float projection path, not
+ * a second matrix truth: mp remains the authoritative Q16.16 value.  The
+ * cache is refreshed only when mp itself is recomposed.  Keeping only X,
+ * Y and W avoids converting the unused Z column.
+ *
+ * Each value is the exact IEEE-754 result of Q16.16 -> float conversion.
+ * sm64_saturn_q16_to_float performs the power-of-two scale by adjusting
+ * the exponent bits, so refreshing the cache needs one _floatsisf per
+ * entry and no soft-float multiply. */
+typedef struct sm64_saturn_mtx_float_cache {
+    float x[4];
+    float y[4];
+    float w[4];
+} sm64_saturn_mtx_float_cache_t;
 
 /* Decode one N64 Fast3D matrix from its real on-target GBI_FLOATS
  * encoding (16 consecutive row-major floats) into Q16.16.
@@ -159,6 +178,7 @@ typedef struct sm64_saturn_matrix_stack {
     sm64_saturn_mtx_t entries[SM64_SATURN_MATRIX_STACK_DEPTH];
     sm64_saturn_mtx_t projection;
     sm64_saturn_mtx_t mp;
+    sm64_saturn_mtx_float_cache_t mp_float;
     uint8_t depth;
     bool overflowed;
     bool mp_dirty;
@@ -272,6 +292,18 @@ sm64_saturn_matrix_stack_mp(sm64_saturn_matrix_stack_t *stack)
         if (sm64_saturn_matrix_mul(sm64_saturn_matrix_stack_top(stack),
                                     &stack->projection, &stack->mp)) {
             stack->mp_overflowed = true;
+        }
+        /* resolve_triangle used to repeat these twelve invariant
+         * conversions for every corner of every triangle.  Refresh the
+         * derived float view alongside the lazy MP composition instead,
+         * so it cannot go stale independently of mp/mp_dirty. */
+        for (int i = 0; i < 4; i++) {
+            stack->mp_float.x[i] =
+                sm64_saturn_q16_to_float(stack->mp.m[i][0]);
+            stack->mp_float.y[i] =
+                sm64_saturn_q16_to_float(stack->mp.m[i][1]);
+            stack->mp_float.w[i] =
+                sm64_saturn_q16_to_float(stack->mp.m[i][3]);
         }
         stack->mp_dirty = false;
     }

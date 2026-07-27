@@ -289,6 +289,8 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
     const sm64_saturn_mtx_t *mp =
         sm64_saturn_matrix_stack_mp(&frontend->matrix_stack);
+    const sm64_saturn_mtx_float_cache_t *mp_float =
+        &frontend->matrix_stack.mp_float;
     /* Bring-up diagnostic -- see the profile struct's
      * dbg_mp_compose_overflowed_ever comment (saturn_fast3d_frontend.h). */
     profile->dbg_mp_compose_overflowed_ever =
@@ -441,25 +443,27 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         /* Row-vector transform, matching gfx_pc.c's gfx_sp_vertex
          * (~L616-619): out[col] = sum_row v[row]*M[row][col] + M[3][col].
          * Uses float here for the perspective divide/cull math -- v->x/
-         * y/z are already float (GBI_FLOATS, see Task 5's note), and
-         * mp's Q16.16 entries are divided back to float for this scratch
-         * computation. This is fine for a first, correctness-focused
-         * pass; a later perf-motivated increment can revisit whether
-         * this per-triangle math should move to fixed point once real
-         * SH-2 profiling data exists. */
+         * y/z are already float (GBI_FLOATS, see Task 5's note).  The
+         * Q16.16 MP columns are decoded once per lazy MP recomposition
+         * into matrix_stack.mp_float, rather than twelve times per
+         * corner here.  sm64_saturn_q16_to_float produces exactly the
+         * same float bits as q / 65536.0f without a soft-float scale.
+         * The dot-product operation order is otherwise unchanged, so
+         * this cache is bit-exact; the later all-Q16.16 projection is a
+         * separate, behavior-gated optimization. */
         const float mx = v->x, my = v->y, mz = v->z;
-        const float x = mx * (mp->m[0][0] / 65536.0f) +
-                        my * (mp->m[1][0] / 65536.0f) +
-                        mz * (mp->m[2][0] / 65536.0f) +
-                        (mp->m[3][0] / 65536.0f);
-        const float y = mx * (mp->m[0][1] / 65536.0f) +
-                        my * (mp->m[1][1] / 65536.0f) +
-                        mz * (mp->m[2][1] / 65536.0f) +
-                        (mp->m[3][1] / 65536.0f);
-        const float w = mx * (mp->m[0][3] / 65536.0f) +
-                        my * (mp->m[1][3] / 65536.0f) +
-                        mz * (mp->m[2][3] / 65536.0f) +
-                        (mp->m[3][3] / 65536.0f);
+        const float x = mx * mp_float->x[0] +
+                        my * mp_float->x[1] +
+                        mz * mp_float->x[2] +
+                        mp_float->x[3];
+        const float y = mx * mp_float->y[0] +
+                        my * mp_float->y[1] +
+                        mz * mp_float->y[2] +
+                        mp_float->y[3];
+        const float w = mx * mp_float->w[0] +
+                        my * mp_float->w[1] +
+                        mz * mp_float->w[2] +
+                        mp_float->w[3];
         if (w <= 0.0f) {
             profile->reject_near_far++;
             profile->reject_w_nonpositive++;
