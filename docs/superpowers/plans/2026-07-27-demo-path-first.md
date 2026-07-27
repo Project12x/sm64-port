@@ -148,16 +148,21 @@ Evidence anchors: `docs/saturn/evidence/reports/e2-sourceboot-bob-parity-v1-*.js
 Dependency shape:
 
 ```text
-Task 0 (sim timer)          Task 1 (harvest)         Task 2+3 (bake, offline)
-      \                          |                        /
-       \------ Task 4 (Mario live-anim bridge) ----------/
-                        |
-               Task 5 (renderer swap in sourceboot)
-                        |
-               Task 6 (degradation profile)
-                        |
-               Task 7 (measure + user gate)
+Task 0 (sim timer)     Task 1 (harvest)     Task 2+3 (bake)     Task 3b (VDP2 sky)
+      \                     |                    /                   |
+       \----- Task 4 (Mario live-anim bridge) --/                    |
+                       |                                             |
+              Task 5 (renderer swap) --------------------------------+
+                       |
+              Task 5b (slave SH-2 split, A/B-gated)
+                       |
+              Task 6 (degradation profile)
+                       |
+              Task 7 (measure + user gate: FPS + utilization report)
 ```
+
+Task 3b is independent of everything except the sky bake tooling — it can
+land first and makes every subsequent screenshot look dramatically better.
 
 Tasks 0, 1, and 2/3 are mutually independent — run in parallel with separate
 agents; they share no files. Task 4 needs 1 and 2/3. Never run an emulator
@@ -331,6 +336,42 @@ Task 1).
 
 ---
 
+### Task 3b: VDP2 skybox — the idle coprocessor's first job
+
+**Measured current state:** VDP2 does a black back color and the NBG3 debug
+text — nothing else. The skybox does not render at all (no `GEO_BACKGROUND`
+path exists in the frontend); the ~47% black in every capture is the unused
+VDP2. Shipping Saturn titles put sky (and often ground) on VDP2 planes —
+zero CPU polygons, zero VDP1 fill. This is the cheapest large visual win in
+the plan and it runs in parallel with everything (offline tooling + a
+bounded `main.c` init change).
+
+**Files:** Create `tools/saturn/bake_bob_sky.py` (source: BOB's skybox
+tiles under the real asset tree via the existing texture export tooling),
+modify `src/port/saturn/sourceboot/main.c` (NBG0 or NBG1 tilemap/bitmap
+setup + scroll tied to camera yaw/pitch from sim state, read-only),
+generated sky bank as a build dependency.
+
+- [ ] Bake BOB's sky to a VDP2-native format (tilemap preferred for VRAM;
+  measure both against remaining VDP2 VRAM and state the budget).
+- [ ] Wire NBG plane behind VDP1 sprites (priority below the 3-D layer,
+  above back color). Scroll from camera yaw — the sim's camera, read-only,
+  same authority rule as everything else.
+- [ ] Route capture + screenshot: sky visible, `fault_flags` 0, frame rate
+  unchanged or better (sky costs VDP2, not the frame budget).
+- [ ] Record VDP2 layer usage in the completion note (which planes are now
+  live, VRAM spent).
+
+**Gate:** sky visible in a committed route screenshot at no measured frame
+cost; owner visual confirmation before any TIMELINE entry, as always.
+
+**References consumed (AW-3):** existing texture export tooling
+(`export_rgba16_textures.py`), Yaul VDP2 scroll-screen API (existing
+dependency), shipping-engine precedent (`SHIPPING_ENGINE_COMPARISON.md` —
+VDP2 offload noted for both GPL engines).
+
+---
+
 ### Task 4: Mario — live animation into the actor IR
 
 The least-proven seam in the plan; the correctness nets matter most here.
@@ -401,6 +442,54 @@ owns" rule verbatim).
 
 ---
 
+### Task 5b: Slave SH-2 transform split — measured, not aspirational
+
+**Measured current state: zero references to the slave CPU anywhere in the
+port.** This was structural, not neglect — sequential display-list
+interpretation with shared frontend state has no independent work to hand a
+second CPU. The IR path changes that: baked banks are independent job
+batches, which is exactly how SlaveDriver and Z-Treme kept both CPUs busy.
+**Task 1's shared `saturn_ir_transform` module is the prerequisite** — the
+split happens at that module's boundary, in one place, for every consumer.
+
+**Files:** Create `src/port/saturn/gpl/slavedriver_dual_worker.{c,h}`
+(close-port of `WALLS.C:1806-1950` incl. the spin-count auto-balancer; GPL
+notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
+(job partitioning), `saturn_demo_render.c` (dispatch/join), profile
+(append-only): `uint32_t slave_jobs_completed`, `uint32_t slave_busy_ticks`,
+`uint32_t master_wait_ticks`, `uint32_t slave_timeouts`.
+
+- [ ] Close-port the worker loop: master partitions bank primitives into
+  bounded jobs; slave transforms/lights/culls its share into its own output
+  region (no shared writes — SlaveDriver's work/result discipline); master
+  joins and links commands. Cache coherency per the write-through SH7604
+  reality (`saturn_vdp1_backend.h:200-203` states it correctly).
+- [ ] The auto-balancer adjusts the split from measured spin counts, exactly
+  as upstream does.
+- [ ] **Serial fallback flag** (`SATURN_SLAVE_RENDER ?= 1`, `=0` builds the
+  identical serial path) — required for the A/B gate and by the sprint's
+  own exit-gate wording. Flag-variant stale-object hazard applies: force
+  rebuild on toggle.
+- [ ] `slave_timeouts` must be 0 on the route; a hung slave degrades to
+  serial with a counted fault, never a wedge.
+- [ ] A/B on the frozen route: slave build vs serial build, absolute FPS
+  both, checkpoint hash identical in both (the slave touches render data
+  only, never sim state).
+
+**Gate:** `slave_busy_ticks > 0` in a committed capture, checkpoint hash
+unchanged, and **measured absolute FPS improvement over the serial build of
+the same commit** — the sprint's gate 8, inherited verbatim. If the split
+doesn't pay on this workload, the honest number is the deliverable and the
+serial flag stays default.
+
+**References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
+close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
+notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`
+(behaviour-only — that checkout lacks a root licence), Z-Treme rendering
+split (behaviour lessons, `SHIPPING_ENGINE_COMPARISON.md`).
+
+---
+
 ### Task 6: Degradation profile — Croc's levers, measured
 
 **Files:** `saturn_demo_render.c` (view-distance clamp, per-bank LOD hooks),
@@ -424,9 +513,14 @@ captures.
 
 ### Task 7: Measure, present, gate
 
-- [ ] Full regression, both profiles.
+- [ ] Full regression, both profiles (and both slave flags).
 - [ ] Frozen-route capture at the chosen degradation setting: **absolute FPS
   (median and 1% low if the phase timer supports it), never ratios.**
+- [ ] **Hardware-utilization report alongside FPS**: sim vs render ms (Task
+  0 timers), slave share (`slave_busy_ticks` vs master, Task 5b), VDP2
+  layers live and VRAM spent (Task 3b), VDP1 vs VDP2 division of the frame.
+  Both processors and both VDPs are gated deliverables of this plan, not
+  aspirations — a report without these numbers is incomplete.
 - [ ] Screenshot evidence committed; **the owner's eyes are the acceptance
   gate** — no `TIMELINE.md` or gallery entry before their confirmation.
   Describe frames factually; never assert what an object is (twice-burned
@@ -487,10 +581,18 @@ Footguns (every one has burned this project at least once):
 
 ## 5. Out of scope (deliberate, revisit after Task 7)
 
-Slave SH-2 rendering; 68000/SCSP audio (poneSound cloned and pinned, awaits
-`m68keb-elf` toolchain); dynamic objects beyond the cannon; Mario texture
-tiles (milestone 2); second-area load proof (sprint gate 13 — stands, later);
-retail-hardware validation (emulator evidence only, as always).
+68000/SCSP audio (poneSound cloned and pinned, awaits `m68keb-elf`
+toolchain); dynamic objects beyond the cannon; Mario texture tiles
+(milestone 2); VDP2 rotation-plane ground (RBG0 — a real candidate for
+flat-floor areas per the Sonic-R-style precedent, but BOB's hilly terrain
+makes it a poor first target; revisit for interior/flat areas); second-area
+load proof (sprint gate 13 — stands, later); retail-hardware validation
+(emulator evidence only, as always).
+
+Note what is *no longer* out of scope: slave SH-2 rendering (Task 5b) and
+VDP2 sky (Task 3b) were deferred in earlier drafts; the owner's directive
+that both processors and both VDPs be properly used pulled them into this
+plan as measured, gated tasks.
 
 ## 6. Self-review (performed at write time)
 
