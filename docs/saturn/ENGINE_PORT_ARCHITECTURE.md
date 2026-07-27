@@ -26,12 +26,12 @@ scripts, or scene transitions.
 
 ## Source-authority rule
 
-**Owner decision — 2026-07-27.** The project owner explicitly approved
-retiring the old rule, stating: "I approve the engine tree rule, because I
-think we are hitting the limits of what we can do without more saturn shaped
-rewrites." Recorded verbatim, per this project's decision convention (see the
-Z-Treme decision in `THIRD_PARTY_LICENSES.md` for the format), so the change
-reads as deliberate policy, not drift.
+**Owner decision — 2026-07-27.** The project owner approved retiring the old
+rule ("proceed as recommended"), with the stated reasoning: "I approve the
+engine tree rule, because I think we are hitting the limits of what we can do
+without more saturn shaped rewrites." Recorded per this project's decision
+convention (see the Z-Treme decision in `THIRD_PARTY_LICENSES.md` for the
+format), so the change reads as deliberate policy, not drift.
 
 The former shorthand that the engine tree must remain completely unmodified is
 retired. It described a useful preference, not the actual invariant: the
