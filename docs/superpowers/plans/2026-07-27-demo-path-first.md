@@ -1212,6 +1212,12 @@ directional evidence that fragment geometry generation (not texture residency)
 introduces the artifact; a frame-serial-normalized rerun is still required
 before changing the bake.
 
+The bucket-ordered fragment control produces the same sheet as the indexed-BSP
+fragment profile, so changing traversal order alone is not the fix. The
+remaining differential is now narrowed to fragment geometry emission (or the
+profile’s frame-alignment sensitivity), not VDP1 texture binding or BSP node
+walk order.
+
 ---
 
 ## 4. Shared verification commands
