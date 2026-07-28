@@ -1205,6 +1205,13 @@ sampling. A same-limit non-fragment flat capture was also retained, but reaches
 a different simulation frame serial, so it is not treated as a clean A/B
 verdict; the flat profile remains a reusable isolation gate.
 
+The paired flat frames keep Mario at the same screen location despite the
+fragment profile reaching 60 versus 57 frame serial, while the fragment frame
+still carries the broad sheet and the source frame does not. This is strong
+directional evidence that fragment geometry generation (not texture residency)
+introduces the artifact; a frame-serial-normalized rerun is still required
+before changing the bake.
+
 ---
 
 ## 4. Shared verification commands
