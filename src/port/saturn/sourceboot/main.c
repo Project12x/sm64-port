@@ -173,6 +173,36 @@ static void sourceboot_vblank_out_handler(void *work __unused) {
     smpc_peripheral_intback_issue();
 }
 
+/* BOB's sky is the VDP2 back screen, not a VDP1 polygon.  The back-screen
+ * color table is sampled once per display line, so this costs 224 RGB1555
+ * entries in VDP2 VRAM and no work in the game/render loop.  Keep the table
+ * in HWRAM until vdp2_scrn_back_sync() queues the upload; it is deliberately
+ * a fixed boot asset rather than camera or simulation state. */
+#define SOURCEBOOT_BACKSCREEN_LINES 224U
+static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
+
+static void sourceboot_init_sky_gradient(void)
+{
+    for (uint16_t line = 0; line < SOURCEBOOT_BACKSCREEN_LINES; line++) {
+        /* Dark blue at the horizon, brighter blue overhead.  RGB1555's
+         * channels are 5-bit; interpolate with integer arithmetic so the
+         * boot image is deterministic on SH-2 and host probes. */
+        const uint16_t t = (uint16_t)(SOURCEBOOT_BACKSCREEN_LINES - 1U - line);
+        const uint16_t r = (uint16_t)(1U + (t * 1U) /
+            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
+        const uint16_t g = (uint16_t)(2U + (t * 8U) /
+            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
+        const uint16_t b = (uint16_t)(8U + (t * 15U) /
+            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
+        sourceboot_sky_gradient[line] = RGB1555(1, r, g, b);
+    }
+
+    vdp2_scrn_back_buffer_set(VDP2_VRAM_ADDR(3, 0x01FE00),
+                              sourceboot_sky_gradient,
+                              SOURCEBOOT_BACKSCREEN_LINES);
+    vdp2_scrn_back_sync();
+}
+
 void user_init(void) {
     /* First, matching both siblings' user_init order (castleviewer
      * main.c:1186, marioturntable main.c:247). */
@@ -180,7 +210,7 @@ void user_init(void) {
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
-    vdp2_scrn_back_color_set(VDP2_VRAM_ADDR(3, 0x01FFFE), RGB1555(1, 0, 0, 0));
+    sourceboot_init_sky_gradient();
     /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
      * means "never displayed" (the classic footgun recorded in
      * docs/saturn/SGL_REFERENCE_NOTES.md). Without this, the whole

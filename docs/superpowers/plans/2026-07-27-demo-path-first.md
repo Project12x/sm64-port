@@ -405,11 +405,12 @@ modify `src/port/saturn/sourceboot/main.c` (NBG0 or NBG1 tilemap/bitmap
 setup + scroll tied to camera yaw/pitch from sim state, read-only),
 generated sky bank as a build dependency.
 
-- [ ] **First step, before any bake: per-line back-screen gradient.** VDP2's
+- [x] **First step, before any bake: per-line back-screen gradient.** VDP2's
   back screen accepts a per-line color table — a sky gradient for a few
-  hundred bytes of VRAM and zero per-frame cost. Land it, capture it, then
-  build the textured sky on top. If the textured sky slips, the gradient
-  alone already retires the black void.
+  hundred bytes of VRAM and zero per-frame cost. The sourceboot now uploads
+  224 deterministic RGB1555 entries at boot; capture remains the visual gate
+  before this task is considered fully complete. If the textured sky slips,
+  the gradient alone already retires the black void.
 - [ ] Bake BOB's sky to a VDP2-native format (tilemap preferred for VRAM;
   measure both against remaining VDP2 VRAM and state the budget — VDP2 has
   its own 512 KiB, essentially untouched today).
