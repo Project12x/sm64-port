@@ -335,6 +335,14 @@ quad map + `mario_anim_data` dependency wiring), modify
   `src/port/saturn/gpl/` with notices; budget against the measured 576 KiB
   LWRAM / re-measured HWRAM figures. **The frame loop never chases cart
   pointers** (`CARTRIDGE_ASSET_POLICY.md`).
+
+**Progress note (2026-07-28):** the generated BOB positions/primitives now
+ copy from cart-linked source data into `.lwram_bss` before the demo frame loop
+ (`task2-lwram-residency-2026-07-28`). The frame renderer therefore consumes
+ work-RAM arrays, and the texture bank is uploaded once to VDP1 VRAM. The
+ Z-Treme-style optional LWRAM→HWRAM hot-promotion layer and its budget proof
+ remain open; this is the safe baseline residency step, not completion of the
+ checkbox.
 - [x] Host tests: v2 schema round-trip, bank size budget assertion, unittest
   (NOT pytest — bare `test_*` functions silently never run).
 - [x] Mutation-test the safety-relevant compiler logic (project standing

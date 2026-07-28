@@ -30,6 +30,21 @@ static uint16_t s_bucket_indices[DEMO_BUCKETS][
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
+static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
+    __attribute__((section(".lwram_bss")));
+static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    __attribute__((section(".lwram_bss")));
+static uint8_t s_bob_resident_ready;
+
+void sm64_saturn_demo_render_init(void)
+{
+    memcpy(s_bob_positions_resident, sm64_saturn_bob_positions,
+           sizeof(s_bob_positions_resident));
+    memcpy(s_bob_primitives_resident, sm64_saturn_bob_primitives,
+           sizeof(s_bob_primitives_resident));
+    s_bob_resident_ready = 1U;
+}
 
 static int32_t demo_world_unit(float value)
 {
@@ -228,6 +243,7 @@ void sm64_saturn_demo_render_frame(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose)
 {
+    if (!s_bob_resident_ready) return;
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(),
         .focal_length = DEMO_FOCAL_LENGTH,
@@ -240,9 +256,9 @@ void sm64_saturn_demo_render_frame(
     for (uint16_t i = 0; i < SM64_SATURN_BOB_POSITION_COUNT; i++) {
         if (sm64_saturn_ir_transform_one(
                 &job, (sm64_saturn_vec3i_t){
-                    sm64_saturn_bob_positions[i][0],
-                    sm64_saturn_bob_positions[i][1],
-                    sm64_saturn_bob_positions[i][2]},
+                    s_bob_positions_resident[i][0],
+                    s_bob_positions_resident[i][1],
+                    s_bob_positions_resident[i][2]},
                 &s_view[i], &s_projected[i])) {
             s_position_valid[i] = 1U;
             profile->triangles_transformed++;
@@ -256,7 +272,7 @@ void sm64_saturn_demo_render_frame(
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         const sm64_saturn_bob_primitive_t *primitive =
-            &sm64_saturn_bob_primitives[i];
+            &s_bob_primitives_resident[i];
         if (!s_position_valid[primitive->indices[0]] ||
             !s_position_valid[primitive->indices[1]] ||
             !s_position_valid[primitive->indices[2]] ||
@@ -274,7 +290,7 @@ void sm64_saturn_demo_render_frame(
     for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
         for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket]; ordinal++) {
             demo_emit_primitive(
-                &sm64_saturn_bob_primitives[
+                &s_bob_primitives_resident[
                     s_bucket_indices[bucket][ordinal]], backend, gouraud_bank,
                 profile);
         }

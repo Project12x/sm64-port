@@ -345,6 +345,7 @@ int main(void) {
         saturn_dma_queue_init();
         vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_PATH
+        sm64_saturn_demo_render_init();
         /* The baked BOB bank is linked into .cart_rodata and copied to the
          * DRAM cart at its final VMA by source_cart_load(). Stage it through
          * the shared residency API before the first demo-path command list;
