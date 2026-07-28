@@ -17,6 +17,7 @@ SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 SATURN_DEMO_PATH ?= 0
+SATURN_DEMO_VIEW_RADIUS ?= 6000
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -105,6 +106,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
 # construction and keeps each ELF/CUE pair self-consistent.
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),-demo,)
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_SOURCEBOOT_ROUTE_REPLAY)),$(SOURCEBOOT_OUTPUT_TAG)-replay,$(SOURCEBOOT_OUTPUT_TAG))
+SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-r$(SATURN_DEMO_VIEW_RADIUS),$(SOURCEBOOT_OUTPUT_TAG))
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
@@ -134,6 +136,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
   -DSATURN_SOURCEBOOT_ROUTE_REPLAY=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
+  -DSATURN_DEMO_VIEW_RADIUS=$(SATURN_DEMO_VIEW_RADIUS) \
   -DSATURN_DEMO_PATH=$(SATURN_DEMO_PATH) \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \

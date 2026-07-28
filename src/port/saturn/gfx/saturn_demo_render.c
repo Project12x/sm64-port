@@ -20,6 +20,9 @@
 #define DEMO_COORD_MIN (-1024)
 #define DEMO_COORD_MAX 1023
 #define DEMO_BUCKETS 16U
+#ifndef SATURN_DEMO_VIEW_RADIUS
+#define SATURN_DEMO_VIEW_RADIUS 6000
+#endif
 
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
 static sm64_saturn_projected_vertex_t s_projected[
@@ -254,6 +257,17 @@ void sm64_saturn_demo_render_frame(
         .coord_max = DEMO_COORD_MAX
     };
     for (uint16_t i = 0; i < SM64_SATURN_BOB_POSITION_COUNT; i++) {
+        const int64_t dx = (int64_t)s_bob_positions_resident[i][0] -
+                           job.camera.position.x;
+        const int64_t dy = (int64_t)s_bob_positions_resident[i][1] -
+                           job.camera.position.y;
+        const int64_t dz = (int64_t)s_bob_positions_resident[i][2] -
+                           job.camera.position.z;
+        if (dx * dx + dy * dy + dz * dz >
+            (int64_t)SATURN_DEMO_VIEW_RADIUS * SATURN_DEMO_VIEW_RADIUS) {
+            s_position_valid[i] = 0U;
+            continue;
+        }
         if (sm64_saturn_ir_transform_one(
                 &job, (sm64_saturn_vec3i_t){
                     s_bob_positions_resident[i][0],

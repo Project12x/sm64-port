@@ -516,6 +516,14 @@ pose-differential fixture, and later-phase visual capture remain open.
  authority portion of Task 5 is therefore passed; visual owner confirmation,
  renderer-rate work, and the 5 FPS gate remain open.
 
+**Progress note (2026-07-28, Task 6 radius sweep):** the build-profile radius
+ is now structural (`SATURN_DEMO_VIEW_RADIUS`, variant object directories).
+ Captures at 6,000/4,096/2,048 reduce render FRT work but leave frame cadence
+ unchanged at 53 frames per 3,600 emulator frames; sim FRT remains 25,829.
+ The sweep is therefore a measured non-lever for the current bottleneck, and
+ the next performance track is simulation/dual-SH2 work rather than a claimed
+ view-distance FPS improvement.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
