@@ -88,6 +88,9 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         right_degradation = right["degradation"]
         if not isinstance(left_degradation, dict) or not isinstance(right_degradation, dict):
             raise ValueError("degradation must be an object in both reports")
+        if any(left_degradation.get(field) is None for field in ("view_radius", "poly_tier")) or \
+                any(right_degradation.get(field) is None for field in ("view_radius", "poly_tier")):
+            raise ValueError("degradation settings must be explicitly declared in both reports")
         if left_degradation != right_degradation:
             raise ValueError("degradation settings differ between reports")
     first = decode_probe(left)

@@ -1191,6 +1191,15 @@ class BobParityRouteTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "degradation settings differ"):
             compare_reports(left, right, route)
 
+    def test_comparator_rejects_unstated_degradation_settings(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        left = self._report(words)
+        right = self._report(words)
+        left["degradation"] = {"view_radius": None, "poly_tier": None}
+        with self.assertRaisesRegex(ValueError, "explicitly declared"):
+            compare_reports(left, right, route)
+
 
 class BobSkyBakeTests(unittest.TestCase):
     def test_bob_sky_bake_is_vdp2_sized_and_deterministic(self) -> None:
