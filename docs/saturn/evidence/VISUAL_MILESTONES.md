@@ -11,7 +11,8 @@ docs/saturn/evidence/reports/<milestone>-YYYY-MM-DD.json
 ```
 
 The report must identify the exact ELF and CUE used, their SHA-256 hashes and
-mtimes, the capture command/configuration (including probe address and
+mtimes (the capture tool writes these under `artifacts.game` and
+`artifacts.elf`), the capture command/configuration (including probe address and
 `--dram-cart` when applicable), route/checkpoint, frame hash, and screenshot
 dimensions. Never reuse a screenshot from a different build; resolve moving
 symbols from the ELF used for that capture. `capture_hwtest.py`'s stale-CUE
