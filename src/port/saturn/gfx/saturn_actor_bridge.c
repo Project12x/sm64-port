@@ -10,6 +10,7 @@
 #include "saturn_actor_bridge.h"
 
 #include "game/level_update.h"
+#include "game/camera.h"
 #include "game/mario.h"
 #include "game/object_list_processor.h"
 #include "graph_node.h"
@@ -42,6 +43,13 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     snapshot->position[0] = gMarioState->pos[0];
     snapshot->position[1] = gMarioState->pos[1];
     snapshot->position[2] = gMarioState->pos[2];
+    snapshot->camera_position[0] = gLakituState.pos[0];
+    snapshot->camera_position[1] = gLakituState.pos[1];
+    snapshot->camera_position[2] = gLakituState.pos[2];
+    snapshot->camera_focus[0] = gLakituState.focus[0];
+    snapshot->camera_focus[1] = gLakituState.focus[1];
+    snapshot->camera_focus[2] = gLakituState.focus[2];
+    snapshot->camera_mode = gLakituState.mode;
     snapshot->yaw = gMarioState->faceAngle[1];
     snapshot->action = gMarioState->action;
     /* The simulation state is authoritative and can outlive its graph object

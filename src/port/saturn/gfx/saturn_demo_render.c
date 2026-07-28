@@ -153,17 +153,18 @@ static int32_t demo_world_unit(float value)
     return (int32_t)value;
 }
 
-static sm64_saturn_camera_transform_t demo_camera(void)
+static sm64_saturn_camera_transform_t demo_camera(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot)
 {
     const sm64_saturn_vec3i_t position = {
-        demo_world_unit(gLakituState.pos[0]),
-        demo_world_unit(gLakituState.pos[1]),
-        demo_world_unit(gLakituState.pos[2])
+        demo_world_unit(snapshot->camera_position[0]),
+        demo_world_unit(snapshot->camera_position[1]),
+        demo_world_unit(snapshot->camera_position[2])
     };
     const sm64_saturn_vec3i_t focus = {
-        demo_world_unit(gLakituState.focus[0]),
-        demo_world_unit(gLakituState.focus[1]),
-        demo_world_unit(gLakituState.focus[2])
+        demo_world_unit(snapshot->camera_focus[0]),
+        demo_world_unit(snapshot->camera_focus[1]),
+        demo_world_unit(snapshot->camera_focus[2])
     };
     const sm64_saturn_vec3i_t forward = sm64_saturn_vec3_normalize_q16(
         (sm64_saturn_vec3i_t){focus.x - position.x, focus.y - position.y,
@@ -279,7 +280,7 @@ static void demo_emit_mario(
     const int32_t sine = sm64_saturn_sins_q16(snapshot->yaw);
     const int32_t cosine = sm64_saturn_coss_q16(snapshot->yaw);
     const sm64_saturn_ir_transform_job_t job = {
-        .camera = demo_camera(), .focal_length = DEMO_FOCAL_LENGTH,
+        .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y, .coord_min = DEMO_COORD_MIN,
         .coord_max = DEMO_COORD_MAX
@@ -347,7 +348,7 @@ void sm64_saturn_demo_render_frame(
 {
     if (!s_bob_resident_ready) return;
     const sm64_saturn_ir_transform_job_t job = {
-        .camera = demo_camera(),
+        .camera = demo_camera(snapshot),
         .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = DEMO_NEAR_DEPTH,
         .center_x = DEMO_CENTER_X,

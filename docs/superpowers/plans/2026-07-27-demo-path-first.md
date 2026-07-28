@@ -454,7 +454,7 @@ are milestone-2 in the spec — **Gouraud Mario over textured terrain is
 acceptable for the first visible build**, per the spec's staging; his
 existing material colors already read well).
 
-- [ ] Bridge inputs, strictly read-only from sim state: `gMarioState`
+- [x] Bridge inputs, strictly read-only from sim state: `gMarioState`
   position/action, `gMarioObject` animation id + frame, camera
   (`gLakituState` / camera focus per the real engine), area index.
 - [ ] Drive the turntable's existing joint/Q15-weight deformation from the
@@ -487,6 +487,12 @@ pose-differential fixture, and later-phase visual capture remain open.
  actor vertex/primitive counts at replay tick 25; the screenshot remains a
  terrain/ordering diagnostic and is not gallery-accepted. The pose
  differential and a clean identifiable Mario frame are still open.
+
+**Progress note (2026-07-28, camera snapshot):** the read-only actor snapshot
+ now also captures the authoritative `gLakituState` position, focus, and mode;
+ demo terrain and Mario projection consume those copied camera values rather
+ than reading camera globals from the renderer. This closes the bridge-input
+ seam; pose deformation, checkpoint proof, and visual acceptance remain open.
 
 **Progress note (2026-07-28, near-plane cull):** the shared transform now
  rejects vertices on/behind the near plane instead of projecting them with a
