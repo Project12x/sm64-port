@@ -1432,6 +1432,8 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "sim_frt_ticks_accum",
                 "sim_tick_count",
                 "render_frt_ticks_last",
+                "demo_actor_vertices_valid",
+                "demo_actor_primitives_emitted",
             ],
         )
         # Fields the older build did have still read correctly.

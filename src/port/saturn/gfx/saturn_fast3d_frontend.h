@@ -340,6 +340,10 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t sim_frt_ticks_accum;
     uint32_t sim_tick_count;
     uint32_t render_frt_ticks_last;
+    /* Demo-path diagnostics; append-only so existing probe offsets remain
+     * stable. These count the live actor pass separately from terrain. */
+    uint32_t demo_actor_vertices_valid;
+    uint32_t demo_actor_primitives_emitted;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

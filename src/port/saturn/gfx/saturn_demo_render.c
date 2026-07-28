@@ -181,6 +181,7 @@ static void demo_emit_mario(
         sm64_saturn_vec3i_t view;
         s_actor_valid[i] = sm64_saturn_ir_transform_one(
             &job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
+        if (s_actor_valid[i]) profile->demo_actor_vertices_valid++;
     }
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
@@ -215,6 +216,7 @@ static void demo_emit_mario(
         vdp1_cmdt_vtx_set(cmdt, vertices);
         profile->triangles_vdp1_emitted++;
         profile->triangles_emitted++;
+        profile->demo_actor_primitives_emitted++;
     }
 }
 
