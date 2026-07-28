@@ -759,6 +759,16 @@ is the renderer's master-side transform/shared-bus/emission work, not a join
 stall alone: cumulative master wait is only **22.7467 ms**. The next worker
 pass must move or batch more measured render work before this gate can close.
 
+**Progress note (2026-07-28, bounded cancellation polling):** the transform
+callback now reads the uncached cancellation latch once per 16 vertices rather
+than once per vertex; the bounded callback and outer timeout still provide the
+same cancellation guarantee. Same-commit captures preserve the route hash and
+zero faults/timeouts. Serial render falls to **2.2151 ms/frame** and dual to
+**17.8073 ms/frame**; dual slave share is **20.0146%** (9,601,281 busy ticks /
+47,971,375 render ticks), a ~1.4% dual render improvement but still far below
+the ≥50% target. The remaining limiter is therefore not the per-vertex cancel
+poll alone; master-side transform/shared-bus/emission work remains open.
+
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
 notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`

@@ -22,6 +22,7 @@
 #define DEMO_COORD_MIN (-1024)
 #define DEMO_COORD_MAX 1023
 #define DEMO_BUCKETS 16U
+#define DEMO_CANCEL_POLL_INTERVAL 16U
 #ifndef SATURN_DEMO_VIEW_RADIUS
 #define SATURN_DEMO_VIEW_RADIUS 6000
 #endif
@@ -88,7 +89,12 @@ static void demo_transform_range(void *opaque, uint16_t begin, uint16_t end)
     demo_transform_context_t *context = opaque;
     const uint8_t lane = begin == 0U ? 0U : 1U;
     for (uint16_t i = begin; i < end; i++) {
-        if (sm64_saturn_dual_worker_cancelled()) break;
+        /* The cancellation latch lives in uncached shared control memory.
+         * Poll at a bounded interval rather than once per vertex: the
+         * worker's callback is finite and the outer wait is already bounded,
+         * while per-vertex reads turn the shared bus into the hot path. */
+        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+            sm64_saturn_dual_worker_cancelled()) break;
         const int64_t dx = (int64_t)context->positions[i][0] -
                            context->job->camera.position.x;
         const int64_t dy = (int64_t)context->positions[i][1] -
