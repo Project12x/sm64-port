@@ -55,13 +55,13 @@ The live BOB sweep now also uses a 32-pass depth quantization
 value. This is a bounded approximation of finer SGL/Z-Treme staging, not a
 substitute for a baked sector/dependency order.
 
-The terrain transform now has an explicit `clip_near` mode. BOB uses it to
-project corners crossing the near plane at the plane depth and retain the
-primitive when at least one corner remains in front; Castleviewer and the
-shared transform tests retain strict rejection. This is the bounded equivalent
-of SlaveDriver's `clipZ` recovery for a four-corner tile, not a claim that the
-full edge-interpolating polygon clipper is finished. It removes the previous
-all-four-corners atomic hole without changing the shared IR contract.
+The terrain transform now has an explicit `clip_near` mode, but the
+edge-interpolating implementation is currently gated off after a manual
+regression in which Mario disappeared. The shared transform tests and the live
+BOB path therefore retain strict rejection while the clipper is isolated for a
+targeted test. The intended implementation is the bounded equivalent of
+SlaveDriver's `clipZ` recovery for a four-corner tile; it must not return to the
+live path until actor visibility is proven.
 
 ## PS1 port: architecture lesson, not renderer source
 

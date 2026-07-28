@@ -952,13 +952,12 @@ ambiguity. The finer sweep is explicitly an intermediate measure; the
 reference-complete solution remains a baked spatial/dependency order plus
 near-plane clipping.
 
-The current terrain pass also enables the shared transform's opt-in
-`clip_near` mode. A corner at or behind the near plane is projected at the
-plane, while the primitive is retained only if another corner is in front.
-This follows SlaveDriver's bounded `clipZ` tile recovery and keeps strict
-rejection for Castleviewer and generic IR callers. Full edge interpolation and
-UV/shade interpolation remain a later fidelity gate; the present change is
-deliberately bounded so it can be measured against the old atomic rejection.
+The terrain pass contains an opt-in `clip_near` prototype based on
+SlaveDriver's bounded `clipZ` tile recovery. It is currently disabled in the
+live path after a manual regression made Mario disappear; strict rejection is
+the active behavior while the edge-interpolating cache is isolated for a
+targeted actor-visibility test. It may be re-enabled only after that test and
+a fresh foreground capture pass both prove the actor remains visible.
 
 ---
 
