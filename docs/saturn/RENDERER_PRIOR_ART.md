@@ -50,6 +50,11 @@ staging; (4) only then refine painter/dependency ordering. The existing
 `vdp1_commands_last=626/2048` and zero arena-reject evidence rules out a simple
 command-count ceiling for the current flicker.
 
+The live BOB sweep now also uses a 32-pass depth quantization
+(`SATURN_DEMO_BUCKETS`, build-overridable) instead of the 16-pass bring-up
+value. This is a bounded approximation of finer SGL/Z-Treme staging, not a
+substitute for a baked sector/dependency order.
+
 ## PS1 port: architecture lesson, not renderer source
 
 The inspected PS1 port is not a Saturn code donor: it lacks one

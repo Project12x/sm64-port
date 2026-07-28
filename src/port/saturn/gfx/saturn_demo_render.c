@@ -27,7 +27,13 @@
 #define DEMO_CENTER_Y 112
 #define DEMO_COORD_MIN (-1024)
 #define DEMO_COORD_MAX 1023
-#define DEMO_BUCKETS 16U
+#ifndef SATURN_DEMO_BUCKETS
+/* SGL/Z-Treme use finer depth staging than the original 16-pass bring-up
+ * sweep. Thirty-two keeps the bounded SRAM footprint while reducing
+ * same-bucket painter ambiguity for overlapping BOB terrain. */
+#define SATURN_DEMO_BUCKETS 32U
+#endif
+#define DEMO_BUCKETS SATURN_DEMO_BUCKETS
 #define DEMO_CANCEL_POLL_INTERVAL 16U
 #ifndef SATURN_DEMO_VIEW_RADIUS
 #define SATURN_DEMO_VIEW_RADIUS 6000
@@ -47,9 +53,9 @@ static sm64_saturn_projected_vertex_t s_projected[
     SM64_SATURN_BOB_POSITION_COUNT];
 static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT];
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
-static uint16_t s_bucket_indices[DEMO_BUCKETS][
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_bucket_offsets[DEMO_BUCKETS + 1U];
 static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_emit_reordered[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_count;
 static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -886,7 +892,18 @@ void sm64_saturn_demo_render_frame(
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         if (s_primitive_visible[i] == 0U) continue;
         const uint16_t bucket = s_primitive_buckets[i];
-        s_bucket_indices[bucket][s_bucket_counts[bucket]++] = i;
+        s_bucket_counts[bucket]++;
+    }
+    s_bucket_offsets[0] = 0U;
+    for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++)
+        s_bucket_offsets[bucket + 1U] =
+            s_bucket_offsets[bucket] + s_bucket_counts[bucket];
+    uint16_t bucket_write[DEMO_BUCKETS];
+    memcpy(bucket_write, s_bucket_offsets,
+           sizeof(uint16_t) * DEMO_BUCKETS);
+    for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
+        if (s_primitive_visible[i] == 0U) continue;
+        s_emit_order[bucket_write[s_primitive_buckets[i]]++] = i;
     }
     /* VDP1 has no depth buffer. Within each coarse bucket, order by the
      * nearest-corner view depth far-to-near; equal-depth primitives retain
@@ -894,30 +911,40 @@ void sm64_saturn_demo_render_frame(
      * corner is conservative for large quads whose depth range crosses a
      * neighboring surface; an average key can reorder those quads mid-pan. */
     for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++) {
-        for (uint16_t i = 1U; i < s_bucket_counts[bucket]; i++) {
-            const uint16_t value = s_bucket_indices[bucket][i];
+        const uint16_t start = s_bucket_offsets[bucket];
+        const uint16_t end = s_bucket_offsets[bucket + 1U];
+        for (uint16_t i = start + 1U; i < end; i++) {
+            const uint16_t value = s_emit_order[i];
             uint16_t j = i;
-            while (j > 0U &&
-                   s_primitive_depth[s_bucket_indices[bucket][j - 1U]] <
+            while (j > start &&
+                   s_primitive_depth[s_emit_order[j - 1U]] <
                        s_primitive_depth[value]) {
-                s_bucket_indices[bucket][j] =
-                    s_bucket_indices[bucket][j - 1U];
+                s_emit_order[j] = s_emit_order[j - 1U];
                 j--;
             }
-            s_bucket_indices[bucket][j] = value;
+            s_emit_order[j] = value;
         }
     }
+    /* The bucket segments were built in near-to-far bucket order. Repack once
+     * into the actual VDP1 far-to-near stream, preserving each bucket's
+     * depth/source stability without a second bucket-sized matrix. */
+    uint16_t reordered_count = 0U;
+    for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
+        for (uint16_t ordinal = s_bucket_offsets[bucket];
+             ordinal < s_bucket_offsets[bucket + 1U]; ordinal++) {
+            s_emit_reordered[reordered_count++] = s_emit_order[ordinal];
+        }
+    }
+    memcpy(s_emit_order, s_emit_reordered,
+           sizeof(uint16_t) * reordered_count);
+    s_emit_count = reordered_count;
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     sm64_saturn_vdp1_backend_begin(backend);
     uint16_t bob_draw_count = 0U;
-    for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
-        for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket];
-             ordinal++) {
-            const uint16_t primitive = s_bucket_indices[bucket][ordinal];
-            s_emit_order[s_emit_count++] = primitive;
-            s_primitive_slots[primitive] =
-                (uint16_t)(backend->commands.cursor + bob_draw_count++);
-        }
+    for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
+        const uint16_t primitive = s_emit_order[ordinal];
+        s_primitive_slots[primitive] =
+            (uint16_t)(backend->commands.cursor + bob_draw_count++);
     }
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
@@ -953,14 +980,10 @@ void sm64_saturn_demo_render_frame(
         /* Capacity fallback retains the pre-split path. This should remain
          * unreachable for the generated 867-primitive BOB bank, but avoids
          * turning a future asset expansion into a blank frame. */
-        for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
-            for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket];
-                 ordinal++) {
-                demo_emit_primitive(
-                    &s_bob_primitives_active[
-                        s_bucket_indices[bucket][ordinal]], backend,
-                    gouraud_bank, profile, &partitions);
-            }
+        for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
+            demo_emit_primitive(
+                &s_bob_primitives_active[s_emit_order[ordinal]], backend,
+                gouraud_bank, profile, &partitions);
         }
     } else {
         profile->texture_commands += emit.stats[0].texture_commands +

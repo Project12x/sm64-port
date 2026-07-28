@@ -945,6 +945,13 @@ allocator paths are not adopted. The next correctness pass therefore adds
 visibility-reason counters, moves radius rejection to spatial bounds, and
 double-banks sourceboot command staging before further painter tuning.
 
+The follow-on implementation adds conservative primitive bounds, append-only
+visibility-reason counters, double-bank LWRAM command staging, and a
+32-pass depth sweep (`SATURN_DEMO_BUCKETS`) to reduce same-bucket terrain
+ambiguity. The finer sweep is explicitly an intermediate measure; the
+reference-complete solution remains a baked spatial/dependency order plus
+near-plane clipping.
+
 ---
 
 ### Task 6: Degradation profile — Croc's levers, measured
