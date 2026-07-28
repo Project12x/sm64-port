@@ -1123,6 +1123,7 @@ class BobParityRouteTests(unittest.TestCase):
             "post_poke_frames": 36000,
             "probe_window": {"data": list(struct.pack(">13I", *words))},
             "protocol": {"ready": True},
+            "degradation": {"view_radius": 6000, "poly_tier": 0},
         }
 
     def test_route_is_600_ticks_and_has_movement_jump_and_camera_input(self) -> None:
@@ -1179,6 +1180,15 @@ class BobParityRouteTests(unittest.TestCase):
         del report["protocol"]
         with self.assertRaisesRegex(ValueError, "required schema fields: protocol"):
             compare_reports(report, report, route)
+
+    def test_comparator_rejects_mismatched_degradation_settings(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        left = self._report(words)
+        right = self._report(words)
+        right["degradation"] = {"view_radius": 2048, "poly_tier": 1}
+        with self.assertRaisesRegex(ValueError, "degradation settings differ"):
+            compare_reports(left, right, route)
 
 
 class TelemetryTests(unittest.TestCase):

@@ -82,6 +82,14 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
                    if field not in report]
         if missing:
             raise ValueError(f"{label} report lacks required schema fields: {', '.join(missing)}")
+    schema = route["report_schema"]
+    if schema.get("compare_degradation", False):
+        left_degradation = left["degradation"]
+        right_degradation = right["degradation"]
+        if not isinstance(left_degradation, dict) or not isinstance(right_degradation, dict):
+            raise ValueError("degradation must be an object in both reports")
+        if left_degradation != right_degradation:
+            raise ValueError("degradation settings differ between reports")
     first = decode_probe(left)
     second = decode_probe(right)
     errors: list[str] = []
@@ -108,7 +116,7 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
     for field in ("triangles_transformed", "triangles_vdp1_emitted"):
         delta = abs(first[field] - second[field])
         renderer_deltas[field] = delta
-        if route["report_schema"].get("compare_renderer_counters", True) and delta > tolerance:
+        if schema.get("compare_renderer_counters", True) and delta > tolerance:
             errors.append(f"{field} differs beyond tolerance {tolerance}")
     return {
         "route_version": route["route_version"],
@@ -119,6 +127,7 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         "left_checkpoint_sha256": signatures[0],
         "right_checkpoint_sha256": signatures[1],
         "renderer_counter_deltas": renderer_deltas,
+        "degradation": left.get("degradation"),
         "deterministic": not errors,
         "errors": errors,
     }
