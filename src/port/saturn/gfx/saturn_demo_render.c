@@ -456,11 +456,18 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         if (s_primitive_clipped[i] != 0U) {
             demo_build_clipped_quad(primitive, s_clipped_projected[i]);
         }
+        /* Match the castleviewer/SlaveDriver painter contract: a primitive's
+         * farthest projected corner owns its painter key.  Using the nearest
+         * corner made large BOB quads jump in front of neighboring surfaces as
+         * the camera moved, because a quad crossing a depth boundary was
+         * classified as near before its far half had been painted.  Proper
+         * BSP splitting remains the long-term fix; max-z is the conservative
+         * unsplit fallback used by the reference path. */
         int32_t z = s_projected[primitive->indices[0]].z;
         for (uint8_t corner = 1U; corner < 4U; corner++) {
             const int32_t corner_z =
                 s_projected[primitive->indices[corner]].z;
-            if (corner_z < z) z = corner_z;
+            if (corner_z > z) z = corner_z;
         }
         const int32_t cross =
             (int32_t)(s_projected[primitive->indices[1]].x -
@@ -1023,10 +1030,10 @@ void sm64_saturn_demo_render_frame(
         s_emit_order[bucket_write[s_primitive_buckets[i]]++] = i;
     }
     /* VDP1 has no depth buffer. Within each coarse bucket, order by the
-     * nearest-corner view depth far-to-near; equal-depth primitives retain
-     * source order for deterministic coplanar decals and seams. The nearest
-     * corner is conservative for large quads whose depth range crosses a
-     * neighboring surface; an average key can reorder those quads mid-pan. */
+     * farthest-corner view depth far-to-near; equal-depth primitives retain
+     * source order for deterministic coplanar decals and seams. This matches
+     * castleviewer's proven render queue and is the conservative unsplit
+     * fallback until the baked BSP stream is wired into sourceboot. */
     for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++) {
         const uint16_t start = s_bucket_offsets[bucket];
         const uint16_t end = s_bucket_offsets[bucket + 1U];
