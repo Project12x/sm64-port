@@ -43,6 +43,8 @@ static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT];
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
 static uint16_t s_bucket_indices[DEMO_BUCKETS][
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
@@ -73,6 +75,10 @@ typedef struct demo_transform_context {
     uint8_t *valid;
     uint32_t transformed[2];
 } demo_transform_context_t;
+
+typedef struct demo_classify_context {
+    const sm64_saturn_bob_primitive_t *primitives;
+} demo_classify_context_t;
 
 /* The generated BOB bank currently has one source-faithful primitive tier.
  * Keep the selection boundary explicit so near/mid/far baked variants can be
@@ -193,6 +199,31 @@ static uint16_t demo_bucket(int32_t z)
     return (uint16_t)(((z - DEMO_NEAR_DEPTH) *
                        (DEMO_BUCKETS - 1U)) /
                       (DEMO_FAR_DEPTH - DEMO_NEAR_DEPTH));
+}
+
+static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
+{
+    demo_classify_context_t *context = opaque;
+    for (uint16_t i = begin; i < end; i++) {
+        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+            sm64_saturn_dual_worker_cancelled())
+            break;
+        const sm64_saturn_bob_primitive_t *primitive =
+            &context->primitives[i];
+        if (!demo_poly_tier_accepts(primitive) ||
+            !s_position_valid[primitive->indices[0]] ||
+            !s_position_valid[primitive->indices[1]] ||
+            !s_position_valid[primitive->indices[2]] ||
+            !s_position_valid[primitive->indices[3]]) {
+            s_primitive_visible[i] = 0U;
+            continue;
+        }
+        const int32_t z = (s_projected[primitive->indices[0]].z +
+                           s_projected[primitive->indices[1]].z +
+                           s_projected[primitive->indices[2]].z) / 3;
+        s_primitive_buckets[i] = (uint8_t)demo_bucket(z);
+        s_primitive_visible[i] = 1U;
+    }
 }
 
 static void demo_emit_primitive(
@@ -404,21 +435,32 @@ void sm64_saturn_demo_render_frame(
             s_slave_begin--;
         }
     }
+    demo_classify_context_t classify = {
+        .primitives = s_bob_primitives_active
+    };
+    sm64_saturn_dual_worker_stats_t classify_stats;
+    bool classify_ok = true;
+#if SATURN_SLAVE_RENDER
+    classify_ok = sm64_saturn_dual_worker_run(
+        demo_classify_range, &classify, SM64_SATURN_BOB_PRIMITIVE_COUNT,
+        SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U, &classify_stats);
+#else
+    classify_stats = (sm64_saturn_dual_worker_stats_t){0};
+    demo_classify_range(&classify, 0U, SM64_SATURN_BOB_PRIMITIVE_COUNT);
+#endif
+    if (!classify_ok) {
+        memset(s_primitive_visible, 0, sizeof(s_primitive_visible));
+        demo_classify_range(&classify, 0U, SM64_SATURN_BOB_PRIMITIVE_COUNT);
+    }
+    profile->slave_jobs_completed += classify_stats.slave_jobs_completed;
+    profile->slave_busy_ticks += classify_stats.slave_busy_ticks;
+    profile->master_wait_ticks += classify_stats.master_wait_ticks;
+    profile->slave_timeouts += classify_stats.slave_timeouts;
+
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
-        const sm64_saturn_bob_primitive_t *primitive =
-            &s_bob_primitives_active[i];
-        if (!demo_poly_tier_accepts(primitive)) continue;
-        if (!s_position_valid[primitive->indices[0]] ||
-            !s_position_valid[primitive->indices[1]] ||
-            !s_position_valid[primitive->indices[2]] ||
-            !s_position_valid[primitive->indices[3]]) {
-            continue;
-        }
-        const int32_t z = (s_projected[primitive->indices[0]].z +
-                           s_projected[primitive->indices[1]].z +
-                           s_projected[primitive->indices[2]].z) / 3;
-        const uint16_t bucket = demo_bucket(z);
+        if (s_primitive_visible[i] == 0U) continue;
+        const uint16_t bucket = s_primitive_buckets[i];
         s_bucket_indices[bucket][s_bucket_counts[bucket]++] = i;
     }
     sm64_saturn_gouraud_bank_begin(gouraud_bank);

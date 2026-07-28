@@ -794,6 +794,16 @@ is the renderer's master-side transform/shared-bus/emission work, not a join
 stall alone: cumulative master wait is only **22.7467 ms**. The next worker
 pass must move or batch more measured render work before this gate can close.
 
+**Progress note (2026-07-28, primitive classification split):** the dual
+worker now also classifies the 867 BOB primitives into visibility/depth buckets
+over disjoint ranges, preserving the master's source-order scatter and command
+ownership. A fresh capture records `slave_jobs_completed=496`,
+`slave_busy_ticks=3,395,680`, and `render_frt_ticks_accum=15,029,161` —
+22.6% slave share, up from the prior ~20% baseline but still below the ≥50%
+bar. The paired route comparator remains deterministic with the same
+checkpoint hash and zero faults/rejects. Command emission and texture/VRAM
+setup remain the next measured master-side lever.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
