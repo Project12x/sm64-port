@@ -188,19 +188,19 @@ ceiling is sim-bound and mitigation opens *before* Task 5, not after.
 append-only), `src/port/saturn/sourceboot/main.c`. FRT pattern:
 `src/port/saturn/hwtest/main.c:163-190`.
 
-- [ ] Append to `sm64_saturn_fast3d_profile_t` (END of struct, never
+- [x] Append to `sm64_saturn_fast3d_profile_t` (END of struct, never
   reorder — recorded offsets everywhere): `uint32_t sim_frt_ticks_last`,
   `uint32_t sim_frt_ticks_accum`, `uint32_t sim_tick_count`,
   `uint32_t render_frt_ticks_last`. Note the FRT is 16-bit with a prescaler —
   handle wrap; document the tick→µs conversion in a comment beside the
   fields.
-- [ ] In `main.c`'s frame loop, bracket the sim call and the render/submit
+- [x] In `main.c`'s frame loop, bracket the sim call and the render/submit
   call with FRT reads. No behavior change; counters only.
-- [ ] Host: `verify-runtime-contracts` green (offset probe recompiles
+- [x] Host: `verify-runtime-contracts` green (offset probe recompiles
   automatically); note the new `sizeof` for `--probe-count`.
-- [ ] Capture on the frozen route (fresh symbol! it moves), decode with
+- [x] Capture on the frozen route (fresh symbol! it moves), decode with
   `fast3d_profile_decode.py`.
-- [ ] **Report: sim ms/tick, render ms/frame, both absolute.** Add the two
+- [x] **Report: sim ms/tick, render ms/frame, both absolute.** Add the two
   fields to the route schema per its `extension_rule` (version bump).
 
 **Gate:** the sim-tick number exists in a committed capture. Decision matrix
@@ -209,6 +209,11 @@ proceed, flag sim-side soft-float work as a parallel track; > 33 ms → owner
 decision before Task 5 (the 30 Hz sim itself can't hold rate — options:
 sim-rate decouple per sprint gate 1, or targeted sim float fixes from the
 call-site map in `2026-07-26-soft-float-replacement-design.md`).
+
+**Completed evidence:** `docs/saturn/evidence/reports/e2-sourceboot-task0-timing-preserved-2026-07-27.{json,md}`;
+average simulation phase **8.93 ms/tick**, last render phase **15.08 ms**,
+`fault_flags=0`. The timing fields are preserved across the frontend profile
+reset so a frame-boundary capture cannot erase the last completed sample.
 
 **References consumed (AW-3):** FRT harness `hwtest/main.c:163-190`
 (in-repo); profile append pattern (Task 6 quad counters precedent).
