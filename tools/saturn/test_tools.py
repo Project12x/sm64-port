@@ -1150,6 +1150,15 @@ class BobParityRouteTests(unittest.TestCase):
         self.assertFalse(result["deterministic"])
         self.assertIn("source checkpoint signature differs", result["errors"])
 
+    def test_comparator_accepts_route_in_paired_extra_probe_window(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        report = self._report(words)
+        report["probe_window"] = {"data": [0] * (13 * 4)}
+        report["extra_probe_window"] = {"data": list(struct.pack(">13I", *words))}
+        result = compare_reports(report, report, route)
+        self.assertTrue(result["deterministic"])
+
     def test_comparator_rejects_missing_required_report_schema_field(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]

@@ -1,0 +1,43 @@
+{
+  "deterministic": false,
+  "errors": [
+    "source checkpoint signature differs",
+    "triangles_transformed differs beyond tolerance 0",
+    "triangles_vdp1_emitted differs beyond tolerance 0"
+  ],
+  "left": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "global_timer": 602,
+    "magic": 1396855345,
+    "mario_action": 67109957,
+    "mario_pos_x_bits": 3315198828,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167837780,
+    "replay_ticks": 600,
+    "triangles_transformed": 3393,
+    "triangles_vdp1_emitted": 1118,
+    "version": 1
+  },
+  "left_checkpoint_sha256": "560740249dfb504f2f43d2d58e89fb52111b8366f630ae924e4296ec6fb13579",
+  "report_schema_version": "sourceboot-route-v1",
+  "right": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "global_timer": 611,
+    "magic": 1396855345,
+    "mario_action": 201327165,
+    "mario_pos_x_bits": 3315167764,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167940200,
+    "replay_ticks": 600,
+    "triangles_transformed": 2074,
+    "triangles_vdp1_emitted": 531,
+    "version": 1
+  },
+  "right_checkpoint_sha256": "4d7bb47020d618d84fc3e3b038a6a7083c3867e644845a21adb9c9fe71f84029",
+  "route_version": "bob-parity-v1",
+  "simulation_ticks": 600
+}

@@ -496,6 +496,16 @@ pose-differential fixture, and later-phase visual capture remain open.
  composition and the route sample is only tick 25, so Task 5's visual and
  checkpoint gates remain open.
 
+**Progress note (2026-07-28, 600-tick authority gate):** the demo/replay
+ capture now reaches the exact 600-tick endpoint
+ (`task5-route-600-final-2026-07-28`) with zero renderer faults and capacity
+ rejects. A same-commit interpreted replay oracle was captured and the paired
+ comparator was extended to consume route data from `extra_probe_window`. The
+ authority gate fails: demo `global_timer=602` vs interpreted `611`, the Mario
+ checkpoint signature differs, and renderer counters differ (`3393/1118` vs
+ `2074/531`). This is the current Task 5 blocker; no gallery promotion is
+ justified.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.

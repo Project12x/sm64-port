@@ -53,17 +53,26 @@ def load_route(path: Path) -> dict[str, Any]:
 
 
 def decode_probe(report: dict[str, Any]) -> dict[str, int]:
-    window = report.get("probe_window")
-    if not isinstance(window, dict) or not isinstance(window.get("data"), list):
+    # Paired captures keep the Fast3D profile in probe_window and the route
+    # block in extra_probe_window. Prefer the legacy primary window, but fall
+    # back to the explicitly named extra window when it is not a route block.
+    windows = [report.get("probe_window"), report.get("extra_probe_window")]
+    saw_data = False
+    for window in windows:
+        if not isinstance(window, dict) or not isinstance(window.get("data"), list):
+            continue
+        saw_data = True
+        data = window["data"]
+        if len(data) < PROBE_BYTES or not all(
+                isinstance(byte, int) and 0 <= byte <= 255 for byte in data):
+            continue
+        values = struct.unpack(">13I", bytes(data[:PROBE_BYTES]))
+        probe = dict(zip(PROBE_FIELDS, values, strict=True))
+        if probe["magic"] == MAGIC and probe["version"] == VERSION:
+            return probe
+    if not saw_data:
         raise ValueError("report lacks a route probe_window")
-    data = window["data"]
-    if len(data) < PROBE_BYTES or not all(isinstance(byte, int) and 0 <= byte <= 255 for byte in data):
-        raise ValueError(f"route probe must contain at least {PROBE_BYTES} byte values")
-    values = struct.unpack(">13I", bytes(data[:PROBE_BYTES]))
-    probe = dict(zip(PROBE_FIELDS, values, strict=True))
-    if probe["magic"] != MAGIC or probe["version"] != VERSION:
-        raise ValueError("route checkpoint is absent or has an unsupported version")
-    return probe
+    raise ValueError("route checkpoint is absent or has an unsupported version")
 
 
 def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str, Any]) -> dict[str, Any]:

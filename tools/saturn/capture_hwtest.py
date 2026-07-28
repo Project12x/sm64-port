@@ -29,6 +29,11 @@ from telemetry_decode import decode
 # size and validate each chunk's response (see response_for() below) so a
 # rejected request raises immediately instead of silently no-opping.
 YMIR_MAX_RUN_FOR_FRAMES = 3600
+# The per-request Ymir limit above is unchanged.  Slow demo-path renderers
+# can need more than the historical 36,000-frame aggregate to reach the
+# frozen 600-tick checkpoint; requests are still chunked and each response is
+# validated before the report is emitted.
+MAX_CAPTURE_FRAMES = 72000
 
 
 def has_cd_block_copy_limitation(stderr: str) -> bool:
@@ -259,8 +264,11 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
-    if not 1 <= args.frames <= 36000 or not 1 <= args.post_poke_frames <= 36000:
-        parser.error("--frames and --post-poke-frames must be between 1 and 36000")
+    if not 1 <= args.frames <= MAX_CAPTURE_FRAMES or not 1 <= args.post_poke_frames <= MAX_CAPTURE_FRAMES:
+        parser.error(
+            "--frames and --post-poke-frames must be between 1 and "
+            f"{MAX_CAPTURE_FRAMES}"
+        )
     if args.event_word_poke is not None and not 0 <= args.event_word_poke <= 0xFFFFFFFF:
         parser.error("--event-word-poke must be an unsigned 32-bit value")
     if args.input_pulse is not None and not 0 <= args.input_pulse <= 0xFFFF:
