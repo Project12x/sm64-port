@@ -233,10 +233,10 @@ them** — that is the no-regression proof and the anti-drift guarantee.
 per-primitive binding), modify `src/port/saturn/castleviewer/main.c` (consume
 the modules, delete the moved bodies), modify `castleviewer/Makefile`.
 
-- [ ] Inventory pass first: list every function/table moving, with line
+- [x] Inventory pass first: list every function/table moving, with line
   ranges, in the commit message. Anything *not* moved that Task 4/5 will need
   gets named now (so the bridge never "quickly copies" something).
-- [ ] Move `world_to_view_project` (+ helpers) into `saturn_ir_transform.c`
+- [x] Move `world_to_view_project` (+ helpers) into `saturn_ir_transform.c`
   **verbatim first** — no improvements in the move commit. Improvements are
   separate commits after the identity proof.
 - [ ] Move texture residency/upload/binding into `saturn_ir_texture.c`, same
