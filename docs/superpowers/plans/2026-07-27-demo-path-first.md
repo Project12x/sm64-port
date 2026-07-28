@@ -552,6 +552,17 @@ are available; no gallery promotion is made from this code-only result.
  degradation profile. This is a hook and schema improvement, not an FPS or
  visual claim; the real-route settings sweep remains open.
 
+**Progress note (2026-07-28, Task 2 optional hot promotion):** the existing
+ Z-Treme-derived bounded promotion helper is now wired behind
+ `SATURN_DEMO_HOT_PROMOTION`, with `-hot0`/`-hot1` output variants. The hot
+ build copies the 19,500-byte position bank and 24,276-byte primitive bank
+ once into HWRAM and the frame loop reads only the promoted pointers; the
+ default remains the LWRAM-resident baseline. Cross-link measurements for the
+ hot build put the arrays at `0x060BEE00`/`0x060C4CD4` and `___end` at
+ `0x060FD5A0`, leaving 10,848 bytes before the `0x06100000` HWRAM ceiling.
+ This proves the budgeted optional path; runtime parity and performance still
+ need the unavailable capture rig.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.

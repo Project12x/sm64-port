@@ -12,6 +12,7 @@
 #include "saturn_mario_actor_mesh.h"
 #include "../gpl/slavedriver_dma_queue.h"
 #include "../gpl/slavedriver_dual_worker.h"
+#include "../gpl/ztreme_hot_promotion.h"
 
 #define DEMO_NEAR_DEPTH 128
 #define DEMO_FAR_DEPTH 8192
@@ -30,6 +31,9 @@
 #ifndef SATURN_DEMO_POLY_TIER
 #define SATURN_DEMO_POLY_TIER 0
 #endif
+#ifndef SATURN_DEMO_HOT_PROMOTION
+#define SATURN_DEMO_HOT_PROMOTION 0
+#endif
 
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
 static sm64_saturn_projected_vertex_t s_projected[
@@ -45,6 +49,17 @@ static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
 static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
     SM64_SATURN_BOB_PRIMITIVE_COUNT]
     __attribute__((section(".lwram_bss")));
+#if SATURN_DEMO_HOT_PROMOTION
+/* Optional Z-Treme-style hot arena. The source bank remains the LWRAM
+ * authority; these HWRAM arrays are populated once before the frame loop and
+ * then become the renderer's active read-only bank. */
+static int32_t s_bob_positions_hot[SM64_SATURN_BOB_POSITION_COUNT][3];
+static sm64_saturn_bob_primitive_t s_bob_primitives_hot[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static saturn_hot_promotion_t s_bob_hot_promotion;
+#endif
+static const int32_t (*s_bob_positions_active)[3];
+static const sm64_saturn_bob_primitive_t *s_bob_primitives_active;
 static uint8_t s_bob_resident_ready;
 static uint16_t s_slave_begin = SM64_SATURN_BOB_POSITION_COUNT / 2U;
 
@@ -107,6 +122,28 @@ void sm64_saturn_demo_render_init(void)
            sizeof(s_bob_positions_resident));
     memcpy(s_bob_primitives_resident, sm64_saturn_bob_primitives,
            sizeof(s_bob_primitives_resident));
+    s_bob_positions_active = s_bob_positions_resident;
+    s_bob_primitives_active = s_bob_primitives_resident;
+#if SATURN_DEMO_HOT_PROMOTION
+    saturn_hot_promotion_init(
+        &s_bob_hot_promotion, s_bob_positions_hot,
+        sizeof(s_bob_positions_hot));
+    const int32_t (*hot_positions)[3] = saturn_hot_promote(
+        &s_bob_hot_promotion, s_bob_positions_resident,
+        sizeof(s_bob_positions_resident), 16U);
+    /* The second bank is a separate bounded arena entry. Resetting to its
+     * own HWRAM destination keeps both source ranges independently checked. */
+    saturn_hot_promotion_init(
+        &s_bob_hot_promotion, s_bob_primitives_hot,
+        sizeof(s_bob_primitives_hot));
+    const sm64_saturn_bob_primitive_t *hot_primitives = saturn_hot_promote(
+        &s_bob_hot_promotion, s_bob_primitives_resident,
+        sizeof(s_bob_primitives_resident), 16U);
+    if (hot_positions != NULL && hot_primitives != NULL) {
+        s_bob_positions_active = hot_positions;
+        s_bob_primitives_active = hot_primitives;
+    }
+#endif
     s_bob_resident_ready = 1U;
 }
 
@@ -319,7 +356,7 @@ void sm64_saturn_demo_render_frame(
     };
     demo_transform_context_t transform = {
         .job = &job,
-        .positions = s_bob_positions_resident,
+        .positions = s_bob_positions_active,
         .view = s_view,
         .projected = s_projected,
         .valid = s_position_valid,
@@ -363,7 +400,7 @@ void sm64_saturn_demo_render_frame(
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         const sm64_saturn_bob_primitive_t *primitive =
-            &s_bob_primitives_resident[i];
+            &s_bob_primitives_active[i];
         if (!demo_poly_tier_accepts(primitive)) continue;
         if (!s_position_valid[primitive->indices[0]] ||
             !s_position_valid[primitive->indices[1]] ||
@@ -382,7 +419,7 @@ void sm64_saturn_demo_render_frame(
     for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
         for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket]; ordinal++) {
             demo_emit_primitive(
-                &s_bob_primitives_resident[
+                &s_bob_primitives_active[
                     s_bucket_indices[bucket][ordinal]], backend, gouraud_bank,
                 profile);
         }
