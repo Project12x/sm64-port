@@ -597,13 +597,10 @@ static void demo_emit_primitive(
     demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
-        /* Castleviewer draws source triangles with the same affine companion
-         * corner used by the distorted-sprite texture mapping.  Collapsing
-         * the shape to C while passing the companion to VDP1's texture path
-         * makes the geometry and UV homography disagree, producing the large
-         * warped sheets seen in BOB.  Flat triangles retain the repeated-C
-         * polygon convention. */
-        primitive->source1 == 0xFFFFU && primitive->textured == 0U
+        /* Castleviewer and the shared bake path lower textured triangles as
+         * repeated-C A/B/C/C sprites. True source quads retain their fourth
+         * corner; flat triangles use the same repeated-C convention. */
+        primitive->source1 == 0xFFFFU
             ? vertices[2] : vertices[3]
     };
     const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *

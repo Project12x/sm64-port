@@ -17,12 +17,9 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         textured = bool(fragment["textured"])
         indices = [len(positions) + offset for offset in range(3)]
         positions.extend(points)
-        if textured:
-            a, b, c = points
-            positions.append([a[axis] + c[axis] - b[axis] for axis in range(3)])
-            fourth = indices[0] + 3
-        else:
-            fourth = indices[2]
+        # sample_triangle() and castleviewer lower triangles as A/B/C/C.
+        # The offline affine companion is deliberately not a runtime vertex.
+        fourth = indices[2]
         primitives.append({
             "indices": (*indices, fourth),
             # Keep the compiled Mesh IR primitive identity, not the source

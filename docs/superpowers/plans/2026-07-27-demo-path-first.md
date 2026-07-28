@@ -989,6 +989,15 @@ so the ordering wiring is proven but is not the cause of the remaining visual
 error. Texture/UV lowering or the fragment-to-source geometry contract is now
 the next correctness investigation.
 
+**Progress note (2026-07-28, repeated-C texture contract):** the reference
+audit found that `bake_castle_uv.py:index_position_quads` intentionally keeps
+triangle runtime geometry as A/B/C/C; its affine companion is an offline
+sampling concept, not a transformed vertex. Both BOB emitters and the VDP1
+shape path now follow that contract. The fresh capture remains fault-free and
+the image is materially improved (the large foreground sheet is reduced), but
+terrain is still visibly warped. This proves the companion mismatch was one
+real contributor; remaining UV/geometry error is still open.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the

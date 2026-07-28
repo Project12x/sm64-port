@@ -16,10 +16,8 @@ def c_array(values: list[object], width: int = 12) -> list[str]:
 
 def emit(mesh: dict[str, object], manifest: dict[str, object]) -> str:
     entries = {int(entry["source_triangle"]): entry for entry in manifest["entries"]}
-    # VDP1 textured commands are distorted sprites and therefore need four
-    # corners.  Castleviewer lowers a source triangle with the affine
-    # companion A + C - B; retain the source triangle shape for flat fallback
-    # emission, but give textured BOB triangles the same valid fourth corner.
+    # VDP1 textured triangle tiles use the shared castleviewer A/B/C/C
+    # lowering. The offline affine companion is not a runtime vertex.
     positions = [tuple(point) for point in mesh["positions"]]
     materials = {int(material["id"]): material for material in mesh["materials"]}
     primitives: list[dict[str, object]] = []
@@ -30,11 +28,6 @@ def emit(mesh: dict[str, object], manifest: dict[str, object]) -> str:
         indices = [int(value) for value in primitive["indices"]]
         if len(indices) != 4:
             raise ValueError("compiled primitive must have four VDP1 corners")
-        if len(sources) == 1 and indices[3] == indices[2]:
-            a, b, c = (positions[indices[offset]] for offset in range(3))
-            companion = tuple(a[axis] + c[axis] - b[axis] for axis in range(3))
-            indices[3] = len(positions)
-            positions.append(companion)
         primitives.append({
             "indices": indices,
             "source0": sources[0],

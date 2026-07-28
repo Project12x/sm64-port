@@ -964,10 +964,9 @@ class BobMeshIRTests(unittest.TestCase):
         mesh = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
         manifest = json.loads((root / "build/saturn/sourceboot/generated/bob_tiles_manifest.json").read_text(encoding="utf-8"))
         header = emit_bob_scene(mesh, manifest)
-        # Textured source triangles use the Castleviewer affine companion
-        # corner.  The 867 primitive bank therefore carries 633 generated
-        # positions in addition to the 1625 compiled mesh positions.
-        self.assertIn("SM64_SATURN_BOB_POSITION_COUNT 2258U", header)
+        # Textured source triangles share castleviewer's repeated-C lowering;
+        # no offline affine companion is retained in the runtime pool.
+        self.assertIn("SM64_SATURN_BOB_POSITION_COUNT 1625U", header)
         self.assertIn("SM64_SATURN_BOB_PRIMITIVE_COUNT 867U", header)
         self.assertEqual(header, emit_bob_scene(mesh, manifest))
         self.assertEqual(header.count("    {{"), 867)
