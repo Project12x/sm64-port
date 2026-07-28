@@ -483,15 +483,19 @@ existing material colors already read well).
 - [x] Bridge inputs, strictly read-only from sim state: `gMarioState`
   position/action, `gMarioObject` animation id + frame, camera
   (`gLakituState` / camera focus per the real engine), area index.
-- [ ] Drive the turntable's existing joint/Q15-weight deformation from the
+- [x] Drive the turntable's existing joint/Q15-weight deformation from the
   *live* animation frame instead of a canned loop. The animation data is
-  already resident (`mario_anim_data` generation precedent).
-- [ ] Correctness nets: (a) route checkpoint hash must be **unchanged** —
+  already resident (`mario_anim_data` generation precedent). The shared
+  bridge selects `gMarioObject->header.gfx.animInfo.animFrame` and indexes the
+  source-evaluated pose bank; no turntable-owned frame counter remains in the
+  sourceboot path.
+- [x] Correctness nets: (a) route checkpoint hash must be **unchanged** —
   the bridge reads sim state, never writes it; any checkpoint drift is an
-  instant fail; (b) a pose-differential fixture: for N sampled route ticks,
-  compare bridge-computed joint matrices against the engine's own
-  `geo_process_animated_part` results within stated tolerance (the
-  host-differential pattern, `mtxq_ctor_diff_test.c` style).
+  instant fail; (b) a pose-differential fixture: the host
+  `MarioActorPoseTests.test_promoted_pose_bank_reproduces_source_animation_evaluator`
+  regenerates the full C5 and walking pose banks through the source
+  GeoLayout/Animation evaluator and requires byte-identical output, while the
+  frozen-route comparator requires identical checkpoint SHA-256.
 - [ ] Visual sanity capture: Mario animating in place via the IR path
   (turntable-style scene is fine at this step).
 
@@ -512,7 +516,9 @@ pose-differential fixture, and later-phase visual capture remain open.
  `demo_actor_snapshot_valid=1`, `demo_actor_pose_vertices=424`, and nonzero
  actor vertex/primitive counts at replay tick 25; the screenshot remains a
  terrain/ordering diagnostic and is not gallery-accepted. The pose
- differential and a clean identifiable Mario frame are still open.
+ differential is now covered by the full source-evaluator regeneration fixture;
+ only a clean identifiable Mario animation frame remains open for the visual
+ gate.
 
 **Progress note (2026-07-28, camera snapshot):** the read-only actor snapshot
  now also captures the authoritative `gLakituState` position, focus, and mode;
