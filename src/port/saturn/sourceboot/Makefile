@@ -16,6 +16,7 @@ SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
+SATURN_DEMO_PATH ?= 0
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -78,6 +79,9 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_ir_transform.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_ir_texture.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c \
@@ -94,12 +98,17 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C)
 
-# Keep the direct-Bob source closure in its own object/output tree. Yaul's
-# make fragments glob the object directory at link time, so sharing it with a
-# prior all-level experiment would accidentally retain stale level objects.
-SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob/obj
-SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob
-IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob/cd
+# Keep the direct-Bob source closure in its own object/output tree. The demo
+# profile gets a distinct tree as well: SH_CFLAGS are not part of Yaul's
+# object key, so sharing `e2-bob/obj` would silently reuse interpreted
+# `main.o` when SATURN_DEMO_PATH changes. This makes the flag variant safe by
+# construction and keeps each ELF/CUE pair self-consistent.
+SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),-demo,)
+SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
+SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
+IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
+SOURCEBOOT_BOB_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_texture_bank.sx
+SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
@@ -124,6 +133,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
   -DTARGET_SATURN=1 -DSATURN_SOURCEBOOT=1 -DNO_SEGMENTED_MEMORY=1 \
   -DSATURN_SOURCEBOOT_ROUTE_REPLAY=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
+  -DSATURN_DEMO_PATH=$(SATURN_DEMO_PATH) \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
@@ -287,6 +297,27 @@ $(SOURCEBOOT_BOB_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_TILE_MANIFE
 
 .PHONY: source-bob-scene
 source-bob-scene: $(SOURCEBOOT_BOB_SCENE)
+
+# Keep the large baked bank binary, rather than a generated C initializer, so
+# the source cart remains compact and the linker can place it in .cart_rodata
+# alongside the other immutable source assets.  The generated assembly is in
+# the variant object tree, so demo/interpreted builds cannot cross-contaminate.
+$(SOURCEBOOT_BOB_TEXTURE_ASM): $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT)
+	@mkdir -p "$(dir $@)"
+	@printf '%s\n' \
+	  '.section .rodata' \
+	  '.align 4' \
+	  '.global _sm64_saturn_bob_texture_bank' \
+	  '_sm64_saturn_bob_texture_bank:' \
+	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_TILES))"' \
+	  '.global _sm64_saturn_bob_texture_bank_end' \
+	  '_sm64_saturn_bob_texture_bank_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_bob_clut_bank' \
+	  '_sm64_saturn_bob_clut_bank:' \
+	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_CLUT))"' \
+	  '.global _sm64_saturn_bob_clut_bank_end' \
+	  '_sm64_saturn_bob_clut_bank_end:' > "$@"
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 

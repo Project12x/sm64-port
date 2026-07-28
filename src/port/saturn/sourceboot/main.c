@@ -8,7 +8,9 @@
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_actor_bridge.h"
+#include "saturn_demo_render.h"
 #include "saturn_gouraud_bank.h"
+#include "saturn_texture_residency.h"
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
@@ -123,6 +125,10 @@ static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
 #define SOURCEBOOT_BOB_TEXTURE_BYTES 333696U
 #define SOURCEBOOT_BOB_CLUT_COUNT 1077U
+#define SOURCEBOOT_BOB_CLUT_BYTES (SOURCEBOOT_BOB_CLUT_COUNT * sizeof(vdp1_clut_t))
+
+extern const uint8_t sm64_saturn_bob_texture_bank[];
+extern const uint8_t sm64_saturn_bob_clut_bank[];
 
 /* LWRAM-resident command staging -- see sourceboot-cart.x's new lwram
  * MEMORY region/.lwram_cmdts section. Zeroed explicitly by
@@ -338,6 +344,24 @@ int main(void) {
 
         saturn_dma_queue_init();
         vdp1_vram_partitions_get(&partitions);
+#if SATURN_DEMO_PATH
+        /* The baked BOB bank is linked into .cart_rodata and copied to the
+         * DRAM cart at its final VMA by source_cart_load(). Stage it through
+         * the shared residency API before the first demo-path command list;
+         * no frame ever follows a cart pointer. */
+        sm64_saturn_texture_residency_t demo_texture_residency;
+        sm64_saturn_texture_residency_init(&demo_texture_residency,
+                                           &partitions);
+        if (!sm64_saturn_texture_residency_upload(
+                &demo_texture_residency, 0, sm64_saturn_bob_texture_bank,
+                SOURCEBOOT_BOB_TEXTURE_BYTES)) {
+            dbgio_puts("sourceboot: BOB texture residency failed\n");
+            for (;;) {}
+        }
+        scu_dma_transfer(0, partitions.clut_base, sm64_saturn_bob_clut_bank,
+                         SOURCEBOOT_BOB_CLUT_BYTES);
+        scu_dma_transfer_wait(0);
+#endif
         /* The backend CPU-copies its command list to VDP1_VRAM(0)
          * without consulting Yaul's partition layout -- verify the
          * gouraud partition clears the command region before trusting
@@ -409,9 +433,15 @@ int main(void) {
         }
 
         const uint16_t render_start = cpu_frt_count_get();
+#if SATURN_DEMO_PATH
+        sm64_saturn_demo_render_frame(&sourceboot_vdp1_backend,
+                                      &sourceboot_gouraud_bank,
+                                      &sourceboot_fast3d.profile);
+#else
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend,
                                      &sourceboot_gouraud_bank);
+#endif
         sourceboot_fast3d.profile.render_frt_ticks_last =
             sourceboot_frt_delta(render_start, cpu_frt_count_get());
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
