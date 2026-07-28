@@ -25,8 +25,11 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
             fourth = indices[2]
         primitives.append({
             "indices": (*indices, fourth),
-        "source0": int(fragment["source_triangles"][0]),
-        "source1": 0xFFFF,
+            # Keep the compiled Mesh IR primitive identity, not the source
+            # triangle ordinal. The BSP reference stream is keyed by this
+            # identity, so fragments can inherit its camera order.
+            "source0": int(fragment["source_primitive"]),
+            "source1": 0xFFFF,
             "rgb": material["rgb555"],
             "textured": 1 if textured else 0,
             "tile_size": 16 if textured else 0,

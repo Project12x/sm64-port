@@ -977,6 +977,18 @@ not visual acceptance or a correctness claim. The next correctness lever is
 camera-dependent ordering of the emitted split fragments, followed by a
 paired A/B capture against the non-fragment profile.
 
+**Progress note (2026-07-28, fragment BSP expansion):** fragment `source0`
+now records the compiled Mesh IR primitive identity, and the runtime expands
+each camera-traversed BSP source reference into its visible split fragments.
+This is the reference-backed ordering rule from castleviewer/Z-Treme, not a
+new per-fragment plane approximation. The fresh `bsp1-frag1` build and
+3,600-frame capture completed with `fault_flags=0`, `slave_timeouts=0`,
+`frame_serial=27`, and 20,257 VDP1 triangles. The saved image remains
+visibly warped/sheeted and is materially unchanged from the bucketed profile,
+so the ordering wiring is proven but is not the cause of the remaining visual
+error. Texture/UV lowering or the fragment-to-source geometry contract is now
+the next correctness investigation.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the

@@ -66,6 +66,7 @@ from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_bob_bsp import compile_bsp as compile_bob_bsp  # noqa: E402
 from bake_bob_bsp_fragments import bake as bake_bob_bsp_fragments  # noqa: E402
+from emit_bob_bsp_fragments import emit as emit_bob_bsp_fragments  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
     Polygon as BspPolygon,
@@ -1013,6 +1014,17 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(manifest["fragment_count"], 2108)
         self.assertEqual(manifest["textured_fragment_count"], 2108 - 67)
         self.assertEqual(len(fragment_scene["fragments"]), 2108)
+
+    def test_bob_bsp_fragment_emitter_preserves_mesh_primitive_identity(self) -> None:
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        _bank, _clut, _manifest, fragment_scene = bake_bob_bsp_fragments(scene, root)
+        header = emit_bob_bsp_fragments(scene, fragment_scene)
+        self.assertIn("SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT 2108U", header)
+        # The BSP header references compiled primitive IDs. A source-triangle
+        # ordinal would silently place split fragments in the wrong order.
+        first = fragment_scene["fragments"][0]
+        self.assertIn("}, %d, 65535," % int(first["source_primitive"]), header)
 
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)
