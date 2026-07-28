@@ -715,6 +715,14 @@ stays default.
  implemented and cross-compiled. Route timeout, checkpoint parity, utilization,
  and FPS A/B remain runtime gates.
 
+**Progress note (2026-07-28, fresh serial baseline):** the rebuilt
+`-slave0`/`-r2048` image was captured with a fresh ELF/CUE pair and
+`--dram-cart`. The 3,600-emulator-frame window reached `frame_serial=317`,
+`sim_tick_count=317`, `slave_busy_ticks=0`, `slave_timeouts=0`, and
+`fault_flags=0`; the paired screenshot shows identifiable Mario and textured
+BOB terrain. This is a serial reference artifact, not yet the frozen-route
+A/B/FPS gate or an owner-confirmed gallery milestone.
+
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
 notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`

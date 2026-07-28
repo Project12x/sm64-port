@@ -361,6 +361,13 @@ $(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY)
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 
+# Yaul's bundled rule declares the CUE's ISO prerequisite order-only. That
+# leaves a stale CUE whenever the ISO/ELF is rebuilt in place, and capture's
+# artifact preflight correctly rejects that mismatch. Re-state the
+# prerequisite as normal so GNU make regenerates the CUE whenever the exact
+# image it describes changes.
+$(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
+
 # Any translation unit may include the generated quad-map header, so no
 # compile may start before it exists; under -j make would otherwise happily
 # race a consumer against the generator. Order-only, so a regenerated map does
