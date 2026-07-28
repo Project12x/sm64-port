@@ -57,6 +57,17 @@ static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
+
+/* VDP1's distorted-sprite texture mapper consumes a genuine four-corner
+ * quadrilateral.  BOB triangle fallbacks deliberately repeat corner C in
+ * corner D; feeding those through the sprite mapper stretches the tile over
+ * an undefined quad (the large orange slabs seen in the manual capture).
+ * Keep texture lowering restricted to paired Fast3D triangles until a real
+ * triangle-texture decomposition is available. */
+static bool demo_has_texture_quad(const sm64_saturn_bob_primitive_t *primitive)
+{
+    return primitive->textured != 0U && primitive->source1 != 0xFFFFU;
+}
 static uint16_t s_actor_texture_count;
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
     SM64_MARIO_PRIMITIVE_COUNT];
@@ -306,7 +317,7 @@ static void demo_emit_primitive(
     }
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, vertices);
-    if (primitive->textured != 0U) {
+    if (demo_has_texture_quad(primitive)) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -376,7 +387,7 @@ static void demo_emit_primitive_at(
     };
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, vertices);
-    if (primitive->textured != 0U &&
+    if (demo_has_texture_quad(primitive) &&
         sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
