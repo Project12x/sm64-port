@@ -1387,12 +1387,22 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     const uint32_t sim_frt_ticks_accum = profile->sim_frt_ticks_accum;
     const uint32_t sim_tick_count = profile->sim_tick_count;
     const uint32_t render_frt_ticks_last = profile->render_frt_ticks_last;
+    const uint32_t demo_actor_snapshot_valid =
+        profile->demo_actor_snapshot_valid;
+    const uint32_t demo_actor_pose_vertices = profile->demo_actor_pose_vertices;
+    const uint32_t demo_actor_vertices_valid = profile->demo_actor_vertices_valid;
+    const uint32_t demo_actor_primitives_emitted =
+        profile->demo_actor_primitives_emitted;
     (void)memset(profile, 0, sizeof(*profile));
     profile->frame_serial = frame_serial;
     profile->sim_frt_ticks_last = sim_frt_ticks_last;
     profile->sim_frt_ticks_accum = sim_frt_ticks_accum;
     profile->sim_tick_count = sim_tick_count;
     profile->render_frt_ticks_last = render_frt_ticks_last;
+    profile->demo_actor_snapshot_valid = demo_actor_snapshot_valid;
+    profile->demo_actor_pose_vertices = demo_actor_pose_vertices;
+    profile->demo_actor_vertices_valid = demo_actor_vertices_valid;
+    profile->demo_actor_primitives_emitted = demo_actor_primitives_emitted;
     /* resolved[]/resolved_count are per-frame output, not persistent
      * state -- without this reset they accumulate across calls until
      * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES is reached, after which
