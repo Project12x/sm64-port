@@ -543,6 +543,15 @@ are available; no gallery promotion is made from this code-only result.
  Ymir/BIOS capture. No Task 5b performance claim or gallery promotion is made
  from build evidence alone.
 
+**Progress note (2026-07-28, Task 6 tier metadata):** the demo build now has
+ a structural `SATURN_DEMO_POLY_TIER` bank-selection boundary and `-polyN`
+ output variant, with tiers 1/2 deliberately aliasing the current complete
+ source bank until alternate baked assets exist. `capture_hwtest.py` now
+ records the compiled view radius and poly tier in every report when supplied;
+ it validates those settings so captures cannot silently omit their declared
+ degradation profile. This is a hook and schema improvement, not an FPS or
+ visual claim; the real-route settings sweep remains open.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.

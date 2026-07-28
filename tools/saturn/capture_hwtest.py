@@ -263,6 +263,18 @@ def main() -> int:
             "needed for the sourceboot source-cart loader)"
         ),
     )
+    parser.add_argument(
+        "--degradation-view-radius",
+        type=int,
+        default=None,
+        help="metadata: compiled SATURN_DEMO_VIEW_RADIUS used by this image",
+    )
+    parser.add_argument(
+        "--degradation-poly-tier",
+        type=int,
+        default=None,
+        help="metadata: compiled SATURN_DEMO_POLY_TIER used by this image",
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= MAX_CAPTURE_FRAMES or not 1 <= args.post_poke_frames <= MAX_CAPTURE_FRAMES:
         parser.error(
@@ -313,6 +325,10 @@ def main() -> int:
             f"({args.game.name} {game_mtime:.3f} < {elf.name} {elf_mtime:.3f}); "
             "regenerate the CUE or pass --allow-stale"
         )
+    if args.degradation_view_radius is not None and args.degradation_view_radius <= 0:
+        parser.error("--degradation-view-radius must be positive")
+    if args.degradation_poly_tier is not None and not 0 <= args.degradation_poly_tier <= 2:
+        parser.error("--degradation-poly-tier must be between 0 and 2")
 
     requests: list[dict[str, Any]] = []
     # Every exec.run_for request id lands here so its response can be checked
@@ -515,6 +531,10 @@ def main() -> int:
         "frames": args.frames,
         "bios_input": args.bios_input,
         "dram_cart": args.dram_cart,
+        "degradation": {
+            "view_radius": args.degradation_view_radius,
+            "poly_tier": args.degradation_poly_tier,
+        },
         "event_word_poke": args.event_word_poke,
         "handoff_yield": args.handoff_yield,
         "post_poke_frames": (
