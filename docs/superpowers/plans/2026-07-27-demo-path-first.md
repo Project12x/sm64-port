@@ -1218,6 +1218,14 @@ remaining differential is now narrowed to fragment geometry emission (or the
 profile’s frame-alignment sensitivity), not VDP1 texture binding or BSP node
 walk order.
 
+**Correction (2026-07-28, matched flat source control):** a fresh 3,900-frame
+source flat capture reaches serial 64 and shows the same broad terrain
+silhouette as the fragment flat control at serial 61. The earlier 3,600-frame
+source frame looked cleaner only because it stopped at serial 57. The flat A/B
+therefore does not prove a fragment geometry defect; it proves texture binding
+is not required for the observed silhouette and restores frame alignment as a
+first-class capture requirement.
+
 ---
 
 ## 4. Shared verification commands
