@@ -19,10 +19,15 @@ preflight remains enabled unless a diagnostic capture explicitly uses
 `--allow-stale` and records why.
 
 The capture is then presented for owner visual confirmation. Only after that
-confirmation may the milestone be added to `evidence/TIMELINE.md`,
-`evidence/index.html`, or the curated `VISUAL_PORTFOLIO.md`. Failed or
-rejected frames remain available as evidence and are labelled as such; they
-are not silently replaced.
+confirmation may the milestone be added to `evidence/TIMELINE.md` and the
+repository screenshot gallery, `evidence/index.html`. The gallery is a
+curated acceptance surface, not a dump of every capture: failed, diagnostic,
+or owner-unconfirmed frames remain available in `screenshots/` and `reports/`,
+labelled as such, but are not promoted or silently replaced.
+
+For every gallery entry, keep the image basename and report basename paired,
+link the card to the milestone evidence where practical, and record the
+owner-confirmation date in the card text or corresponding timeline entry.
 
 ## Milestone labels
 

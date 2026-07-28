@@ -187,9 +187,11 @@ checkpoint, frame hash, and image dimensions. `capture_hwtest.py`'s stale-CUE
 preflight stays enabled; use `--allow-stale` only for a labelled diagnostic.
 
 Present each image to the owner for visual confirmation. The owner’s eyes are
-the acceptance gate: only after confirmation may `evidence/TIMELINE.md`,
-`evidence/index.html`, or `VISUAL_PORTFOLIO.md` receive a gallery entry. Failed
-frames remain labelled evidence. The first demo-path visual label is
+the acceptance gate: only after confirmation may `evidence/TIMELINE.md` and
+the repository screenshot gallery, `evidence/index.html`, receive a gallery
+entry. Failed or diagnostic frames remain labelled evidence and are not
+promoted. Keep each gallery card paired with its same-basename report, and
+record the owner-confirmation date. The first demo-path visual label is
 `task5-textured-bob` (textured BOB terrain plus animated Mario on the frozen
 route); Task 3b sky and Task 4 live-Mario captures use their own labels.
 
