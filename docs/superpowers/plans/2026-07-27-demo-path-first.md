@@ -480,6 +480,14 @@ pose-differential fixture, and later-phase visual capture remain open.
  terrain/ordering diagnostic and is not gallery-accepted. The pose
  differential and a clean identifiable Mario frame are still open.
 
+**Progress note (2026-07-28, near-plane cull):** the shared transform now
+ rejects vertices on/behind the near plane instead of projecting them with a
+ clamped reciprocal. The fresh paired capture is the first identifiable Mario
+ frame in the demo path (`task5-near-cull-2026-07-28`); actor counters and
+ `fault_flags=0` confirm the live bridge. The terrain still has black/fragmented
+ composition and the route sample is only tick 25, so Task 5's visual and
+ checkpoint gates remain open.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
