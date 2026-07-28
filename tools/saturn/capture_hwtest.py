@@ -13,6 +13,7 @@ import base64
 import hashlib
 import json
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,21 @@ YMIR_MAX_RUN_FOR_FRAMES = 3600
 # validated before the report is emitted.
 MAX_CAPTURE_FRAMES = 72000
 DEFAULT_CAPTURE_TIMEOUT_SECONDS = 1700.0
+
+
+def emulation_timing(emulated_frames: int, wall_clock_seconds: float) -> dict[str, float | int]:
+    """Return guest VBlank throughput and the emulator's real-time ratio."""
+    if emulated_frames <= 0:
+        raise ValueError("emulated_frames must be positive")
+    if wall_clock_seconds <= 0:
+        raise ValueError("wall_clock_seconds must be positive")
+    vblank_fps = emulated_frames / wall_clock_seconds
+    return {
+        "emulated_frames": emulated_frames,
+        "wall_clock_seconds": wall_clock_seconds,
+        "emulated_vblank_fps": vblank_fps,
+        "emulation_speed_ratio": vblank_fps / 60.0,
+    }
 
 
 def has_cd_block_copy_limitation(stderr: str) -> bool:
@@ -491,6 +507,12 @@ def main() -> int:
     command = [str(args.ymir), "--ipl", str(args.ipl), "--game", str(args.game)]
     if args.dram_cart:
         command.append("--dram-cart")
+    emulated_frames = sum(
+        int(message.get("params", {}).get("frames", 0))
+        for message in requests
+        if message.get("method") == "exec.run_for"
+    )
+    wall_clock_start = time.perf_counter()
     try:
         completed = subprocess.run(
             command,
@@ -505,6 +527,7 @@ def main() -> int:
         parser.error(f"Ymir did not finish within {args.timeout:.1f} seconds")
     except OSError as error:
         parser.error(str(error))
+    wall_clock_seconds = time.perf_counter() - wall_clock_start
     if completed.returncode != 0:
         capped_stderr, _ = cap_stderr(completed.stderr)
         raise SystemExit(f"Ymir exited with status {completed.returncode}: {capped_stderr.strip()}")
@@ -580,6 +603,7 @@ def main() -> int:
             "elf": artifact_identity(capture_elf),
         },
         "frames": args.frames,
+        "emulation_timing": emulation_timing(emulated_frames, wall_clock_seconds),
         "bios_input": args.bios_input,
         "dram_cart": args.dram_cart,
         "degradation": {

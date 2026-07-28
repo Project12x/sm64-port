@@ -22,6 +22,7 @@ from capture_hwtest import (  # noqa: E402
     artifact_identity,
     DEFAULT_CAPTURE_TIMEOUT_SECONDS,
     cap_stderr,
+    emulation_timing,
     has_cd_block_copy_limitation,
     input_pulse_request,
     stale_game_image,
@@ -1203,6 +1204,18 @@ class YmirInputTests(unittest.TestCase):
             os.utime(game, (200, 200))
             os.utime(elf, (100, 100))
             self.assertIsNone(stale_game_image(game))
+
+    def test_emulation_timing_reports_guest_rate_and_speed_ratio(self) -> None:
+        timing = emulation_timing(3600, 120.0)
+        self.assertEqual(timing["emulated_frames"], 3600)
+        self.assertEqual(timing["emulated_vblank_fps"], 30.0)
+        self.assertEqual(timing["emulation_speed_ratio"], 0.5)
+
+    def test_emulation_timing_rejects_nonpositive_inputs(self) -> None:
+        with self.assertRaises(ValueError):
+            emulation_timing(0, 1.0)
+        with self.assertRaises(ValueError):
+            emulation_timing(1, 0.0)
 
 
 class BobParityRouteTests(unittest.TestCase):

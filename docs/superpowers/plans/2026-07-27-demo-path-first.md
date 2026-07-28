@@ -1192,6 +1192,21 @@ boundaries; useful transform, material/Gouraud, command-preparation, emission,
 and upload ranges remain insufficiently partitioned. Finer disjoint range
 splitting is the next Task 5b performance experiment.
 
+**Measurement correction (2026-07-28):** `capture_hwtest.py` now records the
+requested emulated VBlank count, wall-clock capture duration,
+`emulated_vblank_fps`, and `emulation_speed_ratio` (guest VBlanks per real
+second divided by 60). Future reports must keep guest render FPS, emulator
+speed, and their perceived-host product distinct; the ratio is an emulator
+throughput measurement, not a retail-hardware claim.
+
+**Progress note (2026-07-28, first emission split):** the dual terrain emitter
+now allocates its frame-local Gouraud tables on the master but fills the color
+records and programs the Gouraud command state inside each worker-owned
+primitive range. Textured commands retain their existing disjoint binder path;
+worker failure resets the Gouraud bank and falls back to the serial emitter.
+This is a bounded first split, not yet a measured FPS or ≥50% utilization
+result.
+
 **Progress note (2026-07-28, fragment-indexed BSP):** the fragment baker now
 emits a fragment-indexed BSP stream (1,183 nodes and 2,108 references, with a
 host assertion that references are a permutation of the lowered primitives),

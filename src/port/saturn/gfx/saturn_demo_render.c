@@ -99,6 +99,10 @@ static sm64_saturn_projected_vertex_t s_clipped_projected[
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static sm64_saturn_gouraud_table_t *s_bob_gouraud[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uintptr_t s_bob_gouraud_addresses[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
@@ -299,6 +303,8 @@ typedef struct demo_emit_context {
     const sm64_saturn_bob_primitive_t *primitives;
     vdp1_cmdt_t *cmdts;
     const vdp1_vram_partitions_t *partitions;
+    sm64_saturn_gouraud_table_t *const *gouraud_tables;
+    const uintptr_t *gouraud_addresses;
     demo_emit_stats_t stats[2];
 } demo_emit_context_t;
 
@@ -673,7 +679,8 @@ static void demo_emit_primitive_at(
     const sm64_saturn_bob_primitive_t *primitive,
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
-    bool allow_gouraud,
+    sm64_saturn_gouraud_table_t *gouraud_table,
+    uintptr_t gouraud_address,
     demo_emit_stats_t *stats)
 {
     int16_vec2_t vertices[4];
@@ -695,20 +702,28 @@ static void demo_emit_primitive_at(
         stats->triangles_emitted++;
         return;
     }
-    if (allow_gouraud) {
-        /* The master fallback path retains the existing Gouraud allocator;
-         * direct worker slots use flat color to avoid a shared cursor. */
+    if (gouraud_table != NULL) {
+        const rgb1555_t color = RGB1555(1, primitive->rgb[0],
+                                        primitive->rgb[1], primitive->rgb[2]);
+        gouraud_table->colors[0] = color.raw;
+        gouraud_table->colors[1] = color.raw;
+        gouraud_table->colors[2] = color.raw;
+        gouraud_table->colors[3] = color.raw;
         vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
             .color_mode = VDP1_CMDT_CM_RGB_32768,
-            .cc_mode = VDP1_CMDT_CC_REPLACE});
+            .cc_mode = VDP1_CMDT_CC_GOURAUD});
+        vdp1_cmdt_color_set(cmdt, (rgb1555_t){
+            .raw = sm64_saturn_gouraud_neutral_color()});
+        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)gouraud_address);
     } else {
         vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
             .color_mode = VDP1_CMDT_CM_RGB_32768,
             .cc_mode = VDP1_CMDT_CC_REPLACE});
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0],
+                                          primitive->rgb[1], primitive->rgb[2]));
     }
-    vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0],
-                                      primitive->rgb[1], primitive->rgb[2]));
-    if (primitive->textured == 0U) stats->gouraud_bank_overflow++;
+    if (primitive->textured == 0U && gouraud_table == NULL)
+        stats->gouraud_bank_overflow++;
     stats->triangles_emitted++;
 }
 
@@ -724,7 +739,9 @@ static void demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
         if (s_primitive_visible[i] == 0U) continue;
         demo_emit_primitive_at(&context->primitives[i],
                                &context->cmdts[s_primitive_slots[i]],
-                               context->partitions, false,
+                               context->partitions,
+                               context->gouraud_tables[i],
+                               context->gouraud_addresses[i],
                                &context->stats[lane]);
     }
 }
@@ -1195,12 +1212,25 @@ void sm64_saturn_demo_render_frame(
         s_primitive_slots[primitive] =
             (uint16_t)(backend->commands.cursor + bob_draw_count++);
     }
+#if SATURN_SLAVE_RENDER
+    memset(s_bob_gouraud, 0, sizeof(s_bob_gouraud));
+    memset(s_bob_gouraud_addresses, 0, sizeof(s_bob_gouraud_addresses));
+    for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
+        const uint16_t primitive = s_emit_order[ordinal];
+        if (s_bob_primitives_active[primitive].textured == 0U) {
+            s_bob_gouraud[primitive] = sm64_saturn_gouraud_bank_alloc(
+                gouraud_bank, &s_bob_gouraud_addresses[primitive]);
+        }
+    }
+#endif
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
     demo_emit_context_t emit = {
         .primitives = s_bob_primitives_active,
         .cmdts = backend->list.cmdts,
         .partitions = &partitions,
+        .gouraud_tables = s_bob_gouraud,
+        .gouraud_addresses = s_bob_gouraud_addresses,
         .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
     };
     bool emit_direct = false;
@@ -1217,11 +1247,16 @@ void sm64_saturn_demo_render_frame(
         profile->master_wait_ticks += emit_worker_stats.master_wait_ticks;
         profile->slave_timeouts += emit_worker_stats.slave_timeouts;
         if (!emit_ok) {
-            /* A failed worker has already observed cancellation; rerun the
-             * complete direct range serially so every reserved slot is valid. */
+            /* A failed worker has already observed cancellation. Reset the
+             * frame-local Gouraud bank and use the proven serial emitter so
+             * every reserved slot is rebuilt with fresh ownership. */
             emit.stats[0] = (demo_emit_stats_t){0U, 0U, 0U};
             emit.stats[1] = (demo_emit_stats_t){0U, 0U, 0U};
-            demo_emit_range(&emit, 0U, s_emit_count);
+            sm64_saturn_gouraud_bank_begin(gouraud_bank);
+            memset(s_bob_gouraud, 0, sizeof(s_bob_gouraud));
+            memset(s_bob_gouraud_addresses, 0,
+                   sizeof(s_bob_gouraud_addresses));
+            emit_direct = false;
         }
     }
 #endif
