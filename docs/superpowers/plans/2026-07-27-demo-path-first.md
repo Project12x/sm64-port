@@ -268,7 +268,7 @@ twice):**
   model).
 - Task 2's bank format must be **sliceable**: contiguous primitive runs with
   per-slice bounds, so a job is a range, not a traversal.
-- [ ] **Slave smoke gate, in this task:** run the harvested transform on the
+- [x] **Slave smoke gate, in this task:** run the harvested transform on the
   slave CPU over a fixture bank and compare outputs **bit-exact** against
   the master running the same job (Yaul dual-CPU API; behaviour reference
   `work/upstream/libyaul-examples/cpu-dual`, behaviour-only). This proves
