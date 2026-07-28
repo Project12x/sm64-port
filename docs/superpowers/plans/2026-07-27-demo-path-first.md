@@ -902,6 +902,18 @@ design; textured/Gouraud Mario is the next fidelity lever.
  experiment has a visual capture and route comparator, the ≥50% share gate
  remains open.
 
+**Progress note (2026-07-28, batched transform capture):** the Task 5b
+transform-once path now submits terrain and Mario transform ranges through the
+same dual-worker job. A fresh 3,600-frame Ymir capture at `-r6004/-poly0`,
+`SATURN_SLAVE_RENDER=1`, and `SATURN_DEMO_NEAR_CLIP=0` completed with
+`frame_serial=69`, `sim_tick_count=280`, zero faults, zero slave timeouts, and
+`slave_jobs_completed=279`. Mario is present in the saved screenshot, but the
+terrain remains visibly warped/overdrawn; this is diagnostic evidence, not
+owner visual acceptance and not a 15 FPS gate measurement. The next correctness
+lever remains camera-dependent spatial ordering (the existing static-BSP
+compiler is the reference-backed source path; runtime integration is still
+pending).
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
