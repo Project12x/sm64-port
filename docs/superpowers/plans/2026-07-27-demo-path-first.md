@@ -691,7 +691,7 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
   identical serial path) — required for the A/B gate and by the sprint's
   own exit-gate wording. Flag-variant stale-object hazard applies: force
   rebuild on toggle.
-- [ ] `slave_timeouts` must be 0 on the route; a hung slave degrades to
+- [x] `slave_timeouts` are 0 on the route; a hung slave degrades to
   serial with a counted fault, never a wedge.
 - [ ] A/B on the frozen route: slave build vs serial build, absolute FPS
   both, checkpoint hash identical in both (the slave touches render data
@@ -728,6 +728,15 @@ The matched fresh `-slave1` capture reached `frame_serial=326` with
 same 3,600-emulator-frame window (`-slave0` reached 317). This is retained as
 an A/B diagnostic signal only: it is not an absolute-FPS result, did not reach
 the 600-tick endpoint, and has no paired checkpoint hash yet.
+
+**Progress note (2026-07-28, frozen 600-tick A/B):** paired fresh serial and
+dual captures at the same `-r2048/-poly0` profile both reach
+`replay_ticks=600`, `global_timer=601`, `fault_flags=0`, and
+`command_capacity_rejects=0`. The route comparator reports deterministic
+parity with identical checkpoint SHA-256
+`d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c` and
+zero renderer-counter deltas. This passes authority/timeout parity, but the
+absolute-FPS and slave-share acceptance bars remain open.
 
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
