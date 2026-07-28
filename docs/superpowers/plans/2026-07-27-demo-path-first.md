@@ -597,6 +597,13 @@ is still required before gallery promotion.
  intentionally not claimed fixed by this change; it remains a separate BOB
  painter/flicker investigation.
 
+**Progress note (2026-07-28, BOB painter ordering experiment):** the dual
+ emitter now consumes a flattened, stable far-to-near primitive order instead
+ of iterating source primitive indices and silently bypassing its depth buckets.
+ Each bucket sorts by four-corner average view depth while preserving source
+ order for equal-depth coplanar surfaces. The image cross-builds and is running
+ in foreground Ymir; terrain visual acceptance and route parity remain open.
+
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.

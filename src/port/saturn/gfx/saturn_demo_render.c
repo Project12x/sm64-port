@@ -46,8 +46,11 @@ static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT];
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
 static uint16_t s_bucket_indices[DEMO_BUCKETS][
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_emit_count;
 static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
@@ -246,7 +249,8 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         }
         const int32_t z = (s_projected[primitive->indices[0]].z +
                            s_projected[primitive->indices[1]].z +
-                           s_projected[primitive->indices[2]].z) / 3;
+                           s_projected[primitive->indices[2]].z +
+                           s_projected[primitive->indices[3]].z) / 4;
         const int32_t cross =
             (int32_t)(s_projected[primitive->indices[1]].x -
                       s_projected[primitive->indices[0]].x) *
@@ -261,6 +265,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             continue;
         }
         s_primitive_buckets[i] = (uint8_t)demo_bucket(z);
+        s_primitive_depth[i] = z;
         s_primitive_visible[i] = 1U;
     }
 }
@@ -400,10 +405,11 @@ static void demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_emit_context_t *context = opaque;
     const uint8_t lane = begin == 0U ? 0U : 1U;
-    for (uint16_t i = begin; i < end; i++) {
-        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+    for (uint16_t ordinal = begin; ordinal < end; ordinal++) {
+        if (((uint16_t)(ordinal - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
             break;
+        const uint16_t i = s_emit_order[ordinal];
         if (s_primitive_visible[i] == 0U) continue;
         demo_emit_primitive_at(&context->primitives[i],
                                &context->cmdts[s_primitive_slots[i]],
@@ -794,10 +800,28 @@ void sm64_saturn_demo_render_frame(
     profile->slave_timeouts += classify_stats.slave_timeouts;
 
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
+    s_emit_count = 0U;
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         if (s_primitive_visible[i] == 0U) continue;
         const uint16_t bucket = s_primitive_buckets[i];
         s_bucket_indices[bucket][s_bucket_counts[bucket]++] = i;
+    }
+    /* VDP1 has no depth buffer. Within each coarse bucket, order by the
+     * average view depth far-to-near; equal-depth primitives retain source
+     * order for deterministic coplanar decals and seams. */
+    for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++) {
+        for (uint16_t i = 1U; i < s_bucket_counts[bucket]; i++) {
+            const uint16_t value = s_bucket_indices[bucket][i];
+            uint16_t j = i;
+            while (j > 0U &&
+                   s_primitive_depth[s_bucket_indices[bucket][j - 1U]] <
+                       s_primitive_depth[value]) {
+                s_bucket_indices[bucket][j] =
+                    s_bucket_indices[bucket][j - 1U];
+                j--;
+            }
+            s_bucket_indices[bucket][j] = value;
+        }
     }
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     sm64_saturn_vdp1_backend_begin(backend);
@@ -806,6 +830,7 @@ void sm64_saturn_demo_render_frame(
         for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket];
              ordinal++) {
             const uint16_t primitive = s_bucket_indices[bucket][ordinal];
+            s_emit_order[s_emit_count++] = primitive;
             s_primitive_slots[primitive] =
                 (uint16_t)(backend->commands.cursor + bob_draw_count++);
         }
@@ -825,8 +850,8 @@ void sm64_saturn_demo_render_frame(
         emit_direct = true;
         sm64_saturn_dual_worker_stats_t emit_worker_stats;
         const bool emit_ok = sm64_saturn_dual_worker_run(
-            demo_emit_range, &emit, SM64_SATURN_BOB_PRIMITIVE_COUNT,
-            SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U, &emit_worker_stats);
+            demo_emit_range, &emit, s_emit_count, s_emit_count / 2U,
+            &emit_worker_stats);
         profile->slave_jobs_completed += emit_worker_stats.slave_jobs_completed;
         profile->slave_busy_ticks += emit_worker_stats.slave_busy_ticks;
         profile->master_wait_ticks += emit_worker_stats.master_wait_ticks;
@@ -836,7 +861,7 @@ void sm64_saturn_demo_render_frame(
              * complete direct range serially so every reserved slot is valid. */
             emit.stats[0] = (demo_emit_stats_t){0U, 0U, 0U};
             emit.stats[1] = (demo_emit_stats_t){0U, 0U, 0U};
-            demo_emit_range(&emit, 0U, SM64_SATURN_BOB_PRIMITIVE_COUNT);
+            demo_emit_range(&emit, 0U, s_emit_count);
         }
     }
 #endif
