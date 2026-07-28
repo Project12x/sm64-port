@@ -1,5 +1,9 @@
 #include "saturn_demo_render.h"
 
+#ifndef SATURN_DEMO_BSP_FRAGMENT_FLAT
+#define SATURN_DEMO_BSP_FRAGMENT_FLAT 0
+#endif
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -615,7 +619,7 @@ static void demo_emit_primitive(
     }
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);
-    if (primitive->textured != 0U) {
+    if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -681,7 +685,7 @@ static void demo_emit_primitive_at(
     };
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);
-    if (primitive->textured != 0U &&
+    if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT &&
         sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,

@@ -1197,6 +1197,14 @@ fragments carry three geometry/UV corners and that every textured tile/CLUT
 offset is aligned. This makes the next capture’s UV diagnosis falsifiable;
 visual acceptance remains open.
 
+**Progress note (2026-07-28, flat fragment isolation):** an opt-in
+`SATURN_DEMO_BSP_FRAGMENT_FLAT=1` profile suppresses texture binding while
+preserving the fragment geometry, BSP stream, and command order. Its capture
+still contains the large sheet, proving the artifact is present before texture
+sampling. A same-limit non-fragment flat capture was also retained, but reaches
+a different simulation frame serial, so it is not treated as a clean A/B
+verdict; the flat profile remains a reusable isolation gate.
+
 ---
 
 ## 4. Shared verification commands
