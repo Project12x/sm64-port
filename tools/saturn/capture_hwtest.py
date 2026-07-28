@@ -275,6 +275,27 @@ def main() -> int:
         default=None,
         help="metadata: compiled SATURN_DEMO_POLY_TIER used by this image",
     )
+    parser.add_argument(
+        "--build-demo-path",
+        type=int,
+        choices=(0, 1),
+        default=None,
+        help="metadata: compiled SATURN_DEMO_PATH used by this image",
+    )
+    parser.add_argument(
+        "--build-slave-render",
+        type=int,
+        choices=(0, 1),
+        default=None,
+        help="metadata: compiled SATURN_SLAVE_RENDER used by this image",
+    )
+    parser.add_argument(
+        "--build-hot-promotion",
+        type=int,
+        choices=(0, 1),
+        default=None,
+        help="metadata: compiled SATURN_DEMO_HOT_PROMOTION used by this image",
+    )
     args = parser.parse_args()
     if not 1 <= args.frames <= MAX_CAPTURE_FRAMES or not 1 <= args.post_poke_frames <= MAX_CAPTURE_FRAMES:
         parser.error(
@@ -534,6 +555,11 @@ def main() -> int:
         "degradation": {
             "view_radius": args.degradation_view_radius,
             "poly_tier": args.degradation_poly_tier,
+        },
+        "build_profile": {
+            "demo_path": args.build_demo_path,
+            "slave_render": args.build_slave_render,
+            "hot_promotion": args.build_hot_promotion,
         },
         "event_word_poke": args.event_word_poke,
         "handoff_yield": args.handoff_yield,
