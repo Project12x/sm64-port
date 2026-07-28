@@ -302,10 +302,18 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             s_primitive_visible[i] = 0U;
             continue;
         }
+        bool any_front = false;
+        for (uint8_t corner = 0U; corner < 4U; corner++) {
+            if (s_view[primitive->indices[corner]].z >
+                SATURN_DEMO_NEAR_DEPTH) {
+                any_front = true;
+                break;
+            }
+        }
         if (!s_position_valid[primitive->indices[0]] ||
             !s_position_valid[primitive->indices[1]] ||
             !s_position_valid[primitive->indices[2]] ||
-            !s_position_valid[primitive->indices[3]]) {
+            !s_position_valid[primitive->indices[3]] || !any_front) {
             context->near_rejected[lane]++;
             s_primitive_visible[i] = 0U;
             continue;
@@ -641,7 +649,7 @@ static void demo_emit_mario(
         .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = SATURN_DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y, .coord_min = DEMO_COORD_MIN,
-        .coord_max = DEMO_COORD_MAX
+        .coord_max = DEMO_COORD_MAX, .clip_near = false
     };
     for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++) {
         const int16_t *source = pose->vertices[i];
@@ -807,7 +815,8 @@ void sm64_saturn_demo_render_frame(
         .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y,
         .coord_min = DEMO_COORD_MIN,
-        .coord_max = DEMO_COORD_MAX
+        .coord_max = DEMO_COORD_MAX,
+        .clip_near = true
     };
     demo_transform_context_t transform = {
         .job = &job,

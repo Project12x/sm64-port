@@ -952,6 +952,14 @@ ambiguity. The finer sweep is explicitly an intermediate measure; the
 reference-complete solution remains a baked spatial/dependency order plus
 near-plane clipping.
 
+The current terrain pass also enables the shared transform's opt-in
+`clip_near` mode. A corner at or behind the near plane is projected at the
+plane, while the primitive is retained only if another corner is in front.
+This follows SlaveDriver's bounded `clipZ` tile recovery and keeps strict
+rejection for Castleviewer and generic IR callers. Full edge interpolation and
+UV/shade interpolation remain a later fidelity gate; the present change is
+deliberately bounded so it can be measured against the old atomic rejection.
+
 ---
 
 ### Task 6: Degradation profile — Croc's levers, measured

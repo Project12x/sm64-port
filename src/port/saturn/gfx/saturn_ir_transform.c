@@ -55,13 +55,9 @@ bool sm64_saturn_ir_transform_one(
     view->z = (int32_t)((((int64_t)relative.x * job->camera.forward.x) +
                          ((int64_t)relative.y * job->camera.forward.y) +
                          ((int64_t)relative.z * job->camera.forward.z)) >> 16);
-    /* Never project a vertex behind or on the near plane. Clamping its
-     * reciprocal to near_depth turns behind-camera geometry into giant
-     * screen-edge polygons and corrupts every caller's primitive-level cull;
-     * callers already have the position-valid bit needed to reject the whole
-     * primitive atomically. */
-    if (view->z <= job->near_depth) return false;
-    const int32_t divisor = view->z;
+    const bool near_clipped = view->z <= job->near_depth;
+    if (near_clipped && !job->clip_near) return false;
+    const int32_t divisor = near_clipped ? job->near_depth : view->z;
     int32_t reciprocal;
     if (!reciprocal_q16(job->focal_length, divisor, &reciprocal)) {
         return false;

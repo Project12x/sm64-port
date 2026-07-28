@@ -17,6 +17,10 @@ typedef struct sm64_saturn_ir_transform_job {
     int16_t center_y;
     int16_t coord_min;
     int16_t coord_max;
+    /* Permit a caller to recover a primitive crossing the near plane by
+     * projecting its clipped corner at the plane. Strict rejection remains
+     * the default for shared IR callers and host tests. */
+    bool clip_near;
 } sm64_saturn_ir_transform_job_t;
 
 /* Transform one source-space vertex. `view` and `projected` are disjoint
