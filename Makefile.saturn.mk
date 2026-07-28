@@ -8,6 +8,7 @@ CASTLEVIEWER_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/castleviewer
 SOURCEBOOT_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/sourceboot
 VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 PYTHON ?= python3
+HOST_CC ?= gcc
 ifeq ($(OS),Windows_NT)
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
 HOST_EXEEXT := .exe
@@ -51,7 +52,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe verify-tools verify-runtime-contracts verify-ir-transform verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map plan-castle-camera verify-all clean
 
 all: hello
 
@@ -173,7 +174,7 @@ verify-tools: check-host-tools
 # with synthetic maps.
 verify-runtime-contracts: compile-quad-map
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
 	  -I"$(SATURN_REPO_ROOT)/include" \
 	  -I"$(SATURN_REPO_ROOT)/src" \
@@ -187,6 +188,19 @@ verify-runtime-contracts: compile-quad-map
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
+
+# Task 1 shared transform contract. This intentionally links the actual
+# extracted module, rather than reproducing its math in a test-only helper;
+# the same immutable job record is therefore checked independently of either
+# Saturn consumer.
+verify-ir-transform:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/ir_transform_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_ir_transform.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-transform-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-transform-test$(HOST_EXEEXT)"
 
 # Task 2's fixed-point projection differential gate.  The corpus begins with
 # real Bob-omb Battlefield source vertices and is intentionally separate from
@@ -427,7 +441,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools verify-runtime-contracts classify-source verify-hello verify-hwtest
+verify-all: verify-tools verify-runtime-contracts verify-ir-transform classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean
