@@ -16,6 +16,7 @@ static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
 static sm64_saturn_source_runtime_state_t sState;
 static sm64_saturn_input_replay_t sInputReplay;
+static bool sDisplaySuppressed;
 
 /* Matches the original public game/main.h boundary. This target owns the
  * implementation, but the startup preflight invokes it before its definition
@@ -95,6 +96,14 @@ void sm64_saturn_source_runtime_audio_tick(void) {
 void sm64_saturn_source_runtime_wait_vblank(void) {
     vdp2_tvmd_vblank_in_wait();
     vdp2_tvmd_vblank_out_wait();
+}
+
+void sm64_saturn_source_runtime_set_display_suppressed(bool suppressed) {
+    sDisplaySuppressed = suppressed;
+}
+
+bool sm64_saturn_source_runtime_display_suppressed(void) {
+    return sDisplaySuppressed;
 }
 
 bool sm64_saturn_source_runtime_preflight_task(void) {

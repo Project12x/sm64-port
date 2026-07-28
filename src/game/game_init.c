@@ -413,10 +413,18 @@ void display_and_vsync(void) {
     /* Preserve the original game-owned display boundary. Saturn replaces only
      * the N64 message/VI mechanism: exec_display_list() enters the target
      * front end, then the platform owns the presentation VBlank. */
+    const bool display_suppressed =
+        sm64_saturn_source_runtime_display_suppressed();
     profiler_log_thread5_time(BEFORE_DISPLAY_LISTS);
-    exec_display_list(&gGfxPool->spTask);
+    if (!display_suppressed)
+        exec_display_list(&gGfxPool->spTask);
     profiler_log_thread5_time(AFTER_DISPLAY_LISTS);
-    sm64_saturn_source_runtime_wait_vblank();
+    /* Catch-up ticks remain authoritative source updates, but are not
+     * presentation boundaries. Skipping only this wait lets the demo-path
+     * scheduler restore its fixed 30 Hz simulation after a slow IR render;
+     * ordinary and interpreted frames retain the platform VBlank wait. */
+    if (!display_suppressed)
+        sm64_saturn_source_runtime_wait_vblank();
     profiler_log_thread5_time(THREAD5_END);
     gGlobalTimer++;
 #else

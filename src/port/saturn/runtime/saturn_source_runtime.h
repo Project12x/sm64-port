@@ -50,6 +50,12 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
                                                   uint32_t count);
 void sm64_saturn_source_runtime_audio_tick(void);
 void sm64_saturn_source_runtime_wait_vblank(void);
+
+/* Demo-path scheduler hook. Suppression skips only the source display-list
+ * submission at the Saturn presentation boundary; the authoritative source
+ * tick, VBlank wait, and global-timer increment still run unchanged. */
+void sm64_saturn_source_runtime_set_display_suppressed(bool suppressed);
+bool sm64_saturn_source_runtime_display_suppressed(void);
 bool sm64_saturn_source_runtime_preflight_task(void);
 const sm64_saturn_source_runtime_state_t *
 sm64_saturn_source_runtime_state(void);

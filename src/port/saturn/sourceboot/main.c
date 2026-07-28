@@ -27,11 +27,18 @@
 #ifndef SATURN_SOURCEBOOT_ROUTE_REPLAY
 #define SATURN_SOURCEBOOT_ROUTE_REPLAY 0
 #endif
+#ifndef SATURN_DEMO_PATH
+#define SATURN_DEMO_PATH 0
+#endif
+
+#define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
+#define SOURCEBOOT_MAX_SIM_CATCHUP 4U
 
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
 static uint32_t sourceboot_render_ticks_accum;
+static volatile uint32_t sourceboot_vblank_out_count;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -42,6 +49,21 @@ sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
 static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
 {
     return (uint16_t)(end - start);
+}
+
+static void sourceboot_run_source_tick(void)
+{
+    const uint16_t sim_start = cpu_frt_count_get();
+    game_loop_one_iteration();
+    const uint16_t sim_end = cpu_frt_count_get();
+    sourceboot_fast3d.profile.sim_frt_ticks_last =
+        sourceboot_frt_delta(sim_start, sim_end);
+    sourceboot_sim_ticks_accum +=
+        sourceboot_fast3d.profile.sim_frt_ticks_last;
+    sourceboot_sim_tick_count++;
+    sourceboot_fast3d.profile.sim_frt_ticks_accum =
+        sourceboot_sim_ticks_accum;
+    sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
 }
 
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
@@ -190,6 +212,7 @@ static sm64_saturn_gouraud_bank_t sourceboot_gouraud_bank;
  * loop, and the boot worked without it because the BIOS sequence uses the
  * BIOS's own pad handling. */
 static void sourceboot_vblank_out_handler(void *work __unused) {
+    sourceboot_vblank_out_count++;
     smpc_peripheral_intback_issue();
 }
 
@@ -489,31 +512,58 @@ int main(void) {
         for (;;) {}
     }
 
-    /* These are the unmodified source-port calls used by src/pc/pc_main.c:
-     * bootstrap once, then advance exactly one source frame per iteration. */
+    /* These are the source-port calls used by src/pc/pc_main.c. The
+     * interpreted build keeps its original one-call-per-loop behavior. The
+     * demo build instead schedules authoritative source ticks at 30 Hz and
+     * suppresses only the source display-list submission while it catches up
+     * after a slow IR render. */
     thread5_game_loop(NULL);
+#if SATURN_DEMO_PATH
+    uint32_t scheduler_vblank_clock = sourceboot_vblank_out_count;
+    uint32_t sim_vblank_credit = SOURCEBOOT_SIM_VBLANK_DIVISOR;
+#endif
     for (;;) {
-        const uint16_t sim_start = cpu_frt_count_get();
-        game_loop_one_iteration();
-        const uint16_t sim_end = cpu_frt_count_get();
-        sourceboot_fast3d.profile.sim_frt_ticks_last =
-            sourceboot_frt_delta(sim_start, sim_end);
-        sourceboot_sim_ticks_accum +=
-            sourceboot_fast3d.profile.sim_frt_ticks_last;
-        sourceboot_sim_tick_count++;
-        sourceboot_fast3d.profile.sim_frt_ticks_accum =
-            sourceboot_sim_ticks_accum;
-        sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+#if SATURN_DEMO_PATH
+        bool simulation_ran = false;
+        uint32_t scheduler_now = sourceboot_vblank_out_count;
+        sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
+        scheduler_vblank_clock = scheduler_now;
+        for (uint8_t catchup = 0U;
+             sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
+             catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
+            sim_vblank_credit -= SOURCEBOOT_SIM_VBLANK_DIVISOR;
+            sm64_saturn_source_runtime_set_display_suppressed(true);
+            sourceboot_run_source_tick();
+            sm64_saturn_source_runtime_set_display_suppressed(false);
+            simulation_ran = true;
+            scheduler_now = sourceboot_vblank_out_count;
+            sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
+            scheduler_vblank_clock = scheduler_now;
+        }
+        if (!simulation_ran)
+            sm64_saturn_source_runtime_wait_vblank();
+#else
+        sourceboot_run_source_tick();
+#endif
 
         /* Renderer-facing actor state is captured after the authoritative
          * source tick and before command emission. The bridge is read-only;
          * the eventual IR renderer consumes these records instead of
          * consulting live globals from a transform worker. */
+#if SATURN_DEMO_PATH
+        if (simulation_ran &&
+            sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
+            (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
+                                               &sourceboot_mario_pose);
+            sourceboot_update_sky_scroll(&sourceboot_mario_snapshot);
+        }
+#else
         if (sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
             sourceboot_update_sky_scroll(&sourceboot_mario_snapshot);
         }
+#endif
         sourceboot_fast3d.profile.demo_actor_snapshot_valid =
             sourceboot_mario_snapshot.valid;
         sourceboot_fast3d.profile.demo_actor_pose_vertices =

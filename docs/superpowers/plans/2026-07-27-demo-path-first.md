@@ -646,7 +646,7 @@ flags does NOT rebuild stale objects; force rebuild or variant object dirs).
 - [x] The interpreted frontend no longer runs per-frame in demo profile —
   but keep `exec_display_list` reachable so the differential build still
   works. Do not delete anything.
-- [ ] Sim cadence per the sprint's frame contract: 30 Hz sim independent of
+- [x] Sim cadence per the sprint's frame contract: 30 Hz sim independent of
   render rate (Task 0's timer proves the budget).
 - [x] Full regression: all host suites, cross-compile, `make verify`, both
   profile flags build.
@@ -660,6 +660,14 @@ flags does NOT rebuild stale objects; force rebuild or variant object dirs).
 **Gate:** demo profile boots the real game, renders textured BOB + animated
 Mario + cannon via the IR path, checkpoint hash identical to interpreted
 build, `fault_flags` 0.
+
+**Progress note (2026-07-28, cadence scheduler):** the demo loop now owns a
+VBlank-credit scheduler with bounded catch-up. A fresh 3,600-frame capture
+records `sim_tick_count=996` alongside `frame_serial=249`, with zero faults,
+zero slave timeouts, and valid Mario pose data. The paired frozen-route
+comparator remains deterministic (`replay_ticks=600`, `global_timer=601`,
+checkpoint hash unchanged). The capture report retains both clocks because
+Ymir's capture-frame count is not the source VBlank count.
 
 **References consumed (AW-3):** everything above; `ENGINE_PORT_ARCHITECTURE.md`
 ownership contract (the swap must satisfy its "renderer consumes, never
