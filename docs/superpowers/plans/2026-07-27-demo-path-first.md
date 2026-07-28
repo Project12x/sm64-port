@@ -562,7 +562,15 @@ hot build put the arrays at `0x060BEE00`/`0x060C4CE0` and `___end` at
 `0x060FD5C0`, leaving 10,816 bytes before the `0x06100000` HWRAM ceiling;
 both arena bases are 16-byte aligned.
  This proves the budgeted optional path; runtime parity and performance still
- need the unavailable capture rig.
+need the unavailable capture rig.
+
+**Progress note (2026-07-28, Task 5 demo submit boundary):** demo-profile
+ sourceboot now configures a null task consumer while retaining the public
+ `exec_display_list` ABI symbol; the interpreted profile still registers the
+ Fast3D frontend. This removes the previously duplicated interpreted render
+ submission from every IR demo frame and restores the planned
+ sim → bridge → IR frame ownership. Both profiles cross-build successfully;
+ the resulting FPS and checkpoint comparison still require a runtime capture.
 
 The promotion contract now has a standing host target (`verify-hot-promotion`)
  covering alignment, bounded capacity, copied bytes, and source immutability;

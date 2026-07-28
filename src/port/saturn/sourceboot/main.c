@@ -290,8 +290,17 @@ int main(void) {
     vdp2_sync_wait();
 
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
+#if SATURN_DEMO_PATH
+    /* The demo renderer consumes the authoritative source state through its
+     * IR bridge below. Keep the original exec_display_list symbol reachable
+     * for the source ABI, but do not submit every source display list to the
+     * interpreted frontend as well: doing both doubled the render work and
+     * violated the demo-path frame-loop contract. */
+    sm64_saturn_source_runtime_configure(NULL, NULL);
+#else
     sm64_saturn_source_runtime_configure(sm64_saturn_fast3d_frontend_submit,
                                          &sourceboot_fast3d);
+#endif
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
     {
         uint16_t sample_count = 0U;
