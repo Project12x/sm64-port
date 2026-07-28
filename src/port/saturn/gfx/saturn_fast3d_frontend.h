@@ -359,6 +359,13 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t vdp1_vram_bytes;
     uint32_t vdp2_display_mask;
     uint32_t vdp2_vram_bytes;
+    /* Demo BOB visibility diagnostics; append-only. These are cumulative
+     * counters, like the existing frame/profile fields, and separate the
+     * coarse bounds policy from near-plane and screen degeneracy loss. */
+    uint32_t demo_bob_primitives_visible;
+    uint32_t demo_bob_primitives_radius_rejected;
+    uint32_t demo_bob_primitives_near_rejected;
+    uint32_t demo_bob_primitives_degenerate;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

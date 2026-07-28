@@ -99,6 +99,10 @@ typedef struct demo_transform_context {
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
     const sm64_saturn_camera_transform_t *camera;
+    uint32_t visible[2];
+    uint32_t radius_rejected[2];
+    uint32_t near_rejected[2];
+    uint32_t degenerate[2];
 } demo_classify_context_t;
 
 typedef struct demo_emit_stats {
@@ -276,18 +280,27 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_classify_context_t *context = opaque;
     const sm64_saturn_camera_transform_t *camera = context->camera;
+    const uint8_t lane = begin == 0U ? 0U : 1U;
     for (uint16_t i = begin; i < end; i++) {
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
             break;
         const sm64_saturn_bob_primitive_t *primitive =
             &context->primitives[i];
-        if (!demo_poly_tier_accepts(primitive) ||
-            !demo_primitive_in_radius(primitive, camera) ||
-            !s_position_valid[primitive->indices[0]] ||
+        if (!demo_poly_tier_accepts(primitive)) {
+            s_primitive_visible[i] = 0U;
+            continue;
+        }
+        if (!demo_primitive_in_radius(primitive, camera)) {
+            context->radius_rejected[lane]++;
+            s_primitive_visible[i] = 0U;
+            continue;
+        }
+        if (!s_position_valid[primitive->indices[0]] ||
             !s_position_valid[primitive->indices[1]] ||
             !s_position_valid[primitive->indices[2]] ||
             !s_position_valid[primitive->indices[3]]) {
+            context->near_rejected[lane]++;
             s_primitive_visible[i] = 0U;
             continue;
         }
@@ -307,12 +320,14 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
                 (s_projected[primitive->indices[2]].x -
                  s_projected[primitive->indices[0]].x);
         if (cross == 0) {
+            context->degenerate[lane]++;
             s_primitive_visible[i] = 0U;
             continue;
         }
         s_primitive_buckets[i] = (uint8_t)demo_bucket(z);
         s_primitive_depth[i] = z;
         s_primitive_visible[i] = 1U;
+        context->visible[lane]++;
     }
 }
 
@@ -833,7 +848,11 @@ void sm64_saturn_demo_render_frame(
     }
     demo_classify_context_t classify = {
         .primitives = s_bob_primitives_active,
-        .camera = &job.camera
+        .camera = &job.camera,
+        .visible = {0U, 0U},
+        .radius_rejected = {0U, 0U},
+        .near_rejected = {0U, 0U},
+        .degenerate = {0U, 0U}
     };
     sm64_saturn_dual_worker_stats_t classify_stats;
     bool classify_ok = true;
@@ -853,6 +872,14 @@ void sm64_saturn_demo_render_frame(
     profile->slave_busy_ticks += classify_stats.slave_busy_ticks;
     profile->master_wait_ticks += classify_stats.master_wait_ticks;
     profile->slave_timeouts += classify_stats.slave_timeouts;
+    profile->demo_bob_primitives_visible += classify.visible[0] +
+                                            classify.visible[1];
+    profile->demo_bob_primitives_radius_rejected +=
+        classify.radius_rejected[0] + classify.radius_rejected[1];
+    profile->demo_bob_primitives_near_rejected +=
+        classify.near_rejected[0] + classify.near_rejected[1];
+    profile->demo_bob_primitives_degenerate +=
+        classify.degenerate[0] + classify.degenerate[1];
 
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     s_emit_count = 0U;
