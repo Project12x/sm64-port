@@ -796,6 +796,16 @@ zero faults/timeouts. Serial render falls to **2.2151 ms/frame** and dual to
 the ≥50% target. The remaining limiter is therefore not the per-vertex cancel
 poll alone; master-side transform/shared-bus/emission work remains open.
 
+**Progress note (2026-07-28, partition-cache A/B):** terrain emission now
+reads the immutable VDP1 partition layout once per frame instead of once per
+primitive. Same-commit fresh captures pass the 600-tick route comparator with
+identical checkpoint SHA-256, zero faults/timeouts/capacity rejects, and zero
+renderer-counter deltas. Serial render is `1.8005 ms/frame`; dual render is
+`17.6779 ms/frame` with `20.1632%` slave share (47,682,152 cumulative render
+FRT ticks, 9,614,259 slave-busy ticks, 803 jobs). This is a small measured
+improvement over the prior 20.0146% share, not a gate close; the ≥50% target
+and the remaining master-side transform/emission work stay open.
+
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
 notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`

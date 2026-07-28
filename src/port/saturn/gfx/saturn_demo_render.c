@@ -199,7 +199,8 @@ static void demo_emit_primitive(
     const sm64_saturn_bob_primitive_t *primitive,
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile,
+    const vdp1_vram_partitions_t *partitions)
 {
     const uint16_t *indices = primitive->indices;
     const int16_vec2_t vertices[4] = {
@@ -221,8 +222,6 @@ static void demo_emit_primitive(
         return;
     }
 
-    vdp1_vram_partitions_t partitions;
-    vdp1_vram_partitions_get(&partitions);
     vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1);
     if (cmdt == NULL) {
         profile->reject_vdp1_arena_capacity++;
@@ -232,7 +231,7 @@ static void demo_emit_primitive(
     vdp1_cmdt_vtx_set(cmdt, vertices);
     if (primitive->textured != 0U) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
-            cmdt, &partitions, primitive->tile_offset, primitive->tile_size,
+            cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
             (uint16_t)(primitive->clut_offset / sizeof(vdp1_clut_t)),
             VDP1_CMDT_CC_REPLACE, vertices);
@@ -424,12 +423,18 @@ void sm64_saturn_demo_render_frame(
     }
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     sm64_saturn_vdp1_backend_begin(backend);
+    /* This layout is immutable after sourceboot initialization. Hoist the
+     * shadow-register query out of the per-primitive master-side loop; the
+     * slave only transforms disjoint arrays and never touches submission
+     * state. */
+    vdp1_vram_partitions_t partitions;
+    vdp1_vram_partitions_get(&partitions);
     for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
         for (uint16_t ordinal = 0; ordinal < s_bucket_counts[bucket]; ordinal++) {
             demo_emit_primitive(
                 &s_bob_primitives_active[
                     s_bucket_indices[bucket][ordinal]], backend, gouraud_bank,
-                profile);
+                profile, &partitions);
         }
     }
     /* Mario is currently a flat-material actor pass. It deliberately consumes
