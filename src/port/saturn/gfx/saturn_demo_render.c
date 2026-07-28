@@ -875,7 +875,9 @@ void sm64_saturn_demo_render_frame(
         .center_y = DEMO_CENTER_Y,
         .coord_min = DEMO_COORD_MIN,
         .coord_max = DEMO_COORD_MAX,
-        .clip_near = true
+        /* Keep the edge-cache implementation compiled but disabled until
+         * its VDP1 coverage is proven not to occlude the actor pass. */
+        .clip_near = false
     };
     demo_transform_context_t transform = {
         .job = &job,
