@@ -61,6 +61,8 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
         "candidate_limit": candidate_limit,
         "split_weight": split_weight,
         "deterministic_sha256": stats.digest,
+        "runtime_plane_policy": "scale-invariant sign test; normal max 2^20; rounded offset at same scale",
+        "runtime_normal_limit": 1048576,
         "origin_order_sha256": hashlib.sha256(
             json.dumps([
                 {"source": p.source, "vertices": [
