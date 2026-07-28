@@ -59,6 +59,7 @@ from bake_castle_uv import (  # noqa: E402
     texture_coordinate,
 )
 from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
+from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
@@ -951,6 +952,17 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(sum(value <= 2 for value in values), 567)
         self.assertEqual(sum(2 < value <= 16 for value in values), 510)
         self.assertEqual(sum(value > 16 for value in values), 24)
+
+    def test_bob_scene_emitter_preserves_ir_counts_and_manifest_offsets(self) -> None:
+        root = TOOLS.parents[1]
+        mesh = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        manifest = json.loads((root / "build/saturn/sourceboot/generated/bob_tiles_manifest.json").read_text(encoding="utf-8"))
+        header = emit_bob_scene(mesh, manifest)
+        self.assertIn("SM64_SATURN_BOB_POSITION_COUNT 1625U", header)
+        self.assertIn("SM64_SATURN_BOB_PRIMITIVE_COUNT 867U", header)
+        self.assertEqual(header, emit_bob_scene(mesh, manifest))
+        self.assertEqual(header.count("    {{"), 867)
+        self.assertIn("512U, 32U", header)
 
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)

@@ -56,7 +56,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-tiles plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-tiles compile-bob-scene plan-castle-camera verify-all clean
 
 all: hello
 
@@ -408,6 +408,12 @@ compile-bob-tiles: compile-bob-area
 	  --bank "$(BOB_TILES_GENERATED)/bob_tiles_clut16.bin" \
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json"
+
+compile-bob-scene: compile-bob-tiles
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/emit_bob_scene.py" \
+	  --mesh "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
+	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json" \
+	  --output "$(BOB_MESH_GENERATED)/bob_scene.h"
 
 compile-castle-gameplay-config: check-host-tools
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/extract_castle_gameplay_config.py" \
