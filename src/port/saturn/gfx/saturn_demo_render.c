@@ -636,15 +636,13 @@ static void demo_emit_mario(
         (uint16_t)(s_actor_draw_count + s_actor_texture_count);
     if (s_actor_draw_count != 0U &&
         sm64_saturn_vdp1_backend_reserve(backend, actor_command_count) != NULL) {
-        for (uint16_t i = 0; i < s_actor_draw_count; i++)
-            s_actor_slots[i] = (uint16_t)(backend->commands.cursor -
-                                          actor_command_count + i);
-        uint16_t texture_slot = (uint16_t)(backend->commands.cursor -
-                                           s_actor_texture_count);
+        uint16_t command_slot = (uint16_t)(backend->commands.cursor -
+                                           actor_command_count);
         for (uint16_t i = 0; i < s_actor_draw_count; i++) {
+            s_actor_slots[i] = command_slot++;
             if (sm64_mario_texture_tile_start[s_actor_order[i]] !=
                 SM64_MARIO_TEXTURE_TILE_NONE)
-                s_actor_texture_slots[i] = texture_slot++;
+                s_actor_texture_slots[i] = command_slot++;
         }
         for (uint16_t i = 0; i < s_actor_draw_count; i++) {
             s_actor_gouraud[i] = sm64_saturn_gouraud_bank_alloc(
