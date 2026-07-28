@@ -758,7 +758,7 @@ captures.
 
 ### Task 7: Measure, present, gate
 
-- [ ] Full regression, both profiles (and both slave flags).
+- [x] Full regression, both profiles (and both slave flags). Host `verify-all` passes; interpreted and demo-path sourceboot variants cross-build with slave render disabled/enabled. Runtime route capture and FPS/utilization evidence remain open below.
 - [ ] Frozen-route capture at the chosen degradation setting: **absolute FPS
   (median and 1% low if the phase timer supports it), never ratios.**
 - [ ] **Hardware-utilization report alongside FPS**: sim vs render ms (Task
