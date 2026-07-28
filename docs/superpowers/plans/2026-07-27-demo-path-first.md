@@ -657,7 +657,7 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
 (append-only): `uint32_t slave_jobs_completed`, `uint32_t slave_busy_ticks`,
 `uint32_t master_wait_ticks`, `uint32_t slave_timeouts`.
 
-- [ ] **Choose the parallel model from Task 0's numbers — both are in
+- [x] **Choose the parallel model from Task 0's numbers — both are in
   scope; the data decides which is primary:**
   - **(A) Frame pipeline:** master sims frame N+1 while the slave renders
     frame N from an **immutable snapshot** (Mario pos/action/anim, camera,
@@ -671,7 +671,12 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
     latency.
   - If sim and render are comparable, (A) with master-join dominates; if sim
     is small, they converge. Record the decision and its arithmetic in the
-    completion note.
+    completion note. **Decision:** model A (frame pipeline) is primary for
+    the measured baseline: 8.93 ms sim + 15.08 ms render gives an idealized
+    `(8.93 + 15.08) / 2 = 12.01 ms` frame ceiling, versus model B's
+    `8.93 + 15.08 / 2 = 16.47 ms`; the one-frame render latency is accepted
+    for the performance experiment. Runtime timeout/share and A/B parity
+    gates remain open.
 - [x] Close-port the worker loop: bounded jobs from Task 2's sliceable
   banks; slave transforms/lights/culls into per-job disjoint output regions
   (no shared writes — SlaveDriver's work/result discipline); master joins
