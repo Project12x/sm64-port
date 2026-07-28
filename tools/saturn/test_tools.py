@@ -64,6 +64,7 @@ from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
 from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
+from compile_bob_bsp import compile_bsp as compile_bob_bsp  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
     Polygon as BspPolygon,
@@ -969,6 +970,19 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(header, emit_bob_scene(mesh, manifest))
         self.assertEqual(header.count("    {{"), 867)
         self.assertIn("512U, 32U", header)
+
+    def test_bob_bsp_report_is_exact_and_deterministic(self) -> None:
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        first = compile_bob_bsp(scene)
+        second = compile_bob_bsp(scene)
+        self.assertEqual(first, second)
+        self.assertEqual(first["input_render_polygons"], 867)
+        self.assertEqual(first["output_convex_polygons"], 1425)
+        self.assertEqual(first["split_events"], 560)
+        self.assertEqual(first["node_count"], 1183)
+        self.assertEqual(len(first["deterministic_sha256"]), 64)
+        self.assertIn("runtime traversal", " ".join(first["limits"]).lower())
 
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)

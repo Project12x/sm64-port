@@ -60,7 +60,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -415,6 +415,11 @@ compile-bob-area: check-host-tools
 	  --input "$(BOB_MESH_GENERATED)/bob_area1_mesh_ir_v2.json" \
 	  --output "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_report.json"
+
+compile-bob-bsp: compile-bob-area
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_bob_bsp.py" \
+	  --input "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
+	  --output "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json"
 
 compile-bob-tiles: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_tiles.py" \

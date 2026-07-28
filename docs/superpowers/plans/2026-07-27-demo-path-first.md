@@ -915,6 +915,16 @@ lever remains camera-dependent spatial ordering (the existing static-BSP
 compiler is the reference-backed source path; runtime integration is still
 pending).
 
+**Progress note (2026-07-28, BOB BSP cost pass):** the existing exact-rational
+`static_bsp` compiler is now exercised against the actual compiled BOB Mesh IR
+v2 bank through `compile_bob_bsp.py` and the normal sourceboot Makefile. The
+deterministic result is 867 input polygons → 1,425 convex fragments, 560 split
+events, 1,183 nodes, and maximum depth 33. This is the first concrete sizing
+evidence for the reference-backed runtime stream. It remains report-only until
+the generated scene header carries split fragments, UVs, and node ranges; the
+runtime must traverse those ranges from the camera position rather than use the
+origin-order digest.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the

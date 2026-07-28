@@ -40,6 +40,7 @@ SOURCEBOOT_QUAD_MAP_TOOLS := \
 SOURCEBOOT_BOB_MESH := $(SOURCEBOOT_GENERATED)/bob_area1_mesh_ir_v2.json
 SOURCEBOOT_BOB_COMPILED := $(SOURCEBOOT_GENERATED)/bob_area1_compiled.json
 SOURCEBOOT_BOB_REPORT := $(SOURCEBOOT_GENERATED)/bob_area1_report.json
+SOURCEBOOT_BOB_BSP_REPORT := $(SOURCEBOOT_GENERATED)/bob_area1_bsp_report.json
 SOURCEBOOT_BOB_TILES := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.bin
 SOURCEBOOT_BOB_CLUT := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.pal
 SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
@@ -52,7 +53,8 @@ SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
-  $(ROOT)/tools/saturn/extract_mario_actor.py
+  $(ROOT)/tools/saturn/extract_mario_actor.py \
+  $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py
 SOURCEBOOT_BOB_TILE_TOOLS := $(ROOT)/tools/saturn/bake_bob_tiles.py \
   $(ROOT)/tools/saturn/bake_castle_uv.py $(ROOT)/tools/saturn/vdp1_texture.py
 SOURCEBOOT_BOB_SCENE_TOOL := $(ROOT)/tools/saturn/emit_bob_scene.py
@@ -282,7 +284,7 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-tiles source-bob-scene source-bob-sky source-mario-textures
+source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-tiles source-bob-scene source-bob-sky source-mario-textures
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -304,6 +306,13 @@ $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
 
 .PHONY: source-bob-mesh
 source-bob-mesh: $(SOURCEBOOT_BOB_COMPILED)
+
+$(SOURCEBOOT_BOB_BSP_REPORT): $(SOURCEBOOT_BOB_COMPILED) $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/compile_bob_bsp.py" \
+	  --input "$(SOURCEBOOT_BOB_COMPILED)" --output "$@"
+
+.PHONY: source-bob-bsp
+source-bob-bsp: $(SOURCEBOOT_BOB_BSP_REPORT)
 
 $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST) &: \
 	$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_TILE_TOOLS) \

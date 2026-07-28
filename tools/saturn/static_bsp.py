@@ -238,6 +238,17 @@ def build(polygons: Iterable[Polygon], *, candidate_limit: int = 32,
                 split_events += 1
             else:
                 groups[classification].append(polygon)
+        # A source bank can contain repeated/coplanar fragments whose
+        # canonical plane is numerically indistinguishable from the chosen
+        # splitter but whose vertices classify to one side after an earlier
+        # exact split.  Recursing that unchanged set would never make a leaf
+        # (and was exposed by the first BOB BSP trial).  Keep the source
+        # polygons together as a deterministic leaf; the runtime still gets a
+        # valid painter dependency, and the report records the unsplit cost.
+        if (not groups["coplanar"] and
+                (len(groups["front"]) == len(items) or
+                 len(groups["back"]) == len(items))):
+            return Node(plane=plane, coplanar=items)
         node = Node(plane=plane, coplanar=groups["coplanar"])
         if groups["front"]:
             node.front = recurse(groups["front"], depth + 1)
