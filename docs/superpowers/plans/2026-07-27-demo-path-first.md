@@ -496,7 +496,7 @@ existing material colors already read well).
   regenerates the full C5 and walking pose banks through the source
   GeoLayout/Animation evaluator and requires byte-identical output, while the
   frozen-route comparator requires identical checkpoint SHA-256.
-- [ ] Visual sanity capture: Mario animating in place via the IR path
+- [x] Visual sanity capture: Mario animating in place via the IR path
   (turntable-style scene is fine at this step).
 
 **Gate:** checkpoint hash unchanged; pose differential within tolerance;
@@ -525,6 +525,16 @@ pose-differential fixture, and later-phase visual capture remain open.
  demo terrain and Mario projection consume those copied camera values rather
  than reading camera globals from the renderer. This closes the bridge-input
  seam; pose deformation, checkpoint proof, and visual acceptance remain open.
+
+**Progress note (2026-07-28, fresh sky-fixed visual capture):** the current
+`e2-bob-demo-replay-r2048-slave1-poly0-hot0` image was captured with the
+established BIOS handoff-yield sequence, `--dram-cart`, and fresh symbols
+(`_sourceboot_fast3d=0x060D11E0`, route probe `0x060D1158`). The paired frame
+shows identifiable Mario over the baked BOB sky/terrain; profile decode reports
+`frame_serial=802`, `demo_actor_snapshot_valid=1`, `demo_actor_pose_vertices=424`,
+`fault_flags=0`, and `vdp2_display_mask=10`. Evidence is retained at
+`task4-live-mario-sky-fixed-2026-07-28.{png,json,md}`. Owner visual confirmation
+is still required before gallery promotion.
 
 **Progress note (2026-07-28, near-plane cull):** the shared transform now
  rejects vertices on/behind the near plane instead of projecting them with a
