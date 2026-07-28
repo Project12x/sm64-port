@@ -492,6 +492,17 @@ code is confined to `src/port/saturn/gpl/` and is not mixed next to
 SM64-adjacent source, per the license-isolation discipline already
 established in this ledger.
 
+**2026-07-27 Task 2 close-port**: the BOB Mesh IR bank adopts the bounded hot
+promotion shape from `Projects/SONIC Z-TREME/ZTE/ZT_LOADING.c:320-353` at
+pinned commit `cff75451c1616aac1236fc2b44223902b55c706b`. The isolated
+`src/port/saturn/gpl/ztreme_hot_promotion.{c,h}` module is GPL-3.0 close-port
+code: it copies a bounded cold LWRAM slice into a caller-owned HWRAM arena,
+aligns each allocation, reports capacity failure, and returns the hot pointer
+used by the renderer. SGL globals, Z-Treme mesh types, and DMA register
+assumptions were not copied because Mesh IR v2 is an immutable record stream
+and the cartridge policy forbids cart/LWRAM pointer chasing in the frame loop.
+This is therefore a small API adaptation, not a wholesale loader port.
+
 ### Sega hardware documentation
 
 | Reference | Use |

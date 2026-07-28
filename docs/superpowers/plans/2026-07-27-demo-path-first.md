@@ -299,14 +299,14 @@ tile reference — coordinate with Task 3), create generated bank under
 quad map + `mario_anim_data` dependency wiring), modify
 `tools/saturn/test_tools.py`.
 
-- [ ] Extract BOB's terrain display lists + vertices (the
+- [x] Extract BOB's terrain display lists + vertices (the
   `dl_rigid_groups.py` walker already parses these files; reuse its
   parsing, not a new parser — note its known limitation: bracketed-expression
   macro regex, fix if hit).
-- [ ] Static world-space pre-transform: terrain is static; bake vertices to
+- [x] Static world-space pre-transform: terrain is static; bake vertices to
   world space so runtime skips the model matrix entirely (castleviewer
   precedent).
-- [ ] Quad pairing via `quad_pairing.py` unchanged. Textured quads now pair
+- [x] Quad pairing via `quad_pairing.py` unchanged. Textured quads now pair
   under the texture spec's four conditions (identical tile state, existing
   convexity/normal gates, consistent UV cycle — free with attribute-exact
   weld — bounded affine error). Expected recovery: ~220–285 commands.
@@ -315,7 +315,7 @@ quad map + `mario_anim_data` dependency wiring), modify
   `src/port/saturn/gpl/` with notices; budget against the measured 576 KiB
   LWRAM / re-measured HWRAM figures. **The frame loop never chases cart
   pointers** (`CARTRIDGE_ASSET_POLICY.md`).
-- [ ] Host tests: v2 schema round-trip, bank size budget assertion, unittest
+- [x] Host tests: v2 schema round-trip, bank size budget assertion, unittest
   (NOT pytest — bare `test_*` functions silently never run).
 - [ ] Mutation-test the safety-relevant compiler logic (project standing
   rule; the quad-map precedent lists the mutation catalogue style).

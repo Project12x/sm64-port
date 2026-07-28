@@ -44,6 +44,7 @@ from bake_mario_eye_uv import TILE, bilinear_weights, split_four  # noqa: E402
 from vdp1_texture import distorted_sprite_weights, downsample_rgb1555, repeated_vertex_weights  # noqa: E402
 from inspect_castle_area import inventory  # noqa: E402
 from extract_castle_area import extract, flatten  # noqa: E402
+from extract_bob_area import intake as intake_bob_area, mesh_ir as mesh_ir_bob_area  # noqa: E402
 from extract_castle_gameplay_config import extract as extract_castle_gameplay_config  # noqa: E402
 from extract_castle_geo_root import extract as extract_castle_geo_root  # noqa: E402
 from compile_castle_area import compile_opaque, compile_scene  # noqa: E402
@@ -846,6 +847,7 @@ class SaturnMeshIRTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sum to 32768"):
             validate_mesh_ir(document)
 
+
     def test_goddard_mode_preserves_more_than_one_total_weight(self) -> None:
         document = self.document()
         document["deformation"] = {
@@ -879,6 +881,91 @@ class SaturnMeshIRTests(unittest.TestCase):
             [{"joint": 0, "weight_q15": 32768}, {"joint": 1, "weight_q15": 24576}],
         )
         self.assertEqual(deformation["influences"][2][0]["weight_q15"], 7)
+
+
+class BobMeshIRTests(unittest.TestCase):
+    AREA = TOOLS.parents[1] / "levels" / "bob" / "areas" / "1"
+
+    def test_bob_intake_reconciles_known_triangle_and_layer_counts(self) -> None:
+        intake = intake_bob_area(self.AREA)
+        self.assertEqual(intake["schema"], "sm64-saturn-static-scene-intake")
+        self.assertEqual(intake["triangle_count"], 1101)
+        self.assertEqual(intake["textured_triangle_count"], 1101)
+        self.assertEqual(
+            intake["layers"],
+            {"LAYER_OPAQUE": 1043, "LAYER_TRANSPARENT_DECAL": 34, "LAYER_ALPHA": 24},
+        )
+
+    def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
+        intake = intake_bob_area(self.AREA)
+        document = mesh_ir_bob_area(intake)
+        validate_mesh_ir(document)
+        self.assertEqual(document["version"], 2)
+        self.assertTrue(document["static_world_space"])
+        self.assertEqual(len(document["triangles"]), 1101)
+        self.assertLess(len(document["positions"]), 3303)
+        self.assertEqual(len(document["positions"]), len(document["vertex_attributes"]["uv"]))
+        compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertGreaterEqual(report["quad_count"], 220)
+        self.assertLessEqual(report["quad_count"], 285)
+        self.assertEqual(report["source_triangle_count"], 1101)
+        self.assertEqual(report["render_primitive_count"], len(compiled["primitives"]))
+        self.assertTrue(report["textured_pairing"])
+
+    def test_bob_v2_generation_is_deterministic_and_within_lwram_budget(self) -> None:
+        first = mesh_ir_bob_area(intake_bob_area(self.AREA))
+        second = mesh_ir_bob_area(intake_bob_area(self.AREA))
+        self.assertEqual(
+            json.dumps(first, sort_keys=True, separators=(",", ":")),
+            json.dumps(second, sort_keys=True, separators=(",", ":")),
+        )
+        compiled, _primitives, _report = compile_mesh_ir(first)
+        # Conservative packed-bank estimate: positions + UVs + 16-byte VDP1
+        # primitive records + materials. Keep the 576 KiB LWRAM ceiling
+        # explicit even before the binary bank writer lands.
+        estimate = (
+            len(first["positions"]) * (6 + 4)
+            + len(compiled["primitives"]) * 16
+            + len(first["materials"]) * 16
+        )
+        self.assertLessEqual(estimate, 576 * 1024)
+
+    def test_bob_textured_pairing_mutation_tile_state_is_killed(self) -> None:
+        document = {
+            "schema": "sm64-saturn-mesh-ir",
+            "version": 2,
+            "static_world_space": True,
+            "name": "mutation_tile_state",
+            "positions": [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]],
+            "materials": [{"id": 0, "rgb555": [31, 31, 31]}],
+            "triangles": [
+                {"source": 0, "material": 0, "indices": [0, 1, 2],
+                 "texture_tile": {"texture": "tile", "state": {"tile": 0}}},
+                {"source": 1, "material": 0, "indices": [0, 2, 3],
+                 "texture_tile": {"texture": "tile", "state": {"tile": 1}}},
+            ],
+            "vertex_attributes": {"uv": [[0, 0], [32, 0], [32, 32], [0, 32]]},
+        }
+        _compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertEqual(report["quad_count"], 0)
+        self.assertIn("texture_tile_state_mismatch", report["rejection_reasons"])
+
+    def test_bob_textured_pairing_mutation_affine_gate_is_killed(self) -> None:
+        document = mesh_ir_bob_area(intake_bob_area(self.AREA))
+        # A large boundary-UV perturbation must not silently turn a textured
+        # quad into a VDP1 affine mapping.
+        document["vertex_attributes"]["uv"][document["triangles"][0]["indices"][0]][0] += 100000
+        _compiled, _primitives, report = compile_mesh_ir(document)
+        self.assertIn("uv_affine_error", report["rejection_reasons"])
+
+    def test_bob_attribute_exact_weld_mutation_is_killed(self) -> None:
+        document = mesh_ir_bob_area(intake_bob_area(self.AREA))
+        by_position: dict[tuple[int, int, int], set[tuple[int, int]]] = {}
+        for position, uv in zip(document["positions"], document["vertex_attributes"]["uv"]):
+            by_position.setdefault(tuple(position), set()).add(tuple(uv))
+        hard_edge_positions = sum(len(uvs) > 1 for uvs in by_position.values())
+        self.assertGreater(hard_edge_positions, 0)
+        self.assertGreater(len(document["positions"]), len(by_position))
 
 
 class YmirInputTests(unittest.TestCase):
@@ -1273,6 +1360,10 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "quad_pair_not_adjacent",
                 "quad_ordinal_past_row",
                 "quad_pairs_declined",
+                "sim_frt_ticks_last",
+                "sim_frt_ticks_accum",
+                "sim_tick_count",
+                "render_frt_ticks_last",
             ],
         )
         # Fields the older build did have still read correctly.

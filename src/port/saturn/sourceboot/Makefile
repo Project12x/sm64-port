@@ -31,6 +31,16 @@ SOURCEBOOT_QUAD_MAP_TOOLS := \
   $(ROOT)/tools/saturn/quad_map.py $(ROOT)/tools/saturn/dl_rigid_groups.py \
   $(ROOT)/tools/saturn/quad_pairing.py \
   $(ROOT)/tools/saturn/extract_mario_actor.py
+SOURCEBOOT_BOB_MESH := $(SOURCEBOOT_GENERATED)/bob_area1_mesh_ir_v2.json
+SOURCEBOOT_BOB_COMPILED := $(SOURCEBOOT_GENERATED)/bob_area1_compiled.json
+SOURCEBOOT_BOB_REPORT := $(SOURCEBOOT_GENERATED)/bob_area1_report.json
+SOURCEBOOT_BOB_TOOLS := \
+  $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
+  $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
+  $(ROOT)/tools/saturn/extract_mario_actor.py
+SOURCEBOOT_BOB_SOURCES := \
+  $(ROOT)/levels/bob/areas/1/geo.inc.c \
+  $(wildcard $(ROOT)/levels/bob/areas/1/*/model.inc.c)
 SOURCEBOOT_BIN_SRCS := $(wildcard $(ROOT)/bin/*.c)
 SOURCEBOOT_ACTOR_SRCS := $(wildcard $(ROOT)/actors/*.c)
 # E2 intentionally links one original level, not the full game archive.  The
@@ -60,6 +70,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
+  $(ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c \
   $(ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c \
@@ -227,7 +238,7 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
-source-assets: source-data-catalog
+source-assets: source-data-catalog source-bob-mesh
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -239,6 +250,16 @@ source-assets: source-data-catalog
 	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets $(SOURCEBOOT_TEXT_STRINGS) \
 	  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'
+
+$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
+    $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_SOURCES)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" \
+	  compile-bob-area BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
+	  BOB_AREA_DIR="levels/bob/areas/1" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+
+.PHONY: source-bob-mesh
+source-bob-mesh: $(SOURCEBOOT_BOB_COMPILED)
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 

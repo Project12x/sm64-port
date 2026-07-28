@@ -1,0 +1,55 @@
+{
+  "schema": "sm64-saturn-task2-bob-mesh-ir-v2-evidence",
+  "version": 1,
+  "source": "levels/bob/areas/1",
+  "intake_schema": "sm64-saturn-static-scene-intake",
+  "mesh_schema": "sm64-saturn-mesh-ir",
+  "mesh_version": 2,
+  "static_world_space": true,
+  "source_triangle_count": 1101,
+  "textured_triangle_count": 1101,
+  "layers": {
+    "LAYER_OPAQUE": 1043,
+    "LAYER_TRANSPARENT_DECAL": 34,
+    "LAYER_ALPHA": 24
+  },
+  "attribute_exact_vertex_count": 1625,
+  "compiled_primitive_count": 867,
+  "quad_count": 234,
+  "standalone_triangle_count": 633,
+  "commands_saved": 234,
+  "textured_pairing": {
+    "tile_state": "exact texture identity and canonical tile-state equality",
+    "geometry": "existing material, winding, normal, and planar-convexity gates",
+    "uv_cycle": "attribute-exact shared-edge UVs and four distinct boundary UVs",
+    "affine_error_limit_raw_uv": 256
+  },
+  "estimated_hot_bank_bytes": 30410,
+  "lwram_budget_bytes": 589824,
+  "generated_sha256": {
+    "bob_area1_intake.json": "5d005373ffeb37e05191cb349f2a141cfea1246d2d9e1955fc3fbe4cc06c6687",
+    "bob_area1_mesh_ir_v2.json": "48f988bab71a96927e1be3ad124821de6a5b0c0eac37e12a96894da807292407",
+    "bob_area1_compiled.json": "8b3d64a17ef4191e83a60b70ec1ce05a6a4d2660c29a4b0573ebea50836af358",
+    "bob_area1_report.json": "a073b5126a7a865e102d2b8d03b76abe6e42fd526aa4013efaaa877f7e930d47"
+  },
+  "references": [
+    {
+      "repository": "in-repo",
+      "files": ["tools/saturn/extract_castle_area.py", "tools/saturn/dl_rigid_groups.py", "tools/saturn/saturn_mesh_ir.py", "tools/saturn/quad_pairing.py"],
+      "license": "repository license",
+      "reuse_mode": "pattern/adaptation"
+    },
+    {
+      "repository": "Maxime-XL2/SONIC-Z-TREME",
+      "commit": "cff75451c1616aac1236fc2b44223902b55c706b",
+      "file": "Projects/SONIC Z-TREME/ZTE/ZT_LOADING.c:320-353",
+      "license": "GPL-3.0",
+      "reuse_mode": "isolated close-port in src/port/saturn/gpl/"
+    }
+  ],
+  "verification": {
+    "command": ".venv-saturn-tools/Scripts/python.exe tools/saturn/test_tools.py",
+    "status": "passed",
+    "notes": "162 tests pass (one unrelated legacy profile-size test is skipped). The new GPL helper compiles for host and the SH-2 sourceboot compile reaches the helper object; the sandboxed MSYS2 linker cannot create its temporary file."
+  }
+}

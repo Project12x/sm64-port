@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Iterable
+from typing import Any, Iterable
 
 try:
     import networkx as nx
@@ -21,6 +21,7 @@ except ModuleNotFoundError as error:  # pragma: no cover - exercised by bootstra
 
 Vertex = tuple[int, int, int]
 Face = tuple[int, int, int, int]
+DEFAULT_TEXTURED_AFFINE_ERROR_LIMIT = 256
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,50 @@ def _is_planar_convex(vertices: list[Vertex], cycle: tuple[int, int, int, int]) 
     return _is_strictly_convex(projected)
 
 
+def _texture_state_key(state: Any) -> str:
+    """Return a deterministic key for the tile state carried by one source face."""
+    if state is None:
+        return "<none>"
+    if not isinstance(state, dict):
+        return repr(state)
+    return repr(sorted((str(key), repr(value)) for key, value in state.items()))
+
+
+def _textured_pair_is_safe(
+    cycle: tuple[int, int, int, int],
+    texture_tiles: list[dict[str, Any] | None],
+    vertex_uvs: list[tuple[int, int]],
+    first_index: int,
+    second_index: int,
+    affine_error_limit: int,
+) -> tuple[bool, str]:
+    """Check the v2 textured-quad contract without weakening geometry gates.
+
+    The attribute-exact weld makes UVs at a shared edge identical by
+    construction. We require identical tile state and bound the opposite-
+    corner affine residual. The latter is conservative: VDP1's
+    rectangle mapper can represent a parallelogram exactly, while a small
+    integer residual is tolerated for source quantisation.
+    """
+    left = texture_tiles[first_index]
+    right = texture_tiles[second_index]
+    if left is None or right is None:
+        return False, "textured_state_missing"
+    if left.get("texture") != right.get("texture"):
+        return False, "texture_identity_mismatch"
+    if _texture_state_key(left.get("state")) != _texture_state_key(right.get("state")):
+        return False, "texture_tile_state_mismatch"
+    uvs = [vertex_uvs[index] for index in cycle]
+    if len(set(uvs)) != 4:
+        return False, "uv_cycle_degenerate"
+    residual = (uvs[0][0] + uvs[2][0] - uvs[1][0] - uvs[3][0]) ** 2 + (
+        uvs[0][1] + uvs[2][1] - uvs[1][1] - uvs[3][1]
+    ) ** 2
+    if residual > affine_error_limit * affine_error_limit:
+        return False, "uv_affine_error"
+    return True, ""
+
+
 def candidates(
     vertices: list[Vertex],
     faces: list[Face],
@@ -161,6 +206,9 @@ def candidates(
     deformation_poses: Iterable[tuple[str, list[Vertex]]] | None = None,
     pairing_forbidden_triangles: set[int] | None = None,
     projection_policy: str = "sampled",
+    texture_tiles: list[dict[str, Any] | None] | None = None,
+    vertex_uvs: list[tuple[int, int]] | None = None,
+    textured_affine_error_limit: int = DEFAULT_TEXTURED_AFFINE_ERROR_LIMIT,
 ) -> tuple[list[QuadCandidate], dict[str, int]]:
     """Return Saturn-safe shared-edge candidates and rejection counts.
 
@@ -173,6 +221,12 @@ def candidates(
         raise ValueError("projection_policy must be 'sampled' or 'planar'")
     pose_list = list(deformation_poses or [])
     forbidden = pairing_forbidden_triangles or set()
+    if texture_tiles is not None and len(texture_tiles) != len(faces):
+        raise ValueError("texture_tiles length must match faces")
+    if texture_tiles is not None and vertex_uvs is None:
+        raise ValueError("textured pairing requires vertex_uvs")
+    if vertex_uvs is not None and len(vertex_uvs) != len(vertices):
+        raise ValueError("vertex_uvs length must match vertices")
     for name, pose_vertices in pose_list:
         if len(pose_vertices) != len(vertices):
             raise ValueError(
@@ -207,6 +261,20 @@ def candidates(
             reject("winding_or_topology")
             continue
         cycle, _ = boundary
+        if texture_tiles is not None and (
+            texture_tiles[first_index] is not None or texture_tiles[second_index] is not None
+        ):
+            textured_ok, textured_reason = _textured_pair_is_safe(
+                cycle,
+                texture_tiles,
+                vertex_uvs or [],
+                first_index,
+                second_index,
+                textured_affine_error_limit,
+            )
+            if not textured_ok:
+                reject(textured_reason)
+                continue
         first_normal = _normal(vertices, first[1:])
         second_normal = _normal(vertices, second[1:])
         lengths = math.sqrt(_dot(first_normal, first_normal) * _dot(second_normal, second_normal))
@@ -314,14 +382,24 @@ def pair_triangles(
     faces: Iterable[Face],
     deformation_poses: Iterable[tuple[str, Iterable[Vertex]]] | None = None,
     pairing_forbidden_triangles: set[int] | None = None,
+    texture_tiles: Iterable[dict[str, Any] | None] | None = None,
+    vertex_uvs: Iterable[tuple[int, int]] | None = None,
+    projection_policy: str = "sampled",
+    textured_affine_error_limit: int = DEFAULT_TEXTURED_AFFINE_ERROR_LIMIT,
 ) -> tuple[list[RenderPrimitive], dict[str, object]]:
     vertex_list, face_list = list(vertices), list(faces)
     pose_list = [(name, list(pose)) for name, pose in (deformation_poses or [])]
+    texture_tile_list = list(texture_tiles) if texture_tiles is not None else None
+    uv_list = list(vertex_uvs) if vertex_uvs is not None else None
     options, rejected = candidates(
         vertex_list,
         face_list,
         deformation_poses=pose_list,
         pairing_forbidden_triangles=pairing_forbidden_triangles,
+        projection_policy=projection_policy,
+        texture_tiles=texture_tile_list,
+        vertex_uvs=uv_list,
+        textured_affine_error_limit=textured_affine_error_limit,
     )
     matched = maximum_weight_matching(options)
     primitives: list[RenderPrimitive] = []
@@ -352,4 +430,6 @@ def pair_triangles(
         "render_primitive_count": len(primitives),
         "commands_saved": len(face_list) - len(primitives),
         "rejection_reasons": rejected,
+        "textured_pairing": texture_tile_list is not None,
+        "textured_affine_error_limit": textured_affine_error_limit,
     }

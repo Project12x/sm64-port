@@ -21,6 +21,7 @@ from quad_pairing import RenderPrimitive, pair_triangles
 SOURCE_SCHEMA = "sm64-saturn-mesh-ir"
 COMPILED_SCHEMA = "sm64-saturn-compiled-mesh"
 SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 
 
 def _integer_vector(value: Any, length: int, label: str) -> list[int]:
@@ -35,8 +36,13 @@ def _integer_vector(value: Any, length: int, label: str) -> list[int]:
 
 def validate_mesh_ir(document: dict[str, Any]) -> None:
     """Reject malformed or target-incompatible source IR documents."""
-    if document.get("schema") != SOURCE_SCHEMA or document.get("version") != SCHEMA_VERSION:
-        raise ValueError(f"expected {SOURCE_SCHEMA!r} schema version {SCHEMA_VERSION}")
+    if document.get("schema") != SOURCE_SCHEMA or document.get("version") not in SUPPORTED_SCHEMA_VERSIONS:
+        raise ValueError(
+            f"expected {SOURCE_SCHEMA!r} schema version one of {SUPPORTED_SCHEMA_VERSIONS}"
+        )
+    version = int(document["version"])
+    if version >= 2 and document.get("static_world_space") is not True:
+        raise ValueError("version 2 meshes must declare static_world_space=true")
     if not isinstance(document.get("name"), str) or not document["name"]:
         raise ValueError("name must be a non-empty string")
 
@@ -77,6 +83,17 @@ def validate_mesh_ir(document: dict[str, Any]) -> None:
             raise ValueError(f"triangles[{index}] has degenerate or out-of-range indices")
         if triangle.get("material") not in material_ids:
             raise ValueError(f"triangles[{index}] references an unknown material")
+        if "texture_tile" in triangle:
+            if version < 2:
+                raise ValueError("texture_tile is only supported by Mesh IR v2")
+            texture_tile = triangle["texture_tile"]
+            if not isinstance(texture_tile, dict):
+                raise ValueError(f"triangles[{index}].texture_tile must be an object")
+            texture = texture_tile.get("texture")
+            if texture is not None and (not isinstance(texture, str) or not texture):
+                raise ValueError(f"triangles[{index}].texture_tile.texture must be a string or null")
+            if not isinstance(texture_tile.get("state"), dict):
+                raise ValueError(f"triangles[{index}].texture_tile.state must be an object")
         source_id = triangle.get("source")
         if isinstance(source_id, bool) or not isinstance(source_id, int) or source_id < 0:
             raise ValueError(f"triangles[{index}].source must be a non-negative integer")
@@ -191,15 +208,26 @@ def compile_mesh_ir(
         (pose["name"], [tuple(position) for position in pose["positions"]])
         for pose in document.get("validation_poses", [])
     ]
+    explicit_forbidden_triangles = set(document.get("pairing_forbidden_triangles", []))
+    texture_tiles = None
+    vertex_uvs = None
+    if document["version"] >= 2 and "uv" in document.get("vertex_attributes", {}):
+        texture_tiles = [triangle.get("texture_tile") for triangle in triangles]
+        vertex_uvs = [tuple(uv) for uv in document["vertex_attributes"]["uv"]]
     textured_triangles = (
-        set(range(len(faces))) if "uv" in document.get("vertex_attributes", {}) else set()
+        set(range(len(faces)))
+        if "uv" in document.get("vertex_attributes", {}) and document["version"] < 2
+        else set()
     )
-    pairing_forbidden_triangles = textured_triangles | set(document.get("pairing_forbidden_triangles", []))
+    pairing_forbidden_triangles = textured_triangles | explicit_forbidden_triangles
     primitives, report = pair_triangles(
         positions,
         faces,
         deformation_poses=poses,
         pairing_forbidden_triangles=pairing_forbidden_triangles,
+        texture_tiles=texture_tiles,
+        vertex_uvs=vertex_uvs,
+        projection_policy="planar" if document["version"] >= 2 else "sampled",
     )
     if pairing_forbidden_triangles:
         report["pairing_forbidden_triangle_count"] = len(pairing_forbidden_triangles)
@@ -237,15 +265,20 @@ def compile_mesh_ir(
                 "source_triangles": [triangles[index]["source"] for index in source_indices],
             }
         )
+        if document["version"] >= 2:
+            compiled_primitives[-1]["texture_tiles"] = [
+                triangles[index].get("texture_tile") for index in source_indices
+            ]
 
     compiled = {
         "schema": COMPILED_SCHEMA,
-        "version": SCHEMA_VERSION,
+        "version": document["version"],
         "name": document["name"],
         "source": document.get("source", {}),
         "positions": document["positions"],
         "materials": document["materials"],
         "vertex_attributes": document.get("vertex_attributes", {}),
+        "static_world_space": document.get("static_world_space", False),
         "pairing_forbidden_triangles": document.get("pairing_forbidden_triangles", []),
         "deformation": document.get("deformation"),
         "primitives": compiled_primitives,
