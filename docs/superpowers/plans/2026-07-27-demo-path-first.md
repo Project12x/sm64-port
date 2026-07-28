@@ -427,7 +427,7 @@ generated sky bank as a build dependency.
 - [x] Wire NBG plane behind VDP1 sprites (priority below the 3-D layer,
   above back color). Scroll from camera yaw — the sim's camera, read-only,
   same authority rule as everything else.
-- [ ] Route capture + screenshot: sky visible, `fault_flags` 0, frame rate
+- [x] Route capture + screenshot: sky visible, `fault_flags` 0, frame rate
   unchanged or better (sky costs VDP2, not the frame budget).
 - [x] Record VDP2 layer usage in the completion note (which planes are now
   live, VRAM spent).
@@ -449,6 +449,17 @@ cost; owner visual confirmation before any TIMELINE entry, as always.
 
 The current layer budget is NBG1 RGB1555 bitmap: 262,144 bytes in VDP2 VRAM;
 the back-screen gradient uses 448 bytes; NBG3 remains the debug text plane.
+
+**Progress note (2026-07-28, post-cart sky upload):** a fresh dual route
+capture now shows the baked NBG1 sky bitmap behind the BOB terrain; the prior
+black field was traced to copying `.cart_rodata` during `user_init()` before
+`source_cart_load()` populated the DRAM cart. The copy is now deferred until
+after cart load. The paired report records `frame_serial=802`,
+`fault_flags=0`, `slave_timeouts=0`, and `render_frt_ticks_accum=47,972,047`
+(17.8075 ms/frame, effectively unchanged from the 17.8073 ms/frame optimized
+dual baseline). Screenshot:
+`evidence/screenshots/task3b-bob-sky-fixed-2026-07-28.png`. This is runtime
+evidence; owner visual confirmation is still required before gallery promotion.
 
 **References consumed (AW-3):** existing texture export tooling
 (`export_rgba16_textures.py`), Yaul VDP2 scroll-screen API (existing

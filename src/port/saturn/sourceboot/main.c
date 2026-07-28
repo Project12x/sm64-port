@@ -284,7 +284,6 @@ void user_init(void) {
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     sourceboot_init_sky_gradient();
-    sourceboot_init_sky_bitmap();
     /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
      * means "never displayed" (the classic footgun recorded in
      * docs/saturn/SGL_REFERENCE_NOTES.md). Without this, the whole
@@ -314,6 +313,11 @@ int main(void) {
         sm64_saturn_source_cart_report_failure(cart_status);
         for (;;) {}
     }
+    /* The bitmap is linked in .cart_rodata and is not readable from its
+     * final DRAM-cart address until source_cart_load() has completed. Keep
+     * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
+     * never receives a zeroed pre-cart buffer. */
+    sourceboot_init_sky_bitmap();
 
     dbgio_init();
     dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
