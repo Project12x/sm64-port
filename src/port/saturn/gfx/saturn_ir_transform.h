@@ -31,6 +31,13 @@ bool sm64_saturn_ir_transform_one(
     sm64_saturn_vec3i_t *view,
     sm64_saturn_projected_vertex_t *projected);
 
+/* Project an already view-space point. Terrain clipping uses this after its
+ * fixed-ring near-plane pass so no post-projection interpolation is needed. */
+bool sm64_saturn_ir_project_view(
+    const sm64_saturn_ir_transform_job_t *job,
+    sm64_saturn_vec3i_t view,
+    sm64_saturn_projected_vertex_t *projected);
+
 /* Transform a contiguous bank slice. The output arrays must hold `count`
  * entries. This is the job boundary used by the eventual dual-SH2 split. */
 bool sm64_saturn_ir_transform_batch(

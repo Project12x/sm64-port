@@ -201,6 +201,8 @@ verify-runtime-contracts: compile-quad-map
 	  "$(SATURN_REPO_ROOT)/tools/saturn/runtime_contract_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 

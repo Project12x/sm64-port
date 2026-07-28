@@ -35,6 +35,31 @@ static int32_t project_q16(int32_t reciprocal, int32_t coordinate)
 #endif
 }
 
+bool sm64_saturn_ir_project_view(
+    const sm64_saturn_ir_transform_job_t *job,
+    sm64_saturn_vec3i_t view,
+    sm64_saturn_projected_vertex_t *projected)
+{
+    if (job == NULL || projected == NULL || job->near_depth <= 0 ||
+        job->focal_length <= 0 || job->coord_min > job->coord_max ||
+        view.z <= 0) {
+        return false;
+    }
+    int32_t reciprocal;
+    if (!reciprocal_q16(job->focal_length, view.z, &reciprocal))
+        return false;
+    const int32_t screen_x = job->center_x +
+        project_q16(reciprocal, view.x);
+    const int32_t screen_y = job->center_y -
+        project_q16(reciprocal, view.y);
+    projected->x = (int16_t)clamp_coordinate(screen_x, job->coord_min,
+                                             job->coord_max);
+    projected->y = (int16_t)clamp_coordinate(screen_y, job->coord_min,
+                                             job->coord_max);
+    projected->z = view.z;
+    return true;
+}
+
 bool sm64_saturn_ir_transform_one(
     const sm64_saturn_ir_transform_job_t *job,
     sm64_saturn_vec3i_t world,
@@ -57,28 +82,15 @@ bool sm64_saturn_ir_transform_one(
                          ((int64_t)relative.z * job->camera.forward.z)) >> 16);
     const bool near_clipped = view->z <= job->near_depth;
     if (near_clipped && !job->clip_near) return false;
-    const int32_t divisor = near_clipped ? job->near_depth : view->z;
-    int32_t reciprocal;
-    if (!reciprocal_q16(job->focal_length, divisor, &reciprocal)) {
-        return false;
-    }
-
     view->x = (int32_t)((((int64_t)relative.x * job->camera.right.x) +
                          ((int64_t)relative.y * job->camera.right.y) +
                          ((int64_t)relative.z * job->camera.right.z)) >> 16);
     view->y = (int32_t)((((int64_t)relative.x * job->camera.up.x) +
                          ((int64_t)relative.y * job->camera.up.y) +
                          ((int64_t)relative.z * job->camera.up.z)) >> 16);
-    const int32_t screen_x = job->center_x +
-        project_q16(reciprocal, view->x);
-    const int32_t screen_y = job->center_y -
-        project_q16(reciprocal, view->y);
-    projected->x = (int16_t)clamp_coordinate(screen_x, job->coord_min,
-                                             job->coord_max);
-    projected->y = (int16_t)clamp_coordinate(screen_y, job->coord_min,
-                                             job->coord_max);
-    projected->z = view->z;
-    return true;
+    sm64_saturn_vec3i_t projected_view = *view;
+    if (near_clipped) projected_view.z = job->near_depth;
+    return sm64_saturn_ir_project_view(job, projected_view, projected);
 }
 
 bool sm64_saturn_ir_transform_batch(

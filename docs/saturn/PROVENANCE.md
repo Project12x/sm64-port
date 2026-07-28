@@ -520,6 +520,14 @@ assumptions were not copied because Mesh IR v2 is an immutable record stream
 and the cartridge policy forbids cart/LWRAM pointer chasing in the frame loop.
 This is therefore a small API adaptation, not a wholesale loader port.
 
+**2026-07-28 renderer pipeline sprint**: `src/port/saturn/gpl/ztreme_frustum.{c,h}`
+is a GPL-3.0-only close-port of the tri-state AABB/frustum decision from
+`ZT_FRUSTUM.c:126-161` at `cff75451c1616aac1236fc2b44223902b55c706b`.
+The adaptation consumes this port's Q16 camera basis and generated tight BOB
+fragment bounds; it does not import Z-Treme PVS, map bounds, SGL globals, or
+asset data. `src/port/saturn/gpl/slavedriver_terrain_result.h` remains the
+separate SlaveDriver result-boundary close-port described above.
+
 ### Sega hardware documentation
 
 | Reference | Use |

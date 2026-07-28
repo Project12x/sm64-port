@@ -33,6 +33,8 @@
 #endif
 #include "../gpl/slavedriver_dma_queue.h"
 #include "../gpl/slavedriver_dual_worker.h"
+#include "../gpl/slavedriver_terrain_clip.h"
+#include "../gpl/ztreme_frustum.h"
 #include "../gpl/ztreme_hot_promotion.h"
 
 #ifndef SATURN_DEMO_NEAR_DEPTH
@@ -92,8 +94,12 @@ static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_reordered[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_count;
 static uint8_t s_bsp_seen[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_spatial_admitted[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_spatial_seen[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_spatial_admitted_count;
 static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_recovery[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][4] __attribute__((section(".lwram_bss")));
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -199,7 +205,86 @@ static void demo_fragment_bsp_append(
 }
 #endif
 
-static void demo_build_clipped_quad(
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
+    int16_t node, sm64_saturn_ztreme_frustum_result_t inherited,
+    const sm64_saturn_ztreme_frustum_t *frustum,
+    sm64_saturn_fast3d_profile_t *profile)
+{
+    if (node < 0 || node >= (int16_t)SM64_SATURN_BOB_BSP_NODE_COUNT)
+        return SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE;
+    sm64_saturn_ztreme_frustum_result_t state = inherited;
+    if (state != SM64_SATURN_ZTREME_FRUSTUM_INSIDE) {
+        const sm64_saturn_ztreme_frustum_result_t tested =
+            sm64_saturn_ztreme_frustum_aabb(
+                frustum,
+                sm64_saturn_bob_bsp_bounds_min[node],
+                sm64_saturn_bob_bsp_bounds_max[node]);
+        state = tested;
+    }
+    profile->demo_bob_nodes_visited++;
+    if (state == SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE) {
+        profile->demo_bob_nodes_outside++;
+        return state;
+    }
+    if (state == SM64_SATURN_ZTREME_FRUSTUM_INSIDE)
+        profile->demo_bob_nodes_inside++;
+    else
+        profile->demo_bob_nodes_intersecting++;
+
+    const uint16_t start = sm64_saturn_bob_bsp_ref_ranges[node][0];
+    const uint16_t count = sm64_saturn_bob_bsp_ref_ranges[node][1];
+    for (uint16_t offset = 0U; offset < count; offset++) {
+        const uint16_t primitive = sm64_saturn_bob_bsp_refs[start + offset];
+        if (primitive >= SM64_SATURN_BOB_PRIMITIVE_COUNT ||
+            s_spatial_seen[primitive] != 0U)
+            continue;
+        s_spatial_seen[primitive] = 1U;
+        if (s_spatial_admitted_count < SM64_SATURN_BOB_PRIMITIVE_COUNT) {
+            s_spatial_admitted[primitive] = 1U;
+            s_spatial_admitted_count++;
+            profile->demo_bob_primitives_spatial_admitted++;
+        } else {
+            profile->demo_bob_primitives_spatial_dropped++;
+        }
+    }
+
+    const int64_t side =
+        (int64_t)sm64_saturn_bob_bsp_planes[node][0] * frustum->position[0] +
+        (int64_t)sm64_saturn_bob_bsp_planes[node][1] * frustum->position[1] +
+        (int64_t)sm64_saturn_bob_bsp_planes[node][2] * frustum->position[2] +
+        sm64_saturn_bob_bsp_distances[node];
+    const bool camera_front = side >= 0;
+    const int16_t near = sm64_saturn_bob_bsp_children[node][camera_front ? 0 : 1];
+    const int16_t far = sm64_saturn_bob_bsp_children[node][camera_front ? 1 : 0];
+    demo_spatial_admit_node(near, state, frustum, profile);
+    demo_spatial_admit_node(far, state, frustum, profile);
+    return state;
+}
+
+static void demo_spatial_admit(
+    const sm64_saturn_camera_transform_t *camera,
+    sm64_saturn_fast3d_profile_t *profile)
+{
+    memset(s_spatial_admitted, 0, sizeof(s_spatial_admitted));
+    memset(s_spatial_seen, 0, sizeof(s_spatial_seen));
+    s_spatial_admitted_count = 0U;
+    const sm64_saturn_ztreme_frustum_t frustum = {
+        .position = {camera->position.x, camera->position.y, camera->position.z},
+        .right = {camera->right.x, camera->right.y, camera->right.z},
+        .up = {camera->up.x, camera->up.y, camera->up.z},
+        .forward = {camera->forward.x, camera->forward.y, camera->forward.z},
+        .near_depth = SATURN_DEMO_NEAR_DEPTH,
+        .far_depth = DEMO_FAR_DEPTH,
+        .half_width = DEMO_CENTER_X,
+        .half_height = DEMO_CENTER_Y,
+        .focal_length = DEMO_FOCAL_LENGTH};
+    (void)demo_spatial_admit_node(
+        0, SM64_SATURN_ZTREME_FRUSTUM_INTERSECTS, &frustum, profile);
+}
+#endif
+
+static void __attribute__((unused)) demo_build_clipped_quad(
     const sm64_saturn_bob_primitive_t *primitive,
     sm64_saturn_projected_vertex_t output[4])
 {
@@ -287,10 +372,16 @@ typedef struct demo_scene_transform_context {
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
     const sm64_saturn_camera_transform_t *camera;
+    const sm64_saturn_ir_transform_job_t *job;
     uint32_t visible[2];
     uint32_t radius_rejected[2];
     uint32_t near_rejected[2];
     uint32_t degenerate[2];
+    uint32_t clip_away[2];
+    uint32_t clip_to_one[2];
+    uint32_t clip_to_two[2];
+    uint32_t clip_recovery[2];
+    uint32_t clip_overflow[2];
 } demo_classify_context_t;
 
 typedef struct demo_emit_stats {
@@ -470,7 +561,7 @@ static uint16_t demo_bucket(int32_t z)
                       (DEMO_FAR_DEPTH - SATURN_DEMO_NEAR_DEPTH));
 }
 
-static bool demo_primitive_in_radius(
+static bool __attribute__((unused)) demo_primitive_in_radius(
     const sm64_saturn_bob_primitive_t *primitive,
     const sm64_saturn_camera_transform_t *camera)
 {
@@ -514,7 +605,9 @@ static bool demo_primitive_in_radius(
 static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_classify_context_t *context = opaque;
+#if !(SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS)
     const sm64_saturn_camera_transform_t *camera = context->camera;
+#endif
     const uint8_t lane = begin == 0U ? 0U : 1U;
     for (uint16_t i = begin; i < end; i++) {
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
@@ -522,11 +615,18 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             break;
         const sm64_saturn_bob_primitive_t *primitive =
             &context->primitives[i];
+        s_primitive_recovery[i] = 0U;
         if (!demo_poly_tier_accepts(primitive)) {
             s_primitive_visible[i] = 0U;
             continue;
         }
-        if (!demo_primitive_in_radius(primitive, camera)) {
+        bool spatial_rejected = false;
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+        spatial_rejected = s_spatial_admitted[i] == 0U;
+#else
+        spatial_rejected = !demo_primitive_in_radius(primitive, camera);
+#endif
+        if (spatial_rejected) {
             context->radius_rejected[lane]++;
             s_primitive_visible[i] = 0U;
             continue;
@@ -548,15 +648,61 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             continue;
         }
         s_primitive_clipped[i] = 0U;
+        s_primitive_recovery[i] = 0U;
+        bool any_back = false;
+        sm64_saturn_terrain_clip_vertex_t clip_input[4];
         for (uint8_t corner = 0U; corner < 4U; corner++) {
-            if (s_view[primitive->indices[corner]].z <=
-                SATURN_DEMO_NEAR_DEPTH) {
-                s_primitive_clipped[i] = 1U;
-                break;
-            }
+            const uint16_t index = primitive->indices[corner];
+            clip_input[corner] = (sm64_saturn_terrain_clip_vertex_t){
+                .view = s_view[index],
+                .shade = (uint16_t)(((uint16_t)primitive->rgb[0] << 10) |
+                                    ((uint16_t)primitive->rgb[1] << 5) |
+                                    primitive->rgb[2]),
+                .source_edge = corner,
+                .source_corner = corner,
+                .edge_t_q16 = 0};
+            if (s_view[index].z < SATURN_DEMO_NEAR_DEPTH) any_back = true;
         }
-        if (s_primitive_clipped[i] != 0U) {
-            demo_build_clipped_quad(primitive, s_clipped_projected[i]);
+        if (any_back && context->job->clip_near) {
+            sm64_saturn_terrain_clip_output_t clipped;
+            const int clipped_count = sm64_saturn_terrain_clip_near_quad(
+                clip_input, SATURN_DEMO_NEAR_DEPTH, &clipped);
+            if (clipped_count == 0) {
+                if (clipped.classification == SM64_SATURN_TERRAIN_CLIP_AWAY)
+                    context->clip_away[lane]++;
+                else
+                    context->clip_overflow[lane]++;
+                context->near_rejected[lane]++;
+                s_primitive_visible[i] = 0U;
+                continue;
+            }
+            if (clipped_count < 3) {
+                context->clip_to_one[lane]++;
+                context->near_rejected[lane]++;
+                s_primitive_visible[i] = 0U;
+                continue;
+            }
+            if (clipped_count == 3) context->clip_to_one[lane]++;
+            else if (clipped_count == 4) context->clip_to_two[lane]++;
+            else {
+                context->clip_recovery[lane]++;
+                s_primitive_recovery[i] = 1U;
+            }
+            s_primitive_clipped[i] = 1U;
+            const uint8_t projected_count = clipped_count > 4 ? 4U :
+                                             (uint8_t)clipped_count;
+            for (uint8_t corner = 0U; corner < projected_count; corner++) {
+                if (!sm64_saturn_ir_project_view(
+                        context->job, clipped.vertices[corner].view,
+                        &s_clipped_projected[i][corner])) {
+                    s_primitive_visible[i] = 0U;
+                    context->near_rejected[lane]++;
+                    break;
+                }
+            }
+            if (s_primitive_visible[i] == 0U) continue;
+            if (projected_count == 3U)
+                s_clipped_projected[i][3] = s_clipped_projected[i][2];
         }
         /* Match the castleviewer/SlaveDriver painter contract: a primitive's
          * farthest projected corner owns its painter key.  Using the nearest
@@ -571,15 +717,13 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
                 s_projected[primitive->indices[corner]].z;
             if (corner_z > z) z = corner_z;
         }
+        int16_vec2_t screen_vertices[4];
+        demo_primitive_screen_vertices(primitive, screen_vertices);
         const int32_t cross =
-            (int32_t)(s_projected[primitive->indices[1]].x -
-                      s_projected[primitive->indices[0]].x) *
-                (s_projected[primitive->indices[2]].y -
-                 s_projected[primitive->indices[0]].y) -
-            (int32_t)(s_projected[primitive->indices[1]].y -
-                      s_projected[primitive->indices[0]].y) *
-                (s_projected[primitive->indices[2]].x -
-                 s_projected[primitive->indices[0]].x);
+            (int32_t)(screen_vertices[1].x - screen_vertices[0].x) *
+                (screen_vertices[2].y - screen_vertices[0].y) -
+            (int32_t)(screen_vertices[1].y - screen_vertices[0].y) *
+                (screen_vertices[2].x - screen_vertices[0].x);
         if (cross == 0) {
             context->degenerate[lane]++;
             s_primitive_visible[i] = 0U;
@@ -625,7 +769,8 @@ static void demo_emit_primitive(
     }
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);
-    if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT) {
+    if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT &&
+        s_primitive_recovery[primitive - s_bob_primitives_active] == 0U) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -693,6 +838,7 @@ static void demo_emit_primitive_at(
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);
     if (primitive->textured != 0U && !SATURN_DEMO_BSP_FRAGMENT_FLAT &&
+        s_primitive_recovery[primitive - s_bob_primitives_active] == 0U &&
         sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -1030,7 +1176,7 @@ void sm64_saturn_demo_render_frame(
     const sm64_saturn_mario_actor_pose_t *pose)
 {
     if (!s_bob_resident_ready) return;
-    const sm64_saturn_ir_transform_job_t job = {
+    const sm64_saturn_ir_transform_job_t terrain_job = {
         .camera = demo_camera(snapshot),
         .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = SATURN_DEMO_NEAR_DEPTH,
@@ -1040,8 +1186,18 @@ void sm64_saturn_demo_render_frame(
         .coord_max = DEMO_COORD_MAX,
         .clip_near = SATURN_DEMO_NEAR_CLIP != 0
     };
+    const sm64_saturn_ir_transform_job_t actor_job = {
+        .camera = terrain_job.camera,
+        .focal_length = terrain_job.focal_length,
+        .near_depth = terrain_job.near_depth,
+        .center_x = terrain_job.center_x,
+        .center_y = terrain_job.center_y,
+        .coord_min = terrain_job.coord_min,
+        .coord_max = terrain_job.coord_max,
+        .clip_near = false
+    };
     demo_transform_context_t transform = {
-        .job = &job,
+        .job = &terrain_job,
         .positions = s_bob_positions_active,
         .view = s_view,
         .projected = s_projected,
@@ -1049,7 +1205,7 @@ void sm64_saturn_demo_render_frame(
         .transformed = {0U, 0U}
     };
     demo_mario_transform_context_t mario_transform = {
-        .job = &job, .snapshot = snapshot, .pose = pose
+        .job = &actor_job, .snapshot = snapshot, .pose = pose
     };
     demo_scene_transform_context_t scene_transform = {
         .terrain = &transform,
@@ -1094,9 +1250,13 @@ void sm64_saturn_demo_render_frame(
             s_slave_begin--;
         }
     }
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+    demo_spatial_admit(&terrain_job.camera, profile);
+#endif
     demo_classify_context_t classify = {
         .primitives = s_bob_primitives_active,
-        .camera = &job.camera,
+        .camera = &terrain_job.camera,
+        .job = &terrain_job,
         .visible = {0U, 0U},
         .radius_rejected = {0U, 0U},
         .near_rejected = {0U, 0U},
@@ -1128,12 +1288,17 @@ void sm64_saturn_demo_render_frame(
         classify.near_rejected[0] + classify.near_rejected[1];
     profile->demo_bob_primitives_degenerate +=
         classify.degenerate[0] + classify.degenerate[1];
+    profile->demo_bob_clip_away += classify.clip_away[0] + classify.clip_away[1];
+    profile->demo_bob_clip_to_one += classify.clip_to_one[0] + classify.clip_to_one[1];
+    profile->demo_bob_clip_to_two += classify.clip_to_two[0] + classify.clip_to_two[1];
+    profile->demo_bob_clip_recovery += classify.clip_recovery[0] + classify.clip_recovery[1];
+    profile->demo_bob_clip_overflow += classify.clip_overflow[0] + classify.clip_overflow[1];
 
 #if SATURN_DEMO_BSP_ORDER
 #if SATURN_DEMO_BSP_FRAGMENTS
     memset(s_bsp_seen, 0, sizeof(s_bsp_seen));
     s_emit_count = 0U;
-    demo_fragment_bsp_append(0, &job.camera);
+    demo_fragment_bsp_append(0, &terrain_job.camera);
     for (uint16_t primitive = 0U;
          primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
         if (s_primitive_visible[primitive] != 0U &&
@@ -1145,7 +1310,7 @@ void sm64_saturn_demo_render_frame(
      * far-to-near dependency stream for the static world. */
     memset(s_bsp_seen, 0, sizeof(s_bsp_seen));
     s_emit_count = 0U;
-    demo_bsp_append(0, &job.camera);
+    demo_bsp_append(0, &terrain_job.camera);
     for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         if (s_primitive_visible[i] != 0U && s_bsp_seen[i] == 0U)
             s_emit_order[s_emit_count++] = i;

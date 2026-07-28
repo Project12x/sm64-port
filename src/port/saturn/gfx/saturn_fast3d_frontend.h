@@ -366,6 +366,18 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_bob_primitives_radius_rejected;
     uint32_t demo_bob_primitives_near_rejected;
     uint32_t demo_bob_primitives_degenerate;
+    /* Task 3 Z-Treme-style spatial admission diagnostics; append-only. */
+    uint32_t demo_bob_nodes_visited;
+    uint32_t demo_bob_nodes_inside;
+    uint32_t demo_bob_nodes_intersecting;
+    uint32_t demo_bob_nodes_outside;
+    uint32_t demo_bob_primitives_spatial_admitted;
+    uint32_t demo_bob_primitives_spatial_dropped;
+    uint32_t demo_bob_clip_away;
+    uint32_t demo_bob_clip_to_one;
+    uint32_t demo_bob_clip_to_two;
+    uint32_t demo_bob_clip_recovery;
+    uint32_t demo_bob_clip_overflow;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

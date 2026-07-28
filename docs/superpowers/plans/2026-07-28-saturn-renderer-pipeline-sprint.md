@@ -1,6 +1,7 @@
 # Saturn Renderer Pipeline Sprint
 
-> **Status:** Ready for implementation
+> **Status:** In progress — Tasks 0–4 implementation slices landed; route/visual
+> acceptance and the one-dispatch performance gate remain open.
 > **Date:** 2026-07-28
 > **Branch baseline:** `saturn/bootstrap` at `d58fc37`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
@@ -284,21 +285,21 @@ starting point and eliminate the remaining licence-policy contradiction.
 
 - [ ] Record `d58fc37` as the sprint baseline with the exact SBR2 values in
   section 2.
-- [ ] Correct the stale Z-Treme behaviour-only statement to the dated owner
+- [x] Correct the stale Z-Treme behaviour-only statement to the dated owner
   decision: GPL close-port is authorized under the recorded obligations.
-- [ ] Add the exact source ranges and reuse modes from section 4 to the
+- [x] Add the exact source ranges and reuse modes from section 4 to the
   upstream ledger before implementation begins.
 - [ ] Capture the current serial and dual route from clean, fresh builds at
   `view_radius=6000`, `poly_tier=0`; preserve the exact checkpoint
   comparison. Use the standard `--timeout 1500` recipe and reserve at least
   1,700 seconds of host budget rather than treating a 240-second stop as a
   renderer failure.
-- [ ] Add `emulation_speed_ratio` to capture reports from emulated VBlanks,
+- [x] Add `emulation_speed_ratio` to capture reports from emulated VBlanks,
   nominal refresh, and measured wall-clock duration.
-- [ ] Add a bounded cadence sample series sufficient to calculate guest
+- [x] Add a bounded cadence sample series sufficient to calculate guest
   median and 1% low without treating a cumulative counter as a frame-time
   distribution.
-- [ ] Freeze the three named visual viewpoints from Task 3 as deterministic
+- [x] Freeze the three named visual viewpoints from Task 3 as deterministic
   controller/capture steps in `bob_renderer_views_v1.json`.
 - [ ] Record current manual-view screenshots as baseline diagnostics, not
   gallery milestones unless already owner-accepted.
@@ -344,17 +345,17 @@ state, VDP1 command cursor, or Gouraud cursor.
 
 **Work:**
 
-- [ ] Close-port the fixed-capacity result and pre-write guard pattern from
+- [x] Close-port the fixed-capacity result and pre-write guard pattern from
   `WALLS.C:1240-1408`.
-- [ ] Define two disjoint output spans, one for each CPU, with deterministic
+- [x] Define two disjoint output spans, one for each CPU, with deterministic
   merge order.
 - [ ] Define uncached/cache-through access explicitly for worker-produced
   data.
-- [ ] Add overflow counters by reason and reserve headroom before every
+- [x] Add overflow counters by reason and reserve headroom before every
   multi-result clip write.
-- [ ] Add host tests for zero, exact-capacity, capacity-minus-headroom,
+- [x] Add host tests for zero, exact-capacity, capacity-minus-headroom,
   overflow, stable merge, and marker handling.
-- [ ] Add compile-time size/alignment assertions.
+- [x] Add compile-time size/alignment assertions.
 
 **Gate:** host contract suite passes; capacity tests prove no write occurs
 after a rejected reservation; worker result headers contain no master-owned
@@ -381,18 +382,18 @@ of rejecting whole primitives from individual vertex failures.
 
 **Work:**
 
-- [ ] Emit tight conservative AABBs for every node and leaf from final baked
+- [x] Emit tight conservative AABBs for every node and leaf from final baked
   fragment vertices.
-- [ ] Quantize bounds with an explicit error envelope; verify each source
+- [x] Quantize bounds with an explicit error envelope; verify each source
   vertex remains inside its emitted bound after quantization.
 - [ ] Emit contiguous leaf ranges and immutable per-leaf primitive/material
   ranges suitable for master/slave splitting.
 - [ ] Emit stable traversal-child order data for each camera octant.
-- [ ] Emit an estimated work weight per leaf: fragments plus clip-risk and
+- [x] Emit an estimated work weight per leaf: fragments plus clip-risk and
   material-change terms. Keep the formula documented and versioned.
 - [ ] Preserve the current Mesh IR identity and `source0` mapping; do not
   invent a parallel world format.
-- [ ] Add a schema/version bump and deterministic artifact digest.
+- [x] Add a static-BSP schema/version bump and deterministic artifact digest.
 
 **Gate:** all generated bounds are conservative; two identical bakes produce
 the same digest; every fragment is referenced exactly once by its leaf data;
@@ -418,13 +419,13 @@ rather than random emission order.
 
 **Work:**
 
-- [ ] Close-port Z-Treme’s tri-state AABB/frustum test from
+- [x] Close-port Z-Treme’s tri-state AABB/frustum test from
   `ZT_FRUSTUM.c:126-161`.
-- [ ] Propagate inherited `INSIDE` state to children.
+- [x] Propagate inherited `INSIDE` state to children.
 - [ ] Traverse camera-octant children near-to-far for capacity admission.
-- [ ] Stop primitive-radius rejection from overriding an accepted tight leaf;
+- [x] Stop primitive-radius rejection from overriding an accepted tight leaf;
   retain a profile flag for same-commit A/B.
-- [ ] Record nodes/leaves visited, inside, intersecting, outside, admitted,
+- [x] Record nodes/leaves visited, inside, intersecting, outside, admitted,
   and dropped by capacity.
 - [ ] Build the accepted opaque leaf list in near-to-far admission order,
   then emit it in stable far-to-near painter order.
@@ -448,6 +449,11 @@ labels the residual failure before Task 4.
 ---
 
 ### Task 4 — Terrain-only view-space near handling
+
+Implementation slice is present behind `SATURN_DEMO_NEAR_CLIP`: the
+SlaveDriver-style fixed ring interpolates view position/shade and projects
+only after clipping, while Mario keeps the strict actor job. The visual gate,
+recovery-material screenshots, and full counter acceptance remain open.
 
 **Purpose:** Replace whole-polygon loss and post-projection sheets with a
 bounded view-space decision.

@@ -15,6 +15,7 @@
 #include "saturn_matrix_kernels.h"
 #include "slavedriver_projection.h"
 #include "slavedriver_terrain_result.h"
+#include "slavedriver_terrain_clip.h"
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
 #include "saturn_input_replay.h"
@@ -362,6 +363,29 @@ static void test_bounded_terrain_result_spans(void)
     sm64_saturn_terrain_result_arena_reset(&spans.slave);
     assert(spans.slave.count == 0U);
     assert(spans.slave.reserve_rejects == 0U);
+}
+
+static void test_view_space_terrain_clip(void)
+{
+    const sm64_saturn_terrain_clip_vertex_t input[4] = {
+        {{-8, -8, 64}, 10U, 0U, 0U, 0},
+        {{8, -8, 64}, 20U, 1U, 1U, 0},
+        {{8, 8, 256}, 30U, 2U, 2U, 0},
+        {{-8, 8, 256}, 40U, 3U, 3U, 0},
+    };
+    sm64_saturn_terrain_clip_output_t output;
+    assert(sm64_saturn_terrain_clip_near_quad(input, 128, &output) == 4);
+    assert(output.classification == SM64_SATURN_TERRAIN_CLIP_CROSSES);
+    assert(output.vertices[0].view.z >= 128);
+    assert(output.vertices[1].view.z >= 128);
+    assert(output.vertices[0].source_corner == UINT8_MAX);
+    assert(output.vertices[0].edge_t_q16 > 0);
+    const sm64_saturn_terrain_clip_vertex_t away[4] = {
+        {{0, 0, 1}, 0U, 0U, 0U, 0}, {{1, 0, 1}, 0U, 1U, 1U, 0},
+        {{1, 1, 1}, 0U, 2U, 2U, 0}, {{0, 1, 1}, 0U, 3U, 3U, 0},
+    };
+    assert(sm64_saturn_terrain_clip_near_quad(away, 128, &output) == 0);
+    assert(output.classification == SM64_SATURN_TERRAIN_CLIP_AWAY);
 }
 
 static uint32_t float_bits(float value)
@@ -3541,6 +3565,7 @@ int main(void)
     test_q16_normalization();
     test_input_replay_feeds_only_pads_and_ends_neutral();
     test_bounded_terrain_result_spans();
+    test_view_space_terrain_clip();
     test_frame_profile();
     test_bounded_memory_arena();
     test_source_identified_render_queue();

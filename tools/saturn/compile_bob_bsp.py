@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 from fractions import Fraction
+from math import ceil, floor
 from pathlib import Path
 
 from static_bsp import Node, Polygon, Vertex, build, iter_polygons, painter_order
@@ -48,7 +49,7 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
     origin_order = painter_order(root, (0, 0, 0))
     report = {
         "schema": "sm64-saturn-bob-static-bsp",
-        "version": 1,
+        "version": 2,
         "source": scene["source"],
         "source_ir_version": scene["version"],
         "policy": "exact rational convex splits; deterministic balanced plane heuristic",
@@ -72,8 +73,9 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
                 ]} for p in origin_order
             ], sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest(),
+        "bounds": _bounds_report(root),
         "limits": [
-            "Report-only until split fragments and node ranges are emitted into bob_scene.h",
+            "Bounds are conservative floor/ceil quantized exact-rational fragment bounds",
             "Runtime traversal must use the camera position, not the origin order",
             "UV interpolation remains exact rational until final scene-header quantization",
         ],
@@ -111,6 +113,69 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
         low_tier_clut = report["triangulated_fragment_count"] * 32
         report["all_16x16_fragment_resident_bytes"] = low_tier_texture + low_tier_clut
     return report
+
+
+def _node_metrics(node: Node | None) -> tuple[tuple[Fraction, Fraction, Fraction],
+                                                tuple[Fraction, Fraction, Fraction],
+                                                int, int, int, int]:
+    """Return conservative bounds and deterministic work metadata for a node.
+
+    Bounds are derived from final split fragments, not source primitive boxes.
+    The work weight is versioned by this module's policy: one unit per
+    fragment, two for each extra vertex introduced by a split, and one for
+    each adjacent material transition in the flattened subtree.
+    """
+    if node is None:
+        zero = (Fraction(0), Fraction(0), Fraction(0))
+        return zero, zero, 0, 0, 0, 0
+    polygons = list(iter_polygons(node))
+    own_polygons = list(node.coplanar)
+    if not polygons:
+        zero = (Fraction(0), Fraction(0), Fraction(0))
+        return zero, zero, 0, 0, 0, 0
+    minimum = tuple(min(vertex.position[axis] for polygon in polygons
+                        for vertex in polygon.vertices)
+                    for axis in range(3))
+    maximum = tuple(max(vertex.position[axis] for polygon in polygons
+                        for vertex in polygon.vertices)
+                    for axis in range(3))
+    material_changes = sum(
+        1 for left, right in zip(own_polygons, own_polygons[1:])
+        if left.texture != right.texture)
+    weight = sum(1 + max(0, len(polygon.vertices) - 4) * 2
+                 for polygon in own_polygons) + material_changes
+    child_metrics = [_node_metrics(child) for child in (node.front, node.back)
+                     if child is not None]
+    leaf_count = 1 if node.front is None and node.back is None else 0
+    max_depth = 1
+    for child_min, child_max, child_weight, _child_count, child_leaves, child_depth in child_metrics:
+        minimum = tuple(min(minimum[axis], child_min[axis]) for axis in range(3))
+        maximum = tuple(max(maximum[axis], child_max[axis]) for axis in range(3))
+        weight += child_weight
+        leaf_count += child_leaves
+        max_depth = max(max_depth, child_depth + 1)
+    return minimum, maximum, weight, len(polygons), leaf_count, max_depth
+
+
+def _quantized_bounds(node: Node | None) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    minimum, maximum, _weight, _count, _leaves, _depth = _node_metrics(node)
+    return tuple(floor(value) for value in minimum), tuple(ceil(value) for value in maximum)
+
+
+def _bounds_report(root: Node) -> dict[str, object]:
+    minimum, maximum, weight, fragments, leaves, depth = _node_metrics(root)
+    quantized_min, quantized_max = _quantized_bounds(root)
+    return {
+        "quantization": "floor minimum / ceil maximum; exact Fraction source",
+        "root_min": list(quantized_min),
+        "root_max": list(quantized_max),
+        "root_exact_min": [[value.numerator, value.denominator] for value in minimum],
+        "root_exact_max": [[value.numerator, value.denominator] for value in maximum],
+        "root_work_weight": weight,
+        "root_fragment_count": fragments,
+        "root_leaf_count": leaves,
+        "max_depth": depth,
+    }
 
 
 def _flatten(root: Node) -> tuple[list[Node], list[int], list[tuple[int, int]], list[tuple[int, int]]]:
@@ -215,6 +280,24 @@ def header_text(scene: dict[str, object], candidate_limit: int = 32,
         "static const uint16_t sm64_saturn_bob_bsp_ref_ranges[SM64_SATURN_BOB_BSP_NODE_COUNT][2] = {",
     ]
     lines.extend("    {%dU, %dU}," % pair for pair in ranges)
+    lines += [
+        "};",
+        "/* Conservative final-fragment bounds; minima are floored and maxima ceiled. */",
+        "static const int32_t sm64_saturn_bob_bsp_bounds_min[SM64_SATURN_BOB_BSP_NODE_COUNT][3] = {",
+    ]
+    lines.extend(
+        "    {%d, %d, %d}," % _quantized_bounds(node)[0] for node in nodes)
+    lines += [
+        "};",
+        "static const int32_t sm64_saturn_bob_bsp_bounds_max[SM64_SATURN_BOB_BSP_NODE_COUNT][3] = {",
+    ]
+    lines.extend(
+        "    {%d, %d, %d}," % _quantized_bounds(node)[1] for node in nodes)
+    lines += [
+        "};",
+        "static const uint16_t sm64_saturn_bob_bsp_work_weight[SM64_SATURN_BOB_BSP_NODE_COUNT] = {",
+    ]
+    lines.extend("    %dU," % _node_metrics(node)[2] for node in nodes)
     lines += [
         "};",
         "static const uint16_t sm64_saturn_bob_bsp_refs[SM64_SATURN_BOB_BSP_REF_COUNT] = {",

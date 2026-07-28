@@ -66,7 +66,10 @@ from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
 from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
-from compile_bob_bsp import compile_bsp as compile_bob_bsp  # noqa: E402
+from compile_bob_bsp import (  # noqa: E402
+    compile_bsp as compile_bob_bsp,
+    header_text as header_bob_bsp,
+)
 from bake_bob_bsp_fragments import bake as bake_bob_bsp_fragments  # noqa: E402
 from emit_bob_bsp_fragments import emit as emit_bob_bsp_fragments  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
@@ -985,7 +988,20 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(first["split_events"], 560)
         self.assertEqual(first["node_count"], 1183)
         self.assertEqual(len(first["deterministic_sha256"]), 64)
+        self.assertEqual(first["version"], 2)
+        self.assertEqual(first["bounds"]["root_min"], [-8191, -383, -8191])
+        self.assertEqual(first["bounds"]["root_max"], [8192, 4294, 8192])
+        self.assertGreater(first["bounds"]["root_work_weight"], 0)
         self.assertIn("runtime traversal", " ".join(first["limits"]).lower())
+
+    def test_bob_bsp_header_emits_conservative_bounds_and_work_weights(self) -> None:
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        header = header_bob_bsp(scene)
+        self.assertIn("sm64_saturn_bob_bsp_bounds_min", header)
+        self.assertIn("sm64_saturn_bob_bsp_bounds_max", header)
+        self.assertIn("sm64_saturn_bob_bsp_work_weight", header)
+        self.assertEqual(header, header_bob_bsp(scene))
 
     def test_bob_bsp_fragment_texture_cost_exposes_budget_gap(self) -> None:
         root = TOOLS.parents[1]
@@ -1682,6 +1698,17 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_bob_primitives_radius_rejected",
                 "demo_bob_primitives_near_rejected",
                 "demo_bob_primitives_degenerate",
+                "demo_bob_nodes_visited",
+                "demo_bob_nodes_inside",
+                "demo_bob_nodes_intersecting",
+                "demo_bob_nodes_outside",
+                "demo_bob_primitives_spatial_admitted",
+                "demo_bob_primitives_spatial_dropped",
+                "demo_bob_clip_away",
+                "demo_bob_clip_to_one",
+                "demo_bob_clip_to_two",
+                "demo_bob_clip_recovery",
+                "demo_bob_clip_overflow",
             ],
         )
         # Fields the older build did have still read correctly.
