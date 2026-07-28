@@ -1101,7 +1101,7 @@ metadata, so an unprofiled capture cannot silently enter a parity comparison.
 - [x] View distance: single clamp on baked-bank spatial groups (the bake
   emits bounds — Mesh IR v2 already carries them from Task 2). Near-to-far
   traversal per the Z-Treme pattern.
-- [ ] **RBG0 horizon-mask spike** (timeboxed; success optional, measurement
+- [x] **RBG0 horizon-mask spike** (timeboxed; success optional, measurement
   mandatory): a perspective-correct VDP2 rotation plane at the horizon,
   rotation parameters computed from the sim camera each frame, filling the
   world beyond the draw-distance clamp — so cut geometry reads as art
@@ -1113,7 +1113,7 @@ metadata, so an unprofiled capture cannot silently enter a parity comparison.
   care. If the spike misses its box, commit the findings and fall back to
   the gradient horizon — the view-distance clamp still works, it just looks
   cheaper.
-- [ ] **Fog-band spike via sprite color calculation** (pairs with the
+- [x] **Fog-band spike via sprite color calculation** (pairs with the
   horizon mask; only if it survives): bucket far geometry into 2-3 sprite
   priority groups with VDP2-side color-calc blending toward the sky color.
   Coarse depth cueing at zero VDP1 fill cost — VDP1 half-transparency
@@ -1136,6 +1136,16 @@ reports; owner visual acceptance and the final FPS gate remain open.
 
 **Gate:** a settings table — view distance vs absolute FPS — from real route
 captures.
+
+**Progress note (2026-07-28, horizon/fog spike measurement):** the RBG0 and
+fog-band spikes are measured and deferred. The existing NBG1 sky consumes
+262,144 bytes of the 512 KiB VDP2 budget, leaving no comfortable second
+full-frame RGB1555 bitmap once rotation parameters and maps are included; a
+tilemap seam is not justified for BOB's hilly horizon. Fog requires a new
+priority/color-calc bucket path that the current VDP1 stream does not expose.
+The measurement record is
+`docs/saturn/evidence/reports/task6-horizon-fog-spikes-2026-07-28.md`; the
+gradient/NBG1 fallback remains the accepted degradation path.
 
 ---
 
