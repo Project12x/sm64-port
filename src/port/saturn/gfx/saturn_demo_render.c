@@ -53,6 +53,7 @@ static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
     SM64_MARIO_PRIMITIVE_COUNT];
 static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT];
+static const uint8_t *s_actor_light_intensity;
 static uint16_t s_actor_draw_count;
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
     __attribute__((section(".lwram_bss")));
@@ -433,13 +434,11 @@ static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
             const uint16_t corners[4] = {indices[1], indices[2], indices[3],
                                          indices[4]};
             for (uint8_t corner = 0; corner < 4U; corner++) {
-                int32_t level = 16 +
-                    (s_actor_projected[corners[corner]].y - DEMO_CENTER_Y) / -8;
-                if (level < 8) level = 8;
-                if (level > 24) level = 24;
-                const uint8_t r = (uint8_t)((rgb[0] * level) / 16);
-                const uint8_t g = (uint8_t)((rgb[1] * level) / 16);
-                const uint8_t b = (uint8_t)((rgb[2] * level) / 16);
+                const uint8_t intensity = s_actor_light_intensity != NULL
+                    ? s_actor_light_intensity[corners[corner]] : 31U;
+                const uint8_t r = (uint8_t)((rgb[0] * intensity) / 31U);
+                const uint8_t g = (uint8_t)((rgb[1] * intensity) / 31U);
+                const uint8_t b = (uint8_t)((rgb[2] * intensity) / 31U);
                 table->colors[corner] = RGB1555(
                     1, r > 31U ? 31U : r, g > 31U ? 31U : g,
                     b > 31U ? 31U : b).raw;
@@ -524,6 +523,7 @@ static void demo_emit_mario(
     const int32_t cosine = sm64_saturn_coss_q16(snapshot->yaw);
     memset(s_actor_gouraud, 0, sizeof(s_actor_gouraud));
     memset(s_actor_gouraud_addresses, 0, sizeof(s_actor_gouraud_addresses));
+    s_actor_light_intensity = pose->light_intensity;
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,

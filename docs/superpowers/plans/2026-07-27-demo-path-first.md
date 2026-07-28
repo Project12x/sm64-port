@@ -571,10 +571,14 @@ is still required before gallery promotion.
 
 **Progress note (2026-07-28, actor Gouraud milestone):** the dual-worker Mario
  pass now allocates one master-owned Gouraud table per visible primitive and
- emits a deterministic projected-height light ramp through VDP1's Gouraud
- combiner, with flat RGB1555 retained when the table bank is exhausted or the
- worker falls back. The image builds cleanly and is running in foreground Ymir;
- owner visual confirmation and a saved milestone screenshot remain open.
+ expands the shared bridge's source-derived compact per-vertex light
+ intensities through VDP1's Gouraud combiner, matching Castleviewer. Flat RGB1555
+ remains the fallback when the table bank is exhausted or the worker falls back.
+ The image builds cleanly and is running in foreground Ymir; owner visual
+ confirmation and a saved milestone screenshot remain open. Castleviewer also
+ establishes the next texture lesson: textured Mario primitives are lowered as
+ an adjacent opaque Gouraud material command plus alpha-keyed texture tile
+ overlays, preserving source-primitive ordering.
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
