@@ -36,6 +36,7 @@ MARIO_TEXTURE_SUBDIVISION ?= 1
 # mario_anim_data.c; that Makefile overrides this when it delegates here.
 QUAD_MAP_GENERATED ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated
 BOB_MESH_GENERATED ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated
+BOB_ASSET_ROOT ?= $(SATURN_REPO_ROOT)
 BOB_AREA_DIR ?= levels/bob/areas/1
 BOB_TILES_GENERATED ?= $(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated
 BOB_SKY_SOURCE ?= textures/skyboxes/water.png
@@ -60,7 +61,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-ir-transform verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -420,6 +421,15 @@ compile-bob-bsp: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_bob_bsp.py" \
 	  --input "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --output "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json"
+
+compile-bob-bsp-fragments: compile-bob-area
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_bsp_fragments.py" \
+	  --input "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
+	  --asset-root "$(BOB_ASSET_ROOT)" \
+	  --bank "$(BOB_MESH_GENERATED)/bob_bsp_fragments_clut16.bin" \
+	  --clut "$(BOB_MESH_GENERATED)/bob_bsp_fragments_clut16.pal" \
+	  --manifest "$(BOB_MESH_GENERATED)/bob_bsp_fragments_manifest.json" \
+	  --scene "$(BOB_MESH_GENERATED)/bob_bsp_fragments_scene.json"
 
 compile-bob-tiles: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_tiles.py" \

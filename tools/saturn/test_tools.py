@@ -65,6 +65,7 @@ from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_bob_bsp import compile_bsp as compile_bob_bsp  # noqa: E402
+from bake_bob_bsp_fragments import bake as bake_bob_bsp_fragments  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
     Polygon as BspPolygon,
@@ -998,6 +999,20 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(report["all_16x16_fragment_resident_bytes"], 337280)
         self.assertGreater(report["estimated_fragment_resident_bytes"],
                            report["vdp1_texture_budget_bytes"])
+
+    def test_bob_bsp_fragment_bake_is_deterministic_and_budgeted(self) -> None:
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        first = bake_bob_bsp_fragments(scene, root)
+        second = bake_bob_bsp_fragments(scene, root)
+        self.assertEqual(first, second)
+        bank, clut, manifest, fragment_scene = first
+        self.assertEqual(len(bank), 261248)
+        self.assertEqual(len(clut), 65312)
+        self.assertEqual(len(bank) + len(clut), 326560)
+        self.assertEqual(manifest["fragment_count"], 2108)
+        self.assertEqual(manifest["textured_fragment_count"], 2108 - 67)
+        self.assertEqual(len(fragment_scene["fragments"]), 2108)
 
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)

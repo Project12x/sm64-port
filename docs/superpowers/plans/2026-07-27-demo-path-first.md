@@ -949,9 +949,20 @@ existing BOB tile manifest to the 1,425 BSP fragments and triangulating convex
 fragments for VDP1 yields 2,108 commands: 876 16×16, 1,165 32×32, and 67 flat.
 That is 773,920 bytes of texture/CLUT versus the 446,432-byte VDP1 resident
 budget. Full-resolution per-fragment UV baking therefore cannot be enabled
-blindly. An all-16×16 fragment tier is estimated at 337,280 bytes; the next
+blindly. An all-16×16 textured fragment tier is estimated at 326,560 bytes;
+flat fragments retain their RGB path. The next
 implementation must bake that tier and verify its UV error before wiring split
 fragments into sourceboot.
+
+**Progress note (2026-07-28, 16×16 BSP fragment bake):**
+`bake_bob_bsp_fragments.py` now samples interpolated split UVs, fan-triangulates
+convex fragments, canonicalizes transparent RGB, and emits a deterministic
+bank/CLUT/scene artifact through `compile-bob-bsp-fragments`. The result is
+2,108 fragment commands, 2,041 textured tiles. The verified artifact is
+261,248 bytes of texture plus 65,312 bytes of CLUT = 326,560 bytes,
+under the 446,432-byte resident gate. It is still host-side; runtime adoption
+must carry the fragment geometry and tile offsets into the generated scene
+header without displacing Mario's texture base.
 
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
