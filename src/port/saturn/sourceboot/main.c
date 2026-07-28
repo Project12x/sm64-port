@@ -1,5 +1,6 @@
 /* E2 sourceboot target: original game-loop ownership, direct Bob source entry. */
 #include <yaul.h>
+#include <cpu/cache.h>
 
 #include "game/camera.h"
 #include "game/game_init.h"
@@ -199,6 +200,12 @@ static void sourceboot_vblank_out_handler(void *work __unused) {
 #define SOURCEBOOT_BACKSCREEN_LINES 224U
 static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
 
+#define SOURCEBOOT_SKY_BITMAP_WIDTH 512U
+#define SOURCEBOOT_SKY_BITMAP_HEIGHT 256U
+#define SOURCEBOOT_SKY_BITMAP_WORDS \
+    (SOURCEBOOT_SKY_BITMAP_WIDTH * SOURCEBOOT_SKY_BITMAP_HEIGHT)
+extern const uint16_t sm64_saturn_bob_sky_bitmap[];
+
 static void sourceboot_init_sky_gradient(void)
 {
     for (uint16_t line = 0; line < SOURCEBOOT_BACKSCREEN_LINES; line++) {
@@ -221,6 +228,36 @@ static void sourceboot_init_sky_gradient(void)
     vdp2_scrn_back_sync();
 }
 
+static void sourceboot_init_sky_bitmap(void)
+{
+    volatile uint16_t * const vram = (volatile uint16_t *)
+        (CPU_CACHE_THROUGH | VDP2_VRAM_ADDR(0, 0x00000));
+    for (uint32_t index = 0; index < SOURCEBOOT_SKY_BITMAP_WORDS; index++) {
+        vram[index] = sm64_saturn_bob_sky_bitmap[index];
+    }
+    const vdp2_scrn_bitmap_format_t format = {
+        .scroll_screen = VDP2_SCRN_NBG1,
+        .ccc = VDP2_SCRN_CCC_RGB_32768,
+        .bitmap_size = VDP2_SCRN_BITMAP_SIZE_512X256,
+        .palette_base = 0,
+        .bitmap_base = VDP2_VRAM_ADDR(0, 0x00000),
+    };
+    const vdp2_vram_cycp_t cycles = {
+        .pt[0].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[0].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[1].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+    };
+    vdp2_vram_cycp_set(&cycles);
+    vdp2_scrn_bitmap_format_set(&format);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 1);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
+}
+
 void user_init(void) {
     /* First, matching both siblings' user_init order (castleviewer
      * main.c:1186, marioturntable main.c:247). */
@@ -229,6 +266,7 @@ void user_init(void) {
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
     sourceboot_init_sky_gradient();
+    sourceboot_init_sky_bitmap();
     /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
      * means "never displayed" (the classic footgun recorded in
      * docs/saturn/SGL_REFERENCE_NOTES.md). Without this, the whole
@@ -272,7 +310,7 @@ int main(void) {
         vdp2_sprite_priority_set(priority, 7);
     }
     vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
-    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG3);
+    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1 | VDP2_SCRN_DISP_NBG3);
     dbgio_puts("\x1B[H\x1B[2JSM64 SATURN SOURCEBOOT E2\n"
                "Direct original Bob script\n"
                "SOURCE.DAT -> 4 MiB RAM cart\n"

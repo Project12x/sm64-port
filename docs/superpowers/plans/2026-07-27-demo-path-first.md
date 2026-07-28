@@ -437,9 +437,15 @@ cost; owner visual confirmation before any TIMELINE entry, as always.
 
 **Progress note (2026-07-28, offline sky bake):** `bake_bob_sky.py` now
  decodes the checked-in 248x248 BOB water sky and emits a deterministic
- 512x256 RGB1555 NBG1 bitmap (262,144 bytes), with an auditable manifest and
+512x256 RGB1555 NBG1 bitmap (262,144 bytes), with an auditable manifest and
  `compile-bob-sky` build target. The remaining open work is runtime NBG1
  wiring, camera scroll, and the capture/visual gate.
+
+**Progress note (2026-07-28, NBG1 wiring):** sourceboot now links the baked
+ sky in `.cart_rodata`, copies it once to VDP2 VRAM at boot, allocates NBG1's
+ bitmap fetch cycles, and places NBG1 below the VDP1 sprite layer while
+ preserving NBG3 diagnostics. The camera-scroll and runtime visual gates are
+ still open.
 
 **References consumed (AW-3):** existing texture export tooling
 (`export_rgba16_textures.py`), Yaul VDP2 scroll-screen API (existing

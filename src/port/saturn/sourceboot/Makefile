@@ -43,6 +43,8 @@ SOURCEBOOT_BOB_TILES := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.bin
 SOURCEBOOT_BOB_CLUT := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.pal
 SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
 SOURCEBOOT_BOB_SCENE := $(SOURCEBOOT_GENERATED)/bob_scene.h
+SOURCEBOOT_BOB_SKY := $(SOURCEBOOT_GENERATED)/bob_sky_rgb1555.bin
+SOURCEBOOT_BOB_SKY_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_sky_manifest.json
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -117,8 +119,10 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPU
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
+SOURCEBOOT_BOB_SKY_ASM := $(SH_BUILD_DIR)/bob_sky_bitmap.sx
 SOURCEBOOT_BOB_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_texture_bank.sx
 SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
+SH_SRCS += $(SOURCEBOOT_BOB_SKY_ASM)
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
@@ -270,7 +274,7 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-tiles source-bob-scene
+source-assets: source-data-catalog source-bob-mesh source-bob-tiles source-bob-scene source-bob-sky
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -312,6 +316,16 @@ $(SOURCEBOOT_BOB_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_TILE_MANIFE
 .PHONY: source-bob-scene
 source-bob-scene: $(SOURCEBOOT_BOB_SCENE)
 
+$(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bake_bob_sky.py $(ROOT)/textures/skyboxes/water.png
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
+	  compile-bob-sky BOB_SKY_SOURCE="textures/skyboxes/water.png" \
+	  BOB_SKY_OUTPUT="$(SOURCEBOOT_BOB_SKY)" \
+	  BOB_SKY_MANIFEST="$(SOURCEBOOT_BOB_SKY_MANIFEST)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+
+.PHONY: source-bob-sky
+source-bob-sky: $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST)
+
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
@@ -332,6 +346,18 @@ $(SOURCEBOOT_BOB_TEXTURE_ASM): $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT)
 	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_CLUT))"' \
 	  '.global _sm64_saturn_bob_clut_bank_end' \
 	  '_sm64_saturn_bob_clut_bank_end:' > "$@"
+
+$(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY)
+	@mkdir -p "$(dir $@)"
+	@printf '%s\n' \
+	  '.section .rodata' \
+	  '.align 4' \
+	  '.global _sm64_saturn_bob_sky_bitmap' \
+	  '_sm64_saturn_bob_sky_bitmap:' \
+	  '.incbin "$(subst \,/,$(SOURCEBOOT_BOB_SKY))"' \
+	  '.global _sm64_saturn_bob_sky_bitmap_end' \
+	  '_sm64_saturn_bob_sky_bitmap_end:' \
+	  '.align 4' > "$@"
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 
