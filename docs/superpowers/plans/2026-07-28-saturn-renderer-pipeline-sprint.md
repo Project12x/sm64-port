@@ -468,12 +468,12 @@ bounded view-space decision.
 
 **Work:**
 
-- [ ] Close-port the bounded view-space polygon clipping structure from
+- [x] Close-port the bounded view-space polygon clipping structure from
   `WALLS.C:288-500`, retaining fixed rings and shade interpolation.
 - [ ] Add source-edge/barycentric provenance to new intersection vertices.
 - [ ] Accept at most the proven bounded output count; reserve all result slots
   before writing any output.
-- [ ] Project only after clipping.
+- [x] Project only after clipping.
 - [ ] Keep wholly-in-front fragments textured through the existing
   castleviewer A/B/C/C sampling contract.
 - [ ] Do **not** pretend VDP1 can represent arbitrary clipped UVs. A crossing
@@ -481,7 +481,7 @@ bounded view-space decision.
   Gouraud) unless its original texture domain remains exactly representable.
 - [ ] Count clipped-away, clipped-to-one, clipped-to-two, recovery-material,
   and overflow cases.
-- [ ] Leave Mario on strict actor-safe clipping. The terrain flag must not
+- [x] Leave Mario on strict actor-safe clipping. The terrain flag must not
   affect actor visibility.
 
 **Visual milestone label:** `pipeline-m2-viewspace-near`

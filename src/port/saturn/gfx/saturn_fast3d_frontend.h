@@ -378,6 +378,9 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_bob_clip_to_two;
     uint32_t demo_bob_clip_recovery;
     uint32_t demo_bob_clip_overflow;
+    uint32_t demo_bob_results_master;
+    uint32_t demo_bob_results_slave;
+    uint32_t demo_bob_result_reserve_rejects;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

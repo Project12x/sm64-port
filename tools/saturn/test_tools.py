@@ -1709,6 +1709,9 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_bob_clip_to_two",
                 "demo_bob_clip_recovery",
                 "demo_bob_clip_overflow",
+                "demo_bob_results_master",
+                "demo_bob_results_slave",
+                "demo_bob_result_reserve_rejects",
             ],
         )
         # Fields the older build did have still read correctly.

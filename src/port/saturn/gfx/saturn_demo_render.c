@@ -34,6 +34,7 @@
 #include "../gpl/slavedriver_dma_queue.h"
 #include "../gpl/slavedriver_dual_worker.h"
 #include "../gpl/slavedriver_terrain_clip.h"
+#include "../gpl/slavedriver_terrain_result.h"
 #include "../gpl/ztreme_frustum.h"
 #include "../gpl/ztreme_hot_promotion.h"
 
@@ -105,10 +106,10 @@ static sm64_saturn_projected_vertex_t s_clipped_projected[
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static sm64_saturn_gouraud_table_t *s_bob_gouraud[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uintptr_t s_bob_gouraud_addresses[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static sm64_saturn_terrain_result_t s_terrain_master_results[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT] __attribute__((section(".lwram_bss")));
+static sm64_saturn_terrain_result_t s_terrain_slave_results[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT] __attribute__((section(".lwram_bss")));
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
@@ -139,7 +140,7 @@ static saturn_hot_promotion_t s_bob_hot_promotion;
 static const int32_t (*s_bob_positions_active)[3];
 static const sm64_saturn_bob_primitive_t *s_bob_primitives_active;
 static uint8_t s_bob_resident_ready;
-static uint16_t s_slave_begin = SM64_SATURN_BOB_POSITION_COUNT / 2U;
+static uint16_t s_slave_begin = SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U;
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
 static void demo_bsp_append(int16_t node,
@@ -736,6 +737,64 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
     }
 }
 
+typedef struct demo_terrain_compact_context {
+    demo_classify_context_t *classify;
+    sm64_saturn_terrain_result_spans_t *spans;
+} demo_terrain_compact_context_t;
+
+/* One coarse same-frame callback: classification and compact result writes
+ * share the worker's disjoint primitive range. Transform is deliberately
+ * complete before this callback, so neither lane reads a half-written vertex. */
+static void demo_terrain_compact_range(void *opaque, uint16_t begin,
+                                       uint16_t end)
+{
+    demo_terrain_compact_context_t *context = opaque;
+    demo_classify_range(context->classify, begin, end);
+    const uint8_t lane = begin == 0U ? 0U : 1U;
+    sm64_saturn_terrain_result_arena_t *arena = lane == 0U
+        ? &context->spans->master : &context->spans->slave;
+    for (uint16_t primitive_index = begin; primitive_index < end;
+         primitive_index++) {
+        if (s_primitive_visible[primitive_index] == 0U) continue;
+        sm64_saturn_terrain_result_t *result = NULL;
+        if (!sm64_saturn_terrain_result_reserve(arena, 1U, &result))
+            continue;
+        const sm64_saturn_bob_primitive_t *primitive =
+            &context->classify->primitives[primitive_index];
+        const sm64_saturn_projected_vertex_t *projected =
+            s_primitive_clipped[primitive_index] != 0U
+                ? s_clipped_projected[primitive_index] : NULL;
+        for (uint8_t corner = 0U; corner < 4U; corner++) {
+            result->corners[corner] = projected != NULL
+                ? projected[corner] : s_projected[primitive->indices[corner]];
+            result->gouraud[corner] = (uint16_t)(
+                ((uint16_t)primitive->rgb[0] << 10) |
+                ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
+        }
+        result->primitive_id = primitive_index;
+        result->leaf_id = UINT16_MAX;
+        result->material_id = primitive->source0;
+        result->texture_slot = primitive->tile_offset > UINT16_MAX
+            ? UINT16_MAX : (uint16_t)primitive->tile_offset;
+        result->painter_key = (uint32_t)s_primitive_depth[primitive_index];
+        result->flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+            (primitive->textured != 0U
+                ? SM64_SATURN_TERRAIN_RESULT_TEXTURED :
+                  SM64_SATURN_TERRAIN_RESULT_GOURAUD) |
+            (s_primitive_clipped[primitive_index] != 0U
+                ? SM64_SATURN_TERRAIN_RESULT_CLIPPED : 0U) |
+            (s_primitive_recovery[primitive_index] != 0U
+                ? SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL : 0U);
+        result->corner_count = primitive->source1 == 0xFFFFU ? 3U : 4U;
+        result->clip_class = s_primitive_recovery[primitive_index] != 0U
+            ? SM64_SATURN_TERRAIN_CLIP_OVERFLOW :
+              (s_primitive_clipped[primitive_index] != 0U
+                  ? SM64_SATURN_TERRAIN_CLIP_CROSSES
+                  : SM64_SATURN_TERRAIN_CLIP_FRONT);
+        (void)sm64_saturn_terrain_result_commit(arena, result);
+    }
+}
+
 static void demo_emit_primitive(
     const sm64_saturn_bob_primitive_t *primitive,
     sm64_saturn_vdp1_backend_t *backend,
@@ -820,7 +879,7 @@ static void demo_emit_primitive(
  * routine performs no shared arena mutation. The slave deliberately uses
  * flat RGB1555 for untextured primitives: Gouraud-table allocation remains a
  * master-owned resource, while textured setup is entirely disjoint. */
-static void demo_emit_primitive_at(
+static void __attribute__((unused)) demo_emit_primitive_at(
     const sm64_saturn_bob_primitive_t *primitive,
     vdp1_cmdt_t *cmdt,
     const vdp1_vram_partitions_t *partitions,
@@ -873,7 +932,7 @@ static void demo_emit_primitive_at(
     stats->triangles_emitted++;
 }
 
-static void demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
+static void __attribute__((unused)) demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_emit_context_t *context = opaque;
     const uint8_t lane = begin == 0U ? 0U : 1U;
@@ -892,7 +951,7 @@ static void demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
     }
 }
 
-static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
+static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_emit_context_t *context = opaque;
     const uint8_t lane = begin == 0U ? 0U : 1U;
@@ -1036,7 +1095,7 @@ static void demo_emit_mario(
     s_actor_light_intensity = pose->light_intensity;
     for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++)
         if (s_actor_valid[i]) profile->demo_actor_vertices_valid++;
-#if SATURN_SLAVE_RENDER
+#if 0 && SATURN_SLAVE_RENDER
     s_actor_draw_count = 0U;
     s_actor_texture_count = 0U;
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
@@ -1214,42 +1273,15 @@ void sm64_saturn_demo_render_frame(
         .mario_count = SM64_MARIO_VERTEX_COUNT
     };
     sm64_saturn_dual_worker_stats_t worker_stats;
-    bool worker_ok = true;
-#if SATURN_SLAVE_RENDER
-    worker_ok = sm64_saturn_dual_worker_run(
-        demo_transform_scene_range, &scene_transform,
-        SM64_SATURN_BOB_POSITION_COUNT,
-        s_slave_begin, &worker_stats);
-#else
     worker_stats = (sm64_saturn_dual_worker_stats_t){0};
     demo_transform_scene_range(&scene_transform, 0U,
                                SM64_SATURN_BOB_POSITION_COUNT);
-#endif
-    if (!worker_ok) {
-        transform.transformed[0] = 0U;
-        transform.transformed[1] = 0U;
-        demo_transform_scene_range(&scene_transform, 0U,
-                                   SM64_SATURN_BOB_POSITION_COUNT);
-    }
     profile->triangles_transformed += transform.transformed[0] +
                                      transform.transformed[1];
     profile->slave_jobs_completed += worker_stats.slave_jobs_completed;
     profile->slave_busy_ticks += worker_stats.slave_busy_ticks;
     profile->master_wait_ticks += worker_stats.master_wait_ticks;
     profile->slave_timeouts += worker_stats.slave_timeouts;
-    if (worker_ok && worker_stats.slave_busy_ticks != 0U) {
-        /* SlaveDriver's measured spin-count balancer: if the master waited
-         * longer than its 100-tick threshold, give the slave fewer vertices;
-         * otherwise let it take one more. The boundary is bounded so both
-         * CPUs retain work, matching the upstream monotonic adjustment. */
-        if (worker_stats.master_wait_ticks > 100U && s_slave_begin + 8U <
-            SM64_SATURN_BOB_POSITION_COUNT) {
-            s_slave_begin++;
-        } else if (worker_stats.master_wait_ticks < 100U &&
-                   s_slave_begin > 8U) {
-            s_slave_begin--;
-        }
-    }
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
@@ -1262,24 +1294,47 @@ void sm64_saturn_demo_render_frame(
         .near_rejected = {0U, 0U},
         .degenerate = {0U, 0U}
     };
+    sm64_saturn_terrain_result_spans_t terrain_spans;
+    sm64_saturn_terrain_result_spans_init(
+        &terrain_spans, s_terrain_master_results,
+        SM64_SATURN_BOB_PRIMITIVE_COUNT, s_terrain_slave_results,
+        SM64_SATURN_BOB_PRIMITIVE_COUNT, 8U);
+    demo_terrain_compact_context_t compact = {
+        .classify = &classify, .spans = &terrain_spans};
     sm64_saturn_dual_worker_stats_t classify_stats;
     bool classify_ok = true;
 #if SATURN_SLAVE_RENDER
     classify_ok = sm64_saturn_dual_worker_run(
-        demo_classify_range, &classify, SM64_SATURN_BOB_PRIMITIVE_COUNT,
-        SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U, &classify_stats);
+        demo_terrain_compact_range, &compact,
+        SM64_SATURN_BOB_PRIMITIVE_COUNT, s_slave_begin, &classify_stats);
 #else
     classify_stats = (sm64_saturn_dual_worker_stats_t){0};
-    demo_classify_range(&classify, 0U, SM64_SATURN_BOB_PRIMITIVE_COUNT);
+    demo_terrain_compact_range(&compact, 0U,
+                               SM64_SATURN_BOB_PRIMITIVE_COUNT);
 #endif
     if (!classify_ok) {
         memset(s_primitive_visible, 0, sizeof(s_primitive_visible));
-        demo_classify_range(&classify, 0U, SM64_SATURN_BOB_PRIMITIVE_COUNT);
+        sm64_saturn_terrain_result_spans_init(
+            &terrain_spans, s_terrain_master_results,
+            SM64_SATURN_BOB_PRIMITIVE_COUNT, s_terrain_slave_results,
+            SM64_SATURN_BOB_PRIMITIVE_COUNT, 8U);
+        demo_terrain_compact_range(&compact, 0U,
+                                   SM64_SATURN_BOB_PRIMITIVE_COUNT);
     }
     profile->slave_jobs_completed += classify_stats.slave_jobs_completed;
     profile->slave_busy_ticks += classify_stats.slave_busy_ticks;
     profile->master_wait_ticks += classify_stats.master_wait_ticks;
     profile->slave_timeouts += classify_stats.slave_timeouts;
+    if (classify_ok && classify_stats.slave_busy_ticks != 0U) {
+        const uint16_t minimum = 32U;
+        if (classify_stats.master_wait_ticks > 100U && s_slave_begin +
+            minimum < SM64_SATURN_BOB_PRIMITIVE_COUNT) {
+            s_slave_begin++;
+        } else if (classify_stats.master_wait_ticks < 100U &&
+                   s_slave_begin > minimum) {
+            s_slave_begin--;
+        }
+    }
     profile->demo_bob_primitives_visible += classify.visible[0] +
                                             classify.visible[1];
     profile->demo_bob_primitives_radius_rejected +=
@@ -1293,6 +1348,10 @@ void sm64_saturn_demo_render_frame(
     profile->demo_bob_clip_to_two += classify.clip_to_two[0] + classify.clip_to_two[1];
     profile->demo_bob_clip_recovery += classify.clip_recovery[0] + classify.clip_recovery[1];
     profile->demo_bob_clip_overflow += classify.clip_overflow[0] + classify.clip_overflow[1];
+    profile->demo_bob_results_master += terrain_spans.master.count;
+    profile->demo_bob_results_slave += terrain_spans.slave.count;
+    profile->demo_bob_result_reserve_rejects +=
+        terrain_spans.master.reserve_rejects + terrain_spans.slave.reserve_rejects;
 
 #if SATURN_DEMO_BSP_ORDER
 #if SATURN_DEMO_BSP_FRAGMENTS
@@ -1377,72 +1436,14 @@ void sm64_saturn_demo_render_frame(
         s_primitive_slots[primitive] =
             (uint16_t)(backend->commands.cursor + bob_draw_count++);
     }
-#if SATURN_SLAVE_RENDER
-    memset(s_bob_gouraud, 0, sizeof(s_bob_gouraud));
-    memset(s_bob_gouraud_addresses, 0, sizeof(s_bob_gouraud_addresses));
-    for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
-        const uint16_t primitive = s_emit_order[ordinal];
-        if (s_bob_primitives_active[primitive].textured == 0U) {
-            s_bob_gouraud[primitive] = sm64_saturn_gouraud_bank_alloc(
-                gouraud_bank, &s_bob_gouraud_addresses[primitive]);
-        }
-    }
-#endif
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
-    demo_emit_context_t emit = {
-        .primitives = s_bob_primitives_active,
-        .cmdts = backend->list.cmdts,
-        .partitions = &partitions,
-        .gouraud_tables = s_bob_gouraud,
-        .gouraud_addresses = s_bob_gouraud_addresses,
-        .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
-    };
-    bool emit_direct = false;
-#if SATURN_SLAVE_RENDER
-    if (bob_draw_count != 0U &&
-        sm64_saturn_vdp1_backend_reserve(backend, bob_draw_count) != NULL) {
-        emit_direct = true;
-        sm64_saturn_dual_worker_stats_t emit_worker_stats;
-        const bool emit_ok = sm64_saturn_dual_worker_run(
-            demo_emit_range, &emit, s_emit_count, s_emit_count / 2U,
-            &emit_worker_stats);
-        profile->slave_jobs_completed += emit_worker_stats.slave_jobs_completed;
-        profile->slave_busy_ticks += emit_worker_stats.slave_busy_ticks;
-        profile->master_wait_ticks += emit_worker_stats.master_wait_ticks;
-        profile->slave_timeouts += emit_worker_stats.slave_timeouts;
-        if (!emit_ok) {
-            /* A failed worker has already observed cancellation. Reset the
-             * frame-local Gouraud bank and use the proven serial emitter so
-             * every reserved slot is rebuilt with fresh ownership. */
-            emit.stats[0] = (demo_emit_stats_t){0U, 0U, 0U};
-            emit.stats[1] = (demo_emit_stats_t){0U, 0U, 0U};
-            sm64_saturn_gouraud_bank_begin(gouraud_bank);
-            memset(s_bob_gouraud, 0, sizeof(s_bob_gouraud));
-            memset(s_bob_gouraud_addresses, 0,
-                   sizeof(s_bob_gouraud_addresses));
-            emit_direct = false;
-        }
-    }
-#endif
-    if (!emit_direct) {
-        /* Capacity fallback retains the pre-split path. This should remain
-         * unreachable for the generated 867-primitive BOB bank, but avoids
-         * turning a future asset expansion into a blank frame. */
-        for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
-            demo_emit_primitive(
-                &s_bob_primitives_active[s_emit_order[ordinal]], backend,
-                gouraud_bank, profile, &partitions);
-        }
-    } else {
-        profile->texture_commands += emit.stats[0].texture_commands +
-                                     emit.stats[1].texture_commands;
-        profile->triangles_emitted += emit.stats[0].triangles_emitted +
-                                      emit.stats[1].triangles_emitted;
-        profile->triangles_vdp1_emitted += emit.stats[0].triangles_emitted +
-                                           emit.stats[1].triangles_emitted;
-        profile->gouraud_bank_overflow += emit.stats[0].gouraud_bank_overflow +
-                                          emit.stats[1].gouraud_bank_overflow;
+    /* The master owns all VDP1 lowering. Compact terrain results are merged
+     * above, then consumed in the stable baked painter order here. */
+    for (uint16_t ordinal = 0U; ordinal < s_emit_count; ordinal++) {
+        demo_emit_primitive(
+            &s_bob_primitives_active[s_emit_order[ordinal]], backend,
+            gouraud_bank, profile, &partitions);
     }
     /* Mario is currently a flat-material actor pass. It deliberately consumes
      * the live bridge pose now; textured actor tiles and painter interleave
@@ -1456,7 +1457,7 @@ void sm64_saturn_demo_render_frame(
             SATURN_DMA_QUEUE_SCU);
     }
     sm64_saturn_vdp1_backend_finish(backend);
-#if SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING) && \
+#if 0 && SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING) && \
     defined(SATURN_SLAVE_VDP1_UPLOAD) && SATURN_SLAVE_VDP1_UPLOAD
     sm64_saturn_dual_worker_stats_t upload_stats;
     demo_upload_vdp1_dual(backend, &upload_stats);
