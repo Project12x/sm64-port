@@ -621,7 +621,7 @@ flags does NOT rebuild stale objects; force rebuild or variant object dirs).
   works. Do not delete anything.
 - [ ] Sim cadence per the sprint's frame contract: 30 Hz sim independent of
   render rate (Task 0's timer proves the budget).
-- [ ] Full regression: all host suites, cross-compile, `make verify`, both
+- [x] Full regression: all host suites, cross-compile, `make verify`, both
   profile flags build.
 - [ ] Route capture on the demo profile: **checkpoint hash must equal the
   interpreted build's** (same sim, same inputs — this is the whole
