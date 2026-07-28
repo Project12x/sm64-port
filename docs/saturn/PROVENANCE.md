@@ -379,6 +379,15 @@ submission, and explicit master/slave render records. They are behavior and
 architecture references for the future world renderer only; no additional
 SlaveDriver renderer source was copied.
 
+**2026-07-28 Task 5b worker close-port:** `WALLS.C:1806-1950` was re-read at
+the pinned commit for the bounded master/slave work hand-off and spin-count
+balancing discipline. That scheduling boundary is close-ported in
+`src/port/saturn/gpl/slavedriver_dual_worker.{c,h}`. The callback, result
+arrays, cancellation check, and Yaul polling-mode setup are new adaptations;
+the worker never shares output ranges between CPUs. The upstream GPL notice,
+repository, commit pin, and this material-change record are retained here;
+there is no copied world-renderer or polygon code.
+
 **2026-07-27 Task 1 close-port:** `WALLASM.S:253-353` was re-read at the
 pinned commit and narrowly adapted into
 `src/port/saturn/gpl/slavedriver_projection.sx` and

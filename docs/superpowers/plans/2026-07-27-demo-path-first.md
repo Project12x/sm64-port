@@ -531,7 +531,17 @@ pose-differential fixture, and later-phase visual capture remain open.
  the removed pair was an independent second synchronization wait per loop.
  The demo image rebuilds successfully and the 168-test host suite remains
  green. A fresh visual capture is still required once the Ymir/BIOS artifacts
- are available; no gallery promotion is made from this code-only result.
+are available; no gallery promotion is made from this code-only result.
+
+**Progress note (2026-07-28, Task 5b worker boundary):** the IR transform bank
+ now has a Yaul polling-mode dual worker with disjoint master/slave ranges,
+ cancellation checks, a serial `SATURN_SLAVE_RENDER=0` build, structural
+ `-slave0`/`-slave1` output variants, and append-only utilization counters.
+ Both demo variants and the interpreted route build successfully; the host
+ suite remains green at 168 tests (one skipped). The runtime A/B gate,
+ checkpoint identity, timeout-zero proof, and screenshot still require a
+ Ymir/BIOS capture. No Task 5b performance claim or gallery promotion is made
+ from build evidence alone.
 
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract

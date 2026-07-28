@@ -11,6 +11,7 @@
 #include "bob_scene.h"
 #include "saturn_mario_actor_mesh.h"
 #include "../gpl/slavedriver_dma_queue.h"
+#include "../gpl/slavedriver_dual_worker.h"
 
 #define DEMO_NEAR_DEPTH 128
 #define DEMO_FAR_DEPTH 8192
@@ -22,6 +23,9 @@
 #define DEMO_BUCKETS 16U
 #ifndef SATURN_DEMO_VIEW_RADIUS
 #define SATURN_DEMO_VIEW_RADIUS 6000
+#endif
+#ifndef SATURN_SLAVE_RENDER
+#define SATURN_SLAVE_RENDER 1
 #endif
 
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
@@ -39,6 +43,50 @@ static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
     SM64_SATURN_BOB_PRIMITIVE_COUNT]
     __attribute__((section(".lwram_bss")));
 static uint8_t s_bob_resident_ready;
+static uint16_t s_slave_begin = SM64_SATURN_BOB_POSITION_COUNT / 2U;
+
+typedef struct demo_transform_context {
+    const sm64_saturn_ir_transform_job_t *job;
+    const int32_t (*positions)[3];
+    sm64_saturn_vec3i_t *view;
+    sm64_saturn_projected_vertex_t *projected;
+    uint8_t *valid;
+    uint32_t transformed[2];
+} demo_transform_context_t;
+
+static void demo_transform_range(void *opaque, uint16_t begin, uint16_t end)
+{
+    demo_transform_context_t *context = opaque;
+    const uint8_t lane = begin == 0U ? 0U : 1U;
+    for (uint16_t i = begin; i < end; i++) {
+        if (sm64_saturn_dual_worker_cancelled()) break;
+        const int64_t dx = (int64_t)context->positions[i][0] -
+                           context->job->camera.position.x;
+        const int64_t dy = (int64_t)context->positions[i][1] -
+                           context->job->camera.position.y;
+        const int64_t dz = (int64_t)context->positions[i][2] -
+                           context->job->camera.position.z;
+        if (dx * dx + dy * dy + dz * dz >
+            (int64_t)SATURN_DEMO_VIEW_RADIUS * SATURN_DEMO_VIEW_RADIUS) {
+            context->valid[i] = 0U;
+            continue;
+        }
+        if (sm64_saturn_ir_transform_one(
+                context->job,
+                (sm64_saturn_vec3i_t){context->positions[i][0],
+                                      context->positions[i][1],
+                                      context->positions[i][2]},
+                &context->view[i], &context->projected[i])) {
+            context->valid[i] = 1U;
+            context->transformed[lane]++;
+        } else {
+            context->valid[i] = 0U;
+            context->view[i] = (sm64_saturn_vec3i_t){0, 0, DEMO_NEAR_DEPTH};
+            context->projected[i] = (sm64_saturn_projected_vertex_t){
+                DEMO_CENTER_X, DEMO_CENTER_Y, DEMO_NEAR_DEPTH};
+        }
+    }
+}
 
 void sm64_saturn_demo_render_init(void)
 {
@@ -256,32 +304,46 @@ void sm64_saturn_demo_render_frame(
         .coord_min = DEMO_COORD_MIN,
         .coord_max = DEMO_COORD_MAX
     };
-    for (uint16_t i = 0; i < SM64_SATURN_BOB_POSITION_COUNT; i++) {
-        const int64_t dx = (int64_t)s_bob_positions_resident[i][0] -
-                           job.camera.position.x;
-        const int64_t dy = (int64_t)s_bob_positions_resident[i][1] -
-                           job.camera.position.y;
-        const int64_t dz = (int64_t)s_bob_positions_resident[i][2] -
-                           job.camera.position.z;
-        if (dx * dx + dy * dy + dz * dz >
-            (int64_t)SATURN_DEMO_VIEW_RADIUS * SATURN_DEMO_VIEW_RADIUS) {
-            s_position_valid[i] = 0U;
-            continue;
-        }
-        if (sm64_saturn_ir_transform_one(
-                &job, (sm64_saturn_vec3i_t){
-                    s_bob_positions_resident[i][0],
-                    s_bob_positions_resident[i][1],
-                    s_bob_positions_resident[i][2]},
-                &s_view[i], &s_projected[i])) {
-            s_position_valid[i] = 1U;
-            profile->triangles_transformed++;
-        } else {
-            s_position_valid[i] = 0U;
-            s_view[i] = (sm64_saturn_vec3i_t){0, 0, DEMO_NEAR_DEPTH};
-            s_projected[i] = (sm64_saturn_projected_vertex_t){
-                DEMO_CENTER_X, DEMO_CENTER_Y, DEMO_NEAR_DEPTH};
-        }
+    demo_transform_context_t transform = {
+        .job = &job,
+        .positions = s_bob_positions_resident,
+        .view = s_view,
+        .projected = s_projected,
+        .valid = s_position_valid,
+        .transformed = {0U, 0U}
+    };
+    sm64_saturn_dual_worker_stats_t worker_stats;
+    bool worker_ok = true;
+#if SATURN_SLAVE_RENDER
+    worker_ok = sm64_saturn_dual_worker_run(
+        demo_transform_range, &transform, SM64_SATURN_BOB_POSITION_COUNT,
+        s_slave_begin, &worker_stats);
+#else
+    worker_stats = (sm64_saturn_dual_worker_stats_t){0};
+    demo_transform_range(&transform, 0U, SM64_SATURN_BOB_POSITION_COUNT);
+#endif
+    if (!worker_ok) {
+        transform.transformed[0] = 0U;
+        transform.transformed[1] = 0U;
+        demo_transform_range(&transform, 0U,
+                             SM64_SATURN_BOB_POSITION_COUNT);
+    }
+    profile->triangles_transformed += transform.transformed[0] +
+                                     transform.transformed[1];
+    profile->slave_jobs_completed += worker_stats.slave_jobs_completed;
+    profile->slave_busy_ticks += worker_stats.slave_busy_ticks;
+    profile->master_wait_ticks += worker_stats.master_wait_ticks;
+    profile->slave_timeouts += worker_stats.slave_timeouts;
+    if (worker_ok && worker_stats.slave_busy_ticks != 0U &&
+        worker_stats.master_wait_ticks != 0U) {
+        /* SlaveDriver's spin-count balancer: move the boundary toward the
+         * slower side, bounded to retain work on both processors. */
+        const uint32_t total = worker_stats.slave_busy_ticks +
+                               worker_stats.master_wait_ticks;
+        const uint32_t target =
+            ((uint32_t)s_slave_begin * worker_stats.slave_busy_ticks) / total;
+        if (target > 8U && target + 8U < SM64_SATURN_BOB_POSITION_COUNT)
+            s_slave_begin = (uint16_t)target;
     }
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {

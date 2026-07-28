@@ -346,6 +346,10 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_actor_primitives_emitted;
     uint32_t demo_actor_snapshot_valid;
     uint32_t demo_actor_pose_vertices;
+    uint32_t slave_jobs_completed;
+    uint32_t slave_busy_ticks;
+    uint32_t master_wait_ticks;
+    uint32_t slave_timeouts;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

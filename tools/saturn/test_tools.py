@@ -1458,6 +1458,10 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_actor_primitives_emitted",
                 "demo_actor_snapshot_valid",
                 "demo_actor_pose_vertices",
+                "slave_jobs_completed",
+                "slave_busy_ticks",
+                "master_wait_ticks",
+                "slave_timeouts",
             ],
         )
         # Fields the older build did have still read correctly.
