@@ -998,6 +998,15 @@ the image is materially improved (the large foreground sheet is reduced), but
 terrain is still visibly warped. This proves the companion mismatch was one
 real contributor; remaining UV/geometry error is still open.
 
+**Progress note (2026-07-28, worker texture-homography parity):** the dual
+worker's VDP1 texture binder now receives the same A/B/C/C array as its shape
+command; the master and worker paths no longer disagree about the fourth
+corner. The fresh build/capture is fault-free, but its screenshot hash is
+identical to the prior repeated-C capture. This closes the remaining branch
+parity gap without claiming another visual improvement; the residual warp is
+therefore upstream of the binder call and remains in the fragment bake or
+source geometry mapping.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the

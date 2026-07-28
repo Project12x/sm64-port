@@ -624,7 +624,7 @@ static void demo_emit_primitive(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
             (uint16_t)(primitive->clut_offset / sizeof(vdp1_clut_t)),
-            VDP1_CMDT_CC_REPLACE, vertices);
+            VDP1_CMDT_CC_REPLACE, shape_vertices);
         if (bound) {
             profile->texture_commands++;
             profile->triangles_vdp1_emitted++;
@@ -680,7 +680,7 @@ static void demo_emit_primitive_at(
     demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
-        primitive->source1 == 0xFFFFU && primitive->textured == 0U
+        primitive->source1 == 0xFFFFU
             ? vertices[2] : vertices[3]
     };
     vdp1_cmdt_polygon_set(cmdt);
@@ -690,7 +690,7 @@ static void demo_emit_primitive_at(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
             (uint16_t)(primitive->clut_offset / sizeof(vdp1_clut_t)),
-            VDP1_CMDT_CC_REPLACE, vertices)) {
+            VDP1_CMDT_CC_REPLACE, shape_vertices)) {
         stats->texture_commands++;
         stats->triangles_emitted++;
         return;
