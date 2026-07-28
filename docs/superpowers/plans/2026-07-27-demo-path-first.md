@@ -589,6 +589,14 @@ is still required before gallery promotion.
  untextured primitives. The fresh dual image builds and boots in foreground
  Ymir; visual texture acceptance and route evidence remain open.
 
+**Progress note (2026-07-28, Mario painter ordering):** visible Mario
+ primitives are now stably sorted back-to-front by projected depth before
+ command reservation. Each material/detail texture pair remains adjacent, so
+ front-facing detail cannot leap ahead of the actor's farther surfaces merely
+ because source primitive order differs from painter order. Terrain ordering is
+ intentionally not claimed fixed by this change; it remains a separate BOB
+ painter/flicker investigation.
+
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.

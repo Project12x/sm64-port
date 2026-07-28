@@ -605,6 +605,33 @@ static void demo_emit_mario(
         if (sm64_mario_texture_tile_start[i] != SM64_MARIO_TEXTURE_TILE_NONE)
             s_actor_texture_count++;
     }
+    /* VDP1 has no depth buffer. Castleviewer therefore paints Mario leaves
+     * from far to near; source primitive order is only topology order and can
+     * put a front-facing texture over the back of the actor. Keep the sort
+     * stable for equal depths so captures remain deterministic. */
+    for (uint16_t i = 1U; i < s_actor_draw_count; i++) {
+        const uint16_t value = s_actor_order[i];
+        const uint16_t *value_indices = sm64_mario_primitives[value];
+        const int32_t value_depth =
+            (s_actor_projected[value_indices[1]].z +
+             s_actor_projected[value_indices[2]].z +
+             s_actor_projected[value_indices[3]].z +
+             s_actor_projected[value_indices[4]].z) / 4;
+        uint16_t j = i;
+        while (j > 0U) {
+            const uint16_t previous = s_actor_order[j - 1U];
+            const uint16_t *previous_indices = sm64_mario_primitives[previous];
+            const int32_t previous_depth =
+                (s_actor_projected[previous_indices[1]].z +
+                 s_actor_projected[previous_indices[2]].z +
+                 s_actor_projected[previous_indices[3]].z +
+                 s_actor_projected[previous_indices[4]].z) / 4;
+            if (previous_depth >= value_depth) break;
+            s_actor_order[j] = previous;
+            j--;
+        }
+        s_actor_order[j] = value;
+    }
     const uint16_t actor_command_count =
         (uint16_t)(s_actor_draw_count + s_actor_texture_count);
     if (s_actor_draw_count != 0U &&
