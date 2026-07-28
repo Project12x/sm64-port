@@ -80,6 +80,30 @@ def _capped_stderr_diagnostics(stderr: str) -> dict[str, Any]:
     }
 
 
+def newest_sibling_elf(game: Path) -> Path | None:
+    """Return the newest ELF in the game's build sibling directory.
+
+    Yaul emits the CUE beside the image and the ELF under its ``obj``
+    directory.  Keeping this lookup local avoids guessing a toolchain path;
+    captures for layouts without a sibling ELF simply retain the old behavior.
+    """
+    candidates = sorted(game.parent.glob("obj/**/*.elf"))
+    files = [path for path in candidates if path.is_file()]
+    return max(files, key=lambda path: path.stat().st_mtime, default=None)
+
+
+def stale_game_image(game: Path) -> tuple[Path, float, float] | None:
+    """Describe a CUE older than its newest sibling ELF, if one exists."""
+    elf = newest_sibling_elf(game)
+    if elf is None:
+        return None
+    game_mtime = game.stat().st_mtime
+    elf_mtime = elf.stat().st_mtime
+    if game_mtime < elf_mtime:
+        return elf, game_mtime, elf_mtime
+    return None
+
+
 def request(method: str, request_id: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": request_id}
     if params is not None:
@@ -158,6 +182,11 @@ def main() -> int:
         "--allow-invalid",
         action="store_true",
         help="write a diagnostic report even when the telemetry magic is absent",
+    )
+    parser.add_argument(
+        "--allow-stale",
+        action="store_true",
+        help="allow capture when the CUE is older than a sibling build ELF",
     )
     parser.add_argument(
         "--bios-input",
@@ -257,6 +286,14 @@ def main() -> int:
         args.raw_output = args.raw_output.resolve()
     if args.screenshot_output:
         args.screenshot_output = args.screenshot_output.resolve()
+    stale = stale_game_image(args.game)
+    if stale is not None and not args.allow_stale:
+        elf, game_mtime, elf_mtime = stale
+        parser.error(
+            "game image is older than its build ELF "
+            f"({args.game.name} {game_mtime:.3f} < {elf.name} {elf_mtime:.3f}); "
+            "regenerate the CUE or pass --allow-stale"
+        )
 
     requests: list[dict[str, Any]] = []
     # Every exec.run_for request id lands here so its response can be checked

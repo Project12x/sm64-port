@@ -18,7 +18,12 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
-from capture_hwtest import cap_stderr, has_cd_block_copy_limitation, input_pulse_request  # noqa: E402
+from capture_hwtest import (  # noqa: E402
+    cap_stderr,
+    has_cd_block_copy_limitation,
+    input_pulse_request,
+    stale_game_image,
+)
 from compare_route_reports import compare_reports, load_route  # noqa: E402
 from extract_mario_actor import (  # noqa: E402
     animation_frame_count,
@@ -923,6 +928,34 @@ class YmirInputTests(unittest.TestCase):
         capped, original_length = cap_stderr("x" * 200_000)
         self.assertEqual(original_length, 200_000)
         self.assertEqual(len(capped), 64 * 1024)
+
+    def test_stale_game_image_detects_newer_sibling_elf(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            game = root / "disc.cue"
+            obj = root / "obj"
+            obj.mkdir()
+            elf = obj / "game.elf"
+            game.write_bytes(b"cue")
+            elf.write_bytes(b"elf")
+            os.utime(game, (100, 100))
+            os.utime(elf, (200, 200))
+            result = stale_game_image(game)
+            self.assertIsNotNone(result)
+            self.assertEqual(result[0], elf)
+
+    def test_stale_game_image_accepts_newer_cue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            game = root / "disc.cue"
+            obj = root / "obj"
+            obj.mkdir()
+            elf = obj / "game.elf"
+            game.write_bytes(b"cue")
+            elf.write_bytes(b"elf")
+            os.utime(game, (200, 200))
+            os.utime(elf, (100, 100))
+            self.assertIsNone(stale_game_image(game))
 
 
 class BobParityRouteTests(unittest.TestCase):
