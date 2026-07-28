@@ -721,6 +721,9 @@ split (behaviour lessons, `SHIPPING_ENGINE_COMPARISON.md`).
 route/report schema (degradation settings recorded in every report so no
 capture is ever compared across unstated settings).
 
+The route comparator now rejects `null`/omitted view-radius or poly-tier
+metadata, so an unprofiled capture cannot silently enter a parity comparison.
+
 - [x] View distance: single clamp on baked-bank spatial groups (the bake
   emits bounds — Mesh IR v2 already carries them from Task 2). Near-to-far
   traversal per the Z-Treme pattern.
