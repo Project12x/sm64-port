@@ -8,6 +8,7 @@
 #include "saturn_frame_sample.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_ir_transform.h"
+#include "saturn_ir_texture.h"
 #include "saturn_gouraud.h"
 #include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
@@ -983,26 +984,17 @@ static void draw_castle(uint16_t tile, const vdp1_vram_partitions_t *partitions)
     };
     vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(&vdp1_backend, 1);
     if (cmdt == NULL) return;
-    vdp1_cmdt_distorted_sprite_set(cmdt);
-    vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-        .color_mode = SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
-            ? VDP1_CMDT_CM_CLUT_16 : VDP1_CMDT_CM_RGB_32768,
-        .cc_mode = color_calculation,
-        /* Source texels may legitimately encode the VDP1 end-code value:
-         * CLUT index F and RGB1555 0x7FFF are image data, never an implicit
-         * scanline terminator in the generated fixed-size tile bank. */
-        .end_code_disable = true
-    });
-    vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base +
-                            tile * SM64_CASTLE_UV_TILE_BYTES);
-    vdp1_cmdt_char_size_set(cmdt, SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH);
 #if SM64_CASTLE_UV_TEXTURE_FORMAT_CLUT16
-    vdp1_cmdt_color_mode1_set(cmdt,
-        (vdp1_vram_t)&partitions->clut_base[sm64_castle_uv_tile_clut[tile]]);
+    (void)sm64_saturn_ir_texture_bind_clut16(
+        cmdt, partitions, tile * SM64_CASTLE_UV_TILE_BYTES,
+        SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH,
+        sm64_castle_uv_tile_clut[tile], color_calculation, vertices);
 #else
-    vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
+    (void)sm64_saturn_ir_texture_bind_rgb1555(
+        cmdt, partitions, tile * SM64_CASTLE_UV_TILE_BYTES,
+        SM64_CASTLE_UV_TILE_WIDTH, SM64_CASTLE_UV_TILE_WIDTH,
+        color_calculation, vertices);
 #endif
-    vdp1_cmdt_vtx_set(cmdt, vertices);
 }
 
 static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partitions) {
@@ -1043,19 +1035,14 @@ static void draw_mario(uint16_t primitive, const vdp1_vram_partitions_t *partiti
         for (uint16_t tile = first_tile;
              tile < first_tile + SM64_MARIO_TEXTURE_TILES_PER_SOURCE; tile++) {
             int16_vec2_t vertices[4]; mario_texture_tile_vertices(tile, vertices);
-            vdp1_cmdt_distorted_sprite_set(cmdt);
-            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-                .color_mode = VDP1_CMDT_CM_RGB_32768,
-                .cc_mode = VDP1_CMDT_CC_REPLACE,
-                /* Transparent-white source pixels become RGB1555 0x7FFF,
-                 * which is also VDP1's default 16-bit end code.  ECD must be
-                 * set or every such texel truncates the remainder of a row. */
-                .end_code_disable = true
-            });
-            vdp1_cmdt_char_base_set(cmdt, (vdp1_vram_t)partitions->texture_base + sizeof(sm64_castle_uv_tiles) + tile * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t));
-            vdp1_cmdt_char_size_set(cmdt, SM64_MARIO_TEXTURE_UV_TILE_WIDTH, SM64_MARIO_TEXTURE_UV_TILE_WIDTH);
-            vdp1_cmdt_color_set(cmdt, RGB1555(1, 31, 31, 31));
-            vdp1_cmdt_vtx_set(cmdt, vertices);
+            (void)sm64_saturn_ir_texture_bind_rgb1555(
+                cmdt, partitions,
+                sizeof(sm64_castle_uv_tiles) + tile *
+                    SM64_MARIO_TEXTURE_UV_TILE_WIDTH *
+                    SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t),
+                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                VDP1_CMDT_CC_REPLACE, vertices);
             cmdt++;
         }
         return;

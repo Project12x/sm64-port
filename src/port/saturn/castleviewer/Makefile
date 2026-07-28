@@ -10,6 +10,7 @@ SH_SRCS := main.c castle_graph_bridge.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
   $(ROOT)/src/port/saturn/gfx/saturn_ir_transform.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_ir_texture.c \
   quad_map_empty.c \
   $(ROOT)/src/game/game_init.c \
   $(ROOT)/src/game/main.c \
