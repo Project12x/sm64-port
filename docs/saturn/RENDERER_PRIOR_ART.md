@@ -12,6 +12,44 @@ for the SM64 port. Exact commits, licenses, and inspected paths are recorded in
 | Jo Engine | A small C command pipeline can keep VDP1 setup commands explicit and flush bounded command blocks by DMA. | Retain libyaul's typed persistent command list; it already gives the useful lifecycle without another allocator. | Compare block/arena command allocation if variable scene command counts make a fixed list wasteful. |
 | Sonic Z-Treme | Stable per-polygon Gouraud slots plus conditional VBlank table copies make realtime lighting optional and measurable; frustum/octree culling and contiguous model arenas are viable on Saturn. | Keep the intro face's cached vertex lighting, persistent Gouraud slots, A-button shine toggle, and update-only-on-change upload. | Benchmark contiguous level banks, coarse visibility, early slave-SH2 submission, and Gouraud quality tiers. |
 
+## New BOB terrain diagnosis (2026-07-28)
+
+The manual BOB A/B exposed a distinction that the renderer must preserve:
+increasing the view radius improves distant coverage while worsening near-camera
+coverage. This is not one global draw limit. The current demo path performs
+vertex-level radius rejection in `saturn_demo_render.c` and then requires all
+four primitive corners to be valid; `saturn_ir_transform_one` similarly rejects
+each vertex at the near plane. A large surface crossing either boundary is
+therefore removed as a unit, producing terrain popping even when a visible
+portion remains in front of the camera.
+
+The pinned engines point to three concrete corrections:
+
+- Z-Treme's `ZT_FRUSTUM.c` and `ZT_RENDERING.c:494` use bounding-volume,
+  tri-state frustum traversal and per-polygon screen/depth checks. Visibility
+  is decided on a spatial unit, not by requiring every polygon corner to pass
+  a spherical radius test.
+- SlaveDriver's `WALLS.C:1546-1794` propagates portal screen AABBs and its
+  `buildTree` path (`:1953-1983`) supplies a baked dependency order. It does
+  not attempt to solve intersecting terrain with a coarse per-triangle depth
+  bucket.
+- Both references rebuild into double-banked VDP1 command regions
+  (`SPR.C:71-72,129,141-157` and the corresponding render handoff in
+  `WALLS.C`). A single command table rewritten while VDP1 consumes it is not
+  an acceptable final lifetime contract.
+
+Jo Engine remains pattern-only for the explicit setup-command prefix and
+bounded command blocks. Its allocator and SGL-backed 3-D layer are not a fit
+for this Yaul renderer, and its immediate-read DIVU sequence is specifically
+excluded by the sprint's negative-knowledge rule.
+
+The implementation order is now: (1) counters for radius, near-plane,
+primitive visibility, and command peak/overflow; (2) coarse BOB bounds with
+near-to-far traversal and no atomic vertex-radius pop; (3) double-bank command
+staging; (4) only then refine painter/dependency ordering. The existing
+`vdp1_commands_last=626/2048` and zero arena-reject evidence rules out a simple
+command-count ceiling for the current flicker.
+
 ## PS1 port: architecture lesson, not renderer source
 
 The inspected PS1 port is not a Saturn code donor: it lacks one

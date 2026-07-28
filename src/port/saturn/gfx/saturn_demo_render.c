@@ -1,6 +1,7 @@
 #include "saturn_demo_render.h"
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "game/camera.h"
 #include "saturn_gouraud.h"
@@ -17,7 +18,9 @@
 #include "../gpl/slavedriver_dual_worker.h"
 #include "../gpl/ztreme_hot_promotion.h"
 
-#define DEMO_NEAR_DEPTH 128
+#ifndef SATURN_DEMO_NEAR_DEPTH
+#define SATURN_DEMO_NEAR_DEPTH 128
+#endif
 #define DEMO_FAR_DEPTH 8192
 #define DEMO_FOCAL_LENGTH 256
 #define DEMO_CENTER_X 160
@@ -58,16 +61,6 @@ static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
 
-/* VDP1's distorted-sprite texture mapper consumes a genuine four-corner
- * quadrilateral.  BOB triangle fallbacks deliberately repeat corner C in
- * corner D; feeding those through the sprite mapper stretches the tile over
- * an undefined quad (the large orange slabs seen in the manual capture).
- * Keep texture lowering restricted to paired Fast3D triangles until a real
- * triangle-texture decomposition is available. */
-static bool demo_has_texture_quad(const sm64_saturn_bob_primitive_t *primitive)
-{
-    return primitive->textured != 0U && primitive->source1 != 0xFFFFU;
-}
 static uint16_t s_actor_texture_count;
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
     SM64_MARIO_PRIMITIVE_COUNT];
@@ -105,6 +98,7 @@ typedef struct demo_transform_context {
 
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
+    const sm64_saturn_camera_transform_t *camera;
 } demo_classify_context_t;
 
 typedef struct demo_emit_stats {
@@ -141,17 +135,12 @@ static void demo_transform_range(void *opaque, uint16_t begin, uint16_t end)
          * while per-vertex reads turn the shared bus into the hot path. */
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) break;
-        const int64_t dx = (int64_t)context->positions[i][0] -
-                           context->job->camera.position.x;
-        const int64_t dy = (int64_t)context->positions[i][1] -
-                           context->job->camera.position.y;
-        const int64_t dz = (int64_t)context->positions[i][2] -
-                           context->job->camera.position.z;
-        if (dx * dx + dy * dy + dz * dz >
-            (int64_t)SATURN_DEMO_VIEW_RADIUS * SATURN_DEMO_VIEW_RADIUS) {
-            context->valid[i] = 0U;
-            continue;
-        }
+        /* Do not radius-cull individual vertices here.  Z-Treme's tri-state
+         * bounds and SlaveDriver's sector AABBs both keep a spatial unit
+         * alive when only part of it intersects the view.  Primitive-level
+         * bounds below decide visibility after all corners have a stable
+         * projection; this prevents a large terrain face from popping merely
+         * because one corner crossed the distance sphere. */
         if (sm64_saturn_ir_transform_one(
                 context->job,
                 (sm64_saturn_vec3i_t){context->positions[i][0],
@@ -162,9 +151,10 @@ static void demo_transform_range(void *opaque, uint16_t begin, uint16_t end)
             context->transformed[lane]++;
         } else {
             context->valid[i] = 0U;
-            context->view[i] = (sm64_saturn_vec3i_t){0, 0, DEMO_NEAR_DEPTH};
+            context->view[i] = (sm64_saturn_vec3i_t){0, 0,
+                                                     SATURN_DEMO_NEAR_DEPTH};
             context->projected[i] = (sm64_saturn_projected_vertex_t){
-                DEMO_CENTER_X, DEMO_CENTER_Y, DEMO_NEAR_DEPTH};
+                DEMO_CENTER_X, DEMO_CENTER_Y, SATURN_DEMO_NEAR_DEPTH};
         }
     }
 }
@@ -234,16 +224,58 @@ static sm64_saturn_camera_transform_t demo_camera(
 
 static uint16_t demo_bucket(int32_t z)
 {
-    if (z <= DEMO_NEAR_DEPTH) return 0;
+    if (z <= SATURN_DEMO_NEAR_DEPTH) return 0;
     if (z >= DEMO_FAR_DEPTH) return DEMO_BUCKETS - 1U;
-    return (uint16_t)(((z - DEMO_NEAR_DEPTH) *
+    return (uint16_t)(((z - SATURN_DEMO_NEAR_DEPTH) *
                        (DEMO_BUCKETS - 1U)) /
-                      (DEMO_FAR_DEPTH - DEMO_NEAR_DEPTH));
+                      (DEMO_FAR_DEPTH - SATURN_DEMO_NEAR_DEPTH));
+}
+
+static bool demo_primitive_in_radius(
+    const sm64_saturn_bob_primitive_t *primitive,
+    const sm64_saturn_camera_transform_t *camera)
+{
+    const uint16_t count = primitive->source1 == 0xFFFFU ? 3U : 4U;
+    int32_t minimum[3] = {INT32_MAX, INT32_MAX, INT32_MAX};
+    int32_t maximum[3] = {INT32_MIN, INT32_MIN, INT32_MIN};
+    for (uint16_t corner = 0U; corner < count; corner++) {
+        const int32_t *point = s_bob_positions_active[
+            primitive->indices[corner]];
+        for (uint8_t axis = 0U; axis < 3U; axis++) {
+            if (point[axis] < minimum[axis]) minimum[axis] = point[axis];
+            if (point[axis] > maximum[axis]) maximum[axis] = point[axis];
+        }
+    }
+    const int32_t center[3] = {
+        (minimum[0] + maximum[0]) / 2,
+        (minimum[1] + maximum[1]) / 2,
+        (minimum[2] + maximum[2]) / 2
+    };
+    int64_t bound = 0;
+    for (uint16_t corner = 0U; corner < count; corner++) {
+        const int32_t *point = s_bob_positions_active[
+            primitive->indices[corner]];
+        const int64_t dx = (int64_t)point[0] - center[0];
+        const int64_t dy = (int64_t)point[1] - center[1];
+        const int64_t dz = (int64_t)point[2] - center[2];
+        const int64_t extent = (dx < 0 ? -dx : dx) +
+                               (dy < 0 ? -dy : dy) +
+                               (dz < 0 ? -dz : dz);
+        if (extent > bound) bound = extent;
+    }
+    const int64_t dx = (int64_t)center[0] - camera->position.x;
+    const int64_t dy = (int64_t)center[1] - camera->position.y;
+    const int64_t dz = (int64_t)center[2] - camera->position.z;
+    const int64_t distance = dx * dx + dy * dy + dz * dz;
+    const int64_t view = (int64_t)SATURN_DEMO_VIEW_RADIUS;
+    const int64_t limit = view + bound;
+    return distance <= limit * limit;
 }
 
 static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
 {
     demo_classify_context_t *context = opaque;
+    const sm64_saturn_camera_transform_t *camera = context->camera;
     for (uint16_t i = begin; i < end; i++) {
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
@@ -251,6 +283,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         const sm64_saturn_bob_primitive_t *primitive =
             &context->primitives[i];
         if (!demo_poly_tier_accepts(primitive) ||
+            !demo_primitive_in_radius(primitive, camera) ||
             !s_position_valid[primitive->indices[0]] ||
             !s_position_valid[primitive->indices[1]] ||
             !s_position_valid[primitive->indices[2]] ||
@@ -301,6 +334,10 @@ static void demo_emit_primitive(
         INT16_VEC2_INITIALIZER(s_projected[indices[3]].x,
                                s_projected[indices[3]].y)
     };
+    const int16_vec2_t shape_vertices[4] = {
+        vertices[0], vertices[1], vertices[2],
+        primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
+    };
     const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
                               (vertices[2].y - vertices[0].y) -
                           (int32_t)(vertices[1].y - vertices[0].y) *
@@ -316,8 +353,8 @@ static void demo_emit_primitive(
         return;
     }
     vdp1_cmdt_polygon_set(cmdt);
-    vdp1_cmdt_vtx_set(cmdt, vertices);
-    if (demo_has_texture_quad(primitive)) {
+    vdp1_cmdt_vtx_set(cmdt, shape_vertices);
+    if (primitive->textured != 0U) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -385,9 +422,13 @@ static void demo_emit_primitive_at(
         INT16_VEC2_INITIALIZER(s_projected[indices[3]].x,
                                s_projected[indices[3]].y)
     };
+    const int16_vec2_t shape_vertices[4] = {
+        vertices[0], vertices[1], vertices[2],
+        primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
+    };
     vdp1_cmdt_polygon_set(cmdt);
-    vdp1_cmdt_vtx_set(cmdt, vertices);
-    if (demo_has_texture_quad(primitive) &&
+    vdp1_cmdt_vtx_set(cmdt, shape_vertices);
+    if (primitive->textured != 0U &&
         sm64_saturn_ir_texture_bind_clut16(
             cmdt, partitions, primitive->tile_offset, primitive->tile_size,
             primitive->tile_size,
@@ -577,7 +618,7 @@ static void demo_emit_mario(
     s_actor_light_intensity = pose->light_intensity;
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
-        .near_depth = DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
+        .near_depth = SATURN_DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y, .coord_min = DEMO_COORD_MIN,
         .coord_max = DEMO_COORD_MAX
     };
@@ -741,7 +782,7 @@ void sm64_saturn_demo_render_frame(
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(snapshot),
         .focal_length = DEMO_FOCAL_LENGTH,
-        .near_depth = DEMO_NEAR_DEPTH,
+        .near_depth = SATURN_DEMO_NEAR_DEPTH,
         .center_x = DEMO_CENTER_X,
         .center_y = DEMO_CENTER_Y,
         .coord_min = DEMO_COORD_MIN,
@@ -791,7 +832,8 @@ void sm64_saturn_demo_render_frame(
         }
     }
     demo_classify_context_t classify = {
-        .primitives = s_bob_primitives_active
+        .primitives = s_bob_primitives_active,
+        .camera = &job.camera
     };
     sm64_saturn_dual_worker_stats_t classify_stats;
     bool classify_ok = true;

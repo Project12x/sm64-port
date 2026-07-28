@@ -18,6 +18,19 @@ typedef struct sm64_saturn_vdp1_backend {
     sm64_saturn_command_arena_t commands;
 } sm64_saturn_vdp1_backend_t;
 
+/* Switch a caller-owned command list after the previous VDP1 cycle has
+ * retired.  The setup commands are initialized once per bank by the caller;
+ * this operation only resets the arena cursor and list prefix. */
+static inline void
+sm64_saturn_vdp1_backend_bind_storage(sm64_saturn_vdp1_backend_t *backend,
+                                      vdp1_cmdt_t *cmdts,
+                                      uint16_t capacity)
+{
+    backend->list.cmdts = cmdts;
+    backend->list.count = 3U;
+    sm64_saturn_command_arena_init(&backend->commands, capacity, 2U);
+}
+
 static inline bool
 sm64_saturn_vdp1_backend_init(sm64_saturn_vdp1_backend_t *backend,
                               uint16_t capacity, int16_vec2_t clip,

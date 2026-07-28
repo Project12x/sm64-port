@@ -184,9 +184,10 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
  * triangle). 2048 * 32 bytes = 64 KiB, trivial against the ~1 MiB free
  * in the lwram region (sourceboot-cart.x) -- no linker script change
  * needed. */
-static vdp1_cmdt_t sourceboot_vdp1_cmdts[SOURCEBOOT_VDP1_COMMAND_CAPACITY]
+static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __attribute__((section(".lwram_cmdts")));
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
+static uint8_t sourceboot_vdp1_cmdts_bank;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
@@ -407,7 +408,7 @@ int main(void) {
         const int16_vec2_t clip = INT16_VEC2_INITIALIZER(319, 223);
         const int16_vec2_t local = INT16_VEC2_INITIALIZER(0, 0);
         if (!sm64_saturn_vdp1_backend_init_with_storage(
-                &sourceboot_vdp1_backend, sourceboot_vdp1_cmdts,
+                &sourceboot_vdp1_backend, sourceboot_vdp1_cmdts[0],
                 SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
             dbgio_puts("sourceboot: VDP1 backend init failed\n");
             dbgio_flush();
@@ -471,6 +472,19 @@ int main(void) {
                 &demo_texture_residency, 0, sm64_saturn_bob_texture_bank,
                 SOURCEBOOT_BOB_TEXTURE_BYTES)) {
             dbgio_puts("sourceboot: BOB texture residency failed\n");
+            for (;;) {}
+        }
+        /* Initialize the second bank's fixed system/local commands without
+         * making it the active list yet. Both banks are independently valid
+         * VDP1 lists before the first frame swap. */
+        sm64_saturn_vdp1_backend_t spare_backend;
+        const int16_vec2_t spare_clip = INT16_VEC2_INITIALIZER(319, 223);
+        const int16_vec2_t spare_local = INT16_VEC2_INITIALIZER(0, 0);
+        if (!sm64_saturn_vdp1_backend_init_with_storage(
+                &spare_backend, sourceboot_vdp1_cmdts[1],
+                SOURCEBOOT_VDP1_COMMAND_CAPACITY, spare_clip, spare_local)) {
+            dbgio_puts("sourceboot: spare VDP1 backend init failed\n");
+            dbgio_flush();
             for (;;) {}
         }
         if (!sm64_saturn_texture_residency_upload(
@@ -587,6 +601,15 @@ int main(void) {
             sourceboot_mario_pose.vertex_count;
 
         const uint16_t render_start = cpu_frt_count_get();
+        /* SlaveDriver and Z-Treme both rebuild into a bank that VDP1 is not
+         * consuming. Wait for the previous list to retire, then alternate
+         * the LWRAM staging bank before emitting this frame. */
+        vdp1_sync_wait();
+        sourceboot_vdp1_cmdts_bank ^= 1U;
+        sm64_saturn_vdp1_backend_bind_storage(
+            &sourceboot_vdp1_backend,
+            sourceboot_vdp1_cmdts[sourceboot_vdp1_cmdts_bank],
+            SOURCEBOOT_VDP1_COMMAND_CAPACITY);
 #if SATURN_DEMO_PATH
         sm64_saturn_demo_render_frame(&sourceboot_vdp1_backend,
                                       &sourceboot_gouraud_bank,

@@ -928,6 +928,23 @@ notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`
 (behaviour-only — that checkout lacks a root licence), Z-Treme rendering
 split (behaviour lessons, `SHIPPING_ENGINE_COMPARISON.md`).
 
+**Progress note (2026-07-28, reference-led visibility diagnosis):** the
+manual free-roam A/B separated two independent disappearance boundaries. A
+larger `SATURN_DEMO_VIEW_RADIUS` restored distant terrain but increased near-
+Mario loss because the current renderer rejects a whole primitive when any
+vertex fails the radius or near-plane test. The retained profile shows
+`vdp1_commands_last=626` against a 2048-slot arena with
+`reject_vdp1_arena_capacity=0`, so command-capacity exhaustion is not the
+explanation. The pinned references establish the replacement shape: Z-Treme
+uses bounding-volume/tri-state frustum traversal (`ZT_FRUSTUM.c`,
+`ZT_RENDERING.c:494`), SlaveDriver uses sector/portal AABBs and a baked
+dependency order (`WALLS.C:1546-1794`, `1953-1983`), and both GPL engines
+double-bank VDP1 command staging (`SPR.C:71-72,129,141-157`). Jo Engine's
+contribution remains the bounded command-block lifecycle only; its 3-D and
+allocator paths are not adopted. The next correctness pass therefore adds
+visibility-reason counters, moves radius rejection to spatial bounds, and
+double-banks sourceboot command staging before further painter tuning.
+
 ---
 
 ### Task 6: Degradation profile — Croc's levers, measured
