@@ -19,6 +19,7 @@ sys.path.insert(0, str(TOOLS))
 
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import (  # noqa: E402
+    artifact_identity,
     cap_stderr,
     has_cd_block_copy_limitation,
     input_pulse_request,
@@ -1038,6 +1039,17 @@ class BobMeshIRTests(unittest.TestCase):
 
 
 class YmirInputTests(unittest.TestCase):
+    def test_artifact_identity_records_hash_size_and_mtime(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "artifact.bin"
+            path.write_bytes(b"saturn-artifact")
+            identity = artifact_identity(path)
+            self.assertIsNotNone(identity)
+            self.assertEqual(identity["size"], len(b"saturn-artifact"))
+            self.assertEqual(identity["sha256"], __import__("hashlib").sha256(
+                b"saturn-artifact").hexdigest())
+            self.assertIsInstance(identity["mtime"], float)
+
     def test_pressed_mask_is_converted_to_active_low_pad_report(self) -> None:
         message = input_pulse_request(7, 0x0400)
         self.assertEqual(message["id"], 7)

@@ -109,6 +109,23 @@ def stale_game_image(game: Path) -> tuple[Path, float, float] | None:
     return None
 
 
+def artifact_identity(path: Path | None) -> dict[str, Any] | None:
+    """Return stable identity fields for an artifact used by a capture."""
+    if path is None or not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    stat = path.stat()
+    return {
+        "path": str(path),
+        "sha256": digest.hexdigest(),
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+    }
+
+
 def request(method: str, request_id: int, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "id": request_id}
     if params is not None:
@@ -338,6 +355,7 @@ def main() -> int:
         args.raw_output = args.raw_output.resolve()
     if args.screenshot_output:
         args.screenshot_output = args.screenshot_output.resolve()
+    capture_elf = newest_sibling_elf(args.game)
     stale = stale_game_image(args.game)
     if stale is not None and not args.allow_stale:
         elf, game_mtime, elf_mtime = stale
@@ -549,6 +567,10 @@ def main() -> int:
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
         "game": str(args.game),
+        "artifacts": {
+            "game": artifact_identity(args.game),
+            "elf": artifact_identity(capture_elf),
+        },
         "frames": args.frames,
         "bios_input": args.bios_input,
         "dram_cart": args.dram_cart,
