@@ -536,7 +536,14 @@ static void demo_emit_primitive(
     demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
-        primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
+        /* Castleviewer draws source triangles with the same affine companion
+         * corner used by the distorted-sprite texture mapping.  Collapsing
+         * the shape to C while passing the companion to VDP1's texture path
+         * makes the geometry and UV homography disagree, producing the large
+         * warped sheets seen in BOB.  Flat triangles retain the repeated-C
+         * polygon convention. */
+        primitive->source1 == 0xFFFFU && primitive->textured == 0U
+            ? vertices[2] : vertices[3]
     };
     const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
                               (vertices[2].y - vertices[0].y) -
@@ -615,7 +622,8 @@ static void demo_emit_primitive_at(
     demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
-        primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
+        primitive->source1 == 0xFFFFU && primitive->textured == 0U
+            ? vertices[2] : vertices[3]
     };
     vdp1_cmdt_polygon_set(cmdt);
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);

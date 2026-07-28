@@ -936,6 +936,14 @@ but still has severe warped-sheet geometry. This is an ordering milestone, not
 visual acceptance: source primitives are currently deduplicated through the BSP
 references, while split fragments/UV lowering remain the next correctness step.
 
+**Progress note (2026-07-28, textured companion alignment):** sourceboot's
+textured triangle emission now uses the generated affine companion as the
+fourth VDP1 distorted-sprite corner, matching castleviewer; flat triangles keep
+the repeated-C polygon. Direct and dual-worker emission share the rule. The
+fresh cross-build/capture completed cleanly, but the screenshot is materially
+unchanged, so this closes a proven contract mismatch without claiming it fixed
+the warped terrain. Split-fragment texture baking remains the active lever.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
