@@ -24,6 +24,7 @@
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
 static sm64_saturn_projected_vertex_t s_projected[
     SM64_SATURN_BOB_POSITION_COUNT];
+static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT];
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
 static uint16_t s_bucket_indices[DEMO_BUCKETS][
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -243,8 +244,10 @@ void sm64_saturn_demo_render_frame(
                     sm64_saturn_bob_positions[i][1],
                     sm64_saturn_bob_positions[i][2]},
                 &s_view[i], &s_projected[i])) {
+            s_position_valid[i] = 1U;
             profile->triangles_transformed++;
         } else {
+            s_position_valid[i] = 0U;
             s_view[i] = (sm64_saturn_vec3i_t){0, 0, DEMO_NEAR_DEPTH};
             s_projected[i] = (sm64_saturn_projected_vertex_t){
                 DEMO_CENTER_X, DEMO_CENTER_Y, DEMO_NEAR_DEPTH};
@@ -254,6 +257,12 @@ void sm64_saturn_demo_render_frame(
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
         const sm64_saturn_bob_primitive_t *primitive =
             &sm64_saturn_bob_primitives[i];
+        if (!s_position_valid[primitive->indices[0]] ||
+            !s_position_valid[primitive->indices[1]] ||
+            !s_position_valid[primitive->indices[2]] ||
+            !s_position_valid[primitive->indices[3]]) {
+            continue;
+        }
         const int32_t z = (s_projected[primitive->indices[0]].z +
                            s_projected[primitive->indices[1]].z +
                            s_projected[primitive->indices[2]].z) / 3;
