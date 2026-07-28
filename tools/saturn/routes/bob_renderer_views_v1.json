@@ -1,0 +1,43 @@
+{
+  "schema": "sm64-saturn-bob-renderer-views",
+  "version": 1,
+  "source_route": "tools/saturn/routes/bob_parity_v1.json",
+  "route_version": "bob-parity-v1",
+  "controller_encoding": "N64 OSContPad active-high bitmask",
+  "capture_contract": {
+    "fresh_elf_and_cue": true,
+    "dram_cart": true,
+    "probe_symbol_from_captured_elf": true,
+    "cadence_interval_emulated_frames": 60,
+    "owner_gallery_acceptance_required": true
+  },
+  "viewpoints": [
+    {
+      "id": "frozen-route",
+      "route_tick": 600,
+      "route_sample_end": 7,
+      "camera_expectation": "final camera variation",
+      "purpose": "authority checkpoint and primary performance comparison"
+    },
+    {
+      "id": "near-mario-blue-hole",
+      "route_tick": 360,
+      "route_sample_end": 3,
+      "camera_expectation": "post-jump arc view",
+      "purpose": "foreground terrain coverage and near-plane diagnostic"
+    },
+    {
+      "id": "distant-terrain-disappearance",
+      "route_tick": 504,
+      "route_sample_end": 5,
+      "camera_expectation": "return-leg view before second jump",
+      "purpose": "far-radius and bounded-admission diagnostic"
+    }
+  ],
+  "reproduction": {
+    "route_file": "tools/saturn/routes/bob_parity_v1.json",
+    "required_checkpoint_tick": 600,
+    "repeat_count": 2,
+    "manual_capture_note": "The sourceboot route remains authoritative. A viewpoint is valid only when the named route tick and camera expectation are recorded in the paired capture report; this manifest does not authorize an inferred screenshot."
+  }
+}

@@ -15,7 +15,7 @@ or is there a structural gap beyond it?
 | Engine | Path | Pinned commit | Licence | Reuse posture |
 |---|---|---|---|---|
 | Lobotomy SlaveDriver | `work/upstream/slavedriver-engine` | `a8986591557b6e680550d3c23970284d3b38ff8f` | GPL-3.0-or-later | Copyable under the project's existing GPL policy, isolated per `THIRD_PARTY_LICENSES.md` |
-| Sonic Z-Treme | `work/upstream/sonic-z-treme` | `cff75451c1616aac1236fc2b44223902b55c706b` | GPL-3.0 text with a contradictory no-sale clause | **Behaviour study only.** No code adoption |
+| Sonic Z-Treme | `work/upstream/sonic-z-treme` | `cff75451c1616aac1236fc2b44223902b55c706b` | GPL-3.0; owner decision dated 2026-07-27 authorizes compatible close-port reuse with preserved notices and corresponding-source obligations | **Pattern study plus authorized close-port** in `src/port/saturn/gpl/`; no Sega assets or SGL binary |
 | Jo Engine | `work/upstream/joengine` | `556d081146211b6a1cfa6591d70f9487d406758b` | Repo `LICENSE` is MIT; **76 of 77 per-file headers are BSD-3-Clause** | Copyable; honour the stricter per-file header |
 
 A fourth reference is used throughout and is not a repository: Sega's own SGL
@@ -789,10 +789,14 @@ is already proven at ~15 FPS in the castleviewer target.
 | Buys | Up to ~2× on the geometry stage. Strictly less overall — command emission stays serial on the master |
 | Risk | High (dual-CPU coherence), and it should follow ranks 1–4, not lead them. But **the diagnosis's Rank-6 dismissal was written against an 80×-over-budget frame**; at 5–10× over budget a clean 1.6–2× is no longer irrelevant |
 
-### F. Sonic Z-Treme — **lessons only, no code**
+### F. Sonic Z-Treme — **pinned lessons and authorized close-port**
 
-The licence contradiction stands; nothing is copyable. The transferable lessons,
-already restated in §3.2 and §7: hot/cold LWRAM→HWRAM promotion of exactly the
+The owner decision dated 2026-07-27 resolves the stale no-sale wording as a
+Sega-IP disclaimer rather than a source-code prohibition. Compatible GPL
+close-port reuse is authorized when isolated under `src/port/saturn/gpl/`,
+attributed, and accompanied by corresponding-source obligations. The
+transferable lessons, already restated in §3.2 and §7, are: hot/cold
+LWRAM→HWRAM promotion of exactly the
 per-frame-touched structures (`ZT_LOADING.c:321-353`); tri-state hierarchical
 frustum culling with INSIDE-propagation (`ZT_FRUSTUM.c:145-165`); near-to-far
 submission as an overflow policy (`ZT_RENDERING.c:494-503`); delta-timed logic
@@ -808,7 +812,9 @@ ordering to keep the slave busy (`SRC/game.c:772-775`).
   x^(n+1); routes through soft-double; bit-by-bit with no table.
 - **SlaveDriver's world renderer** — its sector assumptions do not match SM64's
   scene graph, as `RENDERER_PRIOR_ART.md:211-213` already records.
-- **Any Z-Treme source.**
+- **Unpinned or unattributed Z-Treme source, Sega assets, or the proprietary
+  SGL binary.** Close-port only the exact pinned, technically applicable ranges
+  recorded in `UPSTREAM_CODE_LEDGER.md` and `PROVENANCE.md`.
 
 ---
 

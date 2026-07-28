@@ -14,6 +14,7 @@
 #include "saturn_matrix.h"
 #include "saturn_matrix_kernels.h"
 #include "slavedriver_projection.h"
+#include "slavedriver_terrain_result.h"
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
 #include "saturn_input_replay.h"
@@ -331,6 +332,36 @@ static void test_input_replay_feeds_only_pads_and_ends_neutral(void)
     assert(replay.complete && replay.ticks_consumed == 3U);
     sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
     assert(buttons == 0U && stick_x == 0 && stick_y == 0);
+}
+
+static void test_bounded_terrain_result_spans(void)
+{
+    sm64_saturn_terrain_result_t master_records[4];
+    sm64_saturn_terrain_result_t slave_records[4];
+    sm64_saturn_terrain_result_spans_t spans;
+    sm64_saturn_terrain_result_t *slot = NULL;
+
+    sm64_saturn_terrain_result_spans_init(
+        &spans, master_records, 4U, slave_records, 4U, 1U);
+    assert(sm64_saturn_terrain_result_reserve(&spans.master, 3U, &slot));
+    assert(slot == &master_records[0]);
+    assert(spans.master.count == 3U);
+    assert(!sm64_saturn_terrain_result_reserve(&spans.master, 1U, &slot));
+    assert(spans.master.reserve_rejects == 1U);
+
+    slot->corner_count = 3U;
+    slot->flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE;
+    assert(sm64_saturn_terrain_result_commit(&spans.master, slot));
+    slot->corner_count = 2U;
+    assert(!sm64_saturn_terrain_result_commit(&spans.master, slot));
+    assert(spans.master.malformed_rejects == 1U);
+
+    assert(sm64_saturn_terrain_result_reserve(&spans.slave, 3U, &slot));
+    assert(slot == &slave_records[0]);
+    assert(spans.slave.count == 3U);
+    sm64_saturn_terrain_result_arena_reset(&spans.slave);
+    assert(spans.slave.count == 0U);
+    assert(spans.slave.reserve_rejects == 0U);
 }
 
 static uint32_t float_bits(float value)
@@ -3509,6 +3540,7 @@ int main(void)
     test_identity_camera();
     test_q16_normalization();
     test_input_replay_feeds_only_pads_and_ends_neutral();
+    test_bounded_terrain_result_spans();
     test_frame_profile();
     test_bounded_memory_arena();
     test_source_identified_render_queue();

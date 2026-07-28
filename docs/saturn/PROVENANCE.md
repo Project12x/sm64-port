@@ -461,7 +461,7 @@ therefore serializes the SH-2 hardware divider.
 | License | GPL-3.0 (`LICENSE`; additional asset/Sega-library caveats in `README.md`) |
 | Role | Shipped-scale Saturn 3D renderer prior art for Gouraud cost, visibility, model arenas, and DMA |
 | Files inspected | `README.md`, `LICENSE`, `Projects/SONIC Z-TREME/ZTE/ZT_RENDERING.c`, `ZT_LOADING.c`, `ZT_LOAD_MODEL.c`, `ZT_SPRITES.H` |
-| Reuse mode | Behavior/architecture study only; no source copied |
+| Reuse mode | Pinned behavior/architecture study plus authorized GPL close-port in `src/port/saturn/gpl/`; only the exact ranges recorded in `UPSTREAM_CODE_LEDGER.md` may be reused, with preserved notices and corresponding-source obligations |
 
 Sonic Z-Treme assigns each eligible polygon a stable Gouraud-table slot while
 loading a model, initializes the complete Gouraud work area once, and copies
@@ -476,6 +476,14 @@ slave SH-2 are valuable measurement targets, not implementation to copy.
 
 The comparison and resulting renderer decisions are maintained in
 `docs/saturn/RENDERER_PRIOR_ART.md`.
+
+**2026-07-28 renderer-pipeline sprint policy reconciliation:** the owner
+decision dated 2026-07-27 resolves the stale Z-Treme no-sale wording as a
+Sega-IP disclaimer rather than a source-code prohibition. This does not
+authorize Sega assets, the proprietary SGL binary, or unpinned source. The
+Saturn port may close-port the pinned GPL-3.0 ranges listed in
+`UPSTREAM_CODE_LEDGER.md`, isolated under `src/port/saturn/gpl/`, while
+retaining the GPL notice, change record, and corresponding-source obligations.
 
 **2026-07-22 re-consultation** (sourceboot gGfxPool collision investigation,
 `docs/saturn/evidence/e2-sourceboot-bad-mtx-pointer-2026-07-22.md`): inspected

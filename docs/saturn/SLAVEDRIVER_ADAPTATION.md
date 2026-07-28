@@ -61,3 +61,21 @@ owns only Q16 DIVU start/collect transport (not a SlaveDriver wall renderer),
 retains the GPL declaration, upstream path, pin, and material-change note,
 and is exercised once at sourceboot startup by a debugger-readable target
 vector. Pinned Yaul public CPU-DIVU headers replace any raw SDK assumptions.
+
+## Compact terrain results (renderer pipeline sprint)
+
+The sprint's first renderer boundary is the close-port result discipline in
+`src/port/saturn/gpl/slavedriver_terrain_result.h`. It adapts the fixed result
+span and pre-write guard from `WALLS.C:1240-1408` at the pinned commit
+`a8986591557b6e680550d3c23970284d3b38ff8f`. The adaptation is intentionally
+smaller than the upstream wall record: it stores only projected corners,
+shade inputs, stable primitive/leaf/material identities, painter key, and
+clip/material flags. It contains no VDP1 command pointer or allocator state.
+
+Master and slave receive separate fixed-capacity arenas. A producer reserves
+the complete output count before writing a clipped fan, with explicit
+headroom; rejected reservations increment a reasoned counter and do not write
+past the arena. The master merges the spans after the one-dispatch join and is
+the only owner allowed to lower results into VDP1 commands, texture slots, or
+Gouraud tables. This is a close-port of the ownership pattern, not a copy of
+SlaveDriver's sector/portal world model.

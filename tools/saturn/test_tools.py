@@ -20,6 +20,7 @@ sys.path.insert(0, str(TOOLS))
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import (  # noqa: E402
     artifact_identity,
+    cadence_summary,
     DEFAULT_CAPTURE_TIMEOUT_SECONDS,
     cap_stderr,
     emulation_timing,
@@ -1217,6 +1218,29 @@ class YmirInputTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             emulation_timing(1, 0.0)
 
+    def test_cadence_summary_reports_median_and_one_percent_low(self) -> None:
+        summary = cadence_summary(
+            [
+                {"emulated_frame": 0, "frame_serial": 0},
+                {"emulated_frame": 60, "frame_serial": 10},
+                {"emulated_frame": 120, "frame_serial": 20},
+                {"emulated_frame": 180, "frame_serial": 21},
+            ]
+        )
+        self.assertEqual(summary["sample_count"], 4)
+        self.assertEqual(summary["interval_count"], 3)
+        self.assertAlmostEqual(summary["guest_fps_median"], 10.0)
+        self.assertAlmostEqual(summary["guest_fps_1pct_low"], 1.0)
+
+    def test_cadence_summary_rejects_nonmonotonic_samples(self) -> None:
+        with self.assertRaises(ValueError):
+            cadence_summary(
+                [
+                    {"emulated_frame": 60, "frame_serial": 1},
+                    {"emulated_frame": 60, "frame_serial": 2},
+                ]
+            )
+
 
 class BobParityRouteTests(unittest.TestCase):
     @staticmethod
@@ -1242,6 +1266,20 @@ class BobParityRouteTests(unittest.TestCase):
         self.assertTrue(any(sample["buttons"] & 0x8000 for sample in route["samples"]))
         self.assertTrue(any(sample["buttons"] & 0x0003 for sample in route["samples"]))
         self.assertTrue(any(sample["stick_x"] or sample["stick_y"] for sample in route["samples"]))
+
+    def test_renderer_view_manifest_is_route_bound_and_reproducible(self) -> None:
+        manifest = json.loads(
+            (TOOLS / "routes" / "bob_renderer_views_v1.json").read_text(encoding="utf-8")
+        )
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        self.assertEqual(manifest["source_route"], "tools/saturn/routes/bob_parity_v1.json")
+        self.assertEqual(manifest["reproduction"]["required_checkpoint_tick"], route["checkpoint_tick"])
+        self.assertEqual(manifest["reproduction"]["repeat_count"], 2)
+        self.assertEqual(
+            [view["route_tick"] for view in manifest["viewpoints"]],
+            [360, 504, 600],
+        )
+        self.assertTrue(all(view["route_tick"] <= route["checkpoint_tick"] for view in manifest["viewpoints"]))
 
     def test_comparator_accepts_identical_complete_checkpoints(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")

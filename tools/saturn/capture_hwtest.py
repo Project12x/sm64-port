@@ -12,6 +12,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 import subprocess
 import time
 from pathlib import Path
@@ -36,6 +37,7 @@ YMIR_MAX_RUN_FOR_FRAMES = 3600
 # validated before the report is emitted.
 MAX_CAPTURE_FRAMES = 72000
 DEFAULT_CAPTURE_TIMEOUT_SECONDS = 1700.0
+MAX_CADENCE_SAMPLES = 4096
 
 
 def emulation_timing(emulated_frames: int, wall_clock_seconds: float) -> dict[str, float | int]:
@@ -51,6 +53,54 @@ def emulation_timing(emulated_frames: int, wall_clock_seconds: float) -> dict[st
         "emulated_vblank_fps": vblank_fps,
         "emulation_speed_ratio": vblank_fps / 60.0,
     }
+
+
+def cadence_summary(samples: list[dict[str, int]], nominal_refresh_hz: float = 60.0) -> dict[str, Any]:
+    """Summarize bounded frame-serial samples into guest cadence metrics.
+
+    ``frame_serial`` is sampled at known emulated-frame boundaries.  It is
+    deliberately not treated as a cumulative rate: each adjacent pair is a
+    separate interval, then the interval rates are summarized.  This keeps
+    the median/1% low meaningful even when the emulator's wall-clock speed
+    varies during a long capture.
+    """
+    if nominal_refresh_hz <= 0:
+        raise ValueError("nominal_refresh_hz must be positive")
+    normalized = [
+        {"emulated_frame": int(sample["emulated_frame"]), "frame_serial": int(sample["frame_serial"])}
+        for sample in samples
+    ]
+    intervals: list[dict[str, int | float]] = []
+    for previous, current in zip(normalized, normalized[1:]):
+        emulated_delta = current["emulated_frame"] - previous["emulated_frame"]
+        if emulated_delta <= 0:
+            raise ValueError("cadence samples must have increasing emulated_frame values")
+        frame_delta = (current["frame_serial"] - previous["frame_serial"]) & 0xFFFFFFFF
+        guest_fps = frame_delta * nominal_refresh_hz / emulated_delta
+        intervals.append(
+            {
+                "emulated_frames": emulated_delta,
+                "frame_serial_delta": frame_delta,
+                "guest_fps": guest_fps,
+            }
+        )
+    rates = sorted(float(interval["guest_fps"]) for interval in intervals)
+    summary: dict[str, Any] = {
+        "nominal_refresh_hz": nominal_refresh_hz,
+        "sample_count": len(normalized),
+        "interval_count": len(intervals),
+        "samples": normalized,
+        "intervals": intervals,
+        "guest_fps_median": None,
+        "guest_fps_1pct_low": None,
+    }
+    if rates:
+        middle = len(rates) // 2
+        summary["guest_fps_median"] = (
+            rates[middle] if len(rates) % 2 else (rates[middle - 1] + rates[middle]) / 2.0
+        )
+        summary["guest_fps_1pct_low"] = rates[max(0, math.ceil(len(rates) * 0.01) - 1)]
+    return summary
 
 
 def has_cd_block_copy_limitation(stderr: str) -> bool:
@@ -187,6 +237,39 @@ def run_for_requests(next_id: int, frames: int) -> tuple[list[dict[str, Any]], l
     return chunk_requests, chunk_ids, next_id
 
 
+def run_for_requests_cadenced(
+    next_id: int,
+    frames: int,
+    probe_address: int,
+    interval: int,
+) -> tuple[list[dict[str, Any]], list[int], list[tuple[int, int]], int]:
+    """Run a bounded frame sequence with profile probes at fixed boundaries."""
+    if frames <= 0:
+        raise ValueError("frames must be positive")
+    if interval <= 0:
+        raise ValueError("interval must be positive")
+    if (frames + interval - 1) // interval > MAX_CADENCE_SAMPLES:
+        raise ValueError(f"cadence would exceed {MAX_CADENCE_SAMPLES} samples")
+    requests: list[dict[str, Any]] = []
+    run_ids: list[int] = []
+    sample_ids: list[tuple[int, int]] = []
+    remaining = frames
+    elapsed = 0
+    while remaining > 0:
+        chunk = min(remaining, YMIR_MAX_RUN_FOR_FRAMES, interval)
+        run_id = next_id
+        requests.append(request("exec.run_for", run_id, {"frames": chunk}))
+        run_ids.append(run_id)
+        next_id += 1
+        elapsed += chunk
+        sample_id = next_id
+        requests.append(request("mem.peek", sample_id, {"address": probe_address, "count": 4}))
+        sample_ids.append((elapsed, sample_id))
+        next_id += 1
+        remaining -= chunk
+    return requests, run_ids, sample_ids, next_id
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ymir", type=Path, required=True, help="path to the ymir-headless executable")
@@ -210,6 +293,21 @@ def main() -> int:
         type=int,
         default=64,
         help="number of bytes for --probe-address (1..65536)",
+    )
+    parser.add_argument(
+        "--cadence-probe-address",
+        type=lambda value: int(value, 0),
+        metavar="ADDRESS",
+        help=(
+            "optional profile address to sample every --cadence-interval "
+            "emulated frames; the first uint32 is interpreted as frame_serial"
+        ),
+    )
+    parser.add_argument(
+        "--cadence-interval",
+        type=int,
+        default=60,
+        help="emulated-frame spacing for cadence samples (default: 60)",
     )
     parser.add_argument(
         "--extra-probe-address",
@@ -351,6 +449,17 @@ def main() -> int:
         parser.error("--probe-address must be an unsigned 32-bit value")
     if args.extra_probe_address is not None and not 0 <= args.extra_probe_address <= 0xFFFFFFFF:
         parser.error("--extra-probe-address must be an unsigned 32-bit value")
+    if args.cadence_probe_address is not None and not 0 <= args.cadence_probe_address <= 0xFFFFFFFF:
+        parser.error("--cadence-probe-address must be an unsigned 32-bit value")
+    if not 1 <= args.cadence_interval <= YMIR_MAX_RUN_FOR_FRAMES:
+        parser.error(
+            "--cadence-interval must be between 1 and "
+            f"{YMIR_MAX_RUN_FOR_FRAMES}"
+        )
+    if args.cadence_probe_address is not None and (
+        args.frames + args.cadence_interval - 1
+    ) // args.cadence_interval > MAX_CADENCE_SAMPLES:
+        parser.error(f"cadence would exceed {MAX_CADENCE_SAMPLES} samples")
     if not 1 <= args.probe_count <= 65536:
         parser.error("--probe-count must be between 1 and 65536")
     if (
@@ -428,7 +537,16 @@ def main() -> int:
         # capture cannot inherit the last language/clock navigation pulse.
         requests.append(request("input.pulse", next_id, {"buttons": 0xFFF8}))
         next_id += 1
-    frame_requests, frame_ids, next_id = run_for_requests(next_id, args.frames)
+    cadence_sample_ids: list[tuple[int, int]] = []
+    if args.cadence_probe_address is None:
+        frame_requests, frame_ids, next_id = run_for_requests(next_id, args.frames)
+    else:
+        frame_requests, frame_ids, cadence_sample_ids, next_id = run_for_requests_cadenced(
+            next_id,
+            args.frames,
+            args.cadence_probe_address,
+            args.cadence_interval,
+        )
     requests.extend(frame_requests)
     run_for_ids.extend(frame_ids)
     pre_poke_event_id: int | None = None
@@ -572,6 +690,20 @@ def main() -> int:
             "height": screenshot_result["height"],
             "frame_hash": screenshot_result["hash"],
         }
+    cadence_samples: list[dict[str, int]] = []
+    for emulated_frame, sample_id in cadence_sample_ids:
+        sample_response = response_for(messages, sample_id)
+        sample_data = sample_response.get("result", {}).get("data", [])
+        if not isinstance(sample_data, list) or len(sample_data) < 4:
+            raise RuntimeError(
+                f"cadence probe {sample_id} returned fewer than four bytes"
+            )
+        cadence_samples.append(
+            {
+                "emulated_frame": emulated_frame,
+                "frame_serial": int.from_bytes(bytes(sample_data[:4]), byteorder="big"),
+            }
+        )
     raw_data = telemetry_response["result"]["data"]
     raw_bytes = bytes(raw_data)
     raw_telemetry = {
@@ -604,6 +736,7 @@ def main() -> int:
         },
         "frames": args.frames,
         "emulation_timing": emulation_timing(emulated_frames, wall_clock_seconds),
+        "cadence": cadence_summary(cadence_samples) if cadence_sample_ids else None,
         "bios_input": args.bios_input,
         "dram_cart": args.dram_cart,
         "degradation": {
@@ -621,6 +754,8 @@ def main() -> int:
             args.post_poke_frames if args.event_word_poke is not None or args.handoff_yield else None
         ),
         "probe_address": args.probe_address,
+        "cadence_probe_address": args.cadence_probe_address,
+        "cadence_interval": args.cadence_interval if args.cadence_probe_address is not None else None,
         "extra_probe_address": args.extra_probe_address,
         "probe_count": args.probe_count,
         "input_pulse": args.input_pulse,
