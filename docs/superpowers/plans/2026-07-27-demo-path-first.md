@@ -604,6 +604,12 @@ is still required before gallery promotion.
  order for equal-depth coplanar surfaces. The image cross-builds and is running
  in foreground Ymir; terrain visual acceptance and route parity remain open.
 
+**Progress note (2026-07-28, conservative terrain depth key):** the BOB
+ painter now keys each primitive by its nearest projected corner rather than
+ its average depth. This avoids mid-pan reorder flips when a large quad spans
+ a neighboring surface; equal-depth source order remains stable. The fresh
+ image builds and is running in foreground Ymir for a manual flicker check.
+
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
