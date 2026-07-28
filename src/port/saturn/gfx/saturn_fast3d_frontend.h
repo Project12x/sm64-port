@@ -350,6 +350,15 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t slave_busy_ticks;
     uint32_t master_wait_ticks;
     uint32_t slave_timeouts;
+    /* Task 7 utilization evidence. These are append-only profile fields so
+     * archived probe offsets remain valid. render_frt_ticks_accum is the
+     * denominator for the cumulative slave-share calculation; the residency
+     * fields describe the fixed sourceboot BOB display configuration. */
+    uint32_t render_frt_ticks_accum;
+    uint32_t vdp1_commands_last;
+    uint32_t vdp1_vram_bytes;
+    uint32_t vdp2_display_mask;
+    uint32_t vdp2_vram_bytes;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

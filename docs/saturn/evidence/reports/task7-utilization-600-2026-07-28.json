@@ -1,0 +1,88 @@
+{
+  "evidence_kind": "sourceboot-task7-utilization",
+  "date": "2026-07-28",
+  "route": "bob_parity_v1",
+  "degradation": {
+    "view_radius": 2048,
+    "poly_tier": 0,
+    "hot_promotion": 0
+  },
+  "clock": {
+    "frt_ticks_per_ms": 3359,
+    "calibration": "CPU_FRT_NTSC_320_8_COUNT_1MS"
+  },
+  "captures": {
+    "serial": {
+      "report": "task5b-serial-util-600-2026-07-28.json",
+      "screenshot": "../screenshots/task5b-serial-util-600-2026-07-28.png",
+      "elf_sha256": "f4151e84d71ce26e179729de56afe26275f073475d7c89c67af1a69171b321c8",
+      "cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "probe_address": "0x060D0F40",
+      "frame_serial": 782,
+      "sim_tick_count": 783,
+      "sim_frt_ticks_accum": 35867403,
+      "render_frt_ticks_accum": 6734507,
+      "sim_ms_total": 10678.0003,
+      "sim_ms_per_tick": 13.6373,
+      "render_ms_total": 2004.9143,
+      "render_ms_per_frame": 2.5638,
+      "slave_busy_ticks": 0,
+      "slave_share_percent": 0.0,
+      "fault_flags": 0,
+      "slave_timeouts": 0,
+      "vdp1_commands_last": 573,
+      "vdp1_vram_bytes": 445984,
+      "vdp2_display_mask": 10,
+      "vdp2_vram_bytes": 262592
+    },
+    "dual": {
+      "report": "task5b-dual-util-600-2026-07-28.json",
+      "screenshot": "../screenshots/task5b-dual-util-600-2026-07-28.png",
+      "elf_sha256": "52dbeac9ce3f031e3edda8d981274113c71289c0386cdc065b1768ac05404c0b",
+      "cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "probe_address": "0x060D11E0",
+      "frame_serial": 801,
+      "sim_tick_count": 801,
+      "sim_frt_ticks_accum": 18530326,
+      "render_frt_ticks_accum": 48630101,
+      "sim_ms_total": 5516.6198,
+      "sim_ms_per_tick": 6.8872,
+      "render_ms_total": 14477.5531,
+      "render_ms_per_frame": 18.0743,
+      "slave_jobs_completed": 801,
+      "slave_busy_ticks": 10308448,
+      "master_wait_ticks": 76406,
+      "slave_share_percent": 21.1977,
+      "master_wait_ms_total": 22.7467,
+      "fault_flags": 0,
+      "slave_timeouts": 0,
+      "vdp1_commands_last": 577,
+      "vdp1_vram_bytes": 445984,
+      "vdp2_display_mask": 10,
+      "vdp2_vram_bytes": 262592
+    }
+  },
+  "route_comparator": {
+    "report": "task7-serial-vs-dual-util-600-2026-07-28.json",
+    "deterministic": true,
+    "replay_ticks": 600,
+    "global_timer": 601,
+    "checkpoint_sha256": "d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c",
+    "renderer_counter_deltas": {
+      "triangles_transformed": 0,
+      "triangles_vdp1_emitted": 0
+    },
+    "fault_flags": 0,
+    "command_capacity_rejects": 0
+  },
+  "derived": {
+    "vdp2_layers": ["NBG1 sky bitmap", "NBG3 debug text"],
+    "vdp1_vram_bytes": 445984,
+    "vdp2_vram_bytes": 262592,
+    "slave_share_definition": "dual.slave_busy_ticks / dual.render_frt_ticks_accum",
+    "slave_share_target_percent": 50.0,
+    "slave_share_target_met": false,
+    "limiter": "The dual transform path is renderer-bound: cumulative render time is 18.0743 ms/frame and the slave is busy for only 21.1977% of that measured render interval. Master join wait is 22.7467 ms cumulative, so the missing share is not explained by a long foreground join alone; the worker's serial transform and shared-bus/emit work remain the next investigation target.",
+    "verdict": "A/B parity and absolute-rate evidence pass; Task 5b utilization gate fails the >=50% slave-share target at this degradation setting. Keep the dual path diagnostic and do not promote these frames to the gallery without owner confirmation."
+  }
+}

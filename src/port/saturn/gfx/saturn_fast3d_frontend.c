@@ -1397,6 +1397,11 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     const uint32_t slave_busy_ticks = profile->slave_busy_ticks;
     const uint32_t master_wait_ticks = profile->master_wait_ticks;
     const uint32_t slave_timeouts = profile->slave_timeouts;
+    const uint32_t render_frt_ticks_accum = profile->render_frt_ticks_accum;
+    const uint32_t vdp1_commands_last = profile->vdp1_commands_last;
+    const uint32_t vdp1_vram_bytes = profile->vdp1_vram_bytes;
+    const uint32_t vdp2_display_mask = profile->vdp2_display_mask;
+    const uint32_t vdp2_vram_bytes = profile->vdp2_vram_bytes;
     (void)memset(profile, 0, sizeof(*profile));
     profile->frame_serial = frame_serial;
     profile->sim_frt_ticks_last = sim_frt_ticks_last;
@@ -1411,6 +1416,11 @@ void sm64_saturn_fast3d_frontend_submit(struct SPTask *task, void *context)
     profile->slave_busy_ticks = slave_busy_ticks;
     profile->master_wait_ticks = master_wait_ticks;
     profile->slave_timeouts = slave_timeouts;
+    profile->render_frt_ticks_accum = render_frt_ticks_accum;
+    profile->vdp1_commands_last = vdp1_commands_last;
+    profile->vdp1_vram_bytes = vdp1_vram_bytes;
+    profile->vdp2_display_mask = vdp2_display_mask;
+    profile->vdp2_vram_bytes = vdp2_vram_bytes;
     /* resolved[]/resolved_count are per-frame output, not persistent
      * state -- without this reset they accumulate across calls until
      * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES is reached, after which

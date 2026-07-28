@@ -31,6 +31,7 @@
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
+static uint32_t sourceboot_render_ticks_accum;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -204,6 +205,10 @@ static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
 #define SOURCEBOOT_SKY_BITMAP_HEIGHT 256U
 #define SOURCEBOOT_SKY_BITMAP_WORDS \
     (SOURCEBOOT_SKY_BITMAP_WIDTH * SOURCEBOOT_SKY_BITMAP_HEIGHT)
+#define SOURCEBOOT_VDP2_DISPLAY_MASK ((1U << 1) | (1U << 3)) /* NBG1 + NBG3 */
+#define SOURCEBOOT_VDP2_VRAM_BYTES \
+    ((SOURCEBOOT_SKY_BITMAP_WORDS * sizeof(uint16_t)) + \
+     (SOURCEBOOT_BACKSCREEN_LINES * sizeof(rgb1555_t)))
 extern const uint16_t sm64_saturn_bob_sky_bitmap[];
 
 static void sourceboot_init_sky_gradient(void)
@@ -524,6 +529,21 @@ int main(void) {
 #endif
         sourceboot_fast3d.profile.render_frt_ticks_last =
             sourceboot_frt_delta(render_start, cpu_frt_count_get());
+        sourceboot_render_ticks_accum +=
+            sourceboot_fast3d.profile.render_frt_ticks_last;
+        sourceboot_fast3d.profile.render_frt_ticks_accum =
+            sourceboot_render_ticks_accum;
+        sourceboot_fast3d.profile.vdp1_commands_last =
+            sourceboot_vdp1_backend.list.count;
+        sourceboot_fast3d.profile.vdp1_vram_bytes =
+            (SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t)) +
+            SOURCEBOOT_BOB_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
+            (SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES *
+             sizeof(vdp1_gouraud_table_t));
+        sourceboot_fast3d.profile.vdp2_display_mask =
+            SOURCEBOOT_VDP2_DISPLAY_MASK;
+        sourceboot_fast3d.profile.vdp2_vram_bytes =
+            SOURCEBOOT_VDP2_VRAM_BYTES;
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
         sourceboot_capture_route_checkpoint();
 #endif

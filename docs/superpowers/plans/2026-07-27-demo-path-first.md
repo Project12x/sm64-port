@@ -748,6 +748,17 @@ serial `frame_serial` 317→782 and dual 326→801 across screenshot sequence
 claim; the remaining gate is the utilization table and its ≥50% slave-share
 target.
 
+**Progress note (2026-07-28, Task 5b utilization report):** the profile now
+publishes cumulative render FRT ticks plus VDP1/VDP2 residency metadata, so the
+share denominator is measured rather than inferred from one frame. Fresh paired
+captures at `-r2048/-poly0` report dual render **18.0743 ms/frame**, slave busy
+**10,308,448 FRT ticks**, and **21.1977%** slave share against the cumulative
+render interval (801 jobs, zero timeouts/faults); serial is **2.5638 ms/frame**
+with zero slave work. This fails the owner's ≥50% target. The measured limiter
+is the renderer's master-side transform/shared-bus/emission work, not a join
+stall alone: cumulative master wait is only **22.7467 ms**. The next worker
+pass must move or batch more measured render work before this gate can close.
+
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
 notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`
@@ -802,11 +813,12 @@ captures.
 - [x] Full regression, both profiles (and both slave flags). Host `verify-all` passes; interpreted and demo-path sourceboot variants cross-build with slave render disabled/enabled. Runtime route capture and FPS/utilization evidence remain open below.
 - [ ] Frozen-route capture at the chosen degradation setting: **absolute FPS
   (median and 1% low if the phase timer supports it), never ratios.**
-- [ ] **Hardware-utilization report alongside FPS**: sim vs render ms (Task
+- [x] **Hardware-utilization report alongside FPS**: sim vs render ms (Task
   0 timers), slave share (`slave_busy_ticks` vs master, Task 5b), VDP2
   layers live and VRAM spent (Task 3b), VDP1 vs VDP2 division of the frame.
   Both processors and both VDPs are gated deliverables of this plan, not
-  aspirations — a report without these numbers is incomplete.
+  aspirations — the report is complete, but its measured 21.1977% dual slave
+  share fails the ≥50% utilization gate.
 - [ ] Screenshot evidence committed; **the owner's eyes are the acceptance
   gate** — no `TIMELINE.md` or gallery entry before their confirmation.
   Describe frames factually; never assert what an object is (twice-burned

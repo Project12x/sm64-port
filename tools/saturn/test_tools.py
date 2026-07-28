@@ -1540,6 +1540,11 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "slave_busy_ticks",
                 "master_wait_ticks",
                 "slave_timeouts",
+                "render_frt_ticks_accum",
+                "vdp1_commands_last",
+                "vdp1_vram_bytes",
+                "vdp2_display_mask",
+                "vdp2_vram_bytes",
             ],
         )
         # Fields the older build did have still read correctly.
