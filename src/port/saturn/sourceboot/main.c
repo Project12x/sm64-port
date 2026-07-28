@@ -258,6 +258,19 @@ static void sourceboot_init_sky_bitmap(void)
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
 }
 
+static void sourceboot_update_sky_scroll(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot)
+{
+    if (snapshot == NULL || !snapshot->valid) return;
+    const int32_t yaw = (uint16_t)snapshot->camera_yaw;
+    int32_t x = (yaw * (int32_t)SOURCEBOOT_SKY_BITMAP_WIDTH) >> 16;
+    int32_t y = 128 + (((int32_t)snapshot->camera_pitch * 256) >> 16);
+    if (y < 0) y = 0;
+    if (y > 256) y = 256;
+    vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1, FIX16(x));
+    vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, FIX16(y));
+}
+
 void user_init(void) {
     /* First, matching both siblings' user_init order (castleviewer
      * main.c:1186, marioturntable main.c:247). */
@@ -490,6 +503,7 @@ int main(void) {
         if (sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
+            sourceboot_update_sky_scroll(&sourceboot_mario_snapshot);
         }
         sourceboot_fast3d.profile.demo_actor_snapshot_valid =
             sourceboot_mario_snapshot.valid;

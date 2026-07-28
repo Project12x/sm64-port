@@ -14,6 +14,8 @@ typedef struct sm64_saturn_mario_actor_snapshot {
     int16_t animation_frame;
     int8_t area_index;
     uint8_t camera_mode;
+    int16_t camera_yaw;
+    int16_t camera_pitch;
     uint8_t walking_bank;
     uint8_t valid;
 } sm64_saturn_mario_actor_snapshot_t;

@@ -50,6 +50,8 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     snapshot->camera_focus[1] = gLakituState.focus[1];
     snapshot->camera_focus[2] = gLakituState.focus[2];
     snapshot->camera_mode = gLakituState.mode;
+    snapshot->camera_yaw = gLakituState.yaw;
+    snapshot->camera_pitch = gLakituState.oldPitch;
     snapshot->yaw = gMarioState->faceAngle[1];
     snapshot->action = gMarioState->action;
     /* The simulation state is authoritative and can outlive its graph object
