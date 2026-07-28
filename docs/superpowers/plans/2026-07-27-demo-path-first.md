@@ -471,6 +471,15 @@ but the actor is inside the current 128-unit near clip; it is retained as
 diagnostic evidence, not as a visual-gate pass. The route checkpoint,
 pose-differential fixture, and later-phase visual capture remain open.
 
+**Progress note (2026-07-28, fresh-symbol capture):** the bridge now tolerates
+ the interval where `gMarioState` exists before its graph object by selecting
+ the neutral generated pose (`d13906f`). Frontend profile reset now preserves
+ the bridge diagnostics (`b2e0724`). A paired probe at fresh symbols reports
+ `demo_actor_snapshot_valid=1`, `demo_actor_pose_vertices=424`, and nonzero
+ actor vertex/primitive counts at replay tick 25; the screenshot remains a
+ terrain/ordering diagnostic and is not gallery-accepted. The pose
+ differential and a clean identifiable Mario frame are still open.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
