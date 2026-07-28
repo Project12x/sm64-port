@@ -580,14 +580,6 @@ is still required before gallery promotion.
  an adjacent opaque Gouraud material command plus alpha-keyed texture tile
  overlays, preserving source-primitive ordering.
 
-**Progress note (2026-07-28, owner-approved gallery):** the foreground Ymir
- frame is now retained as `task4-mario-gouraud-gallery-2026-07-28.png` with a
- matching report. The Castleviewer texture lesson is implementation-ready but
- requires the existing ROM-derived `bake_mario_eye_uv.py` output to become an
- explicit sourceboot build input: upload its bounded RGB1555 tile bank after
- the BOB bank, reserve the additional VDP1 texture bytes, and emit the
- adjacent Gouraud-material/alpha-keyed overlay pair. The generated Nintendo
- pixels remain local build output and must not be committed as source data.
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
