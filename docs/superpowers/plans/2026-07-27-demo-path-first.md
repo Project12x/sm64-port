@@ -421,7 +421,7 @@ generated sky bank as a build dependency.
   224 deterministic RGB1555 entries at boot; capture remains the visual gate
   before this task is considered fully complete. If the textured sky slips,
   the gradient alone already retires the black void.
-- [ ] Bake BOB's sky to a VDP2-native format (tilemap preferred for VRAM;
+- [x] Bake BOB's sky to a VDP2-native format (tilemap preferred for VRAM;
   measure both against remaining VDP2 VRAM and state the budget — VDP2 has
   its own 512 KiB, essentially untouched today).
 - [ ] Wire NBG plane behind VDP1 sprites (priority below the 3-D layer,
@@ -434,6 +434,12 @@ generated sky bank as a build dependency.
 
 **Gate:** sky visible in a committed route screenshot at no measured frame
 cost; owner visual confirmation before any TIMELINE entry, as always.
+
+**Progress note (2026-07-28, offline sky bake):** `bake_bob_sky.py` now
+ decodes the checked-in 248x248 BOB water sky and emits a deterministic
+ 512x256 RGB1555 NBG1 bitmap (262,144 bytes), with an auditable manifest and
+ `compile-bob-sky` build target. The remaining open work is runtime NBG1
+ wiring, camera scroll, and the capture/visual gate.
 
 **References consumed (AW-3):** existing texture export tooling
 (`export_rgba16_textures.py`), Yaul VDP2 scroll-screen API (existing

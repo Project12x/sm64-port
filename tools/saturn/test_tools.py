@@ -59,6 +59,7 @@ from bake_castle_uv import (  # noqa: E402
     texture_coordinate,
 )
 from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
+from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
@@ -1189,6 +1190,20 @@ class BobParityRouteTests(unittest.TestCase):
         right["degradation"] = {"view_radius": 2048, "poly_tier": 1}
         with self.assertRaisesRegex(ValueError, "degradation settings differ"):
             compare_reports(left, right, route)
+
+
+class BobSkyBakeTests(unittest.TestCase):
+    def test_bob_sky_bake_is_vdp2_sized_and_deterministic(self) -> None:
+        source = TOOLS.parents[1] / "textures" / "skyboxes" / "water.png"
+        first, manifest = bake_bob_sky(source)
+        second, manifest_again = bake_bob_sky(source)
+        self.assertEqual(first, second)
+        self.assertEqual(manifest, manifest_again)
+        self.assertEqual(len(first), 512 * 256 * 2)
+        self.assertEqual(manifest["source_dimensions"], [248, 248])
+        self.assertEqual(manifest["bitmap_dimensions"], [512, 256])
+        self.assertEqual(manifest["format"], "RGB1555")
+        self.assertTrue(manifest["edge_replication"])
 
 
 class TelemetryTests(unittest.TestCase):
