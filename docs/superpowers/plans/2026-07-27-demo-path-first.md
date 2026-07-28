@@ -693,9 +693,12 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
   rebuild on toggle.
 - [x] `slave_timeouts` are 0 on the route; a hung slave degrades to
   serial with a counted fault, never a wedge.
-- [ ] A/B on the frozen route: slave build vs serial build, absolute FPS
+- [x] A/B on the frozen route: slave build vs serial build, absolute FPS
   both, checkpoint hash identical in both (the slave touches render data
-  only, never sim state).
+  only, never sim state). The paired 600-tick captures have identical
+  checkpoint SHA-256; frame-serial differencing over the same 3,360 emulator
+  VBlank sequence span gives serial **8.304 FPS** (465 / 3,360 × 60) and
+  dual **8.482 FPS** (475 / 3,360 × 60), a measured +0.178 FPS (+2.1%).
 
 **Gate:** checkpoint hash unchanged; **measured absolute FPS improvement
 over the serial build of the same commit** (the sprint's gate 8, inherited
@@ -735,8 +738,15 @@ dual captures at the same `-r2048/-poly0` profile both reach
 `command_capacity_rejects=0`. The route comparator reports deterministic
 parity with identical checkpoint SHA-256
 `d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c` and
-zero renderer-counter deltas. This passes authority/timeout parity, but the
-absolute-FPS and slave-share acceptance bars remain open.
+zero renderer-counter deltas. This passes authority/timeout parity and the
+absolute-rate A/B checkbox; the ≥50% slave-share utilization acceptance bar
+remains open.
+
+The same reports supply the absolute-rate calculation for the A/B checkbox:
+serial `frame_serial` 317→782 and dual 326→801 across screenshot sequence
+5340→8700. This is emulator-derived FPS evidence, not a retail-hardware
+claim; the remaining gate is the utilization table and its ≥50% slave-share
+target.
 
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
