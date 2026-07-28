@@ -344,6 +344,8 @@ typedef struct sm64_saturn_fast3d_profile {
      * stable. These count the live actor pass separately from terrain. */
     uint32_t demo_actor_vertices_valid;
     uint32_t demo_actor_primitives_emitted;
+    uint32_t demo_actor_snapshot_valid;
+    uint32_t demo_actor_pose_vertices;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

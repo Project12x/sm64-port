@@ -1434,6 +1434,8 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "render_frt_ticks_last",
                 "demo_actor_vertices_valid",
                 "demo_actor_primitives_emitted",
+                "demo_actor_snapshot_valid",
+                "demo_actor_pose_vertices",
             ],
         )
         # Fields the older build did have still read correctly.

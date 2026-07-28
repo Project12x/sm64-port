@@ -36,7 +36,7 @@ static uint8_t is_walking_family(int16_t animation_id)
 uint8_t sm64_saturn_mario_actor_snapshot(
     sm64_saturn_mario_actor_snapshot_t *snapshot)
 {
-    if (snapshot == NULL || gMarioState == NULL || gMarioObject == NULL) {
+    if (snapshot == NULL || gMarioState == NULL) {
         return 0U;
     }
     snapshot->position[0] = gMarioState->pos[0];
@@ -44,9 +44,19 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     snapshot->position[2] = gMarioState->pos[2];
     snapshot->yaw = gMarioState->faceAngle[1];
     snapshot->action = gMarioState->action;
-    snapshot->animation_id = gMarioObject->header.gfx.animInfo.animID;
-    snapshot->animation_frame = gMarioObject->header.gfx.animInfo.animFrame;
-    snapshot->area_index = gMarioObject->header.gfx.areaIndex;
+    /* The simulation state is authoritative and can outlive its graph object
+     * during level/bootstrap transitions. Keep the actor seam live in that
+     * interval by using the neutral generated pose; once the graph object is
+     * present again its animation id/frame are consumed verbatim. */
+    if (gMarioObject != NULL) {
+        snapshot->animation_id = gMarioObject->header.gfx.animInfo.animID;
+        snapshot->animation_frame = gMarioObject->header.gfx.animInfo.animFrame;
+        snapshot->area_index = gMarioObject->header.gfx.areaIndex;
+    } else {
+        snapshot->animation_id = 0;
+        snapshot->animation_frame = 0;
+        snapshot->area_index = -1;
+    }
     snapshot->walking_bank = is_walking_family(snapshot->animation_id);
     snapshot->valid = 1U;
     return 1U;

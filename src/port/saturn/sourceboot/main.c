@@ -431,6 +431,10 @@ int main(void) {
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
         }
+        sourceboot_fast3d.profile.demo_actor_snapshot_valid =
+            sourceboot_mario_snapshot.valid;
+        sourceboot_fast3d.profile.demo_actor_pose_vertices =
+            sourceboot_mario_pose.vertex_count;
 
         const uint16_t render_start = cpu_frt_count_get();
 #if SATURN_DEMO_PATH
