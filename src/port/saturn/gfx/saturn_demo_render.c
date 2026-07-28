@@ -433,6 +433,53 @@ static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
         context->stats[lane].triangles_emitted++;
     }
 }
+
+#if defined(SM64_SATURN_VDP1_LWRAM_STAGING)
+typedef struct demo_vdp1_upload_context {
+    volatile const uint32_t *source;
+    volatile uint32_t *destination;
+} demo_vdp1_upload_context_t;
+
+static void demo_upload_vdp1_range(void *opaque, uint16_t begin,
+                                   uint16_t end)
+{
+    demo_vdp1_upload_context_t *context = opaque;
+    for (uint16_t i = begin; i < end; i++) {
+        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+            sm64_saturn_dual_worker_cancelled())
+            break;
+        context->destination[i] = context->source[i];
+    }
+}
+
+static void demo_upload_vdp1_serial(sm64_saturn_vdp1_backend_t *backend)
+{
+    volatile const uint32_t *source = (volatile const uint32_t *)
+        ((uintptr_t)backend->list.cmdts & ~CPU_ADDRESS_PARTITION_MASK);
+    volatile uint32_t *destination = (volatile uint32_t *)VDP1_VRAM(0);
+    uint32_t words = (uint32_t)backend->list.count *
+                     (sizeof(vdp1_cmdt_t) / sizeof(uint32_t));
+    while (words-- > 0U) *destination++ = *source++;
+}
+
+static void demo_upload_vdp1_dual(sm64_saturn_vdp1_backend_t *backend,
+                                  sm64_saturn_dual_worker_stats_t *stats)
+{
+    vdp1_sync_wait();
+    assert(!vdp1_sync_busy());
+    demo_vdp1_upload_context_t context = {
+        .source = (volatile const uint32_t *)
+            ((uintptr_t)backend->list.cmdts & ~CPU_ADDRESS_PARTITION_MASK),
+        .destination = (volatile uint32_t *)VDP1_VRAM(0)};
+    const uint32_t words = (uint32_t)backend->list.count *
+                           (sizeof(vdp1_cmdt_t) / sizeof(uint32_t));
+    const bool completed = sm64_saturn_dual_worker_run(
+        demo_upload_vdp1_range, &context, (uint16_t)words,
+        (uint16_t)(words / 2U), stats);
+    if (!completed) demo_upload_vdp1_serial(backend);
+    vdp1_sync_force_put();
+}
+#endif
 #endif
 
 static void demo_emit_mario(
@@ -721,6 +768,15 @@ void sm64_saturn_demo_render_frame(
             SATURN_DMA_QUEUE_SCU);
     }
     sm64_saturn_vdp1_backend_finish(backend);
+#if SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING)
+    sm64_saturn_dual_worker_stats_t upload_stats;
+    demo_upload_vdp1_dual(backend, &upload_stats);
+    profile->slave_jobs_completed += upload_stats.slave_jobs_completed;
+    profile->slave_busy_ticks += upload_stats.slave_busy_ticks;
+    profile->master_wait_ticks += upload_stats.master_wait_ticks;
+    profile->slave_timeouts += upload_stats.slave_timeouts;
+#else
     sm64_saturn_vdp1_backend_upload(backend);
+#endif
     profile->frame_serial++;
 }

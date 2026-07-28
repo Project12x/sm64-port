@@ -824,6 +824,15 @@ records `slave_jobs_completed=992`, `slave_busy_ticks=4,646,864`,
 The screenshot/report pair is retained as evidence; owner visual acceptance
 and the ≥50% slave-share gate remain open.
 
+**Progress note (2026-07-28, VDP1 upload split):** the LWRAM command-table
+copy now uses disjoint master/slave word ranges before the existing master
+`vdp1_sync_force_put`; a failed dispatch falls back to the complete serial
+copy. The fresh dual capture retains the route checkpoint and visual actor,
+records `slave_jobs_completed=1,245`, `slave_busy_ticks=5,952,214`,
+`master_wait_ticks=33,504`, and `render_frt_ticks_accum=14,677,538`, with
+zero timeouts/faults. This is evidence for the final-submission lever, not a
+closure of the ≥50% utilization gate or owner gallery acceptance.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
