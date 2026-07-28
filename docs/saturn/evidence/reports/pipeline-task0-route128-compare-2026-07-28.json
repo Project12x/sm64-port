@@ -1,0 +1,73 @@
+{
+  "degradation": {
+    "poly_tier": 0,
+    "view_radius": 6000
+  },
+  "deterministic": true,
+  "errors": [],
+  "left": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "frame_serial": 150,
+    "global_timer": 601,
+    "magic": 1396855346,
+    "mario_action": 67109952,
+    "mario_pos_x_bits": 3315212176,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167793780,
+    "master_wait_ticks": 0,
+    "render_frt_ticks_accum": 2957536,
+    "render_frt_ticks_last": 12893,
+    "replay_ticks": 600,
+    "sim_frt_ticks_accum": 23634881,
+    "slave_busy_ticks": 0,
+    "slave_jobs_completed": 0,
+    "slave_timeouts": 0,
+    "triangles_transformed": 854580,
+    "triangles_vdp1_emitted": 110958,
+    "version": 2
+  },
+  "left_checkpoint_sha256": "d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c",
+  "renderer_counter_deltas": {
+    "triangles_transformed": 0,
+    "triangles_vdp1_emitted": 0
+  },
+  "report_schema_version": "sourceboot-route-v3",
+  "right": {
+    "camera_mode": 1,
+    "command_capacity_rejects": 0,
+    "fault_flags": 0,
+    "frame_serial": 150,
+    "global_timer": 601,
+    "magic": 1396855346,
+    "mario_action": 67109952,
+    "mario_pos_x_bits": 3315212176,
+    "mario_pos_y_bits": 2147483648,
+    "mario_pos_z_bits": 1167793780,
+    "master_wait_ticks": 868889,
+    "render_frt_ticks_accum": 4999436,
+    "render_frt_ticks_last": 10853,
+    "replay_ticks": 600,
+    "sim_frt_ticks_accum": 23635006,
+    "slave_busy_ticks": 14985355,
+    "slave_jobs_completed": 600,
+    "slave_timeouts": 0,
+    "triangles_transformed": 854580,
+    "triangles_vdp1_emitted": 110958,
+    "version": 2
+  },
+  "right_checkpoint_sha256": "d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c",
+  "route_version": "bob-parity-v1",
+  "simulation_ticks": 600,
+  "telemetry_deltas": {
+    "frame_serial": 0,
+    "master_wait_ticks": 868889,
+    "render_frt_ticks_accum": 2041900,
+    "render_frt_ticks_last": 2040,
+    "sim_frt_ticks_accum": 125,
+    "slave_busy_ticks": 14985355,
+    "slave_jobs_completed": 600,
+    "slave_timeouts": 0
+  }
+}
