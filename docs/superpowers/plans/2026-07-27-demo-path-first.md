@@ -669,7 +669,7 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
   - If sim and render are comparable, (A) with master-join dominates; if sim
     is small, they converge. Record the decision and its arithmetic in the
     completion note.
-- [ ] Close-port the worker loop: bounded jobs from Task 2's sliceable
+- [x] Close-port the worker loop: bounded jobs from Task 2's sliceable
   banks; slave transforms/lights/culls into per-job disjoint output regions
   (no shared writes — SlaveDriver's work/result discipline); master joins
   and links commands. Cache coherency per the write-through SH7604 reality
@@ -677,9 +677,9 @@ notices + `PROVENANCE.md`), modify `src/port/saturn/gfx/saturn_ir_transform.c`
   smoke gate means this task is **wiring and scheduling, not restructuring**
   — if it turns into restructuring, Task 1's constraints were violated and
   that is the bug to fix.
-- [ ] The auto-balancer adjusts the split from measured spin counts, exactly
+- [x] The auto-balancer adjusts the split from measured spin counts, exactly
   as upstream does.
-- [ ] **Serial fallback flag** (`SATURN_SLAVE_RENDER ?= 1`, `=0` builds the
+- [x] **Serial fallback flag** (`SATURN_SLAVE_RENDER ?= 1`, `=0` builds the
   identical serial path) — required for the A/B gate and by the sprint's
   own exit-gate wording. Flag-variant stale-object hazard applies: force
   rebuild on toggle.
@@ -700,6 +700,12 @@ measured share lands below target, the completion note states the limiter
 is the deliverable, not a relabeled gate. If the split doesn't pay at all on
 this workload, the honest number is the deliverable and the serial flag
 stays default.
+
+**Progress note (2026-07-28, worker implementation):** the bounded
+ SlaveDriver-derived worker, disjoint transform ranges, cancellation timeout,
+ monotonic spin-count balancer, and `SATURN_SLAVE_RENDER=0` serial path are
+ implemented and cross-compiled. Route timeout, checkpoint parity, utilization,
+ and FPS A/B remain runtime gates.
 
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
