@@ -723,6 +723,12 @@ stays default.
 BOB terrain. This is a serial reference artifact, not yet the frozen-route
 A/B/FPS gate or an owner-confirmed gallery milestone.
 
+The matched fresh `-slave1` capture reached `frame_serial=326` with
+`slave_jobs_completed=326`, `slave_timeouts=0`, and `fault_flags=0` over the
+same 3,600-emulator-frame window (`-slave0` reached 317). This is retained as
+an A/B diagnostic signal only: it is not an absolute-FPS result, did not reach
+the 600-tick endpoint, and has no paired checkpoint hash yet.
+
 **References consumed (AW-3):** SlaveDriver `WALLS.C:1806-1950` (GPL-3.0+,
 close-port → `gpl/`), in-repo `gpl/slavedriver_dma_queue.*` precedent for
 notice/isolation format, `work/upstream/libyaul-examples/cpu-dual`
