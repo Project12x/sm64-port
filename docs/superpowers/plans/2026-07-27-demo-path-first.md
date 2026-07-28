@@ -804,6 +804,16 @@ bar. The paired route comparator remains deterministic with the same
 checkpoint hash and zero faults/rejects. Command emission and texture/VRAM
 setup remain the next measured master-side lever.
 
+**Progress note (2026-07-28, direct command emission split):** BOB command
+slots are now preassigned in source draw order and encoded by disjoint
+master/slave ranges. Textured CLUT setup moved onto the worker; untextured
+worker slots use flat RGB1555 while Gouraud allocation remains master-owned.
+The fresh capture reaches the same 600-tick checkpoint with zero faults and
+records `slave_jobs_completed=744`, `slave_busy_ticks=3,754,302`, and
+`render_frt_ticks_accum=15,468,012` — 24.3% slave share. This is below the
+≥50% bar; the remaining gap is the master-owned Gouraud/Mario path and final
+VDP submission boundary.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
