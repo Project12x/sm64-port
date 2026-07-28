@@ -69,6 +69,7 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
     s_control.end = count;
     s_control.cancel = 0U;
     s_control.done = 0U;
+    s_control.slave_busy_ticks = 0U;
     s_control.active = 1U;
 
     cpu_dual_slave_notify();
@@ -88,7 +89,8 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
         (uint16_t)(cpu_frt_count_get() - wait_start);
     if (!completed) {
         s_control.cancel = 1U;
-        while (s_control.done == 0U) {
+        uint32_t cancel_spins = 0U;
+        while (s_control.done == 0U && cancel_spins++ < 1000000U) {
             /* bounded transform callbacks observe cancel promptly */
         }
     }
@@ -99,6 +101,10 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
         stats->master_wait_ticks = master_wait_ticks;
         stats->slave_timeouts = completed ? 0U : 1U;
     }
+    /* A serial fallback must not inherit the cancellation latch from the
+     * failed dispatch. Delayed polling notifications observe active==0 and
+     * return without touching the caller's next frame. */
+    s_control.cancel = 0U;
     return completed;
 }
 #else
