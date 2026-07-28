@@ -867,7 +867,7 @@ captures.
 ### Task 7: Measure, present, gate
 
 - [x] Full regression, both profiles (and both slave flags). Host `verify-all` passes; interpreted and demo-path sourceboot variants cross-build with slave render disabled/enabled. Runtime route capture and FPS/utilization evidence remain open below.
-- [ ] Frozen-route capture at the chosen degradation setting: **absolute FPS
+- [x] Frozen-route capture at the chosen degradation setting: **absolute FPS
   (median and 1% low if the phase timer supports it), never ratios.**
 - [x] **Hardware-utilization report alongside FPS**: sim vs render ms (Task
   0 timers), slave share (`slave_busy_ticks` vs master, Task 5b), VDP2
@@ -882,6 +882,15 @@ captures.
 - [ ] Honest verdict against the milestones: ≥ 5 FPS visible milestone;
   15/12 sprint gate standing. If short: the numbers, the limiter, the next
   lever — no relabeling.
+
+**Progress note (2026-07-28, absolute-rate window):** paired same-lineage
+captures at the chosen `-r2048/-poly0` setting span Ymir screenshot sequences
+3,900→8,700 and frame serials 118→803. The resulting absolute rate is
+`685 / 4,800 * 60 = 8.5625 FPS`; the long window reaches replay tick 600 with
+zero faults/timeouts. This clears the ≥5 FPS visible threshold numerically but
+misses the 15 FPS median / 12 FPS 1%-low exit gate. The current phase timer has
+no percentile stream, so no 1%-low claim is made; owner visual acceptance and
+the honest final verdict remain open.
 
 ---
 
