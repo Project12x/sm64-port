@@ -1,7 +1,8 @@
 # Saturn Renderer Pipeline Sprint
 
-> **Status:** In progress — Tasks 0–4 implementation slices landed; route/visual
-> acceptance and the one-dispatch performance gate remain open.
+> **Status:** In progress — Tasks 0–4 and the Task 5 compact one-dispatch slice
+> landed; route/visual acceptance and the one-dispatch performance gate remain
+> open.
 > **Date:** 2026-07-28
 > **Branch baseline:** `saturn/bootstrap` at `d58fc37`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
@@ -497,6 +498,12 @@ accepts the trade or the flag remains off with a written failure report.
 
 ### Task 5 — Fuse terrain into one coarse renderer dispatch
 
+Implementation slice landed: terrain transform is completed before the single
+coarse classify/clip/compact dispatch, and the master alone lowers commands.
+The full concurrent transform/clip/shade producer and the dual-vs-serial FRT
+gate are still open; this slice must not be reported as a speed win until a
+fresh cross-build proves it.
+
 **Purpose:** Convert the second SH-2 from several synchronous helpers into
 one independent terrain producer.
 
@@ -512,23 +519,23 @@ one independent terrain producer.
 
 **Work:**
 
-- [ ] Build one immutable per-frame terrain job from accepted contiguous leaf
+- [x] Build one immutable per-frame terrain job from accepted contiguous leaf
   ranges.
-- [ ] Notify the slave exactly once per rendered frame.
+- [x] Notify the slave exactly once per rendered frame.
 - [ ] Slave performs cull → transform → clip → shade → compact-result writes
   for its range.
 - [ ] Master concurrently performs the same stages for its complementary
   range and handles Mario.
-- [ ] Join once, then let the master merge and lower all compact results.
-- [ ] Remove worker access to the backend, command cursor, texture allocator,
+- [x] Join once, then let the master merge and lower all compact results.
+- [x] Remove worker access to the backend, command cursor, texture allocator,
   and Gouraud allocator.
 - [ ] Replace transform-vertex balancing with leaf/work-weight balancing.
 - [ ] Adapt SlaveDriver’s prior-spin boundary correction with bounded steps
   and minimum useful ranges.
 - [ ] Preserve `SATURN_SLAVE_RENDER=0` as the identical serial oracle.
-- [ ] A timeout cancels safely, increments a fault, and falls back to serial
+- [x] A timeout cancels safely, increments a fault, and falls back to serial
   production without reusing partial worker results.
-- [ ] Report jobs/render, master and slave useful-result counts, wait, busy,
+- [x] Report jobs/render, master and slave useful-result counts, wait, busy,
   merge, lower, and total render FRT.
 
 **Performance gate:**
