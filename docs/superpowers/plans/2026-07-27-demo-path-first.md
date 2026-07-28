@@ -879,7 +879,7 @@ captures.
   gate** — no `TIMELINE.md` or gallery entry before their confirmation.
   Describe frames factually; never assert what an object is (twice-burned
   rule).
-- [ ] Honest verdict against the milestones: ≥ 5 FPS visible milestone;
+- [x] Honest verdict against the milestones: ≥ 5 FPS visible milestone;
   15/12 sprint gate standing. If short: the numbers, the limiter, the next
   lever — no relabeling.
 
@@ -889,8 +889,11 @@ captures at the chosen `-r2048/-poly0` setting span Ymir screenshot sequences
 `685 / 4,800 * 60 = 8.5625 FPS`; the long window reaches replay tick 600 with
 zero faults/timeouts. This clears the ≥5 FPS visible threshold numerically but
 misses the 15 FPS median / 12 FPS 1%-low exit gate. The current phase timer has
-no percentile stream, so no 1%-low claim is made; owner visual acceptance and
-the honest final verdict remain open.
+no percentile stream, so no 1%-low claim is made. The honest verdict is now
+recorded: the visible milestone clears numerically, the 15/12 gate is missed,
+and the next measured lever is moving more master-side transform/emission work
+to the slave rather than relabeling the current split. Owner visual acceptance
+remains open.
 
 ---
 
