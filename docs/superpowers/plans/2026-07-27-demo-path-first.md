@@ -590,12 +590,12 @@ The promotion contract now has a standing host target (`verify-hot-promotion`)
 buildable at `=0` for differential runs — flag-variant hazard: toggling
 flags does NOT rebuild stale objects; force rebuild or variant object dirs).
 
-- [ ] Frame loop: sim tick (unchanged) → bridge reads state → IR renderer
+- [x] Frame loop: sim tick (unchanged) → bridge reads state → IR renderer
   draws terrain bank + Mario + cannon (cannon IR is trivial; include it —
   it has been the control object all project). Dynamic objects beyond that:
   **deferred, listed by name** in the completion note (coins, goombas, etc.)
   — deliberate coverage debt per the pivot handoff.
-- [ ] The interpreted frontend no longer runs per-frame in demo profile —
+- [x] The interpreted frontend no longer runs per-frame in demo profile —
   but keep `exec_display_list` reachable so the differential build still
   works. Do not delete anything.
 - [ ] Sim cadence per the sprint's frame contract: 30 Hz sim independent of
@@ -694,7 +694,7 @@ split (behaviour lessons, `SHIPPING_ENGINE_COMPARISON.md`).
 route/report schema (degradation settings recorded in every report so no
 capture is ever compared across unstated settings).
 
-- [ ] View distance: single clamp on baked-bank spatial groups (the bake
+- [x] View distance: single clamp on baked-bank spatial groups (the bake
   emits bounds — Mesh IR v2 already carries them from Task 2). Near-to-far
   traversal per the Z-Treme pattern.
 - [ ] **RBG0 horizon-mask spike** (timeboxed; success optional, measurement
@@ -714,9 +714,9 @@ capture is ever compared across unstated settings).
   priority groups with VDP2-side color-calc blending toward the sky color.
   Coarse depth cueing at zero VDP1 fill cost — VDP1 half-transparency
   halves fill rate and stays banned for this purpose.
-- [ ] Poly degradation hooks: bank-level tier selection (the texture spec's
+- [x] Poly degradation hooks: bank-level tier selection (the texture spec's
   near/mid/far variants slot here later; a stub tier switch is enough now).
-- [ ] **Do not** implement viewport shrinking — fill is ~6% of the frame;
+- [x] **Do not** implement viewport shrinking — fill is ~6% of the frame;
   measured non-lever. Recorded here so nobody re-tries it.
 - [ ] Sweep 2–3 view-distance settings on the frozen route; report absolute
   FPS for each.
