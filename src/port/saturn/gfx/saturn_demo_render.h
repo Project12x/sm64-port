@@ -2,6 +2,7 @@
 #define SM64_SATURN_DEMO_RENDER_H
 
 #include "saturn_fast3d_frontend.h"
+#include "saturn_actor_bridge.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_vdp1_backend.h"
 
@@ -11,6 +12,8 @@
 void sm64_saturn_demo_render_frame(
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
-    sm64_saturn_fast3d_profile_t *profile);
+    sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose);
 
 #endif

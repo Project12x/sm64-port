@@ -6,8 +6,10 @@
 #include "saturn_gouraud.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
+#include "saturn_matrix_kernels.h"
 #include "saturn_transform.h"
 #include "bob_scene.h"
+#include "saturn_mario_actor_mesh.h"
 #include "../gpl/slavedriver_dma_queue.h"
 
 #define DEMO_NEAR_DEPTH 128
@@ -25,6 +27,8 @@ static sm64_saturn_projected_vertex_t s_projected[
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
 static uint16_t s_bucket_indices[DEMO_BUCKETS][
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
+static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 
 static int32_t demo_world_unit(float value)
 {
@@ -145,10 +149,81 @@ static void demo_emit_primitive(
     profile->triangles_emitted++;
 }
 
+static void demo_emit_mario(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    sm64_saturn_vdp1_backend_t *backend,
+    sm64_saturn_fast3d_profile_t *profile)
+{
+    if (snapshot == NULL || pose == NULL || !snapshot->valid ||
+        pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
+        return;
+    const int32_t sine = sm64_saturn_sins_q16(snapshot->yaw);
+    const int32_t cosine = sm64_saturn_coss_q16(snapshot->yaw);
+    const sm64_saturn_ir_transform_job_t job = {
+        .camera = demo_camera(), .focal_length = DEMO_FOCAL_LENGTH,
+        .near_depth = DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
+        .center_y = DEMO_CENTER_Y, .coord_min = DEMO_COORD_MIN,
+        .coord_max = DEMO_COORD_MAX
+    };
+    for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++) {
+        const int16_t *source = pose->vertices[i];
+        const int32_t sx = (int32_t)source[0] << 16;
+        const int32_t sz = (int32_t)source[2] << 16;
+        const sm64_saturn_vec3i_t world = {
+            (int32_t)snapshot->position[0] +
+                ((sm64_saturn_q16_mul(sx, cosine) +
+                  sm64_saturn_q16_mul(sz, sine)) >> 16),
+            (int32_t)snapshot->position[1] + source[1],
+            (int32_t)snapshot->position[2] +
+                ((-sm64_saturn_q16_mul(sx, sine) +
+                  sm64_saturn_q16_mul(sz, cosine)) >> 16)};
+        sm64_saturn_vec3i_t view;
+        s_actor_valid[i] = sm64_saturn_ir_transform_one(
+            &job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
+    }
+    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
+        const uint16_t *primitive = sm64_mario_primitives[i];
+        if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||
+            !s_actor_valid[primitive[3]] || !s_actor_valid[primitive[4]])
+            continue;
+        const int16_vec2_t vertices[4] = {
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[1]].x,
+                                   s_actor_projected[primitive[1]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[2]].x,
+                                   s_actor_projected[primitive[2]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[3]].x,
+                                   s_actor_projected[primitive[3]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[4]].x,
+                                   s_actor_projected[primitive[4]].y)};
+        const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
+                                  (vertices[2].y - vertices[0].y) -
+                              (int32_t)(vertices[1].y - vertices[0].y) *
+                                  (vertices[2].x - vertices[0].x);
+        if (cross == 0) continue;
+        vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1);
+        if (cmdt == NULL) {
+            profile->reject_vdp1_arena_capacity++;
+            continue;
+        }
+        const uint8_t *rgb = sm64_mario_material_rgb[primitive[0]];
+        vdp1_cmdt_polygon_set(cmdt);
+        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+            .color_mode = VDP1_CMDT_CM_RGB_32768,
+            .cc_mode = VDP1_CMDT_CC_REPLACE});
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        vdp1_cmdt_vtx_set(cmdt, vertices);
+        profile->triangles_vdp1_emitted++;
+        profile->triangles_emitted++;
+    }
+}
+
 void sm64_saturn_demo_render_frame(
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose)
 {
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(),
@@ -193,6 +268,10 @@ void sm64_saturn_demo_render_frame(
                 profile);
         }
     }
+    /* Mario is currently a flat-material actor pass. It deliberately consumes
+     * the live bridge pose now; textured actor tiles and painter interleave
+     * remain separate fidelity work, rather than hiding the actor seam. */
+    demo_emit_mario(snapshot, pose, backend, profile);
     if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
         saturn_dma_queue_transfer_wait(
             (void *)gouraud_bank->vram_base, gouraud_bank->staging,

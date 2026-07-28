@@ -104,6 +104,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
 # `main.o` when SATURN_DEMO_PATH changes. This makes the flag variant safe by
 # construction and keeps each ELF/CUE pair self-consistent.
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),-demo,)
+SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_SOURCEBOOT_ROUTE_REPLAY)),$(SOURCEBOOT_OUTPUT_TAG)-replay,$(SOURCEBOOT_OUTPUT_TAG))
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd

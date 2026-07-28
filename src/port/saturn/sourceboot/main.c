@@ -436,7 +436,9 @@ int main(void) {
 #if SATURN_DEMO_PATH
         sm64_saturn_demo_render_frame(&sourceboot_vdp1_backend,
                                       &sourceboot_gouraud_bank,
-                                      &sourceboot_fast3d.profile);
+                                      &sourceboot_fast3d.profile,
+                                      &sourceboot_mario_snapshot,
+                                      &sourceboot_mario_pose);
 #else
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend,
