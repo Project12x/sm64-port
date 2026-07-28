@@ -890,8 +890,9 @@ terrain flicker is not attributable to dual ownership; the r6000 diagnostic
 also reports zero command-capacity rejects, degenerate rejects, faults, and
 timeouts. The baked sky is forced behind VDP1, and the experimental dual VDP1
 upload is now opt-in. Flicker is explicitly deferred for a later projection /
-single-buffer investigation. The current actor pass remains flat RGB1555 by
-design; textured/Gouraud Mario is the next fidelity lever.
+single-buffer investigation. Mario's textured/Gouraud path is already present;
+the flat-RGB1555 wording in this historical note predates the completed
+texture-lowering pass.
 
 **Next-lever note (2026-07-28, dispatch-cost diagnosis):** the upload-split
  dual profile records five bounded worker dispatches per rendered frame
@@ -1171,15 +1172,25 @@ gradient/NBG1 fallback remains the accepted degradation path.
 
 **Progress note (2026-07-28, absolute-rate window):** paired same-lineage
 captures at the chosen `-r2048/-poly0` setting span Ymir screenshot sequences
-3,900→8,700 and frame serials 118→803. The resulting absolute rate is
-`685 / 4,800 * 60 = 8.5625 FPS`; the long window reaches replay tick 600 with
-zero faults/timeouts. This clears the ≥5 FPS visible threshold numerically but
+3,900→8,700 and frame serials 118→803. The resulting emulator frame-serial
+rate proxy is `685 / 4,800 * 60 = 8.5625`; it is not a foreground/manual
+presentation-rate measurement. The long window reaches replay tick 600 with
+zero faults/timeouts. This clears the ≥5 FPS proxy threshold but
 misses the 15 FPS median / 12 FPS 1%-low exit gate. The current phase timer has
 no percentile stream, so no 1%-low claim is made. The honest verdict is now
 recorded: the visible milestone clears numerically, the 15/12 gate is missed,
 and the next measured lever is moving more master-side transform/emission work
 to the slave rather than relabeling the current split. Owner visual acceptance
-remains open.
+remains open in this historical note; the exact textured fragment milestone
+was accepted in the final note below.
+
+**Current correction (2026-07-28):** manual testing puts the practical
+presentation rate closer to 3 FPS, so a dedicated wall-clock measurement is
+still required before claiming an absolute runtime FPS. Mario is already
+textured and Gouraud-lit. The current dual path has five coarse dispatch
+boundaries; useful transform, material/Gouraud, command-preparation, emission,
+and upload ranges remain insufficiently partitioned. Finer disjoint range
+splitting is the next Task 5b performance experiment.
 
 **Progress note (2026-07-28, fragment-indexed BSP):** the fragment baker now
 emits a fragment-indexed BSP stream (1,183 nodes and 2,108 references, with a
