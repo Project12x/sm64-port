@@ -558,8 +558,9 @@ are available; no gallery promotion is made from this code-only result.
  build copies the 19,500-byte position bank and 24,276-byte primitive bank
  once into HWRAM and the frame loop reads only the promoted pointers; the
  default remains the LWRAM-resident baseline. Cross-link measurements for the
- hot build put the arrays at `0x060BEE00`/`0x060C4CD4` and `___end` at
- `0x060FD5A0`, leaving 10,848 bytes before the `0x06100000` HWRAM ceiling.
+hot build put the arrays at `0x060BEE00`/`0x060C4CE0` and `___end` at
+`0x060FD5C0`, leaving 10,816 bytes before the `0x06100000` HWRAM ceiling;
+both arena bases are 16-byte aligned.
  This proves the budgeted optional path; runtime parity and performance still
  need the unavailable capture rig.
 

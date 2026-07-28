@@ -53,9 +53,10 @@ static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
 /* Optional Z-Treme-style hot arena. The source bank remains the LWRAM
  * authority; these HWRAM arrays are populated once before the frame loop and
  * then become the renderer's active read-only bank. */
-static int32_t s_bob_positions_hot[SM64_SATURN_BOB_POSITION_COUNT][3];
+static int32_t s_bob_positions_hot[SM64_SATURN_BOB_POSITION_COUNT][3]
+    __attribute__((aligned(16)));
 static sm64_saturn_bob_primitive_t s_bob_primitives_hot[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+    SM64_SATURN_BOB_PRIMITIVE_COUNT] __attribute__((aligned(16)));
 static saturn_hot_promotion_t s_bob_hot_promotion;
 #endif
 static const int32_t (*s_bob_positions_active)[3];
