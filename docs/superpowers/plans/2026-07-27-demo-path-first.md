@@ -1160,8 +1160,9 @@ gradient/NBG1 fallback remains the accepted degradation path.
   Both processors and both VDPs are gated deliverables of this plan, not
   aspirations — the report is complete, but its measured 21.1977% dual slave
   share fails the ≥50% utilization gate.
-- [ ] Screenshot evidence committed; **the owner's eyes are the acceptance
-  gate** — no `TIMELINE.md` or gallery entry before their confirmation.
+- [x] Screenshot evidence committed; **the owner's eyes are the acceptance
+  gate** — owner accepted the exact capture on 2026-07-28, so it is now
+  promoted to `TIMELINE.md`.
   Describe frames factually; never assert what an object is (twice-burned
   rule).
 - [x] Honest verdict against the milestones: ≥ 5 FPS visible milestone;
@@ -1240,6 +1241,11 @@ The normalized source rerun at 3,720 frames reaches serial 60 (240 sim ticks)
 and its silhouette matches the fragment flat control at serial 61 (244 ticks).
 This confirms the broad sheet is a shared scene/camera presentation at this
 route checkpoint, not a fragment-only geometry regression.
+
+**Owner acceptance (2026-07-28):** the textured fragment milestone capture was
+reviewed and accepted as a visual checkpoint. The lower-half blue region still
+shows terrain disappearing near and around Mario; the owner identified that
+limitation as pre-existing rather than a regression from this milestone.
 
 ---
 

@@ -1386,6 +1386,20 @@ post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
 
+---
+
+### 2026-07-28 — Owner-accepted textured fragment milestone
+
+[Screenshot](screenshots/task5b-bsp-fragments-rounded-3600-2026-07-28.png) ·
+[capture report](reports/task5b-bsp-fragments-rounded-3600-2026-07-28.json)
+
+The rebuilt fragment-indexed BOB route reaches the VDP1 textured milestone at
+fresh profile address `0x060C8D14`: `fault_flags=0`, `slave_timeouts=0`,
+`frame_serial=53`, `triangles_vdp1_emitted=39976`, and `texture_commands=10053`.
+The owner accepted this exact frame as the visual checkpoint. The lower-half
+blue region still shows terrain disappearing near and around Mario; that
+limitation is recorded as pre-existing, not introduced by this milestone.
+
 ### 2026-07-24 — Real vertex lighting: Gouraud shading through VDP1
 
 The colors in the 2026-07-23 capture were never colors. SM64 enables
