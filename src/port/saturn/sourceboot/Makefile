@@ -23,6 +23,7 @@ SATURN_DEMO_POLY_TIER ?= 0
 SATURN_DEMO_HOT_PROMOTION ?= 0
 SATURN_DEMO_NEAR_CLIP ?= 0
 SATURN_DEMO_BSP_ORDER ?= 1
+SATURN_DEMO_BSP_FRAGMENTS ?= 0
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -47,6 +48,7 @@ SOURCEBOOT_BOB_BSP_FRAGMENT_BANK := $(SOURCEBOOT_GENERATED)/bob_bsp_fragments_cl
 SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT := $(SOURCEBOOT_GENERATED)/bob_bsp_fragments_clut16.pal
 SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_bsp_fragments_manifest.json
 SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE := $(SOURCEBOOT_GENERATED)/bob_bsp_fragments_scene.json
+SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER := $(SOURCEBOOT_GENERATED)/bob_bsp_fragments.h
 SOURCEBOOT_BOB_TILES := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.bin
 SOURCEBOOT_BOB_CLUT := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.pal
 SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
@@ -61,7 +63,7 @@ SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
   $(ROOT)/tools/saturn/extract_mario_actor.py \
   $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/bake_bob_bsp_fragments.py \
-  $(ROOT)/tools/saturn/static_bsp.py
+  $(ROOT)/tools/saturn/emit_bob_bsp_fragments.py $(ROOT)/tools/saturn/static_bsp.py
 SOURCEBOOT_BOB_TILE_TOOLS := $(ROOT)/tools/saturn/bake_bob_tiles.py \
   $(ROOT)/tools/saturn/bake_castle_uv.py $(ROOT)/tools/saturn/vdp1_texture.py
 SOURCEBOOT_BOB_SCENE_TOOL := $(ROOT)/tools/saturn/emit_bob_scene.py
@@ -131,12 +133,17 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPU
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-hot$(SATURN_DEMO_HOT_PROMOTION),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-clip$(SATURN_DEMO_NEAR_CLIP),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-bsp$(SATURN_DEMO_BSP_ORDER),$(SOURCEBOOT_OUTPUT_TAG))
+SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-frag$(SATURN_DEMO_BSP_FRAGMENTS),$(SOURCEBOOT_OUTPUT_TAG))
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
 SOURCEBOOT_BOB_SKY_ASM := $(SH_BUILD_DIR)/bob_sky_bitmap.sx
 SOURCEBOOT_BOB_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_texture_bank.sx
+SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_bsp_fragment_texture_bank.sx
 SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
+ifeq ($(SATURN_DEMO_BSP_FRAGMENTS),1)
+SH_SRCS += $(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)
+endif
 SH_SRCS += $(SOURCEBOOT_BOB_SKY_ASM)
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
@@ -168,8 +175,9 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -DSATURN_DEMO_HOT_PROMOTION=$(SATURN_DEMO_HOT_PROMOTION) \
   -DSATURN_DEMO_NEAR_CLIP=$(SATURN_DEMO_NEAR_CLIP) \
   -DSATURN_DEMO_BSP_ORDER=$(SATURN_DEMO_BSP_ORDER) \
+  -DSATURN_DEMO_BSP_FRAGMENTS=$(SATURN_DEMO_BSP_FRAGMENTS) \
   -DSATURN_DEMO_PATH=$(SATURN_DEMO_PATH) \
-  -DSATURN_MARIO_TEXTURE_BASE_OFFSET=333696U \
+  -DSATURN_MARIO_TEXTURE_BASE_OFFSET=$(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),261248U,333696U) \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
@@ -331,7 +339,12 @@ $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCE
 	  BOB_ASSET_ROOT="$(ROOT)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
 .PHONY: source-bob-bsp-fragments
-source-bob-bsp-fragments: $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST) $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE)
+source-bob-bsp-fragments: $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST) $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE) $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER)
+
+$(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER): $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE) $(SOURCEBOOT_BOB_COMPILED) $(ROOT)/tools/saturn/emit_bob_bsp_fragments.py
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/emit_bob_bsp_fragments.py" \
+	  --mesh "$(SOURCEBOOT_BOB_COMPILED)" --scene "$(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE)" \
+	  --output "$@"
 
 $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST) &: \
 	$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_TILE_TOOLS) \
@@ -399,6 +412,23 @@ $(SOURCEBOOT_BOB_TEXTURE_ASM): $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT)
 	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_CLUT))"' \
 	  '.global _sm64_saturn_bob_clut_bank_end' \
 	  '_sm64_saturn_bob_clut_bank_end:' > "$@"
+
+$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM): $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT)
+	@mkdir -p "$(dir $@)"
+	@printf '%s\n' \
+	  '.section .rodata' \
+	  '.align 4' \
+	  '.global _sm64_saturn_bob_fragment_texture_bank' \
+	  '_sm64_saturn_bob_fragment_texture_bank:' \
+	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK))"' \
+	  '.global _sm64_saturn_bob_fragment_texture_bank_end' \
+	  '_sm64_saturn_bob_fragment_texture_bank_end:' \
+	  '.align 4' \
+	  '.global _sm64_saturn_bob_fragment_clut_bank' \
+	  '_sm64_saturn_bob_fragment_clut_bank:' \
+	  '.incbin "$(subst \\,/,$(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT))"' \
+	  '.global _sm64_saturn_bob_fragment_clut_bank_end' \
+	  '_sm64_saturn_bob_fragment_clut_bank_end:' > "$@"
 
 $(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY)
 	@mkdir -p "$(dir $@)"

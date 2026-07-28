@@ -964,6 +964,19 @@ under the 446,432-byte resident gate. It is still host-side; runtime adoption
 must carry the fragment geometry and tile offsets into the generated scene
 header without displacing Mario's texture base.
 
+**Progress note (2026-07-28, fragment-tier runtime adoption):** the generated
+fragment header and 16×16 bank/CLUT are now selectable through the normal
+sourceboot Makefile (`SATURN_DEMO_BSP_FRAGMENTS=1`). The profile keeps the
+HWRAM linker assertion intact by placing only its CPU-only transform caches in
+the existing LWRAM work section; no SCU-DMA buffer is aliased. A fresh
+cross-build and 3,600-frame `--dram-cart` capture completed with
+`fault_flags=0`, `slave_timeouts=0`, `frame_serial=64`, and 48,252 VDP1
+triangles. The saved frame shows Mario and textured terrain commands, but the
+terrain is still visibly warped/sheeted; this is a diagnostic runtime pass,
+not visual acceptance or a correctness claim. The next correctness lever is
+camera-dependent ordering of the emitted split fragments, followed by a
+paired A/B capture against the non-fragment profile.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the

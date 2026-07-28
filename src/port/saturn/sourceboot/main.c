@@ -160,18 +160,30 @@ static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
     __attribute__((section(".lwram_bss"))) __aligned(16);
 
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
+#if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
+#define SOURCEBOOT_BOB_TEXTURE_BYTES 261248U
+#define SOURCEBOOT_BOB_CLUT_COUNT 2041U
+#else
 #define SOURCEBOOT_BOB_TEXTURE_BYTES 333696U
+#define SOURCEBOOT_BOB_CLUT_COUNT 1077U
+#endif
 #define SOURCEBOOT_MARIO_TEXTURE_BYTES \
     (SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT * \
      SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * \
      sizeof(uint16_t))
 #define SOURCEBOOT_TEXTURE_BYTES \
     (SOURCEBOOT_BOB_TEXTURE_BYTES + SOURCEBOOT_MARIO_TEXTURE_BYTES)
-#define SOURCEBOOT_BOB_CLUT_COUNT 1077U
 #define SOURCEBOOT_BOB_CLUT_BYTES (SOURCEBOOT_BOB_CLUT_COUNT * sizeof(vdp1_clut_t))
 
+#if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
+extern const uint8_t sm64_saturn_bob_fragment_texture_bank[];
+extern const uint8_t sm64_saturn_bob_fragment_clut_bank[];
+#define sm64_saturn_bob_texture_bank sm64_saturn_bob_fragment_texture_bank
+#define sm64_saturn_bob_clut_bank sm64_saturn_bob_fragment_clut_bank
+#else
 extern const uint8_t sm64_saturn_bob_texture_bank[];
 extern const uint8_t sm64_saturn_bob_clut_bank[];
+#endif
 
 /* LWRAM-resident command staging -- see sourceboot-cart.x's new lwram
  * MEMORY region/.lwram_cmdts section. Zeroed explicitly by

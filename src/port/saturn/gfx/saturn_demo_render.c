@@ -11,6 +11,18 @@
 #include "saturn_transform.h"
 #include "bob_scene.h"
 #include "bob_bsp.h"
+#if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
+#include "bob_bsp_fragments.h"
+#undef SM64_SATURN_BOB_POSITION_COUNT
+#undef SM64_SATURN_BOB_PRIMITIVE_COUNT
+#undef sm64_saturn_bob_positions
+#undef sm64_saturn_bob_primitives
+#define SM64_SATURN_BOB_POSITION_COUNT SM64_SATURN_BOB_FRAGMENT_POSITION_COUNT
+#define SM64_SATURN_BOB_PRIMITIVE_COUNT SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT
+#define sm64_saturn_bob_positions sm64_saturn_bob_fragment_positions
+#define sm64_saturn_bob_primitives sm64_saturn_bob_fragment_primitives
+#define sm64_saturn_bob_primitive_t sm64_saturn_bob_fragment_primitive_t
+#endif
 #include "saturn_mario_actor_mesh.h"
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
 #include "mario_eye_uv_tiles.h"
@@ -54,11 +66,22 @@
 #ifndef SATURN_DEMO_BSP_ORDER
 #define SATURN_DEMO_BSP_ORDER 1
 #endif
+#ifndef SATURN_DEMO_BSP_FRAGMENTS
+#define SATURN_DEMO_BSP_FRAGMENTS 0
+#endif
 
-static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
+#if SATURN_DEMO_BSP_FRAGMENTS
+#define DEMO_FRAGMENT_CACHE __attribute__((section(".lwram_bss")))
+#else
+#define DEMO_FRAGMENT_CACHE
+#endif
+
+static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT]
+    DEMO_FRAGMENT_CACHE;
 static sm64_saturn_projected_vertex_t s_projected[
-    SM64_SATURN_BOB_POSITION_COUNT];
-static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT];
+    SM64_SATURN_BOB_POSITION_COUNT] DEMO_FRAGMENT_CACHE;
+static uint8_t s_position_valid[SM64_SATURN_BOB_POSITION_COUNT]
+    DEMO_FRAGMENT_CACHE;
 static uint16_t s_bucket_counts[DEMO_BUCKETS];
 static uint16_t s_bucket_offsets[DEMO_BUCKETS + 1U];
 static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -104,7 +127,7 @@ static const sm64_saturn_bob_primitive_t *s_bob_primitives_active;
 static uint8_t s_bob_resident_ready;
 static uint16_t s_slave_begin = SM64_SATURN_BOB_POSITION_COUNT / 2U;
 
-#if SATURN_DEMO_BSP_ORDER
+#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
 static void demo_bsp_append(int16_t node,
                             const sm64_saturn_camera_transform_t *camera)
 {
