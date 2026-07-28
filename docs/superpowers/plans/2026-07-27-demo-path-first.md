@@ -925,6 +925,17 @@ the generated scene header carries split fragments, UVs, and node ranges; the
 runtime must traverse those ranges from the camera position rather than use the
 origin-order digest.
 
+**Progress note (2026-07-28, bounded BSP runtime pass):** the generated BOB
+node/reference stream now traverses from the live camera position in sourceboot
+(`SATURN_DEMO_BSP_ORDER=1`). Exact host planes remain the deterministic digest;
+the generated runtime header quantizes each plane to a bounded 20-bit normal
+envelope so SH-2 sign products do not overflow. The fresh BSP-order capture
+completed with `frame_serial=69`, `sim_tick_count=276`, zero faults, and zero
+slave timeouts. Its screenshot shows Mario and a different terrain ordering,
+but still has severe warped-sheet geometry. This is an ordering milestone, not
+visual acceptance: source primitives are currently deduplicated through the BSP
+references, while split fragments/UV lowering remain the next correctness step.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
