@@ -290,7 +290,7 @@ starting point and eliminate the remaining licence-policy contradiction.
   decision: GPL close-port is authorized under the recorded obligations.
 - [x] Add the exact source ranges and reuse modes from section 4 to the
   upstream ledger before implementation begins.
-- [ ] Capture the current serial and dual route from clean, fresh builds at
+- [x] Capture the current serial and dual route from clean, fresh builds at
   `view_radius=6000`, `poly_tier=0`; preserve the exact checkpoint
   comparison. Use the standard `--timeout 1500` recipe and reserve at least
   1,700 seconds of host budget rather than treating a 240-second stop as a
@@ -302,7 +302,7 @@ starting point and eliminate the remaining licence-policy contradiction.
   distribution.
 - [x] Freeze the three named visual viewpoints from Task 3 as deterministic
   controller/capture steps in `bob_renderer_views_v1.json`.
-- [ ] Record current manual-view screenshots as baseline diagnostics, not
+- [x] Record current manual-view screenshots as baseline diagnostics, not
   gallery milestones unless already owner-accepted.
 
 **Gate:** exact checkpoint parity; clean capture preflight; baseline report
