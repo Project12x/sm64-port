@@ -4,6 +4,7 @@ endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-mario-turntable
 SH_SRCS := main.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_ir_texture.c \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/compat/sqrtf.c \
   $(ROOT)/src/game/game_init.c \

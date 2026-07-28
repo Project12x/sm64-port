@@ -1,4 +1,35 @@
 #include "saturn_ir_texture.h"
+#include "saturn_texture_residency.h"
+
+void sm64_saturn_texture_residency_init(
+    sm64_saturn_texture_residency_t *residency,
+    const vdp1_vram_partitions_t *partitions)
+{
+    if (residency == NULL || partitions == NULL) return;
+    residency->base = (uint8_t *)partitions->texture_base;
+    residency->capacity = partitions->texture_size;
+    residency->used = 0;
+    residency->peak = 0;
+    residency->overflowed = false;
+}
+
+bool sm64_saturn_texture_residency_upload(
+    sm64_saturn_texture_residency_t *residency, size_t offset,
+    const void *source, size_t bytes)
+{
+    if (residency == NULL || source == NULL || offset > residency->capacity ||
+        bytes > residency->capacity - offset) {
+        if (residency != NULL) residency->overflowed = true;
+        return false;
+    }
+
+    scu_dma_transfer(0, residency->base + offset, source, bytes);
+    scu_dma_transfer_wait(0);
+    const size_t end = offset + bytes;
+    if (end > residency->used) residency->used = end;
+    if (residency->used > residency->peak) residency->peak = residency->used;
+    return true;
+}
 
 static bool texture_binding_valid(
     vdp1_cmdt_t *cmdt,
