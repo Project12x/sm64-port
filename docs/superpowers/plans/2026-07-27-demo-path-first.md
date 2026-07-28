@@ -243,13 +243,13 @@ the modules, delete the moved bodies), modify `castleviewer/Makefile`.
   discipline. Keep `saturn_texture_residency.h`'s generation-stamp model —
   the segment-addressing decision requires it (address stability only while
   a cart slot is resident).
-- [ ] Castleviewer builds; its own capture reproduces the retained baseline
+- [x] Castleviewer builds; its own capture reproduces the retained baseline
   (screenshot hash or documented benign delta with pixel-diff bbox, per the
   quad-merge precedent).
-- [ ] Host contract tests for the moved transform (the
+- [x] Host contract tests for the moved transform (the
   `fast3d_q16_diff_test.c` corpus pattern) so the shared module is pinned
   independently of either consumer.
-- [ ] Commit(s); update the inventory in `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`'s
+- [x] Commit(s); update the inventory in `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`'s
   layer table (gfx layer now lists the shared modules).
 
 **Dual-CPU design constraints — bind NOW, at the harvest (owner directive:
