@@ -1226,6 +1226,11 @@ therefore does not prove a fragment geometry defect; it proves texture binding
 is not required for the observed silhouette and restores frame alignment as a
 first-class capture requirement.
 
+The normalized source rerun at 3,720 frames reaches serial 60 (240 sim ticks)
+and its silhouette matches the fragment flat control at serial 61 (244 ticks).
+This confirms the broad sheet is a shared scene/camera presentation at this
+route checkpoint, not a fragment-only geometry regression.
+
 ---
 
 ## 4. Shared verification commands
