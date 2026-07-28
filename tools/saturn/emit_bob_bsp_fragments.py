@@ -21,7 +21,7 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         # The offline affine companion is deliberately not a runtime vertex.
         fourth = indices[2]
         primitives.append({
-            "indices": (*indices, fourth),
+            "indices": (indices[0], indices[1], indices[2], fourth),
             # Keep the compiled Mesh IR primitive identity, not the source
             # triangle ordinal. The BSP reference stream is keyed by this
             # identity, so fragments can inherit its camera order.

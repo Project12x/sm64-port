@@ -1007,6 +1007,15 @@ parity gap without claiming another visual improvement; the residual warp is
 therefore upstream of the binder call and remains in the fragment bake or
 source geometry mapping.
 
+**Progress note (2026-07-28, native convex-quad experiment rejected):** a
+castleviewer-style variant preserved 562 convex quads and sampled them with
+`sample_quad`, reducing the tier to 1,546 commands/240,480 resident bytes.
+Its fresh sourceboot capture showed more missing and warped terrain than the
+2,108-command repeated-C triangle tier, so the experiment is not promoted.
+The runtime remains on the visibly improved, host-validated triangle tier;
+quad preservation stays negative knowledge until its geometry/ordering
+contract is understood.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
