@@ -833,6 +833,13 @@ records `slave_jobs_completed=1,245`, `slave_busy_ticks=5,952,214`,
 zero timeouts/faults. This is evidence for the final-submission lever, not a
 closure of the ≥50% utilization gate or owner gallery acceptance.
 
+**Progress note (2026-07-28, upload-split A/B):** a same-commit serial
+`SATURN_SLAVE_RENDER=0` capture reaches the identical frozen-route checkpoint
+with zero faults/rejects. The dual/serial retained windows report 249/246
+rendered frames and approximately 58,946/7,527 FRT ticks per rendered frame;
+the figures are parity/utilization evidence only, not a new 15 FPS claim. The
+≥50% share gate and owner visual acceptance remain open.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
