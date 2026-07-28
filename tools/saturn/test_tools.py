@@ -1013,6 +1013,19 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(manifest["fragment_count"], 2108)
         self.assertEqual(manifest["textured_fragment_count"], 2108 - 67)
         self.assertEqual(len(fragment_scene["fragments"]), 2108)
+        self.assertEqual(fragment_scene["uv_mapping"], {
+            "tile_size": 16,
+            "source_scale": 1,
+            "weights": "vdp1_repeated_c",
+            "corner_order": "A/B/C/C",
+            "uv_interpolation": "exact_rational_before_source_tile_state",
+        })
+        for fragment in fragment_scene["fragments"]:
+            self.assertEqual(len(fragment["positions"]), 3)
+            self.assertEqual(len(fragment["uv"]), 3)
+            if fragment["textured"]:
+                self.assertEqual(int(fragment["tile_offset"]) % (16 * 16 // 2), 0)
+                self.assertEqual(int(fragment["clut_offset"]) % 32, 0)
         bsp = fragment_scene["bsp"]
         self.assertEqual(bsp["node_count"], 1183)
         self.assertEqual(bsp["ref_count"], 2108)

@@ -164,6 +164,13 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
         "schema": "sm64-saturn-bob-bsp-fragment-scene",
         "version": 1,
         "bsp_sha256": stats.digest,
+        "uv_mapping": {
+            "tile_size": TILE,
+            "source_scale": 1,
+            "weights": "vdp1_repeated_c",
+            "corner_order": "A/B/C/C",
+            "uv_interpolation": "exact_rational_before_source_tile_state",
+        },
         "fragments": fragments,
         "bsp": _fragment_bsp(root, fragment_indices),
     }

@@ -1190,6 +1190,13 @@ triangles. The screenshot is materially unchanged from the repeated-C/indexed
 baselines, so this closes a real lowering-contract gap without claiming it is
 the remaining visual cause.
 
+**Progress note (2026-07-28, UV contract gate):** the fragment scene now records
+its VDP1 mapping contract explicitly (`16x16`, source scale `1`, exact rational
+sampling, repeated-C `A/B/C/C` corners). Host tests validate that all 2,108
+fragments carry three geometry/UV corners and that every textured tile/CLUT
+offset is aligned. This makes the next capture’s UV diagnosis falsifiable;
+visual acceptance remains open.
+
 ---
 
 ## 4. Shared verification commands
