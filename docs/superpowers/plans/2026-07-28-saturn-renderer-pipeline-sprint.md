@@ -1,9 +1,9 @@
 # Saturn Renderer Pipeline Sprint
 
-> **Status:** In progress — Tasks 0–4 and the Task 5 compact one-dispatch slice
-> landed. The fresh same-commit route proves deterministic compact output and
-> useful slave work, but the dual render-FRT gate fails; corrective Task 5A is
-> now the hard stop before bank, promotion, or LOD work.
+> **Status:** In progress — Tasks 0–4 and the Task 5A concurrent transform
+> slice landed. The fresh same-commit route now passes the one-dispatch speed
+> gate; visual acceptance, leaf/work-weight balancing, and compact-result
+> lowering remain open before bank, promotion, or LOD work.
 > **Date:** 2026-07-28
 > **Branch baseline:** `saturn/bootstrap` at `d58fc37`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
@@ -525,17 +525,20 @@ one independent terrain producer.
 - [x] Build one immutable per-frame terrain job from accepted contiguous leaf
   ranges.
 - [x] Notify the slave exactly once per rendered frame.
-- [ ] Slave performs cull → transform → clip → shade → compact-result writes
+- [x] Slave performs cull → transform → clip → shade → compact-result writes
   for its range.
-- [ ] Master concurrently performs the same stages for its complementary
+- [x] Master concurrently performs the same stages for its complementary
   range and handles Mario.
-- [x] Join once, then let the master merge and lower all compact results.
+- [x] Join once after both disjoint producers finish.
+- [ ] Merge compact results by stable baked painter key and lower that merged
+  stream as the sole terrain emission source (the current slice still uses
+  the legacy visibility stream for lowering).
 - [x] Remove worker access to the backend, command cursor, texture allocator,
   and Gouraud allocator.
 - [ ] Replace transform-vertex balancing with leaf/work-weight balancing.
 - [ ] Adapt SlaveDriver’s prior-spin boundary correction with bounded steps
   and minimum useful ranges.
-- [ ] Preserve `SATURN_SLAVE_RENDER=0` as the identical serial oracle.
+- [x] Preserve `SATURN_SLAVE_RENDER=0` as the identical serial oracle.
 - [x] A timeout cancels safely, increments a fault, and falls back to serial
   production without reusing partial worker results.
 - [x] Report jobs/render, master and slave useful-result counts, wait, busy,
@@ -571,9 +574,9 @@ current slice because transform still runs as a serial pre-dispatch pass.
 The comparison is recorded in
 `docs/saturn/evidence/reports/task5-sbr2-current-compare-2026-07-28.json`.
 
-The sprint stops here. Do not begin Tasks 6–8 or frame-ahead work until the
-correction below either passes the same gate or is explicitly rejected with a
-measured follow-on plan.
+Task 5A now passes the performance portion of this gate. Do not begin Tasks
+6–8 or frame-ahead work until the remaining ownership/order and visual checks
+below are closed.
 
 ---
 
@@ -585,25 +588,31 @@ classifier.
 
 **Work:**
 
-- [ ] Divide the accepted contiguous leaf ranges, not raw vertex indices, and
-  give each CPU a disjoint transform/clip/shade/compact range.
+- [x] Give each CPU a disjoint transform/clip/shade/compact primitive range
+  without racing shared source positions. The switch to contiguous accepted
+  leaf ranges and work-weight balancing remains open.
 - [ ] Keep shared source positions immutable; publish worker-produced spans
   through an explicit cache-through/uncached hand-off or a measured purge at
   the single join boundary.
-- [ ] Make the master process its complementary terrain range concurrently
+- [x] Make the master process its complementary terrain range concurrently
   with the slave and keep Mario on the master path.
 - [ ] Merge compact results by stable baked painter key; do not re-enter the
   legacy primitive visibility path for emission.
 - [ ] Carry the bounded prior-spin correction into the leaf/work-weight split
   and record balance error, useful-result counts, merge cost, and cache/DMA
   costs.
-- [ ] Preserve the exact serial oracle and the timeout-to-serial fallback.
+- [x] Preserve the exact serial oracle and the timeout-to-serial fallback.
 
-**Gate:** same route/checkpoint and visual invariants; one job/render; zero
-faults/timeouts/rejected writes; master wait below 5%; slave useful results at
-least 35%; and dual render FRT at least 15% below serial. If this correction
-still loses, leave serial as default and open exactly one measured follow-on
-task before touching Tasks 6–8.
+**Measured gate:** same route/checkpoint and safety invariants pass; one
+job/render; master wait is 0.57%; the slave supplies 42.9% of the final
+compact-result stream; and dual render FRT is 20.8% below serial. The fresh
+pair is recorded in
+`docs/saturn/evidence/reports/task5a-sbr2-current-2026-07-28.md`.
+
+**Remaining gate:** visual invariants, explicit cache-through publication,
+leaf/work-weight balancing, and consuming the merged compact results as the
+sole emission source. If any of those loses, retain serial as the default and
+record exactly one measured follow-on task.
 
 **Commit:** `perf(saturn): overlap terrain transform and compact production`
 
