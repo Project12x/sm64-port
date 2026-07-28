@@ -1181,6 +1181,15 @@ present), so the ordering contract is now evidenced but the visual milestone
 is not accepted; the next lever remains geometry/UV correctness rather than
 the boot path.
 
+**Progress note (2026-07-28, rational fragment lowering):** fragment positions
+now use castleviewer’s symmetric nearest-integer policy, while split UVs remain
+rational through `sample_triangle` instead of being truncated before tile
+baking. The correctly tagged demo profile rebuilt and captured at fresh symbol
+`0x060C8D14` with `fault_flags=0`, `slave_timeouts=0`, and 39,976 emitted
+triangles. The screenshot is materially unchanged from the repeated-C/indexed
+baselines, so this closes a real lowering-contract gap without claiming it is
+the remaining visual cause.
+
 ---
 
 ## 4. Shared verification commands

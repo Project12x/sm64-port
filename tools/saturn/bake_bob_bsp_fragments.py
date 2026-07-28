@@ -15,7 +15,8 @@ import struct
 from pathlib import Path
 
 from bake_bob_tiles import BOB_TEXTURES, _png_pixels
-from bake_castle_uv import pack_clut16, quantize_clut16, sample_triangle, triangulate_polygon
+from bake_castle_uv import (nearest_integer, pack_clut16, quantize_clut16,
+                            sample_triangle, triangulate_polygon)
 from compile_bob_bsp import _polygons, _runtime_plane
 from static_bsp import build, iter_polygons
 
@@ -100,10 +101,12 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
         children = triangulate_polygon(polygon)
         polygon_fragments: list[int] = []
         for child_index, child in enumerate(children):
-            points = [[int(vertex.position[axis]) for axis in range(3)]
+            points = [[nearest_integer(vertex.position[axis]) for axis in range(3)]
                       for vertex in child.vertices]
             uvs = [[int(vertex.attributes[axis]) for axis in range(2)]
                    for vertex in child.vertices]
+            uv = tuple(tuple(vertex.attributes[axis] for axis in range(2))
+                       for vertex in child.vertices)
             fragment = {
                 "source_primitive": polygon.source,
                 "source_triangles": primitive["source_triangles"],
@@ -118,7 +121,6 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
             if texture_name is not None:
                 state = primitive["texture_tiles"][0]["state"]
                 texture = textures[str(texture_name)]
-                uv = tuple(tuple(value) for value in uvs)
                 # Transparent source texels may retain RGB bits in exported
                 # PNGs.  VDP1's reserved CLUT entry is zero; canonicalize
                 # those samples before the shared quantizer so a split UV
