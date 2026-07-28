@@ -623,9 +623,12 @@ flags does NOT rebuild stale objects; force rebuild or variant object dirs).
   render rate (Task 0's timer proves the budget).
 - [x] Full regression: all host suites, cross-compile, `make verify`, both
   profile flags build.
-- [ ] Route capture on the demo profile: **checkpoint hash must equal the
-  interpreted build's** (same sim, same inputs — this is the whole
-  authority guarantee). Route schema v-bump for the renderer counters.
+- [x] Route capture on the demo profile: **checkpoint hash equals the
+  interpreted build's** (same sim, same inputs — this is the whole authority
+  guarantee). The frozen-endpoint v2 comparator reports identical SHA-256
+  `d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c`, zero
+  faults, and zero capacity rejects at 600 ticks; renderer counters remain
+  informational. Route schema v2 is recorded in the paired report.
 
 **Gate:** demo profile boots the real game, renders textured BOB + animated
 Mario + cannon via the IR path, checkpoint hash identical to interpreted
