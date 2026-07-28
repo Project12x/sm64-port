@@ -956,7 +956,7 @@ The terrain pass contains an opt-in `clip_near` prototype based on
 SlaveDriver's bounded `clipZ` tile recovery. It is currently disabled in the
 live path after a manual regression made Mario disappear; strict rejection is
 the active behavior while the edge-interpolating cache is isolated for a
-targeted actor-visibility test. It may be re-enabled only after that test and
+targeted actor-visibility test (`SATURN_DEMO_NEAR_CLIP=1`). It may be re-enabled only after that test and
 a fresh foreground capture pass both prove the actor remains visible.
 
 ---

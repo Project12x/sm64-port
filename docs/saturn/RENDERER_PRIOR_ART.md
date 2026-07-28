@@ -59,7 +59,8 @@ The terrain transform now has an explicit `clip_near` mode, but the
 edge-interpolating implementation is currently gated off after a manual
 regression in which Mario disappeared. The shared transform tests and the live
 BOB path therefore retain strict rejection while the clipper is isolated for a
-targeted test. The intended implementation is the bounded equivalent of
+targeted test. It is now selected only with the uniquely keyed
+`SATURN_DEMO_NEAR_CLIP=1` sourceboot profile. The intended implementation is the bounded equivalent of
 SlaveDriver's `clipZ` recovery for a four-corner tile; it must not return to the
 live path until actor visibility is proven.
 

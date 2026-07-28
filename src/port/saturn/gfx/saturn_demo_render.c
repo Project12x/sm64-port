@@ -47,6 +47,9 @@
 #ifndef SATURN_DEMO_HOT_PROMOTION
 #define SATURN_DEMO_HOT_PROMOTION 0
 #endif
+#ifndef SATURN_DEMO_NEAR_CLIP
+#define SATURN_DEMO_NEAR_CLIP 0
+#endif
 
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT];
 static sm64_saturn_projected_vertex_t s_projected[
@@ -875,9 +878,7 @@ void sm64_saturn_demo_render_frame(
         .center_y = DEMO_CENTER_Y,
         .coord_min = DEMO_COORD_MIN,
         .coord_max = DEMO_COORD_MAX,
-        /* Keep the edge-cache implementation compiled but disabled until
-         * its VDP1 coverage is proven not to occlude the actor pass. */
-        .clip_near = false
+        .clip_near = SATURN_DEMO_NEAR_CLIP != 0
     };
     demo_transform_context_t transform = {
         .job = &job,
