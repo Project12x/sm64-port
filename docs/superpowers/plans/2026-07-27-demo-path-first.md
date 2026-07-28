@@ -959,6 +959,13 @@ the active behavior while the edge-interpolating cache is isolated for a
 targeted actor-visibility test (`SATURN_DEMO_NEAR_CLIP=1`). It may be re-enabled only after that test and
 a fresh foreground capture pass both prove the actor remains visible.
 
+**Progress note (2026-07-28, clip A/B isolation):** the near-clip prototype
+now has a distinct `-clip1` sourceboot output tag and can be built beside the
+actor-safe `-clip0` image. Both variants use the same generated BOB bank and
+reference-led 32-pass ordering; only the opt-in transform recovery differs.
+The clip profile cross-builds, but owner visual acceptance is still required
+before it can become the default.
+
 ---
 
 ### Task 6: Degradation profile — Croc's levers, measured
