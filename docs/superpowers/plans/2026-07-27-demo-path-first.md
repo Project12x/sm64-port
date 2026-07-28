@@ -464,6 +464,13 @@ existing material colors already read well).
 **Gate:** checkpoint hash unchanged; pose differential within tolerance;
 animated Mario renders via the shared modules.
 
+**Progress note (2026-07-28):** the read-only snapshot/pose bridge is now
+consumed by the demo renderer and emits a live flat-material Mario pass
+(`1cc84b5`). A fresh intro-camera capture proves the bridge snapshot is valid,
+but the actor is inside the current 128-unit near clip; it is retained as
+diagnostic evidence, not as a visual-gate pass. The route checkpoint,
+pose-differential fixture, and later-phase visual capture remain open.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
