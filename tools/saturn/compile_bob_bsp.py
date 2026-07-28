@@ -15,7 +15,7 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-from static_bsp import Node, Polygon, Vertex, build, painter_order
+from static_bsp import Node, Polygon, Vertex, build, iter_polygons, painter_order
 
 
 def _polygons(scene: dict[str, object]) -> list[Polygon]:
@@ -40,12 +40,13 @@ def _polygons(scene: dict[str, object]) -> list[Polygon]:
 
 
 def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
-                split_weight: int = 8) -> dict[str, object]:
+                split_weight: int = 8,
+                manifest: dict[str, object] | None = None) -> dict[str, object]:
     polygons = _polygons(scene)
     root, stats = build(polygons, candidate_limit=candidate_limit,
                         split_weight=split_weight)
     origin_order = painter_order(root, (0, 0, 0))
-    return {
+    report = {
         "schema": "sm64-saturn-bob-static-bsp",
         "version": 1,
         "source": scene["source"],
@@ -77,6 +78,30 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
             "UV interpolation remains exact rational until final scene-header quantization",
         ],
     }
+    if manifest is not None:
+        entries = {int(entry["source_triangle"]): entry
+                   for entry in manifest["entries"]}
+        fragment_classes = {"16x16": 0, "32x32": 0, "flat": 0}
+        texture_bytes = 0
+        clut_bytes = 0
+        for polygon in iter_polygons(root):
+            primitive = scene["primitives"][polygon.source]
+            source = int(primitive["source_triangles"][0])
+            entry = entries.get(source)
+            if entry is None:
+                fragment_classes["flat"] += 1
+                continue
+            size = int(entry["tile_size"])
+            key = f"{size}x{size}"
+            fragment_classes[key] = fragment_classes.get(key, 0) + 1
+            texture_bytes += size * size // 2
+            clut_bytes += 32
+        report["fragment_tile_classes"] = fragment_classes
+        report["estimated_fragment_texture_bytes"] = texture_bytes
+        report["estimated_fragment_clut_bytes"] = clut_bytes
+        report["estimated_fragment_resident_bytes"] = texture_bytes + clut_bytes
+        report["vdp1_texture_budget_bytes"] = 446432
+    return report
 
 
 def _flatten(root: Node) -> tuple[list[Node], list[int], list[tuple[int, int]], list[tuple[int, int]]]:
@@ -195,11 +220,15 @@ def main() -> None:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--header", type=Path)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--candidate-limit", type=int, default=32)
     parser.add_argument("--split-weight", type=int, default=8)
     args = parser.parse_args()
     scene = json.loads(args.input.read_text(encoding="utf-8"))
-    report = compile_bsp(scene, args.candidate_limit, args.split_weight)
+    manifest = None if args.manifest is None else json.loads(
+        args.manifest.read_text(encoding="utf-8"))
+    report = compile_bsp(scene, args.candidate_limit, args.split_weight,
+                         manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if args.header is not None:

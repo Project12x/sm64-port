@@ -984,6 +984,17 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(len(first["deterministic_sha256"]), 64)
         self.assertIn("runtime traversal", " ".join(first["limits"]).lower())
 
+    def test_bob_bsp_fragment_texture_cost_exposes_budget_gap(self) -> None:
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        manifest = json.loads((root / "build/saturn/sourceboot/generated/bob_tiles_manifest.json").read_text(encoding="utf-8"))
+        report = compile_bob_bsp(scene, manifest=manifest)
+        self.assertEqual(report["fragment_tile_classes"],
+                         {"16x16": 597, "32x32": 793, "flat": 35})
+        self.assertEqual(report["estimated_fragment_resident_bytes"], 526912)
+        self.assertGreater(report["estimated_fragment_resident_bytes"],
+                           report["vdp1_texture_budget_bytes"])
+
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)
         document = mesh_ir_bob_area(intake)

@@ -311,10 +311,11 @@ $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
 .PHONY: source-bob-mesh
 source-bob-mesh: $(SOURCEBOOT_BOB_COMPILED)
 
-$(SOURCEBOOT_BOB_BSP_REPORT) $(SOURCEBOOT_BOB_BSP_HEADER): $(SOURCEBOOT_BOB_COMPILED) $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py
+$(SOURCEBOOT_BOB_BSP_REPORT) $(SOURCEBOOT_BOB_BSP_HEADER): $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_TILE_MANIFEST) $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py
 	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/compile_bob_bsp.py" \
 	  --input "$(SOURCEBOOT_BOB_COMPILED)" \
-	  --output "$(SOURCEBOOT_BOB_BSP_REPORT)" --header "$(SOURCEBOOT_BOB_BSP_HEADER)"
+  --output "$(SOURCEBOOT_BOB_BSP_REPORT)" --header "$(SOURCEBOOT_BOB_BSP_HEADER)" \
+  --manifest "$(SOURCEBOOT_BOB_TILE_MANIFEST)"
 
 .PHONY: source-bob-bsp
 source-bob-bsp: $(SOURCEBOOT_BOB_BSP_REPORT) $(SOURCEBOOT_BOB_BSP_HEADER)
