@@ -34,6 +34,7 @@ YMIR_MAX_RUN_FOR_FRAMES = 3600
 # frozen 600-tick checkpoint; requests are still chunked and each response is
 # validated before the report is emitted.
 MAX_CAPTURE_FRAMES = 72000
+DEFAULT_CAPTURE_TIMEOUT_SECONDS = 1700.0
 
 
 def has_cd_block_copy_limitation(stderr: str) -> bool:
@@ -208,7 +209,12 @@ def main() -> int:
         type=Path,
         help="optional path for a PNG captured through Ymir video.capture",
     )
-    parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_CAPTURE_TIMEOUT_SECONDS,
+        help="Ymir wall-clock budget in seconds (default: 1700; captures are slow)",
+    )
     parser.add_argument(
         "--allow-invalid",
         action="store_true",
@@ -314,6 +320,8 @@ def main() -> int:
         help="metadata: compiled SATURN_DEMO_HOT_PROMOTION used by this image",
     )
     args = parser.parse_args()
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     if not 1 <= args.frames <= MAX_CAPTURE_FRAMES or not 1 <= args.post_poke_frames <= MAX_CAPTURE_FRAMES:
         parser.error(
             "--frames and --post-poke-frames must be between 1 and "

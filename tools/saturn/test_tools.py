@@ -20,6 +20,7 @@ sys.path.insert(0, str(TOOLS))
 from asset_classifier import classify_primitives, source_scan  # noqa: E402
 from capture_hwtest import (  # noqa: E402
     artifact_identity,
+    DEFAULT_CAPTURE_TIMEOUT_SECONDS,
     cap_stderr,
     has_cd_block_copy_limitation,
     input_pulse_request,
@@ -1039,6 +1040,9 @@ class BobMeshIRTests(unittest.TestCase):
 
 
 class YmirInputTests(unittest.TestCase):
+    def test_capture_timeout_matches_slow_route_guidance(self) -> None:
+        self.assertGreaterEqual(DEFAULT_CAPTURE_TIMEOUT_SECONDS, 1500.0)
+
     def test_artifact_identity_records_hash_size_and_mtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "artifact.bin"
