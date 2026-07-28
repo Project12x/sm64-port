@@ -173,6 +173,15 @@ def main() -> int:
         help="number of bytes for --probe-address (1..65536)",
     )
     parser.add_argument(
+        "--extra-probe-address",
+        type=lambda value: int(value, 0),
+        metavar="ADDRESS",
+        help=(
+            "optional second paused-state SH-2 address; uses --probe-count "
+            "and is reported as extra_probe_window"
+        ),
+    )
+    parser.add_argument(
         "--screenshot-output",
         type=Path,
         help="optional path for a PNG captured through Ymir video.capture",
@@ -258,6 +267,8 @@ def main() -> int:
         parser.error("--input-pulse must be an unsigned 16-bit value")
     if args.probe_address is not None and not 0 <= args.probe_address <= 0xFFFFFFFF:
         parser.error("--probe-address must be an unsigned 32-bit value")
+    if args.extra_probe_address is not None and not 0 <= args.extra_probe_address <= 0xFFFFFFFF:
+        parser.error("--extra-probe-address must be an unsigned 32-bit value")
     if not 1 <= args.probe_count <= 65536:
         parser.error("--probe-count must be between 1 and 65536")
     if (
@@ -390,6 +401,17 @@ def main() -> int:
                 {"address": args.probe_address, "count": args.probe_count},
             )
         )
+    extra_probe_id: int | None = None
+    if args.extra_probe_address is not None:
+        extra_probe_id = next_id
+        next_id += 1
+        requests.append(
+            request(
+                "mem.peek",
+                extra_probe_id,
+                {"address": args.extra_probe_address, "count": args.probe_count},
+            )
+        )
     screenshot_id = next_id if args.screenshot_output else None
     if screenshot_id is not None:
         next_id += 1
@@ -432,6 +454,9 @@ def main() -> int:
     boot_window_response = response_for(messages, boot_window_id)
     event_word_response = response_for(messages, event_word_id)
     probe_response = response_for(messages, probe_id) if probe_id is not None else None
+    extra_probe_response = (
+        response_for(messages, extra_probe_id) if extra_probe_id is not None else None
+    )
     pre_poke_event_response = (
         response_for(messages, pre_poke_event_id) if pre_poke_event_id is not None else None
     )
@@ -487,6 +512,9 @@ def main() -> int:
         "post_poke_frames": (
             args.post_poke_frames if args.event_word_poke is not None or args.handoff_yield else None
         ),
+        "probe_address": args.probe_address,
+        "extra_probe_address": args.extra_probe_address,
+        "probe_count": args.probe_count,
         "input_pulse": args.input_pulse,
         "input_pulse_count": args.input_pulse_count if args.input_pulse is not None else None,
         "input_hold_frames": args.input_hold_frames if args.input_pulse is not None else None,
@@ -499,6 +527,9 @@ def main() -> int:
         "boot_window": boot_window_response.get("result", {}),
         "event_word": event_word_response.get("result", {}),
         "probe_window": probe_response.get("result", {}) if probe_response else None,
+        "extra_probe_window": (
+            extra_probe_response.get("result", {}) if extra_probe_response else None
+        ),
         "event_word_before_poke": (
             pre_poke_event_response.get("result", {}) if pre_poke_event_response else None
         ),
