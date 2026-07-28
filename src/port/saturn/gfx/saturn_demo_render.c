@@ -58,6 +58,9 @@ static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_reordered[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_count;
 static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static sm64_saturn_projected_vertex_t s_clipped_projected[
+    SM64_SATURN_BOB_PRIMITIVE_COUNT][4] __attribute__((section(".lwram_bss")));
 static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -92,6 +95,69 @@ static const int32_t (*s_bob_positions_active)[3];
 static const sm64_saturn_bob_primitive_t *s_bob_primitives_active;
 static uint8_t s_bob_resident_ready;
 static uint16_t s_slave_begin = SM64_SATURN_BOB_POSITION_COUNT / 2U;
+
+static void demo_build_clipped_quad(
+    const sm64_saturn_bob_primitive_t *primitive,
+    sm64_saturn_projected_vertex_t output[4])
+{
+    for (uint8_t corner = 0U; corner < 4U; corner++) {
+        const uint16_t index = primitive->indices[corner];
+        output[corner] = s_projected[index];
+        if (s_view[index].z > SATURN_DEMO_NEAR_DEPTH) continue;
+
+        const uint8_t next = (uint8_t)((corner + 1U) & 3U);
+        const uint8_t previous = (uint8_t)((corner + 3U) & 3U);
+        uint8_t front = UINT8_MAX;
+        if (s_view[primitive->indices[next]].z > SATURN_DEMO_NEAR_DEPTH &&
+            s_view[primitive->indices[previous]].z <=
+                SATURN_DEMO_NEAR_DEPTH) {
+            front = next;
+        } else if (
+            s_view[primitive->indices[previous]].z > SATURN_DEMO_NEAR_DEPTH &&
+            s_view[primitive->indices[next]].z <= SATURN_DEMO_NEAR_DEPTH) {
+            front = previous;
+        }
+        if (front == UINT8_MAX &&
+            s_view[primitive->indices[next]].z > SATURN_DEMO_NEAR_DEPTH &&
+            s_view[primitive->indices[previous]].z >
+                SATURN_DEMO_NEAR_DEPTH) {
+            /* An isolated back corner has two valid edge intersections;
+             * choose the next edge deterministically. */
+            front = next;
+        }
+        if (front == UINT8_MAX) continue;
+
+        const sm64_saturn_projected_vertex_t edge =
+            s_projected[primitive->indices[front]];
+        const int32_t back_z = s_view[index].z;
+        const int32_t front_z = s_view[primitive->indices[front]].z;
+        const int32_t denominator = front_z - back_z;
+        if (denominator <= 0) continue;
+        const int32_t ratio = (int32_t)(((int64_t)(front_z -
+            SATURN_DEMO_NEAR_DEPTH) << 16) / denominator);
+        output[corner].x = (int16_t)(edge.x -
+            (int32_t)(((int64_t)(edge.x - output[corner].x) * ratio) >> 16));
+        output[corner].y = (int16_t)(edge.y -
+            (int32_t)(((int64_t)(edge.y - output[corner].y) * ratio) >> 16));
+        output[corner].z = SATURN_DEMO_NEAR_DEPTH;
+    }
+}
+
+static void demo_primitive_screen_vertices(
+    const sm64_saturn_bob_primitive_t *primitive,
+    int16_vec2_t vertices[4])
+{
+    const sm64_saturn_projected_vertex_t *projected =
+        s_primitive_clipped[primitive - s_bob_primitives_active] != 0U
+            ? s_clipped_projected[primitive - s_bob_primitives_active]
+            : NULL;
+    for (uint8_t corner = 0U; corner < 4U; corner++) {
+        const sm64_saturn_projected_vertex_t point = projected != NULL
+            ? projected[corner] : s_projected[primitive->indices[corner]];
+        vertices[corner].x = point.x;
+        vertices[corner].y = point.y;
+    }
+}
 
 typedef struct demo_transform_context {
     const sm64_saturn_ir_transform_job_t *job;
@@ -318,6 +384,17 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             s_primitive_visible[i] = 0U;
             continue;
         }
+        s_primitive_clipped[i] = 0U;
+        for (uint8_t corner = 0U; corner < 4U; corner++) {
+            if (s_view[primitive->indices[corner]].z <=
+                SATURN_DEMO_NEAR_DEPTH) {
+                s_primitive_clipped[i] = 1U;
+                break;
+            }
+        }
+        if (s_primitive_clipped[i] != 0U) {
+            demo_build_clipped_quad(primitive, s_clipped_projected[i]);
+        }
         int32_t z = s_projected[primitive->indices[0]].z;
         for (uint8_t corner = 1U; corner < 4U; corner++) {
             const int32_t corner_z =
@@ -352,17 +429,8 @@ static void demo_emit_primitive(
     sm64_saturn_fast3d_profile_t *profile,
     const vdp1_vram_partitions_t *partitions)
 {
-    const uint16_t *indices = primitive->indices;
-    const int16_vec2_t vertices[4] = {
-        INT16_VEC2_INITIALIZER(s_projected[indices[0]].x,
-                               s_projected[indices[0]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[1]].x,
-                               s_projected[indices[1]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[2]].x,
-                               s_projected[indices[2]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[3]].x,
-                               s_projected[indices[3]].y)
-    };
+    int16_vec2_t vertices[4];
+    demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
         primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
@@ -440,17 +508,8 @@ static void demo_emit_primitive_at(
     bool allow_gouraud,
     demo_emit_stats_t *stats)
 {
-    const uint16_t *indices = primitive->indices;
-    const int16_vec2_t vertices[4] = {
-        INT16_VEC2_INITIALIZER(s_projected[indices[0]].x,
-                               s_projected[indices[0]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[1]].x,
-                               s_projected[indices[1]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[2]].x,
-                               s_projected[indices[2]].y),
-        INT16_VEC2_INITIALIZER(s_projected[indices[3]].x,
-                               s_projected[indices[3]].y)
-    };
+    int16_vec2_t vertices[4];
+    demo_primitive_screen_vertices(primitive, vertices);
     const int16_vec2_t shape_vertices[4] = {
         vertices[0], vertices[1], vertices[2],
         primitive->source1 == 0xFFFFU ? vertices[2] : vertices[3]
