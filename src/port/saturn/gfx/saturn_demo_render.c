@@ -347,16 +347,18 @@ void sm64_saturn_demo_render_frame(
     profile->slave_busy_ticks += worker_stats.slave_busy_ticks;
     profile->master_wait_ticks += worker_stats.master_wait_ticks;
     profile->slave_timeouts += worker_stats.slave_timeouts;
-    if (worker_ok && worker_stats.slave_busy_ticks != 0U &&
-        worker_stats.master_wait_ticks != 0U) {
-        /* SlaveDriver's spin-count balancer: move the boundary toward the
-         * slower side, bounded to retain work on both processors. */
-        const uint32_t total = worker_stats.slave_busy_ticks +
-                               worker_stats.master_wait_ticks;
-        const uint32_t target =
-            ((uint32_t)s_slave_begin * worker_stats.slave_busy_ticks) / total;
-        if (target > 8U && target + 8U < SM64_SATURN_BOB_POSITION_COUNT)
-            s_slave_begin = (uint16_t)target;
+    if (worker_ok && worker_stats.slave_busy_ticks != 0U) {
+        /* SlaveDriver's measured spin-count balancer: if the master waited
+         * longer than its 100-tick threshold, give the slave fewer vertices;
+         * otherwise let it take one more. The boundary is bounded so both
+         * CPUs retain work, matching the upstream monotonic adjustment. */
+        if (worker_stats.master_wait_ticks > 100U && s_slave_begin + 8U <
+            SM64_SATURN_BOB_POSITION_COUNT) {
+            s_slave_begin++;
+        } else if (worker_stats.master_wait_ticks < 100U &&
+                   s_slave_begin > 8U) {
+            s_slave_begin--;
+        }
     }
     memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
     for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
