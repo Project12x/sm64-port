@@ -7,6 +7,7 @@
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
+#include "saturn_actor_bridge.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
@@ -27,6 +28,8 @@
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
+static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
+static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
 
 const sm64_saturn_input_replay_sample_t *
@@ -365,6 +368,15 @@ int main(void) {
         sourceboot_fast3d.profile.sim_frt_ticks_accum =
             sourceboot_sim_ticks_accum;
         sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+
+        /* Renderer-facing actor state is captured after the authoritative
+         * source tick and before command emission. The bridge is read-only;
+         * the eventual IR renderer consumes these records instead of
+         * consulting live globals from a transform worker. */
+        if (sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
+            (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
+                                               &sourceboot_mario_pose);
+        }
 
         const uint16_t render_start = cpu_frt_count_get();
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,

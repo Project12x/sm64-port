@@ -1,6 +1,6 @@
 {
   "task": "4",
-  "status": "bridge_compiles_gate_pending",
+  "status": "bridge_frame_boundary_gate_pending",
   "shared_mesh": "src/port/saturn/gfx/saturn_mario_actor_mesh.h",
   "source_mesh_origin": "tools/saturn/extract_mario_actor.py",
   "bridge": [
@@ -21,6 +21,9 @@
   },
   "verification": {
     "sourceboot_cross_compile": "actor bridge object compiled successfully",
+    "host_pose_differential": "regenerated C5 + walking source banks byte-identical to promoted header",
+    "host_suite": "MarioActorPoseTests: 17 passed",
+    "frame_boundary": "sourceboot captures snapshot and pose after each authoritative sim tick",
     "full_link": "blocked by sandbox MSYS2 collect2 temporary-file permissions",
     "checkpoint_differential": "pending Task 4 renderer integration"
   },

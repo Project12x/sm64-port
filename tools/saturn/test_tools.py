@@ -238,6 +238,41 @@ class QuadPairingTests(unittest.TestCase):
 
 
 class MarioActorPoseTests(unittest.TestCase):
+    def test_promoted_pose_bank_reproduces_source_animation_evaluator(self) -> None:
+        """The shared C bank must remain a byte-identical source extraction.
+
+        Running the extractor over every source animation frame exercises the
+        same GeoLayout/Animation evaluator used to create the bank.  This is a
+        stronger fixture than checking only frame counts: any changed joint
+        matrix or vertex pose changes the generated header bytes.
+        """
+        root = TOOLS.parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "mario_actor_mesh.h"
+            report = Path(directory) / "mario_actor_report.json"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(TOOLS / "extract_mario_actor.py"),
+                    "--model", str(root / "actors/mario/model.inc.c"),
+                    "--geo", str(root / "actors/mario/geo.inc.c"),
+                    "--animation", str(root / "assets/anims/anim_C5.inc.c"),
+                    "--walking-animation", str(root / "assets/anims/anim_48.inc.c"),
+                    "--animation-frame", "0",
+                    "--output", str(output),
+                    "--report", str(report),
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                output.read_bytes(),
+                (root / "src/port/saturn/gfx/saturn_mario_actor_mesh.h").read_bytes(),
+            )
+
     def test_render_clusters_are_stable_compact_leaf_work_lists(self) -> None:
         triangles = [
             {"display_list": "mario_leaf_z"},
