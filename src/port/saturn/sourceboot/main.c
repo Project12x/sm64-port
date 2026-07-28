@@ -282,7 +282,10 @@ static void sourceboot_init_sky_bitmap(void)
     };
     vdp2_vram_cycp_set(&cycles);
     vdp2_scrn_bitmap_format_set(&format);
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 1);
+    /* Keep the baked bitmap behind VDP1 sprites in both Ymir's software
+     * compositor and the hardware priority chain. The bitmap has no
+     * transparent texel key, so any higher priority would occlude terrain. */
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 0);
     vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
 }
 

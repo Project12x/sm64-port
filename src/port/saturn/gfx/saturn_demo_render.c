@@ -768,7 +768,8 @@ void sm64_saturn_demo_render_frame(
             SATURN_DMA_QUEUE_SCU);
     }
     sm64_saturn_vdp1_backend_finish(backend);
-#if SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING)
+#if SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING) && \
+    defined(SATURN_SLAVE_VDP1_UPLOAD) && SATURN_SLAVE_VDP1_UPLOAD
     sm64_saturn_dual_worker_stats_t upload_stats;
     demo_upload_vdp1_dual(backend, &upload_stats);
     profile->slave_jobs_completed += upload_stats.slave_jobs_completed;

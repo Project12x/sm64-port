@@ -840,6 +840,16 @@ rendered frames and approximately 58,946/7,527 FRT ticks per rendered frame;
 the figures are parity/utilization evidence only, not a new 15 FPS claim. The
 ≥50% share gate and owner visual acceptance remain open.
 
+**Progress note (2026-07-28, manual free-roam):** a live-input dual build at
+`-r6000` now boots with DRAM configured and exposes Mario moving through the
+BOB bank. The same scene runs with slave rendering disabled, so the observed
+terrain flicker is not attributable to dual ownership; the r6000 diagnostic
+also reports zero command-capacity rejects, degenerate rejects, faults, and
+timeouts. The baked sky is forced behind VDP1, and the experimental dual VDP1
+upload is now opt-in. Flicker is explicitly deferred for a later projection /
+single-buffer investigation. The current actor pass remains flat RGB1555 by
+design; textured/Gouraud Mario is the next fidelity lever.
+
 **Next-lever note (2026-07-28, dispatch-cost diagnosis):** the upload-split
  dual profile records five bounded worker dispatches per rendered frame
  (transform, classify, emit, Mario, and VDP1 upload). The slave performs useful
