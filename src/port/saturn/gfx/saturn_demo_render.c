@@ -158,40 +158,36 @@ static void demo_bsp_append(int16_t node,
 #endif
 
 #if SATURN_DEMO_BSP_ORDER && SATURN_DEMO_BSP_FRAGMENTS
-/* Fragment commands retain their compiled Mesh IR primitive identity in
- * source0. Traverse the same camera-dependent BSP as the unsplit path, then
- * expand each source primitive into all of its baked split fragments. This
- * preserves the static-world dependency stream without pretending each
- * independently split polygon has its own plane. */
-static uint16_t s_fragment_source_order[SM64_SATURN_BOB_BSP_REF_COUNT];
-static uint8_t s_fragment_source_seen[SM64_SATURN_BOB_BSP_REF_COUNT];
-static uint16_t s_fragment_source_count;
-
-static void demo_fragment_bsp_append_sources(
+/* The fragment bake carries its own node/reference stream. Unlike the source
+ * BSP, each reference is a lowered fragment, so split polygons retain their
+ * true camera dependency instead of being grouped by source primitive. */
+static void demo_fragment_bsp_append(
     int16_t node, const sm64_saturn_camera_transform_t *camera)
 {
     if (node < 0) return;
     const int64_t side =
-        (int64_t)sm64_saturn_bob_bsp_planes[node][0] * camera->position.x +
-        (int64_t)sm64_saturn_bob_bsp_planes[node][1] * camera->position.y +
-        (int64_t)sm64_saturn_bob_bsp_planes[node][2] * camera->position.z +
-        sm64_saturn_bob_bsp_distances[node];
+        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][0] * camera->position.x +
+        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][1] * camera->position.y +
+        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][2] * camera->position.z +
+        sm64_saturn_bob_fragment_bsp_distances[node];
     const bool camera_front = side >= 0;
-    const int16_t far = sm64_saturn_bob_bsp_children[node][camera_front ? 1 : 0];
-    const int16_t near = sm64_saturn_bob_bsp_children[node][camera_front ? 0 : 1];
-    demo_fragment_bsp_append_sources(far, camera);
-    const uint16_t start = sm64_saturn_bob_bsp_ref_ranges[node][0];
-    const uint16_t count = sm64_saturn_bob_bsp_ref_ranges[node][1];
+    const int16_t far = sm64_saturn_bob_fragment_bsp_children[node][camera_front ? 1 : 0];
+    const int16_t near = sm64_saturn_bob_fragment_bsp_children[node][camera_front ? 0 : 1];
+    demo_fragment_bsp_append(far, camera);
+    const uint16_t start = sm64_saturn_bob_fragment_bsp_ref_ranges[node][0];
+    const uint16_t count = sm64_saturn_bob_fragment_bsp_ref_ranges[node][1];
     for (uint16_t offset = 0U; offset < count; offset++) {
-        const uint16_t source = sm64_saturn_bob_bsp_refs[start + offset];
-        if (source >= SM64_SATURN_BOB_BSP_REF_COUNT ||
-            s_fragment_source_seen[source] != 0U ||
-            s_fragment_source_count >= SM64_SATURN_BOB_BSP_REF_COUNT)
+        const uint16_t primitive =
+            sm64_saturn_bob_fragment_bsp_refs[start + offset];
+        if (primitive >= SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT ||
+            s_bsp_seen[primitive] != 0U ||
+            s_emit_count >= SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT)
             continue;
-        s_fragment_source_seen[source] = 1U;
-        s_fragment_source_order[s_fragment_source_count++] = source;
+        if (s_primitive_visible[primitive] == 0U) continue;
+        s_bsp_seen[primitive] = 1U;
+        s_emit_order[s_emit_count++] = primitive;
     }
-    demo_fragment_bsp_append_sources(near, camera);
+    demo_fragment_bsp_append(near, camera);
 }
 #endif
 
@@ -1115,24 +1111,8 @@ void sm64_saturn_demo_render_frame(
 #if SATURN_DEMO_BSP_ORDER
 #if SATURN_DEMO_BSP_FRAGMENTS
     memset(s_bsp_seen, 0, sizeof(s_bsp_seen));
-    memset(s_fragment_source_seen, 0, sizeof(s_fragment_source_seen));
-    s_fragment_source_count = 0U;
     s_emit_count = 0U;
-    demo_fragment_bsp_append_sources(0, &job.camera);
-    for (uint16_t source_ordinal = 0U;
-         source_ordinal < s_fragment_source_count; source_ordinal++) {
-        const uint16_t source = s_fragment_source_order[source_ordinal];
-        for (uint16_t primitive = 0U;
-             primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
-            if (s_primitive_visible[primitive] == 0U ||
-                s_bsp_seen[primitive] != 0U ||
-                s_bob_primitives_active[primitive].source0 != source ||
-                s_emit_count >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
-                continue;
-            s_bsp_seen[primitive] = 1U;
-            s_emit_order[s_emit_count++] = primitive;
-        }
-    }
+    demo_fragment_bsp_append(0, &job.camera);
     for (uint16_t primitive = 0U;
          primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
         if (s_primitive_visible[primitive] != 0U &&

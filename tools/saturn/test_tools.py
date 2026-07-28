@@ -1013,6 +1013,10 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(manifest["fragment_count"], 2108)
         self.assertEqual(manifest["textured_fragment_count"], 2108 - 67)
         self.assertEqual(len(fragment_scene["fragments"]), 2108)
+        bsp = fragment_scene["bsp"]
+        self.assertEqual(bsp["node_count"], 1183)
+        self.assertEqual(bsp["ref_count"], 2108)
+        self.assertEqual(sorted(bsp["refs"]), list(range(2108)))
 
     def test_bob_bsp_fragment_emitter_preserves_mesh_primitive_identity(self) -> None:
         root = TOOLS.parents[1]

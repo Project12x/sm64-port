@@ -1170,6 +1170,17 @@ and the next measured lever is moving more master-side transform/emission work
 to the slave rather than relabeling the current split. Owner visual acceptance
 remains open.
 
+**Progress note (2026-07-28, fragment-indexed BSP):** the fragment baker now
+emits a fragment-indexed BSP stream (1,183 nodes and 2,108 references, with a
+host assertion that references are a permutation of the lowered primitives),
+and the runtime traverses that stream directly. A fresh `--dram-cart` capture
+at the rebuilt profile symbol `0x060C8D14` completed with `fault_flags=0` and
+`slave_timeouts=0`. Its screenshot is visually equivalent to the repeated-C
+baseline (the remaining pale foreground sheet and missing terrain are still
+present), so the ordering contract is now evidenced but the visual milestone
+is not accepted; the next lever remains geometry/UV correctness rather than
+the boot path.
+
 ---
 
 ## 4. Shared verification commands

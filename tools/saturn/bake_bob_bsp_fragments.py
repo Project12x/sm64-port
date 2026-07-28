@@ -16,12 +16,45 @@ from pathlib import Path
 
 from bake_bob_tiles import BOB_TEXTURES, _png_pixels
 from bake_castle_uv import pack_clut16, quantize_clut16, sample_triangle, triangulate_polygon
-from compile_bob_bsp import _polygons
+from compile_bob_bsp import _polygons, _runtime_plane
 from static_bsp import build, iter_polygons
 
 
 TILE = 16
 MAX_RESIDENT_BYTES = 446432
+
+
+def _fragment_bsp(root: object,
+                  fragment_indices: dict[int, list[int]]) -> dict[str, object]:
+    nodes: list[dict[str, object] | None] = []
+    refs: list[int] = []
+
+    def visit(node: object | None) -> int:
+        if node is None:
+            return -1
+        index = len(nodes)
+        nodes.append(None)
+        front = visit(node.front)
+        back = visit(node.back)
+        start = len(refs)
+        for polygon in node.coplanar:
+            refs.extend(fragment_indices[id(polygon)])
+        normal, distance = _runtime_plane(node.plane)
+        nodes[index] = {
+            "plane": normal,
+            "distance": distance,
+            "children": (front, back),
+            "ref_range": (start, len(refs) - start),
+        }
+        return index
+
+    visit(root)
+    return {
+        "node_count": len(nodes),
+        "ref_count": len(refs),
+        "nodes": nodes,
+        "refs": refs,
+    }
 
 
 def _primitive_tile_allowed(scene: dict[str, object], primitive: dict[str, object]) -> bool:
@@ -58,12 +91,14 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
     clut = bytearray()
     entries: list[dict[str, object]] = []
     fragments: list[dict[str, object]] = []
+    fragment_indices: dict[int, list[int]] = {}
     for polygon_index, polygon in enumerate(iter_polygons(root)):
         primitive = scene["primitives"][polygon.source]
         material = scene["materials"][int(primitive["material"])]
         texture_name = material["texture"] if _primitive_tile_allowed(
             scene, primitive) else None
         children = triangulate_polygon(polygon)
+        polygon_fragments: list[int] = []
         for child_index, child in enumerate(children):
             points = [[int(vertex.position[axis]) for axis in range(3)]
                       for vertex in child.vertices]
@@ -103,7 +138,9 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
                     "tile_offset": fragment["tile_offset"],
                     "clut_offset": fragment["clut_offset"],
                 })
+            polygon_fragments.append(len(fragments))
             fragments.append(fragment)
+        fragment_indices[id(polygon)] = polygon_fragments
 
     resident = len(bank) + len(clut)
     if resident > MAX_RESIDENT_BYTES:
@@ -126,6 +163,7 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
         "version": 1,
         "bsp_sha256": stats.digest,
         "fragments": fragments,
+        "bsp": _fragment_bsp(root, fragment_indices),
     }
     return bytes(bank), bytes(clut), manifest, scene_out
 

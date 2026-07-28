@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
+    bsp = scene["bsp"]
     positions: list[list[int]] = []
     primitives: list[dict[str, object]] = []
     for fragment in scene["fragments"]:
@@ -40,6 +41,8 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         "#include <stdint.h>",
         f"#define SM64_SATURN_BOB_FRAGMENT_POSITION_COUNT {len(positions)}U",
         f"#define SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT {len(primitives)}U",
+        f"#define SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT {bsp['node_count']}U",
+        f"#define SM64_SATURN_BOB_FRAGMENT_BSP_REF_COUNT {bsp['ref_count']}U",
         "typedef struct sm64_saturn_bob_fragment_primitive {",
         "    uint16_t indices[4]; uint16_t source0; uint16_t source1; uint8_t rgb[3];",
         "    uint8_t textured; uint8_t tile_size; uint32_t tile_offset;",
@@ -48,6 +51,36 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         "static const int32_t sm64_saturn_bob_fragment_positions[SM64_SATURN_BOB_FRAGMENT_POSITION_COUNT][3] = {",
     ]
     lines.extend("    {%d, %d, %d}," % tuple(point) for point in positions)
+    lines += [
+        "};",
+        "static const int32_t sm64_saturn_bob_fragment_bsp_planes[SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT][3] = {",
+    ]
+    lines.extend("    {%d, %d, %d}," % tuple(node["plane"])
+                 for node in bsp["nodes"])
+    lines += [
+        "};",
+        "static const int64_t sm64_saturn_bob_fragment_bsp_distances[SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT] = {",
+    ]
+    lines.extend("    INT64_C(%d)," % node["distance"] for node in bsp["nodes"])
+    lines += [
+        "};",
+        "static const int16_t sm64_saturn_bob_fragment_bsp_children[SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT][2] = {",
+    ]
+    lines.extend("    {%d, %d}," % tuple(node["children"])
+                 for node in bsp["nodes"])
+    lines += [
+        "};",
+        "static const uint16_t sm64_saturn_bob_fragment_bsp_ref_ranges[SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT][2] = {",
+    ]
+    lines.extend("    {%dU, %dU}," % tuple(node["ref_range"])
+                 for node in bsp["nodes"])
+    lines += [
+        "};",
+        "static const uint16_t sm64_saturn_bob_fragment_bsp_refs[SM64_SATURN_BOB_FRAGMENT_BSP_REF_COUNT] = {",
+    ]
+    refs = bsp["refs"]
+    lines.extend("    " + ", ".join(str(value) + "U" for value in refs[offset:offset + 16]) + ","
+                 for offset in range(0, len(refs), 16))
     lines += [
         "};",
         "static const sm64_saturn_bob_fragment_primitive_t sm64_saturn_bob_fragment_primitives[SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT] = {",
