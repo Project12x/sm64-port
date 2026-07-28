@@ -104,6 +104,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c \
+  $(ROOT)/src/port/saturn/gpl/slavedriver_terrain_worker.c \
   $(ROOT)/src/port/saturn/gfx/saturn_ir_transform.c \
   $(ROOT)/src/port/saturn/gfx/saturn_ir_texture.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c \

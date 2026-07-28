@@ -79,3 +79,12 @@ past the arena. The master merges the spans after the one-dispatch join and is
 the only owner allowed to lower results into VDP1 commands, texture slots, or
 Gouraud tables. This is a close-port of the ownership pattern, not a copy of
 SlaveDriver's sector/portal world model.
+
+The same sprint adds `slavedriver_terrain_worker.{c,h}` as the narrow hand-off
+wrapper. It permits exactly one notification per rendered frame and carries a
+single immutable range job into the existing Yaul polling adapter. The current
+callback performs terrain classify/compact production; master-only VDP1
+lowering and Mario remain outside the worker boundary. Transform-once and
+view-space clip stages are explicit inputs to that callback, so a timeout can
+discard both spans and fall back to the serial oracle without consuming
+partial results.

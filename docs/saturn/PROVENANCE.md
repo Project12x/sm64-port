@@ -527,6 +527,10 @@ The adaptation consumes this port's Q16 camera basis and generated tight BOB
 fragment bounds; it does not import Z-Treme PVS, map bounds, SGL globals, or
 asset data. `src/port/saturn/gpl/slavedriver_terrain_result.h` remains the
 separate SlaveDriver result-boundary close-port described above.
+The one-dispatch wrapper `src/port/saturn/gpl/slavedriver_terrain_worker.{c,h}`
+is the corresponding close-port of `WALLS.C:1803-1950`; it preserves the
+coarse range hand-off and bounded join while keeping VDP1 allocation and game
+state on the master.
 
 ### Sega hardware documentation
 

@@ -35,6 +35,7 @@
 #include "../gpl/slavedriver_dual_worker.h"
 #include "../gpl/slavedriver_terrain_clip.h"
 #include "../gpl/slavedriver_terrain_result.h"
+#include "../gpl/slavedriver_terrain_worker.h"
 #include "../gpl/ztreme_frustum.h"
 #include "../gpl/ztreme_hot_promotion.h"
 
@@ -1304,9 +1305,13 @@ void sm64_saturn_demo_render_frame(
     sm64_saturn_dual_worker_stats_t classify_stats;
     bool classify_ok = true;
 #if SATURN_SLAVE_RENDER
-    classify_ok = sm64_saturn_dual_worker_run(
-        demo_terrain_compact_range, &compact,
-        SM64_SATURN_BOB_PRIMITIVE_COUNT, s_slave_begin, &classify_stats);
+    const sm64_saturn_terrain_worker_job_t terrain_worker = {
+        .range = demo_terrain_compact_range,
+        .context = &compact,
+        .count = SM64_SATURN_BOB_PRIMITIVE_COUNT,
+        .slave_begin = s_slave_begin};
+    classify_ok = sm64_saturn_terrain_worker_run(&terrain_worker,
+                                                 &classify_stats);
 #else
     classify_stats = (sm64_saturn_dual_worker_stats_t){0};
     demo_terrain_compact_range(&compact, 0U,
