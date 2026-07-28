@@ -247,10 +247,12 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             s_primitive_visible[i] = 0U;
             continue;
         }
-        const int32_t z = (s_projected[primitive->indices[0]].z +
-                           s_projected[primitive->indices[1]].z +
-                           s_projected[primitive->indices[2]].z +
-                           s_projected[primitive->indices[3]].z) / 4;
+        int32_t z = s_projected[primitive->indices[0]].z;
+        for (uint8_t corner = 1U; corner < 4U; corner++) {
+            const int32_t corner_z =
+                s_projected[primitive->indices[corner]].z;
+            if (corner_z < z) z = corner_z;
+        }
         const int32_t cross =
             (int32_t)(s_projected[primitive->indices[1]].x -
                       s_projected[primitive->indices[0]].x) *
@@ -807,8 +809,10 @@ void sm64_saturn_demo_render_frame(
         s_bucket_indices[bucket][s_bucket_counts[bucket]++] = i;
     }
     /* VDP1 has no depth buffer. Within each coarse bucket, order by the
-     * average view depth far-to-near; equal-depth primitives retain source
-     * order for deterministic coplanar decals and seams. */
+     * nearest-corner view depth far-to-near; equal-depth primitives retain
+     * source order for deterministic coplanar decals and seams. The nearest
+     * corner is conservative for large quads whose depth range crosses a
+     * neighboring surface; an average key can reorder those quads mid-pan. */
     for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++) {
         for (uint16_t i = 1U; i < s_bucket_counts[bucket]; i++) {
             const uint16_t value = s_bucket_indices[bucket][i];
