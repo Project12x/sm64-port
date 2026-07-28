@@ -118,6 +118,8 @@ static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
     __attribute__((section(".lwram_bss"))) __aligned(16);
 
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
+#define SOURCEBOOT_BOB_TEXTURE_BYTES 333696U
+#define SOURCEBOOT_BOB_CLUT_COUNT 1077U
 
 /* LWRAM-resident command staging -- see sourceboot-cart.x's new lwram
  * MEMORY region/.lwram_cmdts section. Zeroed explicitly by
@@ -281,30 +283,13 @@ int main(void) {
          * (1536) worst case -- see this task's commit message for the
          * full byte-budget arithmetic against VDP1_VRAM_SIZE.
          *
-         * texture_size and clut_count go to 0: this backend does not
-         * use Yaul's partition-aware texture or CLUT allocation
-         * anywhere in this target (verified: partitions.texture_base/
-         * clut_base have no consumer in sourceboot's own sources --
-         * only the separate hwtest/castleviewer/marioturntable binaries
-         * reference those fields, each with its own independent
-         * partition setup in its own main()). Freeing that space is
-         * what makes room for the larger gouraud partition.
-         *
-         * NOTE for whoever adds texture support to sourceboot (the
-         * next planned cycle after this one, per this project's own
-         * roadmap -- offline-bake texture pipeline, not hypothetical):
-         * revisit this call FIRST. texture_size=0 means zero VRAM
-         * budget for any Yaul-partition-aware texture upload; adding
-         * texture code without widening this parameter first will not
-         * crash (sm64_saturn_texture_residency_t degrades safely at
-         * capacity 0, per its own bounds check) but will silently
-         * upload nothing. When you do widen it, keep texture_size a
-         * MULTIPLE OF 8: gouraud_base is laid immediately after the
-         * texture region, and an 8-byte-misaligned gouraud_base is
-         * silently truncated by CMDGRDA's >>3 encoding -- see the
-         * alignment guard on the partition check below, which will
-         * catch it into the flat-fallback path rather than corrupting
-         * every lit primitive.
+         * Reserve the milestone-1 BOB CLUT16 texture bank and its 1,077
+         * per-tile CLUTs. The bake gate measures 333,696 bytes of packed
+         * texels plus 34,464 bytes of CLUT data; both partitions are
+         * reserved here before runtime binding is introduced at the IR
+         * renderer seam. texture_size remains a MULTIPLE OF 8: gouraud_base
+         * is laid immediately after the texture region, and an 8-byte-
+         * misaligned base is silently truncated by CMDGRDA's >>3 encoding.
          *
          * cmdt_count stays at SOURCEBOOT_VDP1_COMMAND_CAPACITY so
          * Yaul's own bookkeeping matches the size of the command region
@@ -313,9 +298,10 @@ int main(void) {
          * partition-aware cmdt allocator entirely -- see
          * saturn_vdp1_backend.h), even though nothing on this path
          * reads partitions.cmdt_base. */
-        vdp1_vram_partitions_set(SOURCEBOOT_VDP1_COMMAND_CAPACITY, 0U,
+        vdp1_vram_partitions_set(SOURCEBOOT_VDP1_COMMAND_CAPACITY,
+                                 SOURCEBOOT_BOB_TEXTURE_BYTES,
                                  SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES,
-                                 0U);
+                                 SOURCEBOOT_BOB_CLUT_COUNT);
 
         saturn_dma_queue_init();
         vdp1_vram_partitions_get(&partitions);

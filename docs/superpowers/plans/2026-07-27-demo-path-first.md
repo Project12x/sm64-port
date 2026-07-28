@@ -317,7 +317,7 @@ quad map + `mario_anim_data` dependency wiring), modify
   pointers** (`CARTRIDGE_ASSET_POLICY.md`).
 - [x] Host tests: v2 schema round-trip, bank size budget assertion, unittest
   (NOT pytest — bare `test_*` functions silently never run).
-- [ ] Mutation-test the safety-relevant compiler logic (project standing
+- [x] Mutation-test the safety-relevant compiler logic (project standing
   rule; the quad-map precedent lists the mutation catalogue style).
 
 **Gate:** BOB bank generates reproducibly as a build dependency, fits the
@@ -344,24 +344,24 @@ now goes through Task 1's `saturn_ir_texture` module).
 `src/port/saturn/sourceboot/main.c:240` (VDP1 partition `texture_size` 0 →
 sized, multiple of 8), generated tile bank + manifest, tests.
 
-- [ ] Per-primitive tile bake: resample source texture through each
+- [x] Per-primitive tile bake: resample source texture through each
   primitive's own UVs/tile state → the fixed rectangle VDP1 demands (the
   spec's core insight: the rectangle is one *we* choose). Two classes:
   16×16 CLUT16 (k ≤ 2), 32×32 (2 < k ≤ 16); the 24 anisotropic strips stay
   Gouraud, honestly.
-- [ ] Reuse castleviewer's proven pieces via the spec's transfer list: the
+- [x] Reuse castleviewer's proven pieces via the spec's transfer list: the
   RGB1555 box filter, transparent-code canonicalisation, `sample_raw` tile
   resolver, CLUT16 quantizer. Re-key from castleviewer's scene-global id to
   `(display_list, list_ordinal)` / IR primitive id.
-- [ ] Budget assertion: ≤ 333,696 B tiles against 446,432 B free (leave the
+- [x] Budget assertion: ≤ 333,696 B tiles against 446,432 B free (leave the
   Gouraud partition untouched at 1,536).
-- [ ] Manifest: which primitive binds which tile, versioned with the bank
+- [x] Manifest: which primitive binds which tile, versioned with the bank
   (stale manifest = loud failure, the quad-map sentinel philosophy: absent
   never means "textured").
-- [ ] Host tests + a golden-image style check if cheap (offline resample is
+- [x] Host tests + a golden-image style check if cheap (offline resample is
   deterministic — hash the tile bank).
 
-**Gate:** tile bank + manifest generate as build dependencies within budget;
+**Gate (passed offline):** tile bank + manifest generate as build dependencies within budget;
 1,077/1,101 coverage confirmed by count, with the 24 exceptions listed by id.
 
 **References consumed (AW-3):** the texture spec (its measurements are the

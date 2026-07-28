@@ -58,6 +58,7 @@ from bake_castle_uv import (  # noqa: E402
     should_subdivide,
     texture_coordinate,
 )
+from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_castle_collision import compile_stream, surface_values  # noqa: E402
 from static_bsp import (  # noqa: E402
@@ -895,6 +896,26 @@ class BobMeshIRTests(unittest.TestCase):
             intake["layers"],
             {"LAYER_OPAQUE": 1043, "LAYER_TRANSPARENT_DECAL": 34, "LAYER_ALPHA": 24},
         )
+
+    def test_bob_clut16_tiles_hit_spec_classes_budget_and_determinism(self) -> None:
+        root = TOOLS.parents[1]
+        intake = intake_bob_area(self.AREA)
+        first = bake_bob(intake, root)
+        second = bake_bob(intake, root)
+        self.assertEqual(first, second)
+        bank, clut, manifest = first
+        self.assertEqual(manifest["coverage"], {"16x16": 567, "32x32": 510, "gouraud": 24})
+        self.assertEqual(len(bank), 333696)
+        self.assertEqual(len(clut), (567 + 510) * 32)
+        self.assertLessEqual(manifest["resident_bytes"], 446432)
+        self.assertEqual(len(manifest["entries"]), 1077)
+
+    def test_bob_k_thresholds_are_explicit_and_mutation_visible(self) -> None:
+        intake = intake_bob_area(self.AREA)
+        values = [triangle_k(triangle) for triangle in intake["triangles"]]
+        self.assertEqual(sum(value <= 2 for value in values), 567)
+        self.assertEqual(sum(2 < value <= 16 for value in values), 510)
+        self.assertEqual(sum(value > 16 for value in values), 24)
 
     def test_bob_v2_is_attribute_exact_and_pairs_textured_quads(self) -> None:
         intake = intake_bob_area(self.AREA)

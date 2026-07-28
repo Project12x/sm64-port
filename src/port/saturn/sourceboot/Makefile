@@ -34,10 +34,15 @@ SOURCEBOOT_QUAD_MAP_TOOLS := \
 SOURCEBOOT_BOB_MESH := $(SOURCEBOOT_GENERATED)/bob_area1_mesh_ir_v2.json
 SOURCEBOOT_BOB_COMPILED := $(SOURCEBOOT_GENERATED)/bob_area1_compiled.json
 SOURCEBOOT_BOB_REPORT := $(SOURCEBOOT_GENERATED)/bob_area1_report.json
+SOURCEBOOT_BOB_TILES := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.bin
+SOURCEBOOT_BOB_CLUT := $(SOURCEBOOT_GENERATED)/bob_tiles_clut16.pal
+SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
   $(ROOT)/tools/saturn/extract_mario_actor.py
+SOURCEBOOT_BOB_TILE_TOOLS := $(ROOT)/tools/saturn/bake_bob_tiles.py \
+  $(ROOT)/tools/saturn/bake_castle_uv.py $(ROOT)/tools/saturn/vdp1_texture.py
 SOURCEBOOT_BOB_SOURCES := \
   $(ROOT)/levels/bob/areas/1/geo.inc.c \
   $(wildcard $(ROOT)/levels/bob/areas/1/*/model.inc.c)
@@ -238,7 +243,7 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh
+source-assets: source-data-catalog source-bob-mesh source-bob-tiles
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -260,6 +265,17 @@ $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
 
 .PHONY: source-bob-mesh
 source-bob-mesh: $(SOURCEBOOT_BOB_COMPILED)
+
+$(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST) &: \
+	$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_TILE_TOOLS) \
+	$(SOURCEBOOT_GENERATED)/bob_area1_intake.json
+	@$(MAKE) -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
+	  compile-bob-tiles BOB_TILES_GENERATED="$(SOURCEBOOT_GENERATED)" \
+	  BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
+	  BOB_AREA_DIR="levels/bob/areas/1" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+
+.PHONY: source-bob-tiles
+source-bob-tiles: $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST)
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 

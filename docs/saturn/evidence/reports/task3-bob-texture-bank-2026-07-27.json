@@ -1,0 +1,44 @@
+{
+  "task": "3",
+  "status": "passed",
+  "source": "build/saturn/sourceboot/generated/bob_area1_intake.json",
+  "source_sha256": "5d005373ffeb37e05191cb349f2a141cfea1246d2d9e1955fc3fbe4cc06c6687",
+  "source_triangles": 1101,
+  "coverage": {
+    "16x16_clut16": 567,
+    "32x32_clut16": 510,
+    "gouraud_exceptions": 24,
+    "textured_coverage": 1077
+  },
+  "gouraud_exception_source_triangles": [25, 75, 226, 231, 232, 233, 234, 235, 236, 237, 238, 239, 243, 244, 245, 246, 691, 692, 702, 708, 709, 710, 711, 712],
+  "tile_bank": {
+    "path": "build/saturn/sourceboot/generated/bob_tiles_clut16.bin",
+    "bytes": 333696,
+    "sha256": "e36c13b348669cffedf63f9445a5c2780b47ad6861460e6ababb57c86bfbacdb"
+  },
+  "clut_bank": {
+    "path": "build/saturn/sourceboot/generated/bob_tiles_clut16.pal",
+    "bytes": 34464,
+    "sha256": "a8f3fc575b6333eff9ded55b2c870a4d5b557b7dc2a2a85fb1fdc39cd6e9e987"
+  },
+  "manifest": {
+    "path": "build/saturn/sourceboot/generated/bob_tiles_manifest.json",
+    "sha256": "e04b2d863d53ed21c7d126e75eb9c981978b5ae750d5ee2207d7c858661da47a"
+  },
+  "budget": {
+    "texture_bytes_limit": 333696,
+    "resident_bytes": 368160,
+    "vdp1_free_bytes": 446432
+  },
+  "verification": {
+    "host_suite": "164 tests, 1 skipped, OK",
+    "build_dependency": "make -f Makefile.saturn.mk OS=Windows_NT compile-bob-tiles",
+    "determinism": "two in-process bake results byte-identical"
+  },
+  "references_consumed": [
+    {"source": "docs/superpowers/specs/2026-07-26-vdp1-textures-design.md", "mode": "contract"},
+    {"source": "tools/saturn/bake_castle_uv.py", "mode": "reuse quantizer and sampler"},
+    {"source": "tools/saturn/vdp1_texture.py", "mode": "reuse RGB1555 filter"},
+    {"source": "tools/saturn/export_rgba16_textures.py", "mode": "consume exported PNG asset format"}
+  ]
+}
