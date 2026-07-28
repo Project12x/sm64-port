@@ -48,6 +48,9 @@ static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
+static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_draw_count;
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
     __attribute__((section(".lwram_bss")));
 static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
@@ -399,6 +402,37 @@ static void demo_emit_range(void *opaque, uint16_t begin, uint16_t end)
                                &context->stats[lane]);
     }
 }
+
+static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
+{
+    demo_emit_context_t *context = opaque;
+    const uint8_t lane = begin == 0U ? 0U : 1U;
+    for (uint16_t ordinal = begin; ordinal < end; ordinal++) {
+        if (((uint16_t)(ordinal - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+            sm64_saturn_dual_worker_cancelled())
+            break;
+        const uint16_t primitive = s_actor_order[ordinal];
+        const uint16_t *indices = sm64_mario_primitives[primitive];
+        const int16_vec2_t vertices[4] = {
+            INT16_VEC2_INITIALIZER(s_actor_projected[indices[1]].x,
+                                   s_actor_projected[indices[1]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[indices[2]].x,
+                                   s_actor_projected[indices[2]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[indices[3]].x,
+                                   s_actor_projected[indices[3]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[indices[4]].x,
+                                   s_actor_projected[indices[4]].y)};
+        vdp1_cmdt_t *cmdt = &context->cmdts[s_actor_slots[ordinal]];
+        vdp1_cmdt_polygon_set(cmdt);
+        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+            .color_mode = VDP1_CMDT_CM_RGB_32768,
+            .cc_mode = VDP1_CMDT_CC_REPLACE});
+        const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];
+        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        vdp1_cmdt_vtx_set(cmdt, vertices);
+        context->stats[lane].triangles_emitted++;
+    }
+}
 #endif
 
 static void demo_emit_mario(
@@ -435,6 +469,58 @@ static void demo_emit_mario(
             &job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
         if (s_actor_valid[i]) profile->demo_actor_vertices_valid++;
     }
+#if SATURN_SLAVE_RENDER
+    s_actor_draw_count = 0U;
+    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
+        const uint16_t *primitive = sm64_mario_primitives[i];
+        if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||
+            !s_actor_valid[primitive[3]] || !s_actor_valid[primitive[4]])
+            continue;
+        const int16_vec2_t vertices[4] = {
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[1]].x,
+                                   s_actor_projected[primitive[1]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[2]].x,
+                                   s_actor_projected[primitive[2]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[3]].x,
+                                   s_actor_projected[primitive[3]].y),
+            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[4]].x,
+                                   s_actor_projected[primitive[4]].y)};
+        const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
+                                  (vertices[2].y - vertices[0].y) -
+                              (int32_t)(vertices[1].y - vertices[0].y) *
+                                  (vertices[2].x - vertices[0].x);
+        if (cross == 0) continue;
+        s_actor_order[s_actor_draw_count++] = i;
+    }
+    if (s_actor_draw_count != 0U &&
+        sm64_saturn_vdp1_backend_reserve(backend, s_actor_draw_count) != NULL) {
+        for (uint16_t i = 0; i < s_actor_draw_count; i++)
+            s_actor_slots[i] = (uint16_t)(backend->commands.cursor -
+                                          s_actor_draw_count + i);
+        demo_emit_context_t actor_emit = {
+            .cmdts = backend->list.cmdts,
+            .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
+        };
+        sm64_saturn_dual_worker_stats_t actor_stats;
+        const bool actor_ok = sm64_saturn_dual_worker_run(
+            demo_emit_mario_range, &actor_emit, s_actor_draw_count,
+            s_actor_draw_count / 2U, &actor_stats);
+        profile->slave_jobs_completed += actor_stats.slave_jobs_completed;
+        profile->slave_busy_ticks += actor_stats.slave_busy_ticks;
+        profile->master_wait_ticks += actor_stats.master_wait_ticks;
+        profile->slave_timeouts += actor_stats.slave_timeouts;
+        if (actor_ok) {
+            profile->triangles_vdp1_emitted +=
+                actor_emit.stats[0].triangles_emitted +
+                actor_emit.stats[1].triangles_emitted;
+            profile->triangles_emitted +=
+                actor_emit.stats[0].triangles_emitted +
+                actor_emit.stats[1].triangles_emitted;
+            profile->demo_actor_primitives_emitted += s_actor_draw_count;
+            return;
+        }
+    }
+#endif
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
         if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||

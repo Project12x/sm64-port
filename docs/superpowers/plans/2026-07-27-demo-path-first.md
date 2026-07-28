@@ -814,6 +814,16 @@ records `slave_jobs_completed=744`, `slave_busy_ticks=3,754,302`, and
 ≥50% bar; the remaining gap is the master-owned Gouraud/Mario path and final
 VDP submission boundary.
 
+**Progress note (2026-07-28, safe Mario command split):** the proven Mario
+transform/visibility loop now feeds a bounded, pre-reserved command range to
+the dual worker; the existing master emission loop remains the failure
+fallback. A fresh dual capture retains the Mario primitive count (136,428),
+reaches the same route checkpoint with zero faults/timeouts/rejects, and
+records `slave_jobs_completed=992`, `slave_busy_ticks=4,646,864`,
+`master_wait_ticks=31,871`, and `render_frt_ticks_accum=14,868,977`.
+The screenshot/report pair is retained as evidence; owner visual acceptance
+and the ≥50% slave-share gate remain open.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
