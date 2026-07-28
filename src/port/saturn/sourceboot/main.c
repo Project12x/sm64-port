@@ -118,6 +118,14 @@ static void sourceboot_capture_route_checkpoint(void) {
     sourceboot_route_checkpoint.fault_flags = profile->fault_flags;
     sourceboot_route_checkpoint.command_capacity_rejects =
         profile->reject_command_capacity;
+    sourceboot_route_checkpoint.frame_serial = profile->frame_serial;
+    sourceboot_route_checkpoint.sim_frt_ticks_accum = profile->sim_frt_ticks_accum;
+    sourceboot_route_checkpoint.render_frt_ticks_accum = profile->render_frt_ticks_accum;
+    sourceboot_route_checkpoint.render_frt_ticks_last = profile->render_frt_ticks_last;
+    sourceboot_route_checkpoint.master_wait_ticks = profile->master_wait_ticks;
+    sourceboot_route_checkpoint.slave_busy_ticks = profile->slave_busy_ticks;
+    sourceboot_route_checkpoint.slave_jobs_completed = profile->slave_jobs_completed;
+    sourceboot_route_checkpoint.slave_timeouts = profile->slave_timeouts;
     /* Publish last: a host that sees the magic sees a complete snapshot. */
     sourceboot_route_checkpoint.magic = SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC;
 }

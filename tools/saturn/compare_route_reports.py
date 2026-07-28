@@ -10,14 +10,16 @@ import struct
 from pathlib import Path
 from typing import Any
 
-MAGIC = 0x53425231
-VERSION = 1
-PROBE_BYTES = 13 * 4
+MAGIC = 0x53425232
+VERSION = 2
+PROBE_BYTES = 21 * 4
 PROBE_FIELDS = (
     "magic", "version", "replay_ticks", "global_timer", "mario_action",
     "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode",
     "triangles_transformed", "triangles_vdp1_emitted", "fault_flags",
-    "command_capacity_rejects",
+    "command_capacity_rejects", "frame_serial", "sim_frt_ticks_accum",
+    "render_frt_ticks_accum", "render_frt_ticks_last", "master_wait_ticks",
+    "slave_busy_ticks", "slave_jobs_completed", "slave_timeouts",
 )
 
 
@@ -42,14 +44,14 @@ def load_route(path: Path) -> dict[str, Any]:
         raise ValueError("route tick total must equal simulation_ticks and checkpoint_tick")
     schema = route.get("report_schema")
     if not isinstance(schema, dict) or schema.get("version") not in (
-            "sourceboot-route-v1", "sourceboot-route-v2"):
+            "sourceboot-route-v3",):
         raise ValueError("route must declare the sourceboot-route-v1 or v2 report schema")
     for name in ("required_report_fields", "required_probe_fields"):
         if not isinstance(schema.get(name), list) or not all(
                 isinstance(field, str) for field in schema[name]):
             raise ValueError(f"route report_schema.{name} must be a list of field names")
     if tuple(schema["required_probe_fields"]) != PROBE_FIELDS:
-        raise ValueError("route report_schema.required_probe_fields must match the v1 probe")
+        raise ValueError("route report_schema.required_probe_fields must match the v2 probe")
     return route
 
 
@@ -67,7 +69,7 @@ def decode_probe(report: dict[str, Any]) -> dict[str, int]:
         if len(data) < PROBE_BYTES or not all(
                 isinstance(byte, int) and 0 <= byte <= 255 for byte in data):
             continue
-        values = struct.unpack(">13I", bytes(data[:PROBE_BYTES]))
+        values = struct.unpack(">21I", bytes(data[:PROBE_BYTES]))
         probe = dict(zip(PROBE_FIELDS, values, strict=True))
         if probe["magic"] == MAGIC and probe["version"] == VERSION:
             return probe
@@ -121,6 +123,9 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         renderer_deltas[field] = delta
         if schema.get("compare_renderer_counters", True) and delta > tolerance:
             errors.append(f"{field} differs beyond tolerance {tolerance}")
+    telemetry_deltas = {
+        field: abs(first[field] - second[field]) for field in PROBE_FIELDS[13:]
+    }
     return {
         "route_version": route["route_version"],
         "report_schema_version": route["report_schema"]["version"],
@@ -130,6 +135,7 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         "left_checkpoint_sha256": signatures[0],
         "right_checkpoint_sha256": signatures[1],
         "renderer_counter_deltas": renderer_deltas,
+        "telemetry_deltas": telemetry_deltas,
         "degradation": left.get("degradation"),
         "deterministic": not errors,
         "errors": errors,

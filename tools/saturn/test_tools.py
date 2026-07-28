@@ -1221,12 +1221,16 @@ class YmirInputTests(unittest.TestCase):
 class BobParityRouteTests(unittest.TestCase):
     @staticmethod
     def _report(words: list[int]) -> dict[str, object]:
+        words = list(words)
+        words[0] = 0x53425232
+        words[1] = 2
+        words.extend([0] * (21 - len(words)))
         return {
             "evidence_kind": "ymir-emulator",
             "game": "sourceboot.cue",
             "frames": 240,
             "post_poke_frames": 36000,
-            "probe_window": {"data": list(struct.pack(">13I", *words))},
+            "probe_window": {"data": list(struct.pack(">21I", *words))},
             "protocol": {"ready": True},
             "degradation": {"view_radius": 6000, "poly_tier": 0},
         }
@@ -1260,8 +1264,11 @@ class BobParityRouteTests(unittest.TestCase):
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
         report = self._report(words)
-        report["probe_window"] = {"data": [0] * (13 * 4)}
-        report["extra_probe_window"] = {"data": list(struct.pack(">13I", *words))}
+        report["probe_window"] = {"data": [0] * (21 * 4)}
+        extra_words = words + [0] * 8
+        extra_words[0] = 0x53425232
+        extra_words[1] = 2
+        report["extra_probe_window"] = {"data": list(struct.pack(">21I", *extra_words))}
         result = compare_reports(report, report, route)
         self.assertTrue(result["deterministic"])
 

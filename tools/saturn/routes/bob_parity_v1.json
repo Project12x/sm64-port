@@ -4,9 +4,9 @@
   "primitive_count_tolerance": 0,
   "report_schema": {
     "extension_rule": "When a later task adds a route-relevant counter or metadata field, bump version and add it to the applicable required list; comparator tests must reject its absence.",
-    "required_probe_fields": ["magic", "version", "replay_ticks", "global_timer", "mario_action", "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode", "triangles_transformed", "triangles_vdp1_emitted", "fault_flags", "command_capacity_rejects"],
+    "required_probe_fields": ["magic", "version", "replay_ticks", "global_timer", "mario_action", "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits", "camera_mode", "triangles_transformed", "triangles_vdp1_emitted", "fault_flags", "command_capacity_rejects", "frame_serial", "sim_frt_ticks_accum", "render_frt_ticks_accum", "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks", "slave_jobs_completed", "slave_timeouts"],
     "required_report_fields": ["evidence_kind", "game", "frames", "post_poke_frames", "probe_window", "protocol", "degradation"],
-    "version": "sourceboot-route-v2",
+    "version": "sourceboot-route-v3",
     "compare_renderer_counters": false,
     "compare_degradation": true
   },

@@ -1341,6 +1341,18 @@ See `task5b-gouraud-split-route-parity-2026-07-28.md`. Final profile counters
 remain post-route samples, so the next performance gate must snapshot timing
 and dispatch counters at the checkpoint itself.
 
+The checkpoint probe is now extended to schema `sourceboot-route-v3` (`SBR2`):
+it appends frame serial, sim/render FRT totals, and master/slave wait/busy/job
+counters. The comparator treats these as informational telemetry while still
+requiring route state and renderer counters to match.
+
+The first SBR2 A/B baseline is captured in
+`task5b-gouraud-split-sbr2-2026-07-28.md`: route state and renderer counters
+match exactly, while dual render FRT accumulation is 4,999,436 versus
+2,957,536 serial, with 600 slave jobs and 868,889 master-wait ticks. The split
+is therefore functional but currently slower; Task 5b must reduce the wait/
+busy overhead before claiming a performance improvement.
+
 ## 5. Out of scope (deliberate, revisit after Task 7)
 
 68000/SCSP audio (poneSound cloned and pinned, awaits `m68keb-elf`
