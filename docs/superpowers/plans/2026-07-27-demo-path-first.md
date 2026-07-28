@@ -239,7 +239,7 @@ the modules, delete the moved bodies), modify `castleviewer/Makefile`.
 - [x] Move `world_to_view_project` (+ helpers) into `saturn_ir_transform.c`
   **verbatim first** — no improvements in the move commit. Improvements are
   separate commits after the identity proof.
-- [ ] Move texture residency/upload/binding into `saturn_ir_texture.c`, same
+- [x] Move texture residency/upload/binding into `saturn_ir_texture.c`, same
   discipline. Keep `saturn_texture_residency.h`'s generation-stamp model —
   the segment-addressing decision requires it (address stability only while
   a cart slot is resident).
