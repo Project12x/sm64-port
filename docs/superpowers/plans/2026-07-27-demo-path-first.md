@@ -1323,6 +1323,17 @@ Footguns (every one has burned this project at least once):
 
 ---
 
+### 4.1 Task 5b measurement note (2026-07-28)
+
+The first Gouraud emission split is built and captured in both serial and
+dual-SH2 replay profiles. Both profiles decode cleanly with zero renderer
+faults and zero Gouraud-bank overflow; the dual run reports 232 completed
+slave jobs, 282,521 master-wait ticks, and 5,895,847 slave-busy ticks. The
+paired runs do not yet reach the same replay endpoint (296 vs 233 simulation
+ticks), so they are dispatch telemetry only, not an FPS claim. The retained
+evidence and the exact symbol/mtime checks are in
+`docs/saturn/evidence/reports/task5b-gouraud-split-replay-2026-07-28.md`.
+
 ## 5. Out of scope (deliberate, revisit after Task 7)
 
 68000/SCSP audio (poneSound cloned and pinned, awaits `m68keb-elf`
