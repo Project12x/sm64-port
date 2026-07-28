@@ -959,6 +959,13 @@ the active behavior while the edge-interpolating cache is isolated for a
 targeted actor-visibility test (`SATURN_DEMO_NEAR_CLIP=1`). It may be re-enabled only after that test and
 a fresh foreground capture pass both prove the actor remains visible.
 
+**Progress note (2026-07-28, transform dispatch batching):** the terrain and
+Mario vertex transforms now share one dual-worker submission. The callback
+maps the terrain split proportionally onto Mario's immutable pose bank, so
+each SH-2 retains disjoint output ownership and the serial flag remains an
+exact single-range fallback. This removes one independent dispatch boundary
+from the Task 5b hot path; fresh visual/A-B route measurements are still open.
+
 **Progress note (2026-07-28, clip A/B isolation):** the near-clip prototype
 now has a distinct `-clip1` sourceboot output tag and can be built beside the
 actor-safe `-clip0` image. Both variants use the same generated BOB bank and

@@ -171,6 +171,19 @@ typedef struct demo_transform_context {
     uint32_t transformed[2];
 } demo_transform_context_t;
 
+typedef struct demo_mario_transform_context {
+    const sm64_saturn_ir_transform_job_t *job;
+    const sm64_saturn_mario_actor_snapshot_t *snapshot;
+    const sm64_saturn_mario_actor_pose_t *pose;
+} demo_mario_transform_context_t;
+
+typedef struct demo_scene_transform_context {
+    demo_transform_context_t *terrain;
+    demo_mario_transform_context_t *mario;
+    uint16_t terrain_count;
+    uint16_t mario_count;
+} demo_scene_transform_context_t;
+
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
     const sm64_saturn_camera_transform_t *camera;
@@ -236,6 +249,51 @@ static void demo_transform_range(void *opaque, uint16_t begin, uint16_t end)
                 DEMO_CENTER_X, DEMO_CENTER_Y, SATURN_DEMO_NEAR_DEPTH};
         }
     }
+}
+
+static void demo_transform_mario_range(void *opaque, uint16_t begin,
+                                       uint16_t end)
+{
+    demo_mario_transform_context_t *context = opaque;
+    if (context->snapshot == NULL || context->pose == NULL ||
+        !context->snapshot->valid || context->pose->vertices == NULL ||
+        context->pose->vertex_count != SM64_MARIO_VERTEX_COUNT) {
+        return;
+    }
+    const int32_t sine = sm64_saturn_sins_q16(context->snapshot->yaw);
+    const int32_t cosine = sm64_saturn_coss_q16(context->snapshot->yaw);
+    for (uint16_t i = begin; i < end; i++) {
+        if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
+            sm64_saturn_dual_worker_cancelled()) break;
+        const int16_t *source = context->pose->vertices[i];
+        const int32_t sx = (int32_t)source[0] << 16;
+        const int32_t sz = (int32_t)source[2] << 16;
+        const sm64_saturn_vec3i_t world = {
+            (int32_t)context->snapshot->position[0] +
+                ((sm64_saturn_q16_mul(sx, cosine) +
+                  sm64_saturn_q16_mul(sz, sine)) >> 16),
+            (int32_t)context->snapshot->position[1] + source[1],
+            (int32_t)context->snapshot->position[2] +
+                ((-sm64_saturn_q16_mul(sx, sine) +
+                  sm64_saturn_q16_mul(sz, cosine)) >> 16)};
+        sm64_saturn_vec3i_t view;
+        s_actor_valid[i] = sm64_saturn_ir_transform_one(
+            context->job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
+    }
+}
+
+static void demo_transform_scene_range(void *opaque, uint16_t begin,
+                                       uint16_t end)
+{
+    demo_scene_transform_context_t *context = opaque;
+    demo_transform_range(context->terrain, begin, end);
+    if (context->mario_count == 0U || context->terrain_count == 0U) return;
+    const uint32_t mario_begin = (uint32_t)begin * context->mario_count /
+                                 context->terrain_count;
+    const uint32_t mario_end = (uint32_t)end * context->mario_count /
+                               context->terrain_count;
+    demo_transform_mario_range(context->mario, (uint16_t)mario_begin,
+                               (uint16_t)mario_end);
 }
 
 void sm64_saturn_demo_render_init(void)
@@ -702,34 +760,11 @@ static void demo_emit_mario(
     if (snapshot == NULL || pose == NULL || !snapshot->valid ||
         pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return;
-    const int32_t sine = sm64_saturn_sins_q16(snapshot->yaw);
-    const int32_t cosine = sm64_saturn_coss_q16(snapshot->yaw);
     memset(s_actor_gouraud, 0, sizeof(s_actor_gouraud));
     memset(s_actor_gouraud_addresses, 0, sizeof(s_actor_gouraud_addresses));
     s_actor_light_intensity = pose->light_intensity;
-    const sm64_saturn_ir_transform_job_t job = {
-        .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
-        .near_depth = SATURN_DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
-        .center_y = DEMO_CENTER_Y, .coord_min = DEMO_COORD_MIN,
-        .coord_max = DEMO_COORD_MAX, .clip_near = false
-    };
-    for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++) {
-        const int16_t *source = pose->vertices[i];
-        const int32_t sx = (int32_t)source[0] << 16;
-        const int32_t sz = (int32_t)source[2] << 16;
-        const sm64_saturn_vec3i_t world = {
-            (int32_t)snapshot->position[0] +
-                ((sm64_saturn_q16_mul(sx, cosine) +
-                  sm64_saturn_q16_mul(sz, sine)) >> 16),
-            (int32_t)snapshot->position[1] + source[1],
-            (int32_t)snapshot->position[2] +
-                ((-sm64_saturn_q16_mul(sx, sine) +
-                  sm64_saturn_q16_mul(sz, cosine)) >> 16)};
-        sm64_saturn_vec3i_t view;
-        s_actor_valid[i] = sm64_saturn_ir_transform_one(
-            &job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
+    for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++)
         if (s_actor_valid[i]) profile->demo_actor_vertices_valid++;
-    }
 #if SATURN_SLAVE_RENDER
     s_actor_draw_count = 0U;
     s_actor_texture_count = 0U;
@@ -888,21 +923,32 @@ void sm64_saturn_demo_render_frame(
         .valid = s_position_valid,
         .transformed = {0U, 0U}
     };
+    demo_mario_transform_context_t mario_transform = {
+        .job = &job, .snapshot = snapshot, .pose = pose
+    };
+    demo_scene_transform_context_t scene_transform = {
+        .terrain = &transform,
+        .mario = &mario_transform,
+        .terrain_count = SM64_SATURN_BOB_POSITION_COUNT,
+        .mario_count = SM64_MARIO_VERTEX_COUNT
+    };
     sm64_saturn_dual_worker_stats_t worker_stats;
     bool worker_ok = true;
 #if SATURN_SLAVE_RENDER
     worker_ok = sm64_saturn_dual_worker_run(
-        demo_transform_range, &transform, SM64_SATURN_BOB_POSITION_COUNT,
+        demo_transform_scene_range, &scene_transform,
+        SM64_SATURN_BOB_POSITION_COUNT,
         s_slave_begin, &worker_stats);
 #else
     worker_stats = (sm64_saturn_dual_worker_stats_t){0};
-    demo_transform_range(&transform, 0U, SM64_SATURN_BOB_POSITION_COUNT);
+    demo_transform_scene_range(&scene_transform, 0U,
+                               SM64_SATURN_BOB_POSITION_COUNT);
 #endif
     if (!worker_ok) {
         transform.transformed[0] = 0U;
         transform.transformed[1] = 0U;
-        demo_transform_range(&transform, 0U,
-                             SM64_SATURN_BOB_POSITION_COUNT);
+        demo_transform_scene_range(&scene_transform, 0U,
+                                   SM64_SATURN_BOB_POSITION_COUNT);
     }
     profile->triangles_transformed += transform.transformed[0] +
                                      transform.transformed[1];
