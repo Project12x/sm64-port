@@ -54,6 +54,18 @@ static void sourceboot_capture_route_checkpoint(void) {
         sm64_saturn_source_runtime_state();
     const sm64_saturn_fast3d_profile_t *profile = &sourceboot_fast3d.profile;
 
+    /* The capture harness runs a fixed wall-frame budget. Once the replay
+     * endpoint is published, later neutral frames must not overwrite the
+     * exact deterministic checkpoint with a post-route state (the demo path
+     * can finish the route earlier than the interpreted path). */
+    if (runtime->input_replay_complete &&
+        sourceboot_route_checkpoint.magic ==
+            SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC &&
+        sourceboot_route_checkpoint.replay_ticks ==
+            runtime->input_replay_ticks) {
+        return;
+    }
+
     /* Publish the latest source-frame state. The host accepts it only when
      * replay_ticks is the route's exact 600-tick endpoint, so a stalled
      * controller cadence is reported as a failed gate rather than omitted. */

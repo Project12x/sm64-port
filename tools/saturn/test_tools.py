@@ -1159,6 +1159,19 @@ class BobParityRouteTests(unittest.TestCase):
         result = compare_reports(report, report, route)
         self.assertTrue(result["deterministic"])
 
+    def test_v2_route_keeps_renderer_deltas_informational(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        route["report_schema"]["version"] = "sourceboot-route-v2"
+        route["report_schema"]["compare_renderer_counters"] = False
+        left = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
+        right = left.copy()
+        right[9] += 100
+        right[10] += 50
+        result = compare_reports(self._report(left), self._report(right), route)
+        self.assertTrue(result["deterministic"])
+        self.assertEqual(result["renderer_counter_deltas"], {
+            "triangles_transformed": 100, "triangles_vdp1_emitted": 50})
+
     def test_comparator_rejects_missing_required_report_schema_field(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]

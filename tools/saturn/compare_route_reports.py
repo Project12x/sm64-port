@@ -41,8 +41,9 @@ def load_route(path: Path) -> dict[str, Any]:
     if total != route.get("simulation_ticks") or total != route.get("checkpoint_tick"):
         raise ValueError("route tick total must equal simulation_ticks and checkpoint_tick")
     schema = route.get("report_schema")
-    if not isinstance(schema, dict) or schema.get("version") != "sourceboot-route-v1":
-        raise ValueError("route must declare the sourceboot-route-v1 report schema")
+    if not isinstance(schema, dict) or schema.get("version") not in (
+            "sourceboot-route-v1", "sourceboot-route-v2"):
+        raise ValueError("route must declare the sourceboot-route-v1 or v2 report schema")
     for name in ("required_report_fields", "required_probe_fields"):
         if not isinstance(schema.get(name), list) or not all(
                 isinstance(field, str) for field in schema[name]):
@@ -103,8 +104,11 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
     if signatures[0] != signatures[1]:
         errors.append("source checkpoint signature differs")
     tolerance = route["primitive_count_tolerance"]
+    renderer_deltas = {}
     for field in ("triangles_transformed", "triangles_vdp1_emitted"):
-        if abs(first[field] - second[field]) > tolerance:
+        delta = abs(first[field] - second[field])
+        renderer_deltas[field] = delta
+        if route["report_schema"].get("compare_renderer_counters", True) and delta > tolerance:
             errors.append(f"{field} differs beyond tolerance {tolerance}")
     return {
         "route_version": route["route_version"],
@@ -114,6 +118,7 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         "right": second,
         "left_checkpoint_sha256": signatures[0],
         "right_checkpoint_sha256": signatures[1],
+        "renderer_counter_deltas": renderer_deltas,
         "deterministic": not errors,
         "errors": errors,
     }

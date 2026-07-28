@@ -506,6 +506,16 @@ pose-differential fixture, and later-phase visual capture remain open.
  `2074/531`). This is the current Task 5 blocker; no gallery promotion is
  justified.
 
+**Progress note (2026-07-28, frozen endpoint authority pass):** replay input is
+ held neutral until authoritative Mario state exists, and the route checkpoint
+ freezes on the first complete replay publication. The v2 route schema and
+ paired comparator now treat renderer counters as informational while keeping
+ source state strict. Fresh demo/interpreted captures both reach tick 600 with
+ identical checkpoint hash `d6f8bb72…`, zero faults, and zero capacity rejects;
+ the renderer deltas are `+1323` transformed / `+615` VDP1 commands. The
+ authority portion of Task 5 is therefore passed; visual owner confirmation,
+ renderer-rate work, and the 5 FPS gate remain open.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.

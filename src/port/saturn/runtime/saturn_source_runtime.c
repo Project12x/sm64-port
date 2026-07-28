@@ -9,6 +9,7 @@
 #include <yaul.h>
 
 #include "controller_saturn.h"
+#include "game/level_update.h"
 #include "saturn_source_runtime.h"
 
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
@@ -58,12 +59,24 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
     controller_saturn.read(&pads[0]);
     sState.input_polls++;
     if (sInputReplay.enabled) {
-        sm64_saturn_input_replay_apply(&sInputReplay, &pads[0].button,
-                                       &pads[0].stick_x, &pads[0].stick_y);
-        pads[0].errnum = 0;
-        sState.input_replay_ticks = sInputReplay.ticks_consumed;
-        sState.input_replay_sample = sInputReplay.sample_index;
-        sState.input_replay_complete = sInputReplay.complete;
+        /* Do not spend deterministic route samples while the source boot is
+         * still constructing its authoritative Mario state.  Renderer
+         * profiles can make this bootstrap interval longer; consuming input
+         * there makes the same route begin at different gameplay ticks in
+         * the interpreted and demo builds. */
+        if (gMarioState == NULL) {
+            pads[0].button = 0U;
+            pads[0].stick_x = 0;
+            pads[0].stick_y = 0;
+            pads[0].errnum = 0;
+        } else {
+            sm64_saturn_input_replay_apply(&sInputReplay, &pads[0].button,
+                                           &pads[0].stick_x, &pads[0].stick_y);
+            pads[0].errnum = 0;
+            sState.input_replay_ticks = sInputReplay.ticks_consumed;
+            sState.input_replay_sample = sInputReplay.sample_index;
+            sState.input_replay_complete = sInputReplay.complete;
+        }
     }
     if (count > 1U) {
         (void)memset(&pads[1], 0, sizeof(*pads) * (count - 1U));
