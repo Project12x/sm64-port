@@ -33,7 +33,9 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     int64_t extent_world[3];
     for (uint8_t axis = 0U; axis < 3U; axis++) {
         center_world[axis] = ((int64_t)minimum[axis] + maximum[axis]) / 2;
-        extent_world[axis] = ((int64_t)maximum[axis] - minimum[axis]) / 2;
+        /* Ceil the half-extent so integer quantization never turns a tight
+         * bound into an under-approximation at an odd-sized edge. */
+        extent_world[axis] = ((int64_t)maximum[axis] - minimum[axis] + 1) / 2;
     }
     int64_t delta[3] = {
         center_world[0] - frustum->position[0],
