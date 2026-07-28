@@ -45,6 +45,9 @@ SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
 SOURCEBOOT_BOB_SCENE := $(SOURCEBOOT_GENERATED)/bob_scene.h
 SOURCEBOOT_BOB_SKY := $(SOURCEBOOT_GENERATED)/bob_sky_rgb1555.bin
 SOURCEBOOT_BOB_SKY_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_sky_manifest.json
+SOURCEBOOT_MARIO_TEXTURE_DIR := $(ROOT)/build/saturn/marioturntable/generated
+SOURCEBOOT_MARIO_TEXTURE_HEADER := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.h
+SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.json
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -152,6 +155,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -DSATURN_DEMO_POLY_TIER=$(SATURN_DEMO_POLY_TIER) \
   -DSATURN_DEMO_HOT_PROMOTION=$(SATURN_DEMO_HOT_PROMOTION) \
   -DSATURN_DEMO_PATH=$(SATURN_DEMO_PATH) \
+  -DSATURN_MARIO_TEXTURE_BASE_OFFSET=333696U \
   -DSM64_SATURN_VDP1_LWRAM_STAGING=1 -DSATURN_MTX_IS_Q16=1 \
   -fno-lto -ffunction-sections -fdata-sections \
   -I$(CURDIR) -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src \
@@ -160,7 +164,8 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -I$(ROOT)/src/port/saturn/controller -I$(ROOT)/src/port/saturn/runtime \
   -I$(ROOT)/src/port/saturn/gfx -I$(ROOT)/src/port/saturn/platform \
   -I$(SOURCEBOOT_PC_BUILD) -I$(SOURCEBOOT_PC_BUILD)/include \
-  -I$(SOURCEBOOT_GENERATED)
+  -I$(SOURCEBOOT_GENERATED) -I$(SOURCEBOOT_MARIO_TEXTURE_DIR) \
+  -DSATURN_DEMO_MARIO_TEXTURES=1
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections
 
 # --- soft-float: GCC's soft-fp in place of libgcc's fp-bit ------------------
@@ -274,7 +279,7 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-tiles source-bob-scene source-bob-sky
+source-assets: source-data-catalog source-bob-mesh source-bob-tiles source-bob-scene source-bob-sky source-mario-textures
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -326,6 +331,23 @@ $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bak
 .PHONY: source-bob-sky
 source-bob-sky: $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST)
 
+$(SOURCEBOOT_MARIO_TEXTURE_HEADER) $(SOURCEBOOT_MARIO_TEXTURE_REPORT) &: \
+	$(ROOT)/tools/saturn/bake_mario_eye_uv.py \
+	$(ROOT)/tools/saturn/extract_mario_textures.py \
+	$(ROOT)/tools/saturn/vdp1_texture.py \
+	$(ROOT)/assets.json $(ROOT)/baserom.us.z64 \
+	$(ROOT)/docs/saturn/evidence/reports/mario-actor-intake.json
+	@mkdir -p "$(SOURCEBOOT_MARIO_TEXTURE_DIR)"
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/bake_mario_eye_uv.py" \
+	  --rom "$(ROOT)/baserom.us.z64" --assets "$(ROOT)/assets.json" \
+	  --intake "$(ROOT)/docs/saturn/evidence/reports/mario-actor-intake.json" \
+	  --tile 16 --source-scale 1 --subdivision 1 \
+	  --output "$(SOURCEBOOT_MARIO_TEXTURE_HEADER)" \
+	  --report "$(SOURCEBOOT_MARIO_TEXTURE_REPORT)"
+
+.PHONY: source-mario-textures
+source-mario-textures: $(SOURCEBOOT_MARIO_TEXTURE_HEADER) $(SOURCEBOOT_MARIO_TEXTURE_REPORT)
+
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
@@ -373,7 +395,7 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # race a consumer against the generator. Order-only, so a regenerated map does
 # not by itself rebuild the world -- the generated .d files carry the real
 # header dependency once a build has run.
-$(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H)
+$(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER)
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
 # the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,

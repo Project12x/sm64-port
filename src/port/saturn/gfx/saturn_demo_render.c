@@ -10,6 +10,9 @@
 #include "saturn_transform.h"
 #include "bob_scene.h"
 #include "saturn_mario_actor_mesh.h"
+#if defined(SATURN_DEMO_MARIO_TEXTURES)
+#include "mario_eye_uv_tiles.h"
+#endif
 #include "../gpl/slavedriver_dma_queue.h"
 #include "../gpl/slavedriver_dual_worker.h"
 #include "../gpl/ztreme_hot_promotion.h"
@@ -50,6 +53,8 @@ static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT]
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_texture_count;
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
     SM64_MARIO_PRIMITIVE_COUNT];
 static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT];
@@ -457,6 +462,32 @@ static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
             vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
         }
         vdp1_cmdt_vtx_set(cmdt, vertices);
+        const uint16_t texture_start = sm64_mario_texture_tile_start[primitive];
+        if (texture_start != SM64_MARIO_TEXTURE_TILE_NONE &&
+            context->partitions != NULL) {
+            const uint16_t *texture_indices =
+                sm64_mario_textured_source_vertices[texture_start / 4U];
+            const int16_vec2_t texture_vertices[4] = {
+                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[0]].x,
+                                       s_actor_projected[texture_indices[0]].y),
+                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[1]].x,
+                                       s_actor_projected[texture_indices[1]].y),
+                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[2]].x,
+                                       s_actor_projected[texture_indices[2]].y),
+                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[2]].x,
+                                       s_actor_projected[texture_indices[2]].y)};
+            vdp1_cmdt_t *detail = &context->cmdts[s_actor_texture_slots[ordinal]];
+            (void)sm64_saturn_ir_texture_bind_rgb1555(
+                detail, context->partitions,
+                SATURN_MARIO_TEXTURE_BASE_OFFSET +
+                    (texture_start / 4U) *
+                    (SM64_MARIO_TEXTURE_UV_TILE_WIDTH *
+                     SM64_MARIO_TEXTURE_UV_TILE_WIDTH * sizeof(uint16_t)),
+                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                SM64_MARIO_TEXTURE_UV_TILE_WIDTH,
+                VDP1_CMDT_CC_REPLACE, texture_vertices);
+            context->stats[lane].texture_commands++;
+        }
         context->stats[lane].triangles_emitted++;
     }
 }
@@ -514,6 +545,7 @@ static void demo_emit_mario(
     const sm64_saturn_mario_actor_pose_t *pose,
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
+    const vdp1_vram_partitions_t *partitions,
     sm64_saturn_fast3d_profile_t *profile)
 {
     if (snapshot == NULL || pose == NULL || !snapshot->valid ||
@@ -549,6 +581,7 @@ static void demo_emit_mario(
     }
 #if SATURN_SLAVE_RENDER
     s_actor_draw_count = 0U;
+    s_actor_texture_count = 0U;
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
         if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||
@@ -569,18 +602,30 @@ static void demo_emit_mario(
                                   (vertices[2].x - vertices[0].x);
         if (cross == 0) continue;
         s_actor_order[s_actor_draw_count++] = i;
+        if (sm64_mario_texture_tile_start[i] != SM64_MARIO_TEXTURE_TILE_NONE)
+            s_actor_texture_count++;
     }
+    const uint16_t actor_command_count =
+        (uint16_t)(s_actor_draw_count + s_actor_texture_count);
     if (s_actor_draw_count != 0U &&
-        sm64_saturn_vdp1_backend_reserve(backend, s_actor_draw_count) != NULL) {
+        sm64_saturn_vdp1_backend_reserve(backend, actor_command_count) != NULL) {
         for (uint16_t i = 0; i < s_actor_draw_count; i++)
             s_actor_slots[i] = (uint16_t)(backend->commands.cursor -
-                                          s_actor_draw_count + i);
+                                          actor_command_count + i);
+        uint16_t texture_slot = (uint16_t)(backend->commands.cursor -
+                                           s_actor_texture_count);
+        for (uint16_t i = 0; i < s_actor_draw_count; i++) {
+            if (sm64_mario_texture_tile_start[s_actor_order[i]] !=
+                SM64_MARIO_TEXTURE_TILE_NONE)
+                s_actor_texture_slots[i] = texture_slot++;
+        }
         for (uint16_t i = 0; i < s_actor_draw_count; i++) {
             s_actor_gouraud[i] = sm64_saturn_gouraud_bank_alloc(
                 gouraud_bank, &s_actor_gouraud_addresses[i]);
             if (s_actor_gouraud[i] == NULL) profile->gouraud_bank_overflow++;
         }
         demo_emit_context_t actor_emit = {
+            .partitions = partitions,
             .cmdts = backend->list.cmdts,
             .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
         };
@@ -796,7 +841,8 @@ void sm64_saturn_demo_render_frame(
     /* Mario is currently a flat-material actor pass. It deliberately consumes
      * the live bridge pose now; textured actor tiles and painter interleave
      * remain separate fidelity work, rather than hiding the actor seam. */
-    demo_emit_mario(snapshot, pose, backend, gouraud_bank, profile);
+    demo_emit_mario(snapshot, pose, backend, gouraud_bank, &partitions,
+                    profile);
     if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
         saturn_dma_queue_transfer_wait(
             (void *)gouraud_bank->vram_base, gouraud_bank->staging,

@@ -17,6 +17,7 @@
 #include "source_cart.h"
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
+#include "mario_eye_uv_tiles.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
                                            * under src/port/saturn/; matches
                                            * hwtest's existing include style
@@ -160,6 +161,12 @@ static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
 
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
 #define SOURCEBOOT_BOB_TEXTURE_BYTES 333696U
+#define SOURCEBOOT_MARIO_TEXTURE_BYTES \
+    (SM64_MARIO_TEXTURE_UV_TRIANGLE_COUNT * \
+     SM64_MARIO_TEXTURE_UV_TILE_WIDTH * SM64_MARIO_TEXTURE_UV_TILE_WIDTH * \
+     sizeof(uint16_t))
+#define SOURCEBOOT_TEXTURE_BYTES \
+    (SOURCEBOOT_BOB_TEXTURE_BYTES + SOURCEBOOT_MARIO_TEXTURE_BYTES)
 #define SOURCEBOOT_BOB_CLUT_COUNT 1077U
 #define SOURCEBOOT_BOB_CLUT_BYTES (SOURCEBOOT_BOB_CLUT_COUNT * sizeof(vdp1_clut_t))
 
@@ -445,7 +452,7 @@ int main(void) {
          * saturn_vdp1_backend.h), even though nothing on this path
          * reads partitions.cmdt_base. */
         vdp1_vram_partitions_set(SOURCEBOOT_VDP1_COMMAND_CAPACITY,
-                                 SOURCEBOOT_BOB_TEXTURE_BYTES,
+                                 SOURCEBOOT_TEXTURE_BYTES,
                                  SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES,
                                  SOURCEBOOT_BOB_CLUT_COUNT);
 
@@ -464,6 +471,13 @@ int main(void) {
                 &demo_texture_residency, 0, sm64_saturn_bob_texture_bank,
                 SOURCEBOOT_BOB_TEXTURE_BYTES)) {
             dbgio_puts("sourceboot: BOB texture residency failed\n");
+            for (;;) {}
+        }
+        if (!sm64_saturn_texture_residency_upload(
+                &demo_texture_residency, SOURCEBOOT_BOB_TEXTURE_BYTES,
+                sm64_mario_texture_uv_tiles,
+                SOURCEBOOT_MARIO_TEXTURE_BYTES)) {
+            dbgio_puts("sourceboot: Mario texture residency failed\n");
             for (;;) {}
         }
         scu_dma_transfer(0, partitions.clut_base, sm64_saturn_bob_clut_bank,
@@ -594,7 +608,7 @@ int main(void) {
             sourceboot_vdp1_backend.list.count;
         sourceboot_fast3d.profile.vdp1_vram_bytes =
             (SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t)) +
-            SOURCEBOOT_BOB_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
+            SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
             (SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES *
              sizeof(vdp1_gouraud_table_t));
         sourceboot_fast3d.profile.vdp2_display_mask =

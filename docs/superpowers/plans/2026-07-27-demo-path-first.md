@@ -580,6 +580,15 @@ is still required before gallery promotion.
  an adjacent opaque Gouraud material command plus alpha-keyed texture tile
  overlays, preserving source-primitive ordering.
 
+**Progress note (2026-07-28, Mario texture lowering):** sourceboot now treats
+ the ROM-derived `bake_mario_eye_uv.py` output as an explicit generated build
+ input, reserves and uploads its 16x16 RGB1555 tile bank after BOB, and reserves
+ a second VDP1 command for each textured Mario primitive. The worker emits the
+ existing Gouraud material command followed by the alpha-keyed RGB1555 detail
+ tile, preserving primitive order and retaining flat/Gouraud fallback for
+ untextured primitives. The fresh dual image builds and boots in foreground
+ Ymir; visual texture acceptance and route evidence remain open.
+
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
