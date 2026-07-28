@@ -50,6 +50,9 @@ static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT]
 static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
+static sm64_saturn_gouraud_table_t *s_actor_gouraud[
+    SM64_MARIO_PRIMITIVE_COUNT];
+static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_draw_count;
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
     __attribute__((section(".lwram_bss")));
@@ -424,11 +427,36 @@ static void demo_emit_mario_range(void *opaque, uint16_t begin, uint16_t end)
                                    s_actor_projected[indices[4]].y)};
         vdp1_cmdt_t *cmdt = &context->cmdts[s_actor_slots[ordinal]];
         vdp1_cmdt_polygon_set(cmdt);
-        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-            .color_mode = VDP1_CMDT_CM_RGB_32768,
-            .cc_mode = VDP1_CMDT_CC_REPLACE});
         const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];
-        vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        sm64_saturn_gouraud_table_t *table = s_actor_gouraud[ordinal];
+        if (table != NULL) {
+            const uint16_t corners[4] = {indices[1], indices[2], indices[3],
+                                         indices[4]};
+            for (uint8_t corner = 0; corner < 4U; corner++) {
+                int32_t level = 16 +
+                    (s_actor_projected[corners[corner]].y - DEMO_CENTER_Y) / -8;
+                if (level < 8) level = 8;
+                if (level > 24) level = 24;
+                const uint8_t r = (uint8_t)((rgb[0] * level) / 16);
+                const uint8_t g = (uint8_t)((rgb[1] * level) / 16);
+                const uint8_t b = (uint8_t)((rgb[2] * level) / 16);
+                table->colors[corner] = RGB1555(
+                    1, r > 31U ? 31U : r, g > 31U ? 31U : g,
+                    b > 31U ? 31U : b).raw;
+            }
+            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                .cc_mode = VDP1_CMDT_CC_GOURAUD});
+            vdp1_cmdt_color_set(cmdt, (rgb1555_t){
+                .raw = sm64_saturn_gouraud_neutral_color()});
+            vdp1_cmdt_gouraud_base_set(
+                cmdt, (vdp1_vram_t)s_actor_gouraud_addresses[ordinal]);
+        } else {
+            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                .cc_mode = VDP1_CMDT_CC_REPLACE});
+            vdp1_cmdt_color_set(cmdt, RGB1555(1, rgb[0], rgb[1], rgb[2]));
+        }
         vdp1_cmdt_vtx_set(cmdt, vertices);
         context->stats[lane].triangles_emitted++;
     }
@@ -486,6 +514,7 @@ static void demo_emit_mario(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
     sm64_saturn_vdp1_backend_t *backend,
+    sm64_saturn_gouraud_bank_t *gouraud_bank,
     sm64_saturn_fast3d_profile_t *profile)
 {
     if (snapshot == NULL || pose == NULL || !snapshot->valid ||
@@ -493,6 +522,8 @@ static void demo_emit_mario(
         return;
     const int32_t sine = sm64_saturn_sins_q16(snapshot->yaw);
     const int32_t cosine = sm64_saturn_coss_q16(snapshot->yaw);
+    memset(s_actor_gouraud, 0, sizeof(s_actor_gouraud));
+    memset(s_actor_gouraud_addresses, 0, sizeof(s_actor_gouraud_addresses));
     const sm64_saturn_ir_transform_job_t job = {
         .camera = demo_camera(snapshot), .focal_length = DEMO_FOCAL_LENGTH,
         .near_depth = DEMO_NEAR_DEPTH, .center_x = DEMO_CENTER_X,
@@ -544,6 +575,11 @@ static void demo_emit_mario(
         for (uint16_t i = 0; i < s_actor_draw_count; i++)
             s_actor_slots[i] = (uint16_t)(backend->commands.cursor -
                                           s_actor_draw_count + i);
+        for (uint16_t i = 0; i < s_actor_draw_count; i++) {
+            s_actor_gouraud[i] = sm64_saturn_gouraud_bank_alloc(
+                gouraud_bank, &s_actor_gouraud_addresses[i]);
+            if (s_actor_gouraud[i] == NULL) profile->gouraud_bank_overflow++;
+        }
         demo_emit_context_t actor_emit = {
             .cmdts = backend->list.cmdts,
             .stats = {{0U, 0U, 0U}, {0U, 0U, 0U}}
@@ -760,7 +796,7 @@ void sm64_saturn_demo_render_frame(
     /* Mario is currently a flat-material actor pass. It deliberately consumes
      * the live bridge pose now; textured actor tiles and painter interleave
      * remain separate fidelity work, rather than hiding the actor seam. */
-    demo_emit_mario(snapshot, pose, backend, profile);
+    demo_emit_mario(snapshot, pose, backend, gouraud_bank, profile);
     if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
         saturn_dma_queue_transfer_wait(
             (void *)gouraud_bank->vram_base, gouraud_bank->staging,

@@ -568,6 +568,13 @@ is still required before gallery promotion.
  is now structural (`SATURN_DEMO_VIEW_RADIUS`, variant object directories).
  Captures at 6,000/4,096/2,048 reduce render FRT work but leave frame cadence
  unchanged at 53 frames per 3,600 emulator frames; sim FRT remains 25,829.
+
+**Progress note (2026-07-28, actor Gouraud milestone):** the dual-worker Mario
+ pass now allocates one master-owned Gouraud table per visible primitive and
+ emits a deterministic projected-height light ramp through VDP1's Gouraud
+ combiner, with flat RGB1555 retained when the table bank is exhausted or the
+ worker falls back. The image builds cleanly and is running in foreground Ymir;
+ owner visual confirmation and a saved milestone screenshot remain open.
  The sweep is therefore a measured non-lever for the current bottleneck, and
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
