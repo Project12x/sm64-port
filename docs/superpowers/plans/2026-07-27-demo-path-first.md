@@ -945,13 +945,13 @@ unchanged, so this closes a proven contract mismatch without claiming it fixed
 the warped terrain. Split-fragment texture baking remains the active lever.
 
 **Progress note (2026-07-28, split-texture budget audit):** applying the
-existing BOB tile manifest to the 1,425 BSP fragments estimates 597 16×16
-tiles, 793 32×32 tiles, and 35 flat fragments: 482,432 bytes of texture plus
-44,480 bytes of CLUT, or 526,912 bytes total against the 446,432-byte VDP1
-resident budget. Full-resolution per-fragment UV baking therefore cannot be
-enabled blindly. The next implementation must add a reference-backed
-degradation tier (most likely 16×16 fragment tiles) and verify its UV error and
-resident-byte gate before wiring split fragments into sourceboot.
+existing BOB tile manifest to the 1,425 BSP fragments and triangulating convex
+fragments for VDP1 yields 2,108 commands: 876 16×16, 1,165 32×32, and 67 flat.
+That is 773,920 bytes of texture/CLUT versus the 446,432-byte VDP1 resident
+budget. Full-resolution per-fragment UV baking therefore cannot be enabled
+blindly. An all-16×16 fragment tier is estimated at 337,280 bytes; the next
+implementation must bake that tier and verify its UV error before wiring split
+fragments into sourceboot.
 
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather

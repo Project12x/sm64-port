@@ -82,25 +82,34 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
         entries = {int(entry["source_triangle"]): entry
                    for entry in manifest["entries"]}
         fragment_classes = {"16x16": 0, "32x32": 0, "flat": 0}
+        triangle_classes = {"16x16": 0, "32x32": 0, "flat": 0}
         texture_bytes = 0
         clut_bytes = 0
         for polygon in iter_polygons(root):
             primitive = scene["primitives"][polygon.source]
             source = int(primitive["source_triangles"][0])
             entry = entries.get(source)
+            triangle_count = len(polygon.vertices) - 2
             if entry is None:
                 fragment_classes["flat"] += 1
+                triangle_classes["flat"] += triangle_count
                 continue
             size = int(entry["tile_size"])
             key = f"{size}x{size}"
             fragment_classes[key] = fragment_classes.get(key, 0) + 1
-            texture_bytes += size * size // 2
-            clut_bytes += 32
+            triangle_classes[key] = triangle_classes.get(key, 0) + triangle_count
+            texture_bytes += triangle_count * (size * size // 2)
+            clut_bytes += triangle_count * 32
         report["fragment_tile_classes"] = fragment_classes
+        report["triangulated_fragment_tile_classes"] = triangle_classes
+        report["triangulated_fragment_count"] = sum(triangle_classes.values())
         report["estimated_fragment_texture_bytes"] = texture_bytes
         report["estimated_fragment_clut_bytes"] = clut_bytes
         report["estimated_fragment_resident_bytes"] = texture_bytes + clut_bytes
         report["vdp1_texture_budget_bytes"] = 446432
+        low_tier_texture = report["triangulated_fragment_count"] * (16 * 16 // 2)
+        low_tier_clut = report["triangulated_fragment_count"] * 32
+        report["all_16x16_fragment_resident_bytes"] = low_tier_texture + low_tier_clut
     return report
 
 

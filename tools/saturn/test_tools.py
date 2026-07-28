@@ -991,7 +991,11 @@ class BobMeshIRTests(unittest.TestCase):
         report = compile_bob_bsp(scene, manifest=manifest)
         self.assertEqual(report["fragment_tile_classes"],
                          {"16x16": 597, "32x32": 793, "flat": 35})
-        self.assertEqual(report["estimated_fragment_resident_bytes"], 526912)
+        self.assertEqual(report["triangulated_fragment_tile_classes"],
+                         {"16x16": 876, "32x32": 1165, "flat": 67})
+        self.assertEqual(report["triangulated_fragment_count"], 2108)
+        self.assertEqual(report["estimated_fragment_resident_bytes"], 773920)
+        self.assertEqual(report["all_16x16_fragment_resident_bytes"], 337280)
         self.assertGreater(report["estimated_fragment_resident_bytes"],
                            report["vdp1_texture_budget_bytes"])
 
