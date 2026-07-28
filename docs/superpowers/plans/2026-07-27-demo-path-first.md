@@ -563,6 +563,10 @@ are available; no gallery promotion is made from this code-only result.
  This proves the budgeted optional path; runtime parity and performance still
  need the unavailable capture rig.
 
+The promotion contract now has a standing host target (`verify-hot-promotion`)
+ covering alignment, bounded capacity, copied bytes, and source immutability;
+ it is included in `verify-all`.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
