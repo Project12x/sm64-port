@@ -847,8 +847,17 @@ metadata, so an unprofiled capture cannot silently enter a parity comparison.
   near/mid/far variants slot here later; a stub tier switch is enough now).
 - [x] **Do not** implement viewport shrinking — fill is ~6% of the frame;
   measured non-lever. Recorded here so nobody re-tries it.
-- [ ] Sweep 2–3 view-distance settings on the frozen route; report absolute
+- [x] Sweep 2–3 view-distance settings on the frozen route; report absolute
   FPS for each.
+
+**Progress note (2026-07-28, current-commit view sweep):** fresh dual-worker
+captures at radii 2,048/4,096/6,000 all reach the 600-tick endpoint with zero
+faults, timeouts, and capacity rejects. Render timings are `17.6779`,
+`18.2931`, and `17.0403 ms/frame`, respectively; the non-monotonic result
+means view distance is not a reliable cadence lever in this emulator window.
+The paired screenshots/reports are retained in
+`task6-view-distance-sweep-2026-07-28.{md,json,png}` plus the two settings
+reports; owner visual acceptance and the final FPS gate remain open.
 
 **Gate:** a settings table — view distance vs absolute FPS — from real route
 captures.
