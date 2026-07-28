@@ -1334,6 +1334,13 @@ ticks), so they are dispatch telemetry only, not an FPS claim. The retained
 evidence and the exact symbol/mtime checks are in
 `docs/saturn/evidence/reports/task5b-gouraud-split-replay-2026-07-28.md`.
 
+The route-parity blocker is now closed: serial and dual captures report an
+identical `SBR1` checkpoint at replay tick 600 (global timer, Mario position,
+camera, transformed/emitted triangle counts, and fault counters all match).
+See `task5b-gouraud-split-route-parity-2026-07-28.md`. Final profile counters
+remain post-route samples, so the next performance gate must snapshot timing
+and dispatch counters at the checkpoint itself.
+
 ## 5. Out of scope (deliberate, revisit after Task 7)
 
 68000/SCSP audio (poneSound cloned and pinned, awaits `m68keb-elf`
