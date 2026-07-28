@@ -25,7 +25,7 @@
 #include "castle_collision.h"
 #include "castle_graph_bridge.h"
 #include "castle_uv_tiles.h"
-#include "mario_actor_mesh.h"
+#include "../gfx/saturn_mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 #include "engine/surface_load.h"
 #include "engine/surface_collision.h"

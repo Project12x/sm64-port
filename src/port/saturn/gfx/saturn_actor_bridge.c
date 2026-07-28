@@ -1,0 +1,81 @@
+/*
+ * Task 4 live-Mario bridge.
+ *
+ * The generated mesh/pose bank is promoted from the M2 turntable unchanged;
+ * this file only selects a source pose from the real engine's read-only
+ * graph-node state.  The walking bank is intentionally used for the current
+ * walking-family staging set; other animation IDs use the generated neutral
+ * source animation until their source pose bank is promoted.
+ */
+#include "saturn_actor_bridge.h"
+
+#include "game/level_update.h"
+#include "game/mario.h"
+#include "game/object_list_processor.h"
+#include "graph_node.h"
+#include "mario_animation_ids.h"
+#include "object_fields.h"
+
+#include "saturn_mario_actor_mesh.h"
+
+static uint8_t is_walking_family(int16_t animation_id)
+{
+    switch (animation_id) {
+    case MARIO_ANIM_WALKING:
+    case MARIO_ANIM_WALK_WITH_LIGHT_OBJ:
+    case MARIO_ANIM_RUN_WITH_LIGHT_OBJ:
+    case MARIO_ANIM_SLOW_WALK_WITH_LIGHT_OBJ:
+    case MARIO_ANIM_WALK_PANTING:
+    case MARIO_ANIM_WALK_WITH_HEAVY_OBJ:
+        return 1U;
+    default:
+        return 0U;
+    }
+}
+
+uint8_t sm64_saturn_mario_actor_snapshot(
+    sm64_saturn_mario_actor_snapshot_t *snapshot)
+{
+    if (snapshot == NULL || gMarioState == NULL || gMarioObject == NULL) {
+        return 0U;
+    }
+    snapshot->position[0] = gMarioState->pos[0];
+    snapshot->position[1] = gMarioState->pos[1];
+    snapshot->position[2] = gMarioState->pos[2];
+    snapshot->yaw = gMarioState->faceAngle[1];
+    snapshot->action = gMarioState->action;
+    snapshot->animation_id = gMarioObject->header.gfx.animInfo.animID;
+    snapshot->animation_frame = gMarioObject->header.gfx.animInfo.animFrame;
+    snapshot->area_index = gMarioObject->header.gfx.areaIndex;
+    snapshot->walking_bank = is_walking_family(snapshot->animation_id);
+    snapshot->valid = 1U;
+    return 1U;
+}
+
+uint8_t sm64_saturn_mario_actor_pose(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    sm64_saturn_mario_actor_pose_t *pose)
+{
+    if (snapshot == NULL || pose == NULL || !snapshot->valid) {
+        return 0U;
+    }
+    pose->walking_bank = snapshot->walking_bank;
+    pose->vertex_count = SM64_MARIO_VERTEX_COUNT;
+    if (snapshot->walking_bank) {
+        int32_t frame = snapshot->animation_frame;
+        if (frame < 0) frame = 0;
+        pose->frame_count = SM64_MARIO_WALKING_ANIMATION_FRAME_COUNT;
+        pose->frame = (uint16_t)((uint32_t)frame % pose->frame_count);
+        pose->vertices = sm64_mario_walking_animation_vertices[pose->frame];
+        pose->light_intensity =
+            sm64_mario_walking_animation_light_intensity[pose->frame];
+    } else {
+        int32_t frame = snapshot->animation_frame;
+        if (frame < 0) frame = 0;
+        pose->frame_count = SM64_MARIO_ANIMATION_FRAME_COUNT;
+        pose->frame = (uint16_t)((uint32_t)frame % pose->frame_count);
+        pose->vertices = sm64_mario_animation_vertices[pose->frame];
+        pose->light_intensity = sm64_mario_animation_light_intensity[pose->frame];
+    }
+    return 1U;
+}

@@ -133,7 +133,7 @@ Evidence anchors: `docs/saturn/evidence/reports/e2-sourceboot-bob-parity-v1-*.js
 | Texture machinery | `castleviewer/main.c` texture paths + `saturn_texture_residency.h` | Tile atlas, CLUT16, per-primitive Gouraud, residency, cart→WRAM staging. Harvest target #2 |
 | Castle bake pipeline | `tools/saturn/extract_castle_area.py`, `compile_castle_area.py`, `compile_castle_bsp.py`, `bake_castle_uv.py`, `vdp1_texture.py`, `export_rgba16_textures.py` | The offline pattern Task 2/3 re-points at BOB |
 | Mesh IR + pairing | `tools/saturn/saturn_mesh_ir.py`, `quad_pairing.py`, schema v1 | AW-2's mandated format; exact blossom matching — do not reimplement |
-| Mario actor IR + anim | `src/port/saturn/marioturntable/mario_actor_mesh.h`, `tools/saturn/extract_mario_actor.py` | Quad-optimized animated Mario, already renders; Task 4 bridges it to live state |
+| Mario actor IR + anim | `src/port/saturn/gfx/saturn_mario_actor_mesh.h`, `tools/saturn/extract_mario_actor.py` | Quad-optimized animated Mario, already renders; Task 4 bridges it to live state |
 | Q16 kernels (landed) | `src/port/saturn/gfx/saturn_q16_sh2.h`, `src/port/saturn/gpl/slavedriver_projection.{h,sx}` | Use as-is; disassembly gate protects them |
 | libmic3d | `third_party/libyaul/libmic3d/render.c`, `sort.c` (MIT) | Transform pools/buckets — selective close-port if it fits |
 | Harness/verification | `fast3d_profile_decode.py`, `compare_route_reports.py`, `fast3d_q16_diff_test.c`, `verify_q16_sh2_disassembly.py`, `runtime_contract_test.c` | AW-5; all keep running |
@@ -418,7 +418,7 @@ VDP2 offload noted for both GPL engines).
 The least-proven seam in the plan; the correctness nets matter most here.
 
 **Files:** Create `src/port/saturn/gfx/saturn_actor_bridge.{c,h}`, reuse
-`marioturntable/mario_actor_mesh.h` (promote the mesh bank to a shared/
+`gfx/saturn_mario_actor_mesh.h` (promoted from the turntable into a shared/
 generated location rather than including across targets), modify bake
 tooling if the mesh needs re-generation with texture tiles (Mario textures
 are milestone-2 in the spec — **Gouraud Mario over textured terrain is

@@ -1,0 +1,33 @@
+{
+  "task": "4",
+  "status": "bridge_compiles_gate_pending",
+  "shared_mesh": "src/port/saturn/gfx/saturn_mario_actor_mesh.h",
+  "source_mesh_origin": "tools/saturn/extract_mario_actor.py",
+  "bridge": [
+    "src/port/saturn/gfx/saturn_actor_bridge.c",
+    "src/port/saturn/gfx/saturn_actor_bridge.h"
+  ],
+  "authoritative_inputs": [
+    "gMarioState->pos",
+    "gMarioState->faceAngle[1]",
+    "gMarioState->action",
+    "gMarioObject->header.gfx.animInfo.animID",
+    "gMarioObject->header.gfx.animInfo.animFrame",
+    "gMarioObject->header.gfx.areaIndex"
+  ],
+  "pose_banks": {
+    "default": {"frames": 30, "vertices": 424},
+    "walking_family": {"frames": 77, "vertices": 424}
+  },
+  "verification": {
+    "sourceboot_cross_compile": "actor bridge object compiled successfully",
+    "full_link": "blocked by sandbox MSYS2 collect2 temporary-file permissions",
+    "checkpoint_differential": "pending Task 4 renderer integration"
+  },
+  "references_consumed": [
+    {"source": "src/port/saturn/marioturntable/main.c", "mode": "shared-bank consumer pattern"},
+    {"source": "src/port/saturn/gfx/saturn_mario_actor_mesh.h", "mode": "promoted generated asset"},
+    {"source": "src/engine/graph_node.c:771-832", "mode": "animation-frame behavior reference"},
+    {"source": "include/types.h:112-143", "mode": "read-only GraphNodeObject/AnimInfo layout"}
+  ]
+}

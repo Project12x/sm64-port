@@ -7,7 +7,7 @@
 #include "game/game_init.h"
 #include "game/mario.h"
 #include "sm64.h"
-#include "mario_actor_mesh.h"
+#include "../gfx/saturn_mario_actor_mesh.h"
 #include "mario_eye_uv_tiles.h"
 #include "saturn_texture_residency.h"
 #include "saturn_gouraud.h"
