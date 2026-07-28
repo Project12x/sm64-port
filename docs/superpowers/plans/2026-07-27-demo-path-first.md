@@ -524,6 +524,15 @@ pose-differential fixture, and later-phase visual capture remain open.
  the next performance track is simulation/dual-SH2 work rather than a claimed
  view-distance FPS improvement.
 
+**Progress note (2026-07-28, Task 6 pacing correction):** sourceboot no longer
+ blocks on the bring-up-only `vdp2_sync_wait()`/`vdp1_sync_wait()` pair after
+ arming the sync state machines. The stock game loop already performs one raw
+ VBlank-IN/OUT wait, and the backend retains its guarded pre-copy VDP1 wait;
+ the removed pair was an independent second synchronization wait per loop.
+ The demo image rebuilds successfully and the 168-test host suite remains
+ green. A fresh visual capture is still required once the Ymir/BIOS artifacts
+ are available; no gallery promotion is made from this code-only result.
+
 **References consumed (AW-3):** `marioturntable` mesh + anim bridge
 (in-repo), `extract_mario_actor.py`, Mesh IR deformation contract
 (`SATURN_MESH_IR.md` — `linear_blend` / Q15 weights), Task 1 modules.
