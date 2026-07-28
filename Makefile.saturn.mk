@@ -10,6 +10,7 @@ VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PYTHON ?= python3
 HOST_CC ?= gcc
+HOST_CC_ENV ?= env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
 ifeq ($(OS),Windows_NT)
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
 HOST_EXEEXT := .exe
@@ -187,7 +188,7 @@ verify-tools: check-host-tools
 # with synthetic maps.
 verify-runtime-contracts: compile-quad-map
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
 	  -I"$(SATURN_REPO_ROOT)/include" \
 	  -I"$(SATURN_REPO_ROOT)/src" \
@@ -208,7 +209,7 @@ verify-runtime-contracts: compile-quad-map
 # Saturn consumer.
 verify-ir-transform:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/ir_transform_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_ir_transform.c" \
@@ -219,7 +220,7 @@ verify-ir-transform:
 # capacity, copied bytes, and source immutability are all host-verifiable.
 verify-hot-promotion:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/hot_promotion_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
@@ -344,11 +345,11 @@ verify-softfp-bitexact:
 	@tmp="$$(cd '$(SOFTFP_HOST_BUILD)' && { pwd -W 2>/dev/null || pwd; })"; \
 	export TMP="$$tmp" TEMP="$$tmp" TMPDIR="$$tmp"; \
 	for f in $(SOFTFP_TEST_FUNCS); do \
-	  "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -w -c "$(SOFTFP_VENDOR)/soft-fp/$$f.c" \
+	  $(HOST_CC_ENV) "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -w -c "$(SOFTFP_VENDOR)/soft-fp/$$f.c" \
 	    -I"$(SOFTFP_VENDOR)/soft-fp" -I"$(SOFTFP_VENDOR)/config/sh" -I"$(SOFTFP_VENDOR)/include" \
 	    -o "$(SOFTFP_HOST_BUILD)/$$f.o" || exit 1; \
 	done; \
-	"$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -Wall -Wextra -Werror -fno-builtin \
+	$(HOST_CC_ENV) "$(SOFTFP_HOST_CC)" -O2 -std=gnu11 -Wall -Wextra -Werror -fno-builtin \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/softfp_bitexact_diff_test.c" \
 	  $(patsubst %,"$(SOFTFP_HOST_BUILD)/%.o",$(SOFTFP_TEST_FUNCS)) \
 	  -lm \

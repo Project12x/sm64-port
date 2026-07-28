@@ -1271,8 +1271,23 @@ MARIO_CAPTURE_BYTES = 228
 
 
 def _host_c_compiler() -> str | None:
-    for candidate in (os.environ.get("CC"), "cc", "gcc", "clang"):
+    for candidate in (os.environ.get("HOST_CC"), os.environ.get("CC"), "cc", "gcc", "clang"):
         if candidate and shutil.which(candidate):
+            # Yaul's build environment exports the SH-2 cross compiler as CC.
+            # This probe compiles native host code and must never inherit that
+            # target driver (which rejects the host compiler's march/mtune
+            # defaults on Windows).
+            compiler_name = Path(candidate).name.lower()
+            if "sh-elf" in compiler_name or compiler_name.startswith("sh2"):
+                continue
+            try:
+                target = subprocess.check_output(
+                    [candidate, "-dumpmachine"], text=True,
+                    stderr=subprocess.DEVNULL).strip().lower()
+            except (OSError, subprocess.CalledProcessError):
+                target = ""
+            if "sh-elf" in target or target.startswith("sh2"):
+                continue
             return candidate
     return None
 
@@ -1329,9 +1344,22 @@ class Fast3dProfileLayoutTests(unittest.TestCase):
                 "-o",
                 str(binary),
             ]
-            compiled = subprocess.run(compile_command, capture_output=True, text=True)
+            host_env = os.environ.copy()
+            # Yaul's cross-build exports GCC search-path variables that make a
+            # native gcc driver load sh-elf's cc1.  The layout probe is a host
+            # contract test, so remove target-toolchain injection explicitly.
+            for variable in (
+                "GCC_EXEC_PREFIX", "COMPILER_PATH", "LIBRARY_PATH",
+                "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "CFLAGS",
+                "CPPFLAGS", "LDFLAGS",
+            ):
+                host_env.pop(variable, None)
+            compiled = subprocess.run(
+                compile_command, capture_output=True, text=True, env=host_env)
             self.assertEqual(compiled.returncode, 0, compiled.stderr)
-            probe = subprocess.run([str(binary)], capture_output=True, text=True, check=True)
+            probe = subprocess.run(
+                [str(binary)], capture_output=True, text=True,
+                check=True, env=host_env)
         reported: dict[str, tuple[int, int]] = {}
         probe_size = None
         for line in probe.stdout.split("\n"):
