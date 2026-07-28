@@ -9,6 +9,8 @@ SH_SRCS := main.c castle_graph_bridge.c \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_fast3d_frontend.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_ir_transform.c \
+  quad_map_empty.c \
   $(ROOT)/src/game/game_init.c \
   $(ROOT)/src/game/main.c \
   $(ROOT)/src/game/mario.c \
@@ -25,9 +27,9 @@ IMAGE_DIRECTORY := $(ROOT)/build/saturn/castlearea/cd
 export SOURCE_DATE_EPOCH ?= 1784160000
 export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
-SH_CFLAGS += -Os -g -DDEBUG \
+SH_CFLAGS += -Os -g -DDEBUG -DF3DEX_GBI_2E=1 \
   -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DTARGET_SATURN=1 -DNO_SEGMENTED_MEMORY=1 \
-  -ffunction-sections -fdata-sections \
+  -fno-lto -ffunction-sections -fdata-sections \
   -I$(ROOT)/src/port/saturn/compat \
   -I$(ROOT) -I$(ROOT)/include -I$(ROOT)/src -I$(ROOT)/src/game -I$(ROOT)/src/engine \
   -I$(ROOT)/build/saturn/castlearea/generated \
@@ -38,6 +40,7 @@ SH_CFLAGS += -Os -g -DDEBUG \
   -I$(ROOT)/src/port/saturn/runtime \
   -I$(ROOT)/src/port/saturn/gfx \
   -I$(ROOT)/src/port/saturn/platform
+SH_LDFLAGS += -fno-lto
 ifeq ($(TEXTURE_PROBE),1)
 SH_CFLAGS += -DSM64_SATURN_TEXTURE_PROBE_CAMERA=1
 endif

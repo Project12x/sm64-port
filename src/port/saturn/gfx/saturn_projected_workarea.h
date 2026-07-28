@@ -12,6 +12,7 @@
 #define SM64_SATURN_PROJECTED_WORKAREA_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct sm64_saturn_projected_vertex {

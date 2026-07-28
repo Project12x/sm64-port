@@ -7,6 +7,7 @@
 #include "saturn_frame_profile.h"
 #include "saturn_frame_sample.h"
 #include "saturn_fast3d_frontend.h"
+#include "saturn_ir_transform.h"
 #include "saturn_gouraud.h"
 #include "saturn_projected_workarea.h"
 #include "saturn_render_queue.h"
@@ -432,20 +433,26 @@ static void publish_frame_sample(void) {
  * start one SH-2 DIVU reciprocal, prepare X/Y while it runs, then reuse that
  * quotient for both screen coordinates. No software ___sdivsi3 is required. */
 static sm64_saturn_projected_vertex_t project_vertex(point3_t point) {
-    const int32_t z = point.z < NEAR_DEPTH ? NEAR_DEPTH : point.z;
-    cpu_divu_fix16_set(
-        fix16_int32_from(SM64_CASTLE_CAMERA_FOCAL_LENGTH),
-        fix16_int32_from(z));
-    const fix16_t fixed_x = fix16_int32_from(point.x);
-    const fix16_t fixed_y = fix16_int32_from(point.y);
-    const fix16_t reciprocal = (fix16_t)cpu_divu_quotient_get();
-    const int32_t screen_x = 160 + fix16_high_mul(reciprocal, fixed_x);
-    const int32_t screen_y = 112 - fix16_high_mul(reciprocal, fixed_y);
-    return (sm64_saturn_projected_vertex_t){
-        .x = (int16_t)clamp32(screen_x, VDP1_COORD_MIN, VDP1_COORD_MAX),
-        .y = (int16_t)clamp32(screen_y, VDP1_COORD_MIN, VDP1_COORD_MAX),
-        .z = point.z
+    const sm64_saturn_ir_transform_job_t job = {
+        .camera = {
+            .position = {0, 0, 0},
+            .right = {1 << 16, 0, 0},
+            .up = {0, 1 << 16, 0},
+            .forward = {0, 0, 1 << 16}
+        },
+        .focal_length = SM64_CASTLE_CAMERA_FOCAL_LENGTH,
+        .near_depth = NEAR_DEPTH,
+        .center_x = 160,
+        .center_y = 112,
+        .coord_min = VDP1_COORD_MIN,
+        .coord_max = VDP1_COORD_MAX
     };
+    sm64_saturn_vec3i_t view;
+    sm64_saturn_projected_vertex_t projected;
+    if (!sm64_saturn_ir_transform_one(&job, point, &view, &projected)) {
+        return (sm64_saturn_projected_vertex_t){0, 0, point.z};
+    }
+    return projected;
 }
 
 /* Close-port the full libmic3d scheduling pattern, not merely its reciprocal:
@@ -458,34 +465,21 @@ static sm64_saturn_projected_vertex_t world_to_view_project(
     *view = world_to_view(world.x, world.y, world.z);
     return project_vertex(*view);
 #else
-    const point3_t relative = {
-        world.x - camera_transform.position.x,
-        world.y - camera_transform.position.y,
-        world.z - camera_transform.position.z
+    const sm64_saturn_ir_transform_job_t job = {
+        .camera = camera_transform,
+        .focal_length = SM64_CASTLE_CAMERA_FOCAL_LENGTH,
+        .near_depth = NEAR_DEPTH,
+        .center_x = 160,
+        .center_y = 112,
+        .coord_min = VDP1_COORD_MIN,
+        .coord_max = VDP1_COORD_MAX
     };
-    view->z = (int32_t)((((int64_t)relative.x * camera_transform.forward.x) +
-                         ((int64_t)relative.y * camera_transform.forward.y) +
-                         ((int64_t)relative.z * camera_transform.forward.z)) >> 16);
-    const int32_t divisor = view->z < NEAR_DEPTH ? NEAR_DEPTH : view->z;
-    cpu_divu_fix16_set(
-        fix16_int32_from(SM64_CASTLE_CAMERA_FOCAL_LENGTH),
-        fix16_int32_from(divisor));
-    view->x = (int32_t)((((int64_t)relative.x * camera_transform.right.x) +
-                         ((int64_t)relative.y * camera_transform.right.y) +
-                         ((int64_t)relative.z * camera_transform.right.z)) >> 16);
-    view->y = (int32_t)((((int64_t)relative.x * camera_transform.up.x) +
-                         ((int64_t)relative.y * camera_transform.up.y) +
-                         ((int64_t)relative.z * camera_transform.up.z)) >> 16);
-    const fix16_t reciprocal = (fix16_t)cpu_divu_quotient_get();
-    const int32_t screen_x = 160 +
-        fix16_high_mul(reciprocal, fix16_int32_from(view->x));
-    const int32_t screen_y = 112 -
-        fix16_high_mul(reciprocal, fix16_int32_from(view->y));
-    return (sm64_saturn_projected_vertex_t){
-        .x = (int16_t)clamp32(screen_x, VDP1_COORD_MIN, VDP1_COORD_MAX),
-        .y = (int16_t)clamp32(screen_y, VDP1_COORD_MIN, VDP1_COORD_MAX),
-        .z = view->z
-    };
+    sm64_saturn_projected_vertex_t projected;
+    if (!sm64_saturn_ir_transform_one(&job, world, view, &projected)) {
+        *view = (sm64_saturn_vec3i_t){0, 0, world.z};
+        return (sm64_saturn_projected_vertex_t){0, 0, world.z};
+    }
+    return projected;
 #endif
 }
 

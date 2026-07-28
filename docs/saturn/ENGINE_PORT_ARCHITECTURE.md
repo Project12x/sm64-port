@@ -113,7 +113,8 @@ not a demand for wrappers around every Yaul call:
 
 ```text
 src/port/saturn/platform/   startup, frame clock, memory arenas, CD, SMPC, cart
-src/port/saturn/gfx/        Fast3D front end, frame queue, VDP1/VDP2 back ends
+src/port/saturn/gfx/        Fast3D front end, shared IR transform/texture jobs,
+                            frame queue, VDP1/VDP2 back ends
 src/port/saturn/assets/     package loader, residency, texture/animation banks
 src/port/saturn/audio/      AudioAPI implementation and SCSP transport
 src/port/saturn/harness/    bounded probes such as Castle viewer and turntable
