@@ -840,6 +840,16 @@ rendered frames and approximately 58,946/7,527 FRT ticks per rendered frame;
 the figures are parity/utilization evidence only, not a new 15 FPS claim. The
 ≥50% share gate and owner visual acceptance remain open.
 
+**Next-lever note (2026-07-28, dispatch-cost diagnosis):** the upload-split
+ dual profile records five bounded worker dispatches per rendered frame
+ (transform, classify, emit, Mario, and VDP1 upload). The slave performs useful
+ work, but the dual render interval remains approximately 7.8x the serial
+ interval in the paired emulator window. The next Task 5b experiment must
+ batch dependent work or adopt the accepted frame-pipeline snapshot model;
+ adding another independent worker call is not evidence-based. Until that
+ experiment has a visual capture and route comparator, the ≥50% share gate
+ remains open.
+
 **Progress note (2026-07-28, bounded cancellation polling):** the transform
 callback now reads the uncached cancellation latch once per 16 vertices rather
 than once per vertex; the bounded callback and outer timeout still provide the
