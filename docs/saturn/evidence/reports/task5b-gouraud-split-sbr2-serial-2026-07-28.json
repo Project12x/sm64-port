@@ -154,8 +154,8 @@
     "slave_render": null
   },
   "degradation": {
-    "poly_tier": null,
-    "view_radius": null
+    "poly_tier": 0,
+    "view_radius": 6000
   },
   "diagnostics": {
     "cd_block_copy_unimplemented": false,
