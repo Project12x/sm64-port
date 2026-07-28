@@ -2,6 +2,7 @@
 #include "ztreme_frustum.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 
 static int64_t dot_q16(const int32_t basis[3], const int64_t value[3])
 {

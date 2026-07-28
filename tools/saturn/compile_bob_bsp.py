@@ -16,7 +16,8 @@ from fractions import Fraction
 from math import ceil, floor
 from pathlib import Path
 
-from static_bsp import Node, Polygon, Vertex, build, iter_polygons, painter_order
+from static_bsp import (Node, Polygon, Vertex, build, iter_polygons,
+                         painter_order, plane_distance)
 
 
 def _polygons(scene: dict[str, object]) -> list[Polygon]:
@@ -46,6 +47,9 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
     polygons = _polygons(scene)
     root, stats = build(polygons, candidate_limit=candidate_limit,
                         split_weight=split_weight)
+    nodes, refs, children, ranges, subtree_ranges, octant_orders, leaf_ranges = _flatten(root)
+    leaf_nodes = [index for index, (start, count) in enumerate(leaf_ranges)
+                  if start >= 0 and count >= 0]
     origin_order = painter_order(root, (0, 0, 0))
     report = {
         "schema": "sm64-saturn-bob-static-bsp",
@@ -74,10 +78,28 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
             ], sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest(),
         "bounds": _bounds_report(root),
+        "flattened_ref_count": len(refs),
+        "leaf_node_count": len(leaf_nodes),
+        "leaf_fragment_count": sum(count for _start, count in leaf_ranges
+                                    if count >= 0),
+        "leaf_range_sha256": hashlib.sha256(
+            json.dumps(leaf_ranges, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "subtree_range_sha256": hashlib.sha256(
+            json.dumps(subtree_ranges, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "camera_octant_order": {
+            "octants": 8,
+            "policy": "quantized node extent probe; runtime validates actual plane sign",
+            "sha256": hashlib.sha256(
+                json.dumps(octant_orders, separators=(",", ":")).encode()
+            ).hexdigest(),
+        },
         "limits": [
             "Bounds are conservative floor/ceil quantized exact-rational fragment bounds",
             "Runtime traversal must use the camera position, not the origin order",
             "UV interpolation remains exact rational until final scene-header quantization",
+            "Preorder fragment refs are contiguous per subtree; source0 identity is preserved",
         ],
     }
     if manifest is not None:
@@ -178,46 +200,67 @@ def _bounds_report(root: Node) -> dict[str, object]:
     }
 
 
-def _flatten(root: Node) -> tuple[list[Node], list[int], list[tuple[int, int]], list[tuple[int, int]]]:
+def _flatten(root: Node) -> tuple[
+        list[Node], list[int], list[tuple[int, int]], list[tuple[int, int]],
+        list[tuple[int, int]], list[list[tuple[int, int]]],
+        list[tuple[int, int]]]:
+    """Flatten nodes and their immutable work ranges in preorder.
+
+    ``refs`` is a single preorder stream of final BSP fragments.  Every
+    fragment is appended exactly once, so a subtree's range is contiguous and
+    can be split between the SH-2s without rebuilding Mesh IR identity.  The
+    octant table is a deterministic admission hint: it chooses the child
+    order using a point one quantized node extent outside the node in each
+    camera-octant direction.  Runtime still validates the actual plane sign
+    for painter order; the table only avoids pointer-shaped policy data in the
+    generated artifact.
+    """
     nodes: list[Node] = []
     refs: list[int] = []
     ranges: list[tuple[int, int]] = []
+    subtree_ranges: list[tuple[int, int]] = []
+    leaf_ranges: list[tuple[int, int]] = []
+    children: list[tuple[int, int]] = []
+    octant_orders: list[list[tuple[int, int]]] = []
 
     def visit(node: Node | None) -> int:
         if node is None:
             return -1
         index = len(nodes)
         nodes.append(node)
-        ranges.append((len(refs), len(node.coplanar)))
+        own_start = len(refs)
+        ranges.append((own_start, len(node.coplanar)))
+        subtree_ranges.append((own_start, own_start))
+        leaf_ranges.append((-1, 0))
+        children.append((-1, -1))
+        octant_orders.append([(-1, -1)] * 8)
         refs.extend(polygon.source for polygon in node.coplanar)
-        visit(node.front)
-        visit(node.back)
+        front = visit(node.front)
+        back = visit(node.back)
+        children[index] = (front, back)
+        subtree_end = len(refs)
+        subtree_ranges[index] = (own_start, subtree_end - own_start)
+        if front < 0 and back < 0:
+            leaf_ranges[index] = (own_start, len(node.coplanar))
+        if front >= 0 and back >= 0:
+            minimum, maximum = _quantized_bounds(node)
+            center = tuple(Fraction(minimum[axis] + maximum[axis], 2)
+                           for axis in range(3))
+            extent = tuple(Fraction(maximum[axis] - minimum[axis], 2) + 1
+                           for axis in range(3))
+            for octant in range(8):
+                point = tuple(
+                    center[axis] + (extent[axis]
+                                    if octant & (1 << axis) else -extent[axis])
+                    for axis in range(3))
+                if plane_distance(node.plane, point) >= 0:
+                    octant_orders[index][octant] = (front, back)
+                else:
+                    octant_orders[index][octant] = (back, front)
         return index
 
     visit(root)
-    # Revisit using the same preorder so child indices are stable and there is
-    # no pointer-shaped data in the generated C artifact.
-    cursor = 0
-    children: list[tuple[int, int]] = []
-
-    def wire(node: Node | None) -> None:
-        nonlocal cursor
-        if node is None:
-            return
-        index = cursor
-        cursor += 1
-        front = cursor if node.front is not None else -1
-        if node.front is not None:
-            wire(node.front)
-        back = cursor if node.back is not None else -1
-        if node.back is not None:
-            wire(node.back)
-        if len(children) <= index:
-            children.extend([(-1, -1)] * (index + 1 - len(children)))
-        children[index] = (front, back)
-
-    wire(root)
-    return nodes, refs, children, ranges
+    return nodes, refs, children, ranges, subtree_ranges, octant_orders, leaf_ranges
 
 
 def _runtime_plane(plane: tuple[int, int, int, int]) -> tuple[tuple[int, int, int], int]:
@@ -252,7 +295,7 @@ def header_text(scene: dict[str, object], candidate_limit: int = 32,
     polygons = _polygons(scene)
     root, _stats = build(polygons, candidate_limit=candidate_limit,
                          split_weight=split_weight)
-    nodes, refs, children, ranges = _flatten(root)
+    nodes, refs, children, ranges, subtree_ranges, octant_orders, leaf_ranges = _flatten(root)
     lines = [
         "/* Generated by tools/saturn/compile_bob_bsp.py; do not edit. */",
         "#ifndef SM64_SATURN_BOB_BSP_H",
@@ -280,6 +323,25 @@ def header_text(scene: dict[str, object], candidate_limit: int = 32,
         "static const uint16_t sm64_saturn_bob_bsp_ref_ranges[SM64_SATURN_BOB_BSP_NODE_COUNT][2] = {",
     ]
     lines.extend("    {%dU, %dU}," % pair for pair in ranges)
+    lines += [
+        "};",
+        "/* Contiguous preorder ranges for a complete subtree and its leaf. */",
+        "static const uint16_t sm64_saturn_bob_bsp_subtree_ranges[SM64_SATURN_BOB_BSP_NODE_COUNT][2] = {",
+    ]
+    lines.extend("    {%dU, %dU}," % pair for pair in subtree_ranges)
+    lines += [
+        "};",
+        "static const int16_t sm64_saturn_bob_bsp_leaf_ranges[SM64_SATURN_BOB_BSP_NODE_COUNT][2] = {",
+    ]
+    lines.extend("    {%d, %d}," % pair for pair in leaf_ranges)
+    lines += [
+        "};",
+        "/* Stable camera-octant admission order; -1 denotes an absent child. */",
+        "static const int16_t sm64_saturn_bob_bsp_octant_child_order[SM64_SATURN_BOB_BSP_NODE_COUNT][8][2] = {",
+    ]
+    lines.extend(
+        "    {" + ", ".join("{%d, %d}" % pair for pair in orders) + "},"
+        for orders in octant_orders)
     lines += [
         "};",
         "/* Conservative final-fragment bounds; minima are floored and maxima ceiled. */",

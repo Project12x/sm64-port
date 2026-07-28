@@ -1,8 +1,9 @@
 # Saturn Renderer Pipeline Sprint
 
 > **Status:** In progress — Tasks 0–4 and the Task 5 compact one-dispatch slice
-> landed; route/visual acceptance and the one-dispatch performance gate remain
-> open.
+> landed. The fresh same-commit route proves deterministic compact output and
+> useful slave work, but the dual render-FRT gate fails; corrective Task 5A is
+> now the hard stop before bank, promotion, or LOD work.
 > **Date:** 2026-07-28
 > **Branch baseline:** `saturn/bootstrap` at `d58fc37`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
@@ -247,7 +248,9 @@ Task 3: tri-state traversal + bounded admission
         |
 Task 4: terrain-only view-space near handling
         |
-Task 5: one-dispatch terrain renderer
+        Task 5: one-dispatch terrain renderer
+        |
+Task 5A: remove the serial transform prepass (blocking correction)
         |
 Task 6: VDP1 double-bank submission
         |
@@ -387,12 +390,12 @@ of rejecting whole primitives from individual vertex failures.
   fragment vertices.
 - [x] Quantize bounds with an explicit error envelope; verify each source
   vertex remains inside its emitted bound after quantization.
-- [ ] Emit contiguous leaf ranges and immutable per-leaf primitive/material
-  ranges suitable for master/slave splitting.
-- [ ] Emit stable traversal-child order data for each camera octant.
+- [x] Emit contiguous preorder subtree/leaf ranges and immutable primitive
+  references suitable for master/slave splitting.
+- [x] Emit stable traversal-child order data for each camera octant.
 - [x] Emit an estimated work weight per leaf: fragments plus clip-risk and
   material-change terms. Keep the formula documented and versioned.
-- [ ] Preserve the current Mesh IR identity and `source0` mapping; do not
+- [x] Preserve the current Mesh IR identity and `source0` mapping; do not
   invent a parallel world format.
 - [x] Add a static-BSP schema/version bump and deterministic artifact digest.
 
@@ -553,6 +556,56 @@ Profile bus/cache stalls, result size, merge cost, and balance error, then
 record a bounded corrective task.
 
 **Commit:** `perf(saturn): fuse terrain into one slave dispatch`
+
+**Measured checkpoint — 2026-07-28 (same source/profile, fresh symbols):**
+
+The new serial and dual images both reach the exact SBR2 `replay_ticks=600`
+checkpoint with identical Mario/camera state, `fault_flags=0`,
+`command_capacity_rejects=0`, and `slave_timeouts=0`. The dual image issues
+exactly one job per rendered frame and produces 15,494 slave compact results
+versus 20,585 master results (42.9% of 36,079 admitted results); master wait
+is 12,986 FRT ticks (0.23% of the dual render accumulator). The performance
+gate nevertheless fails: serial render FRT is 3,887,383 ticks and dual is
+5,548,511 ticks, **42.7% slower**. This is the expected failure mode of the
+current slice because transform still runs as a serial pre-dispatch pass.
+The comparison is recorded in
+`docs/saturn/evidence/reports/task5-sbr2-current-compare-2026-07-28.json`.
+
+The sprint stops here. Do not begin Tasks 6–8 or frame-ahead work until the
+correction below either passes the same gate or is explicitly rejected with a
+measured follow-on plan.
+
+---
+
+### Task 5A — Remove the serial transform prepass (blocking correction)
+
+**Purpose:** Make the one-dispatch result producer a genuine concurrent
+same-frame renderer instead of a serial transform followed by a parallel
+classifier.
+
+**Work:**
+
+- [ ] Divide the accepted contiguous leaf ranges, not raw vertex indices, and
+  give each CPU a disjoint transform/clip/shade/compact range.
+- [ ] Keep shared source positions immutable; publish worker-produced spans
+  through an explicit cache-through/uncached hand-off or a measured purge at
+  the single join boundary.
+- [ ] Make the master process its complementary terrain range concurrently
+  with the slave and keep Mario on the master path.
+- [ ] Merge compact results by stable baked painter key; do not re-enter the
+  legacy primitive visibility path for emission.
+- [ ] Carry the bounded prior-spin correction into the leaf/work-weight split
+  and record balance error, useful-result counts, merge cost, and cache/DMA
+  costs.
+- [ ] Preserve the exact serial oracle and the timeout-to-serial fallback.
+
+**Gate:** same route/checkpoint and visual invariants; one job/render; zero
+faults/timeouts/rejected writes; master wait below 5%; slave useful results at
+least 35%; and dual render FRT at least 15% below serial. If this correction
+still loses, leave serial as default and open exactly one measured follow-on
+task before touching Tasks 6–8.
+
+**Commit:** `perf(saturn): overlap terrain transform and compact production`
 
 ---
 

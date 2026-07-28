@@ -2,6 +2,7 @@
 #include "slavedriver_terrain_clip.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 
 static uint16_t interpolate_u16(uint16_t first, uint16_t second,
                                 int32_t amount_q16)

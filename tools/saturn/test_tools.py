@@ -992,6 +992,11 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertEqual(first["bounds"]["root_min"], [-8191, -383, -8191])
         self.assertEqual(first["bounds"]["root_max"], [8192, 4294, 8192])
         self.assertGreater(first["bounds"]["root_work_weight"], 0)
+        self.assertEqual(first["flattened_ref_count"], 1425)
+        self.assertGreater(first["leaf_node_count"], 0)
+        self.assertEqual(first["camera_octant_order"]["octants"], 8)
+        self.assertEqual(len(first["leaf_range_sha256"]), 64)
+        self.assertEqual(len(first["subtree_range_sha256"]), 64)
         self.assertIn("runtime traversal", " ".join(first["limits"]).lower())
 
     def test_bob_bsp_header_emits_conservative_bounds_and_work_weights(self) -> None:
@@ -1001,6 +1006,9 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertIn("sm64_saturn_bob_bsp_bounds_min", header)
         self.assertIn("sm64_saturn_bob_bsp_bounds_max", header)
         self.assertIn("sm64_saturn_bob_bsp_work_weight", header)
+        self.assertIn("sm64_saturn_bob_bsp_subtree_ranges", header)
+        self.assertIn("sm64_saturn_bob_bsp_leaf_ranges", header)
+        self.assertIn("sm64_saturn_bob_bsp_octant_child_order", header)
         self.assertEqual(header, header_bob_bsp(scene))
 
     def test_bob_bsp_fragment_texture_cost_exposes_budget_gap(self) -> None:
