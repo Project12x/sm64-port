@@ -1,0 +1,24 @@
+# Linked demo-route SH-2 native-math census contract.
+#
+# Rows are exact: HOT|COLD <containing-function> <called-helper> <jsr-count>,
+# or HOT_SOURCE <repo-relative-source-suffix> <aggregate-jsr-count>.  The
+# source rows are intentional: the route evidence identifies per-tick source
+# components, while the verifier prints each contained function/helper pair.
+#
+# These are the BOB replay route's documented per-tick components from the
+# call-site map in docs/superpowers/specs/2026-07-26-soft-float-replacement-
+# design.md section 3.3.  The port row includes the active demo render loop.
+# Any count change is a stale-contract failure; remove rows as each conversion
+# eliminates that component's non-native calls.  Unlisted linked calls remain
+# visible as COLD because static disassembly cannot prove a rare branch ran.
+HOT_SOURCE src/port/saturn/ 34
+HOT_SOURCE src/game/camera.c 680
+HOT_SOURCE src/game/object_helpers.c 406
+HOT_SOURCE src/engine/math_util.c 169
+HOT_SOURCE src/game/mario_actions_moving.c 156
+HOT_SOURCE src/game/obj_behaviors.c 147
+HOT_SOURCE src/game/shadow.c 112
+HOT_SOURCE src/engine/surface_collision.c 101
+HOT_SOURCE src/game/mario.c 95
+HOT_SOURCE src/game/mario_step.c 84
+HOT_SOURCE src/game/interaction.c 56

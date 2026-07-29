@@ -6,6 +6,9 @@ ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
+SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump
+SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line
+SOURCEBOOT_NATIVE_MATH_ALLOWLIST := $(ROOT)/tools/saturn/sh2_native_math_allowlist.txt
 SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
@@ -532,6 +535,10 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # the Pipe 5 disappearing-geometry root cause. Demo-path images only -- the
 # default profile does not link the demo renderer's shared state.
 	@if [ "$(SATURN_DEMO_PATH)" = "1" ]; then \
+	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py" \
+	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" "$(SOURCEBOOT_NATIVE_MATH_ALLOWLIST)" \
+	    --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
+	    --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_dual_cpu_coherency.py" \
 	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).sym"; \
 	fi
