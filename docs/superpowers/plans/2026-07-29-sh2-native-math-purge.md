@@ -40,16 +40,26 @@ sweep whatever the census tags in `saturn_demo_render.c`, `saturn_ir_*`,
 actor bridge). Acceptance: route checkpoint unchanged, pixel-diff vs current
 frame within stated bbox tolerance, census HOT count for `src/port/` = **0**.
 
-## Task 2: `math_util.c` + `sqrtf/sinf/cosf` call sites (engine seam #1)
-- `TARGET_SATURN`-guarded Q-format twins of the hot `math_util` functions
-  (vec3 ops, `atan2s`, `approach_*`), per the approved engine-exception
-  checklist (five items in the implementing commit).
+## Task 2: `math_util.c` + `sqrtf/sinf/cosf` call sites (engine seam #1; resliced)
+
+> **Owner reslice — 2026-07-29:** Task 2 closes at the measured
+> `atan2s`/`atan2_lookup` seam. Its implementation and technical review are
+> complete through `3f249d8`. This deliberately does **not** claim completion
+> for the broader original `math_util`/trig scope.
+
+- Delivered scope: `TARGET_SATURN`-guarded Q16 `atan2s` and
+  `atan2_lookup`, with host differential/mutation gates and two independent,
+  role-bound 2,000-tick target A/B captures.
+- Explicitly deferred follow-on scope: hot vec3 operations, `approach_*`, and
+  `sqrtf`/`sinf`/`cosf` call sites. Re-estimate and schedule these after the
+  camera seam rather than silently treating them as complete.
 - The verified 1-ulp `sinf/cosf` from scratchpad `rejected-fix2/` becomes
-  live only if a float path survives a stage; otherwise trig goes straight
-  to `saturn_trig_q16` tables.
-- Methodology per function: host-differential vs the float original on real
-  captured inputs (mtxq pattern), tolerance derived not picked; route
-  checkpoint + 2,000-tick positional-divergence gate (< 1.0 world unit).
+  live only if a float path survives a later stage; otherwise trig goes
+  straight to `saturn_trig_q16` tables.
+- Methodology for every future function remains host-differential versus the
+  float original on real captured inputs (mtxq pattern), tolerance derived
+  rather than picked, plus route checkpoint and 2,000-tick
+  positional-divergence gate (< 1.0 world unit).
 
 ## Task 3: Camera (`camera.c`, 382 refs — the sim's biggest single pocket)
 Convert the per-tick camera math to Q-format behind the seam. The sm64-psx

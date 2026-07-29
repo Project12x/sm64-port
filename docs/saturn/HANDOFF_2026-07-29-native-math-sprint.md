@@ -19,14 +19,17 @@ Only the entire sprint completing, a genuine external decision, or an explicit u
 
 - Worktree: `sm64-port/.worktrees/sh2-native-math-purge`
 - Branch: `sh2/native-math-purge`
-- Current commit: `f07fdd9` (`docs: record Task 2 post-conversion captures`)
+- Task 2 technical checkpoint: `3f249d8` (`fix: bind native math A/B evidence to build roles`)
+- Scope decision: owner-approved Task 2 reslice on 2026-07-29; the completed
+  seam is `atan2s`/`atan2_lookup`, not the broader original `math_util`/trig
+  target.
 
 ## Completed, review-clean tasks
 
 - **Task 0:** native-math census gate. Renderer route is immutable and graph-derived; spill/reload calls and the pinned worker callback edge are covered.
 - **Task 1:** port-owned hot render math is Q16. Route visual/checkpoint evidence is byte-identical to Pipe 8. Differential and mutation checks are wired into `verify-all`.
 
-## Task 2 — implementation and acceptance evidence complete; review outstanding
+## Task 2 — review-clean and closed at the measured atan2 seam
 
 Implementation commits:
 
@@ -35,20 +38,29 @@ Implementation commits:
 - `376b032`: `TARGET_SATURN` Q16 atan2 seam.
 - `32eeb25` / `363bce2`: portable host-fixture temporary-directory and MSYS compiler selection.
 - `f07fdd9`: fresh post-conversion capture evidence.
+- `24cf416` / `3f249d8`: remediation gates and build-role-bound A/B evidence.
 
 Fresh target result:
 
-- Yaul ELF SHA-256: `54d36006080f75119376a0bd16a09d99214f8027a04a63c155374b2d56462305`.
-- Full `make verify` passed: Q16 differential + mutation, native-math HOT total 0, dual-CPU coherency.
-- Two independent 2,000-tick Ymir runs accepted: 64 samples each for `atan2s` and `atan2_lookup`, counters 125,618 each.
-- Final Mario XYZ bit patterns are exact against baseline; L-infinity positional divergence is **0.0 world units**.
-- Live SMC1 corpus/counter differs from the pre-conversion run (128/128 samples, +186 calls); this is recorded, not hidden. The captured-input old-fixture differential remains passing.
+- Static audited simulation-helper total falls from 584 to 582; the converted
+  callers have no remaining audited helper edges.
+- Two independent, role-bound 2,000-tick target A/B comparisons pass. Final
+  Mario XYZ bit patterns are exact, L-infinity positional divergence is
+  **0.0 world units**, and timer/camera/output/reject gates are equal and
+  valid.
+- The route's `sim_frt_ticks_accum` falls from 73,447,067 to 71,594,372
+  (-2.5225%). This is a simulation-kernel result, not an end-to-end or retail
+  performance claim; the available emulator wall time is slower for Q16.
+- Broader vec3, `approach_*`, and `sqrtf`/`sinf`/`cosf` conversions are
+  explicitly deferred for follow-on planning after Task 3.
 
-Primary evidence: `docs/saturn/evidence/reports/task2-sh2-native-math-capture-2026-07-29.md` and the `task2-post376b032-*` JSON artifacts beside it.
+Primary evidence: `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab-2026-07-29.json`, `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab-repeat-2026-07-29.json`, and the role-bound capture artifacts beside them.
 
 ## Required next action
 
-Dispatch a fresh **Task 2 reviewer** over `9e4dd6a..f07fdd9` (or task-specific packages for the implementation/evidence commits). It must decide whether the documented live-corpus change is acceptable under the positional-divergence and output-contract requirements. Do not start Task 3 until Task 2 receives a clean review or its fix loop resolves findings.
+Dispatch a fresh **Task 3 implementer** for the per-tick camera seam. Its
+acceptance gate is bit-stable neutral-stick idle camera over 600 ticks, in
+addition to the standing differential, mutation, and route-checkpoint rules.
 
 ## Environment facts
 
