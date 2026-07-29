@@ -10,6 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from compare_route_reports import PROBE_FIELDS
+
 
 ROOT = Path(__file__).resolve().parent
 VERIFY = ROOT / "verify_math_route_capture.py"
@@ -32,11 +34,59 @@ def capture() -> dict[str, object]:
         "atan2_lookup_samples": 64,
         "corpus": corpus,
     }
+    route = {
+        "magic": 0x53425233,
+        "version": 3,
+        "replay_ticks": 2000,
+        "global_timer": 2001,
+        "mario_action": 0x04000440,
+        "mario_pos_x_bits": 0xC2F70000,
+        "mario_pos_y_bits": 0,
+        "mario_pos_z_bits": 0x43E42000,
+        "mario_face_angle_x": 0,
+        "mario_face_angle_y": 0x8000,
+        "mario_face_angle_z": 0,
+        "camera_pos_x_bits": 0x41200000,
+        "camera_pos_y_bits": 0x41A00000,
+        "camera_pos_z_bits": 0x41F00000,
+        "camera_mode": 1,
+        "triangles_transformed": 2311,
+        "triangles_emitted": 913,
+        "triangles_vdp1_emitted": 829,
+        "reject_near_far": 100,
+        "reject_backface": 200,
+        "reject_degenerate": 300,
+        "reject_vertex_range": 400,
+        "reject_command_capacity": 0,
+        "reject_vdp1_arena_capacity": 0,
+        "reject_w_nonpositive": 500,
+        "reject_z_near": 600,
+        "reject_z_far": 700,
+        "reject_offscreen": 800,
+        "reject_span": 900,
+        "reject_w_nonpositive_overflow_suspect": 1000,
+        "fault_flags": 0,
+        "frame_serial": 500,
+        "sim_frt_ticks_accum": 10000,
+        "render_frt_ticks_accum": 20000,
+        "render_frt_ticks_last": 40,
+        "master_wait_ticks": 50,
+        "slave_busy_ticks": 60,
+        "slave_jobs_completed": 500,
+        "slave_timeouts": 0,
+    }
+    route_bytes = list(
+        b"".join(route[field].to_bytes(4, "big") for field in PROBE_FIELDS)
+    )
     return {
         "evidence_kind": "ymir-sourceboot-smc1-math-route",
         "schema_version": 2,
-        "artifacts": {"game": {"sha256": "game"}, "elf": {"sha256": "elf"}},
-        "route_window": {"decoded": {"replay_ticks": 2000}},
+        "artifacts": {
+            "game": {"sha256": "1" * 64, "size": 80},
+            "image": {"sha256": "2" * 64, "size": 1000},
+            "elf": {"sha256": "3" * 64, "size": 2000},
+        },
+        "route_window": {"data": route_bytes, "decoded": route},
         "math_window": {"decoded": math},
     }
 
@@ -74,6 +124,13 @@ class VerifyMathRouteCaptureTests(unittest.TestCase):
         completed = self.run_verifier(first, first)
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("atan2_lookup", completed.stderr)
+
+    def test_rejects_route_decoded_view_that_does_not_match_raw_capture(self) -> None:
+        first = capture()
+        first["route_window"]["decoded"]["global_timer"] += 1  # type: ignore[index]
+        completed = self.run_verifier(first, first)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("decoded route probe does not match raw bytes", completed.stderr)
 
 
 if __name__ == "__main__":

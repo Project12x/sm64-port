@@ -48,6 +48,9 @@ int main(void)
         const unsigned actual = function[5] == 's' ?
             (uint16_t)atan2s(y, x) : atan2_lookup(y, x);
         if (actual != expected) {
+#if defined(SM64_SATURN_TEST_MUTATE_ATAN2_Q16)
+            fputs("captured atan2 sample changed: ", stderr);
+#endif
             fprintf(stderr, "%s %08x %08x: expected %u, got %u\n",
                     function, y_bits, x_bits, expected, actual);
             return 1;

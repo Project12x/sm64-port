@@ -1,0 +1,10 @@
+# Immutable v2 post-conversion source-simulation audit. The exact total 582
+# is the linked route census from the checked-in conversion baseline ELF
+# 54d36006080f75119376a0bd16a09d99214f8027a04a63c155374b2d56462305.
+# The converted atan2 callers must remain free of every audited native-math
+# helper, regardless of which comparison helper a future compiler selects.
+AUDIT_CONTRACT_VERSION 2
+EXPECTED_ROOT _game_loop_one_iteration
+EXPECTED_TOTAL 582
+FORBIDDEN_CALLER _atan2_lookup
+FORBIDDEN_CALLER _atan2s

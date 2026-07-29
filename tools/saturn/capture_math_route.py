@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Capture the replay-only SMC1 math corpus through Ymir.
+"""Capture the replay-only SMC1 math corpus and SBR3 behavior through Ymir.
 
-The capture intentionally waits for the existing sourceboot SBR2 checkpoint,
+The capture intentionally waits for the sourceboot SBR3 checkpoint,
 then reads the separately linked SMC1 block from the same paused emulation
 state.  It records raw bytes as well as decoded IEEE-754 input bits so a host
 differential test can consume the capture without trusting formatted floats.
@@ -82,6 +82,8 @@ def main() -> int:
     parser.add_argument("--route-address", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--math-address", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--expected-ticks", type=int, default=2000)
+    parser.add_argument("--degradation-view-radius", type=int, required=True)
+    parser.add_argument("--degradation-poly-tier", type=int, required=True)
     parser.add_argument("--timeout", type=float, default=1800.0)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -99,7 +101,8 @@ def main() -> int:
     frames = 0
     try:
         client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
-        frames = run_boot_macro(client)
+        boot_frames = run_boot_macro(client)
+        frames = boot_frames
         route: dict[str, Any] | None = None
         route_data: list[int] = []
         while route is None or int(route["replay_ticks"]) < args.expected_ticks:
@@ -125,19 +128,38 @@ def main() -> int:
         raise
 
     elf = newest_sibling_elf(args.game)
+    image = args.game.with_suffix(".iso")
+    if not image.is_file():
+        parser.error(f"capture image is missing: {image}")
+    route_window = {
+        "address": args.route_address,
+        "data": route_data,
+        "decoded": route,
+    }
     report = {
         "evidence_kind": "ymir-sourceboot-smc1-math-route",
         "schema_version": MATH_VERSION,
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
         "game": str(args.game),
-        "artifacts": {"game": artifact_identity(args.game), "elf": artifact_identity(elf)},
+        "artifacts": {
+            "game": artifact_identity(args.game),
+            "image": artifact_identity(image),
+            "elf": artifact_identity(elf),
+        },
         "dram_cart": True,
         "bios_input": True,
+        "frames": frames,
+        "post_poke_frames": frames - boot_frames,
         "emulated_frames": frames,
         "emulation_timing": emulation_timing(frames, time.perf_counter() - started),
-        "route_window": {"address": args.route_address, "data": route_data, "decoded": route},
+        "probe_window": route_window,
+        "route_window": route_window,
         "math_window": {"address": args.math_address, "data": math_data[:MATH_BYTES], "decoded": math},
+        "degradation": {
+            "view_radius": args.degradation_view_radius,
+            "poly_tier": args.degradation_poly_tier,
+        },
         "corpus_contract": {
             "capacity_per_function": MATH_CORPUS_SLOTS,
             "entry_encoding": "function, IEEE-754 binary32 y bits, IEEE-754 binary32 x bits, u16 angle result",

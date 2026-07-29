@@ -49,8 +49,8 @@ class BaselineContract:
 class AuditContract:
     version: int
     expected_root: str
-    minimum_total: int
-    required_entries: dict[tuple[str, str], int]
+    expected_total: int
+    forbidden_callers: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
 SIM_ROUTE_ORACLE_V1_SHA256 = "3bde797d9f07323b112b297c49ff4debd2a786c81d1e1be382feaf857f278a2f"
-SIM_AUDIT_CONTRACT_V1_SHA256 = "4c42e926a72948d938848cfc33aa76ddbb48b64c859bbbe42f23006e4fe8c982"
+SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -267,11 +267,11 @@ def parse_baseline(text: str) -> BaselineContract:
 
 
 def parse_audit_contract(text: str) -> AuditContract:
-    """Parse the required root, floor, and candidate rows for a route audit."""
+    """Parse a fixed post-conversion total and forbidden converted callers."""
     version: int | None = None
     expected_root: str | None = None
-    minimum_total: int | None = None
-    required_entries: dict[tuple[str, str], int] = {}
+    expected_total: int | None = None
+    forbidden_callers: set[str] = set()
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
         if not line:
@@ -285,24 +285,21 @@ def parse_audit_contract(text: str) -> AuditContract:
             if expected_root is not None:
                 raise ValueError(f"audit contract line {line_number}: duplicate expected root")
             expected_root = parts[1]
-        elif parts[0] == "MINIMUM_TOTAL" and len(parts) == 2:
-            if minimum_total is not None:
-                raise ValueError(f"audit contract line {line_number}: duplicate minimum total")
-            minimum_total = int(parts[1], 10)
-        elif parts[0] == "REQUIRED" and len(parts) == 4:
-            caller, helper, count_text = parts[1:]
-            count = int(count_text, 10)
-            key = (caller, helper)
-            if count <= 0 or key in required_entries:
-                raise ValueError(f"audit contract line {line_number}: invalid required entry")
-            required_entries[key] = count
+        elif parts[0] == "EXPECTED_TOTAL" and len(parts) == 2:
+            if expected_total is not None:
+                raise ValueError(f"audit contract line {line_number}: duplicate expected total")
+            expected_total = int(parts[1], 10)
+        elif parts[0] == "FORBIDDEN_CALLER" and len(parts) == 2:
+            if parts[1] in forbidden_callers:
+                raise ValueError(f"audit contract line {line_number}: duplicate forbidden caller")
+            forbidden_callers.add(parts[1])
         else:
             raise ValueError(f"audit contract line {line_number}: invalid directive")
-    if version != 1 or expected_root is None or minimum_total is None or minimum_total <= 0:
-        raise ValueError("audit contract requires v1 root and positive minimum total")
-    if not required_entries:
-        raise ValueError("audit contract requires at least one candidate entry")
-    return AuditContract(version, expected_root, minimum_total, required_entries)
+    if version != 2 or expected_root is None or expected_total is None or expected_total < 0:
+        raise ValueError("audit contract requires v2 root and non-negative expected total")
+    if not forbidden_callers:
+        raise ValueError("audit contract requires at least one forbidden caller")
+    return AuditContract(version, expected_root, expected_total, frozenset(forbidden_callers))
 
 
 def baseline_digest(text: str) -> str:
@@ -323,8 +320,8 @@ def verify_route_oracle_integrity(text: str, oracle: RouteOracle, *, expected_di
         raise ValueError("immutable route oracle digest mismatch")
 
 
-def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expected_digest: str = SIM_AUDIT_CONTRACT_V1_SHA256) -> None:
-    if contract.version != 1:
+def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expected_digest: str = SIM_AUDIT_CONTRACT_V2_SHA256) -> None:
+    if contract.version != 2:
         raise ValueError(f"unsupported audit contract version {contract.version}")
     if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
         raise ValueError("immutable audit contract digest mismatch")
@@ -368,18 +365,22 @@ def baseline_failures(calls: Iterable[CallSite], route_functions: set[str], base
 
 def audit_failures(calls: Iterable[CallSite], route_functions: set[str], oracle: RouteOracle,
                    contract: AuditContract) -> list[str]:
-    """Reject a missing source-simulation root, empty route, or missing candidate."""
+    """Enforce the pinned post-conversion total and absence of helper regressions."""
     failures: list[str] = []
     if contract.expected_root not in oracle.roots:
         failures.append(f"audit root missing: expected {contract.expected_root}")
     observed = Counter((call.caller, call.helper) for call in calls if call.caller in route_functions)
     actual_total = sum(observed.values())
-    if actual_total < contract.minimum_total:
-        failures.append(f"audit total below floor {contract.minimum_total}, found {actual_total}")
-    for key, minimum in sorted(contract.required_entries.items()):
-        actual = observed.get(key, 0)
-        if actual < minimum:
-            failures.append(f"audit candidate missing: {key[0]} {key[1]} minimum {minimum}, found {actual}")
+    if actual_total != contract.expected_total:
+        failures.append(
+            "audit total differs from fixed post-conversion baseline "
+            f"{contract.expected_total}, found {actual_total}"
+        )
+    for (caller, helper), actual in sorted(observed.items()):
+        if caller in contract.forbidden_callers:
+            failures.append(
+                f"audit forbidden caller uses native math: {caller} {helper} found {actual}"
+            )
     return failures
 
 

@@ -68,6 +68,7 @@ def compiler_environment(
             compiler_bin = str(compiler_path.parent)
             existing_path = environment.get("PATH", "")
             environment["PATH"] = compiler_bin if not existing_path else compiler_bin + os.pathsep + existing_path
+            environment.pop("COMPILER_PATH", None)
     return environment
 
 
@@ -98,9 +99,16 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
             self.assertEqual(compiler, str(mingw_gcc))
 
             environment = compiler_environment(
-                Path(temporary), {"PATH": str(msys_root / "usr" / "bin")}, mingw_gcc)
+                Path(temporary),
+                {
+                    "PATH": str(msys_root / "usr" / "bin"),
+                    "COMPILER_PATH": r"C:\cross\sh-elf",
+                },
+                mingw_gcc,
+            )
 
             self.assertEqual(environment["PATH"].split(os.pathsep)[0], str(mingw_gcc.parent))
+            self.assertNotIn("COMPILER_PATH", environment)
 
     def test_target_q16_seam_matches_every_captured_atan2_result(self) -> None:
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -111,6 +119,9 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
 
         compiler = compatible_host_compiler()
         self.assertIsNotNone(compiler, "gcc is required for the engine seam fixture")
+        expect_mutation = bool(
+            os.environ.get("SM64_SATURN_EXPECT_ATAN2_Q16_MUTATION")
+        )
         with tempfile.TemporaryDirectory() as temporary:
             executable = Path(temporary) / ("engine-atan2-q16-fixture.exe" if os.name == "nt" else "engine-atan2-q16-fixture")
             corpus = "".join(
@@ -131,7 +142,19 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
                 )
                 self.assertEqual(compiled.returncode, 0, compiled.stderr)
                 completed = subprocess.run([str(executable)], input=corpus, text=True, capture_output=True, check=False)
-                self.assertEqual(completed.returncode, 0, completed.stderr)
+                if target and expect_mutation:
+                    self.assertNotEqual(
+                        completed.returncode,
+                        0,
+                        "engine atan2 Q16 mutation escaped the captured-route differential",
+                    )
+                    self.assertIn(
+                        "captured atan2 sample changed",
+                        completed.stderr,
+                        "mutation run failed for an infrastructure reason, not a changed result",
+                    )
+                else:
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 if __name__ == "__main__":

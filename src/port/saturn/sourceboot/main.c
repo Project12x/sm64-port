@@ -101,7 +101,7 @@ static void sourceboot_capture_route_checkpoint(void) {
     }
 
     /* Publish the latest source-frame state. The host accepts it only when
-     * replay_ticks is the route's exact 600-tick endpoint, so a stalled
+     * replay_ticks is the route's exact configured endpoint, so a stalled
      * controller cadence is reported as a failed gate rather than omitted. */
     sourceboot_route_checkpoint.version = SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION;
     sourceboot_route_checkpoint.replay_ticks = runtime->input_replay_ticks;
@@ -111,6 +111,12 @@ static void sourceboot_capture_route_checkpoint(void) {
         sourceboot_route_checkpoint.mario_pos_x_bits = sourceboot_float_bits(gMarioState->pos[0]);
         sourceboot_route_checkpoint.mario_pos_y_bits = sourceboot_float_bits(gMarioState->pos[1]);
         sourceboot_route_checkpoint.mario_pos_z_bits = sourceboot_float_bits(gMarioState->pos[2]);
+        sourceboot_route_checkpoint.mario_face_angle_x =
+            (uint32_t)(uint16_t)gMarioState->faceAngle[0];
+        sourceboot_route_checkpoint.mario_face_angle_y =
+            (uint32_t)(uint16_t)gMarioState->faceAngle[1];
+        sourceboot_route_checkpoint.mario_face_angle_z =
+            (uint32_t)(uint16_t)gMarioState->faceAngle[2];
     } else {
         /* Keep the replay completion observable even if an early bootstrap
          * regression has not produced Mario state yet. The comparator treats
@@ -119,14 +125,44 @@ static void sourceboot_capture_route_checkpoint(void) {
         sourceboot_route_checkpoint.mario_pos_x_bits = UINT32_MAX;
         sourceboot_route_checkpoint.mario_pos_y_bits = UINT32_MAX;
         sourceboot_route_checkpoint.mario_pos_z_bits = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_face_angle_x = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_face_angle_y = UINT32_MAX;
+        sourceboot_route_checkpoint.mario_face_angle_z = UINT32_MAX;
+    }
+    if (gCamera != NULL) {
+        sourceboot_route_checkpoint.camera_pos_x_bits =
+            sourceboot_float_bits(gCamera->pos[0]);
+        sourceboot_route_checkpoint.camera_pos_y_bits =
+            sourceboot_float_bits(gCamera->pos[1]);
+        sourceboot_route_checkpoint.camera_pos_z_bits =
+            sourceboot_float_bits(gCamera->pos[2]);
+    } else {
+        sourceboot_route_checkpoint.camera_pos_x_bits = UINT32_MAX;
+        sourceboot_route_checkpoint.camera_pos_y_bits = UINT32_MAX;
+        sourceboot_route_checkpoint.camera_pos_z_bits = UINT32_MAX;
     }
     sourceboot_route_checkpoint.camera_mode =
         gCamera == NULL ? UINT32_MAX : (uint32_t)(uint16_t)gCamera->mode;
     sourceboot_route_checkpoint.triangles_transformed = profile->triangles_transformed;
+    sourceboot_route_checkpoint.triangles_emitted = profile->triangles_emitted;
     sourceboot_route_checkpoint.triangles_vdp1_emitted = profile->triangles_vdp1_emitted;
-    sourceboot_route_checkpoint.fault_flags = profile->fault_flags;
-    sourceboot_route_checkpoint.command_capacity_rejects =
+    sourceboot_route_checkpoint.reject_near_far = profile->reject_near_far;
+    sourceboot_route_checkpoint.reject_backface = profile->reject_backface;
+    sourceboot_route_checkpoint.reject_degenerate = profile->reject_degenerate;
+    sourceboot_route_checkpoint.reject_vertex_range = profile->reject_vertex_range;
+    sourceboot_route_checkpoint.reject_command_capacity =
         profile->reject_command_capacity;
+    sourceboot_route_checkpoint.reject_vdp1_arena_capacity =
+        profile->reject_vdp1_arena_capacity;
+    sourceboot_route_checkpoint.reject_w_nonpositive =
+        profile->reject_w_nonpositive;
+    sourceboot_route_checkpoint.reject_z_near = profile->reject_z_near;
+    sourceboot_route_checkpoint.reject_z_far = profile->reject_z_far;
+    sourceboot_route_checkpoint.reject_offscreen = profile->reject_offscreen;
+    sourceboot_route_checkpoint.reject_span = profile->reject_span;
+    sourceboot_route_checkpoint.reject_w_nonpositive_overflow_suspect =
+        profile->reject_w_nonpositive_overflow_suspect;
+    sourceboot_route_checkpoint.fault_flags = profile->fault_flags;
     sourceboot_route_checkpoint.frame_serial = profile->frame_serial;
     sourceboot_route_checkpoint.sim_frt_ticks_accum = profile->sim_frt_ticks_accum;
     sourceboot_route_checkpoint.render_frt_ticks_accum = profile->render_frt_ticks_accum;

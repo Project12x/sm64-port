@@ -1267,26 +1267,94 @@ class YmirInputTests(unittest.TestCase):
 
 
 class BobParityRouteTests(unittest.TestCase):
+    SBR3_FIELDS = (
+        "magic", "version", "replay_ticks", "global_timer", "mario_action",
+        "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits",
+        "mario_face_angle_x", "mario_face_angle_y", "mario_face_angle_z",
+        "camera_pos_x_bits", "camera_pos_y_bits", "camera_pos_z_bits",
+        "camera_mode", "triangles_transformed", "triangles_emitted",
+        "triangles_vdp1_emitted", "reject_near_far", "reject_backface",
+        "reject_degenerate", "reject_vertex_range", "reject_command_capacity",
+        "reject_vdp1_arena_capacity", "reject_w_nonpositive", "reject_z_near",
+        "reject_z_far", "reject_offscreen", "reject_span",
+        "reject_w_nonpositive_overflow_suspect", "fault_flags", "frame_serial",
+        "sim_frt_ticks_accum", "render_frt_ticks_accum",
+        "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks",
+        "slave_jobs_completed", "slave_timeouts",
+    )
+
     @staticmethod
-    def _report(words: list[int]) -> dict[str, object]:
-        words = list(words)
-        words[0] = 0x53425232
-        words[1] = 2
-        words.extend([0] * (21 - len(words)))
+    def _float_bits(value: float) -> int:
+        return struct.unpack(">I", struct.pack(">f", value))[0]
+
+    @staticmethod
+    def _probe(**overrides: int) -> dict[str, int]:
+        probe = {
+            "magic": 0x53425233,
+            "version": 3,
+            "replay_ticks": 2000,
+            "global_timer": 2001,
+            "mario_action": 0x04000440,
+            "mario_pos_x_bits": BobParityRouteTests._float_bits(-123.5),
+            "mario_pos_y_bits": BobParityRouteTests._float_bits(0.0),
+            "mario_pos_z_bits": BobParityRouteTests._float_bits(456.25),
+            "mario_face_angle_x": 0x0010,
+            "mario_face_angle_y": 0x8000,
+            "mario_face_angle_z": 0xFFF0,
+            "camera_pos_x_bits": BobParityRouteTests._float_bits(10.0),
+            "camera_pos_y_bits": BobParityRouteTests._float_bits(20.0),
+            "camera_pos_z_bits": BobParityRouteTests._float_bits(30.0),
+            "camera_mode": 1,
+            "triangles_transformed": 2311,
+            "triangles_emitted": 913,
+            "triangles_vdp1_emitted": 829,
+            "reject_near_far": 100,
+            "reject_backface": 200,
+            "reject_degenerate": 300,
+            "reject_vertex_range": 400,
+            "reject_command_capacity": 0,
+            "reject_vdp1_arena_capacity": 0,
+            "reject_w_nonpositive": 500,
+            "reject_z_near": 600,
+            "reject_z_far": 700,
+            "reject_offscreen": 800,
+            "reject_span": 900,
+            "reject_w_nonpositive_overflow_suspect": 1000,
+            "fault_flags": 0,
+            "frame_serial": 500,
+            "sim_frt_ticks_accum": 10000,
+            "render_frt_ticks_accum": 20000,
+            "render_frt_ticks_last": 40,
+            "master_wait_ticks": 50,
+            "slave_busy_ticks": 60,
+            "slave_jobs_completed": 500,
+            "slave_timeouts": 0,
+        }
+        probe.update(overrides)
+        return probe
+
+    @staticmethod
+    def _report(probe: dict[str, int]) -> dict[str, object]:
+        words = [probe[field] for field in BobParityRouteTests.SBR3_FIELDS]
+        raw = list(struct.pack(">39I", *words))
         return {
             "evidence_kind": "ymir-emulator",
             "game": "sourceboot.cue",
             "frames": 240,
             "post_poke_frames": 36000,
-            "probe_window": {"data": list(struct.pack(">21I", *words))},
+            "probe_window": {"data": raw, "decoded": dict(probe)},
             "protocol": {"ready": True},
             "degradation": {"view_radius": 6000, "poly_tier": 0},
+            "artifacts": {
+                "elf": {"sha256": "1" * 64, "size": 100},
+                "image": {"sha256": "2" * 64, "size": 200},
+            },
         }
 
-    def test_route_is_600_ticks_and_has_movement_jump_and_camera_input(self) -> None:
+    def test_route_is_2000_ticks_and_has_movement_jump_and_camera_input(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        self.assertEqual(route["simulation_ticks"], 600)
-        self.assertEqual(sum(sample["ticks"] for sample in route["samples"]), 600)
+        self.assertEqual(route["simulation_ticks"], 2000)
+        self.assertEqual(sum(sample["ticks"] for sample in route["samples"]), 2000)
         self.assertTrue(any(sample["buttons"] & 0x8000 for sample in route["samples"]))
         self.assertTrue(any(sample["buttons"] & 0x0003 for sample in route["samples"]))
         self.assertTrue(any(sample["stick_x"] or sample["stick_y"] for sample in route["samples"]))
@@ -1301,77 +1369,109 @@ class BobParityRouteTests(unittest.TestCase):
         self.assertEqual(manifest["reproduction"]["repeat_count"], 2)
         self.assertEqual(
             [view["route_tick"] for view in manifest["viewpoints"]],
-            [360, 504, 600],
+            [360, 504, 2000],
         )
         self.assertTrue(all(view["route_tick"] <= route["checkpoint_tick"] for view in manifest["viewpoints"]))
 
-    def test_comparator_accepts_identical_complete_checkpoints(self) -> None:
+    def test_stage2_comparator_accepts_subunit_mario_drift_and_one_percent_reject_drift(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        report = self._report(words)
-        result = compare_reports(report, report, route)
+        before = self._probe()
+        after = self._probe(
+            mario_pos_x_bits=self._float_bits(-122.5001),
+            reject_near_far=101,
+            reject_w_nonpositive_overflow_suspect=1010,
+        )
+        result = compare_reports(self._report(before), self._report(after), route)
         self.assertTrue(result["deterministic"])
+        self.assertLess(result["behavioral_gate"]["mario_position_linf"], 1.0)
 
-    def test_comparator_rejects_checkpoint_state_drift(self) -> None:
+    def test_stage2_comparator_rejects_one_world_unit_mario_drift(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        left = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        right = left.copy()
-        right[5] = 4
-        result = compare_reports(
-            self._report(left), self._report(right), route)
+        before = self._probe()
+        after = self._probe(mario_pos_z_bits=self._float_bits(457.25))
+        result = compare_reports(self._report(before), self._report(after), route)
         self.assertFalse(result["deterministic"])
-        self.assertIn("source checkpoint signature differs", result["errors"])
+        self.assertIn("Mario position L-infinity divergence is not < 1.0", result["errors"])
 
     def test_comparator_accepts_route_in_paired_extra_probe_window(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        report = self._report(words)
-        report["probe_window"] = {"data": [0] * (21 * 4)}
-        extra_words = words + [0] * 8
-        extra_words[0] = 0x53425232
-        extra_words[1] = 2
-        report["extra_probe_window"] = {"data": list(struct.pack(">21I", *extra_words))}
+        probe = self._probe()
+        report = self._report(probe)
+        report["probe_window"] = {"data": [0] * (39 * 4)}
+        report["extra_probe_window"] = {
+            "data": list(struct.pack(">39I", *(probe[field] for field in self.SBR3_FIELDS))),
+            "decoded": dict(probe),
+        }
         result = compare_reports(report, report, route)
         self.assertTrue(result["deterministic"])
 
-    def test_v2_route_keeps_renderer_deltas_informational(self) -> None:
+    def test_stage2_comparator_requires_identical_face_camera_and_triangles_emitted(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        route["report_schema"]["version"] = "sourceboot-route-v2"
-        route["report_schema"]["compare_renderer_counters"] = False
-        left = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        right = left.copy()
-        right[9] += 100
-        right[10] += 50
-        result = compare_reports(self._report(left), self._report(right), route)
-        self.assertTrue(result["deterministic"])
-        self.assertEqual(result["renderer_counter_deltas"], {
-            "triangles_transformed": 100, "triangles_vdp1_emitted": 50})
+        for field, value in (
+            ("mario_face_angle_y", 0x8001),
+            ("camera_pos_x_bits", self._float_bits(10.25)),
+            ("triangles_emitted", 914),
+        ):
+            with self.subTest(field=field):
+                result = compare_reports(
+                    self._report(self._probe()),
+                    self._report(self._probe(**{field: value})),
+                    route,
+                )
+                self.assertFalse(result["deterministic"])
+                self.assertTrue(any(field in error for error in result["errors"]))
+
+    def test_stage2_comparator_rejects_over_one_percent_and_zero_baseline_reject_drift(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        for field, value in (
+            ("reject_backface", 203),
+            ("reject_command_capacity", 1),
+        ):
+            with self.subTest(field=field):
+                result = compare_reports(
+                    self._report(self._probe()),
+                    self._report(self._probe(**{field: value})),
+                    route,
+                )
+                self.assertFalse(result["deterministic"])
+                self.assertTrue(any(field in error for error in result["errors"]))
 
     def test_comparator_rejects_missing_required_report_schema_field(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        report = self._report(words)
+        report = self._report(self._probe())
         del report["protocol"]
         with self.assertRaisesRegex(ValueError, "required schema fields: protocol"):
             compare_reports(report, report, route)
 
     def test_comparator_rejects_mismatched_degradation_settings(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        left = self._report(words)
-        right = self._report(words)
+        left = self._report(self._probe())
+        right = self._report(self._probe())
         right["degradation"] = {"view_radius": 2048, "poly_tier": 1}
         with self.assertRaisesRegex(ValueError, "degradation settings differ"):
             compare_reports(left, right, route)
 
     def test_comparator_rejects_unstated_degradation_settings(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
-        words = [0x53425231, 1, 600, 701, 0x04000440, 1, 2, 3, 1, 2311, 829, 0, 0]
-        left = self._report(words)
-        right = self._report(words)
+        left = self._report(self._probe())
+        right = self._report(self._probe())
         left["degradation"] = {"view_radius": None, "poly_tier": None}
         with self.assertRaisesRegex(ValueError, "explicitly declared"):
             compare_reports(left, right, route)
+
+    def test_comparator_rejects_decoded_probe_that_does_not_match_raw_bytes(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        report = self._report(self._probe())
+        report["probe_window"]["decoded"]["global_timer"] += 1  # type: ignore[index]
+        with self.assertRaisesRegex(ValueError, "decoded route probe does not match raw bytes"):
+            compare_reports(report, report, route)
+
+    def test_comparator_rejects_malformed_artifact_hash(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        report = self._report(self._probe())
+        report["artifacts"]["elf"]["sha256"] = "not-a-sha256"  # type: ignore[index]
+        with self.assertRaisesRegex(ValueError, "artifact elf sha256"):
+            compare_reports(report, report, route)
 
 
 class BobSkyBakeTests(unittest.TestCase):

@@ -28,11 +28,10 @@ from capture_hwtest import (
     request,
     stale_game_image,
 )
+from compare_route_reports import MAGIC as ROUTE_MAGIC
+from compare_route_reports import PROBE_BYTES as ROUTE_PROBE_BYTES
+from compare_route_reports import VERSION as ROUTE_VERSION
 from compare_route_reports import decode_probe
-
-ROUTE_MAGIC = 0x53425232
-ROUTE_VERSION = 2
-ROUTE_PROBE_BYTES = 21 * 4
 
 
 class YmirClient:
@@ -175,7 +174,9 @@ def peek_route(client: YmirClient, address: int) -> tuple[dict[str, Any] | None,
     window = client.call("mem.peek", {"address": address, "count": ROUTE_PROBE_BYTES})
     data = window.get("data", [])
     if not isinstance(data, list) or len(data) < ROUTE_PROBE_BYTES:
-        raise RuntimeError("route probe returned fewer than 84 bytes")
+        raise RuntimeError(
+            f"route probe returned fewer than {ROUTE_PROBE_BYTES} bytes"
+        )
     magic = int.from_bytes(bytes(data[:4]), byteorder="big")
     version = int.from_bytes(bytes(data[4:8]), byteorder="big")
     if magic != ROUTE_MAGIC or version != ROUTE_VERSION:

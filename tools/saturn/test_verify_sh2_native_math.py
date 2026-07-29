@@ -21,7 +21,7 @@ from verify_sh2_native_math import (
     scan_call_graph,
     scan_disassembly,
     SIM_ROUTE_ORACLE_V1_SHA256,
-    SIM_AUDIT_CONTRACT_V1_SHA256,
+    SIM_AUDIT_CONTRACT_V2_SHA256,
     verify_audit_contract_integrity,
     verify_baseline_integrity,
     verify_route_oracle_integrity,
@@ -187,52 +187,59 @@ class NativeMathCensusTests(unittest.TestCase):
 
     def test_checked_in_simulation_audit_contract_is_pinned(self) -> None:
         fixture_dir = Path(__file__).parent
-        contract_text = (fixture_dir / "sh2_native_math_sim_audit_contract_v1.txt").read_text(encoding="utf-8")
+        contract_text = (fixture_dir / "sh2_native_math_sim_audit_contract_v2.txt").read_text(encoding="utf-8")
         verify_audit_contract_integrity(
-            contract_text, parse_audit_contract(contract_text), expected_digest=SIM_AUDIT_CONTRACT_V1_SHA256
+            contract_text, parse_audit_contract(contract_text), expected_digest=SIM_AUDIT_CONTRACT_V2_SHA256
         )
 
     def test_audit_fails_when_expected_root_is_missing(self) -> None:
         oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _wrong_root\n")
         contract = parse_audit_contract(
-            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _game_loop_one_iteration\n"
-            "MINIMUM_TOTAL 1\nREQUIRED _atan2_lookup ___divsf3 1\n"
+            "AUDIT_CONTRACT_VERSION 2\nEXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 1\nFORBIDDEN_CALLER _atan2_lookup\n"
         )
         self.assertIn(
             "audit root missing: expected _game_loop_one_iteration",
             audit_failures([], set(), oracle, contract),
         )
 
-    def test_audit_fails_on_zero_rows_and_missing_candidate(self) -> None:
+    def test_audit_fails_when_total_differs_from_checked_conversion_baseline(self) -> None:
         oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _frame_root\n")
         contract = parse_audit_contract(
-            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _frame_root\n"
-            "MINIMUM_TOTAL 1\nREQUIRED _candidate ___addsf3 1\n"
+            "AUDIT_CONTRACT_VERSION 2\nEXPECTED_ROOT _frame_root\n"
+            "EXPECTED_TOTAL 2\nFORBIDDEN_CALLER _atan2_lookup\n"
         )
         self.assertEqual(
-            audit_failures([], {"_frame_root"}, oracle, contract),
-            [
-                "audit total below floor 1, found 0",
-                "audit candidate missing: _candidate ___addsf3 minimum 1, found 0",
-            ],
+            audit_failures([CallSite("_frame_root", 1, "___addsf3")], {"_frame_root"}, oracle, contract),
+            ["audit total differs from fixed post-conversion baseline 2, found 1"],
         )
 
-    def test_renderer_baseline_and_simulation_audit_are_isolated(self) -> None:
+    def test_audit_rejects_any_native_math_helper_reintroduced_in_converted_atan2_callers(self) -> None:
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _atan2_lookup\n")
+        contract = parse_audit_contract(
+            "AUDIT_CONTRACT_VERSION 2\nEXPECTED_ROOT _atan2_lookup\n"
+            "EXPECTED_TOTAL 1\nFORBIDDEN_CALLER _atan2_lookup\nFORBIDDEN_CALLER _atan2s\n"
+        )
+        self.assertEqual(
+            audit_failures(
+                [CallSite("_atan2_lookup", 1, "___divsf3")],
+                {"_atan2_lookup"},
+                oracle,
+                contract,
+            ),
+            ["audit forbidden caller uses native math: _atan2_lookup ___divsf3 found 1"],
+        )
+
+    def test_renderer_baseline_and_post_conversion_simulation_audit_are_isolated(self) -> None:
         baseline = parse_baseline("BASELINE_VERSION 1\nHOT_CEILING 1\nHOT _frame_root ___addsf3 1\n")
         oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _candidate\n")
         contract = parse_audit_contract(
-            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _candidate\n"
-            "MINIMUM_TOTAL 1\nREQUIRED _candidate ___divsf3 1\n"
+            "AUDIT_CONTRACT_VERSION 2\nEXPECTED_ROOT _candidate\n"
+            "EXPECTED_TOTAL 0\nFORBIDDEN_CALLER _atan2_lookup\n"
         )
         calls = [CallSite("_frame_root", 1, "___addsf3")]
         self.assertEqual(baseline_failures(calls, {"_frame_root"}, baseline), [])
-        self.assertEqual(
-            audit_failures(calls, {"_candidate"}, oracle, contract),
-            [
-                "audit total below floor 1, found 0",
-                "audit candidate missing: _candidate ___divsf3 minimum 1, found 0",
-            ],
-        )
+        self.assertEqual(audit_failures(calls, {"_candidate"}, oracle, contract), [])
 
 
 if __name__ == "__main__":

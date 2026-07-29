@@ -11,7 +11,7 @@ SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2
 SOURCEBOOT_NATIVE_MATH_BASELINE := $(ROOT)/tools/saturn/sh2_native_math_baseline_v1.txt
 SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_route_oracle_v1.txt
 SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_sim_route_oracle_v1.txt
-SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT := $(ROOT)/tools/saturn/sh2_native_math_sim_audit_contract_v1.txt
+SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT := $(ROOT)/tools/saturn/sh2_native_math_sim_audit_contract_v2.txt
 SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
@@ -512,11 +512,9 @@ verify-engine-atan2-q16:
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/test_engine_atan2_q16.py"
 
 verify-engine-atan2-q16-mutation:
-	@SM64_SATURN_TEST_MUTATE_ATAN2_Q16=1 \
-	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/test_engine_atan2_q16.py" && { \
-	  printf '%s\\n' 'engine atan2 Q16 mutation escaped the captured-route differential' >&2; \
-	  exit 1; \
-	} || printf '%s\\n' 'engine atan2 Q16 mutation caught by the captured-route differential'
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_engine_atan2_mutation.py" \
+	  --python "$(SOURCEBOOT_PYTHON)" \
+	  --test "$(ROOT)/tools/saturn/test_engine_atan2_q16.py"
 
 verify: verify-engine-atan2-q16 verify-engine-atan2-q16-mutation
 verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
@@ -549,9 +547,14 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # the Pipe 5 disappearing-geometry root cause. Demo-path images only -- the
 # default profile does not link the demo renderer's shared state.
 	@if [ "$(SATURN_DEMO_PATH)" = "1" ]; then \
+	  audit_args=""; \
+	  if [ "$(SATURN_SOURCEBOOT_ROUTE_REPLAY)" = "1" ]; then \
+	    audit_args="--audit-route-oracle $(SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE) --audit-contract $(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)"; \
+	  fi; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py" \
 	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" "$(SOURCEBOOT_NATIVE_MATH_BASELINE)" \
 	    --route-oracle "$(SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE)" \
+	    $$audit_args \
 	    --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
 	    --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)" || exit $$?; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_dual_cpu_coherency.py" \

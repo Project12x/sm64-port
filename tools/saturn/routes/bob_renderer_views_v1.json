@@ -28,15 +28,15 @@
     },
     {
       "id": "frozen-route",
-      "route_tick": 600,
-      "route_sample_end": 7,
-      "camera_expectation": "final camera variation",
+      "route_tick": 2000,
+      "route_sample_end": 17,
+      "camera_expectation": "final forward traverse",
       "purpose": "authority checkpoint and primary performance comparison"
     }
   ],
   "reproduction": {
     "route_file": "tools/saturn/routes/bob_parity_v1.json",
-    "required_checkpoint_tick": 600,
+    "required_checkpoint_tick": 2000,
     "repeat_count": 2,
     "manual_capture_note": "The sourceboot route remains authoritative. A viewpoint is valid only when the named route tick and camera expectation are recorded in the paired capture report; this manifest does not authorize an inferred screenshot."
   }

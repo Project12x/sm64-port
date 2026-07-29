@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from compare_route_reports import decode_probe, validate_artifacts
+
 
 MAGIC = 0x534D4331
 VERSION = 2
@@ -79,10 +81,15 @@ def main() -> int:
             raise ValueError("both atan2 counters must be nonzero")
         validate_corpus(values[0])
         artifacts = [report.get("artifacts", {}) for report in reports]
+        for index, report in enumerate(reports, start=1):
+            validate_artifacts(report, f"run {index}")
         if artifacts[0] != artifacts[1]:
             raise ValueError("ELF/CUE artifacts differ between replay runs")
-        route = [report.get("route_window", {}).get("decoded") for report in reports]
-        if not isinstance(route[0], dict) or route[0] != route[1] or route[0].get("replay_ticks") != EXPECTED_TICKS:
+        route = [
+            decode_probe({"probe_window": report.get("route_window")})
+            for report in reports
+        ]
+        if route[0] != route[1] or route[0]["replay_ticks"] != EXPECTED_TICKS:
             raise ValueError(f"source route checkpoint is not stable at tick {EXPECTED_TICKS}")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
