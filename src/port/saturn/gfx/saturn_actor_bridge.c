@@ -8,6 +8,7 @@
  * source animation until their source pose bank is promoted.
  */
 #include "saturn_actor_bridge.h"
+#include "saturn_render_native_math.h"
 
 #include "game/level_update.h"
 #include "game/camera.h"
@@ -40,15 +41,15 @@ uint8_t sm64_saturn_mario_actor_snapshot(
     if (snapshot == NULL || gMarioState == NULL) {
         return 0U;
     }
-    snapshot->position[0] = gMarioState->pos[0];
-    snapshot->position[1] = gMarioState->pos[1];
-    snapshot->position[2] = gMarioState->pos[2];
-    snapshot->camera_position[0] = gLakituState.pos[0];
-    snapshot->camera_position[1] = gLakituState.pos[1];
-    snapshot->camera_position[2] = gLakituState.pos[2];
-    snapshot->camera_focus[0] = gLakituState.focus[0];
-    snapshot->camera_focus[1] = gLakituState.focus[1];
-    snapshot->camera_focus[2] = gLakituState.focus[2];
+    snapshot->position[0] = sm64_saturn_world_unit_from_float(gMarioState->pos[0]);
+    snapshot->position[1] = sm64_saturn_world_unit_from_float(gMarioState->pos[1]);
+    snapshot->position[2] = sm64_saturn_world_unit_from_float(gMarioState->pos[2]);
+    snapshot->camera_position[0] = sm64_saturn_world_unit_from_float(gLakituState.pos[0]);
+    snapshot->camera_position[1] = sm64_saturn_world_unit_from_float(gLakituState.pos[1]);
+    snapshot->camera_position[2] = sm64_saturn_world_unit_from_float(gLakituState.pos[2]);
+    snapshot->camera_focus[0] = sm64_saturn_world_unit_from_float(gLakituState.focus[0]);
+    snapshot->camera_focus[1] = sm64_saturn_world_unit_from_float(gLakituState.focus[1]);
+    snapshot->camera_focus[2] = sm64_saturn_world_unit_from_float(gLakituState.focus[2]);
     snapshot->camera_mode = gLakituState.mode;
     snapshot->camera_yaw = gLakituState.yaw;
     snapshot->camera_pitch = gLakituState.oldPitch;

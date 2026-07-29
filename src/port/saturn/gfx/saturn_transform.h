@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "saturn_render_native_math.h"
+
 /* Scene-neutral Q16 camera/transform records shared by harnesses and the
  * eventual Fast3D frame front end. Positions remain in source world units;
  * basis vectors are signed Q16.16 values. */
@@ -51,11 +53,16 @@ sm64_saturn_vec3_normalize_q16(sm64_saturn_vec3i_t value)
     if (length == 0) {
         return (sm64_saturn_vec3i_t){0, 0, 0};
     }
-    return (sm64_saturn_vec3i_t){
-        (int32_t)(((int64_t)value.x << 16) / length),
-        (int32_t)(((int64_t)value.y << 16) / length),
-        (int32_t)(((int64_t)value.z << 16) / length)
-    };
+    sm64_saturn_vec3i_t normalized;
+    if (!sm64_saturn_div_s64_s32((int64_t)value.x << 16,
+                                 (int32_t)length, &normalized.x) ||
+        !sm64_saturn_div_s64_s32((int64_t)value.y << 16,
+                                 (int32_t)length, &normalized.y) ||
+        !sm64_saturn_div_s64_s32((int64_t)value.z << 16,
+                                 (int32_t)length, &normalized.z)) {
+        return (sm64_saturn_vec3i_t){0, 0, 0};
+    }
+    return normalized;
 }
 
 static inline sm64_saturn_vec3i_t

@@ -5,9 +5,9 @@
 #include <stdint.h>
 
 typedef struct sm64_saturn_mario_actor_snapshot {
-    float position[3];
-    float camera_position[3];
-    float camera_focus[3];
+    int32_t position[3];
+    int32_t camera_position[3];
+    int32_t camera_focus[3];
     int16_t yaw;
     uint32_t action;
     int16_t animation_id;

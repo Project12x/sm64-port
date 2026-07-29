@@ -15,6 +15,9 @@ int main(void)
     assert(sm64_saturn_terrain_clip_near_quad(input, 128, &output) == 4);
     assert(output.classification == SM64_SATURN_TERRAIN_CLIP_CROSSES);
     assert(output.vertices[0].view.z >= 128);
+    assert(output.vertices[0].edge_t_q16 == 21845);
+    assert(output.vertices[0].view.x == 8);
+    assert(output.vertices[0].view.y == -3);
     const sm64_saturn_terrain_clip_vertex_t one_behind[4] = {
         {{-8, -8, 64}, 10U, 0U, 0U, 0},
         {{8, -8, 256}, 20U, 1U, 1U, 0},

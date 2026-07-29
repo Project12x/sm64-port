@@ -730,23 +730,18 @@ void sm64_saturn_demo_render_init(void)
     s_bob_resident_ready = 1U;
 }
 
-static int32_t demo_world_unit(float value)
-{
-    return (int32_t)value;
-}
-
 static sm64_saturn_camera_transform_t demo_camera(
     const sm64_saturn_mario_actor_snapshot_t *snapshot)
 {
     const sm64_saturn_vec3i_t position = {
-        demo_world_unit(snapshot->camera_position[0]),
-        demo_world_unit(snapshot->camera_position[1]),
-        demo_world_unit(snapshot->camera_position[2])
+        snapshot->camera_position[0],
+        snapshot->camera_position[1],
+        snapshot->camera_position[2]
     };
     const sm64_saturn_vec3i_t focus = {
-        demo_world_unit(snapshot->camera_focus[0]),
-        demo_world_unit(snapshot->camera_focus[1]),
-        demo_world_unit(snapshot->camera_focus[2])
+        snapshot->camera_focus[0],
+        snapshot->camera_focus[1],
+        snapshot->camera_focus[2]
     };
     const sm64_saturn_vec3i_t forward = sm64_saturn_vec3_normalize_q16(
         (sm64_saturn_vec3i_t){focus.x - position.x, focus.y - position.y,

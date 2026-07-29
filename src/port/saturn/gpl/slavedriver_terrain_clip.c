@@ -1,5 +1,6 @@
 /* GPL-3.0-or-later close-port; see slavedriver_terrain_clip.h. */
 #include "slavedriver_terrain_clip.h"
+#include "../gfx/saturn_render_native_math.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -20,9 +21,12 @@ static sm64_saturn_terrain_clip_vertex_t interpolate_vertex(
     int32_t near_depth)
 {
     const int32_t denominator = second->view.z - first->view.z;
-    const int32_t amount = denominator == 0 ? 0 :
-        (int32_t)(((int64_t)(near_depth - first->view.z) << 16) /
-                  denominator);
+    int32_t amount = 0;
+    if (denominator != 0) {
+        (void)sm64_saturn_div_s64_s32(
+            (int64_t)(near_depth - first->view.z) << 16,
+            denominator, &amount);
+    }
     sm64_saturn_terrain_clip_vertex_t result = *first;
     result.view.x = first->view.x + (int32_t)(((int64_t)(second->view.x -
         first->view.x) * amount) >> 16);

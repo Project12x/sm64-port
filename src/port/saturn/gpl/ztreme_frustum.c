@@ -1,5 +1,6 @@
 /* GPL-3.0-only close-port; see ztreme_frustum.h for upstream and changes. */
 #include "ztreme_frustum.h"
+#include "../gfx/saturn_render_native_math.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -39,6 +40,15 @@ static bool interval_inside(int64_t center, int64_t radius,
     return center - radius >= minimum && center + radius <= maximum;
 }
 
+static int32_t scaled_limit(int64_t depth, int32_t extent, int32_t focal_length)
+{
+    int32_t result;
+    if (!sm64_saturn_div_s64_s32(depth * extent, focal_length, &result)) {
+        return INT32_MAX;
+    }
+    return result;
+}
+
 sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     const sm64_saturn_ztreme_frustum_t *frustum,
     const int32_t minimum[3], const int32_t maximum[3])
@@ -73,14 +83,14 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
         ? z + z_radius : near_limit;
     const int64_t near_z = z - z_radius > near_limit
         ? z - z_radius : near_limit;
-    const int64_t far_width = far_z * frustum->half_width /
-                              frustum->focal_length;
-    const int64_t far_height = far_z * frustum->half_height /
-                               frustum->focal_length;
-    const int64_t near_width = near_z * frustum->half_width /
-                               frustum->focal_length;
-    const int64_t near_height = near_z * frustum->half_height /
-                                frustum->focal_length;
+    const int32_t far_width = scaled_limit(far_z, frustum->half_width,
+                                           frustum->focal_length);
+    const int32_t far_height = scaled_limit(far_z, frustum->half_height,
+                                            frustum->focal_length);
+    const int32_t near_width = scaled_limit(near_z, frustum->half_width,
+                                            frustum->focal_length);
+    const int32_t near_height = scaled_limit(near_z, frustum->half_height,
+                                             frustum->focal_length);
     if (interval_outside(z, z_radius, near_limit, far_limit) ||
         interval_outside(x, x_radius, -far_width, far_width) ||
         interval_outside(y, y_radius, -far_height, far_height)) {
