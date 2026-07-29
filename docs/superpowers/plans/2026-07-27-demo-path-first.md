@@ -1353,6 +1353,22 @@ match exactly, while dual render FRT accumulation is 4,999,436 versus
 is therefore functional but currently slower; Task 5b must reduce the wait/
 busy overhead before claiming a performance improvement.
 
+**Pipe 8 closure correction (2026-07-29):** the later transform-once,
+coherency-correct, draw-completion-gated Pipe 8 lineage reverses that result.
+Fresh same-commit SBR2 captures reach the identical 600-tick checkpoint and
+identical 70,516 transformed / 114,982 emitted primitive totals. Dual render
+FRT is 4,700,701 versus 5,274,468 serial, a **10.88% reduction**. The owner set
+10% as the acceptable dispatch gate for now, so this bounded gate passes.
+Both profiles still report 1 guest FPS median / 0 FPS 1%-low; the plan's
+longer-term 15 FPS median / 12 FPS 1%-low exit target remains open.
+
+Three Ymir-internal screenshots at exact route ticks 360, 504, and 600 are
+paired with same-basename reports and promoted after the owner's Pipe 8
+directional acceptance. They prove textured Mario and persistent terrain
+materials together, while continuing to show near-plane coverage/mapping,
+distant detached geometry, and terrain-ordering defects. See
+`docs/saturn/evidence/reports/pipe8-closure-2026-07-29.md`.
+
 ## 5. Out of scope (deliberate, revisit after Task 7)
 
 68000/SCSP audio (poneSound cloned and pinned, awaits `m68keb-elf`

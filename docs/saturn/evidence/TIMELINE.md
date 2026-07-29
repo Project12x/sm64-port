@@ -1386,6 +1386,42 @@ post frames, USA BIOS input macro, branch `saturn/bootstrap` at commit
 Emulator evidence, not retail proof, per the standing rules. Retail hardware
 remains the final authority.
 
+### 2026-07-29 — Pipe 8: stable presentation, persistent terrain material, 10.88% dual gain
+
+The owner accepted two bounded corrections in sequence: Pipe 7 made Mario and
+terrain “finally much more stable” by preventing framebuffer change until
+VDP1 draw completion, and Pipe 8 made texture persistence “much better” by
+keeping a clipped terrain primitive's source material instead of changing it
+to flat/Gouraud as the near-plane crossing set moved.
+
+The closure run used fresh replay-tagged Pipe 8 dual and serial images from
+commit `83938f3`. Both reached the exact 600-tick source checkpoint
+`d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c`
+with identical 70,516 transformed / 114,982 emitted primitive totals and zero
+faults, command-capacity rejects, or slave timeouts. Dual render FRT was
+4,700,701 versus 5,274,468 serial: **10.88% lower**, passing the owner's dated
+10% gate. Guest cadence remains 1 FPS median / 0 FPS 1%-low in these emulator
+captures, so the longer-term 15/12 target is still open.
+
+The three gallery frames were captured through Ymir's internal
+`video.capture` at live route ticks 360, 504, and 600—not inferred from a
+fixed emulator depth. They prove textured Mario and persistent terrain
+materials together. They also preserve the remaining failures honestly:
+near-plane mapping/coverage distortion, detached distant pieces, and
+incomplete terrain ordering.
+
+Evidence:
+[near-Mario tick 360](screenshots/ymir-bob-pipe8-near-mario-blue-hole-tick360-2026-07-29.png)
+([paired report](reports/ymir-bob-pipe8-near-mario-blue-hole-tick360-2026-07-29.json)),
+[distant-terrain tick 504](screenshots/ymir-bob-pipe8-distant-terrain-disappearance-tick504-2026-07-29.png)
+([paired report](reports/ymir-bob-pipe8-distant-terrain-disappearance-tick504-2026-07-29.json)),
+[frozen-route tick 600](screenshots/ymir-bob-pipe8-frozen-route-tick600-2026-07-29.png)
+([paired report](reports/ymir-bob-pipe8-frozen-route-tick600-2026-07-29.json)),
+and the [closure record](reports/pipe8-closure-2026-07-29.md).
+
+Emulator evidence, not retail proof, per the standing rules. Retail hardware
+remains the final authority.
+
 ---
 
 ### 2026-07-28 — Owner-accepted textured fragment milestone

@@ -1,6 +1,6 @@
 # Saturn Throughput Recovery Sprint
 
-> **Status:** Corrective Pipe 5 image ready; awaiting owner inspection
+> **Status:** Pipe 8 accepted; deterministic closure passes the owner-set 10% dual-dispatch gate
 > **Date:** 2026-07-28
 > **Parent:** `2026-07-28-saturn-renderer-pipeline-sprint.md`
 > **First deliverable:** a distinct replay-free CUE for owner manual testing
@@ -188,14 +188,18 @@ resource admission priority, not those renderer stages.
 
 ### Task 5 — Measure only after the image is useful
 
-- [ ] If the owner accepts the manual direction, build the same-commit serial
+- [x] If the owner accepts the manual direction, build the same-commit serial
   oracle.
-- [ ] Run the existing deterministic route once per build.
-- [ ] Report absolute serial/dual render FRT and guest cadence using existing
+- [x] Run the existing deterministic route once per build.
+- [x] Report absolute serial/dual render FRT and guest cadence using existing
   counters.
 
 The 4.57% prior result remains historical. It is not the acceptance result for
 this sprint.
+
+**Gate (owner decision, 2026-07-29):** accept a same-checkpoint dual render-FRT
+reduction of at least 10% for this bounded sprint. This does not replace the
+parent plan's longer-term 15 FPS median / 12 FPS 1%-low destination.
 
 ## Manual acceptance
 
@@ -387,3 +391,22 @@ policy; no upstream source copied.
   claim that clipping/UV mapping is complete; any remaining clipped-edge
   stretching or isolated texture loss stays open separately from the fixed
   frame-to-frame flat-material switch.
+
+### Pipe 8 deterministic closure — passed
+
+Fresh replay-tagged dual and serial images from commit `83938f3` reached the
+same 600-tick source checkpoint
+(`d6f8bb725b0e094b5f659dc81cfedb6b2405b850ab9bea2904fc283781c8861c`)
+with identical 70,516 transformed / 114,982 emitted primitive totals and zero
+route faults, capacity rejects, or slave timeouts.
+
+Dual render FRT accumulation is 4,700,701 ticks versus 5,274,468 serial, a
+**10.88% reduction**. This passes the dated 10% gate above. Both captures
+report 1 guest FPS median / 0 FPS 1%-low, so the broader absolute-cadence
+target remains open.
+
+Ymir internal captures at exact route ticks 360, 504, and 600 show textured
+Mario and persistent terrain materials. They also retain the open visual
+defects honestly: near-plane texture stretch/coverage, detached distant
+pieces, and incomplete terrain ordering. Evidence:
+`docs/saturn/evidence/reports/pipe8-closure-2026-07-29.md`.
