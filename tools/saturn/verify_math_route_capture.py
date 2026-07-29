@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from capture_math_route import MATH_BYTES, decode_math
 from compare_route_reports import decode_probe, validate_artifacts
 
 
@@ -30,7 +31,17 @@ def load(path: Path) -> dict[str, Any]:
 
 
 def decoded(report: dict[str, Any]) -> dict[str, Any]:
-    value = report.get("math_window", {}).get("decoded")
+    window = report.get("math_window")
+    if not isinstance(window, dict):
+        raise ValueError("capture is missing raw SMC1 bytes")
+    raw = window.get("data")
+    if not isinstance(raw, list) or len(raw) < MATH_BYTES:
+        raise ValueError("capture is missing raw SMC1 bytes")
+    try:
+        raw_value = decode_math(raw)
+    except ValueError as error:
+        raise ValueError(f"capture has invalid raw SMC1 bytes: {error}") from error
+    value = window.get("decoded")
     if not isinstance(value, dict) or any(not isinstance(value.get(field), int) for field in FIELDS):
         raise ValueError("capture is missing decoded SMC1 fields")
     corpus = value.get("corpus")
@@ -43,7 +54,9 @@ def decoded(report: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("SMC1 corpus contains an invalid sample")
     result = {field: value[field] for field in FIELDS}
     result["corpus"] = corpus
-    return result
+    if result != raw_value:
+        raise ValueError("decoded SMC1 does not match raw bytes")
+    return raw_value
 
 
 def validate_corpus(value: dict[str, Any]) -> None:
@@ -112,7 +125,7 @@ def main() -> int:
         "evidence": {"run1": capture_identity(args.run1), "run2": capture_identity(args.run2)},
         "limitations": [
             "The corpus is a bounded ring, so it is deterministic evidence rather than an exhaustive trace.",
-            "A future engine-math conversion still needs a separate host differential and positional-divergence A/B capture.",
+            "This same-variant integrity check does not replace the separate host differential and role-bound positional-divergence A/B gates.",
         ],
     }
     args.fixture.parent.mkdir(parents=True, exist_ok=True)

@@ -12,10 +12,10 @@ import struct
 from pathlib import Path
 from typing import Any
 
-MAGIC = 0x53425233
-VERSION = 3
+MAGIC = 0x53425234
+VERSION = 4
 PROBE_FIELDS = (
-    "magic", "version", "replay_ticks", "global_timer", "mario_action",
+    "magic", "version", "atan2_variant", "replay_ticks", "global_timer", "mario_action",
     "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits",
     "mario_face_angle_x", "mario_face_angle_y", "mario_face_angle_z",
     "camera_pos_x_bits", "camera_pos_y_bits", "camera_pos_z_bits",
@@ -66,14 +66,14 @@ def load_route(path: Path) -> dict[str, Any]:
     if total != route.get("simulation_ticks") or total != route.get("checkpoint_tick"):
         raise ValueError("route tick total must equal simulation_ticks and checkpoint_tick")
     schema = route.get("report_schema")
-    if not isinstance(schema, dict) or schema.get("version") != "sourceboot-route-v4":
-        raise ValueError("route must declare the sourceboot-route-v4 report schema")
+    if not isinstance(schema, dict) or schema.get("version") != "sourceboot-route-v6":
+        raise ValueError("route must declare the sourceboot-route-v6 report schema")
     for name in ("required_report_fields", "required_probe_fields"):
         if not isinstance(schema.get(name), list) or not all(
                 isinstance(field, str) for field in schema[name]):
             raise ValueError(f"route report_schema.{name} must be a list of field names")
     if tuple(schema["required_probe_fields"]) != PROBE_FIELDS:
-        raise ValueError("route report_schema.required_probe_fields must match the SBR3 probe")
+        raise ValueError("route report_schema.required_probe_fields must match the SBR4 probe")
     gate = schema.get("behavioral_gate")
     if not isinstance(gate, dict) or gate.get("mario_position_linf_exclusive") != 1.0 \
             or gate.get("reject_relative_tolerance") != 0.01:
@@ -136,6 +136,12 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         if missing:
             raise ValueError(f"{label} report lacks required schema fields: {', '.join(missing)}")
         validate_artifacts(report, label)
+    errors: list[str] = []
+    if left["capture_role"] != "legacy" or right["capture_role"] != "q16":
+        errors.append("capture roles must be ordered legacy then q16")
+    for artifact_name in ("elf", "image"):
+        if left["artifacts"][artifact_name]["sha256"] == right["artifacts"][artifact_name]["sha256"]:
+            errors.append(f"legacy and q16 artifact {artifact_name} identities must differ")
     schema = route["report_schema"]
     if schema.get("compare_degradation", False):
         left_degradation = left["degradation"]
@@ -149,16 +155,33 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
             raise ValueError("degradation settings differ between reports")
     first = decode_probe(left)
     second = decode_probe(right)
-    errors: list[str] = []
     expected_ticks = route["checkpoint_tick"]
     for label, probe in (("left", first), ("right", second)):
         if probe["replay_ticks"] != expected_ticks:
             errors.append(f"{label} replay_ticks={probe['replay_ticks']}, expected {expected_ticks}")
         if probe["triangles_vdp1_emitted"] == 0:
             errors.append(f"{label} captured no complete VDP1 frame")
-        for field in ("fault_flags", "reject_command_capacity"):
+        expected_variant = 1 if label == "left" else 2
+        if probe["atan2_variant"] != expected_variant:
+            errors.append(
+                f"{label} raw atan2 variant={probe['atan2_variant']}, "
+                f"expected {expected_variant}"
+            )
+        for field in (
+            "fault_flags", "reject_command_capacity",
+            "reject_vdp1_arena_capacity",
+        ):
             if probe[field] != 0:
                 errors.append(f"{label} {field}={probe[field]}")
+        try:
+            for field in (
+                "camera_pos_x_bits", "camera_pos_y_bits", "camera_pos_z_bits",
+            ):
+                _float_from_bits(probe[field])
+            if probe["camera_mode"] == 0xFFFFFFFF:
+                raise ValueError("camera mode sentinel")
+        except ValueError:
+            errors.append(f"{label} camera state is missing or non-finite")
     exact_deltas = {}
     for field in EXACT_BEHAVIOR_FIELDS:
         delta = abs(first[field] - second[field])
@@ -216,6 +239,10 @@ def compare_reports(left: dict[str, Any], right: dict[str, Any], route: dict[str
         "route_version": route["route_version"],
         "report_schema_version": route["report_schema"]["version"],
         "simulation_ticks": expected_ticks,
+        "capture_roles": {
+            "left": left["capture_role"],
+            "right": right["capture_role"],
+        },
         "left": first,
         "right": second,
         "left_checkpoint_sha256": signatures[0],

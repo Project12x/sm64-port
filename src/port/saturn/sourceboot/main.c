@@ -104,6 +104,7 @@ static void sourceboot_capture_route_checkpoint(void) {
      * replay_ticks is the route's exact configured endpoint, so a stalled
      * controller cadence is reported as a failed gate rather than omitted. */
     sourceboot_route_checkpoint.version = SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION;
+    sourceboot_route_checkpoint.atan2_variant = SATURN_ATAN2_VARIANT;
     sourceboot_route_checkpoint.replay_ticks = runtime->input_replay_ticks;
     sourceboot_route_checkpoint.global_timer = gGlobalTimer;
     if (gMarioState != NULL) {

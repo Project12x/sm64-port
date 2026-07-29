@@ -1,0 +1,1604 @@
+{
+  "artifacts": {
+    "elf": {
+      "mtime": 1785363353.3794055,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-atan2v2-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "sha256": "089b3b267dcbb0de88507847ad4ffd6f4079f74ef67648aaf3b6aff4bb03c769",
+      "size": 7989532
+    },
+    "game": {
+      "mtime": 1785363363.0649042,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-atan2v2-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "size": 88
+    },
+    "image": {
+      "mtime": 1785363362.0059063,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-atan2v2-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "32655b70a04ac73099df528107d7de63caf3ba997359663011d7b6230a09f857",
+      "size": 4589568
+    }
+  },
+  "capture_contract": {
+    "checkpoint_tick": 2000,
+    "corpus_slots_per_function": 64,
+    "input_encoding": "IEEE-754 binary32 bits, y then x; u16 result",
+    "smc_magic": "SMC1",
+    "smc_version": 2,
+    "two_run_fields_must_match": [
+      "magic",
+      "version",
+      "replay_ticks",
+      "atan2s_calls",
+      "atan2_lookup_calls",
+      "atan2s_samples",
+      "atan2_lookup_samples"
+    ]
+  },
+  "evidence": {
+    "run1": {
+      "path": "docs\\saturn\\evidence\\reports\\task2-remediation-q16-sbr4-run1-2026-07-29.json",
+      "sha256": "4f11963feb1e0517d92e9a2e6a89414029bcd7cfc75d9b45014c5f91bfeb5372"
+    },
+    "run2": {
+      "path": "docs\\saturn\\evidence\\reports\\task2-remediation-q16-sbr4-run2-2026-07-29.json",
+      "sha256": "0ffca5ca6e25a35b2726808a344e9b9c493fd8d2886efcee6718ed64676ca7ad"
+    }
+  },
+  "limitations": [
+    "The corpus is a bounded ring, so it is deterministic evidence rather than an exhaustive trace.",
+    "This same-variant integrity check does not replace the separate host differential and role-bound positional-divergence A/B gates."
+  ],
+  "observed": {
+    "atan2_lookup_calls": 125617,
+    "atan2_lookup_samples": 64,
+    "atan2s_calls": 125617,
+    "atan2s_samples": 64,
+    "corpus": [
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 1111507952
+      },
+      {
+        "function": "atan2s",
+        "result": 24576,
+        "x_bits": 1107817408,
+        "y_bits": 3255301056
+      },
+      {
+        "function": "atan2s",
+        "result": 1297,
+        "x_bits": 1122912088,
+        "y_bits": 1148119851
+      },
+      {
+        "function": "atan2s",
+        "result": 57344,
+        "x_bits": 3291017444,
+        "y_bits": 1143533796
+      },
+      {
+        "function": "atan2s",
+        "result": 62667,
+        "x_bits": 3277858169,
+        "y_bits": 1145468234
+      },
+      {
+        "function": "atan2s",
+        "result": 24576,
+        "x_bits": 1141658820,
+        "y_bits": 3289142468
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 1050950078
+      },
+      {
+        "function": "atan2s",
+        "result": 40960,
+        "x_bits": 3194503168,
+        "y_bits": 3194503168
+      },
+      {
+        "function": "atan2s",
+        "result": 1457,
+        "x_bits": 1124803500,
+        "y_bits": 1148686707
+      },
+      {
+        "function": "atan2s",
+        "result": 57344,
+        "x_bits": 3291418272,
+        "y_bits": 1143934624
+      },
+      {
+        "function": "atan2s",
+        "result": 1297,
+        "x_bits": 1120291570,
+        "y_bits": 1145468234
+      },
+      {
+        "function": "atan2s",
+        "result": 57344,
+        "x_bits": 3289142468,
+        "y_bits": 1141658820
+      },
+      {
+        "function": "atan2s",
+        "result": 64239,
+        "x_bits": 3267775218,
+        "y_bits": 1145468234
+      },
+      {
+        "function": "atan2s",
+        "result": 24576,
+        "x_bits": 1141658820,
+        "y_bits": 3289142468
+      },
+      {
+        "function": "atan2s",
+        "result": 57349,
+        "x_bits": 3291389208,
+        "y_bits": 1143912908
+      },
+      {
+        "function": "atan2s",
+        "result": 64139,
+        "x_bits": 3272281070,
+        "y_bits": 1149305500
+      },
+      {
+        "function": "atan2s",
+        "result": 24581,
+        "x_bits": 1144415300,
+        "y_bits": 3291906324
+      },
+      {
+        "function": "atan2s",
+        "result": 64139,
+        "x_bits": 3272281070,
+        "y_bits": 1149305500
+      },
+      {
+        "function": "atan2s",
+        "result": 24581,
+        "x_bits": 1144415300,
+        "y_bits": 3291906324
+      },
+      {
+        "function": "atan2s",
+        "result": 24576,
+        "x_bits": 1144417252,
+        "y_bits": 3291900900
+      },
+      {
+        "function": "atan2s",
+        "result": 64129,
+        "x_bits": 3272353587,
+        "y_bits": 1149304272
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 61065,
+        "x_bits": 3188881646,
+        "y_bits": 1050698578
+      },
+      {
+        "function": "atan2s",
+        "result": 12714,
+        "x_bits": 1064327020,
+        "y_bits": 1051742532
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 14274,
+        "x_bits": 1165947727,
+        "y_bits": 1146184516
+      },
+      {
+        "function": "atan2s",
+        "result": 13609,
+        "x_bits": 1161851727,
+        "y_bits": 1146184516
+      },
+      {
+        "function": "atan2s",
+        "result": 17308,
+        "x_bits": 1165947727,
+        "y_bits": 3283433848
+      },
+      {
+        "function": "atan2s",
+        "result": 17611,
+        "x_bits": 1161851727,
+        "y_bits": 3283433848
+      },
+      {
+        "function": "atan2s",
+        "result": 64773,
+        "x_bits": 3270219296,
+        "y_bits": 1154068898
+      },
+      {
+        "function": "atan2s",
+        "result": 51879,
+        "x_bits": 3307703473,
+        "y_bits": 1144218436
+      },
+      {
+        "function": "atan2s",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2s",
+        "result": 31471,
+        "x_bits": 1137394440,
+        "y_bits": 3310092845
+      },
+      {
+        "function": "atan2s",
+        "result": 40763,
+        "x_bits": 3307717190,
+        "y_bits": 3308146239
+      },
+      {
+        "function": "atan2s",
+        "result": 51736,
+        "x_bits": 3307339817,
+        "y_bits": 1143190566
+      },
+      {
+        "function": "atan2s",
+        "result": 60749,
+        "x_bits": 3313312149,
+        "y_bits": 1174411117
+      },
+      {
+        "function": "atan2s",
+        "result": 24858,
+        "x_bits": 1164951147,
+        "y_bits": 3313308235
+      },
+      {
+        "function": "atan2s",
+        "result": 24694,
+        "x_bits": 1162792555,
+        "y_bits": 3310592587
+      },
+      {
+        "function": "atan2s",
+        "result": 21179,
+        "x_bits": 1102426832,
+        "y_bits": 3241411148
+      },
+      {
+        "function": "atan2s",
+        "result": 681,
+        "x_bits": 1140857813,
+        "y_bits": 1173632044
+      },
+      {
+        "function": "atan2s",
+        "result": 29871,
+        "x_bits": 1158010208,
+        "y_bits": 3320503117
+      },
+      {
+        "function": "atan2s",
+        "result": 15723,
+        "x_bits": 1132302648,
+        "y_bits": 1098973376
+      },
+      {
+        "function": "atan2s",
+        "result": 1177,
+        "x_bits": 1122524544,
+        "y_bits": 1149253979
+      },
+      {
+        "function": "atan2s",
+        "result": 50848,
+        "x_bits": 3231572918,
+        "y_bits": 1062156015
+      },
+      {
+        "function": "atan2s",
+        "result": 58543,
+        "x_bits": 3269076832,
+        "y_bits": 1124702208
+      },
+      {
+        "function": "atan2s",
+        "result": 59226,
+        "x_bits": 3311254705,
+        "y_bits": 1168139368
+      },
+      {
+        "function": "atan2s",
+        "result": 40090,
+        "x_bits": 3289532506,
+        "y_bits": 3291275788
+      },
+      {
+        "function": "atan2s",
+        "result": 54897,
+        "x_bits": 3230161006,
+        "y_bits": 1076327258
+      },
+      {
+        "function": "atan2s",
+        "result": 60595,
+        "x_bits": 3262363360,
+        "y_bits": 1122870752
+      },
+      {
+        "function": "atan2s",
+        "result": 59746,
+        "x_bits": 3317448280,
+        "y_bits": 1175957044
+      },
+      {
+        "function": "atan2s",
+        "result": 4463,
+        "x_bits": 1164145487,
+        "y_bits": 1173965928
+      },
+      {
+        "function": "atan2s",
+        "result": 2679,
+        "x_bits": 1132728790,
+        "y_bits": 1148907370
+      },
+      {
+        "function": "atan2s",
+        "result": 57344,
+        "x_bits": 3291574304,
+        "y_bits": 1144090656
+      },
+      {
+        "function": "atan2s",
+        "result": 2679,
+        "x_bits": 1132728790,
+        "y_bits": 1148907370
+      },
+      {
+        "function": "atan2s",
+        "result": 57344,
+        "x_bits": 3291574304,
+        "y_bits": 1144090656
+      },
+      {
+        "function": "atan2s",
+        "result": 8192,
+        "x_bits": 1060439284,
+        "y_bits": 1060439284
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 1111507952,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1107817408,
+        "y_bits": 1107817408
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1297,
+        "x_bits": 1148119851,
+        "y_bits": 1122912088
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1143533796,
+        "y_bits": 1143533796
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2869,
+        "x_bits": 1145468234,
+        "y_bits": 1130374521
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1141658820,
+        "y_bits": 1141658820
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 1050950078,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1047019520,
+        "y_bits": 1047019520
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1457,
+        "x_bits": 1148686707,
+        "y_bits": 1124803500
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1143934624,
+        "y_bits": 1143934624
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1297,
+        "x_bits": 1145468234,
+        "y_bits": 1120291570
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1141658820,
+        "y_bits": 1141658820
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1297,
+        "x_bits": 1145468234,
+        "y_bits": 1120291570
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1141658820,
+        "y_bits": 1141658820
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8187,
+        "x_bits": 1143912908,
+        "y_bits": 1143905560
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1397,
+        "x_bits": 1149305500,
+        "y_bits": 1124797422
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8187,
+        "x_bits": 1144422676,
+        "y_bits": 1144415300
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1397,
+        "x_bits": 1149305500,
+        "y_bits": 1124797422
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8187,
+        "x_bits": 1144422676,
+        "y_bits": 1144415300
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1144417252,
+        "y_bits": 1144417252
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1407,
+        "x_bits": 1149304272,
+        "y_bits": 1124869939
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 4471,
+        "x_bits": 1050698578,
+        "y_bits": 1041397998
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 3670,
+        "x_bits": 1064327020,
+        "y_bits": 1051742532
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2110,
+        "x_bits": 1165947727,
+        "y_bits": 1146184516
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2775,
+        "x_bits": 1161851727,
+        "y_bits": 1146184516
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 924,
+        "x_bits": 1165947727,
+        "y_bits": 1135950200
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1227,
+        "x_bits": 1161851727,
+        "y_bits": 1135950200
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 763,
+        "x_bits": 1154068898,
+        "y_bits": 1122735648
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2727,
+        "x_bits": 1160219825,
+        "y_bits": 1144218436
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 0,
+        "x_bits": 0,
+        "y_bits": 0
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1297,
+        "x_bits": 1162609197,
+        "y_bits": 1137394440
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 7995,
+        "x_bits": 1160662591,
+        "y_bits": 1160233542
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2584,
+        "x_bits": 1159856169,
+        "y_bits": 1143190566
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 4787,
+        "x_bits": 1174411117,
+        "y_bits": 1165828501
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 7910,
+        "x_bits": 1165824587,
+        "y_bits": 1164951147
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8074,
+        "x_bits": 1163108939,
+        "y_bits": 1162792555
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 4795,
+        "x_bits": 1102426832,
+        "y_bits": 1093927500
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 681,
+        "x_bits": 1173632044,
+        "y_bits": 1140857813
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2897,
+        "x_bits": 1173019469,
+        "y_bits": 1158010208
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 661,
+        "x_bits": 1132302648,
+        "y_bits": 1098973376
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1177,
+        "x_bits": 1149253979,
+        "y_bits": 1122524544
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 1696,
+        "x_bits": 1084089270,
+        "y_bits": 1062156015
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 6993,
+        "x_bits": 1124702208,
+        "y_bits": 1121593184
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 6310,
+        "x_bits": 1168139368,
+        "y_bits": 1163771057
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 7322,
+        "x_bits": 1143792140,
+        "y_bits": 1142048858
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 5745,
+        "x_bits": 1082677358,
+        "y_bits": 1076327258
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 4941,
+        "x_bits": 1122870752,
+        "y_bits": 1114879712
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 5790,
+        "x_bits": 1175957044,
+        "y_bits": 1169964632
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 4463,
+        "x_bits": 1173965928,
+        "y_bits": 1164145487
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2679,
+        "x_bits": 1148907370,
+        "y_bits": 1132728790
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1144090656,
+        "y_bits": 1144090656
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 2679,
+        "x_bits": 1148907370,
+        "y_bits": 1132728790
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1144090656,
+        "y_bits": 1144090656
+      },
+      {
+        "function": "atan2_lookup",
+        "result": 8192,
+        "x_bits": 1060439284,
+        "y_bits": 1060439284
+      }
+    ],
+    "magic": 1397572401,
+    "replay_ticks": 2000,
+    "version": 2
+  },
+  "route": "bob-parity-v1",
+  "samples": [
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 1111507952
+    },
+    {
+      "function": "atan2s",
+      "result": 24576,
+      "x_bits": 1107817408,
+      "y_bits": 3255301056
+    },
+    {
+      "function": "atan2s",
+      "result": 1297,
+      "x_bits": 1122912088,
+      "y_bits": 1148119851
+    },
+    {
+      "function": "atan2s",
+      "result": 57344,
+      "x_bits": 3291017444,
+      "y_bits": 1143533796
+    },
+    {
+      "function": "atan2s",
+      "result": 62667,
+      "x_bits": 3277858169,
+      "y_bits": 1145468234
+    },
+    {
+      "function": "atan2s",
+      "result": 24576,
+      "x_bits": 1141658820,
+      "y_bits": 3289142468
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 1050950078
+    },
+    {
+      "function": "atan2s",
+      "result": 40960,
+      "x_bits": 3194503168,
+      "y_bits": 3194503168
+    },
+    {
+      "function": "atan2s",
+      "result": 1457,
+      "x_bits": 1124803500,
+      "y_bits": 1148686707
+    },
+    {
+      "function": "atan2s",
+      "result": 57344,
+      "x_bits": 3291418272,
+      "y_bits": 1143934624
+    },
+    {
+      "function": "atan2s",
+      "result": 1297,
+      "x_bits": 1120291570,
+      "y_bits": 1145468234
+    },
+    {
+      "function": "atan2s",
+      "result": 57344,
+      "x_bits": 3289142468,
+      "y_bits": 1141658820
+    },
+    {
+      "function": "atan2s",
+      "result": 64239,
+      "x_bits": 3267775218,
+      "y_bits": 1145468234
+    },
+    {
+      "function": "atan2s",
+      "result": 24576,
+      "x_bits": 1141658820,
+      "y_bits": 3289142468
+    },
+    {
+      "function": "atan2s",
+      "result": 57349,
+      "x_bits": 3291389208,
+      "y_bits": 1143912908
+    },
+    {
+      "function": "atan2s",
+      "result": 64139,
+      "x_bits": 3272281070,
+      "y_bits": 1149305500
+    },
+    {
+      "function": "atan2s",
+      "result": 24581,
+      "x_bits": 1144415300,
+      "y_bits": 3291906324
+    },
+    {
+      "function": "atan2s",
+      "result": 64139,
+      "x_bits": 3272281070,
+      "y_bits": 1149305500
+    },
+    {
+      "function": "atan2s",
+      "result": 24581,
+      "x_bits": 1144415300,
+      "y_bits": 3291906324
+    },
+    {
+      "function": "atan2s",
+      "result": 24576,
+      "x_bits": 1144417252,
+      "y_bits": 3291900900
+    },
+    {
+      "function": "atan2s",
+      "result": 64129,
+      "x_bits": 3272353587,
+      "y_bits": 1149304272
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 61065,
+      "x_bits": 3188881646,
+      "y_bits": 1050698578
+    },
+    {
+      "function": "atan2s",
+      "result": 12714,
+      "x_bits": 1064327020,
+      "y_bits": 1051742532
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 14274,
+      "x_bits": 1165947727,
+      "y_bits": 1146184516
+    },
+    {
+      "function": "atan2s",
+      "result": 13609,
+      "x_bits": 1161851727,
+      "y_bits": 1146184516
+    },
+    {
+      "function": "atan2s",
+      "result": 17308,
+      "x_bits": 1165947727,
+      "y_bits": 3283433848
+    },
+    {
+      "function": "atan2s",
+      "result": 17611,
+      "x_bits": 1161851727,
+      "y_bits": 3283433848
+    },
+    {
+      "function": "atan2s",
+      "result": 64773,
+      "x_bits": 3270219296,
+      "y_bits": 1154068898
+    },
+    {
+      "function": "atan2s",
+      "result": 51879,
+      "x_bits": 3307703473,
+      "y_bits": 1144218436
+    },
+    {
+      "function": "atan2s",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2s",
+      "result": 31471,
+      "x_bits": 1137394440,
+      "y_bits": 3310092845
+    },
+    {
+      "function": "atan2s",
+      "result": 40763,
+      "x_bits": 3307717190,
+      "y_bits": 3308146239
+    },
+    {
+      "function": "atan2s",
+      "result": 51736,
+      "x_bits": 3307339817,
+      "y_bits": 1143190566
+    },
+    {
+      "function": "atan2s",
+      "result": 60749,
+      "x_bits": 3313312149,
+      "y_bits": 1174411117
+    },
+    {
+      "function": "atan2s",
+      "result": 24858,
+      "x_bits": 1164951147,
+      "y_bits": 3313308235
+    },
+    {
+      "function": "atan2s",
+      "result": 24694,
+      "x_bits": 1162792555,
+      "y_bits": 3310592587
+    },
+    {
+      "function": "atan2s",
+      "result": 21179,
+      "x_bits": 1102426832,
+      "y_bits": 3241411148
+    },
+    {
+      "function": "atan2s",
+      "result": 681,
+      "x_bits": 1140857813,
+      "y_bits": 1173632044
+    },
+    {
+      "function": "atan2s",
+      "result": 29871,
+      "x_bits": 1158010208,
+      "y_bits": 3320503117
+    },
+    {
+      "function": "atan2s",
+      "result": 15723,
+      "x_bits": 1132302648,
+      "y_bits": 1098973376
+    },
+    {
+      "function": "atan2s",
+      "result": 1177,
+      "x_bits": 1122524544,
+      "y_bits": 1149253979
+    },
+    {
+      "function": "atan2s",
+      "result": 50848,
+      "x_bits": 3231572918,
+      "y_bits": 1062156015
+    },
+    {
+      "function": "atan2s",
+      "result": 58543,
+      "x_bits": 3269076832,
+      "y_bits": 1124702208
+    },
+    {
+      "function": "atan2s",
+      "result": 59226,
+      "x_bits": 3311254705,
+      "y_bits": 1168139368
+    },
+    {
+      "function": "atan2s",
+      "result": 40090,
+      "x_bits": 3289532506,
+      "y_bits": 3291275788
+    },
+    {
+      "function": "atan2s",
+      "result": 54897,
+      "x_bits": 3230161006,
+      "y_bits": 1076327258
+    },
+    {
+      "function": "atan2s",
+      "result": 60595,
+      "x_bits": 3262363360,
+      "y_bits": 1122870752
+    },
+    {
+      "function": "atan2s",
+      "result": 59746,
+      "x_bits": 3317448280,
+      "y_bits": 1175957044
+    },
+    {
+      "function": "atan2s",
+      "result": 4463,
+      "x_bits": 1164145487,
+      "y_bits": 1173965928
+    },
+    {
+      "function": "atan2s",
+      "result": 2679,
+      "x_bits": 1132728790,
+      "y_bits": 1148907370
+    },
+    {
+      "function": "atan2s",
+      "result": 57344,
+      "x_bits": 3291574304,
+      "y_bits": 1144090656
+    },
+    {
+      "function": "atan2s",
+      "result": 2679,
+      "x_bits": 1132728790,
+      "y_bits": 1148907370
+    },
+    {
+      "function": "atan2s",
+      "result": 57344,
+      "x_bits": 3291574304,
+      "y_bits": 1144090656
+    },
+    {
+      "function": "atan2s",
+      "result": 8192,
+      "x_bits": 1060439284,
+      "y_bits": 1060439284
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 1111507952,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1107817408,
+      "y_bits": 1107817408
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1297,
+      "x_bits": 1148119851,
+      "y_bits": 1122912088
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1143533796,
+      "y_bits": 1143533796
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2869,
+      "x_bits": 1145468234,
+      "y_bits": 1130374521
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1141658820,
+      "y_bits": 1141658820
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 1050950078,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1047019520,
+      "y_bits": 1047019520
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1457,
+      "x_bits": 1148686707,
+      "y_bits": 1124803500
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1143934624,
+      "y_bits": 1143934624
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1297,
+      "x_bits": 1145468234,
+      "y_bits": 1120291570
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1141658820,
+      "y_bits": 1141658820
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1297,
+      "x_bits": 1145468234,
+      "y_bits": 1120291570
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1141658820,
+      "y_bits": 1141658820
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8187,
+      "x_bits": 1143912908,
+      "y_bits": 1143905560
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1397,
+      "x_bits": 1149305500,
+      "y_bits": 1124797422
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8187,
+      "x_bits": 1144422676,
+      "y_bits": 1144415300
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1397,
+      "x_bits": 1149305500,
+      "y_bits": 1124797422
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8187,
+      "x_bits": 1144422676,
+      "y_bits": 1144415300
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1144417252,
+      "y_bits": 1144417252
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1407,
+      "x_bits": 1149304272,
+      "y_bits": 1124869939
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 4471,
+      "x_bits": 1050698578,
+      "y_bits": 1041397998
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 3670,
+      "x_bits": 1064327020,
+      "y_bits": 1051742532
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2110,
+      "x_bits": 1165947727,
+      "y_bits": 1146184516
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2775,
+      "x_bits": 1161851727,
+      "y_bits": 1146184516
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 924,
+      "x_bits": 1165947727,
+      "y_bits": 1135950200
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1227,
+      "x_bits": 1161851727,
+      "y_bits": 1135950200
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 763,
+      "x_bits": 1154068898,
+      "y_bits": 1122735648
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2727,
+      "x_bits": 1160219825,
+      "y_bits": 1144218436
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 0,
+      "x_bits": 0,
+      "y_bits": 0
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1297,
+      "x_bits": 1162609197,
+      "y_bits": 1137394440
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 7995,
+      "x_bits": 1160662591,
+      "y_bits": 1160233542
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2584,
+      "x_bits": 1159856169,
+      "y_bits": 1143190566
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 4787,
+      "x_bits": 1174411117,
+      "y_bits": 1165828501
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 7910,
+      "x_bits": 1165824587,
+      "y_bits": 1164951147
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8074,
+      "x_bits": 1163108939,
+      "y_bits": 1162792555
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 4795,
+      "x_bits": 1102426832,
+      "y_bits": 1093927500
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 681,
+      "x_bits": 1173632044,
+      "y_bits": 1140857813
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2897,
+      "x_bits": 1173019469,
+      "y_bits": 1158010208
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 661,
+      "x_bits": 1132302648,
+      "y_bits": 1098973376
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1177,
+      "x_bits": 1149253979,
+      "y_bits": 1122524544
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 1696,
+      "x_bits": 1084089270,
+      "y_bits": 1062156015
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 6993,
+      "x_bits": 1124702208,
+      "y_bits": 1121593184
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 6310,
+      "x_bits": 1168139368,
+      "y_bits": 1163771057
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 7322,
+      "x_bits": 1143792140,
+      "y_bits": 1142048858
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 5745,
+      "x_bits": 1082677358,
+      "y_bits": 1076327258
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 4941,
+      "x_bits": 1122870752,
+      "y_bits": 1114879712
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 5790,
+      "x_bits": 1175957044,
+      "y_bits": 1169964632
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 4463,
+      "x_bits": 1173965928,
+      "y_bits": 1164145487
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2679,
+      "x_bits": 1148907370,
+      "y_bits": 1132728790
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1144090656,
+      "y_bits": 1144090656
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 2679,
+      "x_bits": 1148907370,
+      "y_bits": 1132728790
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1144090656,
+      "y_bits": 1144090656
+    },
+    {
+      "function": "atan2_lookup",
+      "result": 8192,
+      "x_bits": 1060439284,
+      "y_bits": 1060439284
+    }
+  ],
+  "schema": "sm64-saturn-atan2-route-fixture",
+  "version": 1
+}

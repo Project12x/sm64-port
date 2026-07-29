@@ -1267,8 +1267,8 @@ class YmirInputTests(unittest.TestCase):
 
 
 class BobParityRouteTests(unittest.TestCase):
-    SBR3_FIELDS = (
-        "magic", "version", "replay_ticks", "global_timer", "mario_action",
+    SBR4_FIELDS = (
+        "magic", "version", "atan2_variant", "replay_ticks", "global_timer", "mario_action",
         "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits",
         "mario_face_angle_x", "mario_face_angle_y", "mario_face_angle_z",
         "camera_pos_x_bits", "camera_pos_y_bits", "camera_pos_z_bits",
@@ -1290,8 +1290,9 @@ class BobParityRouteTests(unittest.TestCase):
     @staticmethod
     def _probe(**overrides: int) -> dict[str, int]:
         probe = {
-            "magic": 0x53425233,
-            "version": 3,
+            "magic": 0x53425234,
+            "version": 4,
+            "atan2_variant": 1,
             "replay_ticks": 2000,
             "global_timer": 2001,
             "mario_action": 0x04000440,
@@ -1334,20 +1335,28 @@ class BobParityRouteTests(unittest.TestCase):
         return probe
 
     @staticmethod
-    def _report(probe: dict[str, int]) -> dict[str, object]:
-        words = [probe[field] for field in BobParityRouteTests.SBR3_FIELDS]
-        raw = list(struct.pack(">39I", *words))
+    def _report(
+        probe: dict[str, int],
+        capture_role: str = "legacy",
+    ) -> dict[str, object]:
+        bound_probe = dict(probe)
+        bound_probe["atan2_variant"] = 1 if capture_role == "legacy" else 2
+        words = [bound_probe[field] for field in BobParityRouteTests.SBR4_FIELDS]
+        raw = list(struct.pack(">40I", *words))
+        artifact_digit = "1" if capture_role == "legacy" else "3"
+        image_digit = "2" if capture_role == "legacy" else "4"
         return {
             "evidence_kind": "ymir-emulator",
+            "capture_role": capture_role,
             "game": "sourceboot.cue",
             "frames": 240,
             "post_poke_frames": 36000,
-            "probe_window": {"data": raw, "decoded": dict(probe)},
+            "probe_window": {"data": raw, "decoded": bound_probe},
             "protocol": {"ready": True},
             "degradation": {"view_radius": 6000, "poly_tier": 0},
             "artifacts": {
-                "elf": {"sha256": "1" * 64, "size": 100},
-                "image": {"sha256": "2" * 64, "size": 200},
+                "elf": {"sha256": artifact_digit * 64, "size": 100},
+                "image": {"sha256": image_digit * 64, "size": 200},
             },
         }
 
@@ -1381,7 +1390,11 @@ class BobParityRouteTests(unittest.TestCase):
             reject_near_far=101,
             reject_w_nonpositive_overflow_suspect=1010,
         )
-        result = compare_reports(self._report(before), self._report(after), route)
+        result = compare_reports(
+            self._report(before, "legacy"),
+            self._report(after, "q16"),
+            route,
+        )
         self.assertTrue(result["deterministic"])
         self.assertLess(result["behavioral_gate"]["mario_position_linf"], 1.0)
 
@@ -1397,12 +1410,18 @@ class BobParityRouteTests(unittest.TestCase):
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
         probe = self._probe()
         report = self._report(probe)
-        report["probe_window"] = {"data": [0] * (39 * 4)}
+        report["probe_window"] = {"data": [0] * (40 * 4)}
+        q16_probe = dict(probe)
+        q16_probe["atan2_variant"] = 2
         report["extra_probe_window"] = {
-            "data": list(struct.pack(">39I", *(probe[field] for field in self.SBR3_FIELDS))),
+            "data": list(struct.pack(">40I", *(probe[field] for field in self.SBR4_FIELDS))),
             "decoded": dict(probe),
         }
-        result = compare_reports(report, report, route)
+        result = compare_reports(
+            report,
+            self._report(q16_probe, "q16"),
+            route,
+        )
         self.assertTrue(result["deterministic"])
 
     def test_stage2_comparator_requires_identical_face_camera_and_triangles_emitted(self) -> None:
@@ -1435,6 +1454,71 @@ class BobParityRouteTests(unittest.TestCase):
                 )
                 self.assertFalse(result["deterministic"])
                 self.assertTrue(any(field in error for error in result["errors"]))
+
+    def test_stage2_comparator_rejects_missing_camera_sentinels_even_when_equal(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        missing_camera = self._probe(
+            camera_pos_x_bits=0xFFFFFFFF,
+            camera_pos_y_bits=0xFFFFFFFF,
+            camera_pos_z_bits=0xFFFFFFFF,
+            camera_mode=0xFFFFFFFF,
+        )
+        result = compare_reports(
+            self._report(missing_camera),
+            self._report(missing_camera),
+            route,
+        )
+        self.assertFalse(result["deterministic"])
+        self.assertTrue(any("camera" in error.lower() for error in result["errors"]))
+
+    def test_stage2_comparator_hard_rejects_vdp1_arena_capacity_on_both_sides(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        capacity_reject = self._probe(reject_vdp1_arena_capacity=1)
+        result = compare_reports(
+            self._report(capacity_reject),
+            self._report(capacity_reject),
+            route,
+        )
+        self.assertFalse(result["deterministic"])
+        self.assertIn("left reject_vdp1_arena_capacity=1", result["errors"])
+        self.assertIn("right reject_vdp1_arena_capacity=1", result["errors"])
+
+    def test_stage2_comparator_requires_ordered_legacy_and_q16_roles(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        left = self._report(self._probe(), "q16")
+        right = self._report(self._probe(), "legacy")
+        result = compare_reports(left, right, route)
+        self.assertFalse(result["deterministic"])
+        self.assertTrue(any("legacy" in error and "q16" in error for error in result["errors"]))
+
+    def test_stage2_comparator_rejects_same_artifacts_for_both_roles(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        left = self._report(self._probe(), "legacy")
+        right = self._report(self._probe(), "q16")
+        right["artifacts"] = json.loads(json.dumps(left["artifacts"]))
+        result = compare_reports(left, right, route)
+        self.assertFalse(result["deterministic"])
+        self.assertTrue(any("artifact" in error.lower() for error in result["errors"]))
+
+    def test_stage2_comparator_rejects_role_that_disagrees_with_raw_variant(self) -> None:
+        route = load_route(TOOLS / "routes" / "bob_parity_v1.json")
+        left = self._report(self._probe(), "legacy")
+        right = self._report(self._probe(), "q16")
+        left_probe = dict(left["probe_window"]["decoded"])  # type: ignore[index]
+        left_probe["atan2_variant"] = 2
+        left["probe_window"] = {
+            "data": list(struct.pack(
+                ">40I",
+                *(left_probe[field] for field in self.SBR4_FIELDS),
+            )),
+            "decoded": left_probe,
+        }
+        try:
+            result = compare_reports(left, right, route)
+        except ValueError as error:
+            self.fail(f"SBR4 raw atan2 variant is unsupported: {error}")
+        self.assertFalse(result["deterministic"])
+        self.assertTrue(any("raw atan2 variant" in error for error in result["errors"]))
 
     def test_comparator_rejects_missing_required_report_schema_field(self) -> None:
         route = load_route(TOOLS / "routes" / "bob_parity_v1.json")

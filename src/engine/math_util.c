@@ -5,7 +5,16 @@
 #include "math_util.h"
 #include "surface_collision.h"
 
-#if defined(TARGET_SATURN)
+#if !defined(SATURN_ATAN2_VARIANT)
+#define SATURN_ATAN2_VARIANT 2
+#endif
+
+#if defined(TARGET_SATURN) && SATURN_ATAN2_VARIANT != 1 && \
+    SATURN_ATAN2_VARIANT != 2
+#error "SATURN_ATAN2_VARIANT must be 1 (legacy) or 2 (Q16)"
+#endif
+
+#if defined(TARGET_SATURN) && SATURN_ATAN2_VARIANT == 2
 #include "saturn_engine_math_q16.h"
 #endif
 
@@ -704,7 +713,7 @@ f32 approach_f32(f32 current, f32 target, f32 inc, f32 dec) {
  * decodes the operands into Q16.16 before the ratio/table operation.  The
  * recorded bit pairs let its replay fixture retain the float caller's exact
  * inputs without reintroducing arithmetic into the native path. */
-#if defined(TARGET_SATURN)
+#if defined(TARGET_SATURN) && SATURN_ATAN2_VARIANT == 2
 static u16 atan2_lookup_q16(s32 y, s32 x, u32 y_bits, u32 x_bits) {
     u16 ret;
     ret = sm64_saturn_atan2_lookup_q16(y, x, gArctanTable);
@@ -724,7 +733,7 @@ static u16 atan2_lookup_q16(s32 y, s32 x, u32 y_bits, u32 x_bits) {
  * the resulting angle is in range [0, 0x2000] (1/8 of a circle).
  */
 static u16 atan2_lookup(f32 y, f32 x) {
-#if defined(TARGET_SATURN)
+#if defined(TARGET_SATURN) && SATURN_ATAN2_VARIANT == 2
     u32 y_bits = 0;
     u32 x_bits = 0;
 #if defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && SATURN_SOURCEBOOT_ROUTE_REPLAY
@@ -734,8 +743,17 @@ static u16 atan2_lookup(f32 y, f32 x) {
     return atan2_lookup_q16(sm64_saturn_float_to_q16_trunc(y),
                              sm64_saturn_float_to_q16_trunc(x), y_bits, x_bits);
 #else
-    if (x == 0) return gArctanTable[0];
-    return gArctanTable[(s32)(y / x * 1024 + 0.5f)];
+    u16 ret;
+    if (x == 0) {
+        ret = gArctanTable[0];
+    } else {
+        ret = gArctanTable[(s32)(y / x * 1024 + 0.5f)];
+    }
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2_lookup(y, x, ret);
+#endif
+    return ret;
 #endif
 }
 
@@ -751,7 +769,7 @@ s16 atan2s(f32 y, f32 x) {
     const f32 capture_x = x;
 #endif
 
-#if defined(TARGET_SATURN)
+#if defined(TARGET_SATURN) && SATURN_ATAN2_VARIANT == 2
     s32 y_q16 = sm64_saturn_float_to_q16_trunc(y);
     s32 x_q16 = sm64_saturn_float_to_q16_trunc(x);
     u32 y_bits = 0;

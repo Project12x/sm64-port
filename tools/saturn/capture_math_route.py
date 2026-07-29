@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Capture the replay-only SMC1 math corpus and SBR3 behavior through Ymir.
+"""Capture the replay-only SMC1 math corpus and SBR4 behavior through Ymir.
 
-The capture intentionally waits for the sourceboot SBR3 checkpoint,
+The capture intentionally waits for the sourceboot SBR4 checkpoint,
 then reads the separately linked SMC1 block from the same paused emulation
 state.  It records raw bytes as well as decoded IEEE-754 input bits so a host
 differential test can consume the capture without trusting formatted floats.
@@ -81,6 +81,12 @@ def main() -> int:
     parser.add_argument("--game", type=Path, required=True)
     parser.add_argument("--route-address", type=lambda value: int(value, 0), required=True)
     parser.add_argument("--math-address", type=lambda value: int(value, 0), required=True)
+    parser.add_argument(
+        "--capture-role",
+        choices=("legacy", "q16"),
+        required=True,
+        help="Stage 2 side represented by this independently built artifact",
+    )
     parser.add_argument("--expected-ticks", type=int, default=2000)
     parser.add_argument("--degradation-view-radius", type=int, required=True)
     parser.add_argument("--degradation-poly-tier", type=int, required=True)
@@ -109,6 +115,12 @@ def main() -> int:
             client.call("exec.run_for", {"frames": 30})
             frames += 30
             route, route_data = peek_route(client, args.route_address)
+        expected_variant = 1 if args.capture_role == "legacy" else 2
+        if route["atan2_variant"] != expected_variant:
+            raise RuntimeError(
+                f"raw SBR4 atan2 variant {route['atan2_variant']} does not "
+                f"match capture role {args.capture_role}"
+            )
         if int(route["replay_ticks"]) != args.expected_ticks:
             raise RuntimeError(f"route stopped at tick {route['replay_ticks']}, expected {args.expected_ticks}")
         math_window = client.call("mem.peek", {"address": args.math_address, "count": MATH_BYTES})
@@ -138,6 +150,7 @@ def main() -> int:
     }
     report = {
         "evidence_kind": "ymir-sourceboot-smc1-math-route",
+        "capture_role": args.capture_role,
         "schema_version": MATH_VERSION,
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),

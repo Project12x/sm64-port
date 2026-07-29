@@ -128,10 +128,15 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
                 f"{sample['function']} {sample['y_bits']:08x} {sample['x_bits']:08x} {sample['result']}\n"
                 for sample in samples
             )
-            for target in (False, True):
+            for target, atan2_variant in (
+                (False, None),
+                (True, 2),
+                (True, 1),
+            ):
                 compiled = subprocess.run(
                     [compiler, "-std=c11", "-D_GNU_SOURCE", "-Wall", "-Wextra", "-Werror", "-ffunction-sections", "-fdata-sections",
                      *( ["-DENGINE_ATAN2_Q16_TARGET=1"] if target else [] ),
+                     *( [f"-DSATURN_ATAN2_VARIANT={atan2_variant}"] if atan2_variant is not None else [] ),
                      *( ["-DSM64_SATURN_TEST_MUTATE_ATAN2_Q16=1"] if os.environ.get("SM64_SATURN_TEST_MUTATE_ATAN2_Q16") else [] ),
                      "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
                      "-I", str(ROOT / "src/port/saturn/gfx"), "-I", str(ROOT / "src/port/saturn/platform"),
@@ -142,7 +147,7 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
                 )
                 self.assertEqual(compiled.returncode, 0, compiled.stderr)
                 completed = subprocess.run([str(executable)], input=corpus, text=True, capture_output=True, check=False)
-                if target and expect_mutation:
+                if target and atan2_variant == 2 and expect_mutation:
                     self.assertNotEqual(
                         completed.returncode,
                         0,

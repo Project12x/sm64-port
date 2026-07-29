@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 
-#define SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC 0x53425233U /* "SBR3" */
-#define SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION 3U
+#define SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC 0x53425234U /* "SBR4" */
+#define SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION 4U
 
 typedef struct sm64_saturn_source_route_probe {
     uint32_t magic;
     uint32_t version;
+    uint32_t atan2_variant;
     uint32_t replay_ticks;
     uint32_t global_timer;
     uint32_t mario_action;
