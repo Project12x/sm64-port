@@ -17,6 +17,10 @@
 
 #include "../gfx/saturn_projected_workarea.h"
 
+#if defined(__sh__)
+#include <yaul/scu/map.h>
+#endif
+
 #define SM64_SATURN_TERRAIN_RESULT_CORNERS 4U
 
 typedef enum sm64_saturn_terrain_result_flags {
@@ -55,6 +59,34 @@ typedef struct sm64_saturn_terrain_result_spans {
     sm64_saturn_terrain_result_arena_t master;
     sm64_saturn_terrain_result_arena_t slave;
 } sm64_saturn_terrain_result_spans_t;
+
+/* The two result arenas live in the sourceboot LWRAM work area because a
+ * complete compact stream is larger than the remaining HWRAM margin.  Keep
+ * producer writes on the normal alias and use the uncached alias only at the
+ * single join before the master copies the disjoint spans into its cacheable
+ * merge stream.  This is the explicit cache-through boundary required by
+ * SlaveDriver's worker-result contract without paying uncached traffic for
+ * every record. */
+static inline sm64_saturn_terrain_result_t *
+sm64_saturn_terrain_result_records(
+    sm64_saturn_terrain_result_t *records)
+{
+    return records;
+}
+
+static inline const sm64_saturn_terrain_result_t *
+sm64_saturn_terrain_result_uncached_records(
+    const sm64_saturn_terrain_result_t *records)
+{
+#if defined(__sh__)
+    const uintptr_t physical =
+        ((uintptr_t)records & ~((uintptr_t)CPU_ADDRESS_PARTITION_MASK)) -
+        LWRAM(0);
+    return (const sm64_saturn_terrain_result_t *)LWRAM_UNCACHED(physical);
+#else
+    return records;
+#endif
+}
 
 _Static_assert(sizeof(sm64_saturn_terrain_result_t) <= 64U,
                "terrain result must remain a compact bounded record");

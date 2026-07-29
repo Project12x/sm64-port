@@ -1,13 +1,39 @@
 # Saturn Renderer Pipeline Sprint
 
 > **Status:** In progress — Tasks 0–4 and the Task 5A concurrent transform
-> slice landed. The fresh same-commit route now passes the one-dispatch speed
-> gate; visual acceptance, leaf/work-weight balancing, and compact-result
-> lowering remain open before bank, promotion, or LOD work.
+> slice are implemented in the current working tree. The fresh same-commit
+> route passes the one-dispatch, parity, and safety gates, but the dual build
+> is still slower than its serial oracle over the full capture. Visual
+> acceptance, ownership proof, and the measured speed correction remain open
+> before bank, promotion, or LOD work.
 > **Date:** 2026-07-28
-> **Branch baseline:** `saturn/bootstrap` at `d58fc37`
+> **Branch baseline:** `saturn/bootstrap` at `f4a357d`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
 > `2026-07-27-demo-path-first.md`; completed demo-path work remains authoritative.
+
+### Priority stack for this sprint
+
+The work is deliberately ordered by the three levers that matter in the
+current build, not by whichever counter is easiest to improve:
+
+1. **Visual fidelity:** make visibility and ordering coherent first. Tight
+   leaf bounds, near-to-far admission, view-space clipping, stable far-to-near
+   opaque lowering, and a real frame-ownership boundary address the blue holes,
+   disappearing terrain, and residual flicker. No texture-resolution increase
+   is allowed to mask a visibility failure.
+2. **Saturn-shaped rendering:** keep simulation authoritative on the master,
+   give the slave one coarse immutable range, return compact records, and make
+   the master the sole VDP1/Gouraud/DMA owner. This is the direct lesson from
+   SlaveDriver's bounded result hand-off and Z-Treme's fixed work areas.
+3. **Speed:** only after the first two levers are safe, promote measured hot
+   data, remove avoidable cache/bus traffic, choose shared-vertex tiers, and
+   report guest FPS beside emulator speed ratio and perceived FPS. A faster
+   frame that drops terrain or races the display bank is a failed result.
+
+The sprint therefore has three explicit stop conditions: a visual regression
+stops speed work; a missing ownership/overflow proof stops memory/layout work;
+and a dual build that does not beat its same-commit serial oracle stops any
+frame-ahead or additional-dispatch experiment.
 
 ## 1. Outcome
 
@@ -353,7 +379,7 @@ state, VDP1 command cursor, or Gouraud cursor.
   `WALLS.C:1240-1408`.
 - [x] Define two disjoint output spans, one for each CPU, with deterministic
   merge order.
-- [ ] Define uncached/cache-through access explicitly for worker-produced
+- [x] Define uncached/cache-through access explicitly for worker-produced
   data.
 - [x] Add overflow counters by reason and reserve headroom before every
   multi-result clip write.
@@ -426,14 +452,14 @@ rather than random emission order.
 - [x] Close-port Z-Treme’s tri-state AABB/frustum test from
   `ZT_FRUSTUM.c:126-161`.
 - [x] Propagate inherited `INSIDE` state to children.
-- [ ] Traverse camera-octant children near-to-far for capacity admission.
+- [x] Traverse camera-octant children near-to-far for capacity admission.
 - [x] Stop primitive-radius rejection from overriding an accepted tight leaf;
   retain a profile flag for same-commit A/B.
 - [x] Record nodes/leaves visited, inside, intersecting, outside, admitted,
   and dropped by capacity.
-- [ ] Build the accepted opaque leaf list in near-to-far admission order,
+- [x] Build the accepted opaque leaf list in near-to-far admission order,
   then emit it in stable far-to-near painter order.
-- [ ] Keep Mario, decals, transparent geometry, and sky in their existing
+- [x] Keep Mario, decals, transparent geometry, and sky in their existing
   separate passes.
 
 **Visual milestone label:** `pipeline-m1-spatial-visibility`
@@ -478,12 +504,12 @@ bounded view-space decision.
 - [ ] Accept at most the proven bounded output count; reserve all result slots
   before writing any output.
 - [x] Project only after clipping.
-- [ ] Keep wholly-in-front fragments textured through the existing
+- [x] Keep wholly-in-front fragments textured through the existing
   castleviewer A/B/C/C sampling contract.
-- [ ] Do **not** pretend VDP1 can represent arbitrary clipped UVs. A crossing
+- [x] Do **not** pretend VDP1 can represent arbitrary clipped UVs. A crossing
   fragment uses a labelled baked recovery material (dominant tile colour plus
   Gouraud) unless its original texture domain remains exactly representable.
-- [ ] Count clipped-away, clipped-to-one, clipped-to-two, recovery-material,
+- [x] Count clipped-away, clipped-to-one, clipped-to-two, recovery-material,
   and overflow cases.
 - [x] Leave Mario on strict actor-safe clipping. The terrain flag must not
   affect actor visibility.
@@ -530,13 +556,12 @@ one independent terrain producer.
 - [x] Master concurrently performs the same stages for its complementary
   range and handles Mario.
 - [x] Join once after both disjoint producers finish.
-- [ ] Merge compact results by stable baked painter key and lower that merged
-  stream as the sole terrain emission source (the current slice still uses
-  the legacy visibility stream for lowering).
+- [x] Merge compact results by stable baked painter key and lower that merged
+  stream as the sole terrain emission source.
 - [x] Remove worker access to the backend, command cursor, texture allocator,
   and Gouraud allocator.
-- [ ] Replace transform-vertex balancing with leaf/work-weight balancing.
-- [ ] Adapt SlaveDriver’s prior-spin boundary correction with bounded steps
+- [x] Replace transform-vertex balancing with leaf/work-weight balancing.
+- [x] Adapt SlaveDriver’s prior-spin boundary correction with bounded steps
   and minimum useful ranges.
 - [x] Preserve `SATURN_SLAVE_RENDER=0` as the identical serial oracle.
 - [x] A timeout cancels safely, increments a fault, and falls back to serial
@@ -574,9 +599,11 @@ current slice because transform still runs as a serial pre-dispatch pass.
 The comparison is recorded in
 `docs/saturn/evidence/reports/task5-sbr2-current-compare-2026-07-28.json`.
 
-Task 5A now passes the performance portion of this gate. Do not begin Tasks
-6–8 or frame-ahead work until the remaining ownership/order and visual checks
-below are closed.
+Task 5A now passes the one-dispatch, parity, and safety portions of this gate,
+but the fresh full-capture dual/serial pair still fails the cumulative speed
+portion. Do not begin Tasks 6–8 or frame-ahead work until the ownership/order
+and visual checks below are closed and one bounded speed correction is
+measured.
 
 ---
 
@@ -591,28 +618,36 @@ classifier.
 - [x] Give each CPU a disjoint transform/clip/shade/compact primitive range
   without racing shared source positions. The switch to contiguous accepted
   leaf ranges and work-weight balancing remains open.
-- [ ] Keep shared source positions immutable; publish worker-produced spans
+- [x] Keep shared source positions immutable; publish worker-produced spans
   through an explicit cache-through/uncached hand-off or a measured purge at
   the single join boundary.
 - [x] Make the master process its complementary terrain range concurrently
   with the slave and keep Mario on the master path.
-- [ ] Merge compact results by stable baked painter key; do not re-enter the
+- [x] Merge compact results by stable baked painter key; do not re-enter the
   legacy primitive visibility path for emission.
-- [ ] Carry the bounded prior-spin correction into the leaf/work-weight split
+- [x] Carry the bounded prior-spin correction into the leaf/work-weight split
   and record balance error, useful-result counts, merge cost, and cache/DMA
   costs.
 - [x] Preserve the exact serial oracle and the timeout-to-serial fallback.
 
-**Measured gate:** same route/checkpoint and safety invariants pass; one
-job/render; master wait is 0.57%; the slave supplies 42.9% of the final
-compact-result stream; and dual render FRT is 20.8% below serial. The fresh
-pair is recorded in
-`docs/saturn/evidence/reports/task5a-sbr2-current-2026-07-28.md`.
+**Measured gate — 2026-07-28 fresh rebuild:** the serial and dual images reach
+the exact `replay_ticks=600` checkpoint with identical Mario/camera state,
+`fault_flags=0`, `command_capacity_rejects=0`, and `slave_timeouts=0`. The
+dual image issues one job per rendered frame and produces 20,516 slave results
+plus 17,500 master results; the serial oracle produces 37,308 master results.
+The dual full-capture render accumulator is 13,137,628 FRT ticks versus
+7,147,947 serial ticks, so the dual build is **not** a speed win on this
+lineage. The route-endpoint comparison remains deterministic, but its
+single-frame FRT must not be generalized into a cumulative claim. Evidence:
+`docs/saturn/evidence/reports/task-cycleguard-dual-full.json`,
+`docs/saturn/evidence/reports/task-cycleguard-serial-full.json`, and
+`.tmp-msys/task-cycleguard-compare.json`.
 
-**Remaining gate:** visual invariants, explicit cache-through publication,
-leaf/work-weight balancing, and consuming the merged compact results as the
-sole emission source. If any of those loses, retain serial as the default and
-record exactly one measured follow-on task.
+**Remaining gate:** visual invariants and ownership proof pass for the
+current compact stream, while the cumulative dual-speed gate fails. Keep the
+serial build as the performance oracle/default until a bounded corrective
+task measures merge/cache/bus cost and demonstrates a dual win. Do not add
+dispatches or frame-ahead rendering in response to this failure.
 
 **Commit:** `perf(saturn): overlap terrain transform and compact production`
 
@@ -648,6 +683,16 @@ same frame storage.
   and high-water counters.
 - [ ] Use command linking where it eliminates per-command relinking without
   changing painter order.
+
+**Current evidence boundary — 2026-07-28:** the sourceboot path already has
+two non-overlapping LWRAM CPU staging banks and the fresh route peaks at 747
+commands with a 2,048-command capacity. A true second VDP1 destination bank
+has not been proven: the command-0 trampoline experiment produced a blue-only
+capture with zero renderer profile and was reverted. Treat that as a failed
+hardware-contract experiment, not as evidence for a boot or handoff change.
+Task 6 therefore remains open until Yaul's start-table/destination contract is
+verified independently; do not claim double-buffering from the CPU staging
+banks alone.
 
 **Visual milestone label:** `pipeline-m3-vdp1-double-bank`
 
