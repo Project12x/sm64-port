@@ -30,6 +30,16 @@ static const sm64_saturn_input_replay_sample_t sBobParityV1[] = {
     {  72U, -48,  48,          0U }, /* return leg */
     {  48U, -48,  48,    A_BUTTON }, /* second jump */
     {  48U,   0, -64, R_CBUTTONS }, /* final camera variation */
+    { 200U,   0,   0,          0U }, /* settle before extended sweep */
+    { 200U,  48,  48,          0U }, /* forward-right traverse */
+    {  24U,  48,  48,    A_BUTTON }, /* traverse jump */
+    { 176U,  48,  48,          0U }, /* settle traverse */
+    {  96U,   0,   0, R_CBUTTONS }, /* camera-right sweep */
+    { 200U, -64,   0,          0U }, /* return traverse */
+    {  24U, -64,   0,    A_BUTTON }, /* return jump */
+    { 180U, -64, -32,          0U }, /* return arc */
+    { 100U,   0,   0, L_CBUTTONS }, /* camera-left sweep */
+    { 200U,   0,  64,          0U }, /* final forward traverse */
 };
 
 const sm64_saturn_input_replay_sample_t *

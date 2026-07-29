@@ -1,6 +1,6 @@
 {
   "button_encoding": "N64 OSContPad active-high bitmask",
-  "checkpoint_tick": 600,
+  "checkpoint_tick": 2000,
   "primitive_count_tolerance": 0,
   "report_schema": {
     "extension_rule": "When a later task adds a route-relevant counter or metadata field, bump version and add it to the applicable required list; comparator tests must reject its absence.",
@@ -19,7 +19,17 @@
     { "buttons": 2, "note": "normal camera input", "stick_x": 0, "stick_y": 0, "ticks": 72 },
     { "buttons": 0, "note": "return leg", "stick_x": -48, "stick_y": 48, "ticks": 72 },
     { "buttons": 32768, "note": "second jump", "stick_x": -48, "stick_y": 48, "ticks": 48 },
-    { "buttons": 1, "note": "final camera variation", "stick_x": 0, "stick_y": -64, "ticks": 48 }
+    { "buttons": 1, "note": "final camera variation", "stick_x": 0, "stick_y": -64, "ticks": 48 },
+    { "buttons": 0, "note": "settle before extended sweep", "stick_x": 0, "stick_y": 0, "ticks": 200 },
+    { "buttons": 0, "note": "forward-right traverse", "stick_x": 48, "stick_y": 48, "ticks": 200 },
+    { "buttons": 32768, "note": "traverse jump", "stick_x": 48, "stick_y": 48, "ticks": 24 },
+    { "buttons": 0, "note": "settle traverse", "stick_x": 48, "stick_y": 48, "ticks": 176 },
+    { "buttons": 1, "note": "camera-right sweep", "stick_x": 0, "stick_y": 0, "ticks": 96 },
+    { "buttons": 0, "note": "return traverse", "stick_x": -64, "stick_y": 0, "ticks": 200 },
+    { "buttons": 32768, "note": "return jump", "stick_x": -64, "stick_y": 0, "ticks": 24 },
+    { "buttons": 0, "note": "return arc", "stick_x": -64, "stick_y": -32, "ticks": 180 },
+    { "buttons": 2, "note": "camera-left sweep", "stick_x": 0, "stick_y": 0, "ticks": 100 },
+    { "buttons": 0, "note": "final forward traverse", "stick_x": 0, "stick_y": 64, "ticks": 200 }
   ],
-  "simulation_ticks": 600
+  "simulation_ticks": 2000
 }

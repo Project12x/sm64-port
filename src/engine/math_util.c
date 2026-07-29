@@ -703,16 +703,15 @@ f32 approach_f32(f32 current, f32 target, f32 inc, f32 dec) {
 static u16 atan2_lookup(f32 y, f32 x) {
     u16 ret;
 
-#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
-    SATURN_SOURCEBOOT_ROUTE_REPLAY
-    sm64_saturn_math_route_record_atan2_lookup(y, x);
-#endif
-
     if (x == 0) {
         ret = gArctanTable[0];
     } else {
         ret = gArctanTable[(s32)(y / x * 1024 + 0.5f)];
     }
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2_lookup(y, x, ret);
+#endif
     return ret;
 }
 
@@ -722,10 +721,10 @@ static u16 atan2_lookup(f32 y, f32 x) {
  */
 s16 atan2s(f32 y, f32 x) {
     u16 ret;
-
 #if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
     SATURN_SOURCEBOOT_ROUTE_REPLAY
-    sm64_saturn_math_route_record_atan2s(y, x);
+    const f32 capture_y = y;
+    const f32 capture_x = x;
 #endif
 
     if (x >= 0) {
@@ -760,6 +759,10 @@ s16 atan2s(f32 y, f32 x) {
             }
         }
     }
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2s(capture_y, capture_x, ret);
+#endif
     return ret;
 }
 
