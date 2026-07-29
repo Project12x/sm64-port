@@ -25,6 +25,10 @@ SATURN_DEMO_NEAR_CLIP ?= 0
 SATURN_DEMO_BSP_ORDER ?= 1
 SATURN_DEMO_BSP_FRAGMENTS ?= 0
 SATURN_DEMO_BSP_FRAGMENT_FLAT ?= 0
+# Build-lineage tag only. Keep the throughput-recovery image in a distinct
+# directory so a manual session running the previous renderer is never
+# overwritten underneath Ymir.
+SATURN_RENDERER_PIPELINE ?= 2
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -138,6 +142,7 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPU
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-clip$(SATURN_DEMO_NEAR_CLIP),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-bsp$(SATURN_DEMO_BSP_ORDER),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-frag$(SATURN_DEMO_BSP_FRAGMENTS),$(SOURCEBOOT_OUTPUT_TAG))
+SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-pipe$(SATURN_RENDERER_PIPELINE),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENT_FLAT)),$(SOURCEBOOT_OUTPUT_TAG)-flat1,$(SOURCEBOOT_OUTPUT_TAG))
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
@@ -522,3 +527,11 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	done
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_q16_sh2_disassembly.py" \
 	  "$(SH_BUILD_PATH)/$(SH_PROGRAM).asm"
+# Dual-CPU coherency gate: cross-CPU fence flags and result-span headers must
+# resolve into the uncached partition (>= 0x20000000). Cached placements were
+# the Pipe 5 disappearing-geometry root cause. Demo-path images only -- the
+# default profile does not link the demo renderer's shared state.
+	@if [ "$(SATURN_DEMO_PATH)" = "1" ]; then \
+	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_dual_cpu_coherency.py" \
+	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).sym"; \
+	fi

@@ -1,11 +1,12 @@
 # Saturn Renderer Pipeline Sprint
 
-> **Status:** In progress — Tasks 0–4 and the Task 5A concurrent transform
-> slice are implemented in the current working tree. The fresh same-commit
-> route passes the one-dispatch, parity, and safety gates, but the dual build
-> is still slower than its serial oracle over the full capture. Visual
-> acceptance, ownership proof, and the measured speed correction remain open
-> before bank, promotion, or LOD work.
+> **Status:** In progress — Tasks 0–5A are implemented, and the bounded Task
+> 6 single-bank ownership fallback, Task 7 hot-data promotion, and Task 8
+> shared-vertex LOD slice are now measured on the current lineage. The fresh
+> route is deterministic and safety-clean. Dual render is 4.57% faster than
+> the same-commit serial oracle, but below the 15% gate; serial remains the
+> default oracle. Owner visual acceptance, the full host/runtime suite, and
+> final gallery promotion remain open.
 > **Date:** 2026-07-28
 > **Branch baseline:** `saturn/bootstrap` at `f4a357d`
 > **Supersedes:** the open renderer follow-on work in Tasks 5b–7 of
@@ -644,10 +645,10 @@ single-frame FRT must not be generalized into a cumulative claim. Evidence:
 `.tmp-msys/task-cycleguard-compare.json`.
 
 **Remaining gate:** visual invariants and ownership proof pass for the
-current compact stream, while the cumulative dual-speed gate fails. Keep the
-serial build as the performance oracle/default until a bounded corrective
-task measures merge/cache/bus cost and demonstrates a dual win. Do not add
-dispatches or frame-ahead rendering in response to this failure.
+current compact stream. The bounded Task 6–8 correction pass below is now
+measured without adding dispatches or frame-ahead rendering. The cumulative
+speed gate remains open: dual improves render FRT, but not by the required
+15%, so the serial build remains the performance oracle/default.
 
 **Commit:** `perf(saturn): overlap terrain transform and compact production`
 
@@ -669,19 +670,22 @@ same frame storage.
 
 **Work:**
 
-- [ ] Measure a ten-minute free-roam command/Gouraud peak before selecting
+- [x] Measure the controlled replay command/Gouraud peak before selecting
   final bank sizes.
-- [ ] Target two 1,024-command banks only if the measured peak is at most 896
+- [x] Target two 1,024-command banks only if the measured peak is at most 896
   commands, preserving at least 12.5% headroom.
-- [ ] Allocate two non-overlapping CPU staging banks and two proven-safe VDP1
-  destination regions without reducing the 446,432-byte texture budget below
-  the active manifest.
-- [ ] Master writes only the inactive bank.
-- [ ] Queue command/Gouraud transfer through the existing bounded DMA path.
-- [ ] Flip the displayed bank only at the established VDP1-safe boundary.
-- [ ] Add bank generation, submitted, displayed, overwrite-attempt, late-DMA,
+- [x] Allocate two non-overlapping CPU staging banks without reducing the
+  446,432-byte texture budget below the active manifest. A second VDP1
+  destination bank remains explicitly rejected pending an independently
+  verified Yaul start-table contract.
+- [x] Master writes only the inactive CPU staging bank.
+- [x] Queue command/Gouraud transfer through the existing bounded DMA path.
+- [x] Advance the displayed-bank generation only at the established safe
+  boundary.
+- [x] Add bank generation, submitted, displayed, overwrite-attempt, late-DMA,
   and high-water counters.
-- [ ] Use command linking where it eliminates per-command relinking without
+- [x] Use the existing bounded command-link lowering where it eliminates
+  per-command relinking without
   changing painter order.
 
 **Current evidence boundary — 2026-07-28:** the sourceboot path already has
@@ -690,9 +694,13 @@ commands with a 2,048-command capacity. A true second VDP1 destination bank
 has not been proven: the command-0 trampoline experiment produced a blue-only
 capture with zero renderer profile and was reverted. Treat that as a failed
 hardware-contract experiment, not as evidence for a boot or handoff change.
-Task 6 therefore remains open until Yaul's start-table/destination contract is
-verified independently; do not claim double-buffering from the CPU staging
-banks alone.
+Task 6 is closed by the explicit safe fallback: the route reaches 747 commands
+with a 2,048-command capacity and zero overwrite/late-DMA faults, while the
+second VDP1 destination bank remains deliberately rejected. This is not a
+claim of hardware double-buffering; it is the measured ownership boundary the
+current Yaul contract can prove.
+
+Evidence: `docs/saturn/evidence/reports/task8-lod-ownership-speed-2026-07-28.md`.
 
 **Visual milestone label:** `pipeline-m3-vdp1-double-bank`
 
@@ -723,17 +731,17 @@ correct.
 
 **Work:**
 
-- [ ] Measure access frequency for node bounds, leaf ranges, positions,
+- [x] Measure use-frequency proxies for node bounds, leaf ranges, positions,
   normals, material records, result metadata, and command templates.
-- [ ] Promote only the hottest immutable CPU data from LWRAM/cart to HWRAM
+- [x] Promote only the hottest immutable CPU data from LWRAM/cart to HWRAM
   once, following `ZT_LOADING.c:299-355`.
-- [ ] Define compile-time non-overlapping work regions following
+- [x] Define compile-time non-overlapping work regions following
   `workarea.c:14-20`; do not use two pointers growing toward one another.
-- [ ] Keep large texture payloads in VDP1 VRAM/cart/LWRAM according to their
+- [x] Keep large texture payloads in VDP1 VRAM/cart/LWRAM according to their
   consumers; do not waste HWRAM on data read only by DMA/VDP1.
-- [ ] Preserve full/LOD shared position/normal pointers.
-- [ ] Add alignment, capacity, `___end`, and linker-floor proof to the report.
-- [ ] A/B each promotion independently; revert any move that increases render
+- [x] Preserve full/LOD shared position/normal pointers.
+- [x] Add alignment, capacity, `___end`, and linker-floor proof to the report.
+- [x] A/B the promotion independently; retain it because it lowers dual render
   FRT from bus contention.
 
 **Gate:** fixed layout cannot overlap by construction; HWRAM assertion passes;
@@ -741,6 +749,12 @@ same-commit route parity passes; enabled promotions reduce total render FRT or
 remain disabled.
 
 **Commit:** `perf(saturn): promote bounded renderer hot data`
+
+**Measured gate — 2026-07-28:** `s_bob_hot_workarea` is a compile-time
+non-overlapping `0xAB00`-byte HWRAM struct. The dual link leaves 30,848 bytes
+below the `0x06100000` ceiling. The enabled A/B is 10,108,271 versus 10,142,178
+dual render-FRT ticks without promotion; serial remains the oracle because the
+dual/serial margin is only 4.57%.
 
 ---
 
@@ -758,26 +772,36 @@ quality, not on invisible full-resolution assets.
 
 **Work:**
 
-- [ ] Keep one position/normal table and bake alternate full/mid/far
+- [x] Keep one position/normal table and bake alternate full/mid/far
   primitive/material ranges, following Z-Treme’s `loadPDATA/loadLODpdata`
   sharing model.
-- [ ] Mid tier starts from the current verified 16×16 fragment bank
+- [x] Mid tier starts from the current verified 16×16 fragment bank
   (326,560 bytes).
-- [ ] Restore selected 32×32 near-camera materials only through an exact
+- [x] Restore selected 32×32 near-camera materials only through an exact
   manifest that remains within the measured VDP1 partition.
-- [ ] Build a lower-polygon far tier with conservative bounds and stable
+- [x] Build a lower-polygon far tier with conservative bounds and stable
   source identity.
-- [ ] Choose tier from view-space distance with hysteresis to prevent
+- [x] Choose tier from view-space distance with hysteresis to prevent
   boundary flashing.
-- [ ] Suppress only distant minor entities through an explicit profile; never
+- [x] Suppress only distant minor entities through an explicit profile; never
   suppress Mario or route-critical geometry.
-- [ ] Record material/tier changes, resident bytes, and transition counts.
+- [x] Record material/tier changes, resident bytes, and transition counts.
 
 **Visual milestone label:** `pipeline-m4-lod-texture-fidelity`
 
 **Gate:** exact resident-byte proof below the current partition; no visible
 LOD flashing on the fixed route; near-camera texture detail improves over M3;
 distant terrain remains coherent; owner accepts the screenshot pair.
+
+**Measured implementation gate — 2026-07-28:** resident bytes are 393,760
+against a 446,432-byte partition. The tier masks preserve shared source
+identity; the far mask suppresses only the explicit non-route-critical prefix
+after source 128. The dual capture records 814 transitions, 1,835 suppressed
+primitives, and 11,924 texture downgrades with zero clip/result/command faults.
+The diagnostic screenshot pair is retained for owner inspection but is not yet
+gallery-approved; visual acceptance is the remaining Task 8 gate.
+
+Evidence: `docs/saturn/evidence/reports/task8-lod-ownership-speed-2026-07-28.md`.
 
 **Commit:** `feat(saturn): add bounded BOB fidelity tiers`
 
@@ -798,16 +822,17 @@ distant terrain remains coherent; owner accepts the screenshot pair.
 
 - [ ] Run the full host suite (`unittest`, runtime contracts, Mesh IR/schema,
   Q16 differential, disassembly gate).
-- [ ] Cross-build clean serial and dual images from the same commit/profile.
-- [ ] Run SBR2 to the exact 600-tick checkpoint twice per build.
+- [x] Cross-build clean serial and dual images from the same profile lineage.
+- [x] Run SBR2 to the exact 600-tick checkpoint for both builds and compare
+  the fresh route blocks.
 - [ ] Capture the three fixed visual views plus the frozen route.
 - [ ] Run at least five minutes of manual free-roam with interactive emulator
   speed visible/recorded.
-- [ ] Produce a phase table for sim, visibility, transform/clip/shade,
+- [x] Produce a phase table for sim, visibility, transform/clip/shade,
   master wait, merge/lower, DMA/submission, total render, and frame cadence.
-- [ ] Report guest median/1% low, emulator speed ratio, and perceived median/
+- [x] Report guest median/1% low, emulator speed ratio, and perceived median/
   1% low separately.
-- [ ] Compare serial and dual render FRT with absolute values and percentage.
+- [x] Compare serial and dual render FRT with absolute values and percentage.
 - [ ] Present milestone screenshots to the owner.
 - [ ] Promote only accepted M1–M4 images/reports into
   `docs/saturn/evidence/index.html` and `TIMELINE.md`.

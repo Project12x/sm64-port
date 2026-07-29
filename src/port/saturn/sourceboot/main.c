@@ -40,6 +40,11 @@ static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
 static uint32_t sourceboot_render_ticks_accum;
 static volatile uint32_t sourceboot_vblank_out_count;
+static uint32_t sourceboot_vdp1_bank_generation;
+static uint32_t sourceboot_vdp1_bank_submitted;
+static uint32_t sourceboot_vdp1_bank_displayed;
+static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
+static uint32_t sourceboot_vdp1_bank_late_dma;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -337,6 +342,16 @@ void user_init(void) {
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,
                               VDP2_TVMD_HORZ_NORMAL_A,
                               VDP2_TVMD_VERT_224);
+    /* The demo can submit more VDP1 work than one video field can retire.
+     * Yaul's default auto interval marks a list committed at VBLANK-IN
+     * without checking EDSR.CEF, so a long plot can still be reading command
+     * VRAM when the next frame uploads over it.  Variable interval -1 is
+     * uncapped (frame_rate 0): vdp1_sync_render() starts the plot, and Yaul
+     * requests the framebuffer change only after EDSR.CEF reports draw-end.
+     * This restores the complete-frame boundary used by the pinned
+     * Z-Treme/SGL slSynch loop without imposing a second unconditional
+     * VBlank wait on sourceboot's stock game pacing. */
+    vdp1_sync_interval_set(-1);
     sourceboot_init_sky_gradient();
     /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
      * means "never displayed" (the classic footgun recorded in
@@ -624,7 +639,16 @@ int main(void) {
         /* SlaveDriver and Z-Treme both rebuild into a bank that VDP1 is not
          * consuming. Wait for the previous list to retire, then alternate
          * the LWRAM staging bank before emitting this frame. */
+        /* Ownership proof for the CPU staging banks: observe whether the
+         * previous submission was still in flight, then wait before touching
+         * either staging slot. A busy observation is a late-DMA event, never
+         * an overwrite; the write path below cannot proceed until the safe
+         * boundary is retired. */
+        const bool vdp1_was_busy = vdp1_sync_busy();
+        if (vdp1_was_busy)
+            sourceboot_vdp1_bank_late_dma++;
         vdp1_sync_wait();
+        sourceboot_vdp1_bank_displayed = sourceboot_vdp1_bank_submitted;
         sourceboot_vdp1_cmdts_bank ^= 1U;
         sm64_saturn_vdp1_backend_bind_storage(
             &sourceboot_vdp1_backend,
@@ -649,6 +673,29 @@ int main(void) {
             sourceboot_render_ticks_accum;
         sourceboot_fast3d.profile.vdp1_commands_last =
             sourceboot_vdp1_backend.list.count;
+        sourceboot_vdp1_bank_generation++;
+        sourceboot_vdp1_bank_submitted = sourceboot_vdp1_bank_generation;
+        sourceboot_fast3d.profile.vdp1_bank_generation =
+            sourceboot_vdp1_bank_generation;
+        sourceboot_fast3d.profile.vdp1_bank_submitted =
+            sourceboot_vdp1_bank_submitted;
+        sourceboot_fast3d.profile.vdp1_bank_displayed =
+            sourceboot_vdp1_bank_displayed;
+        sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
+            sourceboot_vdp1_bank_overwrite_attempts;
+        sourceboot_fast3d.profile.vdp1_bank_late_dma =
+            sourceboot_vdp1_bank_late_dma;
+        if (sourceboot_fast3d.profile.vdp1_commands_last >
+            sourceboot_fast3d.profile.vdp1_command_highwater)
+            sourceboot_fast3d.profile.vdp1_command_highwater =
+                sourceboot_fast3d.profile.vdp1_commands_last;
+        const uint32_t gouraud_highwater =
+            sm64_saturn_gouraud_bank_used_bytes(&sourceboot_gouraud_bank) /
+            sizeof(sm64_saturn_gouraud_table_t);
+        if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
+            sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;
+        sourceboot_fast3d.profile.demo_lod_resident_bytes =
+            SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES;
         sourceboot_fast3d.profile.vdp1_vram_bytes =
             (SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t)) +
             SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
@@ -662,56 +709,14 @@ int main(void) {
         sourceboot_capture_route_checkpoint();
 #endif
 
-        /* VDP1 runs in Yaul's default "auto" (1-cycle) interval mode here
-         * (vdp1_sync_interval_set(0), set unconditionally by libyaul's
-         * __vdp_init() before main() runs; this target never changes it) --
-         * i.e. single-buffered: draw and display share the same VRAM command
-         * table. sm64_saturn_fast3d_vdp1_emit() -> backend_upload() copies a
-         * fresh table into that SAME address every frame (this target's
-         * SM64_SATURN_VDP1_LWRAM_STAGING CPU-copy path in
-         * saturn_vdp1_backend.h -- SCU DMA cannot read this target's
-         * LWRAM staging array; see the dispatch comment there).
-         * Nothing guards that upload against
-         * landing while VDP1 is still plotting from the PREVIOUS table
-         * unless libyaul's vdp_sync flag state machine (vdp_sync.c) is armed
-         * and given a chance to advance through one VBLANK-IN (presumed
-         * "plot committed") and the following VBLANK-OUT (safe to swap).
-         *
-         * castleviewer/marioturntable arm *and* fully block on that state
-         * machine every frame:
-         *   vdp1_sync_render(); vdp1_sync(); vdp2_sync();
-         *   vdp2_sync_wait(); vdp1_sync_wait();
-         * That block is itself a second, independent VBLANK-IN+OUT wait. For
-         * those targets it's harmless -- it's their ONLY per-frame wait (or
-         * their loop is so CPU-bound the extra wait is noise). It is NOT
-         * harmless here: game_loop_one_iteration() -> display_and_vsync() ->
-         * sm64_saturn_source_runtime_wait_vblank() (saturn_source_runtime.c)
-         * already raw-polls VDP2 TVSTAT for one VBLANK-IN+OUT pair per
-         * iteration to pace the stock game loop. The raw TVMD poll and the
-         * vdp_sync module's ISR-driven flags are two independent
-         * observers of the same physical VBLANK edges, sharing no state;
-         * appending the full castleviewer dance here would make the loop
-         * wait through a SECOND, separate VBLANK-IN+OUT pair every
-         * iteration -- silently halving the effective game loop rate.
-         *
-         * Fix: arm the state machine but do not block on it here.
-         * vdp1_sync_render() does not block at all in this configuration --
-         * backend_upload()'s LWRAM path completes its copy synchronously and
-         * leaves LIST_XFERRED already set (vdp1_sync_force_put) before it
-         * returns; vdp1_sync() just sets flags. The ISR-driven advance to "list
-         * committed" (next VBLANK-IN) and back to idle (the VBLANK-OUT that
-         * follows) then completes for free during the *existing* raw-poll
-         * wait inside the NEXT game_loop_one_iteration() call -- the VBLANK
-         * ISRs fire on the real hardware edges regardless of what the
-         * foreground loop is polling, so by the time that poll returns, the
-         * state machine has already cycled back to idle. If a frame ever
-         * runs long and the state machine hasn't caught up in time,
-         * backend_upload()'s own pre-copy vdp1_sync_wait() guard
-         * (saturn_vdp1_backend.h) still blocks as a self-correcting
-         * fallback -- so this
-         * is safe even under a dropped frame, it just only costs an explicit
-         * wait when one is actually needed instead of unconditionally every
-         * frame.
+        /* Variable-sync mode was selected once in user_init(). Unlike Yaul's
+         * default auto mode, its VBLANK-IN path checks EDSR.CEF and does not
+         * request a framebuffer change until VDP1 has finished plotting.
+         * vdp1_sync_wait() at the top of the next render therefore protects
+         * command VRAM from overwrite for the actual draw lifetime, not just
+         * for one presumed VBlank pair. In the ordinary case the existing
+         * source-game VBlank pacing retires the sync state for free; only an
+         * overlong plot makes the next render wait.
          *
          * vdp2_sync() IS armed each frame (a flags-only call, no blocking
          * -- the vblank-in ISR performs the actual commit, so this adds

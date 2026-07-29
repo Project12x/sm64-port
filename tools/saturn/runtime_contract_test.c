@@ -16,6 +16,7 @@
 #include "slavedriver_projection.h"
 #include "slavedriver_terrain_result.h"
 #include "slavedriver_terrain_clip.h"
+#include "ztreme_frustum.h"
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
 #include "saturn_input_replay.h"
@@ -309,6 +310,30 @@ static void test_matrix_mp_cache_invalidates_across_pop(void)
     /* If pop() failed to mark mp_dirty, this would incorrectly still
      * return the stale 42<<16 value cached before the pop. */
     assert(mp->m[3][0] == 0);
+}
+
+static void test_rotated_frustum_aabb_radius_is_conservative(void)
+{
+    /* With a 45-degree camera basis, the old abs(dot(axis, extents))
+     * implementation cancelled the +X and -Z radius contributions to zero.
+     * The box genuinely intersects the right edge, so classifying it OUTSIDE
+     * would make a whole BSP node pop as the camera rotates. */
+    const sm64_saturn_ztreme_frustum_t frustum = {
+        .position = {0, 0, 0},
+        .right = {46341, 0, -46341},
+        .up = {0, 65536, 0},
+        .forward = {46341, 0, 46341},
+        .near_depth = 1,
+        .far_depth = 1000,
+        .half_width = 160,
+        .half_height = 112,
+        .focal_length = 160};
+    const int32_t minimum[3] = {324, -1, -241};
+    const int32_t maximum[3] = {524, 1, -41};
+
+    assert(sm64_saturn_ztreme_frustum_aabb(
+               &frustum, minimum, maximum) !=
+           SM64_SATURN_ZTREME_FRUSTUM_OUTSIDE);
 }
 
 static void test_input_replay_feeds_only_pads_and_ends_neutral(void)
@@ -1810,6 +1835,21 @@ static void test_bounded_command_arena(void)
     assert(sm64_saturn_command_arena_finish(&arena) == 3);
     assert(arena.live_count == 4);
     assert(arena.peak == 6);
+
+    /* A saturated world pass must leave an exact all-or-nothing actor tail
+     * plus END. With the sourceboot arena, 1,734 possible clipped terrain
+     * results and a 694-command Mario batch cannot all fit; the helper keeps
+     * 1,351 terrain commands and guarantees the actor reservation. */
+    sm64_saturn_command_arena_init(&arena, 2048U, 2U);
+    assert(sm64_saturn_command_arena_begin(&arena) == 2U);
+    assert(sm64_saturn_command_arena_available(&arena) == 2045U);
+    assert(sm64_saturn_command_arena_budget_before_tail(
+               &arena, 694U) == 1351U);
+    assert(sm64_saturn_command_arena_reserve(&arena, 1351U, &first));
+    assert(sm64_saturn_command_arena_reserve(&arena, 694U, &first));
+    assert(sm64_saturn_command_arena_finish(&arena) == 2047U);
+    assert(arena.live_count == 2048U);
+    assert(!arena.overflowed);
 }
 
 static void test_kernels_isqrt64(void)
@@ -3562,6 +3602,7 @@ int main(void)
     quad_build_lists();
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
     test_identity_camera();
+    test_rotated_frustum_aabb_radius_is_conservative();
     test_q16_normalization();
     test_input_replay_feeds_only_pads_and_ends_neutral();
     test_bounded_terrain_result_spans();

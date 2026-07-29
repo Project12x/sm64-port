@@ -381,6 +381,24 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_bob_results_master;
     uint32_t demo_bob_results_slave;
     uint32_t demo_bob_result_reserve_rejects;
+    /* Task 6: explicit frame-ownership evidence.  These are sourceboot's
+     * measured CPU-staging lifecycle counters; a non-zero destination-bank
+     * capability bit is intentionally not assumed from staging alone. */
+    uint32_t vdp1_bank_generation;
+    uint32_t vdp1_bank_submitted;
+    uint32_t vdp1_bank_displayed;
+    uint32_t vdp1_bank_overwrite_attempts;
+    uint32_t vdp1_bank_late_dma;
+    uint32_t vdp1_command_highwater;
+    uint32_t vdp1_gouraud_highwater;
+    /* Task 8: dynamic shared-vertex tier diagnostics. */
+    uint32_t demo_lod_tier_near;
+    uint32_t demo_lod_tier_mid;
+    uint32_t demo_lod_tier_far;
+    uint32_t demo_lod_transitions;
+    uint32_t demo_lod_primitives_suppressed;
+    uint32_t demo_lod_texture_downgrades;
+    uint32_t demo_lod_resident_bytes;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

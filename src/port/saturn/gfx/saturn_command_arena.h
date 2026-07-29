@@ -56,6 +56,30 @@ sm64_saturn_command_arena_reserve(sm64_saturn_command_arena_t *arena,
     return true;
 }
 
+/* Draw slots still available while preserving the final END command. */
+static inline uint16_t
+sm64_saturn_command_arena_available(
+    const sm64_saturn_command_arena_t *arena)
+{
+    if (arena->cursor >= arena->capacity)
+        return 0U;
+    return (uint16_t)(arena->capacity - arena->cursor - 1U);
+}
+
+/* Budget for the current producer after protecting a later producer's
+ * all-or-nothing tail reservation. This is the command-list equivalent of
+ * SlaveDriver's MAXNMSLAVEPOLYS guard margin (WALLS.C:1278,1380): optional
+ * world work must not consume the space needed by the essential final pass. */
+static inline uint16_t
+sm64_saturn_command_arena_budget_before_tail(
+    const sm64_saturn_command_arena_t *arena, uint16_t reserved_tail)
+{
+    const uint16_t available =
+        sm64_saturn_command_arena_available(arena);
+    return available > reserved_tail
+        ? (uint16_t)(available - reserved_tail) : 0U;
+}
+
 /* Returns the slot where the backend must encode END. */
 static inline uint16_t
 sm64_saturn_command_arena_finish(sm64_saturn_command_arena_t *arena)

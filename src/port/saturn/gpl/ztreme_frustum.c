@@ -11,6 +11,22 @@ static int64_t dot_q16(const int32_t basis[3], const int64_t value[3])
            (int64_t)basis[2] * value[2];
 }
 
+static int64_t support_radius_q16(const int32_t basis[3],
+                                  const int64_t extent[3])
+{
+    int64_t radius_q16 = 0;
+    for (uint8_t axis = 0U; axis < 3U; axis++) {
+        const int64_t component = basis[axis];
+        const int64_t magnitude = component < 0 ? -component : component;
+        radius_q16 += magnitude * extent[axis];
+    }
+    /* Ceil instead of truncating so quantization cannot turn a touching box
+     * into a false OUTSIDE result. Z-Treme's original plane-support-point
+     * test (ZT_FRUSTUM.c:145-163) is conservative by construction; this
+     * center/extent form must preserve the same property. */
+    return (radius_q16 + 0xFFFF) >> 16;
+}
+
 static bool interval_outside(int64_t center, int64_t radius,
                              int64_t minimum, int64_t maximum)
 {
@@ -45,15 +61,12 @@ sm64_saturn_ztreme_frustum_result_t sm64_saturn_ztreme_frustum_aabb(
     const int64_t z = dot_q16(frustum->forward, delta) >> 16;
     const int64_t x = dot_q16(frustum->right, delta) >> 16;
     const int64_t y = dot_q16(frustum->up, delta) >> 16;
-    const int64_t z_radius = (dot_q16(frustum->forward, extent_world) < 0
-        ? -dot_q16(frustum->forward, extent_world)
-        : dot_q16(frustum->forward, extent_world)) >> 16;
-    const int64_t x_radius = (dot_q16(frustum->right, extent_world) < 0
-        ? -dot_q16(frustum->right, extent_world)
-        : dot_q16(frustum->right, extent_world)) >> 16;
-    const int64_t y_radius = (dot_q16(frustum->up, extent_world) < 0
-        ? -dot_q16(frustum->up, extent_world)
-        : dot_q16(frustum->up, extent_world)) >> 16;
+    const int64_t z_radius =
+        support_radius_q16(frustum->forward, extent_world);
+    const int64_t x_radius =
+        support_radius_q16(frustum->right, extent_world);
+    const int64_t y_radius =
+        support_radius_q16(frustum->up, extent_world);
     const int64_t near_limit = frustum->near_depth;
     const int64_t far_limit = frustum->far_depth;
     const int64_t far_z = z + z_radius > near_limit

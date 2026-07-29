@@ -29,7 +29,12 @@ typedef enum sm64_saturn_terrain_result_flags {
     SM64_SATURN_TERRAIN_RESULT_GOURAUD = 1U << 2,
     SM64_SATURN_TERRAIN_RESULT_CLIPPED = 1U << 3,
     SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL = 1U << 4,
-    SM64_SATURN_TERRAIN_RESULT_LEAF_END = 1U << 5
+    SM64_SATURN_TERRAIN_RESULT_LEAF_END = 1U << 5,
+    /* A material may remain geometrically present while its 32x32 texture
+     * is intentionally downgraded for a mid/far LOD.  The master emitter
+     * must honor this bit rather than consulting the source primitive alone.
+     */
+    SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED = 1U << 6
 } sm64_saturn_terrain_result_flags_t;
 
 typedef struct sm64_saturn_terrain_result {

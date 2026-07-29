@@ -13,13 +13,6 @@
   },
   "viewpoints": [
     {
-      "id": "frozen-route",
-      "route_tick": 600,
-      "route_sample_end": 7,
-      "camera_expectation": "final camera variation",
-      "purpose": "authority checkpoint and primary performance comparison"
-    },
-    {
       "id": "near-mario-blue-hole",
       "route_tick": 360,
       "route_sample_end": 3,
@@ -32,6 +25,13 @@
       "route_sample_end": 5,
       "camera_expectation": "return-leg view before second jump",
       "purpose": "far-radius and bounded-admission diagnostic"
+    },
+    {
+      "id": "frozen-route",
+      "route_tick": 600,
+      "route_sample_end": 7,
+      "camera_expectation": "final camera variation",
+      "purpose": "authority checkpoint and primary performance comparison"
     }
   ],
   "reproduction": {
