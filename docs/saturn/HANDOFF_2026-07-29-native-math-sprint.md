@@ -58,9 +58,11 @@ Primary evidence: `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab
 
 ## Required next action
 
-Dispatch a fresh **Task 3 implementer** for the per-tick camera seam. Its
-acceptance gate is bit-stable neutral-stick idle camera over 600 ticks, in
-addition to the standing differential, mutation, and route-checkpoint rules.
+Obtain owner review of
+`docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md` (commit
+`fcc901c`). After written-spec approval, create a detailed implementation plan
+before dispatching Task 3. The approved design bounds the first conversion to
+the default/Lakitu Q island and adds the independent SCC1 600-tick idle gate.
 
 ## Environment facts
 
