@@ -1,0 +1,9 @@
+# Immutable v1 maximum native-math cost for the linked BOB replay route.
+# Its SHA-256 is pinned in verify_sh2_native_math.py. Each existing HOT call
+# may disappear as conversions land, but a new call or a higher count fails.
+BASELINE_VERSION 1
+HOT_CEILING 17
+HOT _sm64_saturn_demo_render_frame ___divdi3 5
+HOT _sm64_saturn_demo_render_frame ___fixsfsi 7
+HOT _sm64_saturn_ztreme_frustum_aabb ___divdi3 4
+HOT _sm64_saturn_terrain_clip_near_quad ___divdi3 1

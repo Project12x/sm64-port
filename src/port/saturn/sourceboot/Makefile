@@ -8,7 +8,8 @@ SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump
 SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line
-SOURCEBOOT_NATIVE_MATH_ALLOWLIST := $(ROOT)/tools/saturn/sh2_native_math_allowlist.txt
+SOURCEBOOT_NATIVE_MATH_BASELINE := $(ROOT)/tools/saturn/sh2_native_math_baseline_v1.txt
+SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_route_oracle_v1.txt
 SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
@@ -536,9 +537,10 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 # default profile does not link the demo renderer's shared state.
 	@if [ "$(SATURN_DEMO_PATH)" = "1" ]; then \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py" \
-	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" "$(SOURCEBOOT_NATIVE_MATH_ALLOWLIST)" \
+	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" "$(SOURCEBOOT_NATIVE_MATH_BASELINE)" \
+	    --route-oracle "$(SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE)" \
 	    --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
-	    --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"; \
+	    --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)" || exit $$?; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_dual_cpu_coherency.py" \
 	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).sym"; \
 	fi

@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """Census linked SH-2 calls that require non-native arithmetic.
 
-The SH-2 has no FPU and no native 64-bit divide.  The compiler reaches those
+The SH-2 has no FPU and no native 64-bit divide. The compiler reaches those
 operations through a PC-relative literal-pool load followed by ``jsr @rN``.
-This verifier reads the *linked* ELF's objdump output, follows that pair, and
-uses addr2line on each call instruction to report the source owner.  It is
-therefore a link-time census, rather than an unreliable source-level grep.
-
-The allowlist deliberately contains only route-HOT call sites.  Its expected
-counts are exact: removing a hot call makes a row stale, while adding one (or
-adding a different expensive helper to an already-hot function) fails the
-gate.  All other linked call sites are reported as COLD; their reachability is
-not inferred from static disassembly.
+This verifier reads the *linked* ELF's objdump output and reports the source
+owner through addr2line. HOT is derived from an immutable replay-route root
+fixture expanded through the linked ELF's direct-call graph; it is never a
+manually maintained list of caller names.
 """
 
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 import re
 import subprocess
@@ -28,7 +24,7 @@ from typing import Iterable
 
 @dataclass(frozen=True)
 class CallSite:
-    """One direct call to a non-native arithmetic helper."""
+    """One resolved direct call in the linked image."""
 
     caller: str
     address: int
@@ -36,17 +32,20 @@ class CallSite:
 
 
 @dataclass(frozen=True)
-class AllowlistEntry:
-    heat: str
-    caller: str
-    helper: str
-    expected_count: int
+class RouteOracle:
+    version: int
+    roots: frozenset[str]
+
+
+@dataclass(frozen=True)
+class BaselineContract:
+    version: int
+    hot_ceiling: int
+    entries: dict[tuple[str, str], int]
 
 
 @dataclass(frozen=True)
 class CensusRow:
-    """Aggregate output for one calling function."""
-
     heat: str
     caller: str
     count: int
@@ -55,15 +54,17 @@ class CensusRow:
 
 FUNCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+)\s+<([^>]+)>:$")
 INSTRUCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+):\s+(?:[0-9A-Fa-f]{2}\s+){1,4}(.+)$")
-LITERAL_LOAD_RE = re.compile(
-    r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*[0-9A-Fa-f]+\s+<([^>]+)>"
-)
+LITERAL_LOAD_RE = re.compile(r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*[0-9A-Fa-f]+\s+<([^>]+)>")
 JSR_RE = re.compile(r"\bjsr\s+@r(\d+)\b")
+BSR_RE = re.compile(r"\bbsr\s+(?:0x)?[0-9A-Fa-f]+\s+<([^>]+)>")
 DESTINATION_RE = re.compile(r",r(\d+)\s*(?:!.*)?$")
 
-# GCC SH targets decorate libgcc symbols with an extra leading underscore.
-# Remove decoration before checking the ABI spelling, but retain the linked
-# spelling in all reports and allowlist rows.
+# Pinned digests deliberately make the route and helper ceilings append-only
+# contracts. Updating either requires an explicit v2 implementation change,
+# not a quiet edit to a text allowlist.
+ROUTE_ORACLE_V1_SHA256 = "61281aa554420da046ab867dd750b61b3d145193cdb2230d0b1471904587923f"
+BASELINE_V1_SHA256 = "563e972073c6e0d851de2e5a22e737ab68e31a18d79add6d48f47505822f48da"
+
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
     "ceil", "ceilf", "cos", "cosf", "exp", "expf", "fabs", "fabsf",
@@ -89,8 +90,13 @@ def is_native_math_helper(symbol: str) -> bool:
     )
 
 
-def scan_disassembly(disassembly: str) -> list[CallSite]:
-    """Attribute literal-pool ``jsr`` calls to their containing symbols."""
+def _symbol_base(symbol: str) -> str:
+    """Drop objdump's intra-symbol offset so graph keys are function names."""
+    return symbol.split("+", 1)[0]
+
+
+def scan_direct_calls(disassembly: str) -> list[CallSite]:
+    """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
     caller = "<outside-function>"
     registers: dict[str, str] = {}
     calls: list[CallSite] = []
@@ -110,100 +116,152 @@ def scan_disassembly(disassembly: str) -> list[CallSite]:
 
         load = LITERAL_LOAD_RE.search(text)
         if load:
-            registers[load.group(1)] = load.group(2)
+            registers[load.group(1)] = _symbol_base(load.group(2))
             continue
 
         jsr = JSR_RE.search(text)
         if jsr:
-            helper = registers.get(jsr.group(1))
-            if helper is not None and is_native_math_helper(helper):
-                calls.append(CallSite(caller, address, helper))
+            target = registers.get(jsr.group(1))
+            if target is not None:
+                calls.append(CallSite(caller, address, target))
             continue
 
-        # A literal-pool value must not survive a later write to the register;
-        # clearing it avoids attributing an unrelated indirect call to a stale
-        # helper target.  Reads (which lack a trailing destination) retain it.
+        bsr = BSR_RE.search(text)
+        if bsr:
+            calls.append(CallSite(caller, address, _symbol_base(bsr.group(1))))
+            continue
+
         destination = DESTINATION_RE.search(text)
         if destination:
             registers.pop(destination.group(1), None)
-
     return calls
 
 
-def parse_allowlist(text: str) -> dict[tuple[str, str], AllowlistEntry]:
-    """Parse the explicit route function set and exact helper-count contract."""
-    entries: dict[tuple[str, str], AllowlistEntry] = {}
+def scan_disassembly(disassembly: str) -> list[CallSite]:
+    """Attribute direct calls to their containing symbols, retaining math only."""
+    return [call for call in scan_direct_calls(disassembly) if is_native_math_helper(call.helper)]
+
+
+def scan_call_graph(disassembly: str) -> dict[str, set[str]]:
+    """Build the linked ELF direct-call graph used to expand route roots."""
+    graph: dict[str, set[str]] = defaultdict(set)
+    for call in scan_direct_calls(disassembly):
+        # Helpers are terminal for route ownership: their implementation is a
+        # runtime cost, not a route child that can itself own another census
+        # call site.
+        if not is_native_math_helper(call.helper):
+            graph[call.caller].add(call.helper)
+    return graph
+
+
+def parse_route_oracle(text: str) -> RouteOracle:
+    """Parse a versioned, checked-in replay-route root fixture."""
+    version: int | None = None
+    roots: set[str] = set()
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
         if not line:
             continue
         parts = line.split()
-        if parts[0] == "ROUTE_FUNCTION" and len(parts) == 2:
-            heat, caller, helper, count_text = "ROUTE_FUNCTION", parts[1], "*", "1"
-        elif parts[0] == "HOT_TOTAL" and len(parts) == 2:
-            heat, caller, helper, count_text = "HOT_TOTAL", "@total", "*", parts[1]
-        elif len(parts) == 4 and parts[0] in {"HOT", "COLD"}:
-            heat, caller, helper, count_text = parts
+        if parts[0] == "ROUTE_ORACLE_VERSION" and len(parts) == 2:
+            if version is not None:
+                raise ValueError(f"route oracle line {line_number}: duplicate version")
+            version = int(parts[1], 10)
+        elif parts[0] == "ROOT" and len(parts) == 2:
+            roots.add(parts[1])
         else:
-            raise ValueError(
-                f"allowlist line {line_number}: expected HOT|COLD "
-                "<caller> <helper> <exact-count>, ROUTE_FUNCTION <caller>, "
-                "or HOT_TOTAL <exact-count>"
-            )
-        try:
-            count = int(count_text, 10)
-        except ValueError as error:
-            raise ValueError(
-                f"allowlist line {line_number}: invalid count {count_text!r}"
-            ) from error
-        if count <= 0:
-            raise ValueError(f"allowlist line {line_number}: count must be positive")
-        entry = AllowlistEntry(heat, caller, helper, count)
-        key = (entry.caller, entry.helper)
-        if key in entries:
-            raise ValueError(f"allowlist line {line_number}: duplicate {entry.caller} {entry.helper}")
-        entries[key] = entry
-    route_callers = {entry.caller for entry in entries.values() if entry.heat == "ROUTE_FUNCTION"}
-    for entry in entries.values():
-        if entry.heat == "HOT" and entry.caller not in route_callers:
-            raise ValueError(f"HOT caller {entry.caller} is missing ROUTE_FUNCTION evidence")
-    if ("@total", "*") not in entries:
-        raise ValueError("allowlist missing HOT_TOTAL contract")
-    return entries
+            raise ValueError(f"route oracle line {line_number}: expected ROOT <linked-symbol>")
+    if version != 1:
+        raise ValueError(f"unsupported route oracle version {version!r}")
+    if not roots:
+        raise ValueError("route oracle has no ROOT")
+    return RouteOracle(version, frozenset(roots))
 
 
-def allowlist_failures(
-    calls: Iterable[CallSite],
-    rules: dict[tuple[str, str], AllowlistEntry],
-) -> list[str]:
-    """Return contract failures for declared route-HOT and COLD rows."""
-    call_list = list(calls)
-    observed = Counter((call.caller, call.helper) for call in call_list)
-    failures: list[str] = []
-    hot_callers = {entry.caller for entry in rules.values() if entry.heat == "HOT"}
-
-    for key, entry in sorted(rules.items()):
-        if entry.heat in {"ROUTE_FUNCTION", "HOT_TOTAL"}:
+def parse_baseline(text: str) -> BaselineContract:
+    """Parse the versioned maximum HOT helper contract."""
+    version: int | None = None
+    hot_ceiling: int | None = None
+    entries: dict[tuple[str, str], int] = {}
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
             continue
-        actual = observed.get(key, 0)
-        if actual != entry.expected_count:
-            failures.append(
-                f"stale allowlist entry: {entry.heat} {entry.caller} "
-                f"{entry.helper} expected {entry.expected_count}, found {actual}"
-            )
+        parts = line.split()
+        if parts[0] == "BASELINE_VERSION" and len(parts) == 2:
+            if version is not None:
+                raise ValueError(f"baseline line {line_number}: duplicate version")
+            version = int(parts[1], 10)
+            continue
+        if parts[0] == "HOT_CEILING" and len(parts) == 2:
+            if hot_ceiling is not None:
+                raise ValueError(f"baseline line {line_number}: duplicate HOT_CEILING")
+            hot_ceiling = int(parts[1], 10)
+            continue
+        if len(parts) == 4 and parts[0] == "HOT":
+            caller, helper, count_text = parts[1:]
+            count = int(count_text, 10)
+            key = (caller, helper)
+            if count <= 0:
+                raise ValueError(f"baseline line {line_number}: count must be positive")
+            if key in entries:
+                raise ValueError(f"baseline line {line_number}: duplicate {caller} {helper}")
+            entries[key] = count
+            continue
+        raise ValueError(f"baseline line {line_number}: expected HOT <caller> <helper> <ceiling>")
+    if version != 1:
+        raise ValueError(f"unsupported baseline version {version!r}")
+    if hot_ceiling is None or hot_ceiling < 0:
+        raise ValueError("baseline missing non-negative HOT_CEILING")
+    if sum(entries.values()) != hot_ceiling:
+        raise ValueError("baseline HOT_CEILING must equal the sum of HOT entries")
+    return BaselineContract(version, hot_ceiling, entries)
 
-    for (caller, helper), count in sorted(observed.items()):
-        if caller in hot_callers and (caller, helper) not in rules:
-            failures.append(
-                f"unallowlisted helper in HOT function: {caller} {helper} found {count}"
-            )
-    expected_total = rules[("@total", "*")].expected_count
-    actual_total = sum(
-        count for key, count in observed.items()
-        if rules.get(key, AllowlistEntry("COLD", "", "", 0)).heat == "HOT"
-    )
-    if actual_total != expected_total:
-        failures.append(f"HOT total expected {expected_total}, found {actual_total}")
+
+def baseline_digest(text: str) -> str:
+    return sha256(text.encode("utf-8")).hexdigest()
+
+
+def verify_baseline_integrity(text: str, baseline: BaselineContract, *, expected_digest: str = BASELINE_V1_SHA256) -> None:
+    if baseline.version != 1:
+        raise ValueError(f"unsupported baseline version {baseline.version}")
+    if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
+        raise ValueError("immutable baseline digest mismatch")
+
+
+def verify_route_oracle_integrity(text: str, oracle: RouteOracle, *, expected_digest: str = ROUTE_ORACLE_V1_SHA256) -> None:
+    if oracle.version != 1:
+        raise ValueError(f"unsupported route oracle version {oracle.version}")
+    if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
+        raise ValueError("immutable route oracle digest mismatch")
+
+
+def route_reachable_functions(graph: dict[str, set[str]], roots: Iterable[str]) -> set[str]:
+    """Return direct-call closure from the checked-in replay route roots."""
+    reachable = set(roots)
+    pending = deque(reachable)
+    while pending:
+        caller = pending.popleft()
+        for target in graph.get(caller, set()):
+            if target not in reachable:
+                reachable.add(target)
+                pending.append(target)
+    return reachable
+
+
+def baseline_failures(calls: Iterable[CallSite], route_functions: set[str], baseline: BaselineContract) -> list[str]:
+    """Enforce immutable maximums for every math call in the derived HOT route."""
+    observed = Counter((call.caller, call.helper) for call in calls if call.caller in route_functions)
+    failures: list[str] = []
+    for key, actual in sorted(observed.items()):
+        expected = baseline.entries.get(key)
+        if expected is None:
+            failures.append(f"unallowlisted helper in HOT function: {key[0]} {key[1]} found {actual}")
+        elif actual > expected:
+            failures.append(f"HOT baseline exceeded: {key[0]} {key[1]} ceiling {expected}, found {actual}")
+    actual_total = sum(observed.values())
+    if actual_total > baseline.hot_ceiling:
+        failures.append(f"HOT total ceiling {baseline.hot_ceiling}, found {actual_total}")
     return failures
 
 
@@ -222,7 +280,6 @@ def address_batches(addresses: Iterable[int], size: int = 128) -> Iterable[tuple
 
 
 def source_locations(addr2line: str, elf: Path, calls: Iterable[CallSite]) -> dict[int, str]:
-    """Resolve each call instruction through the ELF's DWARF line table."""
     addresses = sorted({call.address for call in calls})
     if not addresses:
         return {}
@@ -232,8 +289,6 @@ def source_locations(addr2line: str, elf: Path, calls: Iterable[CallSite]) -> di
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         lines = result.stdout.splitlines()
         for index, address in enumerate(batch):
-            # -f prints one function line followed by one file:line line.
-            # Preserve the path exactly: source roots differ between worktrees.
             source_index = index * 2 + 1
             locations[address] = lines[source_index] if source_index < len(lines) else "??:0"
     return locations
@@ -243,27 +298,20 @@ def run_command(command: list[str]) -> str:
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout
 
 
-def census_rows(calls: Iterable[CallSite], rules: dict[tuple[str, str], AllowlistEntry]) -> list[CensusRow]:
-    """Aggregate helper totals per caller, preserving the route-derived heat."""
+def census_rows(calls: Iterable[CallSite], route_functions: set[str]) -> list[CensusRow]:
     grouped: dict[str, Counter[str]] = defaultdict(Counter)
     for call in calls:
         grouped[call.caller][call.helper] += 1
-    route_callers = {entry.caller for entry in rules.values() if entry.heat == "ROUTE_FUNCTION"}
     return [
-        CensusRow(
-            "HOT" if caller in route_callers else "COLD",
-            caller,
-            sum(helpers.values()),
-            tuple(sorted(helpers.items())),
-        )
+        CensusRow("HOT" if caller in route_functions else "COLD", caller, sum(helpers.values()), tuple(sorted(helpers.items())))
         for caller, helpers in sorted(grouped.items())
     ]
 
 
-def print_census(calls: Iterable[CallSite], rules: dict[tuple[str, str], AllowlistEntry], locations: dict[int, str]) -> None:
+def print_census(calls: Iterable[CallSite], route_functions: set[str], locations: dict[int, str]) -> None:
     call_list = list(calls)
     location_by_caller = {call.caller: locations.get(call.address, "??:0") for call in call_list}
-    rows = census_rows(call_list, rules)
+    rows = census_rows(call_list, route_functions)
     for row in rows:
         helpers = ", ".join(f"{helper}={count}" for helper, count in row.helpers)
         print(f"{row.heat:4} {row.count:4} {row.caller} [{helpers}] ({location_by_caller[row.caller]})")
@@ -274,18 +322,25 @@ def print_census(calls: Iterable[CallSite], rules: dict[tuple[str, str], Allowli
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("elf", type=Path, help="linked sourceboot ELF")
-    parser.add_argument("allowlist", type=Path, help="route HOT/COLD census contract")
+    parser.add_argument("baseline", type=Path, help="immutable HOT helper ceiling fixture")
+    parser.add_argument("--route-oracle", type=Path, required=True, help="immutable replay-route root fixture")
     parser.add_argument("--objdump", required=True, help="target objdump executable")
     parser.add_argument("--addr2line", required=True, help="target addr2line executable")
     args = parser.parse_args(argv)
 
     try:
-        rules = parse_allowlist(args.allowlist.read_text(encoding="utf-8"))
+        baseline_text = args.baseline.read_text(encoding="utf-8")
+        route_text = args.route_oracle.read_text(encoding="utf-8")
+        baseline = parse_baseline(baseline_text)
+        oracle = parse_route_oracle(route_text)
+        verify_baseline_integrity(baseline_text, baseline)
+        verify_route_oracle_integrity(route_text, oracle)
         disassembly = run_command([args.objdump, "-d", str(args.elf)])
         calls = scan_disassembly(disassembly)
+        route_functions = route_reachable_functions(scan_call_graph(disassembly), oracle.roots)
         locations = source_locations(args.addr2line, args.elf, calls)
-        print_census(calls, rules, locations)
-        failures = allowlist_failures(calls, rules)
+        print_census(calls, route_functions, locations)
+        failures = baseline_failures(calls, route_functions, baseline)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
         return 2
