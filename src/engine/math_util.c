@@ -5,6 +5,11 @@
 #include "math_util.h"
 #include "surface_collision.h"
 
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+#include "saturn_math_route_capture.h"
+#endif
+
 #include "trig_tables.inc.c"
 
 // Variables for a spline curve animation (used for the flight path in the grand star cutscene)
@@ -698,6 +703,11 @@ f32 approach_f32(f32 current, f32 target, f32 inc, f32 dec) {
 static u16 atan2_lookup(f32 y, f32 x) {
     u16 ret;
 
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2_lookup(y, x);
+#endif
+
     if (x == 0) {
         ret = gArctanTable[0];
     } else {
@@ -712,6 +722,11 @@ static u16 atan2_lookup(f32 y, f32 x) {
  */
 s16 atan2s(f32 y, f32 x) {
     u16 ret;
+
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2s(y, x);
+#endif
 
     if (x >= 0) {
         if (y >= 0) {

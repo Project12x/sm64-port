@@ -11,6 +11,7 @@
 #include "saturn_actor_bridge.h"
 #include "saturn_demo_render.h"
 #include "saturn_gouraud_bank.h"
+#include "saturn_math_route_capture.h"
 #include "saturn_texture_residency.h"
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
@@ -48,6 +49,9 @@ static uint32_t sourceboot_vdp1_bank_late_dma;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture;
+#endif
 
 const sm64_saturn_input_replay_sample_t *
 sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
@@ -131,6 +135,11 @@ static void sourceboot_capture_route_checkpoint(void) {
     sourceboot_route_checkpoint.slave_busy_ticks = profile->slave_busy_ticks;
     sourceboot_route_checkpoint.slave_jobs_completed = profile->slave_jobs_completed;
     sourceboot_route_checkpoint.slave_timeouts = profile->slave_timeouts;
+    sourceboot_math_route_capture.version = SM64_SATURN_MATH_ROUTE_CAPTURE_VERSION;
+    sourceboot_math_route_capture.replay_ticks = runtime->input_replay_ticks;
+    /* Publish after every other field so a host that sees magic can trust the
+     * same source tick's counters and input bits. */
+    sourceboot_math_route_capture.magic = SM64_SATURN_MATH_ROUTE_CAPTURE_MAGIC;
     /* Publish last: a host that sees the magic sees a complete snapshot. */
     sourceboot_route_checkpoint.magic = SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC;
 }

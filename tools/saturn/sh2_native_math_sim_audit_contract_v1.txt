@@ -1,0 +1,9 @@
+# Immutable v1 source-simulation candidate-discovery contract. The audit does
+# not claim per-tick execution; it fails if the deterministic game-loop root
+# or the selected Task 2 candidates disappear before runtime capture proves
+# their dynamic frequency.
+AUDIT_CONTRACT_VERSION 1
+EXPECTED_ROOT _game_loop_one_iteration
+MINIMUM_TOTAL 584
+REQUIRED _atan2_lookup ___divsf3 1
+REQUIRED _atan2s ___gesf2 4

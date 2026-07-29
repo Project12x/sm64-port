@@ -9,16 +9,20 @@ from pathlib import Path
 from verify_sh2_native_math import (
     CallSite,
     address_batches,
+    audit_failures,
     baseline_digest,
     baseline_failures,
     census_rows,
     is_native_math_helper,
+    parse_audit_contract,
     parse_baseline,
     parse_route_oracle,
     route_reachable_functions,
     scan_call_graph,
     scan_disassembly,
     SIM_ROUTE_ORACLE_V1_SHA256,
+    SIM_AUDIT_CONTRACT_V1_SHA256,
+    verify_audit_contract_integrity,
     verify_baseline_integrity,
     verify_route_oracle_integrity,
 )
@@ -179,6 +183,55 @@ class NativeMathCensusTests(unittest.TestCase):
         audit_text = (fixture_dir / "sh2_native_math_sim_route_oracle_v1.txt").read_text(encoding="utf-8")
         verify_route_oracle_integrity(
             audit_text, parse_route_oracle(audit_text), expected_digest=SIM_ROUTE_ORACLE_V1_SHA256
+        )
+
+    def test_checked_in_simulation_audit_contract_is_pinned(self) -> None:
+        fixture_dir = Path(__file__).parent
+        contract_text = (fixture_dir / "sh2_native_math_sim_audit_contract_v1.txt").read_text(encoding="utf-8")
+        verify_audit_contract_integrity(
+            contract_text, parse_audit_contract(contract_text), expected_digest=SIM_AUDIT_CONTRACT_V1_SHA256
+        )
+
+    def test_audit_fails_when_expected_root_is_missing(self) -> None:
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _wrong_root\n")
+        contract = parse_audit_contract(
+            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _game_loop_one_iteration\n"
+            "MINIMUM_TOTAL 1\nREQUIRED _atan2_lookup ___divsf3 1\n"
+        )
+        self.assertIn(
+            "audit root missing: expected _game_loop_one_iteration",
+            audit_failures([], set(), oracle, contract),
+        )
+
+    def test_audit_fails_on_zero_rows_and_missing_candidate(self) -> None:
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _frame_root\n")
+        contract = parse_audit_contract(
+            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _frame_root\n"
+            "MINIMUM_TOTAL 1\nREQUIRED _candidate ___addsf3 1\n"
+        )
+        self.assertEqual(
+            audit_failures([], {"_frame_root"}, oracle, contract),
+            [
+                "audit total below floor 1, found 0",
+                "audit candidate missing: _candidate ___addsf3 minimum 1, found 0",
+            ],
+        )
+
+    def test_renderer_baseline_and_simulation_audit_are_isolated(self) -> None:
+        baseline = parse_baseline("BASELINE_VERSION 1\nHOT_CEILING 1\nHOT _frame_root ___addsf3 1\n")
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _candidate\n")
+        contract = parse_audit_contract(
+            "AUDIT_CONTRACT_VERSION 1\nEXPECTED_ROOT _candidate\n"
+            "MINIMUM_TOTAL 1\nREQUIRED _candidate ___divsf3 1\n"
+        )
+        calls = [CallSite("_frame_root", 1, "___addsf3")]
+        self.assertEqual(baseline_failures(calls, {"_frame_root"}, baseline), [])
+        self.assertEqual(
+            audit_failures(calls, {"_candidate"}, oracle, contract),
+            [
+                "audit total below floor 1, found 0",
+                "audit candidate missing: _candidate ___divsf3 minimum 1, found 0",
+            ],
         )
 
 

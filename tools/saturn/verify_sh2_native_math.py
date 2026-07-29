@@ -46,6 +46,14 @@ class BaselineContract:
 
 
 @dataclass(frozen=True)
+class AuditContract:
+    version: int
+    expected_root: str
+    minimum_total: int
+    required_entries: dict[tuple[str, str], int]
+
+
+@dataclass(frozen=True)
 class CensusRow:
     heat: str
     caller: str
@@ -68,6 +76,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
 SIM_ROUTE_ORACLE_V1_SHA256 = "3bde797d9f07323b112b297c49ff4debd2a786c81d1e1be382feaf857f278a2f"
+SIM_AUDIT_CONTRACT_V1_SHA256 = "4c42e926a72948d938848cfc33aa76ddbb48b64c859bbbe42f23006e4fe8c982"
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -257,6 +266,45 @@ def parse_baseline(text: str) -> BaselineContract:
     return BaselineContract(version, hot_ceiling, entries)
 
 
+def parse_audit_contract(text: str) -> AuditContract:
+    """Parse the required root, floor, and candidate rows for a route audit."""
+    version: int | None = None
+    expected_root: str | None = None
+    minimum_total: int | None = None
+    required_entries: dict[tuple[str, str], int] = {}
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        parts = line.split()
+        if parts[0] == "AUDIT_CONTRACT_VERSION" and len(parts) == 2:
+            if version is not None:
+                raise ValueError(f"audit contract line {line_number}: duplicate version")
+            version = int(parts[1], 10)
+        elif parts[0] == "EXPECTED_ROOT" and len(parts) == 2:
+            if expected_root is not None:
+                raise ValueError(f"audit contract line {line_number}: duplicate expected root")
+            expected_root = parts[1]
+        elif parts[0] == "MINIMUM_TOTAL" and len(parts) == 2:
+            if minimum_total is not None:
+                raise ValueError(f"audit contract line {line_number}: duplicate minimum total")
+            minimum_total = int(parts[1], 10)
+        elif parts[0] == "REQUIRED" and len(parts) == 4:
+            caller, helper, count_text = parts[1:]
+            count = int(count_text, 10)
+            key = (caller, helper)
+            if count <= 0 or key in required_entries:
+                raise ValueError(f"audit contract line {line_number}: invalid required entry")
+            required_entries[key] = count
+        else:
+            raise ValueError(f"audit contract line {line_number}: invalid directive")
+    if version != 1 or expected_root is None or minimum_total is None or minimum_total <= 0:
+        raise ValueError("audit contract requires v1 root and positive minimum total")
+    if not required_entries:
+        raise ValueError("audit contract requires at least one candidate entry")
+    return AuditContract(version, expected_root, minimum_total, required_entries)
+
+
 def baseline_digest(text: str) -> str:
     return sha256(text.encode("utf-8")).hexdigest()
 
@@ -273,6 +321,13 @@ def verify_route_oracle_integrity(text: str, oracle: RouteOracle, *, expected_di
         raise ValueError(f"unsupported route oracle version {oracle.version}")
     if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
         raise ValueError("immutable route oracle digest mismatch")
+
+
+def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expected_digest: str = SIM_AUDIT_CONTRACT_V1_SHA256) -> None:
+    if contract.version != 1:
+        raise ValueError(f"unsupported audit contract version {contract.version}")
+    if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
+        raise ValueError("immutable audit contract digest mismatch")
 
 
 def route_reachable_functions(
@@ -308,6 +363,23 @@ def baseline_failures(calls: Iterable[CallSite], route_functions: set[str], base
     actual_total = sum(observed.values())
     if actual_total > baseline.hot_ceiling:
         failures.append(f"HOT total ceiling {baseline.hot_ceiling}, found {actual_total}")
+    return failures
+
+
+def audit_failures(calls: Iterable[CallSite], route_functions: set[str], oracle: RouteOracle,
+                   contract: AuditContract) -> list[str]:
+    """Reject a missing source-simulation root, empty route, or missing candidate."""
+    failures: list[str] = []
+    if contract.expected_root not in oracle.roots:
+        failures.append(f"audit root missing: expected {contract.expected_root}")
+    observed = Counter((call.caller, call.helper) for call in calls if call.caller in route_functions)
+    actual_total = sum(observed.values())
+    if actual_total < contract.minimum_total:
+        failures.append(f"audit total below floor {contract.minimum_total}, found {actual_total}")
+    for key, minimum in sorted(contract.required_entries.items()):
+        actual = observed.get(key, 0)
+        if actual < minimum:
+            failures.append(f"audit candidate missing: {key[0]} {key[1]} minimum {minimum}, found {actual}")
     return failures
 
 
@@ -383,6 +455,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--route-oracle", type=Path, required=True, help="immutable replay-route root fixture")
     parser.add_argument("--audit-route-oracle", type=Path,
                         help="optional immutable source-simulation route to audit without changing the shipped ceiling")
+    parser.add_argument("--audit-contract", type=Path,
+                        help="immutable expected root, minimum, and candidate contract for the audit route")
     parser.add_argument("--objdump", required=True, help="target objdump executable")
     parser.add_argument("--addr2line", required=True, help="target addr2line executable")
     args = parser.parse_args(argv)
@@ -395,12 +469,18 @@ def main(argv: list[str] | None = None) -> int:
         verify_baseline_integrity(baseline_text, baseline)
         verify_route_oracle_integrity(route_text, oracle)
         audit_oracle = None
+        audit_contract = None
+        if (args.audit_route_oracle is None) != (args.audit_contract is None):
+            raise ValueError("--audit-route-oracle and --audit-contract must be supplied together")
         if args.audit_route_oracle is not None:
             audit_text = args.audit_route_oracle.read_text(encoding="utf-8")
             audit_oracle = parse_route_oracle(audit_text)
             verify_route_oracle_integrity(
                 audit_text, audit_oracle, expected_digest=SIM_ROUTE_ORACLE_V1_SHA256
             )
+            audit_contract_text = args.audit_contract.read_text(encoding="utf-8")
+            audit_contract = parse_audit_contract(audit_contract_text)
+            verify_audit_contract_integrity(audit_contract_text, audit_contract)
         disassembly = run_command([args.objdump, "-d", str(args.elf)])
         calls = scan_disassembly(disassembly)
         graph = scan_call_graph(disassembly)
@@ -413,6 +493,8 @@ def main(argv: list[str] | None = None) -> int:
         if audit_functions is not None:
             print_audit(calls, audit_functions, locations)
         failures = baseline_failures(calls, route_functions, baseline)
+        if audit_functions is not None and audit_oracle is not None and audit_contract is not None:
+            failures.extend(audit_failures(calls, audit_functions, audit_oracle, audit_contract))
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
         return 2

@@ -11,6 +11,7 @@ SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2
 SOURCEBOOT_NATIVE_MATH_BASELINE := $(ROOT)/tools/saturn/sh2_native_math_baseline_v1.txt
 SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_route_oracle_v1.txt
 SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_sim_route_oracle_v1.txt
+SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT := $(ROOT)/tools/saturn/sh2_native_math_sim_audit_contract_v1.txt
 SOURCEBOOT_PC_BUILD := $(ROOT)/build/us_pc
 SOURCEBOOT_TEXT_STRINGS := build/us_pc/include/text_strings.h
 SOURCEBOOT_COLLISION_CATALOG := $(SOURCEBOOT_GENERATED)/sourceboot_collision_catalog.inc
@@ -546,11 +547,18 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).sym"; \
 	fi
 
-.PHONY: verify-sim-math-route
-verify-sim-math-route: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
+.PHONY: verify-sim-math-route verify-sim-math-route-config
+verify-sim-math-route: verify-sim-math-route-config $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py" \
 	  "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" "$(SOURCEBOOT_NATIVE_MATH_BASELINE)" \
 	  --route-oracle "$(SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE)" \
 	  --audit-route-oracle "$(SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE)" \
+	  --audit-contract "$(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)" \
 	  --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
 	  --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"
+
+verify-sim-math-route-config:
+	@if [ "$(SATURN_DEMO_PATH)" != "1" ] || [ "$(SATURN_SOURCEBOOT_ROUTE_REPLAY)" != "1" ]; then \
+	  printf '%s\n' 'verify-sim-math-route requires SATURN_DEMO_PATH=1 and SATURN_SOURCEBOOT_ROUTE_REPLAY=1' >&2; \
+	  exit 2; \
+	fi
