@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Mapping
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,7 +24,25 @@ FIXTURE = ROOT / "tools/saturn/fixtures/bob_parity_v1_atan2_smc1_v1.json"
 RUNNER = ROOT / "tools/saturn/engine_atan2_q16_fixture_test.c"
 
 
+def compiler_environment(temporary: Path, inherited: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Give GCC a writable temporary directory even under restrictive MSYS setups."""
+    environment = dict(os.environ if inherited is None else inherited)
+    writable_temporary = str(temporary)
+    environment.update(TEMP=writable_temporary, TMP=writable_temporary, TMPDIR=writable_temporary)
+    return environment
+
+
 class EngineAtan2Q16FixtureTests(unittest.TestCase):
+    def test_compiler_environment_uses_fixture_temporary_directory(self) -> None:
+        temporary = Path("fixture-temporary-directory")
+        inherited = {"TEMP": r"C:\\msys64\\tmp", "TMP": r"C:\\msys64\\tmp", "TMPDIR": r"C:\\msys64\\tmp"}
+
+        environment = compiler_environment(temporary, inherited)
+
+        self.assertEqual(environment["TEMP"], str(temporary))
+        self.assertEqual(environment["TMP"], str(temporary))
+        self.assertEqual(environment["TMPDIR"], str(temporary))
+
     def test_target_q16_seam_matches_every_captured_atan2_result(self) -> None:
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         self.assertEqual(fixture["capture_contract"]["checkpoint_tick"], 2000)
@@ -47,8 +66,8 @@ class EngineAtan2Q16FixtureTests(unittest.TestCase):
                      "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
                      "-I", str(ROOT / "src/port/saturn/gfx"), "-I", str(ROOT / "src/port/saturn/platform"),
                      "-I", str(ROOT / "src/port/saturn/runtime"),
-                     str(RUNNER), "-Wl,--gc-sections", "-lm", "-o", str(executable)],
-                    text=True, capture_output=True, check=False,
+                    str(RUNNER), "-Wl,--gc-sections", "-lm", "-o", str(executable)],
+                    text=True, capture_output=True, check=False, env=compiler_environment(Path(temporary)),
                 )
                 self.assertEqual(compiled.returncode, 0, compiled.stderr)
                 completed = subprocess.run([str(executable)], input=corpus, text=True, capture_output=True, check=False)
