@@ -58,3 +58,32 @@ The corpus is a bounded deterministic differential-input fixture, not an
 exhaustive trace. A subsequent conversion remains responsible for its
 host-differential tolerance and for the stated <1.0-world-unit positional
 divergence A/B gate, using this 2,000-tick route.
+
+## Post-`376b032` acceptance recapture
+
+The Q16 `atan2` conversion in `376b032` was rebuilt with the pinned Yaul
+0.3.1 / `6012f79f237773378c8014e70d8998ad95a38d98` environment and the same
+replay profile. The fresh ELF is
+`54d36006080f75119376a0bd16a09d99214f8027a04a63c155374b2d56462305` (the CUE
+remains `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`).
+`make verify` passed the captured-input Q16 fixture and mutation test, the
+SH-2 census (`HOT total 0`), and the dual-CPU coherency gate.
+
+Two independent Ymir build-agent2 DRAM-cart captures are retained as
+`task2-post376b032-smc1-run1-2026-07-29.json` and
+`task2-post376b032-smc1-run2-2026-07-29.json`. Their deterministic verifier
+accepted the retained post-conversion fixture
+`task2-post376b032-smc1-fixture-2026-07-29.json`: both reached SBR2 tick
+2,000 / global timer 2,001, published 64 samples for each SMC1 function, and
+reported identical counters (`atan2s=atan2_lookup=125618`).
+
+Against the pre-conversion run, the final Mario position bits are identical,
+so the endpoint L-infinity positional divergence is **0.0 world units**
+(passing the `< 1.0` requirement). Replay identity fields, action, fault
+flags, and command-capacity rejects also match. The live bounded SMC1 rings
+are intentionally not byte-equal after the conversion (128/128 entries
+differ) and each counter is `+186` (`125432 -> 125618`); the route's
+performance counters also vary with the new image. This is recorded rather
+than masked: the independently compiled captured-input differential fixture
+continues to accept every pre-conversion SMC1 input/result pair, while the
+two post-conversion live captures are mutually deterministic.
