@@ -382,6 +382,8 @@ policy; no upstream source copied.
     `A1F406775D3DEA71EA25026BCA3C1BCBAF96BF63D64F3829ECAC2D94E7F07814`
   - ISO SHA-256:
     `6F04F6F6D5267D23FCF1E0B466D884AAA58DCC642C09FC6CEF3D0B516373D3D0`
-- [ ] Owner manual gate: terrain textures no longer switch to flat material
-  as nearby polygons cross the camera plane; record any remaining clipped-edge
-  stretching separately from disappearance/flicker.
+- [x] Owner manual gate (2026-07-29): “texture persistence is much better
+  now.” Pipe 8 is accepted as a material-stability improvement. This is not a
+  claim that clipping/UV mapping is complete; any remaining clipped-edge
+  stretching or isolated texture loss stays open separately from the fixed
+  frame-to-frame flat-material switch.
