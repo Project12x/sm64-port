@@ -5,6 +5,10 @@
 #include "math_util.h"
 #include "surface_collision.h"
 
+#if defined(TARGET_SATURN)
+#include "saturn_engine_math_q16.h"
+#endif
+
 #if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
     SATURN_SOURCEBOOT_ROUTE_REPLAY
 #include "saturn_math_route_capture.h"
@@ -696,23 +700,43 @@ f32 approach_f32(f32 current, f32 target, f32 inc, f32 dec) {
     return current;
 }
 
+/* The Saturn branch keeps the original float ABI at the engine seam, then
+ * decodes the operands into Q16.16 before the ratio/table operation.  The
+ * recorded bit pairs let its replay fixture retain the float caller's exact
+ * inputs without reintroducing arithmetic into the native path. */
+#if defined(TARGET_SATURN)
+static u16 atan2_lookup_q16(s32 y, s32 x, u32 y_bits, u32 x_bits) {
+    u16 ret;
+    ret = sm64_saturn_atan2_lookup_q16(y, x, gArctanTable);
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
+    SATURN_SOURCEBOOT_ROUTE_REPLAY
+    sm64_saturn_math_route_record_atan2_lookup_bits(y_bits, x_bits, ret);
+#else
+    (void)y_bits;
+    (void)x_bits;
+#endif
+    return ret;
+}
+#endif
+
 /**
  * Helper function for atan2s. Does a look up of the arctangent of y/x assuming
  * the resulting angle is in range [0, 0x2000] (1/8 of a circle).
  */
 static u16 atan2_lookup(f32 y, f32 x) {
-    u16 ret;
-
-    if (x == 0) {
-        ret = gArctanTable[0];
-    } else {
-        ret = gArctanTable[(s32)(y / x * 1024 + 0.5f)];
-    }
-#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
-    SATURN_SOURCEBOOT_ROUTE_REPLAY
-    sm64_saturn_math_route_record_atan2_lookup(y, x, ret);
+#if defined(TARGET_SATURN)
+    u32 y_bits = 0;
+    u32 x_bits = 0;
+#if defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && SATURN_SOURCEBOOT_ROUTE_REPLAY
+    y_bits = sm64_saturn_math_route_float_bits(y);
+    x_bits = sm64_saturn_math_route_float_bits(x);
 #endif
-    return ret;
+    return atan2_lookup_q16(sm64_saturn_float_to_q16_trunc(y),
+                             sm64_saturn_float_to_q16_trunc(x), y_bits, x_bits);
+#else
+    if (x == 0) return gArctanTable[0];
+    return gArctanTable[(s32)(y / x * 1024 + 0.5f)];
+#endif
 }
 
 /**
@@ -727,6 +751,39 @@ s16 atan2s(f32 y, f32 x) {
     const f32 capture_x = x;
 #endif
 
+#if defined(TARGET_SATURN)
+    s32 y_q16 = sm64_saturn_float_to_q16_trunc(y);
+    s32 x_q16 = sm64_saturn_float_to_q16_trunc(x);
+    u32 y_bits = 0;
+    u32 x_bits = 0;
+#if defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && SATURN_SOURCEBOOT_ROUTE_REPLAY
+    y_bits = sm64_saturn_math_route_float_bits(y);
+    x_bits = sm64_saturn_math_route_float_bits(x);
+#endif
+    if (x_q16 >= 0) {
+        if (y_q16 >= 0) {
+            ret = y_q16 >= x_q16 ? atan2_lookup_q16(x_q16, y_q16, x_bits, y_bits)
+                                  : 0x4000 - atan2_lookup_q16(y_q16, x_q16, y_bits, x_bits);
+        } else {
+            y_q16 = -y_q16;
+            y_bits ^= 0x80000000U;
+            ret = y_q16 < x_q16 ? 0x4000 + atan2_lookup_q16(y_q16, x_q16, y_bits, x_bits)
+                                 : 0x8000 - atan2_lookup_q16(x_q16, y_q16, x_bits, y_bits);
+        }
+    } else {
+        x_q16 = -x_q16;
+        x_bits ^= 0x80000000U;
+        if (y_q16 < 0) {
+            y_q16 = -y_q16;
+            y_bits ^= 0x80000000U;
+            ret = y_q16 >= x_q16 ? 0x8000 + atan2_lookup_q16(x_q16, y_q16, x_bits, y_bits)
+                                  : 0xC000 - atan2_lookup_q16(y_q16, x_q16, y_bits, x_bits);
+        } else {
+            ret = y_q16 < x_q16 ? 0xC000 + atan2_lookup_q16(y_q16, x_q16, y_bits, x_bits)
+                                 : -atan2_lookup_q16(x_q16, y_q16, x_bits, y_bits);
+        }
+    }
+#else
     if (x >= 0) {
         if (y >= 0) {
             if (y >= x) {
@@ -759,6 +816,7 @@ s16 atan2s(f32 y, f32 x) {
             }
         }
     }
+#endif
 #if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT_ROUTE_REPLAY) && \
     SATURN_SOURCEBOOT_ROUTE_REPLAY
     sm64_saturn_math_route_record_atan2s(capture_y, capture_x, ret);

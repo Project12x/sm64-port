@@ -52,12 +52,30 @@ static inline void sm64_saturn_math_route_record_atan2s(float y, float x, uint16
 
 static inline void sm64_saturn_math_route_record_atan2_lookup(float y, float x, uint16_t result)
 {
+    const uint32_t y_bits = sm64_saturn_math_route_float_bits(y);
+    const uint32_t x_bits = sm64_saturn_math_route_float_bits(x);
     const uint32_t call = sourceboot_math_route_capture.atan2_lookup_calls++;
     const uint32_t slot = call % SM64_SATURN_MATH_ROUTE_CAPTURE_SAMPLES;
     sm64_saturn_math_route_sample_t *sample =
         (sm64_saturn_math_route_sample_t *)&sourceboot_math_route_capture.atan2_lookup[slot];
-    sample->y_bits = sm64_saturn_math_route_float_bits(y);
-    sample->x_bits = sm64_saturn_math_route_float_bits(x);
+    sample->y_bits = y_bits;
+    sample->x_bits = x_bits;
+    sample->result = result;
+    if (sourceboot_math_route_capture.atan2_lookup_samples <
+        SM64_SATURN_MATH_ROUTE_CAPTURE_SAMPLES)
+        sourceboot_math_route_capture.atan2_lookup_samples++;
+}
+
+static inline void sm64_saturn_math_route_record_atan2_lookup_bits(uint32_t y_bits,
+                                                                    uint32_t x_bits,
+                                                                    uint16_t result)
+{
+    const uint32_t call = sourceboot_math_route_capture.atan2_lookup_calls++;
+    const uint32_t slot = call % SM64_SATURN_MATH_ROUTE_CAPTURE_SAMPLES;
+    sm64_saturn_math_route_sample_t *sample =
+        (sm64_saturn_math_route_sample_t *)&sourceboot_math_route_capture.atan2_lookup[slot];
+    sample->y_bits = y_bits;
+    sample->x_bits = x_bits;
     sample->result = result;
     if (sourceboot_math_route_capture.atan2_lookup_samples <
         SM64_SATURN_MATH_ROUTE_CAPTURE_SAMPLES)

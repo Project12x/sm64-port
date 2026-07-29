@@ -507,7 +507,18 @@ pre-build-iso: $(SOURCEBOOT_CART_IMAGE)
 # itself.
 $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso: $(SOURCEBOOT_CART_IMAGE)
 
-.PHONY: verify
+.PHONY: verify verify-engine-atan2-q16 verify-engine-atan2-q16-mutation
+verify-engine-atan2-q16:
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/test_engine_atan2_q16.py"
+
+verify-engine-atan2-q16-mutation:
+	@SM64_SATURN_TEST_MUTATE_ATAN2_Q16=1 \
+	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/test_engine_atan2_q16.py" && { \
+	  printf '%s\\n' 'engine atan2 Q16 mutation escaped the captured-route differential' >&2; \
+	  exit 1; \
+	} || printf '%s\\n' 'engine atan2 Q16 mutation caught by the captured-route differential'
+
+verify: verify-engine-atan2-q16 verify-engine-atan2-q16-mutation
 verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -h "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq 'Entry point address:[[:space:]]+0x6004000'
 	@$(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf -S "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" | grep -Eq '[[:space:]]\.cart_rodata[[:space:]]+PROGBITS[[:space:]]+22400000'
