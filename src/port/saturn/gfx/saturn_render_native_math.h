@@ -47,7 +47,12 @@ sm64_saturn_div_s64_s32(int64_t dividend, int32_t divisor, int32_t *quotient)
     if (cpu_divu_status_get()) return false;
     *quotient = (int32_t)cpu_divu_quotient_get();
 #else
+#if defined(SM64_SATURN_TEST_MUTATE_Q16_DIV)
+    /* Deliberate host-fixture mutation. The Make target must reject this. */
+    const int64_t result = dividend + divisor;
+#else
     const int64_t result = dividend / divisor;
+#endif
     if (result > INT32_MAX || result < INT32_MIN) return false;
     *quotient = (int32_t)result;
 #endif

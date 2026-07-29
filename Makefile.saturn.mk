@@ -61,7 +61,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -244,6 +244,32 @@ verify-ir-transform:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_ir_transform.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-transform-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/ir-transform-test$(HOST_EXEEXT)"
+
+# Task 1 native-math seam: compile the real public helper header and run its
+# float-boundary and signed-Q16-division differential fixture on every normal
+# verification pass. The companion target is a deterministic mutation check:
+# it only passes when the fixture rejects the test-only broken division mode.
+verify-render-native-math:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_native_math_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-native-math-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-native-math-test$(HOST_EXEEXT)"
+
+verify-render-native-math-mutation:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_TEST_MUTATE_Q16_DIV=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_native_math_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-native-math-mutation$(HOST_EXEEXT)"
+	@if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-native-math-mutation$(HOST_EXEEXT)"; then \
+	  printf '%s\\n' 'render-native-math mutation escaped the differential fixture' >&2; \
+	  exit 1; \
+	else \
+	  printf '%s\\n' 'render-native-math mutation caught by differential fixture'; \
+	fi
 
 # Z-Treme-style LWRAM -> HWRAM promotion contract: alignment, bounded
 # capacity, copied bytes, and source immutability are all host-verifiable.
@@ -539,7 +565,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-hot-promotion classify-source verify-hello verify-hwtest
+verify-all: verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean
