@@ -4,5 +4,8 @@
 # SATURN_DEMO_PATH=1 / SATURN_SOURCEBOOT_ROUTE_REPLAY=1 calls this renderer
 # once per emitted frame. The verifier expands every linked direct-call child
 # from this root, so a new per-frame child cannot be silently marked COLD.
+# The dual-worker dispatch invokes its function-pointer argument on both SH-2
+# CPUs; the checked edge records the terrain callback passed by this replay.
 ROUTE_ORACLE_VERSION 1
 ROOT _sm64_saturn_demo_render_frame
+INDIRECT_EDGE _sm64_saturn_dual_worker_run _demo_terrain_compact_range

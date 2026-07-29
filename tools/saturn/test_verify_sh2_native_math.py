@@ -35,6 +35,33 @@ ROUTE_DISASSEMBLY = """
  6004004: 42 0b        jsr     @r2
 """
 
+STACK_SPILL_DISASSEMBLY = """
+06006000 <_stack_spill_calls>:
+ 6006000: d6 01        mov.l   6006008 <_stack_spill_calls+0x8>,r6 ! 06007000 <___fixsfsi>
+ 6006002: 1f 65        mov.l   r6,@(20,r15)
+ 6006004: 46 0b        jsr     @r6
+ 6006006: 60 36        mov     r0,r6
+ 6006008: 5f 66        mov.l   @(20,r15),r6
+ 600600a: 46 0b        jsr     @r6
+ 600600c: 60 36        mov     r0,r6
+ 600600e: 5f 66        mov.l   @(20,r15),r6
+ 6006010: 46 0b        jsr     @r6
+"""
+
+INDIRECT_ROUTE_DISASSEMBLY = """
+06008000 <_frame_root>:
+ 6008000: d1 01        mov.l   6008008 <_frame_root+0x8>,r1 ! 06008100 <_terrain_worker_run>
+ 6008004: 41 0b        jsr     @r1
+06008100 <_terrain_worker_run>:
+ 6008100: d1 01        mov.l   6008108 <_terrain_worker_run+0x8>,r1 ! 06008200 <_dual_worker_run>
+ 6008104: 41 0b        jsr     @r1
+06008200 <_dual_worker_run>:
+ 6008200: 00 09        nop
+06008300 <_callback_only>:
+ 6008300: d1 01        mov.l   6008308 <_callback_only+0x8>,r1 ! 06008400 <___mulsf3>
+ 6008304: 41 0b        jsr     @r1
+"""
+
 
 class NativeMathCensusTests(unittest.TestCase):
     def test_addr2line_addresses_are_batched_for_windows_command_limits(self) -> None:
@@ -47,6 +74,16 @@ class NativeMathCensusTests(unittest.TestCase):
             [
                 CallSite("_per_frame_child", 0x6002004, "___addsf3"),
                 CallSite("_cold_setup", 0x6004004, "_sinf"),
+            ],
+        )
+
+    def test_attributes_all_helper_calls_after_stack_spill_and_reload(self) -> None:
+        self.assertEqual(
+            scan_disassembly(STACK_SPILL_DISASSEMBLY),
+            [
+                CallSite("_stack_spill_calls", 0x6006004, "___fixsfsi"),
+                CallSite("_stack_spill_calls", 0x600600A, "___fixsfsi"),
+                CallSite("_stack_spill_calls", 0x6006010, "___fixsfsi"),
             ],
         )
 
@@ -76,6 +113,24 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(
             failures,
             ["unallowlisted helper in HOT function: _per_frame_child ___addsf3 found 1"],
+        )
+
+    def test_checked_indirect_worker_callback_is_hot_and_enforced(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _frame_root\n"
+            "INDIRECT_EDGE _dual_worker_run _callback_only\n"
+        )
+        route_functions = route_reachable_functions(
+            scan_call_graph(INDIRECT_ROUTE_DISASSEMBLY), oracle.roots, oracle.indirect_edges
+        )
+        self.assertIn("_callback_only", route_functions)
+        baseline = parse_baseline("BASELINE_VERSION 1\nHOT_CEILING 0\n")
+        self.assertEqual(
+            baseline_failures(scan_disassembly(INDIRECT_ROUTE_DISASSEMBLY), route_functions, baseline),
+            [
+                "unallowlisted helper in HOT function: _callback_only ___mulsf3 found 1",
+                "HOT total ceiling 0, found 1",
+            ],
         )
 
     def test_baseline_allows_hot_calls_to_disappear_but_not_grow(self) -> None:

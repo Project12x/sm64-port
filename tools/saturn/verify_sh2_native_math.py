@@ -35,6 +35,7 @@ class CallSite:
 class RouteOracle:
     version: int
     roots: frozenset[str]
+    indirect_edges: frozenset[tuple[str, str]]
 
 
 @dataclass(frozen=True)
@@ -58,12 +59,14 @@ LITERAL_LOAD_RE = re.compile(r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*[0-9A-Fa-f]+\s+<([
 JSR_RE = re.compile(r"\bjsr\s+@r(\d+)\b")
 BSR_RE = re.compile(r"\bbsr\s+(?:0x)?[0-9A-Fa-f]+\s+<([^>]+)>")
 DESTINATION_RE = re.compile(r",r(\d+)\s*(?:!.*)?$")
+STACK_STORE_RE = re.compile(r"\bmov\.l\s+r(\d+),@\((\d+),r15\)")
+STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 
 # Pinned digests deliberately make the route and helper ceilings append-only
 # contracts. Updating either requires an explicit v2 implementation change,
 # not a quiet edit to a text allowlist.
-ROUTE_ORACLE_V1_SHA256 = "61281aa554420da046ab867dd750b61b3d145193cdb2230d0b1471904587923f"
-BASELINE_V1_SHA256 = "563e972073c6e0d851de2e5a22e737ab68e31a18d79add6d48f47505822f48da"
+ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
+BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -99,6 +102,7 @@ def scan_direct_calls(disassembly: str) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
     caller = "<outside-function>"
     registers: dict[str, str] = {}
+    stack_slots: dict[int, str] = {}
     calls: list[CallSite] = []
 
     for line in disassembly.splitlines():
@@ -106,6 +110,7 @@ def scan_direct_calls(disassembly: str) -> list[CallSite]:
         if function:
             caller = function.group(2)
             registers.clear()
+            stack_slots.clear()
             continue
 
         instruction = INSTRUCTION_RE.match(line)
@@ -117,6 +122,30 @@ def scan_direct_calls(disassembly: str) -> list[CallSite]:
         load = LITERAL_LOAD_RE.search(text)
         if load:
             registers[load.group(1)] = _symbol_base(load.group(2))
+            continue
+
+        # GCC spills a literal-pool target around a call in some large
+        # functions. Preserve only fixed r15-relative slots; they describe the
+        # current function frame and are safe to invalidate if r15 changes.
+        stack_store = STACK_STORE_RE.search(text)
+        if stack_store:
+            slot = int(stack_store.group(2), 10)
+            target = registers.get(stack_store.group(1))
+            if target is None:
+                stack_slots.pop(slot, None)
+            else:
+                stack_slots[slot] = target
+            continue
+
+        stack_load = STACK_LOAD_RE.search(text)
+        if stack_load:
+            slot = int(stack_load.group(1), 10)
+            target_register = stack_load.group(2)
+            target = stack_slots.get(slot)
+            if target is None:
+                registers.pop(target_register, None)
+            else:
+                registers[target_register] = target
             continue
 
         jsr = JSR_RE.search(text)
@@ -133,7 +162,10 @@ def scan_direct_calls(disassembly: str) -> list[CallSite]:
 
         destination = DESTINATION_RE.search(text)
         if destination:
-            registers.pop(destination.group(1), None)
+            destination_register = destination.group(1)
+            registers.pop(destination_register, None)
+            if destination_register == "15":
+                stack_slots.clear()
     return calls
 
 
@@ -158,6 +190,7 @@ def parse_route_oracle(text: str) -> RouteOracle:
     """Parse a versioned, checked-in replay-route root fixture."""
     version: int | None = None
     roots: set[str] = set()
+    indirect_edges: set[tuple[str, str]] = set()
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
         if not line:
@@ -169,13 +202,18 @@ def parse_route_oracle(text: str) -> RouteOracle:
             version = int(parts[1], 10)
         elif parts[0] == "ROOT" and len(parts) == 2:
             roots.add(parts[1])
+        elif parts[0] == "INDIRECT_EDGE" and len(parts) == 3:
+            indirect_edges.add((parts[1], parts[2]))
         else:
-            raise ValueError(f"route oracle line {line_number}: expected ROOT <linked-symbol>")
+            raise ValueError(
+                f"route oracle line {line_number}: expected ROOT <linked-symbol> or "
+                "INDIRECT_EDGE <dispatch-symbol> <callback-symbol>"
+            )
     if version != 1:
         raise ValueError(f"unsupported route oracle version {version!r}")
     if not roots:
         raise ValueError("route oracle has no ROOT")
-    return RouteOracle(version, frozenset(roots))
+    return RouteOracle(version, frozenset(roots), frozenset(indirect_edges))
 
 
 def parse_baseline(text: str) -> BaselineContract:
@@ -236,13 +274,20 @@ def verify_route_oracle_integrity(text: str, oracle: RouteOracle, *, expected_di
         raise ValueError("immutable route oracle digest mismatch")
 
 
-def route_reachable_functions(graph: dict[str, set[str]], roots: Iterable[str]) -> set[str]:
-    """Return direct-call closure from the checked-in replay route roots."""
+def route_reachable_functions(
+    graph: dict[str, set[str]],
+    roots: Iterable[str],
+    indirect_edges: Iterable[tuple[str, str]] = (),
+) -> set[str]:
+    """Return direct-call closure plus pinned, required indirect callback edges."""
+    indirect_graph: dict[str, set[str]] = defaultdict(set)
+    for caller, target in indirect_edges:
+        indirect_graph[caller].add(target)
     reachable = set(roots)
     pending = deque(reachable)
     while pending:
         caller = pending.popleft()
-        for target in graph.get(caller, set()):
+        for target in graph.get(caller, set()) | indirect_graph.get(caller, set()):
             if target not in reachable:
                 reachable.add(target)
                 pending.append(target)
@@ -337,7 +382,9 @@ def main(argv: list[str] | None = None) -> int:
         verify_route_oracle_integrity(route_text, oracle)
         disassembly = run_command([args.objdump, "-d", str(args.elf)])
         calls = scan_disassembly(disassembly)
-        route_functions = route_reachable_functions(scan_call_graph(disassembly), oracle.roots)
+        route_functions = route_reachable_functions(
+            scan_call_graph(disassembly), oracle.roots, oracle.indirect_edges
+        )
         locations = source_locations(args.addr2line, args.elf, calls)
         print_census(calls, route_functions, locations)
         failures = baseline_failures(calls, route_functions, baseline)
