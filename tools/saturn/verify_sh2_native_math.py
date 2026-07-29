@@ -67,6 +67,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
+SIM_ROUTE_ORACLE_V1_SHA256 = "3bde797d9f07323b112b297c49ff4debd2a786c81d1e1be382feaf857f278a2f"
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -364,11 +365,24 @@ def print_census(calls: Iterable[CallSite], route_functions: set[str], locations
     print(f"SH-2 native-math census: HOT total {hot_total}; COLD total {sum(row.count for row in rows) - hot_total}")
 
 
+def print_audit(calls: Iterable[CallSite], route_functions: set[str], locations: dict[int, str]) -> None:
+    """Print a pinned route audit without weakening the shipped HOT ceiling."""
+    call_list = list(calls)
+    location_by_caller = {call.caller: locations.get(call.address, "??:0") for call in call_list}
+    rows = [row for row in census_rows(call_list, route_functions) if row.heat == "HOT"]
+    for row in rows:
+        helpers = ", ".join(f"{helper}={count}" for helper, count in row.helpers)
+        print(f"AUDIT {row.count:4} {row.caller} [{helpers}] ({location_by_caller[row.caller]})")
+    print(f"SH-2 native-math route audit: total {sum(row.count for row in rows)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("elf", type=Path, help="linked sourceboot ELF")
     parser.add_argument("baseline", type=Path, help="immutable HOT helper ceiling fixture")
     parser.add_argument("--route-oracle", type=Path, required=True, help="immutable replay-route root fixture")
+    parser.add_argument("--audit-route-oracle", type=Path,
+                        help="optional immutable source-simulation route to audit without changing the shipped ceiling")
     parser.add_argument("--objdump", required=True, help="target objdump executable")
     parser.add_argument("--addr2line", required=True, help="target addr2line executable")
     args = parser.parse_args(argv)
@@ -380,13 +394,24 @@ def main(argv: list[str] | None = None) -> int:
         oracle = parse_route_oracle(route_text)
         verify_baseline_integrity(baseline_text, baseline)
         verify_route_oracle_integrity(route_text, oracle)
+        audit_oracle = None
+        if args.audit_route_oracle is not None:
+            audit_text = args.audit_route_oracle.read_text(encoding="utf-8")
+            audit_oracle = parse_route_oracle(audit_text)
+            verify_route_oracle_integrity(
+                audit_text, audit_oracle, expected_digest=SIM_ROUTE_ORACLE_V1_SHA256
+            )
         disassembly = run_command([args.objdump, "-d", str(args.elf)])
         calls = scan_disassembly(disassembly)
-        route_functions = route_reachable_functions(
-            scan_call_graph(disassembly), oracle.roots, oracle.indirect_edges
+        graph = scan_call_graph(disassembly)
+        route_functions = route_reachable_functions(graph, oracle.roots, oracle.indirect_edges)
+        audit_functions = None if audit_oracle is None else route_reachable_functions(
+            graph, audit_oracle.roots, audit_oracle.indirect_edges
         )
         locations = source_locations(args.addr2line, args.elf, calls)
         print_census(calls, route_functions, locations)
+        if audit_functions is not None:
+            print_audit(calls, audit_functions, locations)
         failures = baseline_failures(calls, route_functions, baseline)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)

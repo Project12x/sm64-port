@@ -18,6 +18,7 @@ from verify_sh2_native_math import (
     route_reachable_functions,
     scan_call_graph,
     scan_disassembly,
+    SIM_ROUTE_ORACLE_V1_SHA256,
     verify_baseline_integrity,
     verify_route_oracle_integrity,
 )
@@ -172,6 +173,13 @@ class NativeMathCensusTests(unittest.TestCase):
         route_text = (fixture_dir / "sh2_native_math_route_oracle_v1.txt").read_text(encoding="utf-8")
         verify_baseline_integrity(baseline_text, parse_baseline(baseline_text))
         verify_route_oracle_integrity(route_text, parse_route_oracle(route_text))
+
+    def test_checked_in_simulation_audit_fixture_is_pinned(self) -> None:
+        fixture_dir = Path(__file__).parent
+        audit_text = (fixture_dir / "sh2_native_math_sim_route_oracle_v1.txt").read_text(encoding="utf-8")
+        verify_route_oracle_integrity(
+            audit_text, parse_route_oracle(audit_text), expected_digest=SIM_ROUTE_ORACLE_V1_SHA256
+        )
 
 
 if __name__ == "__main__":

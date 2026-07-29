@@ -1,0 +1,6 @@
+# Immutable v1 source-simulation route oracle. It is intentionally audited
+# alongside the renderer route: both roots execute in the same deterministic
+# BOB replay, but the simulation's large starting ceiling must not dilute the
+# renderer's existing shipped regression gate.
+ROUTE_ORACLE_VERSION 1
+ROOT _game_loop_one_iteration
