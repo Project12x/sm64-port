@@ -9,6 +9,8 @@ from verify_sh2_native_math import (
     CallSite,
     allowlist_failures,
     address_batches,
+    census_rows,
+    is_native_math_helper,
     parse_allowlist,
     scan_disassembly,
 )
@@ -43,7 +45,10 @@ class NativeMathCensusTests(unittest.TestCase):
 
     def test_allowlist_requires_exact_hot_counts_and_rejects_stale_rows(self) -> None:
         rules = parse_allowlist(
-            "HOT _frame_tick ___addsf3 1\nCOLD _cold_setup _sinf 1\n"
+            "ROUTE_FUNCTION _frame_tick\n"
+            "HOT_TOTAL 1\n"
+            "HOT _frame_tick ___addsf3 1\n"
+            "COLD _cold_setup _sinf 1\n"
         )
         calls = [
             CallSite("_frame_tick", 0x6001004, "___addsf3"),
@@ -54,27 +59,57 @@ class NativeMathCensusTests(unittest.TestCase):
         removed_hot_call = [CallSite("_cold_setup", 0x600100A, "_sinf")]
         self.assertEqual(
             allowlist_failures(removed_hot_call, rules),
-            ["stale allowlist entry: HOT _frame_tick ___addsf3 expected 1, found 0"],
+            [
+                "stale allowlist entry: HOT _frame_tick ___addsf3 expected 1, found 0",
+                "HOT total expected 1, found 0",
+            ],
         )
 
-    def test_hot_source_row_marks_each_function_and_requires_its_total(self) -> None:
-        rules = parse_allowlist("HOT_SOURCE src/game/camera.c 2\n")
+    def test_recognizes_complete_linked_softfp_helper_spellings(self) -> None:
+        for helper in (
+            "___gesf2", "___lesf2", "___gedf2", "___ledf2", "___powisf2", "_absf",
+        ):
+            with self.subTest(helper=helper):
+                self.assertTrue(is_native_math_helper(helper))
+
+    def test_route_contract_marks_only_explicit_route_functions_hot(self) -> None:
+        rules = parse_allowlist(
+            "ROUTE_FUNCTION _tick_camera\n"
+            "HOT_TOTAL 2\n"
+            "HOT _tick_camera ___addsf3 1\n"
+            "HOT _tick_camera ___mulsf3 1\n"
+        )
+        calls = [
+            CallSite("_tick_camera", 0x6001004, "___addsf3"),
+            CallSite("_tick_camera", 0x6001006, "___mulsf3"),
+            CallSite("_unrelated_handler", 0x6001008, "___addsf3"),
+        ]
+        self.assertEqual(allowlist_failures(calls, rules), [])
+        rows = census_rows(calls, rules)
+        self.assertEqual(rows[0].caller, "_tick_camera")
+        self.assertEqual(rows[0].heat, "HOT")
+        self.assertEqual(rows[0].count, 2)
+        self.assertEqual(rows[1].caller, "_unrelated_handler")
+        self.assertEqual(rows[1].heat, "COLD")
+        self.assertEqual(rows[1].count, 1)
+
+    def test_route_total_fails_when_a_hot_category_is_removed(self) -> None:
+        rules = parse_allowlist(
+            "ROUTE_FUNCTION _tick_camera\n"
+            "HOT_TOTAL 2\n"
+            "HOT _tick_camera ___addsf3 1\n"
+        )
         calls = [
             CallSite("_tick_camera", 0x6001004, "___addsf3"),
             CallSite("_tick_camera", 0x6001006, "___mulsf3"),
         ]
-        locations = {
-            0x6001004: "/worktree/src/game/camera.c:20",
-            0x6001006: "/worktree/src/game/camera.c:21",
-        }
-        self.assertEqual(allowlist_failures(calls, rules, locations), [])
-
-        directory_rules = parse_allowlist("HOT_SOURCE src/port/saturn/ 2\n")
-        port_locations = {
-            0x6001004: "/worktree/src/port/saturn/gfx/demo.c:20",
-            0x6001006: "/worktree/src/port/saturn/gfx/demo.c:21",
-        }
-        self.assertEqual(allowlist_failures(calls, directory_rules, port_locations), [])
+        self.assertEqual(
+            allowlist_failures(calls, rules),
+            [
+                "unallowlisted helper in HOT function: _tick_camera ___mulsf3 found 1",
+                "HOT total expected 2, found 1",
+            ],
+        )
 
 
 if __name__ == "__main__":

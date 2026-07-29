@@ -43,7 +43,14 @@ class AllowlistEntry:
     expected_count: int
 
 
-SOURCE_RULE_PREFIX = "@source:"
+@dataclass(frozen=True)
+class CensusRow:
+    """Aggregate output for one calling function."""
+
+    heat: str
+    caller: str
+    count: int
+    helpers: tuple[tuple[str, int], ...]
 
 
 FUNCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+)\s+<([^>]+)>:$")
@@ -65,9 +72,10 @@ LIBM_NAMES = {
 }
 DIV64_RE = re.compile(r"(?:u?div|u?mod)di3$")
 SOFT_FLOAT_RE = re.compile(
-    r"(?:add|sub|mul|div|neg|eq|ne|g[el]s|l[et]s|unord)"
+    r"(?:add|sub|mul|div|neg|eq|ne|cmp|ge|le|gt|lt|unord)"
     r"(?:sf|df)(?:2|3)$|(?:fix|float|extend|trunc)[a-z0-9]*$"
 )
+SOFT_FLOAT_NAMES = {"absf", "powisf2"}
 
 
 def is_native_math_helper(symbol: str) -> bool:
@@ -75,6 +83,7 @@ def is_native_math_helper(symbol: str) -> bool:
     canonical = symbol.lstrip("_")
     return (
         canonical in LIBM_NAMES
+        or canonical in SOFT_FLOAT_NAMES
         or bool(DIV64_RE.fullmatch(canonical))
         or bool(SOFT_FLOAT_RE.fullmatch(canonical))
     )
@@ -122,21 +131,24 @@ def scan_disassembly(disassembly: str) -> list[CallSite]:
 
 
 def parse_allowlist(text: str) -> dict[tuple[str, str], AllowlistEntry]:
-    """Parse exact call rows and ``HOT_SOURCE <path-suffix> <count>`` rows."""
+    """Parse the explicit route function set and exact helper-count contract."""
     entries: dict[tuple[str, str], AllowlistEntry] = {}
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
         if not line:
             continue
         parts = line.split()
-        if parts[0] == "HOT_SOURCE" and len(parts) == 3:
-            heat, caller, helper, count_text = "HOT", SOURCE_RULE_PREFIX + parts[1], "*", parts[2]
+        if parts[0] == "ROUTE_FUNCTION" and len(parts) == 2:
+            heat, caller, helper, count_text = "ROUTE_FUNCTION", parts[1], "*", "1"
+        elif parts[0] == "HOT_TOTAL" and len(parts) == 2:
+            heat, caller, helper, count_text = "HOT_TOTAL", "@total", "*", parts[1]
         elif len(parts) == 4 and parts[0] in {"HOT", "COLD"}:
             heat, caller, helper, count_text = parts
         else:
             raise ValueError(
                 f"allowlist line {line_number}: expected HOT|COLD "
-                "<caller> <helper> <exact-count> or HOT_SOURCE <path> <exact-count>"
+                "<caller> <helper> <exact-count>, ROUTE_FUNCTION <caller>, "
+                "or HOT_TOTAL <exact-count>"
             )
         try:
             count = int(count_text, 10)
@@ -151,33 +163,27 @@ def parse_allowlist(text: str) -> dict[tuple[str, str], AllowlistEntry]:
         if key in entries:
             raise ValueError(f"allowlist line {line_number}: duplicate {entry.caller} {entry.helper}")
         entries[key] = entry
+    route_callers = {entry.caller for entry in entries.values() if entry.heat == "ROUTE_FUNCTION"}
+    for entry in entries.values():
+        if entry.heat == "HOT" and entry.caller not in route_callers:
+            raise ValueError(f"HOT caller {entry.caller} is missing ROUTE_FUNCTION evidence")
+    if ("@total", "*") not in entries:
+        raise ValueError("allowlist missing HOT_TOTAL contract")
     return entries
 
 
 def allowlist_failures(
     calls: Iterable[CallSite],
     rules: dict[tuple[str, str], AllowlistEntry],
-    locations: dict[int, str] | None = None,
 ) -> list[str]:
     """Return contract failures for declared route-HOT and COLD rows."""
     call_list = list(calls)
     observed = Counter((call.caller, call.helper) for call in call_list)
-    locations = locations or {}
     failures: list[str] = []
     hot_callers = {entry.caller for entry in rules.values() if entry.heat == "HOT"}
 
     for key, entry in sorted(rules.items()):
-        if entry.caller.startswith(SOURCE_RULE_PREFIX):
-            suffix = entry.caller.removeprefix(SOURCE_RULE_PREFIX)
-            actual = sum(
-                1 for call in call_list
-                if source_matches(locations.get(call.address, "").split(":", 1)[0], suffix)
-            )
-            if actual != entry.expected_count:
-                failures.append(
-                    f"stale allowlist entry: HOT_SOURCE {suffix} "
-                    f"expected {entry.expected_count}, found {actual}"
-                )
+        if entry.heat in {"ROUTE_FUNCTION", "HOT_TOTAL"}:
             continue
         actual = observed.get(key, 0)
         if actual != entry.expected_count:
@@ -191,31 +197,14 @@ def allowlist_failures(
             failures.append(
                 f"unallowlisted helper in HOT function: {caller} {helper} found {count}"
             )
+    expected_total = rules[("@total", "*")].expected_count
+    actual_total = sum(
+        count for key, count in observed.items()
+        if rules.get(key, AllowlistEntry("COLD", "", "", 0)).heat == "HOT"
+    )
+    if actual_total != expected_total:
+        failures.append(f"HOT total expected {expected_total}, found {actual_total}")
     return failures
-
-
-def source_matches(source: str, suffix: str) -> bool:
-    """Match a repo-relative file suffix or an explicitly directory-ended one."""
-    normalized = source.replace("\\", "/")
-    return suffix in normalized if suffix.endswith("/") else normalized.endswith(suffix)
-
-
-def heat_for_call(
-    call: CallSite,
-    rules: dict[tuple[str, str], AllowlistEntry],
-    locations: dict[int, str],
-) -> str:
-    """Classify a call only from the explicit route contract."""
-    entry = rules.get((call.caller, call.helper))
-    if entry is not None:
-        return entry.heat
-    source = locations.get(call.address, "").split(":", 1)[0]
-    for source_entry in rules.values():
-        if source_entry.caller.startswith(SOURCE_RULE_PREFIX):
-            suffix = source_entry.caller.removeprefix(SOURCE_RULE_PREFIX)
-            if source_matches(source, suffix):
-                return "HOT"
-    return "COLD"
 
 
 def address_batches(addresses: Iterable[int], size: int = 128) -> Iterable[tuple[int, ...]]:
@@ -254,19 +243,32 @@ def run_command(command: list[str]) -> str:
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout
 
 
-def print_census(calls: Iterable[CallSite], rules: dict[tuple[str, str], AllowlistEntry], locations: dict[int, str]) -> None:
-    grouped: dict[tuple[str, str], list[CallSite]] = defaultdict(list)
+def census_rows(calls: Iterable[CallSite], rules: dict[tuple[str, str], AllowlistEntry]) -> list[CensusRow]:
+    """Aggregate helper totals per caller, preserving the route-derived heat."""
+    grouped: dict[str, Counter[str]] = defaultdict(Counter)
     for call in calls:
-        grouped[(call.caller, call.helper)].append(call)
+        grouped[call.caller][call.helper] += 1
+    route_callers = {entry.caller for entry in rules.values() if entry.heat == "ROUTE_FUNCTION"}
+    return [
+        CensusRow(
+            "HOT" if caller in route_callers else "COLD",
+            caller,
+            sum(helpers.values()),
+            tuple(sorted(helpers.items())),
+        )
+        for caller, helpers in sorted(grouped.items())
+    ]
 
-    hot_total = 0
-    for (caller, helper), group in sorted(grouped.items()):
-        heat = heat_for_call(group[0], rules, locations)
-        if heat == "HOT":
-            hot_total += len(group)
-        source = locations.get(group[0].address, "??:0")
-        print(f"{heat:4} {len(group):4} {caller} -> {helper} ({source})")
-    print(f"SH-2 native-math census: HOT total {hot_total}; COLD total {sum(map(len, grouped.values())) - hot_total}")
+
+def print_census(calls: Iterable[CallSite], rules: dict[tuple[str, str], AllowlistEntry], locations: dict[int, str]) -> None:
+    call_list = list(calls)
+    location_by_caller = {call.caller: locations.get(call.address, "??:0") for call in call_list}
+    rows = census_rows(call_list, rules)
+    for row in rows:
+        helpers = ", ".join(f"{helper}={count}" for helper, count in row.helpers)
+        print(f"{row.heat:4} {row.count:4} {row.caller} [{helpers}] ({location_by_caller[row.caller]})")
+    hot_total = sum(row.count for row in rows if row.heat == "HOT")
+    print(f"SH-2 native-math census: HOT total {hot_total}; COLD total {sum(row.count for row in rows) - hot_total}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -283,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
         calls = scan_disassembly(disassembly)
         locations = source_locations(args.addr2line, args.elf, calls)
         print_census(calls, rules, locations)
-        failures = allowlist_failures(calls, rules, locations)
+        failures = allowlist_failures(calls, rules)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
         return 2
