@@ -1,7 +1,7 @@
 # Saturn Camera Q-Seam Design
 
 **Date:** 2026-07-29  
-**Status:** Approach approved; written specification awaiting owner review  
+**Status:** Owner approved, including the non-vacuous BOB acceptance-route amendment; implementation-plan review clarifications incorporated
 **Sprint task:** Task 3 of `2026-07-29-sh2-native-math-purge.md`
 
 ## Decision
@@ -11,6 +11,17 @@ Task 3 will convert the common per-tick default/Lakitu camera loop, not all
 persistent Saturn-only Q-format state across source ticks, publish the existing
 float ABI once per tick, and remain selectable against an unchanged float
 baseline build.
+
+The existing `bob-parity-v1` replay remains byte-for-byte unchanged and keeps
+its current regression role. It leaves `Camera.mode` at
+`CAMERA_MODE_RADIAL`, so it cannot by itself prove that the bounded default
+goal seam executed. A separate `bob-default-camera-v1` replay therefore keeps
+the proven 120-tick neutral bootstrap, applies one tick of `R_TRIG`, and then
+holds neutral input through the same 2,000-tick endpoint. The trigger selects
+`mode_mario_camera()` and therefore `mode_default_camera()` even though the
+stored `Camera.mode` remains radial. SCC1 binds this route in raw word 23 and
+requires the default seam's pinned nonzero bridge counts. The original route
+still runs independently as a no-regression gate.
 
 The task will also add an independent raw camera-idle evidence contract. It
 must prove that both goal-camera state and render-facing Lakitu state remain
@@ -34,8 +45,9 @@ accumulated bias this task must prevent.
 The common BOB replay path is a coherent first island:
 
 - `update_camera` dispatches the active mode and always calls `update_lakitu`.
-- `mode_default_camera`, `mode_lakitu_camera`, `update_default_camera`, and
-  `update_mario_camera` produce the normal goal camera.
+- `mode_default_camera`, `mode_lakitu_camera`, `mode_mario_camera`,
+  `update_default_camera`, and `update_mario_camera` produce the normal goal
+  camera.
 - `update_lakitu` and `next_lakitu_state` hold the smoothing feedback state
   consumed by rendering.
 - `calculate_pitch`, `calculate_yaw`, `calculate_angles`, `calc_abs_dist`,
@@ -91,6 +103,17 @@ numeric types and operations needed by the bounded camera island:
 - checked 64/32 division through the existing Saturn DIVU contract where a
   transition genuinely requires division.
 
+If the measured decision selects Q20.12, state-state multiplication uses a
+format-specialized `dmuls.l` high/low reconstruction with a 12-bit shift; it
+must not call the existing Q16-only `xtrct` wrapper unchanged. Mixed state/trig
+multiplication may still use the existing 16-bit trig-table shift. Q20.12
+division reuses the existing attributed Q16 DIVU start/collect schedule and
+performs a proved, signed truncation from the collected Q16 quotient to Q12.
+Before narrowing, the sign-restored Q16 quotient must itself fit signed
+32-bit; afterward the Q12 result must fit its configured envelope. The host
+differential must prove that this equals direct Q12 division for the full
+captured and boundary corpus.
+
 No hot helper may express C 64-bit division or modulo. Multiplication may use
 64-bit intermediates because SH-2 supplies the required 32x32 product. Every
 square sum is widened before accumulation. Float/Q boundary conversion must
@@ -135,13 +158,20 @@ Lakitu fields reachable from the bounded default/Lakitu call graph. Each write
 is classified as Q-owned, an explicit float-API import, a public mirror, or a
 shadow invalidation. The implementation review treats an unclassified writer
 as a correctness failure; no direct float write may bypass that ownership
-table.
+table. Coverage is a generated transitive direct-call closure from all bounded
+roots, including `update_mario_camera`; every indirect/function-pointer edge
+and possible callee is reviewed explicitly. A per-function-only brace scan is
+not sufficient.
 
 Unconverted floor, ceiling, and collision APIs form explicit bridges. The Q
 path exports temporary query vectors through the helper-free bit converter,
 calls the unchanged API, imports its result once, and continues in Q. It does
 not rebuild the whole shadow from public floats after the call. Bridge counts
 are captured so an accidental per-operation conversion loop is detectable.
+The pure default operation is an explicit tagged phase machine: it emits one
+of eight typed requests, `camera.c` calls the matching noinline direct bridge,
+and the Q module resumes only with a same-phase typed result. No indirect
+callback or underspecified pause/resume convention is allowed.
 
 The Q variant may use the float implementation for an explicitly out-of-scope
 mode, but that transition invalidates the shadow and increments the reseed
@@ -155,14 +185,14 @@ The Q variant uses this fixed ownership order:
 
 | Stage | Authoritative state and permitted writes |
 | --- | --- |
-| 0. Eligibility | Check the generic camera mode, transition state, and numeric range before Q arithmetic. An unsupported mode or out-of-range input invalidates the shadow and runs the unchanged float path for that tick. It increments `range_fallback_count`; the accepted route requires zero. No level/area name controls eligibility. |
+| 0. Eligibility | Check the selected dispatch path, transition state, and numeric range before Q arithmetic. `mode_mario_camera()` is eligible even when the stored `Camera.mode` is radial. Before the first successful seed, an out-of-island bootstrap tick remains on the float path without arming acceptance counters. After the first seed, an unsupported dispatch or out-of-range input invalidates the shadow, enters the named cold float-fallback bridge, and increments `range_fallback_count`; the accepted route requires zero. No level/area name controls eligibility. |
 | 1. Seed/import | When invalid, import Camera position/focus/area centers and mode/angle state; all Lakitu current/goal/render vectors, distance/old-angle fields, mode/angle state and speed fields; the four zoom/pan globals; the five yaw/distance/pitch globals; `sOldPosition`, `sOldFocus`; `sModeTransition`; and `sModeInfo` including both transition endpoints. After import, the Q shadow is authoritative. |
 | 2. Goal update | The Q default/Lakitu mode reads Q Mario/camera/Lakitu inputs, area centers, zoom/pan values, and yaw/distance/pitch globals. It writes Q Camera goal position, focus, yaw, nextYaw, and any changed pan/zoom/yaw state. Floor, ceiling, and collision calls export temporary query values and import only their returned corrections at the exact call site. |
 | 3. Transition | The Q `next_lakitu_state` consumes Q `sOldPosition`, `sOldFocus`, `sModeTransition`, and `sModeInfo`; writes the Q transition result; advances the Q transition state/frame; and updates the Q old-position/focus copies in the same order as the float baseline. |
 | 4. Smoothing | The Q `update_lakitu` advances goal/current/render vectors and the four speed coefficients. It owns Q Lakitu focusDistance, oldPitch/oldYaw/oldRoll, yaw, nextYaw, and roll plus `sYawSpeed` for the remainder of the tick. |
 | 5. Post-adjustment | The bounded path applies its floor correction and any active shake through Q operations or one named bridge. A nonzero modifier without a converted or named bridge invalidates the shadow before it can write public state. |
 | 6. Publish | One helper-free bit bridge writes Camera, Lakitu, the pan/zoom and yaw/distance/pitch globals, `sOld*`, `sModeTransition`, and `sModeInfo` mirrors in source order. This is the only normal-tick write to those public float fields. |
-| 7. External writer | A later out-of-island camera writer marks the shadow invalid and increments the generation. The next eligible tick performs a full Stage 1 import; it never partially merges public floats into an otherwise-valid shadow. |
+| 7. External writer | After the first successful seed, a later out-of-island camera writer marks the shadow invalid and increments the generation. Pre-seed initialization/invalidation keeps generation zero. The next eligible tick performs a full Stage 1 import; it never partially merges public floats into an otherwise-valid shadow. |
 
 The pre-implementation writer inventory maps every reachable write to one row
 of this table. Tests fail if a writer is omitted or assigned to two owners.
@@ -176,8 +206,26 @@ Add `SATURN_CAMERA_VARIANT=1|2`:
 
 Task 3 builds fix `SATURN_ATAN2_VARIANT=2`; camera evidence must not reuse the
 Task 2 legacy/Q16 role names. The camera variant is validated by the Makefile,
-embedded in raw target telemetry, and included in the output tag so builds
-cannot overwrite each other.
+embedded in raw target telemetry, exposed as an absolute sibling-ELF marker,
+and included in the output tag so builds cannot overwrite each other.
+
+Add `SATURN_SOURCEBOOT_CAMERA_ROUTE=0|1`:
+
+- `0`: the immutable `bob-parity-v1` route;
+- `1`: the separate `bob-default-camera-v1` acceptance route.
+
+Route 1 is valid only with replay enabled, is included in the output tag, and
+is encoded as raw SCC1 route ID `2`. The route manifest hash, raw route ID,
+camera variant, atan2 variant, `gCameraZoomDist == 350.0f`, nonzero Q shadow
+generation, and pinned nonzero default-seam bridge counts form the compound
+non-vacuity proof.
+
+`SATURN_CAMERA_IDLE_DISCOVERY` and `SATURN_CAMERA_RANGE_CAPTURE` are validated
+0/1 build inputs, C preprocessor defines, and route-1 object/output tags.
+`SATURN_SOURCE_CART_STAGE_SECTORS` is validated as 4, 8, or 16 and is also an
+object/output tag. The default remains 16. Camera evidence artifacts select 8,
+or 4 only if the deterministic HWRAM reserve gate requires it; every selected
+size must re-prove the cart READY/copied-size/`SOURCE.DAT` hash contract.
 
 ## Numeric format decision
 
@@ -186,14 +234,21 @@ Q behavior is enabled, a baseline range capture records the maximum absolute
 value of every state coordinate, delta, distance, approach residual,
 transition numerator/divisor, and square sum used by the bounded island.
 
-The selection rule is deterministic:
+The selection rule is deterministic but has two phases:
 
-1. Prefer Q16.16 only if every captured scalar and delta fits within half of
-   its signed range, every derived 64-bit square/sum is proven in range, and
-   its host differential meets the derived error bounds.
-2. Otherwise use Q20.12, subject to the same half-range, intermediate, and
-   differential checks.
-3. If neither format passes, Task 3 stops; it does not add silent clamps,
+1. Raw range evidence nominates Q16.16 and/or Q20.12 candidates. A candidate
+   must fit every captured scalar/delta within half its signed range and pass
+   all square/sum/division-intermediate proofs. This phase does not write the
+   production config.
+2. The actual production numeric source is compiled for every nominated
+   candidate and differentially tested over literal boundaries, the raw
+   captured corpus, every measured extremum, transition division pairs, and
+   deterministic neighborhoods.
+3. Freeze Q16.16 when it passes. Q20.12 may be frozen only when it passes and
+   Q16 was either not range-qualified or has a reviewed representational-bound
+   failure. A code, mutation, overflow, or unexplained mismatch is a hard stop,
+   not grounds to choose the other format.
+4. If neither format passes, Task 3 stops; it does not add silent clamps,
    deadzones, or a looser behavioral threshold.
 
 This decision proves the guarded Q envelope, not every camera state in every
@@ -236,9 +291,53 @@ earliest source tick at which all of these are true:
   timer, and face angles are unchanged for the next 60 source ticks;
 - all SCC1 camera words are unchanged for the next 60 source ticks.
 
-That baseline offset is committed as `idle_start_tick` in the SCC1 fixture.
-Both baseline and Q builds then use the same fixed offset. The Q build may not
+The host raw-decodes SCC1/SCR1 and prints that discovered tick as the only
+input to a fixed non-discovery rebuild. It then raw-decodes the fixed capture,
+requires its first 60 semantic samples to equal the discovery proof, and only
+after those gates atomically emits the SCC1 idle fixture plus a hash-bound
+verification report. Candidate selection requires both artifacts. No manually
+transcribed tick or pre-existing fixture can become authoritative. Both
+baseline and Q builds then use the same fixed offset. The Q build may not
 choose a later start to hide settling or drift.
+
+The authoritative source tick is sourceboot's existing
+`sourceboot_sim_tick_count`, incremented once immediately after
+`game_loop_one_iteration()`. The recorder receives that value after simulation
+timing/accounting. No second tick is added to the generic replay object;
+`input_replay_ticks` keeps its existing frozen-at-2,000 meaning. The runtime
+snapshot adds only the actual post-replay applied pad. The camera probe keeps
+exactly 77 SCC state words and carries Q source dispatch out of band solely so
+sourceboot can latch SQT1; the dispatch value is never packed as an extra SCC
+word.
+
+### SCR1 range-discovery companion
+
+The discovery build appends one exact `0x2000`-byte raw SCR1 block to the same
+LWRAM capture section. It is present only when route 1 and range capture are
+both enabled. Its fixed 32-word header, 256 three-word maxima records, 256
+four-word corpus records, and zero-reserved tail are specified in
+`docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`, Task 5. SCR1 uses
+magic `0x53435231`, version 1, explicit route/source-tick anchors, coverage and
+fault counts, and magic-last publication. The capture reads SCC1, SBR4, and
+SCR1 from the same paused emulator instance and independently decodes every
+raw window.
+
+### SQT1 first-seed trace
+
+Task 9 adds a separate 16-byte HWRAM record named
+`sourceboot_camera_q_seed_trace`. Sourceboot observes the Q probe after each
+game-loop tick and latches it once when the trace is unpublished, generation
+is nonzero, and the probe reports that the current tick completed a valid
+Q-active Mario seam. The probe reports `MARIO` only for that successful
+Q-active tick and `NONE` for mere selection, bootstrap, invalid, or fallback
+ticks. Pre-seed initialization/invalidation leaves generation zero; only a
+successful seed arms later invalidation-generation accounting. Its four
+big-endian words are magic `0x53515431` published last, packed version
+1/dispatch 3, route ID 2, and the existing sourceboot source tick. The host
+derives the one-based first Mario-dispatch tick from the route manifest's
+unique one-tick R-trigger segment and requires the raw target tick to match.
+Baseline leaves all four words zero. SQT1 adds exactly 16 bytes to HWRAM and
+does not change the fixed SCC1 LWRAM ABI.
 
 ### SCC1 raw layout
 
@@ -265,7 +364,7 @@ header is exactly 24 big-endian `u32` words:
 | 19-20 | bridge export and import counts |
 | 21 | Q shadow generation (`0` for baseline) |
 | 22 | payload word count `48600` |
-| 23 | reserved, required to be zero |
+| 23 | input route ID, required to be `2` (`bob-default-camera-v1`) |
 
 State flags use bit 0 `gCamera != NULL`, bit 1 replay complete, bit 2 neutral
 input, bit 3 no cutscene, bit 4 no active mode transition, and bit 5 Mario
@@ -327,8 +426,19 @@ two's-complement representation. Raw length must equal
 published last. The host reads bounded chunks if the emulator response limit
 cannot return the complete window at once.
 Before SCC1 is accepted, the link map must prove that the complete block fits
-without overlapping source data and leaves the existing sourceboot runtime
-headroom unchanged outside the new replay-only allocation.
+without overlapping source data. Fixed capture ends at `0x002FB2E0` and must
+leave at least `0x4000` LWRAM; discovery adds exactly `0x2000` and must leave
+`0x2D20`.
+
+HWRAM is a separate gate. The reviewed pre-task image had
+`___end=0x060FDCB0`, only `0x2350` below the top and only `0x1350` above the
+mandatory `0x1000` TLSF floor. Before Q implementation, camera evidence builds
+reduce the boot-only cart staging buffer from 16 sectors to 8, or to 4 only
+when the deterministic post-transport reserve requires it, and re-prove cart
+load/hash behavior. The complete transport must leave at least `0x5B00` total
+HWRAM, reserving `0x4000` for later camera code. Every target-code increment
+records its exact map delta, and the final image must leave at least `0x1B00`
+(`0x1000` TLSF plus `0x0B00` safety). Neither floor may be weakened.
 
 ### SCC1 pass conditions
 
@@ -342,7 +452,8 @@ disagreement. A capture passes only if:
 5. within each role, every state word in samples 1-599 exactly equals sample
    0; only source tick advances;
 6. overflow, saturation, divide, unexpected-reseed, and range-fallback counts
-   are zero, and bridge counts match their pinned fixture values;
+   are zero, Q generation is nonzero only for variant 2, and the Q role's
+   default-seam bridge counts match pinned nonzero fixture values;
 7. two runs of the same role have byte-identical SCC1 windows;
 8. baseline and Q roles use distinct ELF and ISO hashes and their raw variant
    fields match their declared roles;
@@ -352,14 +463,20 @@ disagreement. A capture passes only if:
    `max(selected-Q ulp, one f32 ulp at the baseline magnitude)`; and every
    position/focus component is additionally below one world unit of
    divergence.
+10. raw route ID is `2`, every sample has
+    `gCameraZoomDist == 350.0f` (`0x43AF0000`), and the capture report's
+    route-manifest digest matches the immutable `bob-default-camera-v1`
+    manifest.
 
 An equality summary, target-side boolean, or first/last-only comparison is not
 sufficient; the host must compare every selected word at every tick.
 
 ## Existing route and output gates
 
-Every Task 3 role also runs the existing route and renderer contract. The
-2,000-tick A/B comparison continues to require:
+Every Task 3 role runs the new camera acceptance route and also reruns the
+existing immutable route and renderer contract. The original
+`bob-parity-v1` fixture is never edited to fit the new route. Both 2,000-tick
+A/B comparisons continue to require:
 
 - final Mario positional divergence below one world unit;
 - identical timer, action, face angles, camera mode, and required camera
@@ -371,10 +488,22 @@ Every Task 3 role also runs the existing route and renderer contract. The
 Task 3 may add SCC1 fields and a new camera-specific comparator, but may not
 edit old fixtures to make a Q result fit.
 
+The existing `compare_route_reports.py` remains unchanged because it
+intentionally requires legacy/Q16 roles and atan2 variants 1/2. The
+camera-specific SBR4 comparator instead requires camera-baseline/camera-Q
+roles, atan2 variant 2 for both, sibling-ELF camera markers 1/2, independently
+decoded 160-byte SBR4 windows, same-role equality of non-timing
+behavior/output fields, and the same hardened renderer gates. Timing and host
+provenance are recorded separately.
+
 ## Static and performance evidence
 
-The existing simulation native-math audit v2 remains immutable. After the new
-ELF is measured, Task 3 creates a hash-pinned v3 contract that:
+The existing simulation native-math audit v2 remains immutable. The final
+route-1 Q ELF is first linked without invoking the unavailable v3 gate. Task 3
+then generates/reviews/commits a hash-pinned v3 contract, selects it only for
+that role, and runs `make verify`; the ELF hash must remain unchanged before
+any capture. Any later target-affecting change regenerates v3 and invalidates
+all captures. The contract:
 
 - has a lower exact helper total than v2;
 - keeps `_atan2_lookup` and `_atan2s` forbidden;
@@ -383,21 +512,41 @@ ELF is measured, Task 3 creates a hash-pinned v3 contract that:
   `saturn_camera_q_next_lakitu_state`, and the publish bridge;
 - generates and hash-pins the complete transitive caller set reachable from
   those roots, stopping only at the named floor/ceiling/collision bridge
-  functions;
+  functions and the named cold float-fallback bridge;
+- records raw-object and canonical `sh-elf-objdump -dr` SHA-256 values for
+  the `camera`, `math_util`, `saturn_camera_q`, and
+  `saturn_camera_q_math` objects from a generated four-row object manifest;
 - requires zero audited helper edges in every generated closure caller,
   including the `camera.c` wrappers;
 - records each stopped bridge in an exact allowlist with its reason and
-  per-symbol helper count, and permits no increase over the baseline bridge
-  count;
+  per-symbol helper count; an independent code-owned map fixes every stopped
+  wrapper's maximum direct soft-float/libm/64-bit helper count at zero, so a
+  bloated bridge is rejected before generation and cannot become its own
+  baseline;
+- requires the cold fallback bridge to remain linked for rollback safety but
+  proves from raw target counters that it executes zero times after the
+  acceptance route's first successful Q seed;
 - rejects a non-shrinking global total, a missing root/caller, or a caller
   removed only from the audit manifest;
 - includes mutations that restore a helper edge, drop a closure caller, and
-  inflate a bridge count, proving each failure is caught.
+  inflate a bridge count, proving each failure is caught. The verifier owns
+  the exact six-root, nine-stop, and two-forbidden-symbol sets independently
+  of the generated contract, so deleting one directive or inserting a new
+  stop cannot weaken coverage;
+- emits a deterministic JSON report only after the ELF, contract, closure,
+  and all four object records pass. Route-0 Q uses a separate
+  object-reference-only mode that compares both its object manifest and the
+  captured route-1 reference manifest with those same four pinned records;
+  ordinary v3 verification never relaxes the route-1 ELF hash.
 
-For each role, two target runs record `sim_frt_ticks_accum`, render timing,
-wait/busy counters, wall time, and emulator speed ratio. Both independent A/B
-comparisons must show a lower Q-variant simulation accumulator. Wall time is
-reported as comparative emulator evidence only and is not a retail claim.
+For each role, two target runs preserve the same-paused-instance raw SBR4
+window and record `frame_serial`, `sim_frt_ticks_accum`,
+`render_frt_ticks_accum`, `render_frt_ticks_last`, `master_wait_ticks`,
+`slave_busy_ticks`, `slave_jobs_completed`, `slave_timeouts`, host wall time,
+observed VBlank rate, and emulator speed ratio. Baseline run 1 pairs with Q run
+1 and run 2 with run 2; both comparisons must show a lower Q-variant
+simulation accumulator. Wall time is comparative emulator evidence only and
+is not a retail claim.
 
 ## Test strategy
 
@@ -432,11 +581,16 @@ Host tests begin with synthetic raw fixtures and must reject:
 - non-finite bits, bad sample count, non-neutral input, or missing route
   anchor;
 - camera role/raw variant mismatch;
+- Q SQT1 magic/version/dispatch/route/tick disagreement or a nonzero baseline
+  SQT1;
 - same-image baseline/Q comparison;
 - decoded data that disagrees with raw bytes.
 
-The existing Saturn tool suite and target `make verify` profile run unchanged
-for both camera variants.
+The existing comparator/contracts remain unchanged and their tests keep
+running. Camera-specific raw comparators, map gates, and audit-v3 selection
+are additive. Variant 1 uses immutable audit v2; the exact route-1 Q artifact
+uses its hash-pinned v3; route-0 Q proves its Q closure objects match the
+audited route-1 objects before the remaining target verification runs.
 
 ## Error handling and rollback
 
@@ -465,25 +619,33 @@ reuse requires a provenance/notice update before merge.
 
 ## Implementation decomposition
 
-The detailed implementation plan will split Task 3 into reviewable increments:
+The executable 15-task plan is
+`docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`. Its reviewable
+increments are:
 
-1. SCC1 decoder/verifier and role-binding tests, then target probe plumbing.
-2. Baseline post-route trace, fixed quiescence pin, range telemetry, and
-   recorded format decision.
-3. Camera Q numeric kernel with host differential and mutation gates.
-4. Guarded persistent shadow plus the default/Lakitu converted island.
-5. Static audit v3, two-run-per-role target captures, A/B comparison, and
-   evidence report.
+1. route/build-role configuration, pure SCC1/SBR4 host contracts, target
+   transport, and HWRAM/LWRAM reclamation gates;
+2. generated writer closure plus exact SCR1 range/quiescence capture;
+3. candidate arithmetic, full production differential, and only then the
+   frozen Q config;
+4. audit-v3 tooling, persistent shadow, Lakitu slice, pure default core,
+   typed eight-bridge phase machine, and one-publish integration;
+5. v3 pinning before capture, two runs per role, original-route regression,
+   performance pairs, final evidence, and independent review.
 
 Each increment receives its own implementation report and independent review.
-No behavior-changing increment begins until the additive SCC1 gate and format
-decision are committed.
+No behavior-changing camera increment begins until the additive raw transport,
+writer closure, and provisional range candidates are committed. Production
+variant 2 remains unbuildable until the differential freezes the final config.
 
 ## Acceptance checklist
 
 Task 3 is complete only when all of the following are true:
 
 - The bounded default/Lakitu Q island is active only for camera variant 2.
+- `bob-parity-v1` remains immutable; raw route ID 2 and the compound
+  Mario/default-dispatch witness bind all SCC1 acceptance evidence to
+  `bob-default-camera-v1`.
 - Public camera/Lakitu layouts and non-Saturn behavior are unchanged.
 - Numeric differential and mutation tests pass on captured and boundary data.
 - The selected Q format has recorded ranges, headroom, and error derivation.
@@ -494,6 +656,9 @@ Task 3 is complete only when all of the following are true:
 - Native-math audit v3 is lower than v2 and enforces the complete generated
   Q-island caller closure plus its exact bridge boundary.
 - Both independent A/B comparisons reduce `sim_frt_ticks_accum`.
+- The fixed SCC leaves at least `0x4000` LWRAM; the selected cart staging size
+  passes READY/copied-size/hash evidence; final HWRAM leaves at least
+  `0x1B00`.
 - Saturation, overflow, divide, unexpected-reseed, and range-fallback counters
   are zero.
 - Evidence records source pins, licenses, inspected files, and reuse modes.

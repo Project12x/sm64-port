@@ -58,11 +58,20 @@ Primary evidence: `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab
 
 ## Required next action
 
-Obtain owner review of
-`docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md` (commit
-`fcc901c`). After written-spec approval, create a detailed implementation plan
-before dispatching Task 3. The approved design bounds the first conversion to
-the default/Lakitu Q island and adds the independent SCC1 600-tick idle gate.
+The owner approved
+`docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`, including
+the separate non-vacuous default-camera route. The reviewed executable plan is
+`docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`.
+
+Choose the execution workflow, then begin that plan at Task 1:
+
+1. **Subagent-Driven Development (recommended):** one fresh implementation
+   subagent per task, followed by spec-compliance and code-quality reviews.
+2. **Inline Execution:** execute the same tasks serially in this task with
+   the plan's mandatory review gates.
+
+No Task 3 production code has started. Do not skip the additive raw transport,
+HWRAM reclamation, writer-closure, or post-differential format-freeze gates.
 
 ## Environment facts
 

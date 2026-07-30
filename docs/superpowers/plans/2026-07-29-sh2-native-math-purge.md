@@ -62,9 +62,28 @@ frame within stated bbox tolerance, census HOT count for `src/port/` = **0**.
   positional-divergence gate (< 1.0 world unit).
 
 ## Task 3: Camera (`camera.c`, 382 refs — the sim's biggest single pocket)
-Convert the per-tick camera math to Q-format behind the seam. The sm64-psx
-artifact to test against explicitly: neutral-stick drift (their deadzone
-paper-over). Our gate: bit-stable idle camera over 600 ticks.
+
+**Status:** owner-approved design and implementation plan complete;
+implementation has not started.
+
+- Normative design:
+  `docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`
+- Executable 15-task plan:
+  `docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`
+- Scope: selectable persistent Q default/Mario/Lakitu island, typed
+  environmental bridges, unchanged public float ABI and variant-1 rollback.
+- Non-vacuity: immutable `bob-parity-v1` remains the radial regression route;
+  separate `bob-default-camera-v1` applies one R-trigger tick and binds raw
+  SCC1 route ID 2, Mario dispatch, zoom 350, Q generation, and bridge counts.
+- Gates: exact SCR1 range evidence before candidate selection; production
+  differential before format freeze; 600 neutral bit-stable SCC1 ticks twice
+  per role; hash-pinned audit v3; two independent lower
+  `sim_frt_ticks_accum` pairs; original-route regression; exact LWRAM/HWRAM
+  budgets.
+
+The sm64-psx artifact to test against explicitly remains neutral-stick drift
+(their deadzone paper-over); this plan permits no new deadzone or silent
+clamp.
 
 ## Task 4: Behaviors by heat (`behaviors/*`, 1,218 refs across 130 files)
 Census-ranked, top files first (`obj_behaviors`, `mario_actions_moving`...);
