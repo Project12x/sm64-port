@@ -885,6 +885,48 @@ def _invalidate_stack_range(
     _replace_stack_slots(state, slots)
 
 
+def _invalidate_escaped_argument_slots(state: dict[str, AbstractValue]) -> None:
+    """Forget slots whose exact frame address is passed in SH argument GPRs."""
+    escaped_offsets = {
+        value.offset
+        for register in ("r4", "r5", "r6", "r7")
+        if isinstance((value := state[register]), StackPtr)
+    }
+    if escaped_offsets:
+        _replace_stack_slots(
+            state,
+            {
+                offset: slot
+                for offset, slot in _stack_slots(state).items()
+                if offset not in escaped_offsets
+            },
+        )
+
+
+def _exact_integer(value: AbstractValue) -> int | None:
+    if isinstance(value, ConstSet) and value.kind in {"signed", "unsigned"} \
+            and len(value.values) == 1:
+        item = next(iter(value.values))
+        return int(item) if isinstance(item, int) else None
+    return None
+
+
+def _indexed_stack_offset(
+    left: AbstractValue, right: AbstractValue
+) -> int | None:
+    for pointer, index in ((left, right), (right, left)):
+        integer = _exact_integer(index)
+        if isinstance(pointer, StackPtr) and integer is not None:
+            offset = pointer.offset + integer
+            return offset if abs(offset) <= 4096 else None
+    return None
+
+
+def _instruction_writes_memory(instruction: Instruction) -> bool:
+    return instruction.mnemonic in {"mov.l", "mov.w", "mov.b", "sts.l"} \
+        and ",@" in instruction.operands
+
+
 def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                   effects: list[UnresolvedEffect], owner: FunctionOwner,
                   memory: dict[int, int] | None = None,
@@ -979,6 +1021,47 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             )
         else:
             state[stack_load.group(2)] = UNKNOWN
+        return
+
+    predecrement_store = re.fullmatch(
+        r"(r(?:1[0-5]|\d)|pr|mach|macl),\s*@-(r(?:1[0-5]|\d))", text
+    )
+    if _instruction_writes_memory(instruction) and predecrement_store:
+        source_register, base_register = predecrement_store.groups()
+        width = {"mov.b": 1, "mov.w": 2, "mov.l": 4, "sts.l": 4}[mnemonic]
+        base = state[base_register]
+        if isinstance(base, StackPtr):
+            offset = base.offset - width
+            state[base_register] = StackPtr(offset)
+            state[f"{base_register}_stack_origin"] = StackOrigin()
+            _invalidate_stack_range(state, offset, width)
+            if mnemonic == "mov.l" and offset % 4 == 0:
+                _stack_store(state, offset, state[source_register], instruction.address)
+        else:
+            state[base_register] = UNKNOWN
+            state[f"{base_register}_stack_origin"] = StackOrigin()
+            _invalidate_stack(state)
+        return
+
+    indexed_stack_store = re.fullmatch(
+        r"(r(?:1[0-5]|\d)),\s*@\((r(?:1[0-5]|\d)),(r(?:1[0-5]|\d))\)",
+        text,
+    )
+    if mnemonic in {"mov.l", "mov.w", "mov.b"} and indexed_stack_store:
+        offset = _indexed_stack_offset(
+            state[indexed_stack_store.group(2)],
+            state[indexed_stack_store.group(3)],
+        )
+        if offset is None:
+            _invalidate_stack(state)
+        else:
+            width = {"mov.b": 1, "mov.w": 2, "mov.l": 4}[mnemonic]
+            _invalidate_stack_range(state, offset, width)
+            if mnemonic == "mov.l" and offset % 4 == 0:
+                _stack_store(
+                    state, offset, state[indexed_stack_store.group(1)],
+                    instruction.address,
+                )
         return
 
     aliased_stack_store = re.fullmatch(
@@ -1301,6 +1384,16 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         return
     if single_destination and mnemonic not in {"cmp/pl", "cmp/pz"}:
         state[single_destination.group(1)] = UNKNOWN
+        known_single_register_effects = {
+            "dt", "movt", "rotcl", "rotcr", "rotl", "rotr", "shal", "shar",
+            "shll", "shll2", "shll8", "shll16", "shlr", "shlr2", "shlr8",
+            "shlr16",
+        }
+        if mnemonic not in known_single_register_effects:
+            effects.append(UnresolvedEffect(
+                owner.name, instruction.address, mnemonic, text,
+                "unparseable register effect",
+            ))
         return
     if mnemonic in {"mov.l", "mov.w", "mov.b", "sts.l"} and ",@" in text:
         base_match = re.search(r"@(?!-)(?:\(\d+,(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d)))", text)
@@ -1309,6 +1402,12 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             base = state.get(base_register, UNKNOWN)
             if base is UNKNOWN:
                 _invalidate_stack(state)
+            return
+        _invalidate_stack(state)
+        effects.append(UnresolvedEffect(
+            owner.name, instruction.address, mnemonic, text,
+            "unparseable memory effect",
+        ))
         return
     if mnemonic == "lds.l" and text.endswith(",pr"):
         return
@@ -1317,8 +1416,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         "cmp/pl", "cmp/pz",
         "bt", "bf", "bt.s", "bf.s", "bra", "bsr", "bsrf", "braf",
         "jsr", "jmp", "rts", "rte", ".word",
+        "clrt", "sett", "clrmac", "div0u",
     }
-    if mnemonic not in known_no_write and re.search(r"\br(?:1[0-5]|\d)\b", text):
+    if mnemonic not in known_no_write:
         effects.append(UnresolvedEffect(owner.name, instruction.address, mnemonic, text,
                                         "unparseable register effect"))
 
@@ -1365,6 +1465,8 @@ def _straight_line_leaf_gpr_clobbers(
     def apply(
         instruction: Instruction, state: dict[str, AbstractValue]
     ) -> dict[str, AbstractValue] | None:
+        if _instruction_writes_memory(instruction):
+            return None
         result = dict(state)
         before = {f"r{index}": result[f"r{index}"] for index in range(8)}
         effects: list[UnresolvedEffect] = []
@@ -1809,20 +1911,25 @@ def _analyze_code_only_pass(
                         provenance, provenance_truncated, address,
                     ))
 
-            def after_slot(base_state: dict[str, AbstractValue]) -> dict[str, AbstractValue]:
+            def after_slot(
+                base_state: dict[str, AbstractValue]
+            ) -> dict[str, AbstractValue] | None:
                 slot_address = address + 2
+                if slot_address not in instructions \
+                        or not region_start <= slot_address < region_end:
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    return None
                 result = dict(base_state)
-                if slot_address in instructions and region_start <= slot_address < region_end:
-                    code_addresses.add(slot_address)
-                    if node_sink is not None:
-                        node_sink.add((owner.name, slot_address))
-                    slot_effects: list[UnresolvedEffect] = []
-                    _write_effect(
-                        instructions[slot_address], result, slot_effects, owner, memory,
-                        profile,
-                    )
-                    for effect in slot_effects:
-                        effect_emissions[key].append(effect)
+                code_addresses.add(slot_address)
+                if node_sink is not None:
+                    node_sink.add((owner.name, slot_address))
+                slot_effects: list[UnresolvedEffect] = []
+                _write_effect(
+                    instructions[slot_address], result, slot_effects, owner, memory,
+                    profile,
+                )
+                for effect in slot_effects:
+                    effect_emissions[key].append(effect)
                 return result
 
             direct_target = _target_from_text(ins.operands)
@@ -1931,6 +2038,8 @@ def _analyze_code_only_pass(
                             ))
 
                 callee_entry = after_slot(state)
+                if callee_entry is None:
+                    continue
                 if not invalid_target:
                     for canonical in sorted(resolved_targets):
                         target = resolved_targets[canonical]
@@ -1938,6 +2047,7 @@ def _analyze_code_only_pass(
                             schedule_island(target[1], target[2], callee_entry)
                 post = dict(callee_entry)
                 gpr_clobbers = {f"r{x}" for x in range(8)}
+                memory_write_free_leaf = False
                 if not invalid_target and resolved_targets and all(
                     target[0] == "callee" for target in resolved_targets.values()
                 ):
@@ -1959,6 +2069,9 @@ def _analyze_code_only_pass(
                         proven_clobbers.update(summary)
                     if all_proven:
                         gpr_clobbers = proven_clobbers
+                        memory_write_free_leaf = True
+                if not memory_write_free_leaf:
+                    _invalidate_escaped_argument_slots(post)
                 for abi_register in [
                     *sorted(gpr_clobbers), "mach", "macl", "t_predicate"
                 ]:
@@ -1980,13 +2093,15 @@ def _analyze_code_only_pass(
                     if mnemonic == "jmp" and len(symbol_atoms) == 1 and (
                         symbol_atoms[0].name.endswith("*") or "[]" in symbol_atoms[0].name
                     ):
+                        post = after_slot(state)
+                        if post is None:
+                            continue
                         synthetic = f"<indirect:{symbol_atoms[0].name}>"
                         call_emissions[key].append(CallSite(owner.name, address, synthetic))
                         fact_emissions[key].append(DirectCallFact(
                             owner.name, caller_offset, synthetic, 0, 1,
                             caller_region, caller_island
                         ))
-                        after_slot(state)
                         continue
                     targets = [x.address for x in symbol_atoms]
                 elif isinstance(value, Interval) and value.hi - value.lo + 1 <= 256:
@@ -2003,6 +2118,8 @@ def _analyze_code_only_pass(
                     ))
                 else:
                     post = after_slot(state)
+                    if post is None:
+                        continue
                     for target in validated_targets:
                         callee = owner_by_address.get(target)
                         if callee and callee.name == owner.name:
@@ -2022,6 +2139,8 @@ def _analyze_code_only_pass(
                 continue
             if mnemonic == "bra":
                 post = after_slot(state)
+                if post is None:
+                    continue
                 if direct_target is None:
                     unresolved_emissions[key].append(unresolved_transfer())
                 else:
@@ -2041,10 +2160,26 @@ def _analyze_code_only_pass(
                             caller_island,
                         ))
                         schedule_island(target_island, direct_target, post)
+                    elif direct_owner is None:
+                        unresolved_emissions[key].append(unresolved_transfer())
+                    elif direct_owner.name != owner.name:
+                        call_emissions[key].append(
+                            CallSite(owner.name, address, direct_owner.name)
+                        )
+                        fact_emissions[key].append(DirectCallFact(
+                            owner.name, caller_offset, direct_owner.name,
+                            direct_target - direct_owner.start, 1,
+                            caller_region, caller_island,
+                        ))
                     else:
                         schedule(direct_target, post)
                 continue
             if mnemonic in {"bt", "bf"}:
+                if direct_target is None \
+                        or not region_start <= direct_target < region_end \
+                        or direct_target not in instructions:
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    continue
                 true_state, false_state = _predicate_refined_states(
                     state["t_predicate"], state
                 )
@@ -2056,12 +2191,17 @@ def _analyze_code_only_pass(
                     (true_state, false_state) if mnemonic == "bt"
                     else (false_state, true_state)
                 )
-                if direct_target is not None and taken is not None:
+                if taken is not None:
                     schedule(direct_target, taken)
                 if fallthrough is not None:
                     schedule(address + 2, fallthrough)
                 continue
             if mnemonic in {"bt.s", "bf.s"}:
+                if direct_target is None \
+                        or not region_start <= direct_target < region_end \
+                        or direct_target not in instructions:
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    continue
                 true_state, false_state = _predicate_refined_states(
                     state["t_predicate"], state
                 )
@@ -2073,10 +2213,14 @@ def _analyze_code_only_pass(
                     (true_state, false_state) if mnemonic == "bt.s"
                     else (false_state, true_state)
                 )
-                if direct_target is not None and taken is not None:
-                    schedule(direct_target, after_slot(taken))
+                if taken is not None:
+                    post = after_slot(taken)
+                    if post is not None:
+                        schedule(direct_target, post)
                 if fallthrough is not None:
-                    schedule(address + 4, after_slot(fallthrough))
+                    post = after_slot(fallthrough)
+                    if post is not None:
+                        schedule(address + 4, post)
                 continue
             next_state = dict(state)
             new_effects: list[UnresolvedEffect] = []

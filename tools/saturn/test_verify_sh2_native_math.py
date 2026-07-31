@@ -509,7 +509,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001018: 00 09 nop
  600101a: 41 0b jsr @r1
  600101c: 00 09 nop
- 600101e: 00 0b rts
+ 600101e: 00 09 nop
 06001020 <_child>:
  6001020: 00 0b rts
  6001022: 00 09 nop
@@ -830,6 +830,101 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertFalse(any(call.address == 0x600100C for call in result.calls))
         self.assertTrue(any(item.address == 0x600100C for item in result.unresolved_transfers))
 
+    def test_predecrement_stack_alias_overwrite_invalidates_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 1f 81 mov.l r8,@(4,r15)
+ 6001006: ee 08 mov #8,r14
+ 6001008: 3e fc add r15,r14
+ 600100a: 2e 26 mov.l r2,@-r14
+ 600100c: 61 f1 mov.l @(4,r15),r1
+ 600100e: 41 0b jsr @r1
+ 6001010: 00 09 nop
+ 6001012: 7f 08 add #8,r15
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x600100E for call in result.calls))
+        self.assertTrue(any(item.address == 0x600100E for item in result.unresolved_transfers))
+
+    def test_indexed_stack_alias_overwrite_invalidates_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 1f 81 mov.l r8,@(4,r15)
+ 6001006: 6e f3 mov r15,r14
+ 6001008: e0 04 mov #4,r0
+ 600100a: 0e 24 mov.l r2,@(r0,r14)
+ 600100c: 61 f1 mov.l @(4,r15),r1
+ 600100e: 41 0b jsr @r1
+ 6001010: 00 09 nop
+ 6001012: 7f 08 add #8,r15
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x600100E for call in result.calls))
+        self.assertTrue(any(item.address == 0x600100E for item in result.unresolved_transfers))
+
+    def test_unknown_indexed_store_invalidates_known_stack_slots(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: 01 24 mov.l r2,@(r0,r1)
+ 6001008: 61 f2 mov.l @r15,r1
+ 600100a: 41 0b jsr @r1
+ 600100c: 00 09 nop
+ 600100e: 7f 04 add #4,r15
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x600100A for call in result.calls))
+        self.assertTrue(any(item.address == 0x600100A for item in result.unresolved_transfers))
+
+    def test_nonleaf_call_invalidates_stack_slot_whose_address_escaped(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: 64 f3 mov r15,r4
+ 6001008: d2 09 mov.l 6001030 <_zero_alias>,r2 ! 06001030 <_zero_alias>
+ 600100a: 42 0b jsr @r2
+ 600100c: 00 09 nop
+ 600100e: 61 f2 mov.l @r15,r1
+ 6001010: 41 0b jsr @r1
+ 6001012: 00 09 nop
+ 6001014: 7f 04 add #4,r15
+ 6001016: 00 0b rts
+ 6001018: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 24 02 mov.l r0,@r4
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x6001010 for call in result.calls))
+        self.assertTrue(any(item.address == 0x6001010 for item in result.unresolved_transfers))
+
     def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
         dis = """
 06001000 <_root>:
@@ -922,6 +1017,126 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001004: 00 09 nop
 """
         self.assertTrue(self.analyze(dis).unresolved_effects)
+
+    def test_unknown_single_register_instruction_blocks_leaf_proof(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d3 07 mov.l 6001020 <_child>,r3 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 43 0b jsr @r3
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 12 34 mystery r2
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            effect.address == 0x6001030 and effect.mnemonic == "mystery"
+            for effect in result.unresolved_effects
+        ))
+        self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
+
+    def test_unknown_register_free_instruction_blocks_leaf_proof(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d3 07 mov.l 6001020 <_child>,r3 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 43 0b jsr @r3
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 12 34 mystery
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            effect.address == 0x6001030 and effect.mnemonic == "mystery"
+            for effect in result.unresolved_effects
+        ))
+        self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
+
+    def test_cross_owner_direct_bra_emits_tail_call_fact(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0e bra 6001020 <_child>
+ 6001002: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001000, "_child"), result.calls)
+        self.assertTrue(any(
+            fact.caller == "_root" and fact.callee == "_child"
+            for fact in result.direct_calls
+        ))
+
+    def test_unowned_direct_bra_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0e bra 6002000 <_external>
+ 6001002: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x6001000 and item.mnemonic == "bra"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_missing_delay_slot_fails_closed_without_scheduling_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001008: 48 0b jsr @r8
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x6001002 and item.mnemonic == "bra"
+            for item in result.unresolved_transfers
+        ))
+        self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
+
+    def test_unparseable_conditional_target_fails_closed_without_fallthrough(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001002: 89 02 bt <malformed>
+ 6001004: 48 0b jsr @r8
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x6001002 and item.mnemonic == "bt"
+            for item in result.unresolved_transfers
+        ))
+        self.assertFalse(any(call.address == 0x6001004 for call in result.calls))
 
     def test_unknown_simple_destination_effect_kills_and_fails_closed(self) -> None:
         dis = """
@@ -1612,6 +1827,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001018: 00 0b rts
  600101a: 00 0b rts
  600101c: 00 0b rts
+ 600101e: 00 09 nop
  6001030: 04 06 .word 0x0406
  6001032: 08 0a .word 0x080a
 """
