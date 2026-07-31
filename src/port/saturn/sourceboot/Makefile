@@ -32,8 +32,8 @@ SATURN_CAMERA_IDLE_START_TICK ?= 0
 SATURN_CAMERA_IDLE_DISCOVERY ?= 0
 SATURN_CAMERA_RANGE_CAPTURE ?= 0
 SATURN_SOURCE_CART_STAGE_SECTORS ?= 16
-ifneq ($(words $(filter $(SATURN_CAMERA_VARIANT),1 2)),1)
-  $(error SATURN_CAMERA_VARIANT must be 1 (float) or 2 (Q))
+ifneq ($(words $(filter $(SATURN_CAMERA_VARIANT),1 2 3)),1)
+  $(error SATURN_CAMERA_VARIANT must be 1 (float), 2 (bypass), or 3 (fixed))
 endif
 ifneq ($(words $(filter $(SATURN_SOURCEBOOT_CAMERA_ROUTE),0 1)),1)
   $(error SATURN_SOURCEBOOT_CAMERA_ROUTE must be 0 (bob-parity-v1) or 1 (bob-default-camera-v1))
@@ -141,6 +141,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/runtime/saturn_camera_role.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_camera_fixed.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
   $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \

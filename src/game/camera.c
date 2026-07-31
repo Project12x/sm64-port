@@ -30,6 +30,7 @@
 #include "level_table.h"
 #if defined(TARGET_SATURN)
 #include "port/saturn/runtime/saturn_camera_probe.h"
+#include "port/saturn/runtime/saturn_camera_fixed.h"
 #include "port/saturn/runtime/saturn_camera_role.h"
 #endif
 
