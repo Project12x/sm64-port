@@ -141,7 +141,7 @@ evidence.
 | `src/port/saturn/runtime/saturn_camera_q.h/.c` | Persistent shadow types plus pure state-machine operations. | Seed, default goal, transition, Lakitu smoothing, invalidation, diagnostics, and mirror values; external effects arrive only through named direct bridge functions. |
 | `tools/saturn/camera_q_diff_fixture.c` and `test_camera_q.py` | Host differential and mutation corpus. | In-tree float formulas are the reference; literal boundaries and captured operands are both mandatory. |
 | `tools/saturn/camera_q_object_contract.py` | Shared canonical SH-object disassembly and selected-candidate equivalence check. | Strip only the objdump input banner, normalize CRLF to LF, compare code/relocations exactly, and provide the canonicalizer later imported by audit v3. |
-| `tools/saturn/verify_sh2_native_math.py` | Parse linked SH code and enforce audit-contract v2 and v3. | Task 3 replaces linear pool decoding with delay-slot-aware executable-code/dataflow analysis, emits observation JSON, and re-pins corrected v2 once; Task 8 freezes that parser while adding v3. |
+| `tools/saturn/verify_sh2_native_math.py` | Parse linked SH code and enforce audit-contract v2 and v3. | Task 3 replaces linear pool decoding with terminating delay-slot-aware executable-code/dataflow analysis, emits observation JSON, and re-pins corrected v2 once; Task 8 may change verifier bytes for v3 but must preserve the historically pinned v2 facts. |
 | `tools/saturn/compare_sh2_native_math_audit_reports.py` | Compare legacy and corrected route-0/route-1 audit observations. | Require corrected closure/direct-call/helper facts and total to be layout-invariant; report old/new totals plus sorted added/removed facts and finalize the reviewed v2 re-pin. |
 | `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt` | Pin the corrected source-simulation audit total. | Rewrite `EXPECTED_TOTAL` exactly once after the Task 3 equality report and independent review, then freeze its new SHA-256 in the verifier. |
 | `tools/saturn/sh2_native_math_sim_audit_contract_v3.txt` | Pin final measured Task 3 audit facts. | Generated from the final Q ELF only after its closure is reviewed; exact total must be lower than v2. |
@@ -790,6 +790,13 @@ only to latch SQT1; it is not an additional SCC1 word.
   - a recognized but otherwise unmodeled register-writing instruction kills
     its destination;
   - an unparseable register effect produces `unresolved_effect` and fails;
+  - a loop-carried signed and unsigned interval widens each expanding bound
+    once and reaches a fixed point;
+  - signed and unsigned branch predicates refine compatible sets/intervals,
+    discard empty paths, and never reinterpret signedness;
+  - an interval containing more than 256 possible computed targets is
+    rejected as unresolved, while a bounded 256-or-fewer-entry jump table is
+    enumerated only when every target is aligned owned executable code;
   - an unresolved `jmp`, `braf`, or `bsrf` in an audited function is reported
     and rejected rather than followed linearly;
   - readelf fixtures cover a nonzero function, a zero-size function ending at
@@ -845,12 +852,31 @@ only to latch SQT1; it is not an additional SCC1 word.
   non-entry seed starts with all general registers, `pr`, `mach`, `macl`, and
   fixed `r15` spill slots `UNKNOWN`.
 
-  The per-location lattice is `UNKNOWN`, one known symbol/address, or a
-  bounded finite integer/address set. Equal known values survive a merge;
-  known-versus-`UNKNOWN` and unequal known values merge to `UNKNOWN`; finite
-  sets union only within the code-owned maximum of 256. Deduplicate work by
-  `(instruction address, full abstract state)` and iterate until no successor
-  state changes.
+  The finite abstract domain for each register and fixed spill slot is:
+
+  - `UNREACHED` bottom;
+  - `UNKNOWN` top;
+  - `ConstSet` containing integer constants with a signed/unsigned
+    interpretation tag, or containing symbol-address atoms; or
+  - typed 32-bit `Interval(signed|unsigned, lo, hi)`.
+
+  Symbol atoms are never coerced into numeric intervals. At a join, identical
+  atoms survive and `ConstSet` values union exactly through 256 members. An
+  oversized all-integer set becomes its same-signedness hull interval.
+  An oversized symbol set, mixed symbol/integer set, or incompatible
+  signedness becomes `UNKNOWN`. Interval joins use the compatible typed hull;
+  an interval plus a compatible integer set also uses the hull; every other
+  combination becomes `UNKNOWN`.
+
+  Branch refinement intersects a `ConstSet` or interval with the proved
+  signed/unsigned predicate; an empty intersection discards that path. There
+  is no narrowing phase. At a CFG backedge, the first expanding state joins
+  normally. On its next expansion, widening sends an expanding lower or
+  upper bound to the corresponding 32-bit type minimum or maximum. Each bound
+  widens at most once. Apply join/widening per instruction address until no
+  abstract state changes; never schedule `UNREACHED`. The finite CFG,
+  256-member exact-set cap, finite interval endpoints, and one-time widening
+  of each bound guarantee termination.
 
   Modeled PC-relative symbol loads, register moves, and fixed `r15`
   spill/reloads propagate source facts. Every other recognized
@@ -861,22 +887,26 @@ only to latch SQT1; it is not an additional SCC1 word.
   caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before their return
   successor; unwritten `r8-r15` survive.
 
-  Track symbol-address sets, finite integer sets, and signed/unsigned
-  intervals.
-  Model the audited switch idioms' `mov #imm`, `and #imm`, `add`,
+  Model only affine constant operations over compatible integer sets and
+  typed intervals. Unsupported arithmetic kills its destination to
+  `UNKNOWN`; a transfer that needs that value fails unresolved. Model the
+  audited switch idioms' `mov #imm`, `and #imm`, `add`,
   shifts/extensions, `mova`, PC-relative `mov.w`/`mov.l`, indexed byte/word
   loads, and the signed/unsigned refinements for `cmp/eq`, `cmp/hs`,
   `cmp/hi`, `cmp/ge`, `cmp/gt`, and `tst`: the `___ashrsi3` mask produces
   `0..31` and the `_render_dialog_entries` `cmp/hi` fallthrough produces
-  `0..3`, so each indexed table load has a finite target set. Exceeding the
-  finite-set maximum is an unresolved-transfer failure, never a linear
-  fallback. Model ordinary, conditional, unconditional, call, return,
-  delayed, and computed successors named by the tests above. Resolve a
-  delayed transfer target from the pre-slot state, execute exactly one slot,
-  and propagate the post-slot state to its target/fallthrough. Map a reached
-  direct target address to the containing function and retain its nonzero
-  offset; never require exact symbol-entry targets and never strip an offset
-  before source-code reachability is known.
+  `0..3`, so each indexed table load has a finite target set. Enumerate a
+  computed jump only when its post-refinement `ConstSet` or interval contains
+  at most 256 two-byte-aligned targets and every target belongs to owned
+  executable code. An oversized, misaligned, non-enumerable, or non-owned set
+  is an unresolved-transfer failure, never a linear fallback. Model ordinary,
+  conditional, unconditional, call, return, delayed, and computed successors
+  named by the tests above. Resolve a delayed transfer target from the
+  pre-slot state, execute exactly one slot, and propagate the post-slot state
+  to its target/fallthrough. Map a reached direct target address to the
+  containing function and retain its nonzero offset; never require exact
+  symbol-entry targets and never strip an offset before source-code
+  reachability is known.
 
   Add `--readelf PATH`; it is mandatory for ordinary linked-ELF verification,
   observation, and v3 generation because those modes build a linked call
@@ -896,6 +926,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   committed repository-relative path named by the final report and rejects
   any absolute or repository-escaping path, hash, parser-commit,
   reviewed-range, reviewed-file inventory, contract, or fact mismatch.
+  Temp-repository fixtures additionally prove that changed post-v3 current
+  verifier bytes with preserved v2 facts pass, while a historical
+  `git show` hash mismatch, non-ancestor `repin_source_commit`, dirty or
+  substituted evidence, and current v2 fact drift each fail.
   Run both focused suites in the clean authoring worktree, then commit exactly
   the four parser-owned files:
 
@@ -1071,14 +1105,58 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   With `apply_patch`, replace the single
   `SIM_AUDIT_CONTRACT_V2_SHA256` value with that exact printed digest. Do not
-  edit either value again. `finalize` rejects a missing/unclean review,
-  proposal hash drift, a new contract total unequal to the corrected total,
-  unchanged old/new contract digests, a verifier pin unequal to the new file
-  digest, or any changed observation. It writes this durable schema:
+  edit either value again. Run the focused suites and both ordinary v2 audits
+  before committing:
+
+  ```powershell
+  Push-Location $evidenceWorktree
+  & $saturnPython tools/saturn/test_verify_sh2_native_math.py
+  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
+  Pop-Location
+  ```
+
+  Commit the historical re-pin source before generating its final report. The
+  tree at this commit already contains the corrected parser, comparator,
+  their tests, all reviewed observations, proposal/review, deliberately
+  re-pinned v2 contract, and the verifier bytes carrying that contract pin.
+  No Task 3 transport or Makefile path is staged:
+
+  ```powershell
+  Push-Location $evidenceWorktree
+  git -c "safe.directory=$evidenceWorktree" add -- tools/saturn/verify_sh2_native_math.py tools/saturn/sh2_native_math_sim_audit_contract_v2.txt docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json
+  git -c "safe.directory=$evidenceWorktree" commit -m "test: repin corrected SH native math source"
+  $repinSourceCommit = (git -c "safe.directory=$evidenceWorktree" rev-parse HEAD).Trim()
+  $expectedRepinSourceFiles = @(
+    "docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json",
+    "tools/saturn/sh2_native_math_sim_audit_contract_v2.txt",
+    "tools/saturn/verify_sh2_native_math.py"
+  )
+  $actualRepinSourceFiles = @(git -c "safe.directory=$evidenceWorktree" diff --name-only $parserCommit $repinSourceCommit | Sort-Object)
+  if (Compare-Object ($expectedRepinSourceFiles | Sort-Object) $actualRepinSourceFiles) { throw "re-pin source commit owns unexpected files" }
+  if (git -c "safe.directory=$evidenceWorktree" status --porcelain --untracked-files=no) { throw "tracked evidence worktree is dirty at re-pin source commit" }
+  Pop-Location
+  ```
+
+  A commit cannot embed its own SHA, so only now run `finalize` with the exact
+  `repin_source_commit`. It rejects a missing/unclean review, proposal hash
+  drift, a new contract total unequal to the corrected total, unchanged
+  old/new contract digests, a verifier pin unequal to the new file digest,
+  any changed observation, or a source commit that is not the current HEAD.
+  It reads and hashes historical bytes with
+  `git show <repin_source_commit>:<path>` rather than trusting working-tree
+  substitutes. It writes this durable schema:
 
   ```text
   schema_version: 1
   status: "reviewed-repin-final"
+  repin_source_commit
   legacy: {route0_total, route1_total}
   corrected: {helper_total, closure_count, direct_call_facts_sha256,
               helper_call_facts_sha256}
@@ -1089,44 +1167,83 @@ only to latch SQT1; it is not an additional SCC1 word.
            reviewed_files, proposal_sha256, approval_record_sha256, verdict}
   inputs:
     [{path, sha256} for all four observations, proposal, and review record]
-  artifacts: {route0_elf_sha256, route1_elf_sha256,
-              analysis_parser_sha256, final_verifier_sha256}
+  historical:
+    parser_verifier: {path, sha256}
+    comparator: {path, sha256}
+    tests: [{path, sha256}, ...]
+    contract: {path, sha256}
+    references: [{path, sha256}, ...]
+  artifacts:
+    {route0_elf_relative_path, route0_elf_sha256,
+     route1_elf_relative_path, route1_elf_sha256,
+     analysis_parser_sha256}
   ```
 
-  Run the final gate and both ordinary audits:
+  Historical paths are exactly
+  `tools/saturn/verify_sh2_native_math.py`,
+  `tools/saturn/compare_sh2_native_math_audit_reports.py`,
+  `tools/saturn/test_verify_sh2_native_math.py`,
+  `tools/saturn/test_compare_sh2_native_math_audit_reports.py`, and
+  `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt`; historical
+  reference paths are
+  `tools/saturn/sh2_native_math_baseline_v1.txt`,
+  `tools/saturn/sh2_native_math_route_oracle_v1.txt`, and
+  `tools/saturn/sh2_native_math_sim_route_oracle_v1.txt`. ELF paths are
+  relative to the retained evidence worktree and cannot escape it.
 
   ```powershell
   Push-Location $evidenceWorktree
-  & $saturnPython tools/saturn/compare_sh2_native_math_audit_reports.py finalize --proposal $proposal --review $reviewRecord --legacy-route0 $legacyRoute0 --legacy-route1 $legacyRoute1 --corrected-route0 $correctedRoute0 --corrected-route1 $correctedRoute1 --contract-after tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --verifier tools/saturn/verify_sh2_native_math.py --output $finalRepin
-  & $saturnPython tools/saturn/test_verify_sh2_native_math.py
-  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
-  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
-  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
+  & $saturnPython tools/saturn/compare_sh2_native_math_audit_reports.py finalize --repin-source-commit $repinSourceCommit --proposal $proposal --review $reviewRecord --legacy-route0 $legacyRoute0 --legacy-route1 $legacyRoute1 --corrected-route0 $correctedRoute0 --corrected-route1 $correctedRoute1 --contract-after tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --verifier tools/saturn/verify_sh2_native_math.py --output $finalRepin
   Pop-Location
   ```
 
-  Commit the one-time contract/digest edit and all durable evidence in the
-  evidence worktree. No Task 3 transport or Makefile file is staged:
+  Commit only the finalized report in the required subsequent commit:
 
   ```powershell
   Push-Location $evidenceWorktree
-  git -c "safe.directory=$evidenceWorktree" add -- tools/saturn/verify_sh2_native_math.py tools/saturn/sh2_native_math_sim_audit_contract_v2.txt docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
-  git -c "safe.directory=$evidenceWorktree" commit -m "test: repin corrected SH native math audit"
-  $repinCommit = (git -c "safe.directory=$evidenceWorktree" rev-parse HEAD).Trim()
-  $expectedRepinFiles = @(
-    "docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json",
-    "docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json",
-    "tools/saturn/sh2_native_math_sim_audit_contract_v2.txt",
-    "tools/saturn/verify_sh2_native_math.py"
-  )
-  $actualRepinFiles = @(git -c "safe.directory=$evidenceWorktree" diff --name-only $parserCommit $repinCommit | Sort-Object)
-  if (Compare-Object ($expectedRepinFiles | Sort-Object) $actualRepinFiles) { throw "re-pin commit owns unexpected files" }
+  git -c "safe.directory=$evidenceWorktree" add -- docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  git -c "safe.directory=$evidenceWorktree" commit -m "test: record reviewed SH native math re-pin"
+  $repinReportCommit = (git -c "safe.directory=$evidenceWorktree" rev-parse HEAD).Trim()
+  $reportCommitFiles = @(git -c "safe.directory=$evidenceWorktree" diff --name-only $repinSourceCommit $repinReportCommit)
+  if ($reportCommitFiles.Count -ne 1 -or $reportCommitFiles[0] -ne "docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json") { throw "final report commit owns unexpected files" }
   if (git -c "safe.directory=$evidenceWorktree" status --porcelain --untracked-files=no) { throw "tracked evidence worktree state is dirty after commit" }
+  Pop-Location
+  ```
+
+  `verify-final` now requires `repin_source_commit` to be a full 40-hex
+  ancestor of both the report commit and current HEAD. It derives the report
+  commit as the commit that introduced the report path, requires its
+  `repin_source_commit..report_commit` diff to contain only that report, and
+  hashes every historical parser/verifier/test/comparator/contract/reference
+  path with `git show <repin_source_commit>:<path>`. It reloads every
+  observation, proposal, and review from both the source and current commits,
+  requires identical blob hashes matching the report, and requires the
+  current v2 contract, comparator, comparator tests, baseline, and oracle
+  blobs to equal their historical hashes. It also requires the current report
+  blob to equal the introduced report blob. It validates the exact reviewed
+  inventory and rejects dirty tracked evidence, dirty current
+  verifier/contract/reference paths, substituted files, or ELF hash drift.
+
+  Separately, it executes the current verifier twice in ordinary v2 mode and
+  twice in code-only observation mode against the retained route ELFs. It
+  compares the current observations' complete closure, normalized
+  direct-call facts, helper facts, helper total, and empty unresolved lists
+  with the frozen corrected observations. Current verifier byte equality to
+  the historical Task 3 SHA is deliberately not required. The comparator
+  tests cover: a post-v3 current-verifier byte change with preserved v2 facts
+  passes; historical `git show` hash mismatch fails; a non-ancestor source
+  commit fails; and current v2 behavioral drift fails. The
+  `verify-final` subcommand, comparator helper, comparator tests, and report
+  schema are the stable compatibility interface: their current hashes must
+  equal their `repin_source_commit` hashes through Task 15. Task 8 extends the
+  current verifier, not this helper or its tests.
+
+  Run the historical and current compatibility gate after the report commit:
+
+  ```powershell
+  Push-Location $evidenceWorktree
+  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  & $saturnPython tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report $finalRepin --current-verifier tools/saturn/verify_sh2_native_math.py --current-v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --baseline tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --route0-elf $auditRoute0Elf --route1-elf $auditRoute1Elf --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
   Pop-Location
   ```
 
@@ -1136,8 +1253,8 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   ```powershell
   if ((git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim() -ne $parserBase) { throw "control branch moved during isolated parser work" }
-  git -C $controlWorktree -c "safe.directory=$controlWorktree" merge --ff-only $repinCommit
-  if ((git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim() -ne $repinCommit) { throw "control branch did not fast-forward to re-pin commit" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" merge --ff-only $repinReportCommit
+  if ((git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim() -ne $repinReportCommit) { throw "control branch did not fast-forward to final report commit" }
   ```
 
   Now, and only now, add the sourceboot integration to the already-dirty
@@ -2383,6 +2500,10 @@ only to latch SQT1; it is not an additional SCC1 word.
 
 - Modify: `tools/saturn/verify_sh2_native_math.py`
 - Modify: `tools/saturn/test_verify_sh2_native_math.py`
+- Preserve byte-for-byte:
+  `tools/saturn/compare_sh2_native_math_audit_reports.py`
+- Preserve byte-for-byte:
+  `tools/saturn/test_compare_sh2_native_math_audit_reports.py`
 - Create: `tools/saturn/generate_camera_q_audit_contract.py`
 - Create: `tools/saturn/test_generate_camera_q_audit_contract.py`
 - Create: `tools/saturn/verify_camera_q_mutation.py`
@@ -2422,18 +2543,37 @@ only to latch SQT1; it is not an additional SCC1 word.
   Assert the post-Task-3 v2 contract digest, one-root schema, measured
   expected total, forbidden callers, code-only parser version, SH
   delay-slot/switch/internal-offset behavior, zero unresolved transfers,
-  failure text, and successful report shape. Revalidate
-  `task3-native-math-audit-repin-2026-07-29.json` against the current parser
-  and contract. Copy the corrected v2 contract into a temporary directory,
-  mutate each directive, and require the frozen post-re-pin failures before
-  adding v3. Reject `analysis-mode=legacy-linear` in every acceptance path.
+  failure text, and successful report shape. Revalidate the report's
+  historical parser/verifier/test/contract bytes from its exact ancestor
+  `repin_source_commit`, then independently run the current verifier against
+  the retained route ELFs and require complete v2 fact equality with the
+  frozen corrected observations. Current verifier SHA equality to the
+  historical Task 3 SHA is not a gate. Copy the corrected v2 contract into a
+  temporary directory, mutate each directive, and require the frozen
+  post-re-pin failures before adding v3. Reject
+  `analysis-mode=legacy-linear` in every acceptance path.
+
+  The comparator tests require a harmless post-v3 current-verifier byte
+  change with identical v2 facts to pass, but historical-byte hash mismatch,
+  non-ancestor `repin_source_commit`, dirty/substituted evidence, and current
+  v2 fact drift to fail.
 
   Run:
 
   ```powershell
+  $repoRoot = "D:/Code/RetroDev/sm64-saturn-port/sm64-port"
+  $repinPath = "docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json"
+  $repin = Get-Content $repinPath -Raw | ConvertFrom-Json
+  $parserCommit = [string]$repin.review.parser_commit
+  $evidenceWorktree = "$repoRoot/.worktrees/audit-parser-evidence-$($parserCommit.Substring(0, 7))"
+  $route0Elf = (Resolve-Path (Join-Path $evidenceWorktree ([string]$repin.artifacts.route0_elf_relative_path))).Path
+  $route1Elf = (Resolve-Path (Join-Path $evidenceWorktree ([string]$repin.artifacts.route1_elf_relative_path))).Path
+  $auditObjdump = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe"
+  $auditReadelf = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe"
+  $auditAddr2line = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe"
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report $repinPath --current-verifier tools/saturn/verify_sh2_native_math.py --current-v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --baseline tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --route0-elf $route0Elf --route1-elf $route1Elf --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
   ```
 
   Expected result: all existing tests and the new v2-freeze cases pass.
@@ -2668,7 +2808,12 @@ only to latch SQT1; it is not an additional SCC1 word.
   ```powershell
   git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge add tools/saturn/verify_sh2_native_math.py tools/saturn/test_verify_sh2_native_math.py tools/saturn/generate_camera_q_audit_contract.py tools/saturn/test_generate_camera_q_audit_contract.py tools/saturn/verify_camera_q_mutation.py tools/saturn/test_verify_camera_q_mutation.py src/port/saturn/sourceboot/Makefile
   git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge commit -m "test: extend native math audit for camera closures"
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report $repinPath --current-verifier tools/saturn/verify_sh2_native_math.py --current-v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --baseline tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --route0-elf $route0Elf --route1-elf $route1Elf --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
   ```
+
+  The post-commit call is the actual compatibility proof for Task 8's changed
+  verifier bytes. It must pass on frozen v2 facts before Task 9 begins.
 
 ---
 
@@ -3979,6 +4124,8 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Revalidate unchanged:
   `tools/saturn/test_compare_sh2_native_math_audit_reports.py`
 - Revalidate unchanged:
+  `tools/saturn/compare_sh2_native_math_audit_reports.py`
+- Revalidate unchanged:
   `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
 - Modify: `docs/superpowers/plans/2026-07-29-sh2-native-math-purge.md`
 - Modify: `docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`
@@ -4001,11 +4148,23 @@ only to latch SQT1; it is not an additional SCC1 word.
   Resolve the Q ELF from each of Task 14's two Q reports and require the same
   ELF hash, matching the hash embedded in the committed v3 contract. Resolve
   `artifacts.q_object_manifest.path` from both reports and require identical
-  manifest hashes matching the committed v3 object records. Re-run:
+  manifest hashes matching the committed v3 object records. Re-run the
+  historical-source and current-v2 compatibility gate with the retained Task
+  3 evidence ELFs:
 
   ```powershell
+  $repoRoot = "D:/Code/RetroDev/sm64-saturn-port/sm64-port"
+  $repinPath = "docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json"
+  $repin = Get-Content $repinPath -Raw | ConvertFrom-Json
+  $parserCommit = [string]$repin.review.parser_commit
+  $evidenceWorktree = "$repoRoot/.worktrees/audit-parser-evidence-$($parserCommit.Substring(0, 7))"
+  $route0Elf = (Resolve-Path (Join-Path $evidenceWorktree ([string]$repin.artifacts.route0_elf_relative_path))).Path
+  $route1Elf = (Resolve-Path (Join-Path $evidenceWorktree ([string]$repin.artifacts.route1_elf_relative_path))).Path
+  $auditObjdump = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe"
+  $auditReadelf = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe"
+  $auditAddr2line = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe"
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report $repinPath --current-verifier tools/saturn/verify_sh2_native_math.py --current-v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --baseline tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --route0-elf $route0Elf --route1-elf $route1Elf --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_generate_camera_q_audit_contract.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_camera_q_mutation.py
@@ -4202,17 +4361,22 @@ only to latch SQT1; it is not an additional SCC1 word.
   invalidated by a target code change.
 
   After the final review is clean and `verify-final` has revalidated every
-  committed input hash, remove the retained evidence worktree. Derive its
-  exact registered path from the committed parser SHA, require it to remain
-  under the repository's `.worktrees` directory, require no tracked changes,
-  and require its HEAD to be the commit that added the finalized report:
+  historical byte/input hash plus the current verifier's v2 behavior, remove
+  the retained evidence worktree. Derive its exact registered path from the
+  committed parser SHA, require it to remain under the repository's
+  `.worktrees` directory, require no tracked changes, require the recorded
+  `repin_source_commit` to be an ancestor of both the finalized-report commit
+  and current control HEAD, and require the retained worktree's HEAD to be the
+  commit that added only the finalized report:
 
   ```powershell
   $repoRoot = "D:/Code/RetroDev/sm64-saturn-port/sm64-port"
   $controlWorktree = "$repoRoot/.worktrees/sh2-native-math-purge"
   $repinReport = Get-Content "$controlWorktree/docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json" -Raw | ConvertFrom-Json
   $parserCommit = [string]$repinReport.review.parser_commit
+  $repinSourceCommit = [string]$repinReport.repin_source_commit
   if ($parserCommit -notmatch '^[0-9a-f]{40}$') { throw "invalid parser commit in re-pin report" }
+  if ($repinSourceCommit -notmatch '^[0-9a-f]{40}$') { throw "invalid source commit in re-pin report" }
   $evidenceWorktree = "$repoRoot/.worktrees/audit-parser-evidence-$($parserCommit.Substring(0, 7))"
   $expectedPrefix = [System.IO.Path]::GetFullPath("$repoRoot/.worktrees") + [System.IO.Path]::DirectorySeparatorChar
   $resolvedEvidence = [System.IO.Path]::GetFullPath($evidenceWorktree)
@@ -4220,6 +4384,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   if (-not (Test-Path $resolvedEvidence)) { throw "retained evidence worktree is missing" }
   if (git -C $resolvedEvidence -c "safe.directory=$resolvedEvidence" status --porcelain --untracked-files=no) { throw "refusing to remove evidence worktree with tracked changes" }
   $repinEvidenceCommit = (git -C $controlWorktree -c "safe.directory=$controlWorktree" log -1 --format=%H -- docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json).Trim()
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" merge-base --is-ancestor $repinSourceCommit $repinEvidenceCommit
+  if ($LASTEXITCODE -ne 0) { throw "re-pin source is not an ancestor of report commit" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" merge-base --is-ancestor $repinSourceCommit HEAD
+  if ($LASTEXITCODE -ne 0) { throw "re-pin source is not an ancestor of current commit" }
   if ((git -C $resolvedEvidence -c "safe.directory=$resolvedEvidence" rev-parse HEAD).Trim() -ne $repinEvidenceCommit) { throw "evidence worktree HEAD no longer matches re-pin evidence commit" }
   git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree remove --force $resolvedEvidence
   git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree prune
@@ -4245,7 +4413,7 @@ only to latch SQT1; it is not an additional SCC1 word.
 | Q health | Nonzero generation and pinned nonzero bridge counts; zero overflow, saturation, divide, reseed, and range-fallback counts |
 | ABI/scope | Public Camera/Lakitu layout and non-Saturn behavior unchanged; radial/cutscene/rare modes remain explicit non-goals |
 | Original route | `bob-parity-v1` hash unchanged; two A/B pairs pass the hardened SBR4 output contract |
-| Static audit | Corrected route-0/route-1 v2 closure/call/helper facts identical and reviewed re-pin report valid; v3 global total lower than corrected v2; complete generated Q closure; zero helper edges before exact named stops |
+| Static audit | Corrected route-0/route-1 v2 closure/call/helper facts identical; reviewed report validates its ancestor historical re-pin bytes and the current verifier's frozen v2 facts; v3 global total lower than corrected v2; complete generated Q closure; zero helper edges before exact named stops |
 | Performance | Q `sim_frt_ticks_accum` strictly lower in both independent default-camera A/B pairs |
 | Memory | SCC exact `0x2F7C0` replay-only NOBITS section; at least `0x4000` LWRAM remains; selected cart stage is hash-proven; final HWRAM margin is at least `0x1B00` (`0x1000` TLSF + `0x0B00` safety) |
 | Provenance | Pinned source, commit, license, inspected ranges, reuse mode, notices, and material changes recorded |

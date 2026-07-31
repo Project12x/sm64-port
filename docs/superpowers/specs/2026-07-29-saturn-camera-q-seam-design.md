@@ -559,21 +559,42 @@ every delayed transfer. Direct call targets are mapped by target address to
 their containing canonical function while retaining the exact nonzero target
 offset, so legitimate internal-entry calls remain edges.
 
-The dataflow lattice for each register or fixed spill slot is `UNKNOWN`, one
-known symbol/address, or a bounded finite integer/address set. Equal known
-facts survive a merge; disagreement with another known fact or with
-`UNKNOWN` becomes `UNKNOWN`; finite sets union only within the code-owned
-bound. The work list deduplicates by `(instruction address, abstract state)`
-and iterates to a fixed point. Modeled PC-relative loads, register moves, and
+The finite abstract domain for each register or fixed spill slot has
+`UNREACHED` as bottom, `UNKNOWN` as top, a `ConstSet` of integer constants or
+symbol-address atoms, and a typed 32-bit `Interval(signed|unsigned, lo, hi)`.
+Numeric `ConstSet` values carry the same signed/unsigned interpretation tag;
+symbol atoms are never coerced into numeric intervals. Identical atoms
+survive a join. `ConstSet` joins are exact through 256 members; an oversized
+all-integer set becomes its same-signedness interval hull, while an oversized
+symbol set, mixed symbol/integer set, or incompatible signedness becomes
+`UNKNOWN`. Interval joins use their hull, and a compatible integer
+`ConstSet` joins an interval by hull; every other combination becomes
+`UNKNOWN`.
+
+Branch refinement intersects a `ConstSet` or interval with the proved
+signed/unsigned predicate and discards an empty path. There is no later
+narrowing phase. At a CFG backedge, the first expansion joins normally; on
+the next expansion, widening sends each expanding lower or upper bound to
+the corresponding signed or unsigned 32-bit minimum or maximum. Each bound
+widens at most once, so the finite CFG and finite product domain terminate.
+The work list applies join/widening per program point until no state changes;
+`UNREACHED` locations are not scheduled.
+
+Only affine constant operations propagate numeric facts. Unsupported
+arithmetic kills its destination to `UNKNOWN`; if a transfer needs that
+value, the audit fails closed. A computed jump is enumerated only when its
+post-refinement `ConstSet` or interval represents at most 256 two-byte-aligned
+targets and every target belongs to owned executable code. A larger,
+misaligned, non-enumerable, or non-owned target set emits
+`unresolved_transfer`. Modeled PC-relative loads, register moves, and
 spill/reload operations propagate their source facts. Every other recognized
 register-writing instruction kills its destination. `jsr`, `bsr`, and
 `bsrf` resolve the pre-delay target, execute the delay slot, then kill the SH
 ABI caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before propagating
 the return successor; `r8-r14` and `r15` survive unless the instruction or
-slot writes them. An unparseable destination, unknown register effect, finite
-set overflow, or unresolved indirect transfer emits an exact
-`unresolved_transfer` or `unresolved_effect` diagnostic and rejects an
-audited closure. It never falls back to linear scanning.
+slot writes them. An unparseable destination or unknown register effect emits
+`unresolved_effect` and rejects an audited closure. It never falls back to
+linear scanning.
 
 Resolved indirect tail calls and computed switch destinations become
 successors. A missing line table is therefore acceptable only when the
@@ -587,8 +608,10 @@ call/return delay slots, a resolved indirect tail call, and the
 mutation must distinguish data from code without dropping a real edge.
 Additional fixtures cover stale-value merges, the caller-clobber set, an
 unmodeled destination kill, an unresolved effect, disconnected line seeds,
-zero-size functions, same-start aliases, ambiguous overlaps, `end_sequence`
-rows, and an absent line table.
+loop-carried widening and convergence, signed/unsigned branch refinement, an
+oversized unresolved interval, bounded jump-table enumeration, zero-size
+functions, same-start aliases, ambiguous overlaps, `end_sequence` rows, and
+an absent line table.
 
 Task 3 captures legacy observations first, then corrected observations from
 the same route-0 and route-1 pure-layout ELFs built in a clean detached
@@ -606,11 +629,27 @@ All four observations, the equality proposal, and the review record are
 committed evidence, not scratch-only inputs. The review record fixes the
 parser commit, reviewed commit range, and complete reviewed-file inventory.
 Only after that equality report receives an independent clean review may the
-implementer change the single v2 `EXPECTED_TOTAL` line, compute and install
-its new SHA-256 pin, and finalize the durable re-pin report. That final report
-hashes every committed input. The contract and parser are re-pinned exactly
-once and then frozen for the rest of the sprint; a later mismatch is a
-regression, not permission for another quiet re-pin.
+implementer change the single v2 `EXPECTED_TOTAL` line and install its new
+SHA-256 pin. The corrected parser, tests, reviewed inputs, historical
+verifier bytes, and re-pinned contract are committed first as the exact
+`repin_source_commit`; the durable final report is generated and committed in
+a subsequent commit because a commit cannot contain its own SHA. The report
+hashes every committed input and every historical source byte via
+`git show <repin_source_commit>:<path>`, and requires that source commit to be
+an ancestor of the report and current commits.
+
+Later `verify-final` runs the current verifier's v2 analysis against the
+retained route ELFs and compares its full closure/direct/helper facts with the
+frozen corrected observations. Thus Task 8 may change current verifier bytes
+to add v3 while it must preserve v2 behavior; current byte equality with the
+historical Task 3 verifier is neither expected nor required. The comparator
+helper and its compatibility tests remain byte-identical to their historical
+`repin_source_commit` versions through Task 15; they are the stable
+historical/current bridge and are not a Task 8 extension surface. Dirty,
+substituted, non-ancestor, or hash-mismatched evidence fails. The contract and
+parser are re-pinned exactly once and then frozen for the rest of the sprint;
+a later behavioral mismatch is a regression, not permission for another
+quiet re-pin.
 
 Disabling the post-link audit is forbidden because object or source checks
 cannot prove the linked closure. Rejecting all `+offset` targets is forbidden
@@ -768,12 +807,14 @@ variant 2 remains unbuildable until the differential freezes the final config.
 Task 3 is complete only when all of the following are true:
 
 - The delay-slot-aware linked-ELF analyzer rejects literal-pool decodes,
-  preserves real internal-offset calls, reports no unresolved transfer in the
-  audited closure, and produces identical corrected route-0/route-1
+  preserves real internal-offset calls, reports no unresolved transfer or
+  effect in the audited closure, and produces identical corrected route-0/route-1
   closure/call/helper facts.
 - V2 is re-pinned exactly once after the equality report and independent
-  review; the durable report records old/new totals, old/new digests, and
-  sorted added/removed facts.
+  review; the durable report names an ancestor `repin_source_commit`, records
+  old/new totals and digests plus sorted added/removed facts, validates its
+  historical bytes, and proves the current verifier still produces the
+  frozen v2 facts.
 - The bounded default/Lakitu Q island is active only for camera variant 2.
 - `bob-parity-v1` remains immutable; raw route ID 2 and the compound
   Mario/default-dispatch witness bind all SCC1 acceptance evidence to
