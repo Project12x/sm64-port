@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -61,8 +63,17 @@ class VerifyCameraIdleCaptureTest(unittest.TestCase):
 
     def test_cli_rejects_a_raw_mutation(self) -> None:
         raw = mutate_word(build_scc1(), 23, 3)
-        with self.assertRaises(ValueError):
-            decode_capture_report(report(raw=raw))
+        with tempfile.TemporaryDirectory() as temporary:
+            capture_path = Path(temporary) / "bad-camera-capture.json"
+            capture_path.write_text(json.dumps(report(raw=raw)), encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "tools/saturn/verify_camera_idle_capture.py"),
+                 str(capture_path), "--route", str(ROUTE), "--idle-start-tick", "31",
+                 "--bridge-export", "0", "--bridge-import", "0"],
+                capture_output=True, text=True, check=False,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid raw SCC1 bytes", result.stderr)
 
 
 if __name__ == "__main__":

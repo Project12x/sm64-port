@@ -215,6 +215,9 @@ def _f32_ulp(value: float) -> float:
         return 2.0 ** -149
     magnitude = abs(value)
     bits = struct.unpack(">I", struct.pack(">f", magnitude))[0]
+    if bits == 0x7F7FFFFF:
+        predecessor = struct.unpack(">f", (bits - 1).to_bytes(4, "big"))[0]
+        return magnitude - predecessor
     successor = struct.unpack(">f", (bits + 1).to_bytes(4, "big"))[0]
     return successor - magnitude
 

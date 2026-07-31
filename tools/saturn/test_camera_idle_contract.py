@@ -10,7 +10,7 @@ import struct
 import unittest
 
 from camera_idle_contract import (
-    Scc1Error, compare_camera_roles, compare_same_role, decode_scc1,
+    Scc1Error, _f32_ulp, compare_camera_roles, compare_same_role, decode_scc1,
     validate_scc1,
 )
 
@@ -168,6 +168,11 @@ class Scc1ValidationTest(unittest.TestCase):
         baseline_bits = struct.unpack(">48624I", baseline_raw)[SCC1_HEADER_WORDS + 4]
         q = decode_scc1(mutate_every_sample_word(qraw, 4, baseline_bits + 1))
         compare_camera_roles(baseline, q, q_fraction_bits=30)
+
+    def test_binary32_ulp_at_finite_extremes_is_finite_and_signedness_independent(self) -> None:
+        maximum = struct.unpack(">f", bytes.fromhex("7f7fffff"))[0]
+        self.assertEqual(_f32_ulp(maximum), 2.0 ** 104)
+        self.assertEqual(_f32_ulp(-maximum), 2.0 ** 104)
 
 
 if __name__ == "__main__":
