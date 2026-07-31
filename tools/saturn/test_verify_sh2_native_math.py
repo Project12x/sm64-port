@@ -338,6 +338,21 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         owners = resolve_function_owners(symbols, sections)
         return analyze_code_only(parse_instructions(disassembly), owners, parse_decoded_lines(lines, owners))
 
+    def _register_add_result(self, source, target=MAYBE_STACK_PTR):
+        instruction = parse_instructions(" 6001000: 34 5c add r5,r4\n")[0x6001000]
+        state = _unknown_state()
+        state["r5"] = source
+        state["r4"] = target
+        effects = []
+        _write_effect(
+            instruction,
+            state,
+            effects,
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertEqual(effects, [])
+        return state["r4"]
+
     def analyze_with_islands(self, disassembly: str, symbols_text: str):
         sections = parse_readelf_sections(self.SECTIONS)
         symbols = parse_readelf_symbols(symbols_text, sections)
@@ -1066,6 +1081,30 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertEqual(
             [(item.address, item.mnemonic) for item in result.unresolved_transfers],
             [(0x600101C, "jsr")],
+        )
+
+    def test_register_add_preserves_maybe_stack_pointer_with_constset(self) -> None:
+        self.assertIs(
+            self._register_add_result(ConstSet("signed", frozenset({0, 4}))),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_preserves_maybe_stack_pointer_with_interval(self) -> None:
+        self.assertIs(
+            self._register_add_result(Interval("signed", -4, 4)),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_preserves_maybe_stack_pointer_with_unknown(self) -> None:
+        self.assertIs(
+            self._register_add_result(UNKNOWN),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_preserves_two_maybe_stack_pointers(self) -> None:
+        self.assertIs(
+            self._register_add_result(MAYBE_STACK_PTR),
+            MAYBE_STACK_PTR,
         )
 
     def test_store_through_maybe_stack_pointer_invalidates_frame(self) -> None:
