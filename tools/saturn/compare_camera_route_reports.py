@@ -13,7 +13,7 @@ from typing import Any, Mapping
 from camera_idle_contract import (Scc1Capture, Scc1Error, compare_camera_roles,
                                   compare_same_role, validate_scc1)
 from compare_route_reports import (EXACT_BEHAVIOR_FIELDS, PROBE_FIELDS, REJECT_FIELDS,
-                                   decode_probe, load_route, validate_artifacts)
+                                   SHA256_RE, decode_probe, load_route, validate_artifacts)
 from verify_camera_idle_capture import decode_capture_report
 
 TIMING_FIELDS = frozenset({"frame_serial", "sim_frt_ticks_accum", "render_frt_ticks_accum",
@@ -29,7 +29,7 @@ def _route(route: Path | Mapping[str, Any]) -> tuple[dict[str, Any], str | None]
         return json.loads(route.read_text(encoding="utf-8")), hashlib.sha256(route.read_bytes()).hexdigest()
     if isinstance(route, Mapping):
         digest = route.get("manifest_sha256") or route.get("route_manifest_sha256")
-        if not isinstance(digest, str) or len(digest) != 64:
+        if not isinstance(digest, str) or SHA256_RE.fullmatch(digest.lower()) is None:
             raise ValueError("a mapping route requires an explicit manifest sha256")
         return dict(route), digest.lower()
     raise ValueError("camera route must be a manifest path or object")
@@ -83,8 +83,8 @@ def _validate_report(report: Mapping[str, Any], *, role: str, marker: int,
     probe = _route_probe(report)
     if probe["atan2_variant"] != 2:
         raise ValueError(f"{role} raw SBR4 atan2 variant must be 2")
-    if probe["replay_ticks"] != route.get("checkpoint_tick", 2000):
-        raise ValueError("raw SBR4 replay tick does not match route anchor")
+    if probe["replay_ticks"] != 2000:
+        raise ValueError("raw SBR4 replay tick must equal the frozen 2000-tick anchor")
     capture = _camera_capture(report, role, int(route.get("route_id", 2)), expected_q_bridge_counts)
     return probe, report["artifacts"], capture
 
@@ -122,13 +122,16 @@ def compare_camera_route_reports(baseline_runs: list[dict[str, Any]], q_runs: li
     """Raw-decode ordered baseline run1/run2 and Q run1/run2 reports."""
     if len(baseline_runs) != 2 or len(q_runs) != 2:
         raise ValueError("camera comparison requires exactly baseline run1/run2 and Q run1/run2")
-    if not isinstance(q_fraction_bits, int) or q_fraction_bits < 0:
+    if (not isinstance(q_fraction_bits, int) or isinstance(q_fraction_bits, bool)
+            or q_fraction_bits < 0):
         raise ValueError("q_fraction_bits must be a nonnegative integer")
     if (not isinstance(expected_q_bridge_counts, tuple) or len(expected_q_bridge_counts) != 2
-            or not all(isinstance(count, int) and count > 0 for count in expected_q_bridge_counts)):
+            or not all(isinstance(count, int) and not isinstance(count, bool) and count > 0
+                       for count in expected_q_bridge_counts)):
         raise ValueError("expected Q bridge counts must be a nonzero pair")
     manifest, digest = _route(route)
-    if manifest.get("route_version") != "bob-default-camera-v1" or manifest.get("route_id") != 2:
+    if (manifest.get("route_version") != "bob-default-camera-v1" or manifest.get("route_id") != 2
+            or manifest.get("checkpoint_tick") != 2000):
         raise ValueError("selected route is not bob-default-camera-v1")
     reports = [*baseline_runs, *q_runs]
     decoded = [_validate_report(item, role=role, marker=marker, route=manifest, route_digest=digest,

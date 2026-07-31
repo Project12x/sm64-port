@@ -21,11 +21,11 @@ ROUTE = ROOT / "tools/saturn/routes/bob_default_camera_v1.json"
 
 
 def sbr4(*, sim: int = 100, atan2: int = 2, reject: int = 0,
-         camera_x_bits: int = 0) -> dict:
+         camera_x_bits: int = 0, replay_ticks: int = 2000) -> dict:
     values = {name: 0 for name in PROBE_FIELDS}
     values.update({
         "magic": 0x53425234, "version": 4, "atan2_variant": atan2,
-        "replay_ticks": 2000, "global_timer": 2000, "mario_action": 42,
+        "replay_ticks": replay_ticks, "global_timer": 2000, "mario_action": 42,
         "mario_pos_x_bits": 0, "mario_pos_y_bits": 0, "mario_pos_z_bits": 0,
         "mario_face_angle_x": 1, "mario_face_angle_y": 2, "mario_face_angle_z": 3,
         "camera_pos_x_bits": camera_x_bits, "camera_pos_y_bits": 0, "camera_pos_z_bits": 0,
@@ -38,7 +38,8 @@ def sbr4(*, sim: int = 100, atan2: int = 2, reject: int = 0,
 
 
 def report(role: str, *, sim: int, atan2: int = 2, marker: int | None = None,
-           reject: int = 0, raw_scc1: bytes | None = None, camera_x_bits: int = 0) -> dict:
+           reject: int = 0, raw_scc1: bytes | None = None, camera_x_bits: int = 0,
+           replay_ticks: int = 2000) -> dict:
     variant = 1 if role == "camera-baseline" else 2
     if marker is None:
         marker = variant
@@ -52,7 +53,8 @@ def report(role: str, *, sim: int, atan2: int = 2, marker: int | None = None,
                       "image": {"sha256": ("c" if variant == 1 else "d") * 64, "size": 1}},
         "elf_camera_variant": marker,
         "elf_route_id": 2,
-        "route_window": sbr4(sim=sim, atan2=atan2, reject=reject, camera_x_bits=camera_x_bits),
+        "route_window": sbr4(sim=sim, atan2=atan2, reject=reject, camera_x_bits=camera_x_bits,
+                              replay_ticks=replay_ticks),
         "camera_idle_window": {"data": list(raw_scc1)},
     }
 
@@ -149,6 +151,40 @@ class CompareCameraRouteReportsTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             compare_camera_route_reports(baseline, q, manifest, True,
                                          q_fraction_bits=12, expected_q_bridge_counts=Q_BRIDGES)
+
+    def test_rejects_a_manifest_and_raw_sbr4_checkpoint_other_than_2000(self) -> None:
+        baseline = [report("camera-baseline", sim=100, replay_ticks=1999),
+                    report("camera-baseline", sim=101, replay_ticks=1999)]
+        q = [report("camera-q", sim=90, replay_ticks=1999),
+             report("camera-q", sim=91, replay_ticks=1999)]
+        manifest = json.loads(ROUTE.read_text(encoding="utf-8"))
+        manifest["checkpoint_tick"] = 1999
+        manifest["manifest_sha256"] = hashlib.sha256(ROUTE.read_bytes()).hexdigest()
+        with self.assertRaises(ValueError):
+            compare_camera_route_reports(baseline, q, manifest, True,
+                                         q_fraction_bits=12, expected_q_bridge_counts=Q_BRIDGES)
+
+    def test_rejects_non_hex_mapping_digest_and_boolean_numeric_inputs(self) -> None:
+        baseline = [report("camera-baseline", sim=100), report("camera-baseline", sim=101)]
+        q = [report("camera-q", sim=90), report("camera-q", sim=91)]
+        malformed = json.loads(ROUTE.read_text(encoding="utf-8"))
+        malformed["manifest_sha256"] = "g" * 64
+        for item in [*baseline, *q]:
+            item["route_manifest_sha256"] = "g" * 64
+        with self.assertRaises(ValueError):
+            compare_camera_route_reports(baseline, q, malformed, True,
+                                         q_fraction_bits=12, expected_q_bridge_counts=Q_BRIDGES)
+
+        baseline = [report("camera-baseline", sim=100), report("camera-baseline", sim=101)]
+        q = [report("camera-q", sim=90), report("camera-q", sim=91)]
+        with self.assertRaises(ValueError):
+            compare_camera_route_reports(baseline, q, ROUTE, True,
+                                         q_fraction_bits=True, expected_q_bridge_counts=Q_BRIDGES)
+        q_raw = build_scc1(variant=2, bridges=(1, 19))
+        q = [report("camera-q", sim=90, raw_scc1=q_raw), report("camera-q", sim=91, raw_scc1=q_raw)]
+        with self.assertRaises(ValueError):
+            compare_camera_route_reports(baseline, q, ROUTE, True,
+                                         q_fraction_bits=12, expected_q_bridge_counts=(True, 19))
 
     def test_legacy_comparator_remains_the_camera_role_rejection_boundary(self) -> None:
         baseline = report("camera-baseline", sim=100)
