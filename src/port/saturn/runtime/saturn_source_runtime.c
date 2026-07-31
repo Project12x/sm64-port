@@ -34,6 +34,9 @@ void sm64_saturn_source_runtime_configure_input_replay(
     sm64_saturn_input_replay_init(&sInputReplay, samples, sample_count);
     sState.input_replay_ticks = 0U;
     sState.input_replay_sample = 0U;
+    sState.last_applied_buttons = 0U;
+    sState.last_applied_stick_x = 0;
+    sState.last_applied_stick_y = 0;
     sState.input_replay_active = sInputReplay.enabled;
     sState.input_replay_complete = sInputReplay.complete;
 }
@@ -79,6 +82,9 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
             sState.input_replay_complete = sInputReplay.complete;
         }
     }
+    sState.last_applied_buttons = pads[0].button;
+    sState.last_applied_stick_x = pads[0].stick_x;
+    sState.last_applied_stick_y = pads[0].stick_y;
     if (count > 1U) {
         (void)memset(&pads[1], 0, sizeof(*pads) * (count - 1U));
         for (uint32_t index = 1; index < count; index++)

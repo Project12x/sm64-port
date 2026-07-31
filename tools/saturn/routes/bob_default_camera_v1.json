@@ -1,0 +1,13 @@
+{
+  "route_version": "bob-default-camera-v1",
+  "route_id": 2,
+  "checkpoint_tick": 2000,
+  "simulation_ticks": 2000,
+  "first_mario_dispatch_tick": 121,
+  "button_encoding": "N64 OSContPad active-high bitmask",
+  "samples": [
+    { "ticks": 120, "stick_x": 0, "stick_y": 0, "buttons": 0 },
+    { "ticks": 1, "stick_x": 0, "stick_y": 0, "buttons": 16 },
+    { "ticks": 1879, "stick_x": 0, "stick_y": 0, "buttons": 0 }
+  ]
+}

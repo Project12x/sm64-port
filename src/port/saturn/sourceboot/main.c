@@ -16,6 +16,7 @@
 #include "saturn_source_runtime.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
+#include "source_camera_acceptance_route.h"
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
 #include "mario_eye_uv_tiles.h"
@@ -31,6 +32,9 @@
 #endif
 #ifndef SATURN_DEMO_PATH
 #define SATURN_DEMO_PATH 0
+#endif
+#ifndef SATURN_SOURCEBOOT_CAMERA_ROUTE
+#define SATURN_SOURCEBOOT_CAMERA_ROUTE 0
 #endif
 
 #define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
@@ -479,8 +483,13 @@ int main(void) {
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
     {
         uint16_t sample_count = 0U;
-        const sm64_saturn_input_replay_sample_t *route =
+        const sm64_saturn_input_replay_sample_t *route;
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+        route = sm64_saturn_sourceboot_bob_default_camera_v1(&sample_count);
+#else
+        route =
             sm64_saturn_sourceboot_bob_parity_v1(&sample_count);
+#endif
         sm64_saturn_source_runtime_configure_input_replay(route, sample_count);
     }
 #endif

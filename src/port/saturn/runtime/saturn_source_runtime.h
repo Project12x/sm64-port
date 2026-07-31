@@ -35,6 +35,9 @@ typedef struct sm64_saturn_source_runtime_state {
     uint32_t preflight_failures;
     uint32_t input_replay_ticks;
     uint16_t input_replay_sample;
+    uint16_t last_applied_buttons;
+    int8_t last_applied_stick_x;
+    int8_t last_applied_stick_y;
     bool input_replay_active;
     bool input_replay_complete;
 } sm64_saturn_source_runtime_state_t;

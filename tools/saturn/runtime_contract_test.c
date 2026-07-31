@@ -360,6 +360,41 @@ static void test_input_replay_feeds_only_pads_and_ends_neutral(void)
     assert(buttons == 0U && stick_x == 0 && stick_y == 0);
 }
 
+static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
+{
+    const sm64_saturn_input_replay_sample_t samples[] = {
+        { 120U, 0, 0, 0U },
+        { 1U, 0, 0, 0x0010U },
+        { 1879U, 0, 0, 0U },
+    };
+    sm64_saturn_input_replay_t replay;
+    uint16_t buttons = UINT16_MAX;
+    int8_t stick_x = INT8_MIN;
+    int8_t stick_y = INT8_MAX;
+
+    sm64_saturn_input_replay_init(&replay, samples, 3U);
+    for (uint32_t tick = 1U; tick <= 120U; tick++) {
+        sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+        assert(buttons == 0U && stick_x == 0 && stick_y == 0);
+    }
+    sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+    assert(buttons == 0x0010U && stick_x == 0 && stick_y == 0);
+    assert(replay.ticks_consumed == 121U);
+
+    for (uint32_t tick = 122U; tick <= 2000U; tick++)
+        sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+    assert(buttons == 0U && stick_x == 0 && stick_y == 0);
+    assert(replay.complete);
+    assert(replay.ticks_consumed == 2000U);
+
+    buttons = UINT16_MAX;
+    stick_x = INT8_MIN;
+    stick_y = INT8_MAX;
+    sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
+    assert(buttons == 0U && stick_x == 0 && stick_y == 0);
+    assert(replay.ticks_consumed == 2000U);
+}
+
 static void test_bounded_terrain_result_spans(void)
 {
     sm64_saturn_terrain_result_t master_records[4];
@@ -3605,6 +3640,7 @@ int main(void)
     test_rotated_frustum_aabb_radius_is_conservative();
     test_q16_normalization();
     test_input_replay_feeds_only_pads_and_ends_neutral();
+    test_default_camera_replay_keeps_the_2000_tick_boundary();
     test_bounded_terrain_result_spans();
     test_view_space_terrain_clip();
     test_frame_profile();
