@@ -1290,12 +1290,19 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             stack_offset = source.offset + int(next(iter(target_integers)))
         elif isinstance(target, StackPtr) and len(source_integers) == 1:
             stack_offset = target.offset + int(next(iter(source_integers)))
+        maybe_stack_offset = (
+            isinstance(source, MaybeStackPtr) and len(target_integers) == 1
+        ) or (
+            isinstance(target, MaybeStackPtr) and len(source_integers) == 1
+        )
         if stack_offset is not None:
             state[binary.group(2)] = (
                 StackPtr(stack_offset)
                 if abs(stack_offset) <= 4096 and stack_offset % 4 == 0
                 else UNKNOWN
             )
+        elif maybe_stack_offset:
+            state[binary.group(2)] = MAYBE_STACK_PTR
         elif isinstance(source, ConstSet) and isinstance(target, ConstSet) \
                 and source.kind == target.kind \
                 and source.kind in {"signed", "unsigned"} \

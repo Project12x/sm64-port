@@ -1022,6 +1022,52 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIs(state["r4"], MAYBE_STACK_PTR)
         self.assertEqual(effects, [])
 
+    def test_register_add_preserves_maybe_stack_pointer_before_memory_call(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d8 0e mov.l 6001040 <_child>,r8 ! 06001040 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: 20 08 tst r0,r0
+ 6001008: 89 02 bt 6001010 <_root+0x10>
+ 600100a: 6f 43 mov r15,r4
+ 600100c: a0 01 bra 6001012 <_root+0x12>
+ 600100e: 00 09 nop
+ 6001010: e4 00 mov #0,r4
+ 6001012: e5 04 mov #4,r5
+ 6001014: 34 5c add r5,r4
+ 6001016: b0 1b bsr 6001050 <_leaf>
+ 6001018: 00 09 nop
+ 600101a: 61 f2 mov.l @r15,r1
+ 600101c: 41 0b jsr @r1
+ 600101e: 00 09 nop
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001040 <_child>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+06001050 <_leaf>:
+ 6001050: 24 02 mov.l r0,@r4
+ 6001052: 00 0b rts
+ 6001054: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(
+            parse_readelf_symbols(
+                "   1: 06001000 36 FUNC GLOBAL DEFAULT 1 _root\n"
+                "   2: 06001040 16 FUNC GLOBAL DEFAULT 1 _child\n"
+                "   3: 06001050 16 FUNC GLOBAL DEFAULT 1 _leaf\n",
+                sections,
+            ),
+            sections,
+        )
+        result = analyze_code_only(parse_instructions(dis), owners)
+        self.assertFalse(any(call.address == 0x600101C for call in result.calls))
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x600101C, "jsr")],
+        )
+
     def test_store_through_maybe_stack_pointer_invalidates_frame(self) -> None:
         instruction = parse_instructions(" 6001000: 24 02 mov.l r0,@r4\n")[0x6001000]
         state = _unknown_state()
