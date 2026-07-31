@@ -20,10 +20,31 @@
 #include "saturn_matrix_ctors.h"
 #include "saturn_light_q16.h"
 #include "saturn_input_replay.h"
+#include "saturn_source_runtime.h"
+#include "pc/controller/controller_api.h"
 #include "types.h"
 #include "saturn_fast3d_frontend.h"
 #include "saturn_quad_map.h"
 #include "PR/gbi.h"
+
+struct MarioState *gMarioState;
+
+static void runtime_contract_controller_init(void)
+{
+}
+
+static void runtime_contract_controller_read(OSContPad *pad)
+{
+    pad->button = 0xFFFFU;
+    pad->stick_x = -41;
+    pad->stick_y = 42;
+    pad->errnum = CONT_NO_RESPONSE_ERROR;
+}
+
+struct ControllerAPI controller_saturn = {
+    .init = runtime_contract_controller_init,
+    .read = runtime_contract_controller_read,
+};
 
 static void test_identity_camera(void)
 {
@@ -393,6 +414,54 @@ static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
     sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
     assert(buttons == 0U && stick_x == 0 && stick_y == 0);
     assert(replay.ticks_consumed == 2000U);
+}
+
+static void test_source_runtime_records_the_applied_camera_replay_pad(void)
+{
+    const sm64_saturn_input_replay_sample_t samples[] = {
+        { 120U, 0, 0, 0U },
+        { 1U, 0, 0, 0x0010U },
+        { 1879U, 0, 0, 0U },
+    };
+    OSContPad pad;
+    struct MarioState mario;
+    const sm64_saturn_source_runtime_state_t *state;
+
+    (void)memset(&mario, 0, sizeof(mario));
+    gMarioState = &mario;
+    sm64_saturn_source_runtime_configure_input_replay(samples, 3U);
+    state = sm64_saturn_source_runtime_state();
+    assert(state->last_applied_buttons == 0U);
+    assert(state->last_applied_stick_x == 0);
+    assert(state->last_applied_stick_y == 0);
+
+    for (uint32_t tick = 1U; tick <= 120U; tick++) {
+        sm64_saturn_source_runtime_read_controllers(&pad, 1U);
+        assert(pad.button == 0U && pad.stick_x == 0 && pad.stick_y == 0);
+    }
+    sm64_saturn_source_runtime_read_controllers(&pad, 1U);
+    assert(pad.button == 0x0010U && pad.stick_x == 0 && pad.stick_y == 0);
+    assert(state->input_replay_ticks == 121U);
+    assert(state->last_applied_buttons == 0x0010U);
+    assert(state->last_applied_stick_x == 0);
+    assert(state->last_applied_stick_y == 0);
+
+    for (uint32_t tick = 122U; tick <= 2000U; tick++)
+        sm64_saturn_source_runtime_read_controllers(&pad, 1U);
+    assert(pad.button == 0U && pad.stick_x == 0 && pad.stick_y == 0);
+    assert(state->input_replay_ticks == 2000U);
+    assert(state->input_replay_complete);
+    assert(state->last_applied_buttons == 0U);
+    assert(state->last_applied_stick_x == 0);
+    assert(state->last_applied_stick_y == 0);
+
+    sm64_saturn_source_runtime_read_controllers(&pad, 1U);
+    assert(pad.button == 0U && pad.stick_x == 0 && pad.stick_y == 0);
+    assert(state->input_replay_ticks == 2000U);
+    assert(state->last_applied_buttons == 0U);
+    assert(state->last_applied_stick_x == 0);
+    assert(state->last_applied_stick_y == 0);
+    gMarioState = NULL;
 }
 
 static void test_bounded_terrain_result_spans(void)
@@ -3641,6 +3710,7 @@ int main(void)
     test_q16_normalization();
     test_input_replay_feeds_only_pads_and_ends_neutral();
     test_default_camera_replay_keeps_the_2000_tick_boundary();
+    test_source_runtime_records_the_applied_camera_replay_pad();
     test_bounded_terrain_result_spans();
     test_view_space_terrain_clip();
     test_frame_profile();

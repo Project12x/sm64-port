@@ -6,10 +6,25 @@
 #include <PR/gbi.h>
 
 #include "types.h"
+#if defined(SM64_SATURN_RUNTIME_CONTRACT_TEST)
+#include "pc/controller/controller_api.h"
+
+extern struct ControllerAPI controller_saturn;
+extern struct MarioState *gMarioState;
+
+static void vdp2_tvmd_vblank_in_wait(void)
+{
+}
+
+static void vdp2_tvmd_vblank_out_wait(void)
+{
+}
+#else
 #include <yaul.h>
 
 #include "controller_saturn.h"
 #include "game/level_update.h"
+#endif
 #include "saturn_source_runtime.h"
 
 static sm64_saturn_source_task_submit_fn sTaskSubmit;

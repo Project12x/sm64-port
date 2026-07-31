@@ -168,6 +168,10 @@ int main(void) {
             module.first_mario_dispatch_tick(manifest),
             EXPECTED_FIRST_MARIO_DISPATCH_TICK,
         )
+        self.assertEqual(
+            manifest["first_mario_dispatch_tick"],
+            module.first_mario_dispatch_tick(manifest),
+        )
         self.assertEqual(sum(sample["ticks"] for sample in manifest["samples"]), 2000)
 
     def test_dispatch_tick_rejects_non_camera_input_shapes(self) -> None:

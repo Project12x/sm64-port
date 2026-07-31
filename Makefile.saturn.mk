@@ -191,6 +191,7 @@ verify-runtime-contracts: compile-quad-map
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+	  -DSM64_SATURN_RUNTIME_CONTRACT_TEST=1 \
 	  -I"$(SATURN_REPO_ROOT)/include" \
 	  -I"$(SATURN_REPO_ROOT)/src" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
@@ -203,6 +204,7 @@ verify-runtime-contracts: compile-quad-map
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_frustum.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_source_runtime.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/runtime-contract-test$(HOST_EXEEXT)"
 
