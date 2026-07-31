@@ -70,7 +70,7 @@ static uint32_t sm64_saturn_camera_fixed_export_bits(int32_t value)
     } else {
         magnitude = (uint32_t)value;
     }
-    while ((magnitude >> (leading + 1U)) != 0U)
+    while (leading < 31U && (magnitude >> (leading + 1U)) != 0U)
         leading++;
     exponent = leading + 111U;
     if (leading <= 23U)

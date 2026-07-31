@@ -223,6 +223,10 @@ int main(void) {
                 "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
                 "SATURN_CAMERA_VARIANT=2",
             ),
+            "fixed_camera_variant": sourceboot_make(
+                "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+                "SATURN_CAMERA_VARIANT=3",
+            ),
             "camera_route": sourceboot_make(
                 "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
                 "SATURN_SOURCEBOOT_CAMERA_ROUTE=1",
@@ -252,11 +256,14 @@ int main(void) {
             variant_dirs.add(output_dir)
         self.assertEqual(len(variant_dirs), len(variants))
 
+        fixed_dir = make_value(variants["fixed_camera_variant"].stdout, "SH_OUTPUT_DIR")
+        self.assertIn("-camv3-stage16", fixed_dir)
+
         route_one_dir = make_value(variants["camera_route"].stdout, "SH_OUTPUT_DIR")
         self.assertIn("-idle0-disc0-range0-stage16-r6000", route_one_dir)
 
         for assignment, message in (
-            ("SATURN_CAMERA_VARIANT=3", "SATURN_CAMERA_VARIANT must be 1 (float) or 2 (Q)"),
+            ("SATURN_CAMERA_VARIANT=4", "SATURN_CAMERA_VARIANT must be 1 (float), 2 (bypass), or 3 (fixed)"),
             ("SATURN_SOURCEBOOT_CAMERA_ROUTE=2", "SATURN_SOURCEBOOT_CAMERA_ROUTE must be 0 (bob-parity-v1) or 1 (bob-default-camera-v1)"),
             ("SATURN_CAMERA_IDLE_DISCOVERY=2", "SATURN_CAMERA_IDLE_DISCOVERY must be 0 or 1"),
             ("SATURN_CAMERA_RANGE_CAPTURE=2", "SATURN_CAMERA_RANGE_CAPTURE must be 0 or 1"),

@@ -76,6 +76,9 @@ int main(void) {
     if (bits(camera.focus[0]) != 0x3fc00000U ||
         bits(camera.focus[1]) != 0xbfc00000U || bits(camera.focus[2]) != 0U ||
         bits(camera.pos[0]) != 0x3f800000U || camera.yaw != -7) return 14;
+    state.rendered_focus[0] = INT32_MIN;
+    sm64_saturn_camera_fixed_publish(&state, &camera);
+    if (bits(camera.focus[0]) != 0xc7000000U) return 16;
     if ((state.diagnostics & SM64_SATURN_CAMERA_FIXED_DIAG_UNSUPPORTED_OBSTRUCTION) == 0)
         return 15;
     return 0;
@@ -96,7 +99,7 @@ int main(void) {
             self.assertEqual(result.returncode, 0, result.stderr)
             run_result = subprocess.run(
                 [str(executable)], capture_output=True, text=True,
-                env=host_environment(), check=False,
+                env=host_environment(), check=False, timeout=3,
             )
             self.assertEqual(run_result.returncode, 0, run_result.stderr)
 
