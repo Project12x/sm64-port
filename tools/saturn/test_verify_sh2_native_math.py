@@ -497,18 +497,18 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001000: 20 08 tst r0,r0
  6001002: 89 02 bt 600100a <_root+0xa>
  6001004: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
- 6001006: a0 08 bra 600101a <_root+0x1a>
+ 6001006: a0 07 bra 6001018 <_root+0x18>
  6001008: 00 09 nop
  600100a: 22 08 tst r2,r2
  600100c: 89 02 bt 6001014 <_root+0x14>
  600100e: d1 07 mov.l 6001030 <_zero>,r1 ! 06001030 <_zero>
- 6001010: a0 03 bra 600101a <_root+0x1a>
+ 6001010: a0 02 bra 6001018 <_root+0x18>
  6001012: 00 09 nop
  6001014: d1 06 mov.l 6001030 <_zero_alias>,r1 ! 06001030 <_zero_alias>
- 6001016: a0 00 bra 600101a <_root+0x1a>
- 6001018: 00 09 nop
- 600101a: 41 0b jsr @r1
- 600101c: 00 09 nop
+ 6001016: 00 09 nop
+ 6001018: 41 0b jsr @r1
+ 600101a: 00 09 nop
+ 600101c: 00 0b rts
  600101e: 00 09 nop
 06001020 <_child>:
  6001020: 00 0b rts
@@ -526,8 +526,8 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertEqual(
             [call for call in result.calls if call.caller == "_root"],
             [
-                CallSite("_root", 0x600101A, "_child"),
-                CallSite("_root", 0x600101A, "_zero_alias"),
+                CallSite("_root", 0x6001018, "_child"),
+                CallSite("_root", 0x6001018, "_zero_alias"),
             ],
         )
         self.assertEqual(
@@ -925,6 +925,35 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertFalse(any(call.address == 0x6001010 for call in result.calls))
         self.assertTrue(any(item.address == 0x6001010 for item in result.unresolved_transfers))
 
+    def test_nonleaf_call_invalidates_neighbor_of_escaped_stack_address(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: e4 04 mov #4,r4
+ 6001008: 34 fc add r15,r4
+ 600100a: d2 09 mov.l 6001030 <_zero_alias>,r2 ! 06001030 <_zero_alias>
+ 600100c: 42 0b jsr @r2
+ 600100e: 00 09 nop
+ 6001010: 61 f2 mov.l @r15,r1
+ 6001012: 41 0b jsr @r1
+ 6001014: 00 09 nop
+ 6001016: 7f 08 add #8,r15
+ 6001018: 00 0b rts
+ 600101a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 24 02 mov.l r0,@r4
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x6001012 for call in result.calls))
+        self.assertTrue(any(item.address == 0x6001012 for item in result.unresolved_transfers))
+
     def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
         dis = """
 06001000 <_root>:
@@ -1070,6 +1099,28 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         ))
         self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
 
+    def test_memory_writing_leaf_preserves_proven_unwritten_gpr(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d3 07 mov.l 6001020 <_child>,r3 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 43 0b jsr @r3
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 24 02 mov.l r0,@r4
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+
     def test_cross_owner_direct_bra_emits_tail_call_fact(self) -> None:
         dis = """
 06001000 <_root>:
@@ -1103,6 +1154,77 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
 06001000 <_root>:
  6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
  6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001008: 48 0b jsr @r8
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x6001002 and item.mnemonic == "bra"
+            for item in result.unresolved_transfers
+        ))
+        self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
+
+    def test_nondelayed_branch_missing_boundary_fallthrough_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0d bra 600101e <_root+0x1e>
+ 6001002: 00 09 nop
+ 600101e: 8b ef bf 6001000 <_root>
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101E and item.mnemonic == "bf"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_delayed_branch_missing_boundary_pc_plus_four_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0c bra 600101c <_root+0x1c>
+ 6001002: 00 09 nop
+ 600101c: 8f f0 bf.s 6001000 <_root>
+ 600101e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101C and item.mnemonic == "bf.s"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_ordinary_fallthrough_into_another_owner_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0d bra 600101e <_root+0x1e>
+ 6001002: 00 09 nop
+ 600101e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101E and item.mnemonic == "nop"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_control_instruction_in_delay_slot_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
  6001008: 48 0b jsr @r8
  600100a: 00 09 nop
  600100c: 00 0b rts
@@ -1821,17 +1943,27 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001008: 01 1e mov.b @(r0,r1),r1
  600100a: 01 23 braf r1
  600100c: 00 09 nop
- 6001010: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
  6001014: 00 0b rts
- 6001016: 00 0b rts
+ 6001016: 00 09 nop
  6001018: 00 0b rts
- 600101a: 00 0b rts
+ 600101a: 00 09 nop
  600101c: 00 0b rts
  600101e: 00 09 nop
- 6001030: 04 06 .word 0x0406
- 6001032: 08 0a .word 0x080a
+ 6001030: 02 06 .word 0x0206
+ 6001032: 0a 0e .word 0x0a0e
 """
-        self.assertEqual(self.analyze(dis).unresolved_transfers, [])
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(
+            parse_readelf_symbols(
+                "   1: 06001000 32 FUNC GLOBAL DEFAULT 1 _root\n",
+                sections,
+            ),
+            sections,
+        )
+        result = analyze_code_only(parse_instructions(dis), owners)
+        self.assertEqual(result.unresolved_transfers, [])
 
     def test_cmp_hi_splits_unknown_into_conservative_unsigned_ranges(self) -> None:
         compare = parse_instructions(
@@ -1944,13 +2076,15 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001008: 00 09 nop
  600100a: 40 0b jsr @r0
  600100c: 00 09 nop
- 600100e: a0 03 bra 6001018 <_root+0x18>
+ 600100e: a0 05 bra 600101c <_root+0x1c>
  6001010: 00 09 nop
  6001012: 40 0b jsr @r0
  6001014: 00 09 nop
- 6001016: 00 0b rts
- 6001018: 00 0b rts
+ 6001016: a0 01 bra 600101c <_root+0x1c>
+ 6001018: 00 09 nop
  600101a: 00 09 nop
+ 600101c: 00 0b rts
+ 600101e: 00 09 nop
 06001020 <_child>:
  6001020: 00 0b rts
  6001022: 00 09 nop

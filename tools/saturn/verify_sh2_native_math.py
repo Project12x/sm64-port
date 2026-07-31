@@ -176,6 +176,12 @@ class Instruction:
 
 
 @dataclass(frozen=True)
+class LeafSummary:
+    gpr_clobbers: frozenset[str]
+    writes_memory: bool
+
+
+@dataclass(frozen=True)
 class DirectCallFact:
     caller: str
     caller_offset: int
@@ -886,21 +892,9 @@ def _invalidate_stack_range(
 
 
 def _invalidate_escaped_argument_slots(state: dict[str, AbstractValue]) -> None:
-    """Forget slots whose exact frame address is passed in SH argument GPRs."""
-    escaped_offsets = {
-        value.offset
-        for register in ("r4", "r5", "r6", "r7")
-        if isinstance((value := state[register]), StackPtr)
-    }
-    if escaped_offsets:
-        _replace_stack_slots(
-            state,
-            {
-                offset: slot
-                for offset, slot in _stack_slots(state).items()
-                if offset not in escaped_offsets
-            },
-        )
+    """Forget the frame when any exact frame address escapes as an argument."""
+    if any(isinstance(state[register], StackPtr) for register in ("r4", "r5", "r6", "r7")):
+        _invalidate_stack(state)
 
 
 def _exact_integer(value: AbstractValue) -> int | None:
@@ -925,6 +919,12 @@ def _indexed_stack_offset(
 def _instruction_writes_memory(instruction: Instruction) -> bool:
     return instruction.mnemonic in {"mov.l", "mov.w", "mov.b", "sts.l"} \
         and ",@" in instruction.operands
+
+
+DELAY_SLOT_CONTROL = frozenset({
+    "bf", "bf.s", "bra", "braf", "bsr", "bsrf", "bt", "bt.s",
+    "jmp", "jsr", "rte", "rts", "sleep", "trapa", ".word",
+})
 
 
 def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
@@ -1430,7 +1430,7 @@ def _straight_line_leaf_gpr_clobbers(
     memory: dict[int, int],
     *,
     max_instructions: int = 256,
-) -> frozenset[str] | None:
+) -> LeafSummary | None:
     """Prove caller-saved GPR writes for a bounded, fully decoded leaf CFG.
 
     GCC's SH runtime and small compiled C leaves can contain conditional
@@ -1449,10 +1449,7 @@ def _straight_line_leaf_gpr_clobbers(
         )
     initial_sp = initial_state["r15"]
     clobbers: set[str] = set()
-    delay_control = {
-        "bf", "bf.s", "bra", "braf", "bsr", "bsrf", "bt", "bt.s",
-        "jmp", "jsr", "rte", "rts", "sleep", "trapa", ".word",
-    }
+    writes_memory = False
     forbidden_control = {"bsr", "bsrf", "jmp", "jsr", "rte", "sleep", "trapa", ".word"}
     states: dict[int, dict[str, AbstractValue]] = {}
     queue: deque[tuple[int, dict[str, AbstractValue]]] = deque([(target, initial_state)])
@@ -1465,8 +1462,9 @@ def _straight_line_leaf_gpr_clobbers(
     def apply(
         instruction: Instruction, state: dict[str, AbstractValue]
     ) -> dict[str, AbstractValue] | None:
+        nonlocal writes_memory
         if _instruction_writes_memory(instruction):
-            return None
+            writes_memory = True
         result = dict(state)
         before = {f"r{index}": result[f"r{index}"] for index in range(8)}
         effects: list[UnresolvedEffect] = []
@@ -1484,7 +1482,8 @@ def _straight_line_leaf_gpr_clobbers(
     ) -> dict[str, AbstractValue] | None:
         delay_address = address + 2
         delay = instructions.get(delay_address)
-        if not in_owner(delay_address) or delay is None or delay.mnemonic in delay_control:
+        if not in_owner(delay_address) or delay is None \
+                or delay.mnemonic in DELAY_SLOT_CONTROL:
             return None
         return apply(delay, state)
 
@@ -1595,7 +1594,7 @@ def _straight_line_leaf_gpr_clobbers(
         if post is None or not schedule(address + 2, post):
             return None
 
-    return frozenset(clobbers) if reached_return else None
+    return LeafSummary(frozenset(clobbers), writes_memory) if reached_return else None
 
 
 def _analyze_code_only_pass(
@@ -1642,7 +1641,7 @@ def _analyze_code_only_pass(
     ] = {}
     unresolved_emissions: dict[tuple[object, ...], list[UnresolvedTransfer]] = {}
     effect_emissions: dict[tuple[object, ...], list[UnresolvedEffect]] = {}
-    leaf_clobber_cache: dict[int, frozenset[str] | None] = {}
+    leaf_clobber_cache: dict[int, LeafSummary | None] = {}
 
     for owner in owner_list:
         if selected_names is not None and owner.name not in selected_names:
@@ -1919,6 +1918,9 @@ def _analyze_code_only_pass(
                         or not region_start <= slot_address < region_end:
                     unresolved_emissions[key].append(unresolved_transfer())
                     return None
+                if instructions[slot_address].mnemonic in DELAY_SLOT_CONTROL:
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    return None
                 result = dict(base_state)
                 code_addresses.add(slot_address)
                 if node_sink is not None:
@@ -2047,7 +2049,8 @@ def _analyze_code_only_pass(
                             schedule_island(target[1], target[2], callee_entry)
                 post = dict(callee_entry)
                 gpr_clobbers = {f"r{x}" for x in range(8)}
-                memory_write_free_leaf = False
+                all_proven = False
+                proven_leaf_writes_memory = False
                 if not invalid_target and resolved_targets and all(
                     target[0] == "callee" for target in resolved_targets.values()
                 ):
@@ -2066,11 +2069,11 @@ def _analyze_code_only_pass(
                         if summary is None:
                             all_proven = False
                             break
-                        proven_clobbers.update(summary)
+                        proven_clobbers.update(summary.gpr_clobbers)
+                        proven_leaf_writes_memory |= summary.writes_memory
                     if all_proven:
                         gpr_clobbers = proven_clobbers
-                        memory_write_free_leaf = True
-                if not memory_write_free_leaf:
+                if not all_proven or proven_leaf_writes_memory:
                     _invalidate_escaped_argument_slots(post)
                 for abi_register in [
                     *sorted(gpr_clobbers), "mach", "macl", "t_predicate"
@@ -2080,7 +2083,12 @@ def _analyze_code_only_pass(
                         post[f"{abi_register}_stack_origin"] = StackOrigin()
                 if profile is not None:
                     profile["abi_continuations_scheduled"] += 1
-                schedule(address + 4, post)
+                continuation = address + 4
+                if region_start <= continuation < region_end \
+                        and continuation in instructions:
+                    schedule(continuation, post)
+                else:
+                    unresolved_emissions[key].append(unresolved_transfer())
                 continue
             if mnemonic in {"jmp", "braf"}:
                 register = re.search(r"@?(r(?:1[0-5]|\d))", ins.operands)
@@ -2191,10 +2199,17 @@ def _analyze_code_only_pass(
                     (true_state, false_state) if mnemonic == "bt"
                     else (false_state, true_state)
                 )
+                fallthrough_address = address + 2
+                if fallthrough is not None and (
+                    not region_start <= fallthrough_address < region_end
+                    or fallthrough_address not in instructions
+                ):
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    continue
                 if taken is not None:
                     schedule(direct_target, taken)
                 if fallthrough is not None:
-                    schedule(address + 2, fallthrough)
+                    schedule(fallthrough_address, fallthrough)
                 continue
             if mnemonic in {"bt.s", "bf.s"}:
                 if direct_target is None \
@@ -2213,6 +2228,13 @@ def _analyze_code_only_pass(
                     (true_state, false_state) if mnemonic == "bt.s"
                     else (false_state, true_state)
                 )
+                fallthrough_address = address + 4
+                if fallthrough is not None and (
+                    not region_start <= fallthrough_address < region_end
+                    or fallthrough_address not in instructions
+                ):
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    continue
                 if taken is not None:
                     post = after_slot(taken)
                     if post is not None:
@@ -2220,14 +2242,19 @@ def _analyze_code_only_pass(
                 if fallthrough is not None:
                     post = after_slot(fallthrough)
                     if post is not None:
-                        schedule(address + 4, post)
+                        schedule(fallthrough_address, post)
                 continue
             next_state = dict(state)
             new_effects: list[UnresolvedEffect] = []
             _write_effect(ins, next_state, new_effects, owner, memory, profile)
             for effect in new_effects:
                 effect_emissions[key].append(effect)
-            schedule(address + 2, next_state)
+            fallthrough_address = address + 2
+            if region_start <= fallthrough_address < region_end \
+                    and fallthrough_address in instructions:
+                schedule(fallthrough_address, next_state)
+            else:
+                unresolved_emissions[key].append(unresolved_transfer())
 
         if progress_callback is not None:
             progress_callback({
