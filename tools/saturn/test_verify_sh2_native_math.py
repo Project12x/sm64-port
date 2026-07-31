@@ -13,7 +13,9 @@ from verify_sh2_native_math import (
     ConstSet,
     FunctionOwner,
     Interval,
+    MAYBE_STACK_PTR,
     UNKNOWN,
+    abstract_value_json,
     analyze_code_only,
     build_instruction_memory,
     build_owner_address_map,
@@ -306,6 +308,12 @@ class NativeMathCensusTests(unittest.TestCase):
         calls = [CallSite("_frame_root", 1, "___addsf3")]
         self.assertEqual(baseline_failures(calls, {"_frame_root"}, baseline), [])
         self.assertEqual(audit_failures(calls, {"_candidate"}, oracle, contract), [])
+
+    def test_maybe_stack_pointer_diagnostic_is_serializable(self) -> None:
+        self.assertEqual(
+            abstract_value_json(MAYBE_STACK_PTR),
+            {"kind": "MaybeStackPtr"},
+        )
 
 
 class CodeOnlyAnalysisTests(unittest.TestCase):
@@ -954,6 +962,37 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertFalse(any(call.address == 0x6001012 for call in result.calls))
         self.assertTrue(any(item.address == 0x6001012 for item in result.unresolved_transfers))
 
+    def test_joined_maybe_stack_argument_invalidates_escaped_frame(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: 20 08 tst r0,r0
+ 6001008: 89 03 bt 6001012 <_root+0x12>
+ 600100a: 6f 43 mov r15,r4
+ 600100c: a0 03 bra 6001016 <_root+0x16>
+ 600100e: 00 09 nop
+ 6001010: 00 09 nop
+ 6001012: e4 00 mov #0,r4
+ 6001014: 00 09 nop
+ 6001016: b0 0b bsr 6001030 <_zero_alias>
+ 6001018: 00 09 nop
+ 600101a: 61 f2 mov.l @r15,r1
+ 600101c: 41 0b jsr @r1
+ 600101e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 24 02 mov.l r0,@r4
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x600101C for call in result.calls))
+        self.assertTrue(any(item.address == 0x600101C for item in result.unresolved_transfers))
+
     def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
         dis = """
 06001000 <_root>:
@@ -1239,6 +1278,57 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             for item in result.unresolved_transfers
         ))
         self.assertFalse(any(call.address == 0x6001008 for call in result.calls))
+
+    def test_resolved_jsr_with_missing_delay_slot_keeps_diagnostic(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001002: a0 0c bra 600101e <_root+0x1e>
+ 6001004: 00 09 nop
+ 600101e: 48 0b jsr @r8
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101E and item.mnemonic == "jsr"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_resolved_bsr_with_control_delay_slot_keeps_diagnostic(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0c bra 600101c <_root+0x1c>
+ 6001002: 00 09 nop
+ 600101c: b0 00 bsr 6001020 <_child>
+ 600101e: 00 0b rts
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101C and item.mnemonic == "bsr"
+            for item in result.unresolved_transfers
+        ))
+
+    def test_resolved_bsr_with_missing_continuation_keeps_diagnostic(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 0c bra 600101c <_root+0x1c>
+ 6001002: 00 09 nop
+ 600101c: b0 00 bsr 6001020 <_child>
+ 600101e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertTrue(any(
+            item.address == 0x600101C and item.mnemonic == "bsr"
+            for item in result.unresolved_transfers
+        ))
 
     def test_unparseable_conditional_target_fails_closed_without_fallthrough(self) -> None:
         dis = """

@@ -107,6 +107,14 @@ class StackPtr:
 
 
 @dataclass(frozen=True)
+class MaybeStackPtr:
+    pass
+
+
+MAYBE_STACK_PTR = MaybeStackPtr()
+
+
+@dataclass(frozen=True)
 class StackSlot:
     value: AbstractValue
     store_addresses: tuple[int, ...] = ()
@@ -124,8 +132,8 @@ class StackOrigin:
 
 
 AbstractValue = (
-    _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | StackMemory
-    | StackOrigin
+    _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | MaybeStackPtr
+    | StackMemory | StackOrigin
 )
 
 
@@ -308,11 +316,12 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         return right
     if right is UNREACHED:
         return left
-    if left is UNKNOWN or right is UNKNOWN:
-        return UNKNOWN
     if left == right:
         return left
-    if isinstance(left, StackPtr) or isinstance(right, StackPtr):
+    if isinstance(left, (StackPtr, MaybeStackPtr)) \
+            or isinstance(right, (StackPtr, MaybeStackPtr)):
+        return MAYBE_STACK_PTR
+    if left is UNKNOWN or right is UNKNOWN:
         return UNKNOWN
     if isinstance(left, StackMemory) and isinstance(right, StackMemory):
         left_slots, right_slots = dict(left.slots), dict(right.slots)
@@ -892,8 +901,11 @@ def _invalidate_stack_range(
 
 
 def _invalidate_escaped_argument_slots(state: dict[str, AbstractValue]) -> None:
-    """Forget the frame when any exact frame address escapes as an argument."""
-    if any(isinstance(state[register], StackPtr) for register in ("r4", "r5", "r6", "r7")):
+    """Forget the frame when any possible frame address escapes as an argument."""
+    if any(
+        isinstance(state[register], (StackPtr, MaybeStackPtr))
+        for register in ("r4", "r5", "r6", "r7")
+    ):
         _invalidate_stack(state)
 
 
@@ -2001,7 +2013,16 @@ def _analyze_code_only_pass(
                         if mnemonic in {"bsrf", "jsr"} and register else None,
                         value if mnemonic in {"bsrf", "jsr"} else None,
                     ))
-                else:
+
+                callee_entry = after_slot(state)
+                if callee_entry is None:
+                    continue
+                continuation = address + 4
+                if not region_start <= continuation < region_end \
+                        or continuation not in instructions:
+                    unresolved_emissions[key].append(unresolved_transfer())
+                    continue
+                if not invalid_target:
                     for canonical in sorted(resolved_targets):
                         target = resolved_targets[canonical]
                         if target[0] == "island":
@@ -2018,6 +2039,7 @@ def _analyze_code_only_pass(
                                     caller_island,
                                 )
                             )
+                            schedule_island(target[1], target[2], callee_entry)
                         elif target[0] == "synthetic":
                             synthetic = target[1]
                             call_emissions[key].append(
@@ -2038,15 +2060,6 @@ def _analyze_code_only_pass(
                                 target_address - callee.start, 1,
                                 caller_region, caller_island
                             ))
-
-                callee_entry = after_slot(state)
-                if callee_entry is None:
-                    continue
-                if not invalid_target:
-                    for canonical in sorted(resolved_targets):
-                        target = resolved_targets[canonical]
-                        if target[0] == "island":
-                            schedule_island(target[1], target[2], callee_entry)
                 post = dict(callee_entry)
                 gpr_clobbers = {f"r{x}" for x in range(8)}
                 all_proven = False
@@ -2083,12 +2096,7 @@ def _analyze_code_only_pass(
                         post[f"{abi_register}_stack_origin"] = StackOrigin()
                 if profile is not None:
                     profile["abi_continuations_scheduled"] += 1
-                continuation = address + 4
-                if region_start <= continuation < region_end \
-                        and continuation in instructions:
-                    schedule(continuation, post)
-                else:
-                    unresolved_emissions[key].append(unresolved_transfer())
+                schedule(continuation, post)
                 continue
             if mnemonic in {"jmp", "braf"}:
                 register = re.search(r"@?(r(?:1[0-5]|\d))", ins.operands)
@@ -3019,6 +3027,8 @@ def abstract_value_json(value: AbstractValue | None) -> dict[str, Any]:
         return {"kind": "NOT_APPLICABLE"}
     if value is UNKNOWN:
         return {"kind": "UNKNOWN"}
+    if isinstance(value, MaybeStackPtr):
+        return {"kind": "MaybeStackPtr"}
     if isinstance(value, Interval):
         return {
             "kind": "Interval", "value_kind": value.kind,
