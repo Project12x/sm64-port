@@ -657,6 +657,18 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Create after measurement:
   `tools/saturn/fixtures/bob_camera_memory_v1.json`
 - Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json`
+- Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json`
+- Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json`
+- Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json`
+- Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json`
+- Create after independent review:
+  `docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json`
+- Create after reviewed parser correction:
   `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
 - Create after measurement:
   `docs/saturn/evidence/reports/task3-camera-memory-transport-2026-07-29.json`
@@ -692,10 +704,30 @@ only to latch SQT1; it is not an additional SCC1 word.
 
 - [ ] **Step 0: Correct and deliberately re-pin the linked-ELF audit before transport**
 
-  This is a two-phase prerequisite. Do not change `camera.c`, SCC transport,
-  cart staging, or the v2 contract during phase A.
+  This is a two-phase prerequisite. The current branch worktree already
+  contains partial, unstaged Task 3 transport work. Do not author the parser
+  there and do not build evidence from it. Record the control commit and
+  create a clean detached authoring worktree under the repository's ignored
+  `.worktrees` area:
 
-  First extend the current linear verifier only with
+  ```powershell
+  $repoRoot = "D:/Code/RetroDev/sm64-saturn-port/sm64-port"
+  $controlWorktree = "$repoRoot/.worktrees/sh2-native-math-purge"
+  $parserBase = (git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim()
+  $parserBaseShort = $parserBase.Substring(0, 7)
+  $parserAuthoring = "$repoRoot/.worktrees/audit-parser-author-$parserBaseShort"
+  if (Test-Path $parserAuthoring) { throw "parser authoring worktree already exists: $parserAuthoring" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree add --detach $parserAuthoring $parserBase
+  if (git -C $parserAuthoring -c "safe.directory=$parserAuthoring" status --porcelain) { throw "parser authoring worktree is dirty" }
+  $saturnPython = "$controlWorktree/.venv-saturn-tools/Scripts/python.exe"
+  ```
+
+  Every parser edit, focused test, and parser commit in phase A runs with
+  `$parserAuthoring` as its working directory. Do not change `camera.c`, SCC
+  transport, cart staging, the sourceboot Makefile, or the v2 contract in
+  this authoring worktree.
+
+  First extend the current linear verifier with
   `--audit-observation-only --json-output PATH --analysis-mode
   legacy-linear`. This mode bypasses only the v2 expected-total comparison;
   it still validates the pinned contract/oracle digests, expected root,
@@ -704,7 +736,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   ```text
   schema_version: 1
   analysis_mode: "legacy-linear" | "code-only"
-  parser_sha256, elf_sha256, route_oracle_sha256
+  producer_commit, parser_sha256, elf_sha256, route_oracle_sha256
   contract_before_sha256, contract_before_expected_total
   root
   closure_functions: [symbol, ...]
@@ -715,40 +747,26 @@ only to latch SQT1; it is not an additional SCC1 word.
   helper_total
   unresolved_indirect_transfers:
     [{caller, caller_offset, mnemonic}, ...]
+  unresolved_effects:
+    [{function, instruction_offset, mnemonic, operands, reason}, ...]
   ```
 
   `caller_offset` and `callee_offset` are nonnegative symbol-relative byte
   offsets serialized as JSON numbers. Closure/call arrays contain only facts
   whose caller belongs to the audit root's derived closure; rows are sorted by
-  their displayed fields. Observation-only is mutually exclusive with normal
+  their displayed fields. `--producer-commit` requires a full lowercase
+  40-hex SHA equal to `git rev-parse HEAD` in the producer worktree and is
+  recorded verbatim. Observation-only is mutually exclusive with normal
   acceptance and never appears in a Makefile target. Add tests proving it
-  cannot suppress a forbidden-caller, bad-root, digest, or malformed-ELF
-  failure.
+  cannot suppress a forbidden-caller, bad-root, digest, producer-commit, or
+  malformed-ELF failure.
 
-  Build the two pre-transport layout probes serially without `verify`, because
-  the known-bad v2 total is not an acceptance gate:
+  Do not build either layout probe yet. Both legacy and corrected observations
+  are produced later from the same clean detached evidence worktree at the
+  reviewed parser commit.
 
-  ```powershell
-  $auditBuildBase = "cd /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge && source /d/Code/RetroDev/sm64-saturn-port/sm64-port/.yaul.env && cd src/port/saturn/sourceboot && make -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_ATAN2_VARIANT=2 SATURN_CAMERA_VARIANT=1 SATURN_DEMO_VIEW_RADIUS=6000 SATURN_SLAVE_RENDER=1 SATURN_DEMO_POLY_TIER=0 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_BSP_FRAGMENTS=0 SATURN_RENDERER_PIPELINE=2 HOST_CC=C:/msys64/mingw64/bin/gcc.exe"
-  $auditRoute0Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
-  $auditRoute1Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=1 SATURN_CAMERA_IDLE_START_TICK=0 SATURN_CAMERA_IDLE_DISCOVERY=0 SATURN_CAMERA_RANGE_CAPTURE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
-  C:/msys64/usr/bin/bash.exe -lc $auditRoute0Command
-  C:/msys64/usr/bin/bash.exe -lc $auditRoute1Command
-
-  $auditRoute0Output = "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-atan2v2-camv1-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
-  $auditRoute1Output = "build/saturn/sourceboot/e2-bob-demo-replay-camroute1-atan2v2-camv1-idle0-disc0-range0-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
-  $auditRoute0Elf = (Resolve-Path "$auditRoute0Output/obj/sm64-saturn-sourceboot-e2.elf").Path
-  $auditRoute1Elf = (Resolve-Path "$auditRoute1Output/obj/sm64-saturn-sourceboot-e2.elf").Path
-  $auditScratch = ".superpowers/sdd/2026-07-29-saturn-camera-q-seam/native-math-audit"
-  New-Item -ItemType Directory -Force $auditScratch | Out-Null
-  $auditObjdump = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe"
-  $auditReadelf = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe"
-
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode legacy-linear --json-output "$auditScratch/legacy-route0.json"
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode legacy-linear --json-output "$auditScratch/legacy-route1.json"
-  ```
-
-  Observe the parser RED tests before changing analysis behavior. Independent
+  Observe the parser RED tests in `$parserAuthoring` before changing analysis
+  behavior. Independent
   synthetic fixtures must prove:
 
   - the `_find_floor` pool range `0x0600B040..0x0600B07B` contributes neither
@@ -763,92 +781,291 @@ only to latch SQT1; it is not an additional SCC1 word.
     delay slot where SH requires it;
   - a literal-resolved `jmp @rN` tail call and a
     `mova`/indexed-`mov.w`/`braf` switch reach their real successors;
+  - a disconnected non-entry decoded-line seed starts with every register
+    `UNKNOWN` and cannot inherit a symbol loaded on an entry path;
+  - merging a known symbol with `UNKNOWN` or a different symbol produces
+    `UNKNOWN`, so a stale call target cannot survive a join;
+  - `jsr`, `bsr`, and `bsrf` kill `r0-r7`, `pr`, `mach`, and `macl` after
+    their delay slots while preserving unwritten `r8-r15`;
+  - a recognized but otherwise unmodeled register-writing instruction kills
+    its destination;
+  - an unparseable register effect produces `unresolved_effect` and fails;
   - an unresolved `jmp`, `braf`, or `bsrf` in an audited function is reported
-    and rejected rather than followed linearly.
+    and rejected rather than followed linearly;
+  - readelf fixtures cover a nonzero function, a zero-size function ending at
+    the next function/section boundary, same-start aliases with deterministic
+    canonicalization, rejected same-start/different-end ownership, a rejected
+    partial overlap, a filtered `end_sequence`/one-past decoded-line row, and
+    an absent line table whose entry CFG passes only when it has no unresolved
+    diagnostic.
 
   Run:
 
   ```powershell
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
+  Push-Location $parserAuthoring
+  & $saturnPython tools/saturn/test_verify_sh2_native_math.py
+  Pop-Location
   ```
 
   Expected RED: fake pool instructions appear as calls/clobbers, delay/switch
   reachability records do not exist, and layout facts differ.
 
   Implement `analysis-mode=code-only` as a per-function SH control-flow and
-  abstract-state work list. Parse function address/size records from
-  `sh-elf-readelf -sW` and C code seeds from
-  `sh-elf-readelf --debug-dump=decodedline`; seed every function entry and
-  every decoded-line address contained by that function. Parse objdump rows
-  into address/bytes/mnemonic/operand records but do not call a row an
-  instruction until the walk reaches its address. Reconstruct the addressed
-  `.text` bytes from those rows. Track symbol-address sets, finite integer
-  sets, and unsigned intervals in registers plus fixed `r15` spill slots.
+  abstract-state work list with separate symbol ownership, code-address
+  discovery, and dataflow phases.
+
+  Parse `sh-elf-readelf -SW` first. Only sections with `SHF_EXECINSTR` may own
+  code. From `sh-elf-readelf -sW`, accept only `STT_FUNC` symbols whose
+  `st_shndx` names one of those sections. A nonzero symbol owns
+  `[st_value, st_value + st_size)`. A zero-size symbol ends at the next
+  greater function address in the same section, or that section's end.
+  Reject any derived range outside its executable section. Same-start
+  symbols are aliases only if their effective ends agree; then choose one
+  canonical symbol by the exact tuple
+  `(binding rank GLOBAL=0/WEAK=1/LOCAL=2, visibility rank
+  DEFAULT/PROTECTED=0/HIDDEN/INTERNAL=1, name byte length, UTF-8 name bytes)`;
+  retain the other names in a sorted alias list. Reject different effective
+  ends at one start and partial overlap between ranges with different starts.
+
+  Parse `sh-elf-readelf --debug-dump=decodedline` only after ranges exist.
+  Keep only two-byte-aligned row addresses strictly inside one canonical
+  executable function range. Ignore `end_sequence` rows and addresses equal
+  to a function or section end. A function entry is always a code seed. Each
+  retained non-entry line row is an independent code seed for disconnected
+  switch/case code; it does not inherit entry-path state. If a function has no
+  usable line rows, analyze its entry CFG alone and reject any unresolved
+  indirect transfer or effect.
+
+  Parse objdump rows into address/bytes/mnemonic/operand records but do not
+  call a row an instruction until structural code discovery reaches it from
+  a seed or a proven successor. Reconstruct the addressed `.text` bytes from
+  those rows. Dataflow runs only over discovered code and may add a resolved
+  indirect successor only inside a proven function range; arbitrary objdump
+  rows never become code merely because they were decoded. Every entry and
+  non-entry seed starts with all general registers, `pr`, `mach`, `macl`, and
+  fixed `r15` spill slots `UNKNOWN`.
+
+  The per-location lattice is `UNKNOWN`, one known symbol/address, or a
+  bounded finite integer/address set. Equal known values survive a merge;
+  known-versus-`UNKNOWN` and unequal known values merge to `UNKNOWN`; finite
+  sets union only within the code-owned maximum of 256. Deduplicate work by
+  `(instruction address, full abstract state)` and iterate until no successor
+  state changes.
+
+  Modeled PC-relative symbol loads, register moves, and fixed `r15`
+  spill/reloads propagate source facts. Every other recognized
+  register-writing instruction kills its destination. An unparseable
+  destination or unknown register effect emits `unresolved_effect` and fails
+  an audited closure. `jsr`, `bsr`, and `bsrf` resolve their target from the
+  pre-delay state, execute the one delay slot, then kill the SH ABI
+  caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before their return
+  successor; unwritten `r8-r15` survive.
+
+  Track symbol-address sets, finite integer sets, and signed/unsigned
+  intervals.
   Model the audited switch idioms' `mov #imm`, `and #imm`, `add`,
   shifts/extensions, `mova`, PC-relative `mov.w`/`mov.l`, indexed byte/word
   loads, and the signed/unsigned refinements for `cmp/eq`, `cmp/hs`,
   `cmp/hi`, `cmp/ge`, `cmp/gt`, and `tst`: the `___ashrsi3` mask produces
   `0..31` and the `_render_dialog_entries` `cmp/hi` fallthrough produces
-  `0..3`, so each indexed table load has a finite target set. At joins, retain only equal
-  symbolic facts and union finite values within a code-owned maximum of 256
-  values; exceeding the maximum is an unresolved-transfer failure, never a
-  linear fallback. Model ordinary, conditional, unconditional, call, return,
+  `0..3`, so each indexed table load has a finite target set. Exceeding the
+  finite-set maximum is an unresolved-transfer failure, never a linear
+  fallback. Model ordinary, conditional, unconditional, call, return,
   delayed, and computed successors named by the tests above. Resolve a
   delayed transfer target from the pre-slot state, execute exactly one slot,
-  and propagate the post-slot state to its target/fallthrough. Map a
-  reached direct target address to the containing function and retain its
-  nonzero offset; never require exact symbol-entry targets and never strip an
-  offset before source-code reachability is known.
+  and propagate the post-slot state to its target/fallthrough. Map a reached
+  direct target address to the containing function and retain its nonzero
+  offset; never require exact symbol-entry targets and never strip an offset
+  before source-code reachability is known.
 
-  Add `--readelf PATH`; every absolute SH-tool child environment prepends
-  `C:\msys64\usr\bin` without mutating its parent. Ordinary verification now
-  always selects `code-only`; normal acceptance rejects `legacy-linear`, and
-  the Makefile never invokes the read-only legacy observation mode. Add
-  `SOURCEBOOT_SH_READELF :=
-  $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf` to the sourceboot
-  Makefile and pass `--readelf "$(SOURCEBOOT_SH_READELF)"` to every ordinary
-  native-math verifier invocation. Add both
-  `test_verify_sh2_native_math.py` and
-  `test_compare_sh2_native_math_audit_reports.py` to the serial host
-  prerequisites of `verify`.
+  Add `--readelf PATH`; it is mandatory for ordinary linked-ELF verification,
+  observation, and v3 generation because those modes build a linked call
+  graph. It is forbidden in `--object-reference-only`, which compares object
+  manifests and canonical object disassembly without constructing a linked
+  graph. Tests require omission in object-reference-only and reject supplying
+  it there. Every absolute SH-tool child environment prepends
+  `C:\msys64\usr\bin` without mutating its parent. Ordinary verification
+  always selects `code-only`; normal acceptance rejects `legacy-linear`.
+  Sourceboot Makefile integration is deferred until the reviewed re-pin is
+  fast-forwarded into the control worktree, so the parser/test commit contains
+  no transport-overlapping Makefile diff.
 
-  Emit corrected observations:
+  Create `compare_sh2_native_math_audit_reports.py` with `compare`,
+  `finalize`, and read-only `verify-final` subcommands and synthetic tests
+  before committing the parser. `verify-final --report PATH` reloads every
+  committed repository-relative path named by the final report and rejects
+  any absolute or repository-escaping path, hash, parser-commit,
+  reviewed-range, reviewed-file inventory, contract, or fact mismatch.
+  Run both focused suites in the clean authoring worktree, then commit exactly
+  the four parser-owned files:
 
   ```powershell
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode code-only --json-output "$auditScratch/corrected-route0.json"
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode code-only --json-output "$auditScratch/corrected-route1.json"
+  Push-Location $parserAuthoring
+  & $saturnPython tools/saturn/test_verify_sh2_native_math.py
+  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  git -c "safe.directory=$parserAuthoring" add -- tools/saturn/verify_sh2_native_math.py tools/saturn/test_verify_sh2_native_math.py tools/saturn/compare_sh2_native_math_audit_reports.py tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  git -c "safe.directory=$parserAuthoring" commit -m "fix: harden linked SH native math parser"
+  $parserCommit = (git -c "safe.directory=$parserAuthoring" rev-parse HEAD).Trim()
+  $parserCommitShort = $parserCommit.Substring(0, 7)
+  $expectedParserFiles = @(
+    "tools/saturn/compare_sh2_native_math_audit_reports.py",
+    "tools/saturn/test_compare_sh2_native_math_audit_reports.py",
+    "tools/saturn/test_verify_sh2_native_math.py",
+    "tools/saturn/verify_sh2_native_math.py"
+  )
+  $actualParserFiles = @(git -c "safe.directory=$parserAuthoring" diff --name-only $parserBase $parserCommit | Sort-Object)
+  if (Compare-Object ($expectedParserFiles | Sort-Object) $actualParserFiles) { throw "parser commit owns unexpected files" }
+  $authorStatus = @(git -c "safe.directory=$parserAuthoring" status --porcelain)
+  if ($authorStatus.Count -ne 0) { throw "parser authoring worktree is dirty after commit" }
+  Pop-Location
   ```
 
-  Create `compare_sh2_native_math_audit_reports.py` with `compare` and
-  `finalize` subcommands and synthetic tests. `compare` accepts the four
-  observations below, requires distinct route ELF hashes but identical
-  corrected parser/oracle/contract-before hashes, closure functions, direct
-  call facts, helper facts, helper total, and an empty unresolved-transfer
-  list. It writes a proposal containing both legacy totals, the one corrected
-  total, sorted per-route added/removed direct/helper facts, and SHA-256 of
-  every input:
+  Only after that parser/test commit exists, create a second detached evidence
+  worktree at that exact commit SHA. It is the sole producer of both layout
+  ELFs and every re-pin evidence file:
 
   ```powershell
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py compare --legacy-route0 "$auditScratch/legacy-route0.json" --legacy-route1 "$auditScratch/legacy-route1.json" --corrected-route0 "$auditScratch/corrected-route0.json" --corrected-route1 "$auditScratch/corrected-route1.json" --contract-before tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --output "$auditScratch/pre-repin-proposal.json"
+  $evidenceWorktree = "$repoRoot/.worktrees/audit-parser-evidence-$parserCommitShort"
+  if (Test-Path $evidenceWorktree) { throw "parser evidence worktree already exists: $evidenceWorktree" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree add --detach $evidenceWorktree $parserCommit
+  if (git -C $evidenceWorktree -c "safe.directory=$evidenceWorktree" status --porcelain) { throw "parser evidence worktree is dirty before build" }
+  if ((git -C $evidenceWorktree -c "safe.directory=$evidenceWorktree" rev-parse HEAD).Trim() -ne $parserCommit) { throw "parser evidence worktree is at wrong commit" }
+
+  $transportDiffPaths = @(
+    "src/game/camera.c",
+    "src/port/saturn/runtime/saturn_camera_probe.h",
+    "src/port/saturn/sourceboot/source_camera_idle_probe.h",
+    "src/port/saturn/sourceboot/source_camera_idle_probe.c",
+    "src/port/saturn/sourceboot/main.c",
+    "src/port/saturn/sourceboot/source_cart.c",
+    "src/port/saturn/sourceboot/Makefile",
+    "src/port/saturn/sourceboot/sourceboot-cart.x",
+    "tools/saturn/capture_camera_idle.py",
+    "tools/saturn/test_capture_camera_idle.py",
+    "tools/saturn/verify_sourceboot_memory_map.py",
+    "tools/saturn/test_verify_sourceboot_memory_map.py",
+    "tools/saturn/test_camera_idle_contract.py"
+  )
+  $transportDiff = @(git -C $evidenceWorktree -c "safe.directory=$evidenceWorktree" diff --name-only $parserBase $parserCommit -- $transportDiffPaths)
+  if ($transportDiff.Count -ne 0) { throw "parser commit contains Task 3 transport diff: $($transportDiff -join ', ')" }
+  $transportOnlyFiles = @(
+    "src/port/saturn/runtime/saturn_camera_probe.h",
+    "src/port/saturn/sourceboot/source_camera_idle_probe.h",
+    "src/port/saturn/sourceboot/source_camera_idle_probe.c",
+    "tools/saturn/capture_camera_idle.py",
+    "tools/saturn/test_capture_camera_idle.py",
+    "tools/saturn/verify_sourceboot_memory_map.py",
+    "tools/saturn/test_verify_sourceboot_memory_map.py"
+  )
+  foreach ($relative in $transportOnlyFiles) {
+    if (Test-Path (Join-Path $evidenceWorktree $relative)) { throw "transport-only file exists in clean parser evidence worktree: $relative" }
+  }
+  ```
+
+  Build the two pure-layout probes serially in that clean detached worktree,
+  without `verify`, because the known-bad v2 total is not yet an acceptance
+  gate. Convert only the validated evidence path for the MSYS command:
+
+  ```powershell
+  $evidenceMsys = ($evidenceWorktree -replace "\\", "/") -replace "^D:", "/d"
+  $auditBuildBase = "cd $evidenceMsys && source /d/Code/RetroDev/sm64-saturn-port/sm64-port/.yaul.env && cd src/port/saturn/sourceboot && make -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_ATAN2_VARIANT=2 SATURN_CAMERA_VARIANT=1 SATURN_DEMO_VIEW_RADIUS=6000 SATURN_SLAVE_RENDER=1 SATURN_DEMO_POLY_TIER=0 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_BSP_FRAGMENTS=0 SATURN_RENDERER_PIPELINE=2 HOST_CC=C:/msys64/mingw64/bin/gcc.exe"
+  $auditRoute0Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
+  $auditRoute1Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=1 SATURN_CAMERA_IDLE_START_TICK=0 SATURN_CAMERA_IDLE_DISCOVERY=0 SATURN_CAMERA_RANGE_CAPTURE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
+  C:/msys64/usr/bin/bash.exe -lc $auditRoute0Command
+  C:/msys64/usr/bin/bash.exe -lc $auditRoute1Command
+
+  $auditRoute0Output = "$evidenceWorktree/build/saturn/sourceboot/e2-bob-demo-replay-camroute0-atan2v2-camv1-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
+  $auditRoute1Output = "$evidenceWorktree/build/saturn/sourceboot/e2-bob-demo-replay-camroute1-atan2v2-camv1-idle0-disc0-range0-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
+  $auditRoute0Elf = (Resolve-Path "$auditRoute0Output/obj/sm64-saturn-sourceboot-e2.elf").Path
+  $auditRoute1Elf = (Resolve-Path "$auditRoute1Output/obj/sm64-saturn-sourceboot-e2.elf").Path
+  $auditObjdump = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe"
+  $auditReadelf = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe"
+  $auditAddr2line = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe"
+  $legacyRoute0 = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json"
+  $legacyRoute1 = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json"
+  $correctedRoute0 = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json"
+  $correctedRoute1 = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json"
+  $proposal = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json"
+  $reviewRecord = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json"
+  $finalRepin = "$evidenceWorktree/docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json"
+  ```
+
+  Emit all four durable observations from the same two ELFs and the same
+  parser commit. Scratch copies are optional and never authoritative:
+
+  ```powershell
+  Push-Location $evidenceWorktree
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line --audit-observation-only --analysis-mode legacy-linear --producer-commit $parserCommit --json-output $legacyRoute0
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line --audit-observation-only --analysis-mode legacy-linear --producer-commit $parserCommit --json-output $legacyRoute1
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line --audit-observation-only --analysis-mode code-only --producer-commit $parserCommit --json-output $correctedRoute0
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line --audit-observation-only --analysis-mode code-only --producer-commit $parserCommit --json-output $correctedRoute1
+  Pop-Location
+  ```
+
+  The already committed comparator's `compare` subcommand accepts the four
+  observations below, requires distinct route ELF hashes but identical
+  corrected parser/oracle/contract-before hashes, closure functions, direct
+  call facts, helper facts, helper total, and empty unresolved-transfer and
+  unresolved-effect lists. It writes a proposal containing both legacy
+  totals; the one corrected
+  total; the complete corrected closure, normalized direct-call, and helper
+  arrays; sorted per-route added/removed direct/helper facts; full
+  `parser_base_commit`, `parser_commit`, and reviewed range; the exact
+  pre-build isolation result (evidence worktree basename, clean detached HEAD,
+  empty transport diff, and absent transport-only files); and the relative
+  repository path plus SHA-256 of every input. The comparator rejects an
+  absolute or repository-escaping input path. Its tests reject false/nonzero
+  isolation claims and a worktree basename inconsistent with the parser SHA:
+
+  ```powershell
+  Push-Location $evidenceWorktree
+  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  & $saturnPython tools/saturn/compare_sh2_native_math_audit_reports.py compare --legacy-route0 $legacyRoute0 --legacy-route1 $legacyRoute1 --corrected-route0 $correctedRoute0 --corrected-route1 $correctedRoute1 --contract-before tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --parser-base-commit $parserBase --parser-commit $parserCommit --producer-worktree-name (Split-Path $evidenceWorktree -Leaf) --isolation-clean-before-build true --transport-diff-count $transportDiff.Count --transport-only-present-count 0 --output $proposal
+  Pop-Location
   ```
 
   Expected: PASS only when corrected route-0/route-1 facts are byte-for-byte
   equal after deterministic JSON serialization. At this point stop. Do not
   edit `EXPECTED_TOTAL` or `SIM_AUDIT_CONTRACT_V2_SHA256`. The controller
   dispatches an independent reviewer for the verifier, tests, four
-  observations, and proposal. A clean reviewer writes
-  `$auditScratch/native-math-parser-review.json` with exact keys
-  `schema_version: 1`, `proposal_sha256`, `verdict: "clean"`, and sorted
-  `reviewed_files`; `proposal_sha256` must equal the proposal's file hash.
+  observations, and proposal. The evidence worktree and both build trees stay
+  in place and are not rebuilt during review. A clean reviewer writes the
+  committed-path candidate `$reviewRecord` with exact keys:
+
+  ```text
+  schema_version: 1
+  verdict: "clean"
+  parser_base_commit
+  parser_commit
+  reviewed_range: parser_base_commit + ".." + parser_commit
+  proposal_sha256
+  reviewed_files:
+    - tools/saturn/compare_sh2_native_math_audit_reports.py
+    - tools/saturn/test_compare_sh2_native_math_audit_reports.py
+    - tools/saturn/test_verify_sh2_native_math.py
+    - tools/saturn/verify_sh2_native_math.py
+    - docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json
+    - docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json
+    - docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json
+    - docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json
+    - docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json
+  findings: []
+  ```
+
+  The comparator requires full 40-hex commit IDs, the exact range string,
+  `proposal_sha256` equal to the proposal file hash, and a sorted
+  nine-element reviewed-file inventory matching those exact inputs. The
+  review record is durable evidence; an ignored reviewer note may supplement
+  it but cannot replace it.
 
   Phase B begins only after that clean review. Read
   `corrected_helper_total` from the reviewed proposal. With `apply_patch`,
   replace the single `EXPECTED_TOTAL` value in
-  `sh2_native_math_sim_audit_contract_v2.txt` exactly once. Compute:
+  `$evidenceWorktree/tools/saturn/sh2_native_math_sim_audit_contract_v2.txt`
+  exactly once. Compute:
 
   ```powershell
-  $newV2Digest = (Get-FileHash tools/saturn/sh2_native_math_sim_audit_contract_v2.txt -Algorithm SHA256).Hash.ToLowerInvariant()
+  $newV2Digest = (Get-FileHash "$evidenceWorktree/tools/saturn/sh2_native_math_sim_audit_contract_v2.txt" -Algorithm SHA256).Hash.ToLowerInvariant()
   $newV2Digest
   ```
 
@@ -868,26 +1085,90 @@ only to latch SQT1; it is not an additional SCC1 word.
   delta: {route0: {added, removed}, route1: {added, removed}}
   contract: {old_expected_total, old_sha256,
              new_expected_total, new_sha256}
-  review: {proposal_sha256, approval_record_sha256, verdict}
-  artifacts: {route0_elf_sha256, route1_elf_sha256, parser_sha256}
+  review: {parser_base_commit, parser_commit, reviewed_range,
+           reviewed_files, proposal_sha256, approval_record_sha256, verdict}
+  inputs:
+    [{path, sha256} for all four observations, proposal, and review record]
+  artifacts: {route0_elf_sha256, route1_elf_sha256,
+              analysis_parser_sha256, final_verifier_sha256}
   ```
 
   Run the final gate and both ordinary audits:
 
   ```powershell
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py finalize --proposal "$auditScratch/pre-repin-proposal.json" --review "$auditScratch/native-math-parser-review.json" --contract-after tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --verifier tools/saturn/verify_sh2_native_math.py --output docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe
+  Push-Location $evidenceWorktree
+  & $saturnPython tools/saturn/compare_sh2_native_math_audit_reports.py finalize --proposal $proposal --review $reviewRecord --legacy-route0 $legacyRoute0 --legacy-route1 $legacyRoute1 --corrected-route0 $correctedRoute0 --corrected-route1 $correctedRoute1 --contract-after tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --verifier tools/saturn/verify_sh2_native_math.py --output $finalRepin
+  & $saturnPython tools/saturn/test_verify_sh2_native_math.py
+  & $saturnPython tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
+  & $saturnPython tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line $auditAddr2line
+  Pop-Location
   ```
 
-  Commit and independently review this prerequisite before Step 1:
+  Commit the one-time contract/digest edit and all durable evidence in the
+  evidence worktree. No Task 3 transport or Makefile file is staged:
 
   ```powershell
-  git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge add tools/saturn/verify_sh2_native_math.py tools/saturn/test_verify_sh2_native_math.py tools/saturn/compare_sh2_native_math_audit_reports.py tools/saturn/test_compare_sh2_native_math_audit_reports.py tools/saturn/sh2_native_math_sim_audit_contract_v2.txt src/port/saturn/sourceboot/Makefile docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
-  git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge commit -m "fix: harden linked SH native math audit"
+  Push-Location $evidenceWorktree
+  git -c "safe.directory=$evidenceWorktree" add -- tools/saturn/verify_sh2_native_math.py tools/saturn/sh2_native_math_sim_audit_contract_v2.txt docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  git -c "safe.directory=$evidenceWorktree" commit -m "test: repin corrected SH native math audit"
+  $repinCommit = (git -c "safe.directory=$evidenceWorktree" rev-parse HEAD).Trim()
+  $expectedRepinFiles = @(
+    "docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json",
+    "docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json",
+    "tools/saturn/sh2_native_math_sim_audit_contract_v2.txt",
+    "tools/saturn/verify_sh2_native_math.py"
+  )
+  $actualRepinFiles = @(git -c "safe.directory=$evidenceWorktree" diff --name-only $parserCommit $repinCommit | Sort-Object)
+  if (Compare-Object ($expectedRepinFiles | Sort-Object) $actualRepinFiles) { throw "re-pin commit owns unexpected files" }
+  if (git -c "safe.directory=$evidenceWorktree" status --porcelain --untracked-files=no) { throw "tracked evidence worktree state is dirty after commit" }
+  Pop-Location
   ```
+
+  Fast-forward the control branch only if no other commit has moved it. This
+  updates parser/contract/evidence paths but leaves all pre-existing unstaged
+  Task 3 transport files untouched:
+
+  ```powershell
+  if ((git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim() -ne $parserBase) { throw "control branch moved during isolated parser work" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" merge --ff-only $repinCommit
+  if ((git -C $controlWorktree -c "safe.directory=$controlWorktree" rev-parse HEAD).Trim() -ne $repinCommit) { throw "control branch did not fast-forward to re-pin commit" }
+  ```
+
+  Now, and only now, add the sourceboot integration to the already-dirty
+  control-worktree Makefile with `apply_patch`:
+
+  ```make
+  SOURCEBOOT_SH_READELF := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf
+  ```
+
+  Pass `--readelf "$(SOURCEBOOT_SH_READELF)"` to every ordinary linked-ELF
+  v2/v3 verification or generation call. Do not pass it to
+  `--object-reference-only`; its exact argument contract omits `--readelf`
+  and tests accept omission while rejecting its presence. Add
+  `test_verify_sh2_native_math.py` and
+  `test_compare_sh2_native_math_audit_reports.py` to the serial host
+  prerequisites of `verify`. This Makefile hunk is committed with the existing
+  transport slice in Step 9, not retroactively included in either clean
+  parser/evidence commit.
+
+  Remove the clean authoring worktree after the fast-forward:
+
+  ```powershell
+  $authorStatus = @(git -C $parserAuthoring -c "safe.directory=$parserAuthoring" status --porcelain)
+  if ($authorStatus.Count -ne 0) { throw "refusing to remove dirty parser authoring worktree" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree remove $parserAuthoring
+  ```
+
+  Retain `$evidenceWorktree`, its ignored build outputs, and its registered
+  worktree metadata unchanged through final evidence review in Task 15. Do
+  not rebuild either layout probe. Cleanup is defined in Task 15 only after
+  every committed hash is revalidated.
 
 - [ ] **Step 1: Write failing transport and symbol-resolution tests**
 
@@ -2112,6 +2393,18 @@ only to latch SQT1; it is not an additional SCC1 word.
   `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt`
 - Preserve unchanged:
   `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json`
 
 **Interfaces:**
 
@@ -2139,6 +2432,8 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   ```powershell
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
   ```
 
   Expected result: all existing tests and the new v2-freeze cases pass.
@@ -2240,8 +2535,9 @@ only to latch SQT1; it is not an additional SCC1 word.
   Add optional `--v2-contract PATH`, `--q-object-manifest PATH`,
   `--reference-q-object-manifest PATH`,
   `--reference-q-object-manifest-sha256 HEX`, and `--json-output PATH` CLI
-  arguments while retaining the required Task 3 `--readelf PATH`. The
-  generated build manifest grammar is exactly one
+  arguments. Ordinary linked-ELF verification and generation retain the
+  required Task 3 `--readelf PATH`; object-reference-only neither accepts nor
+  needs it. The generated build manifest grammar is exactly one
   `logical_name<TAB>absolute_object_path` row for each of the four names
   above, sorted by logical name, with no comments or duplicate paths. For
   every object, hash the raw bytes and call Task 7's
@@ -2265,8 +2561,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   `--q-object-manifest`, `--reference-q-object-manifest`,
   `--reference-q-object-manifest-sha256`, and `--objdump`; it rejects either
   positional, `--route-oracle`, `--audit-route-oracle`, `--addr2line`, or
-  `--json-output`. Ordinary mode rejects either reference-manifest argument
-  and performs no artifact-hash relaxation.
+  `--json-output`, or `--readelf`. Tests prove the exact object-only set
+  succeeds without readelf and fails when readelf is supplied. Ordinary mode
+  rejects either reference-manifest argument and performs no artifact-hash
+  relaxation.
 
   Reject:
 
@@ -3648,6 +3946,18 @@ only to latch SQT1; it is not an additional SCC1 word.
 
 - Create:
   `docs/saturn/evidence/reports/task3-camera-q-audit-v3-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route0-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-legacy-route1-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route0-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-corrected-route1-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-pre-repin-proposal-2026-07-29.json`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-parser-review-2026-07-29.json`
 - Create:
   `docs/saturn/evidence/reports/task3-bob-parity-camera-baseline-run1-2026-07-29.json`
 - Create:
@@ -3695,6 +4005,7 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   ```powershell
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py verify-final --report docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_generate_camera_q_audit_contract.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_camera_q_mutation.py
@@ -3885,9 +4196,37 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   Review scope includes target diff, raw evidence decoder, four SCC captures,
   four original-route captures, both comparison pairs, audit contract,
-  provenance, and build maps. Resolve every P1/P2 finding with the standard
-  fix/re-review loop and refresh any artifact invalidated by a target code
-  change.
+  all four native-math observations, the proposal, parser review record,
+  finalized re-pin report, provenance, and build maps. Resolve every P1/P2
+  finding with the standard fix/re-review loop and refresh any artifact
+  invalidated by a target code change.
+
+  After the final review is clean and `verify-final` has revalidated every
+  committed input hash, remove the retained evidence worktree. Derive its
+  exact registered path from the committed parser SHA, require it to remain
+  under the repository's `.worktrees` directory, require no tracked changes,
+  and require its HEAD to be the commit that added the finalized report:
+
+  ```powershell
+  $repoRoot = "D:/Code/RetroDev/sm64-saturn-port/sm64-port"
+  $controlWorktree = "$repoRoot/.worktrees/sh2-native-math-purge"
+  $repinReport = Get-Content "$controlWorktree/docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json" -Raw | ConvertFrom-Json
+  $parserCommit = [string]$repinReport.review.parser_commit
+  if ($parserCommit -notmatch '^[0-9a-f]{40}$') { throw "invalid parser commit in re-pin report" }
+  $evidenceWorktree = "$repoRoot/.worktrees/audit-parser-evidence-$($parserCommit.Substring(0, 7))"
+  $expectedPrefix = [System.IO.Path]::GetFullPath("$repoRoot/.worktrees") + [System.IO.Path]::DirectorySeparatorChar
+  $resolvedEvidence = [System.IO.Path]::GetFullPath($evidenceWorktree)
+  if (-not $resolvedEvidence.StartsWith($expectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) { throw "evidence cleanup path escaped .worktrees" }
+  if (-not (Test-Path $resolvedEvidence)) { throw "retained evidence worktree is missing" }
+  if (git -C $resolvedEvidence -c "safe.directory=$resolvedEvidence" status --porcelain --untracked-files=no) { throw "refusing to remove evidence worktree with tracked changes" }
+  $repinEvidenceCommit = (git -C $controlWorktree -c "safe.directory=$controlWorktree" log -1 --format=%H -- docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json).Trim()
+  if ((git -C $resolvedEvidence -c "safe.directory=$resolvedEvidence" rev-parse HEAD).Trim() -ne $repinEvidenceCommit) { throw "evidence worktree HEAD no longer matches re-pin evidence commit" }
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree remove --force $resolvedEvidence
+  git -C $controlWorktree -c "safe.directory=$controlWorktree" worktree prune
+  ```
+
+  `--force` is limited to the exact validated retained evidence worktree and
+  removes only ignored build outputs already represented by committed hashes.
 
 - [ ] **Step 7: Commit Task 3 closure**
 

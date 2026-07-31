@@ -523,23 +523,61 @@ The proved examples are binding regression fixtures:
   Even an exact-target-only simulation therefore reports the same 201
   functions but unequal totals 560 and 564.
 
-The corrected analyzer first parses linked function symbols and objdump
-instruction records, then derives executable instruction addresses with a
-per-function SH control-flow walk. Function entries and DWARF decoded-line
-addresses seed the walk; decoded-line seeds cover C switch case entries
-without treating intervening jump-table or literal-pool bytes as code.
+The corrected analyzer separates code-address discovery from register
+dataflow. `sh-elf-readelf -SW` supplies executable-section bounds and
+`sh-elf-readelf -sW` supplies only `STT_FUNC` symbols whose section has
+`SHF_EXECINSTR`. Every derived range must remain inside that section. A
+nonzero symbol owns its exact half-open range. A zero-size symbol ends at the
+next greater function start in the same section, or at the section end.
+Same-start symbols are aliases only when their effective ends agree; a
+same-start/end group has one deterministic canonical owner:
+`GLOBAL` binding before `WEAK` before `LOCAL`, then non-hidden before hidden,
+then shortest name, then bytewise lexical name. All other names are recorded
+as aliases. Different effective ends at one start, or a partial overlap
+between different starts, is ambiguous and fails. DWARF decoded-line rows
+seed only aligned addresses strictly inside a resolved function range;
+`end_sequence` and one-past-end rows are ignored.
+
+Function entries and filtered line rows first seed structural code discovery;
+only a seed or a proven successor can promote an objdump row to an
+instruction. Dataflow then runs on that discovered structure and may add a
+resolved indirect successor only when it remains inside a proven function
+range. Entry seeds use the defined ABI entry state; every general register
+and fixed `r15` spill slot starts `UNKNOWN`. Each non-entry line seed is a
+disconnected code-discovery seed with the same all-`UNKNOWN` state, never a
+copy of state from an earlier linear row. These disconnected seeds make C
+switch case blocks discoverable without inheriting stale literal-target
+registers across jump tables. Arbitrary decoded objdump rows never become
+code merely because they exist. A function with no decoded-line rows may
+still be proved from its entry CFG, but any unresolved indirect transfer or
+unknown instruction effect in that function fails closed.
+
 Successor construction distinguishes fallthrough, `bt`/`bf`,
 `bt/s`/`bf/s`, `bra`, `bsr`, `rts`/`rte`, `jmp`/`jsr`, and
 `braf`/`bsrf`, and executes the one SH delay-slot instruction before applying
 every delayed transfer. Direct call targets are mapped by target address to
-their containing function symbol, retaining the exact nonzero target offset,
-so legitimate internal-entry calls remain edges. A work-list abstract state
-tracks literal-loaded symbol addresses, fixed `r15` spill slots, and finite
-integer/address sets; joins retain only facts equal on every incoming path.
+their containing canonical function while retaining the exact nonzero target
+offset, so legitimate internal-entry calls remain edges.
+
+The dataflow lattice for each register or fixed spill slot is `UNKNOWN`, one
+known symbol/address, or a bounded finite integer/address set. Equal known
+facts survive a merge; disagreement with another known fact or with
+`UNKNOWN` becomes `UNKNOWN`; finite sets union only within the code-owned
+bound. The work list deduplicates by `(instruction address, abstract state)`
+and iterates to a fixed point. Modeled PC-relative loads, register moves, and
+spill/reload operations propagate their source facts. Every other recognized
+register-writing instruction kills its destination. `jsr`, `bsr`, and
+`bsrf` resolve the pre-delay target, execute the delay slot, then kill the SH
+ABI caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before propagating
+the return successor; `r8-r14` and `r15` survive unless the instruction or
+slot writes them. An unparseable destination, unknown register effect, finite
+set overflow, or unresolved indirect transfer emits an exact
+`unresolved_transfer` or `unresolved_effect` diagnostic and rejects an
+audited closure. It never falls back to linear scanning.
+
 Resolved indirect tail calls and computed switch destinations become
-successors. Any unresolved indirect transfer in an audited function is
-reported explicitly; it cannot silently cause the verifier to linear-scan
-the rest of the function or accept an incomplete closure.
+successors. A missing line table is therefore acceptable only when the
+entry-seeded walk completes with no unresolved diagnostic.
 
 Synthetic tests independently mutate a fake pool `bsr`, the
 `_guLookAtReflectF`-style pool register clobber, a real internal-offset
@@ -547,18 +585,32 @@ Synthetic tests independently mutate a fake pool `bsr`, the
 call/return delay slots, a resolved indirect tail call, and the
 `mova`/indexed-load/`braf` switch form present in the audited closure. Each
 mutation must distinguish data from code without dropping a real edge.
+Additional fixtures cover stale-value merges, the caller-clobber set, an
+unmodeled destination kill, an unresolved effect, disconnected line seeds,
+zero-size functions, same-start aliases, ambiguous overlaps, `end_sequence`
+rows, and an absent line table.
 
 Task 3 captures legacy observations first, then corrected observations from
-the same route-0 and route-1 transport ELFs. A deterministic comparator
-requires the corrected closure, normalized direct-call facts (including
+the same route-0 and route-1 pure-layout ELFs built in a clean detached
+worktree at the parser/test commit. That worktree is retained through
+observation, independent review, v2 finalization, and evidence commit; no
+partial SCC/cart/camera transport file or diff may exist in it. A
+deterministic comparator requires the corrected closure, normalized
+direct-call facts (including
 caller-relative site and callee-relative target offsets), helper facts, and
 helper total to be identical across the two layout-only variants. It records
-both legacy and corrected totals plus sorted added/removed facts. Only after
-that equality report receives an independent clean review may the implementer
-change the single v2 `EXPECTED_TOTAL` line, compute and install its new
-SHA-256 pin, and finalize the durable re-pin report. The contract and parser
-are re-pinned exactly once and then frozen for the rest of the sprint; a
-later mismatch is a regression, not permission for another quiet re-pin.
+both legacy and corrected totals, complete corrected closure/direct/helper
+arrays, complete sorted added/removed facts, the parser base/commit/range,
+the pre-build isolation checks, and hashes of every input.
+All four observations, the equality proposal, and the review record are
+committed evidence, not scratch-only inputs. The review record fixes the
+parser commit, reviewed commit range, and complete reviewed-file inventory.
+Only after that equality report receives an independent clean review may the
+implementer change the single v2 `EXPECTED_TOTAL` line, compute and install
+its new SHA-256 pin, and finalize the durable re-pin report. That final report
+hashes every committed input. The contract and parser are re-pinned exactly
+once and then frozen for the rest of the sprint; a later mismatch is a
+regression, not permission for another quiet re-pin.
 
 Disabling the post-link audit is forbidden because object or source checks
 cannot prove the linked closure. Rejecting all `+offset` targets is forbidden
