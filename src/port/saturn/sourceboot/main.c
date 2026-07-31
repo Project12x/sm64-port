@@ -55,6 +55,7 @@ static uint32_t sourceboot_vdp1_bank_late_dma;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
+sm64_saturn_camera_timing_t sm64_saturn_camera_timing;
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
 volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture;
 #endif
@@ -188,6 +189,10 @@ static void sourceboot_capture_route_checkpoint(void) {
     sourceboot_route_checkpoint.slave_busy_ticks = profile->slave_busy_ticks;
     sourceboot_route_checkpoint.slave_jobs_completed = profile->slave_jobs_completed;
     sourceboot_route_checkpoint.slave_timeouts = profile->slave_timeouts;
+    sourceboot_route_checkpoint.camera_ticks_last = sm64_saturn_camera_timing.ticks_last;
+    sourceboot_route_checkpoint.camera_ticks_accum = sm64_saturn_camera_timing.ticks_accum;
+    sourceboot_route_checkpoint.camera_invocations = sm64_saturn_camera_timing.invocations;
+    sourceboot_route_checkpoint.camera_ticks_max = sm64_saturn_camera_timing.ticks_max;
     sourceboot_math_route_capture.version = SM64_SATURN_MATH_ROUTE_CAPTURE_VERSION;
     sourceboot_math_route_capture.replay_ticks = runtime->input_replay_ticks;
     /* Publish after every other field so a host that sees magic can trust the
@@ -506,6 +511,7 @@ int main(void) {
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
         sm64_saturn_sourceboot_camera_idle_probe_reset();
 #endif
+        sm64_saturn_camera_timing_reset();
     }
 #endif
 

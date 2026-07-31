@@ -46,7 +46,7 @@ def build_scc1(*, variant: int = 1, bridges: tuple[int, int] = (0, 0),
         generation = 0 if variant == 1 else 7
     header = [
         SCC1_MAGIC, SCC1_VERSION, SCC1_HEADER_WORDS, SCC1_SAMPLE_WORDS,
-        SCC1_SAMPLE_COUNT, variant, 2, 0x53425234, 4, 2000, idle_start,
+        SCC1_SAMPLE_COUNT, variant, 2, 0x53425234, 5, 2000, idle_start,
         2000 + idle_start, 0, 0x3F, 0, 0, 0, 0, 0, bridges[0], bridges[1],
         generation, SCC1_PAYLOAD_WORDS, SCC1_ROUTE_ID,
     ]

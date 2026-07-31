@@ -28,6 +28,9 @@
 #include "level_table.h"
 #include "course_table.h"
 #include "rumble_init.h"
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+#include "source_route_probe.h"
+#endif
 
 #define PLAY_MODE_NORMAL 0
 #define PLAY_MODE_PAUSED 2
@@ -962,7 +965,13 @@ void basic_update(UNUSED s16 *arg) {
     update_hud_values();
 
     if (gCurrentArea != NULL) {
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        const u16 camera_start = (u16)osGetCount();
+#endif
         update_camera(gCurrentArea->camera);
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        sm64_saturn_camera_timing_record(camera_start, (u16)osGetCount());
+#endif
     }
 }
 
@@ -989,7 +998,13 @@ s32 play_mode_normal(void) {
     update_hud_values();
 
     if (gCurrentArea != NULL) {
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        const u16 camera_start = (u16)osGetCount();
+#endif
         update_camera(gCurrentArea->camera);
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        sm64_saturn_camera_timing_record(camera_start, (u16)osGetCount());
+#endif
     }
 
     initiate_painting_warp();
@@ -1073,7 +1088,13 @@ s32 play_mode_change_area(void) {
     //! This maybe was supposed to be sTransitionTimer == -1? sTransitionUpdate
     // is never set to -1.
     if (sTransitionUpdate == (void (*)(s16 *)) - 1) {
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        const u16 camera_start = (u16)osGetCount();
+#endif
         update_camera(gCurrentArea->camera);
+#if defined(TARGET_SATURN) && defined(SATURN_SOURCEBOOT)
+        sm64_saturn_camera_timing_record(camera_start, (u16)osGetCount());
+#endif
     } else if (sTransitionUpdate != NULL) {
         sTransitionUpdate(&sTransitionTimer);
     }

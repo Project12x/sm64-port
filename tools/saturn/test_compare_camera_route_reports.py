@@ -25,7 +25,7 @@ ROLE_IDS = {
 
 def sbr4(*, sim: int, reject: int = 0) -> dict:
     values = {name: 0 for name in PROBE_FIELDS}
-    values.update(magic=0x53425234, version=4, atan2_variant=2, replay_ticks=2000,
+    values.update(magic=0x53425234, version=5, atan2_variant=2, replay_ticks=2000,
                   global_timer=2000, mario_action=42, camera_mode=7,
                   triangles_transformed=4, triangles_emitted=4,
                   triangles_vdp1_emitted=4, reject_backface=reject,

@@ -4,7 +4,35 @@
 #include <stdint.h>
 
 #define SM64_SATURN_SOURCE_ROUTE_PROBE_MAGIC 0x53425234U /* "SBR4" */
-#define SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION 4U
+#define SM64_SATURN_SOURCE_ROUTE_PROBE_VERSION 5U
+
+typedef struct sm64_saturn_camera_timing {
+    uint32_t ticks_last;
+    uint32_t ticks_accum;
+    uint32_t invocations;
+    uint16_t ticks_max;
+} sm64_saturn_camera_timing_t;
+
+extern sm64_saturn_camera_timing_t sm64_saturn_camera_timing;
+
+static inline void sm64_saturn_camera_timing_reset(void)
+{
+    sm64_saturn_camera_timing.ticks_last = 0;
+    sm64_saturn_camera_timing.ticks_accum = 0;
+    sm64_saturn_camera_timing.invocations = 0;
+    sm64_saturn_camera_timing.ticks_max = 0;
+}
+
+static inline void sm64_saturn_camera_timing_record(uint16_t start, uint16_t end)
+{
+    const uint16_t elapsed = (uint16_t)(end - start);
+    sm64_saturn_camera_timing.ticks_last = elapsed;
+    sm64_saturn_camera_timing.ticks_accum += elapsed;
+    sm64_saturn_camera_timing.invocations++;
+    if (elapsed > sm64_saturn_camera_timing.ticks_max) {
+        sm64_saturn_camera_timing.ticks_max = elapsed;
+    }
+}
 
 typedef struct sm64_saturn_source_route_probe {
     uint32_t magic;
@@ -47,6 +75,10 @@ typedef struct sm64_saturn_source_route_probe {
     uint32_t slave_busy_ticks;
     uint32_t slave_jobs_completed;
     uint32_t slave_timeouts;
+    uint32_t camera_ticks_last;
+    uint32_t camera_ticks_accum;
+    uint32_t camera_invocations;
+    uint32_t camera_ticks_max;
 } sm64_saturn_source_route_probe_t;
 
 #endif

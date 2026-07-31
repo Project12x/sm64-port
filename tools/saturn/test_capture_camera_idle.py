@@ -29,14 +29,15 @@ ROUTE_FIELDS = (
     "reject_w_nonpositive_overflow_suspect", "fault_flags", "frame_serial",
     "sim_frt_ticks_accum", "render_frt_ticks_accum",
     "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks",
-    "slave_jobs_completed", "slave_timeouts",
+    "slave_jobs_completed", "slave_timeouts", "camera_ticks_last",
+    "camera_ticks_accum", "camera_invocations", "camera_ticks_max",
 )
 
 
 def route_bytes() -> bytes:
     values = {name: 0 for name in ROUTE_FIELDS}
     values.update(
-        magic=0x53425234, version=4, atan2_variant=2, replay_ticks=2000,
+        magic=0x53425234, version=5, atan2_variant=2, replay_ticks=2000,
         frame_serial=91, sim_frt_ticks_accum=101,
         render_frt_ticks_accum=102, render_frt_ticks_last=103,
         master_wait_ticks=104, slave_busy_ticks=105,
@@ -174,10 +175,10 @@ class CaptureCameraIdleTest(unittest.TestCase):
                 )
 
         self.assertEqual(len(report["scc1_window"]["data"]), 194496)
-        self.assertEqual(len(report["route_window"]["data"]), 160)
+        self.assertEqual(len(report["route_window"]["data"]), 176)
         self.assertEqual(report["route_window"]["decoded"]["replay_ticks"], 2000)
         self.assertEqual(report["scc1_window"]["decoded"]["header"][7:10],
-                         [0x53425234, 4, 2000])
+                         [0x53425234, 5, 2000])
         self.assertEqual(report["absolute_markers"],
                          {"camera_variant": 1, "camera_route": 1})
         self.assertEqual(report["timing"]["frame_serial"], 91)

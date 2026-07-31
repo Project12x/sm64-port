@@ -13,7 +13,8 @@ from compare_route_reports import PROBE_FIELDS, SHA256_RE, decode_probe, load_ro
 from verify_camera_idle_capture import decode_capture_report
 
 TIMING_FIELDS = frozenset({"frame_serial", "sim_frt_ticks_accum", "render_frt_ticks_accum",
-    "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks", "slave_jobs_completed", "slave_timeouts"})
+    "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks", "slave_jobs_completed", "slave_timeouts",
+    "camera_ticks_last", "camera_ticks_accum", "camera_invocations", "camera_ticks_max"})
 SBR4_BEHAVIOR_FIELDS = tuple(field for field in PROBE_FIELDS if field not in TIMING_FIELDS)
 
 

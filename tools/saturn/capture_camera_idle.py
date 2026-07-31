@@ -25,7 +25,7 @@ NM = Path(
     "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-nm.exe"
 )
 MAX_PEEK_BYTES = 65536
-SBR4_BYTES = 160
+SBR4_BYTES = PROBE_BYTES
 SCAR_BYTES = 28
 SYMBOL_NAMES = (
     "sourceboot_camera_idle_capture",
@@ -224,7 +224,8 @@ def capture_target(
         timing_fields = (
             "frame_serial", "sim_frt_ticks_accum", "render_frt_ticks_accum",
             "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks",
-            "slave_jobs_completed", "slave_timeouts",
+            "slave_jobs_completed", "slave_timeouts", "camera_ticks_last",
+            "camera_ticks_accum", "camera_invocations", "camera_ticks_max",
         )
         report = {
             "evidence_kind": "ymir-sourceboot-scc1-camera-idle",

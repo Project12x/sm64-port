@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 MAGIC = 0x53425234
-VERSION = 4
+VERSION = 5
 PROBE_FIELDS = (
     "magic", "version", "atan2_variant", "replay_ticks", "global_timer", "mario_action",
     "mario_pos_x_bits", "mario_pos_y_bits", "mario_pos_z_bits",
@@ -28,6 +28,8 @@ PROBE_FIELDS = (
     "sim_frt_ticks_accum", "render_frt_ticks_accum",
     "render_frt_ticks_last", "master_wait_ticks", "slave_busy_ticks",
     "slave_jobs_completed", "slave_timeouts",
+    "camera_ticks_last", "camera_ticks_accum", "camera_invocations",
+    "camera_ticks_max",
 )
 PROBE_BYTES = len(PROBE_FIELDS) * 4
 REJECT_FIELDS = (
