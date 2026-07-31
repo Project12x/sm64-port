@@ -19,6 +19,11 @@ REPLAY_TICKS = 2000
 ROUTE_ID = 2
 ZOOM_DIST_BITS = 0x43AF0000
 REQUIRED_FLAGS = 0x3F
+ROLE_IDS = {
+    "camera-source-baseline": 1,
+    "camera-bypass-diagnostic": 2,
+    "camera-fixed-candidate": 3,
+}
 
 FLOAT_OFFSETS = frozenset(
     set(range(4, 10)) | set(range(12, 30)) | set(range(32, 42)) |
@@ -27,10 +32,6 @@ FLOAT_OFFSETS = frozenset(
 )
 PACKED_OFFSETS = frozenset({10, 11, 30, 31, 42, 43, 51, 59, 60, 62,
                             64, 75, 76, 77, 79, 80})
-POSITION_FOCUS_OFFSETS = frozenset(
-    set(range(4, 10)) | set(range(12, 30)) | set(range(36, 42)) |
-    set(range(44, 50)) | set(range(52, 58)) | set(range(65, 68))
-)
 
 
 class Scc1Error(ValueError):
@@ -84,9 +85,8 @@ def _sample_word(sample: Scc1Sample, offset: int) -> int:
 
 
 def _variant_for_role(role: str) -> int:
-    roles = {"camera-baseline": 1, "camera-q": 2}
     try:
-        return roles[role]
+        return ROLE_IDS[role]
     except KeyError as error:
         raise Scc1Error(f"unknown SCC1 role {role!r}") from error
 
@@ -105,7 +105,7 @@ def validate_raw_layout(capture: Scc1Capture) -> None:
     for index, value in expected_header.items():
         if header[index] != value:
             raise Scc1Error(f"SCC1 header word {index} is invalid")
-    if header[5] not in (1, 2):
+    if header[5] not in ROLE_IDS.values():
         raise Scc1Error("SCC1 camera variant is invalid")
     if header[11] != header[9] + header[10]:
         raise Scc1Error("SCC1 first source tick does not follow idle start")
@@ -113,11 +113,6 @@ def validate_raw_layout(capture: Scc1Capture) -> None:
         raise Scc1Error("SCC1 final input/state is not neutral and quiescent")
     if any(header[index] != 0 for index in range(14, 19)):
         raise Scc1Error("SCC1 error counter is nonzero")
-    if header[5] == 1:
-        if header[19] != 0 or header[20] != 0 or header[21] != 0:
-            raise Scc1Error("baseline SCC1 has Q bridge or generation state")
-    elif header[19] == 0 or header[20] == 0 or header[21] == 0:
-        raise Scc1Error("Q SCC1 lacks bridge or generation state")
     for sample in capture.samples:
         if sample.applied_input != 0:
             raise Scc1Error("SCC1 sample input is not neutral")
@@ -161,8 +156,7 @@ def decode_scc1(raw: bytes) -> Scc1Capture:
 
 
 def validate_header_role(header: tuple[int, ...], *, expected_role: str,
-                         expected_idle_start_tick: int, expected_route_id: int,
-                         expected_bridge_counts: tuple[int, int]) -> None:
+                         expected_idle_start_tick: int, expected_route_id: int) -> None:
     variant = _variant_for_role(expected_role)
     if header[5] != variant:
         raise Scc1Error("declared SCC1 role disagrees with raw camera variant")
@@ -170,12 +164,6 @@ def validate_header_role(header: tuple[int, ...], *, expected_role: str,
         raise Scc1Error("SCC1 idle start tick is wrong")
     if header[23] != expected_route_id:
         raise Scc1Error("SCC1 route id is wrong")
-    if tuple(header[19:21]) != expected_bridge_counts:
-        raise Scc1Error("SCC1 bridge counts do not match the expected role")
-    if variant == 1 and (expected_bridge_counts != (0, 0) or header[21] != 0):
-        raise Scc1Error("baseline SCC1 must not use Q bridge state")
-    if variant == 2 and (not all(count > 0 for count in expected_bridge_counts) or header[21] == 0):
-        raise Scc1Error("Q SCC1 requires nonzero bridge counts and generation")
 
 
 def validate_stable_samples(samples: tuple[Scc1Sample, ...]) -> None:
@@ -193,12 +181,10 @@ def validate_stable_samples(samples: tuple[Scc1Sample, ...]) -> None:
 
 
 def validate_scc1(capture: Scc1Capture, *, expected_role: str,
-                  expected_idle_start_tick: int, expected_route_id: int,
-                  expected_bridge_counts: tuple[int, int]) -> None:
+                  expected_idle_start_tick: int, expected_route_id: int) -> None:
     validate_header_role(capture.header, expected_role=expected_role,
                          expected_idle_start_tick=expected_idle_start_tick,
-                         expected_route_id=expected_route_id,
-                         expected_bridge_counts=expected_bridge_counts)
+                         expected_route_id=expected_route_id)
     validate_stable_samples(capture.samples)
     if capture.samples[0].source_tick != REPLAY_TICKS + expected_idle_start_tick:
         raise Scc1Error("SCC1 first sample is not at frozen replay plus idle start")
@@ -207,54 +193,3 @@ def validate_scc1(capture: Scc1Capture, *, expected_role: str,
 def compare_same_role(first: Scc1Capture, second: Scc1Capture) -> None:
     if first.raw != second.raw:
         raise Scc1Error("same-role SCC1 windows are not byte-identical")
-
-
-def _f32_ulp(value: float) -> float:
-    """The spacing of IEEE binary32 at ``abs(value)``, not binary64 spacing."""
-    if value == 0.0:
-        return 2.0 ** -149
-    magnitude = abs(value)
-    bits = struct.unpack(">I", struct.pack(">f", magnitude))[0]
-    if bits == 0x7F7FFFFF:
-        predecessor = struct.unpack(">f", (bits - 1).to_bytes(4, "big"))[0]
-        return magnitude - predecessor
-    successor = struct.unpack(">f", (bits + 1).to_bytes(4, "big"))[0]
-    return successor - magnitude
-
-
-def validate_cross_role_headers(baseline: tuple[int, ...], q_variant: tuple[int, ...]) -> None:
-    if baseline[5] != 1 or q_variant[5] != 2:
-        raise Scc1Error("cross-role SCC1 captures must be baseline then Q")
-    # These fields define the identical replay window, independent of Q state.
-    for index in (0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 22, 23):
-        if baseline[index] != q_variant[index]:
-            raise Scc1Error(f"cross-role SCC1 header word {index} differs")
-
-
-def compare_packed_fields(baseline: Scc1Sample, q_variant: Scc1Sample) -> None:
-    for offset in set(range(SCC1_SAMPLE_WORDS)) - FLOAT_OFFSETS:
-        if _sample_word(baseline, offset) != _sample_word(q_variant, offset):
-            raise Scc1Error(f"SCC1 packed field at sample word {offset} differs")
-
-
-def compare_float_fields(baseline: Scc1Sample, q_variant: Scc1Sample, *,
-                         q_fraction_bits: int) -> None:
-    if not isinstance(q_fraction_bits, int) or q_fraction_bits < 0:
-        raise Scc1Error("Q fraction bit count is invalid")
-    selected_q_ulp = 2.0 ** -q_fraction_bits
-    for offset in FLOAT_OFFSETS:
-        left = _float(_sample_word(baseline, offset))
-        right = _float(_sample_word(q_variant, offset))
-        difference = abs(left - right)
-        if difference > max(selected_q_ulp, _f32_ulp(left)):
-            raise Scc1Error(f"SCC1 float field at sample word {offset} exceeds tolerance")
-        if offset in POSITION_FOCUS_OFFSETS and not difference < 1.0:
-            raise Scc1Error(f"SCC1 position/focus field at sample word {offset} diverges by one world unit")
-
-
-def compare_camera_roles(baseline: Scc1Capture, q_variant: Scc1Capture, *,
-                         q_fraction_bits: int) -> None:
-    validate_cross_role_headers(baseline.header, q_variant.header)
-    for baseline_sample, q_sample in zip(baseline.samples, q_variant.samples, strict=True):
-        compare_packed_fields(baseline_sample, q_sample)
-        compare_float_fields(baseline_sample, q_sample, q_fraction_bits=q_fraction_bits)

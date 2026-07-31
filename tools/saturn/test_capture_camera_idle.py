@@ -169,7 +169,7 @@ class CaptureCameraIdleTest(unittest.TestCase):
                     mock.patch("capture_camera_idle.time.perf_counter", side_effect=[10.0, 20.0]):
                 report, cart_report = capture.capture_target(
                     client=client, game=cue, route_manifest=manifest,
-                    capture_role="camera-baseline", expected_idle_start_tick=0,
+                    capture_role="camera-source-baseline", expected_idle_start_tick=0,
                     discovery=True, source_data=source, frames=600,
                 )
 
@@ -199,7 +199,7 @@ class CaptureCameraIdleTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 capture.capture_target(
                     client=client, game=Path("x.cue"), route_manifest=Path("x.json"),
-                    capture_role="camera-baseline", expected_idle_start_tick=0,
+                    capture_role="camera-source-baseline", expected_idle_start_tick=0,
                     discovery=True, source_data=None, frames=1,
                 )
         self.assertTrue(client.aborted)

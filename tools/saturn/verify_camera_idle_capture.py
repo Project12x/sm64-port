@@ -52,8 +52,7 @@ def decode_capture_report(report: dict[str, Any]) -> Scc1Capture:
 
 
 def verify_capture_report(report: dict[str, Any], *, route_path: Path,
-                          expected_idle_start_tick: int,
-                          expected_bridge_counts: tuple[int, int]) -> Scc1Capture:
+                          expected_idle_start_tick: int) -> Scc1Capture:
     manifest = load_route_manifest(route_path)
     if manifest.get("route_id") != 2 or manifest.get("checkpoint_tick") != 2000:
         raise ValueError("route manifest is not bob-default-camera-v1")
@@ -67,8 +66,7 @@ def verify_capture_report(report: dict[str, Any], *, route_path: Path,
     try:
         validate_scc1(capture, expected_role=role,
                       expected_idle_start_tick=expected_idle_start_tick,
-                      expected_route_id=manifest["route_id"],
-                      expected_bridge_counts=expected_bridge_counts)
+                      expected_route_id=manifest["route_id"])
     except Scc1Error as error:
         raise ValueError(str(error)) from error
     return capture
@@ -79,14 +77,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--route", type=Path, required=True)
     parser.add_argument("--idle-start-tick", type=int, required=True)
-    parser.add_argument("--bridge-export", type=int, required=True)
-    parser.add_argument("--bridge-import", type=int, required=True)
     args = parser.parse_args(argv)
     try:
         report = json.loads(args.report.read_text(encoding="utf-8"))
         capture = verify_capture_report(
             report, route_path=args.route, expected_idle_start_tick=args.idle_start_tick,
-            expected_bridge_counts=(args.bridge_export, args.bridge_import),
         )
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))

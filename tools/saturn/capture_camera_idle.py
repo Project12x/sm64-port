@@ -15,7 +15,7 @@ from typing import Any
 
 from camera_idle_contract import (
     REPLAY_TICKS, ROUTE_ID, SCC1_BYTES, SCC1_MAGIC, SBR4_MAGIC, SBR4_VERSION,
-    decode_scc1, validate_scc1,
+    ROLE_IDS, decode_scc1, validate_scc1,
 )
 from capture_hwtest import artifact_identity, emulation_timing, newest_sibling_elf
 from capture_route_views import YmirClient
@@ -158,8 +158,9 @@ def capture_target(
         }
         manifest, route_digest = _route_manifest(route_manifest)
         symbols = resolve_symbols(elf)
-        expected_variant = 1 if capture_role == "camera-baseline" else 2
-        if capture_role not in ("camera-baseline", "camera-q"):
+        try:
+            expected_variant = ROLE_IDS[capture_role]
+        except KeyError:
             raise ValueError(f"unsupported capture role {capture_role!r}")
         if symbols["sm64_saturn_camera_variant_marker"] != expected_variant:
             raise ValueError("ELF camera variant marker disagrees with capture role")
@@ -198,9 +199,6 @@ def capture_target(
             scc, expected_role=capture_role,
             expected_idle_start_tick=observed_idle_start,
             expected_route_id=ROUTE_ID,
-            expected_bridge_counts=(0, 0) if expected_variant == 1 else (
-                scc.header[19], scc.header[20]
-            ),
         )
         if not discovery and scc.header[10] != expected_idle_start_tick:
             raise ValueError("fixed SCC1 idle start tick is wrong")
@@ -296,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ipl", type=Path, required=True)
     parser.add_argument("--game", type=Path, required=True)
     parser.add_argument("--route-manifest", type=Path, required=True)
-    parser.add_argument("--capture-role", choices=("camera-baseline", "camera-q"), required=True)
+    parser.add_argument("--capture-role", choices=tuple(ROLE_IDS), required=True)
     parser.add_argument("--expected-idle-start-tick", type=int, required=True)
     parser.add_argument("--discovery", action="store_true")
     parser.add_argument("--source-data", type=Path)

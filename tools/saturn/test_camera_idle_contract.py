@@ -5,7 +5,6 @@ word, or treating a baseline/Q divergence as stable camera state.
 """
 from __future__ import annotations
 
-import math
 import os
 from pathlib import Path
 import subprocess
@@ -14,7 +13,7 @@ import tempfile
 import unittest
 
 from camera_idle_contract import (
-    Scc1Error, _f32_ulp, compare_camera_roles, compare_same_role, decode_scc1,
+    Scc1Error, compare_same_role, decode_scc1,
     validate_scc1,
 )
 
@@ -26,7 +25,11 @@ SCC1_SAMPLE_COUNT = 600
 SCC1_PAYLOAD_WORDS = 48600
 SCC1_BYTES = 194496
 SCC1_ROUTE_ID = 2
-Q_BRIDGES = (17, 19)
+ROLE_NAMES = {
+    1: "camera-source-baseline",
+    2: "camera-bypass-diagnostic",
+    3: "camera-fixed-candidate",
+}
 
 FLOAT_WORDS = set(range(4, 10)) | set(range(12, 30)) | set(range(32, 42)) | set(range(44, 51)) | set(range(52, 59)) | {61, 63} | set(range(65, 75)) | {78}
 PACKED_WORDS = {10, 11, 30, 31, 42, 43, 51, 59, 60, 62, 64, 75, 76, 77, 79, 80}
@@ -96,7 +99,7 @@ class Scc1DecodeTest(unittest.TestCase):
 
     def test_rejects_each_header_word_mutation(self) -> None:
         raw = build_scc1()
-        for offset in range(SCC1_HEADER_WORDS):
+        for offset in set(range(SCC1_HEADER_WORDS)) - {19, 20, 21}:
             with self.subTest(offset=offset), self.assertRaises(Scc1Error):
                 decode_scc1(mutate_word(raw, offset, 0xDEADBEEF))
 
@@ -106,9 +109,8 @@ class Scc1DecodeTest(unittest.TestCase):
         for offset in range(SCC1_SAMPLE_WORDS):
             with self.subTest(offset=offset), self.assertRaises(Scc1Error):
                 capture = decode_scc1(mutate_word(raw, base + offset, 0xDEADBEEF))
-                validate_scc1(capture, expected_role="camera-baseline",
-                              expected_idle_start_tick=31, expected_route_id=2,
-                              expected_bridge_counts=(0, 0))
+                validate_scc1(capture, expected_role="camera-source-baseline",
+                              expected_idle_start_tick=31, expected_route_id=2)
 
     def test_rejects_later_state_drift_nonfinite_and_reserved_bits(self) -> None:
         raw = build_scc1()
@@ -127,25 +129,29 @@ class Scc1DecodeTest(unittest.TestCase):
 
 
 class Scc1ValidationTest(unittest.TestCase):
-    def test_validates_baseline_and_q_role_contracts(self) -> None:
-        baseline = decode_scc1(build_scc1())
-        q = decode_scc1(build_scc1(variant=2, bridges=Q_BRIDGES))
-        validate_scc1(baseline, expected_role="camera-baseline", expected_idle_start_tick=31,
-                      expected_route_id=2, expected_bridge_counts=(0, 0))
-        validate_scc1(q, expected_role="camera-q", expected_idle_start_tick=31,
-                      expected_route_id=2, expected_bridge_counts=Q_BRIDGES)
+    def test_validates_each_phase_a_role_without_legacy_bridge_counts(self) -> None:
+        for role_id, role_name in ROLE_NAMES.items():
+            with self.subTest(role=role_name):
+                capture = decode_scc1(build_scc1(variant=role_id, bridges=(0, 0), generation=0))
+                validate_scc1(capture, expected_role=role_name,
+                              expected_idle_start_tick=31, expected_route_id=2)
 
-    def test_rejects_nonneutral_input_missing_flag_route_zoom_generation_and_bridges(self) -> None:
+    def test_rejects_unknown_phase_a_role(self) -> None:
+        with self.assertRaises(Scc1Error):
+            validate_scc1(decode_scc1(build_scc1()), expected_role="camera-q",
+                          expected_idle_start_tick=31, expected_route_id=2)
+
+    def test_rejects_nonneutral_input_missing_flag_route_and_zoom(self) -> None:
         cases = [
             (SCC1_HEADER_WORDS + 1, 1), (SCC1_HEADER_WORDS + 2, 0x3D),
-            (23, 3), (SCC1_HEADER_WORDS + 71, f32(349.0)), (21, 0), (19, 0),
+            (23, 3), (SCC1_HEADER_WORDS + 71, f32(349.0)),
         ]
-        raw = build_scc1(variant=2, bridges=Q_BRIDGES)
+        raw = build_scc1(variant=2, bridges=(0, 0), generation=0)
         for index, value in cases:
             with self.subTest(word=index), self.assertRaises(Scc1Error):
                 validate_scc1(decode_scc1(mutate_word(raw, index, value)),
-                              expected_role="camera-q", expected_idle_start_tick=31,
-                              expected_route_id=2, expected_bridge_counts=Q_BRIDGES)
+                              expected_role="camera-bypass-diagnostic", expected_idle_start_tick=31,
+                              expected_route_id=2)
 
     def test_same_role_requires_raw_byte_identity(self) -> None:
         raw = build_scc1()
@@ -153,30 +159,6 @@ class Scc1ValidationTest(unittest.TestCase):
         changed = mutate_word(raw, SCC1_HEADER_WORDS + SCC1_SAMPLE_WORDS + 10, f32(3.0))
         with self.assertRaises(Scc1Error):
             compare_same_role(decode_scc1(raw), decode_scc1(changed))
-
-    def test_cross_role_checks_packed_exactness_and_float_tolerance(self) -> None:
-        baseline = decode_scc1(build_scc1())
-        qraw = build_scc1(variant=2, bridges=Q_BRIDGES)
-        compare_camera_roles(baseline, decode_scc1(qraw), q_fraction_bits=12)
-        packed = mutate_word(qraw, SCC1_HEADER_WORDS + 10, 0)
-        with self.assertRaises(Scc1Error):
-            compare_camera_roles(baseline, decode_scc1(packed), q_fraction_bits=12)
-        far = mutate_word(qraw, SCC1_HEADER_WORDS + 4, f32(3.0))
-        with self.assertRaises(Scc1Error):
-            compare_camera_roles(baseline, decode_scc1(far), q_fraction_bits=12)
-
-    def test_cross_role_allows_one_binary32_ulp_when_q_tolerance_is_smaller(self) -> None:
-        baseline_raw = build_scc1()
-        baseline = decode_scc1(baseline_raw)
-        qraw = build_scc1(variant=2, bridges=Q_BRIDGES)
-        baseline_bits = struct.unpack(">48624I", baseline_raw)[SCC1_HEADER_WORDS + 4]
-        q = decode_scc1(mutate_every_sample_word(qraw, 4, baseline_bits + 1))
-        compare_camera_roles(baseline, q, q_fraction_bits=30)
-
-    def test_binary32_ulp_at_finite_extremes_is_finite_and_signedness_independent(self) -> None:
-        maximum = struct.unpack(">f", bytes.fromhex("7f7fffff"))[0]
-        self.assertEqual(_f32_ulp(maximum), 2.0 ** 104)
-        self.assertEqual(_f32_ulp(-maximum), 2.0 ** 104)
 
 
 class SaturnCameraProbeMappingTest(unittest.TestCase):
