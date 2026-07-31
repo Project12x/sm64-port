@@ -1141,6 +1141,22 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             StackPtr(12),
         )
 
+    def test_register_add_degrades_unaligned_singleton_stack_offset(self) -> None:
+        self.assertIs(
+            self._register_add_result(
+                ConstSet("signed", frozenset({2})), StackPtr(8)
+            ),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_degrades_out_of_bound_singleton_stack_offset(self) -> None:
+        self.assertIs(
+            self._register_add_result(
+                ConstSet("signed", frozenset({4})), StackPtr(4096)
+            ),
+            MAYBE_STACK_PTR,
+        )
+
     def test_store_through_maybe_stack_pointer_invalidates_frame(self) -> None:
         instruction = parse_instructions(" 6001000: 24 02 mov.l r0,@r4\n")[0x6001000]
         state = _unknown_state()

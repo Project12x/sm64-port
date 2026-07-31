@@ -1296,7 +1296,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             state[binary.group(2)] = (
                 StackPtr(stack_offset)
                 if abs(stack_offset) <= 4096 and stack_offset % 4 == 0
-                else UNKNOWN
+                else MAYBE_STACK_PTR
             )
         elif stack_alias_result:
             state[binary.group(2)] = MAYBE_STACK_PTR
