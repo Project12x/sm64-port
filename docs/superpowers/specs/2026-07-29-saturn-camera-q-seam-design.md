@@ -522,21 +522,51 @@ The proved examples are binding regression fixtures:
   `jsr @r8` calls to `___mulsf3`; route 1's different pointer bits do not.
   Even an exact-target-only simulation therefore reports the same 201
   functions but unequal totals 560 and 564.
+- The real internal targets are not all owned by `STT_FUNC`. All eight
+  legitimate internal-offset `bsr` instructions in `___udivsi3` target
+  `div0+0x6`, `div0+0x8`, or `div0+0x18`, while readelf reports `div0` at
+  `0x0600437E` as a zero-size `STB_LOCAL STT_NOTYPE` symbol in `.text`
+  preceding the `___udivsi3` function range. A function-only target map
+  therefore rejects proven executable assembly even though broad `STT_NOTYPE`
+  admission would also misclassify data.
 
 The corrected analyzer separates code-address discovery from register
 dataflow. `sh-elf-readelf -SW` supplies executable-section bounds and
-`sh-elf-readelf -sW` supplies only `STT_FUNC` symbols whose section has
-`SHF_EXECINSTR`. Every derived range must remain inside that section. A
-nonzero symbol owns its exact half-open range. A zero-size symbol ends at the
-next greater function start in the same section, or at the section end.
-Same-start symbols are aliases only when their effective ends agree; a
-same-start/end group has one deterministic canonical owner:
+`sh-elf-readelf -sW` supplies canonical call-graph owners only from
+`STT_FUNC` symbols whose section has `SHF_EXECINSTR`. Every derived range must
+remain inside that section. A nonzero function owns its exact half-open range.
+A zero-size function ends at the next greater function start in the same
+section, or at the section end. Same-start functions are aliases only when
+their effective ends agree; a same-start/end group has one deterministic
+canonical owner:
 `GLOBAL` binding before `WEAK` before `LOCAL`, then non-hidden before hidden,
 then shortest name, then bytewise lexical name. All other names are recorded
 as aliases. Different effective ends at one start, or a partial overlap
-between different starts, is ambiguous and fails. DWARF decoded-line rows
-seed only aligned addresses strictly inside a resolved function range;
-`end_sequence` and one-past-end rows are ignored.
+between different starts, is ambiguous and fails.
+
+The symbol pass also indexes, but does not automatically admit,
+`STB_LOCAL STT_NOTYPE` labels with nonempty names in executable sections.
+Their candidate half-open range starts at the label value and ends at the
+next strictly greater defined symbol value in that section, or section end,
+then is capped at the first canonical `STT_FUNC` start it would overlap.
+Duplicate identical symbol rows collapse; different same-start names,
+zero-length ranges, overlapping label ranges, or any remaining function
+overlap are ambiguous and fail. `OBJECT`, `TLS`, `SECTION`, and `FILE`
+symbols, all GLOBAL/WEAK `STT_NOTYPE` symbols, undefined/absolute labels, and
+empty names are never candidates. A `.L*` compiler temporary is eligible
+only when the reachable objdump operand names that exact symbol byte-for-byte
+and its displayed `+offset` exactly reconstructs the decoded target.
+
+A candidate becomes a local executable-label island only when an actual
+reachable direct branch/call target lies inside its already bounded range.
+If the target already belongs to a canonical function, ordinary function
+ownership wins and preserves its function-relative offset; no island is
+fabricated. Otherwise candidate selection must be unique, and a `.L*` target
+must satisfy the exact-name rule above. The cap is never relaxed to capture a
+target, and an unmatched target is never assigned to a nearby or unrelated
+containing function. DWARF decoded-line rows seed only aligned addresses
+strictly inside a canonical function range; they do not independently seed
+label islands. `end_sequence` and one-past-end rows are ignored.
 
 Function entries and filtered line rows first seed structural code discovery;
 only a seed or a proven successor can promote an objdump row to an
@@ -555,9 +585,25 @@ unknown instruction effect in that function fails closed.
 Successor construction distinguishes fallthrough, `bt`/`bf`,
 `bt/s`/`bf/s`, `bra`, `bsr`, `rts`/`rte`, `jmp`/`jsr`, and
 `braf`/`bsrf`, and executes the one SH delay-slot instruction before applying
-every delayed transfer. Direct call targets are mapped by target address to
-their containing canonical function while retaining the exact nonzero target
-offset, so legitimate internal-entry calls remain edges.
+every delayed transfer. Direct call targets owned by a canonical function
+retain the exact nonzero function-relative target offset. A reachable `bsr`
+to a label island is instead an intra-owner implementation transfer: the
+island entry starts at the exact target with the post-delay,
+pre-caller-clobber state, keeps the originating canonical caller for
+attribution, and is not a closure caller/callee node. Calls from the island
+to ordinary functions or helpers are recorded under that originating owner
+with an island-relative site. An island-to-island transfer preserves the
+same origin transitively. The work-list key includes origin, island, address,
+and abstract state, so island cycles converge under the same join/widening
+fixed point. A direct `bra` to an island uses the same origin and post-delay
+state but replaces ordinary fallthrough; it is not given a synthetic return.
+
+Only the island entry and successors proved by the same SH CFG rules become
+instructions; the analyzer never linearly scans the island's bounded bytes.
+Literal halfwords inside the range therefore remain data. An island `rts`
+ends that island path and returns to the originating call's post-delay
+fallthrough after applying ABI caller-clobber semantics. Unresolved island
+effects/transfers fail exactly like unresolved function code.
 
 The finite abstract domain for each register or fixed spill slot has
 `UNREACHED` as bottom, `UNKNOWN` as top, a `ConstSet` of integer constants or
@@ -611,7 +657,13 @@ unmodeled destination kill, an unresolved effect, disconnected line seeds,
 loop-carried widening and convergence, signed/unsigned branch refinement, an
 oversized unresolved interval, bounded jump-table enumeration, zero-size
 functions, same-start aliases, ambiguous overlaps, `end_sequence` rows, and
-an absent line table.
+an absent line table. Local-label-island fixtures model the real
+preceding-`div0` zero-size LOCAL/NOTYPE symbol and its three `+offset`
+targets, helper attribution to the originating function, `rts` return
+fallthrough/clobbers, transitive island cycles, and literal data skipped
+inside a bounded island. Negative fixtures reject data/nonlocal/unnamed
+labels, ambiguous aliases/overlaps, and unrelated containing-function
+mapping.
 
 Task 3 captures legacy observations first, then corrected observations from
 the same route-0 and route-1 pure-layout ELFs built in a clean detached
@@ -619,12 +671,13 @@ worktree at the parser/test commit. That worktree is retained through
 observation, independent review, v2 finalization, and evidence commit; no
 partial SCC/cart/camera transport file or diff may exist in it. A
 deterministic comparator requires the corrected closure, normalized
-direct-call facts (including
-caller-relative site and callee-relative target offsets), helper facts, and
-helper total to be identical across the two layout-only variants. It records
-both legacy and corrected totals, complete corrected closure/direct/helper
-arrays, complete sorted added/removed facts, the parser base/commit/range,
-the pre-build isolation checks, and hashes of every input.
+direct-call facts (including owner/island-relative sites and callee-relative
+target offsets), implementation-island transfers, helper facts, and helper
+total to be identical across the two layout-only variants. It records both
+legacy and corrected totals, complete corrected
+closure/direct/helper/implementation-island arrays, complete sorted
+added/removed facts, the parser base/commit/range, the pre-build isolation
+checks, and hashes of every input.
 All four observations, the equality proposal, and the review record are
 committed evidence, not scratch-only inputs. The review record fixes the
 parser commit, reviewed commit range, and complete reviewed-file inventory.
@@ -653,9 +706,11 @@ quiet re-pin.
 
 Disabling the post-link audit is forbidden because object or source checks
 cannot prove the linked closure. Rejecting all `+offset` targets is forbidden
-because it removes the real internal-entry calls above. Pinning route 1's
-inflated total is forbidden because it preserves layout-dependent false
-facts and the route-0 register-clobber false negative.
+because it removes the real internal-entry calls above. Broadening ordinary
+ownership to all `STT_NOTYPE` symbols, linearly scanning label ranges, or
+mapping `div0+offset` to an unrelated containing function is equally
+forbidden. Pinning route 1's inflated total is forbidden because it preserves
+layout-dependent false facts and the route-0 register-clobber false negative.
 
 ## Static and performance evidence
 
@@ -808,8 +863,10 @@ Task 3 is complete only when all of the following are true:
 
 - The delay-slot-aware linked-ELF analyzer rejects literal-pool decodes,
   preserves real internal-offset calls, reports no unresolved transfer or
-  effect in the audited closure, and produces identical corrected route-0/route-1
-  closure/call/helper facts.
+  effect in the audited closure, admits the exact reachable `div0` local-label
+  implementation transfers without making `div0` a closure node, and
+  produces identical corrected route-0/route-1
+  closure/call/helper/implementation-transfer facts.
 - V2 is re-pinned exactly once after the equality report and independent
   review; the durable report names an ancestor `repin_source_commit`, records
   old/new totals and digests plus sorted added/removed facts, validates its

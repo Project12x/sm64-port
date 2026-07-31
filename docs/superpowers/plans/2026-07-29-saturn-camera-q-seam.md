@@ -142,7 +142,7 @@ evidence.
 | `tools/saturn/camera_q_diff_fixture.c` and `test_camera_q.py` | Host differential and mutation corpus. | In-tree float formulas are the reference; literal boundaries and captured operands are both mandatory. |
 | `tools/saturn/camera_q_object_contract.py` | Shared canonical SH-object disassembly and selected-candidate equivalence check. | Strip only the objdump input banner, normalize CRLF to LF, compare code/relocations exactly, and provide the canonicalizer later imported by audit v3. |
 | `tools/saturn/verify_sh2_native_math.py` | Parse linked SH code and enforce audit-contract v2 and v3. | Task 3 replaces linear pool decoding with terminating delay-slot-aware executable-code/dataflow analysis, emits observation JSON, and re-pins corrected v2 once; Task 8 may change verifier bytes for v3 but must preserve the historically pinned v2 facts. |
-| `tools/saturn/compare_sh2_native_math_audit_reports.py` | Compare legacy and corrected route-0/route-1 audit observations. | Require corrected closure/direct-call/helper facts and total to be layout-invariant; report old/new totals plus sorted added/removed facts and finalize the reviewed v2 re-pin. |
+| `tools/saturn/compare_sh2_native_math_audit_reports.py` | Compare legacy and corrected route-0/route-1 audit observations. | Require corrected closure/direct-call/helper/local-label-island facts and total to be layout-invariant; report old/new totals plus sorted added/removed facts and finalize the reviewed v2 re-pin. |
 | `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt` | Pin the corrected source-simulation audit total. | Rewrite `EXPECTED_TOTAL` exactly once after the Task 3 equality report and independent review, then freeze its new SHA-256 in the verifier. |
 | `tools/saturn/sh2_native_math_sim_audit_contract_v3.txt` | Pin final measured Task 3 audit facts. | Generated from the final Q ELF only after its closure is reviewed; exact total must be lower than v2. |
 | `docs/saturn/evidence/reports/task3-*` | Durable range, audit, capture, A/B, and final reports. | Every report includes command line, commit, artifact hashes, route digest, role, and raw-derived result. |
@@ -741,19 +741,32 @@ only to latch SQT1; it is not an additional SCC1 word.
   root
   closure_functions: [symbol, ...]
   direct_call_facts:
-    [{caller, caller_offset, callee, callee_offset, count}, ...]
+    [{caller, caller_region, caller_island, caller_offset,
+      callee, callee_offset, count}, ...]
   helper_call_facts:
-    [{caller, caller_offset, helper, helper_offset, count}, ...]
+    [{caller, caller_region, caller_island, caller_offset,
+      helper, helper_offset, count}, ...]
+  implementation_transfer_facts:
+    [{caller, caller_region, caller_island, caller_offset,
+      target_island, target_offset, count}, ...]
   helper_total
   unresolved_indirect_transfers:
-    [{caller, caller_offset, mnemonic}, ...]
+    [{caller, caller_region, caller_island, caller_offset, mnemonic}, ...]
   unresolved_effects:
-    [{function, instruction_offset, mnemonic, operands, reason}, ...]
+    [{caller, caller_region, caller_island, caller_offset,
+      mnemonic, operands, reason}, ...]
   ```
 
-  `caller_offset` and `callee_offset` are nonnegative symbol-relative byte
-  offsets serialized as JSON numbers. Closure/call arrays contain only facts
-  whose caller belongs to the audit root's derived closure; rows are sorted by
+  `caller_region` is `"owner"` or `"island"`. For owner code,
+  `caller_island` is JSON null and `caller_offset` is relative to the
+  canonical caller; for island code, `caller_island` is the exact local label
+  and the nonnegative offset is relative to that island. `callee_offset` and
+  `target_offset` are likewise nonnegative offsets from the named canonical
+  function or island. Closure/call arrays contain only facts attributed to a
+  canonical caller in the audit root's derived closure; an island never
+  appears in `closure_functions`. Legacy-linear writes an empty
+  `implementation_transfer_facts` array and retains its historical annotated
+  call facts; code-only writes the proved island facts. Rows are sorted by
   their displayed fields. `--producer-commit` requires a full lowercase
   40-hex SHA equal to `git rev-parse HEAD` in the producer worktree and is
   recorded verbatim. Observation-only is mutually exclusive with normal
@@ -775,7 +788,22 @@ only to latch SQT1; it is not an additional SCC1 word.
   - a pool-decoded `extu.b r10,r8` cannot clear a real literal-loaded `r8`
     and hide four later `jsr @r8` calls to `___mulsf3`;
   - real `bsr` targets `___movmemSI52+0x2` and
-    `div0+0x6/+0x8/+0x18` remain distinct internal-offset call facts;
+    `div0+0x6/+0x8/+0x18` remain distinct internal-offset facts;
+  - a real-ELF-shaped `div0` fixture is a zero-size `STB_LOCAL STT_NOTYPE`
+    label immediately before `___udivsi3`; eight reachable `bsr` sites admit
+    only its three exact bounded offsets without adding `div0` to the closure;
+  - a helper or ordinary direct call reached inside an island is attributed
+    to the originating canonical owner at an island-relative site;
+  - island `rts` returns to the originating call's post-delay fallthrough and
+    applies the ABI caller-clobber set exactly once;
+  - island-to-island cycles terminate under the origin/island/address/state
+    fixed-point key;
+  - data, GLOBAL/WEAK NOTYPE, OBJECT/TLS/SECTION/FILE, undefined/absolute,
+    empty-name, ambiguous-alias, overlapping-range, and unrelated-owner
+    candidates are rejected; a `.L*` candidate is admitted only when objdump
+    names the exact symbol and offset;
+  - literal data inside an admitted island range is skipped unless the
+    island-entry CFG actually reaches its halfword;
   - `bt`, `bf`, `bt/s`, `bf/s`, `bra`, `bsr`, `jsr`, `rts`, and `rte`
     take the correct fallthrough/target successors and execute exactly one
     delay slot where SH requires it;
@@ -822,9 +850,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   discovery, and dataflow phases.
 
   Parse `sh-elf-readelf -SW` first. Only sections with `SHF_EXECINSTR` may own
-  code. From `sh-elf-readelf -sW`, accept only `STT_FUNC` symbols whose
-  `st_shndx` names one of those sections. A nonzero symbol owns
-  `[st_value, st_value + st_size)`. A zero-size symbol ends at the next
+  code. From `sh-elf-readelf -sW`, ordinary canonical call-graph owners remain
+  restricted to `STT_FUNC` symbols whose `st_shndx` names one of those
+  sections. A nonzero function owns
+  `[st_value, st_value + st_size)`. A zero-size function ends at the next
   greater function address in the same section, or that section's end.
   Reject any derived range outside its executable section. Same-start
   symbols are aliases only if their effective ends agree; then choose one
@@ -833,6 +862,27 @@ only to latch SQT1; it is not an additional SCC1 word.
   DEFAULT/PROTECTED=0/HIDDEN/INTERNAL=1, name byte length, UTF-8 name bytes)`;
   retain the other names in a sorted alias list. Reject different effective
   ends at one start and partial overlap between ranges with different starts.
+
+  Separately index only named `STB_LOCAL STT_NOTYPE` symbols defined in an
+  executable section as possible local executable-label islands. Indexing is
+  not admission. A candidate starts at its symbol value and ends at the next
+  strictly greater defined symbol value in the same section, or at section
+  end, then is capped at the first canonical `STT_FUNC` start it would
+  overlap. Collapse byte-identical duplicate rows, but reject different names
+  at one start, zero-length ranges, overlapping label candidates, and any
+  remaining canonical-function overlap. Never consider empty names,
+  GLOBAL/WEAK NOTYPE, OBJECT, TLS, SECTION, FILE, undefined, or absolute
+  symbols.
+
+  Admit one candidate only after an actual reachable direct branch/call
+  target lies inside its already capped half-open range. Candidate selection
+  must be unique. For `.L*` compiler temporaries, the objdump target annotation
+  base must equal the symbol-table name byte-for-byte and its displayed
+  `+offset` must reconstruct the decoded absolute target exactly; otherwise
+  reject it. If the target already lies in a canonical `STT_FUNC` range, that
+  ordinary owner wins and retains its function-relative offset. Never relax
+  an island bound, broadly admit NOTYPE symbols, or map an unowned target to a
+  nearby/unrelated function.
 
   Parse `sh-elf-readelf --debug-dump=decodedline` only after ranges exist.
   Keep only two-byte-aligned row addresses strictly inside one canonical
@@ -848,9 +898,12 @@ only to latch SQT1; it is not an additional SCC1 word.
   a seed or a proven successor. Reconstruct the addressed `.text` bytes from
   those rows. Dataflow runs only over discovered code and may add a resolved
   indirect successor only inside a proven function range; arbitrary objdump
-  rows never become code merely because they were decoded. Every entry and
-  non-entry seed starts with all general registers, `pr`, `mach`, `macl`, and
-  fixed `r15` spill slots `UNKNOWN`.
+  rows never become code merely because they were decoded. A label island is
+  not a DWARF seed: only the exact reachable direct target is its entry, and
+  only successors proved from that entry under these same CFG rules promote
+  island halfwords to instructions. Never linearly scan its bounded range.
+  Every function entry and non-entry line seed starts with all general
+  registers, `pr`, `mach`, `macl`, and fixed `r15` spill slots `UNKNOWN`.
 
   The finite abstract domain for each register and fixed spill slot is:
 
@@ -904,9 +957,20 @@ only to latch SQT1; it is not an additional SCC1 word.
   named by the tests above. Resolve a delayed transfer target from the
   pre-slot state, execute exactly one slot, and propagate the post-slot state
   to its target/fallthrough. Map a reached direct target address to the
-  containing function and retain its nonzero offset; never require exact
-  symbol-entry targets and never strip an offset before source-code
-  reachability is known.
+  containing canonical function and retain its nonzero offset. A `bsr` to an
+  admitted island is an intra-owner implementation transfer, not a new
+  closure edge: analyze from the exact island target with the post-delay,
+  pre-caller-clobber state, attribute
+  helper/ordinary calls to the originating canonical owner using the
+  island-relative site, and preserve that origin through transitive island
+  transfers. Key the work list by
+  `(origin owner, island, instruction address, abstract state)` so cycles
+  converge. Island `rts` ends the island path and resumes the originating
+  `bsr` caller's post-delay fallthrough after ABI caller clobbers. A direct
+  `bra` to an island carries the post-delay state and existing `pr`, replaces
+  ordinary fallthrough, and receives no synthetic return. Never require exact
+  function-entry targets, strip an offset before reachability is known, or
+  promote an island to an expected caller/callee node.
 
   Add `--readelf PATH`; it is mandatory for ordinary linked-ELF verification,
   observation, and v3 generation because those modes build a linked call
@@ -1039,17 +1103,18 @@ only to latch SQT1; it is not an additional SCC1 word.
   The already committed comparator's `compare` subcommand accepts the four
   observations below, requires distinct route ELF hashes but identical
   corrected parser/oracle/contract-before hashes, closure functions, direct
-  call facts, helper facts, helper total, and empty unresolved-transfer and
-  unresolved-effect lists. It writes a proposal containing both legacy
-  totals; the one corrected
-  total; the complete corrected closure, normalized direct-call, and helper
-  arrays; sorted per-route added/removed direct/helper facts; full
-  `parser_base_commit`, `parser_commit`, and reviewed range; the exact
-  pre-build isolation result (evidence worktree basename, clean detached HEAD,
-  empty transport diff, and absent transport-only files); and the relative
-  repository path plus SHA-256 of every input. The comparator rejects an
-  absolute or repository-escaping input path. Its tests reject false/nonzero
-  isolation claims and a worktree basename inconsistent with the parser SHA:
+  call facts, helper facts, implementation-transfer facts, helper total, and
+  empty unresolved-transfer and unresolved-effect lists. It writes a proposal
+  containing both legacy totals; the one corrected total; the complete
+  corrected closure, normalized direct-call, helper, and
+  implementation-transfer arrays; sorted per-route added/removed
+  direct/helper/implementation facts; full `parser_base_commit`,
+  `parser_commit`, and reviewed range; the exact pre-build isolation result
+  (evidence worktree basename, clean detached HEAD, empty transport diff, and
+  absent transport-only files); and the relative repository path plus
+  SHA-256 of every input. The comparator rejects an absolute or
+  repository-escaping input path. Its tests reject false/nonzero isolation
+  claims and a worktree basename inconsistent with the parser SHA:
 
   ```powershell
   Push-Location $evidenceWorktree
@@ -1073,6 +1138,17 @@ only to latch SQT1; it is not an additional SCC1 word.
   parser_commit
   reviewed_range: parser_base_commit + ".." + parser_commit
   proposal_sha256
+  implementation_island_review:
+    canonical_owners_stt_func_only: true
+    witness_owner: "___udivsi3"
+    witness_symbol:
+      {value: "0600437e", size: 0, bind: "LOCAL",
+       type: "NOTYPE", section: ".text", name: "div0"}
+    witness_targets: ["div0+0x6", "div0+0x8", "div0+0x18"]
+    witness_reachable_bsr_count: 8
+    closure_contains_div0: false
+    broad_notype_admission: false
+    unrelated_owner_mapping: false
   reviewed_files:
     - tools/saturn/compare_sh2_native_math_audit_reports.py
     - tools/saturn/test_compare_sh2_native_math_audit_reports.py
@@ -1089,8 +1165,12 @@ only to latch SQT1; it is not an additional SCC1 word.
   The comparator requires full 40-hex commit IDs, the exact range string,
   `proposal_sha256` equal to the proposal file hash, and a sorted
   nine-element reviewed-file inventory matching those exact inputs. The
-  review record is durable evidence; an ignored reviewer note may supplement
-  it but cannot replace it.
+  reviewer inspects readelf/objdump from the retained hash-matched ELF and
+  requires the exact island-review witness above, every island fact in the
+  proposal, helper attribution to its originating owner, and negative tests
+  forbidding broad NOTYPE admission or unrelated-function mapping. The review
+  record is durable evidence; an ignored reviewer note may supplement it but
+  cannot replace it.
 
   Phase B begins only after that clean review. Read
   `corrected_helper_total` from the reviewed proposal. With `apply_patch`,
@@ -1159,8 +1239,13 @@ only to latch SQT1; it is not an additional SCC1 word.
   repin_source_commit
   legacy: {route0_total, route1_total}
   corrected: {helper_total, closure_count, direct_call_facts_sha256,
-              helper_call_facts_sha256}
-  delta: {route0: {added, removed}, route1: {added, removed}}
+              helper_call_facts_sha256,
+              implementation_transfer_facts_sha256}
+  delta:
+    {route0: {direct: {added, removed}, helper: {added, removed},
+              implementation: {added, removed}},
+     route1: {direct: {added, removed}, helper: {added, removed},
+              implementation: {added, removed}}}
   contract: {old_expected_total, old_sha256,
              new_expected_total, new_sha256}
   review: {parser_base_commit, parser_commit, reviewed_range,
@@ -1227,9 +1312,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   Separately, it executes the current verifier twice in ordinary v2 mode and
   twice in code-only observation mode against the retained route ELFs. It
   compares the current observations' complete closure, normalized
-  direct-call facts, helper facts, helper total, and empty unresolved lists
-  with the frozen corrected observations. Current verifier byte equality to
-  the historical Task 3 SHA is deliberately not required. The comparator
+  direct-call facts, helper facts, implementation-transfer facts, helper
+  total, and empty unresolved lists with the frozen corrected observations.
+  Current verifier byte equality to the historical Task 3 SHA is deliberately
+  not required. The comparator
   tests cover: a post-v3 current-verifier byte change with preserved v2 facts
   passes; historical `git show` hash mismatch fails; a non-ancestor source
   commit fails; and current v2 behavioral drift fails. The
@@ -2542,8 +2628,10 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   Assert the post-Task-3 v2 contract digest, one-root schema, measured
   expected total, forbidden callers, code-only parser version, SH
-  delay-slot/switch/internal-offset behavior, zero unresolved transfers,
-  failure text, and successful report shape. Revalidate the report's
+  delay-slot/switch/internal-offset behavior, the exact `div0` local-label
+  implementation transfers without a fabricated closure node, zero
+  unresolved transfers/effects, failure text, and successful report shape.
+  Revalidate the report's
   historical parser/verifier/test/contract bytes from its exact ancestor
   `repin_source_commit`, then independently run the current verifier against
   the retained route ELFs and require complete v2 fact equality with the
@@ -4356,8 +4444,9 @@ only to latch SQT1; it is not an additional SCC1 word.
   Review scope includes target diff, raw evidence decoder, four SCC captures,
   four original-route captures, both comparison pairs, audit contract,
   all four native-math observations, the proposal, parser review record,
-  finalized re-pin report, provenance, and build maps. Resolve every P1/P2
-  finding with the standard fix/re-review loop and refresh any artifact
+  finalized re-pin report, the hash-matched readelf/objdump `div0` witness and
+  implementation-transfer arrays, provenance, and build maps. Resolve every
+  P1/P2 finding with the standard fix/re-review loop and refresh any artifact
   invalidated by a target code change.
 
   After the final review is clean and `verify-final` has revalidated every
@@ -4413,7 +4502,7 @@ only to latch SQT1; it is not an additional SCC1 word.
 | Q health | Nonzero generation and pinned nonzero bridge counts; zero overflow, saturation, divide, reseed, and range-fallback counts |
 | ABI/scope | Public Camera/Lakitu layout and non-Saturn behavior unchanged; radial/cutscene/rare modes remain explicit non-goals |
 | Original route | `bob-parity-v1` hash unchanged; two A/B pairs pass the hardened SBR4 output contract |
-| Static audit | Corrected route-0/route-1 v2 closure/call/helper facts identical; reviewed report validates its ancestor historical re-pin bytes and the current verifier's frozen v2 facts; v3 global total lower than corrected v2; complete generated Q closure; zero helper edges before exact named stops |
+| Static audit | Corrected route-0/route-1 v2 closure/call/helper/local-label-island facts identical; exact `div0` implementation transfers preserved without a fabricated closure node or broad NOTYPE ownership; reviewed report validates its ancestor historical re-pin bytes and the current verifier's frozen v2 facts; v3 global total lower than corrected v2; complete generated Q closure; zero helper edges before exact named stops |
 | Performance | Q `sim_frt_ticks_accum` strictly lower in both independent default-camera A/B pairs |
 | Memory | SCC exact `0x2F7C0` replay-only NOBITS section; at least `0x4000` LWRAM remains; selected cart stage is hash-proven; final HWRAM margin is at least `0x1B00` (`0x1000` TLSF + `0x0B00` safety) |
 | Provenance | Pinned source, commit, license, inspected ranges, reuse mode, notices, and material changes recorded |
