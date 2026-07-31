@@ -496,14 +496,85 @@ decoded 160-byte SBR4 windows, same-role equality of non-timing
 behavior/output fields, and the same hardened renderer gates. Timing and host
 provenance are recorded separately.
 
+## Linked-ELF audit parser correction prerequisite
+
+Task 3 starts with an evidence-driven correction to the native-math verifier,
+before any transport build or camera behavior change. The existing v2 result
+is not immutable: route 1 changes only layout, yet the linked
+`sh-elf-objdump -d` stream decodes in-function literal pools as SH
+instructions and the current linear scanner treats those data halfwords as
+control flow and register writes.
+
+The proved examples are binding regression fixtures:
+
+- `_find_floor` spans `0x0600AF20..0x0600B07B`, including its literal pool at
+  `0x0600B040..0x0600B07B`. Route 0's BSS-address low halfword `0xAEC0`
+  decodes as `bra`; route 1's `0xB4A0` decodes as a fake
+  `bsr ... <_load_static_surfaces+0x9a>`. The current regex strips the
+  `+0x9a` and fabricates a direct edge.
+- Exact-target-only filtering is forbidden. Real code deliberately calls
+  internal entries such as `___movmemSI52+0x2` and
+  `div0+0x6`, `div0+0x8`, and `div0+0x18`; the linked image contains 1,024
+  textual offset-`bsr` decodes mixing real instructions with pool data.
+- Literal data also corrupts indirect-call state. In
+  `_guLookAtReflectF`, route 0 pool halfword `0x68AC` decodes as
+  `extu.b r10,r8`, falsely clearing `r8` and hiding four real
+  `jsr @r8` calls to `___mulsf3`; route 1's different pointer bits do not.
+  Even an exact-target-only simulation therefore reports the same 201
+  functions but unequal totals 560 and 564.
+
+The corrected analyzer first parses linked function symbols and objdump
+instruction records, then derives executable instruction addresses with a
+per-function SH control-flow walk. Function entries and DWARF decoded-line
+addresses seed the walk; decoded-line seeds cover C switch case entries
+without treating intervening jump-table or literal-pool bytes as code.
+Successor construction distinguishes fallthrough, `bt`/`bf`,
+`bt/s`/`bf/s`, `bra`, `bsr`, `rts`/`rte`, `jmp`/`jsr`, and
+`braf`/`bsrf`, and executes the one SH delay-slot instruction before applying
+every delayed transfer. Direct call targets are mapped by target address to
+their containing function symbol, retaining the exact nonzero target offset,
+so legitimate internal-entry calls remain edges. A work-list abstract state
+tracks literal-loaded symbol addresses, fixed `r15` spill slots, and finite
+integer/address sets; joins retain only facts equal on every incoming path.
+Resolved indirect tail calls and computed switch destinations become
+successors. Any unresolved indirect transfer in an audited function is
+reported explicitly; it cannot silently cause the verifier to linear-scan
+the rest of the function or accept an incomplete closure.
+
+Synthetic tests independently mutate a fake pool `bsr`, the
+`_guLookAtReflectF`-style pool register clobber, a real internal-offset
+`bsr`, ordinary and delayed conditional branches, unconditional branches,
+call/return delay slots, a resolved indirect tail call, and the
+`mova`/indexed-load/`braf` switch form present in the audited closure. Each
+mutation must distinguish data from code without dropping a real edge.
+
+Task 3 captures legacy observations first, then corrected observations from
+the same route-0 and route-1 transport ELFs. A deterministic comparator
+requires the corrected closure, normalized direct-call facts (including
+caller-relative site and callee-relative target offsets), helper facts, and
+helper total to be identical across the two layout-only variants. It records
+both legacy and corrected totals plus sorted added/removed facts. Only after
+that equality report receives an independent clean review may the implementer
+change the single v2 `EXPECTED_TOTAL` line, compute and install its new
+SHA-256 pin, and finalize the durable re-pin report. The contract and parser
+are re-pinned exactly once and then frozen for the rest of the sprint; a
+later mismatch is a regression, not permission for another quiet re-pin.
+
+Disabling the post-link audit is forbidden because object or source checks
+cannot prove the linked closure. Rejecting all `+offset` targets is forbidden
+because it removes the real internal-entry calls above. Pinning route 1's
+inflated total is forbidden because it preserves layout-dependent false
+facts and the route-0 register-clobber false negative.
+
 ## Static and performance evidence
 
-The existing simulation native-math audit v2 remains immutable. The final
-route-1 Q ELF is first linked without invoking the unavailable v3 gate. Task 3
-then generates/reviews/commits a hash-pinned v3 contract, selects it only for
-that role, and runs `make verify`; the ELF hash must remain unchanged before
-any capture. Any later target-affecting change regenerates v3 and invalidates
-all captures. The contract:
+The corrected and deliberately re-pinned simulation native-math audit v2 is
+the baseline for all subsequent work. The final route-1 Q ELF is first linked
+without invoking the unavailable v3 gate. Task 14 then
+generates/reviews/commits a hash-pinned v3 contract, selects it only for that
+role, and runs `make verify`; the ELF hash must remain unchanged before any
+capture. Any later target-affecting change regenerates v3 and invalidates all
+captures. The contract:
 
 - has a lower exact helper total than v2;
 - keeps `_atan2_lookup` and `_atan2s` forbidden;
@@ -588,9 +659,10 @@ Host tests begin with synthetic raw fixtures and must reject:
 
 The existing comparator/contracts remain unchanged and their tests keep
 running. Camera-specific raw comparators, map gates, and audit-v3 selection
-are additive. Variant 1 uses immutable audit v2; the exact route-1 Q artifact
-uses its hash-pinned v3; route-0 Q proves its Q closure objects match the
-audited route-1 objects before the remaining target verification runs.
+are additive. Variant 1 uses the corrected, re-pinned audit v2; the exact
+route-1 Q artifact uses its hash-pinned v3; route-0 Q proves its Q closure
+objects match the audited route-1 objects before the remaining target
+verification runs.
 
 ## Error handling and rollback
 
@@ -623,7 +695,8 @@ The executable 15-task plan is
 `docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`. Its reviewable
 increments are:
 
-1. route/build-role configuration, pure SCC1/SBR4 host contracts, target
+1. route/build-role configuration, pure SCC1/SBR4 host contracts, the
+   reviewed linked-ELF parser correction and one-time v2 re-pin, target
    transport, and HWRAM/LWRAM reclamation gates;
 2. generated writer closure plus exact SCR1 range/quiescence capture;
 3. candidate arithmetic, full production differential, and only then the
@@ -642,6 +715,13 @@ variant 2 remains unbuildable until the differential freezes the final config.
 
 Task 3 is complete only when all of the following are true:
 
+- The delay-slot-aware linked-ELF analyzer rejects literal-pool decodes,
+  preserves real internal-offset calls, reports no unresolved transfer in the
+  audited closure, and produces identical corrected route-0/route-1
+  closure/call/helper facts.
+- V2 is re-pinned exactly once after the equality report and independent
+  review; the durable report records old/new totals, old/new digests, and
+  sorted added/removed facts.
 - The bounded default/Lakitu Q island is active only for camera variant 2.
 - `bob-parity-v1` remains immutable; raw route ID 2 and the compound
   Mario/default-dispatch witness bind all SCC1 acceptance evidence to

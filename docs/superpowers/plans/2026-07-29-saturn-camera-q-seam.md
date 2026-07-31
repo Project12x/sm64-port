@@ -35,6 +35,12 @@ evidence.
   `docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`
   as the normative specification. If implementation evidence contradicts the
   spec, stop and amend/re-review the spec instead of weakening a test.
+- The proved linked-ELF audit contradiction is the one authorized exception
+  to the old v2 digest: Task 3 must capture the legacy facts, harden the
+  parser, prove corrected route-0/route-1 equality, receive a clean review,
+  and then re-pin v2 exactly once. Disabling the post-link audit, excluding
+  all internal-offset targets, or pinning route 1's inflated count is
+  forbidden.
 - Preserve the public `struct Camera`, `struct LakituState`,
   `update_default_camera`, `next_lakitu_state`, `update_lakitu`,
   `mode_default_camera`, `mode_lakitu_camera`, and `mode_mario_camera`
@@ -98,9 +104,12 @@ evidence.
   reserving `0x4000` for later camera code plus the immutable final
   `0x1B00` floor (`0x1000` TLSF + `0x0B00` safety). Re-run the map gate after
   every target-code task; never weaken either floor.
-- The target capture and performance gates are serial. Host contract,
-  differential, mutation, and documentation work may run in parallel only
-  when agents own disjoint files.
+- The target capture and performance gates are serial. The user's machine is
+  CPU-busy: run every build in this plan with `make -j1`, never overlap two
+  build/test commands, and keep subagents serial. `-j1` is an operational
+  scheduling change only and must not change flags, artifacts, or evidence
+  gates. Any older quoted command below that still spells `make -j2` is
+  explicitly superseded: substitute `make -j1` when executing it.
 - Each task ends with a scoped review. Do not proceed past an unresolved P1 or
   P2 finding. Update
   `.superpowers/sdd/2026-07-29-sh2-native-math-purge/progress.md` after each
@@ -132,7 +141,9 @@ evidence.
 | `src/port/saturn/runtime/saturn_camera_q.h/.c` | Persistent shadow types plus pure state-machine operations. | Seed, default goal, transition, Lakitu smoothing, invalidation, diagnostics, and mirror values; external effects arrive only through named direct bridge functions. |
 | `tools/saturn/camera_q_diff_fixture.c` and `test_camera_q.py` | Host differential and mutation corpus. | In-tree float formulas are the reference; literal boundaries and captured operands are both mandatory. |
 | `tools/saturn/camera_q_object_contract.py` | Shared canonical SH-object disassembly and selected-candidate equivalence check. | Strip only the objdump input banner, normalize CRLF to LF, compare code/relocations exactly, and provide the canonicalizer later imported by audit v3. |
-| `tools/saturn/verify_sh2_native_math.py` | Parse and enforce audit-contract v2 and v3. | V2 behavior/digest stays unchanged; v3 adds multiple roots, generated closure, stop bridges, and exact counts. |
+| `tools/saturn/verify_sh2_native_math.py` | Parse linked SH code and enforce audit-contract v2 and v3. | Task 3 replaces linear pool decoding with delay-slot-aware executable-code/dataflow analysis, emits observation JSON, and re-pins corrected v2 once; Task 8 freezes that parser while adding v3. |
+| `tools/saturn/compare_sh2_native_math_audit_reports.py` | Compare legacy and corrected route-0/route-1 audit observations. | Require corrected closure/direct-call/helper facts and total to be layout-invariant; report old/new totals plus sorted added/removed facts and finalize the reviewed v2 re-pin. |
+| `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt` | Pin the corrected source-simulation audit total. | Rewrite `EXPECTED_TOTAL` exactly once after the Task 3 equality report and independent review, then freeze its new SHA-256 in the verifier. |
 | `tools/saturn/sh2_native_math_sim_audit_contract_v3.txt` | Pin final measured Task 3 audit facts. | Generated from the final Q ELF only after its closure is reviewed; exact total must be lower than v2. |
 | `docs/saturn/evidence/reports/task3-*` | Durable range, audit, capture, A/B, and final reports. | Every report includes command line, commit, artifact hashes, route digest, role, and raw-derived result. |
 
@@ -641,8 +652,12 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Create: `tools/saturn/test_capture_camera_idle.py`
 - Create: `tools/saturn/verify_sourceboot_memory_map.py`
 - Create: `tools/saturn/test_verify_sourceboot_memory_map.py`
+- Create: `tools/saturn/compare_sh2_native_math_audit_reports.py`
+- Create: `tools/saturn/test_compare_sh2_native_math_audit_reports.py`
 - Create after measurement:
   `tools/saturn/fixtures/bob_camera_memory_v1.json`
+- Create after reviewed parser correction:
+  `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
 - Create after measurement:
   `docs/saturn/evidence/reports/task3-camera-memory-transport-2026-07-29.json`
 - Create after target proof:
@@ -655,6 +670,10 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: `src/port/saturn/sourceboot/sourceboot-cart.x`
 - Modify: `tools/saturn/test_camera_idle_contract.py`
+- Modify: `tools/saturn/verify_sh2_native_math.py`
+- Modify: `tools/saturn/test_verify_sh2_native_math.py`
+- Modify exactly once after the parser review gate:
+  `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt`
 
 **Interfaces:**
 
@@ -667,6 +686,208 @@ only to latch SQT1; it is not an additional SCC1 word.
   `sourceboot_camera_idle_capture` symbol, and the capture CLI defined in Step
   7. The memory verifier produces a hash-bound phase report and the selected
   8- or 4-sector camera-artifact staging fixture.
+  The native-math verifier additionally produces schema-1 legacy/code-only
+  observation JSON. The audit-report comparator produces the reviewed,
+  finalized v2 re-pin report and refuses unequal corrected layout facts.
+
+- [ ] **Step 0: Correct and deliberately re-pin the linked-ELF audit before transport**
+
+  This is a two-phase prerequisite. Do not change `camera.c`, SCC transport,
+  cart staging, or the v2 contract during phase A.
+
+  First extend the current linear verifier only with
+  `--audit-observation-only --json-output PATH --analysis-mode
+  legacy-linear`. This mode bypasses only the v2 expected-total comparison;
+  it still validates the pinned contract/oracle digests, expected root,
+  forbidden callers, ELF readability, and JSON schema. Its sorted schema is:
+
+  ```text
+  schema_version: 1
+  analysis_mode: "legacy-linear" | "code-only"
+  parser_sha256, elf_sha256, route_oracle_sha256
+  contract_before_sha256, contract_before_expected_total
+  root
+  closure_functions: [symbol, ...]
+  direct_call_facts:
+    [{caller, caller_offset, callee, callee_offset, count}, ...]
+  helper_call_facts:
+    [{caller, caller_offset, helper, helper_offset, count}, ...]
+  helper_total
+  unresolved_indirect_transfers:
+    [{caller, caller_offset, mnemonic}, ...]
+  ```
+
+  `caller_offset` and `callee_offset` are nonnegative symbol-relative byte
+  offsets serialized as JSON numbers. Closure/call arrays contain only facts
+  whose caller belongs to the audit root's derived closure; rows are sorted by
+  their displayed fields. Observation-only is mutually exclusive with normal
+  acceptance and never appears in a Makefile target. Add tests proving it
+  cannot suppress a forbidden-caller, bad-root, digest, or malformed-ELF
+  failure.
+
+  Build the two pre-transport layout probes serially without `verify`, because
+  the known-bad v2 total is not an acceptance gate:
+
+  ```powershell
+  $auditBuildBase = "cd /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge && source /d/Code/RetroDev/sm64-saturn-port/sm64-port/.yaul.env && cd src/port/saturn/sourceboot && make -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_ATAN2_VARIANT=2 SATURN_CAMERA_VARIANT=1 SATURN_DEMO_VIEW_RADIUS=6000 SATURN_SLAVE_RENDER=1 SATURN_DEMO_POLY_TIER=0 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_BSP_FRAGMENTS=0 SATURN_RENDERER_PIPELINE=2 HOST_CC=C:/msys64/mingw64/bin/gcc.exe"
+  $auditRoute0Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
+  $auditRoute1Command = "$auditBuildBase SATURN_SOURCEBOOT_CAMERA_ROUTE=1 SATURN_CAMERA_IDLE_START_TICK=0 SATURN_CAMERA_IDLE_DISCOVERY=0 SATURN_CAMERA_RANGE_CAPTURE=0 SATURN_SOURCE_CART_STAGE_SECTORS=16"
+  C:/msys64/usr/bin/bash.exe -lc $auditRoute0Command
+  C:/msys64/usr/bin/bash.exe -lc $auditRoute1Command
+
+  $auditRoute0Output = "build/saturn/sourceboot/e2-bob-demo-replay-camroute0-atan2v2-camv1-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
+  $auditRoute1Output = "build/saturn/sourceboot/e2-bob-demo-replay-camroute1-atan2v2-camv1-idle0-disc0-range0-stage16-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2"
+  $auditRoute0Elf = (Resolve-Path "$auditRoute0Output/obj/sm64-saturn-sourceboot-e2.elf").Path
+  $auditRoute1Elf = (Resolve-Path "$auditRoute1Output/obj/sm64-saturn-sourceboot-e2.elf").Path
+  $auditScratch = ".superpowers/sdd/2026-07-29-saturn-camera-q-seam/native-math-audit"
+  New-Item -ItemType Directory -Force $auditScratch | Out-Null
+  $auditObjdump = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe"
+  $auditReadelf = "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe"
+
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode legacy-linear --json-output "$auditScratch/legacy-route0.json"
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode legacy-linear --json-output "$auditScratch/legacy-route1.json"
+  ```
+
+  Observe the parser RED tests before changing analysis behavior. Independent
+  synthetic fixtures must prove:
+
+  - the `_find_floor` pool range `0x0600B040..0x0600B07B` contributes neither
+    route 0's decoded `bra` nor route 1's fake
+    `bsr ... <_load_static_surfaces+0x9a>`;
+  - a pool-decoded `extu.b r10,r8` cannot clear a real literal-loaded `r8`
+    and hide four later `jsr @r8` calls to `___mulsf3`;
+  - real `bsr` targets `___movmemSI52+0x2` and
+    `div0+0x6/+0x8/+0x18` remain distinct internal-offset call facts;
+  - `bt`, `bf`, `bt/s`, `bf/s`, `bra`, `bsr`, `jsr`, `rts`, and `rte`
+    take the correct fallthrough/target successors and execute exactly one
+    delay slot where SH requires it;
+  - a literal-resolved `jmp @rN` tail call and a
+    `mova`/indexed-`mov.w`/`braf` switch reach their real successors;
+  - an unresolved `jmp`, `braf`, or `bsrf` in an audited function is reported
+    and rejected rather than followed linearly.
+
+  Run:
+
+  ```powershell
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
+  ```
+
+  Expected RED: fake pool instructions appear as calls/clobbers, delay/switch
+  reachability records do not exist, and layout facts differ.
+
+  Implement `analysis-mode=code-only` as a per-function SH control-flow and
+  abstract-state work list. Parse function address/size records from
+  `sh-elf-readelf -sW` and C code seeds from
+  `sh-elf-readelf --debug-dump=decodedline`; seed every function entry and
+  every decoded-line address contained by that function. Parse objdump rows
+  into address/bytes/mnemonic/operand records but do not call a row an
+  instruction until the walk reaches its address. Reconstruct the addressed
+  `.text` bytes from those rows. Track symbol-address sets, finite integer
+  sets, and unsigned intervals in registers plus fixed `r15` spill slots.
+  Model the audited switch idioms' `mov #imm`, `and #imm`, `add`,
+  shifts/extensions, `mova`, PC-relative `mov.w`/`mov.l`, indexed byte/word
+  loads, and the signed/unsigned refinements for `cmp/eq`, `cmp/hs`,
+  `cmp/hi`, `cmp/ge`, `cmp/gt`, and `tst`: the `___ashrsi3` mask produces
+  `0..31` and the `_render_dialog_entries` `cmp/hi` fallthrough produces
+  `0..3`, so each indexed table load has a finite target set. At joins, retain only equal
+  symbolic facts and union finite values within a code-owned maximum of 256
+  values; exceeding the maximum is an unresolved-transfer failure, never a
+  linear fallback. Model ordinary, conditional, unconditional, call, return,
+  delayed, and computed successors named by the tests above. Resolve a
+  delayed transfer target from the pre-slot state, execute exactly one slot,
+  and propagate the post-slot state to its target/fallthrough. Map a
+  reached direct target address to the containing function and retain its
+  nonzero offset; never require exact symbol-entry targets and never strip an
+  offset before source-code reachability is known.
+
+  Add `--readelf PATH`; every absolute SH-tool child environment prepends
+  `C:\msys64\usr\bin` without mutating its parent. Ordinary verification now
+  always selects `code-only`; normal acceptance rejects `legacy-linear`, and
+  the Makefile never invokes the read-only legacy observation mode. Add
+  `SOURCEBOOT_SH_READELF :=
+  $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf` to the sourceboot
+  Makefile and pass `--readelf "$(SOURCEBOOT_SH_READELF)"` to every ordinary
+  native-math verifier invocation. Add both
+  `test_verify_sh2_native_math.py` and
+  `test_compare_sh2_native_math_audit_reports.py` to the serial host
+  prerequisites of `verify`.
+
+  Emit corrected observations:
+
+  ```powershell
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode code-only --json-output "$auditScratch/corrected-route0.json"
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --audit-observation-only --analysis-mode code-only --json-output "$auditScratch/corrected-route1.json"
+  ```
+
+  Create `compare_sh2_native_math_audit_reports.py` with `compare` and
+  `finalize` subcommands and synthetic tests. `compare` accepts the four
+  observations below, requires distinct route ELF hashes but identical
+  corrected parser/oracle/contract-before hashes, closure functions, direct
+  call facts, helper facts, helper total, and an empty unresolved-transfer
+  list. It writes a proposal containing both legacy totals, the one corrected
+  total, sorted per-route added/removed direct/helper facts, and SHA-256 of
+  every input:
+
+  ```powershell
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py compare --legacy-route0 "$auditScratch/legacy-route0.json" --legacy-route1 "$auditScratch/legacy-route1.json" --corrected-route0 "$auditScratch/corrected-route0.json" --corrected-route1 "$auditScratch/corrected-route1.json" --contract-before tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --output "$auditScratch/pre-repin-proposal.json"
+  ```
+
+  Expected: PASS only when corrected route-0/route-1 facts are byte-for-byte
+  equal after deterministic JSON serialization. At this point stop. Do not
+  edit `EXPECTED_TOTAL` or `SIM_AUDIT_CONTRACT_V2_SHA256`. The controller
+  dispatches an independent reviewer for the verifier, tests, four
+  observations, and proposal. A clean reviewer writes
+  `$auditScratch/native-math-parser-review.json` with exact keys
+  `schema_version: 1`, `proposal_sha256`, `verdict: "clean"`, and sorted
+  `reviewed_files`; `proposal_sha256` must equal the proposal's file hash.
+
+  Phase B begins only after that clean review. Read
+  `corrected_helper_total` from the reviewed proposal. With `apply_patch`,
+  replace the single `EXPECTED_TOTAL` value in
+  `sh2_native_math_sim_audit_contract_v2.txt` exactly once. Compute:
+
+  ```powershell
+  $newV2Digest = (Get-FileHash tools/saturn/sh2_native_math_sim_audit_contract_v2.txt -Algorithm SHA256).Hash.ToLowerInvariant()
+  $newV2Digest
+  ```
+
+  With `apply_patch`, replace the single
+  `SIM_AUDIT_CONTRACT_V2_SHA256` value with that exact printed digest. Do not
+  edit either value again. `finalize` rejects a missing/unclean review,
+  proposal hash drift, a new contract total unequal to the corrected total,
+  unchanged old/new contract digests, a verifier pin unequal to the new file
+  digest, or any changed observation. It writes this durable schema:
+
+  ```text
+  schema_version: 1
+  status: "reviewed-repin-final"
+  legacy: {route0_total, route1_total}
+  corrected: {helper_total, closure_count, direct_call_facts_sha256,
+              helper_call_facts_sha256}
+  delta: {route0: {added, removed}, route1: {added, removed}}
+  contract: {old_expected_total, old_sha256,
+             new_expected_total, new_sha256}
+  review: {proposal_sha256, approval_record_sha256, verdict}
+  artifacts: {route0_elf_sha256, route1_elf_sha256, parser_sha256}
+  ```
+
+  Run the final gate and both ordinary audits:
+
+  ```powershell
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/compare_sh2_native_math_audit_reports.py finalize --proposal "$auditScratch/pre-repin-proposal.json" --review "$auditScratch/native-math-parser-review.json" --contract-after tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --verifier tools/saturn/verify_sh2_native_math.py --output docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute0Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $auditRoute1Elf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --objdump $auditObjdump --readelf $auditReadelf --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe
+  ```
+
+  Commit and independently review this prerequisite before Step 1:
+
+  ```powershell
+  git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge add tools/saturn/verify_sh2_native_math.py tools/saturn/test_verify_sh2_native_math.py tools/saturn/compare_sh2_native_math_audit_reports.py tools/saturn/test_compare_sh2_native_math_audit_reports.py tools/saturn/sh2_native_math_sim_audit_contract_v2.txt src/port/saturn/sourceboot/Makefile docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json
+  git -c safe.directory=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge commit -m "fix: harden linked SH native math audit"
+  ```
 
 - [ ] **Step 1: Write failing transport and symbol-resolution tests**
 
@@ -1889,11 +2110,13 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Reuse: `tools/saturn/camera_q_object_contract.py`
 - Preserve unchanged:
   `tools/saturn/sh2_native_math_sim_audit_contract_v2.txt`
+- Preserve unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
 
 **Interfaces:**
 
-- Consumes: the immutable v2 audit parser/contract and objdump-derived
-  direct-call graph.
+- Consumes: Task 3's corrected, independently reviewed, re-pinned v2
+  parser/contract and executable-code-derived direct-call graph.
 - Produces: a version-dispatched v3 parser supporting repeated
   `EXPECTED_ROOT`, `EXPECTED_CALLER`, and `STOP_BRIDGE` records; an exact
   closure report; deterministic raw-object and canonical-disassembly
@@ -1901,12 +2124,16 @@ only to latch SQT1; it is not an additional SCC1 word.
   generator; an object-reference-only mode; a code-owned zero-helper ceiling
   for every stop bridge; and seven audit mutations.
 
-- [ ] **Step 1: Freeze v2 parser and result behavior in regression tests**
+- [ ] **Step 1: Freeze the corrected v2 parser and re-pinned result in regression tests**
 
-  Add assertions for the current v2 contract digest, one-root schema, expected
-  total, forbidden callers, failure text, and successful report shape. Copy
-  the current v2 contract into a temporary directory, mutate each directive,
-  and require the same current failures before adding v3.
+  Assert the post-Task-3 v2 contract digest, one-root schema, measured
+  expected total, forbidden callers, code-only parser version, SH
+  delay-slot/switch/internal-offset behavior, zero unresolved transfers,
+  failure text, and successful report shape. Revalidate
+  `task3-native-math-audit-repin-2026-07-29.json` against the current parser
+  and contract. Copy the corrected v2 contract into a temporary directory,
+  mutate each directive, and require the frozen post-re-pin failures before
+  adding v3. Reject `analysis-mode=legacy-linear` in every acceptance path.
 
   Run:
 
@@ -2000,10 +2227,11 @@ only to latch SQT1; it is not an additional SCC1 word.
 
   Expected failure: the current parser rejects contract version 3.
 
-- [ ] **Step 3: Implement v3 without changing v2**
+- [ ] **Step 3: Implement v3 without changing corrected v2**
 
   Add a version-dispatched parser and typed records. Use the existing
-  disassembly/call-edge model. Walk all direct edges from every root, stop
+  corrected executable-code/call-edge model; do not add a linear objdump
+  scanner or exact-target filter. Walk all direct edges from every root, stop
   before traversing a named bridge, and compare the generated caller set
   exactly with `EXPECTED_CALLER` rows. Report roots, closure callers, stops,
   stop counts, global total, v2 delta, ELF digest, contract digest, and both
@@ -2012,7 +2240,8 @@ only to latch SQT1; it is not an additional SCC1 word.
   Add optional `--v2-contract PATH`, `--q-object-manifest PATH`,
   `--reference-q-object-manifest PATH`,
   `--reference-q-object-manifest-sha256 HEX`, and `--json-output PATH` CLI
-  arguments. The generated build manifest grammar is exactly one
+  arguments while retaining the required Task 3 `--readelf PATH`. The
+  generated build manifest grammar is exactly one
   `logical_name<TAB>absolute_object_path` row for each of the four names
   above, sorted by logical name, with no comments or duplicate paths. For
   every object, hash the raw bytes and call Task 7's
@@ -2107,9 +2336,10 @@ only to latch SQT1; it is not an additional SCC1 word.
   prerequisites.
   Do not switch `SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT` to v3 yet; final
   measured v3 does not exist until Task 14.
-  Add `SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_V2_CONTRACT` bound to the immutable v2
-  path. When Task 14 selects v3, the Makefile must pass that path as
-  `--v2-contract`; v2 verification keeps its existing CLI and behavior.
+  Add `SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_V2_CONTRACT` bound to the corrected,
+  re-pinned v2 path. When Task 14 selects v3, the Makefile must pass that path
+  as `--v2-contract`; v2 verification keeps Task 3's code-only CLI and
+  behavior, including `--readelf`.
 
   Add a generated
   `$(SH_BUILD_PATH)/camera-q-objects.tsv` target whose four rows are produced
@@ -2609,7 +2839,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   $qElf = (Resolve-Path "$task10QOutput/obj/sm64-saturn-sourceboot-e2.elf").Path
   $qObjectManifest = (Resolve-Path "$task10QOutput/obj/camera-q-objects.tsv").Path
   .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sourceboot_memory_map.py check-phase --elf $qElf --phase lakitu --stage-sectors $cameraStageSectors --previous-report docs/saturn/evidence/reports/task3-camera-memory-shadow-2026-07-29.json --required-final-margin 0x1B00 --output docs/saturn/evidence/reports/task3-camera-memory-lakitu-2026-07-29.json
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --inspection-only --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output build/saturn/sourceboot/task3-camera-q-lakitu-inspection.json
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --inspection-only --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --readelf D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output build/saturn/sourceboot/task3-camera-q-lakitu-inspection.json
   ```
 
   Use that inspection output to inspect
@@ -3112,7 +3342,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   $qElf = (Resolve-Path "$task13QOutput/obj/sm64-saturn-sourceboot-e2.elf").Path
   $qObjectManifest = (Resolve-Path "$task13QOutput/obj/camera-q-objects.tsv").Path
   .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sourceboot_memory_map.py check-phase --elf $qElf --phase complete-island --stage-sectors $cameraStageSectors --previous-report docs/saturn/evidence/reports/task3-camera-memory-bridges-2026-07-29.json --required-final-margin 0x1B00 --output docs/saturn/evidence/reports/task3-camera-memory-complete-2026-07-29.json
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_default_seam_tick --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_default_tick --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_ceil:ceil --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_bridge_rotate_around_walls:rotate-walls --stop _saturn_camera_bridge_collide_with_walls:collide-walls --stop _saturn_camera_bridge_is_range_behind_surface:range-surface --stop _saturn_camera_bridge_find_water_level:water-level --stop _saturn_camera_bridge_find_poison_gas_level:poison-gas --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output build/saturn/sourceboot/task3-camera-q-audit-candidate-v3.txt
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --readelf D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_default_seam_tick --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_default_tick --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_ceil:ceil --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_bridge_rotate_around_walls:rotate-walls --stop _saturn_camera_bridge_collide_with_walls:collide-walls --stop _saturn_camera_bridge_is_range_behind_surface:range-surface --stop _saturn_camera_bridge_find_water_level:water-level --stop _saturn_camera_bridge_find_poison_gas_level:poison-gas --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output build/saturn/sourceboot/task3-camera-q-audit-candidate-v3.txt
   ```
 
   Do not stage that build-tree candidate. Require:
@@ -3203,6 +3433,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   test_camera_q.py
   test_verify_camera_q_writers.py
   test_verify_sourceboot_memory_map.py
+  test_compare_sh2_native_math_audit_reports.py
   test_generate_camera_q_audit_contract.py
   test_verify_sh2_native_math.py
   test_verify_camera_q_mutation.py
@@ -3210,8 +3441,8 @@ only to latch SQT1; it is not an additional SCC1 word.
   ```
 
   Keep the existing route/native-math/coherency verifiers. Wire the Makefile
-  so variant 1 still uses immutable v2, while route-1 variant 2 requires the
-  measured v3 contract and passes the immutable v2 path separately through
+  so variant 1 still uses the corrected, re-pinned v2, while route-1 variant
+  2 requires the measured v3 contract and passes the frozen corrected v2 path separately through
   `--v2-contract` plus its generated
   `$(SH_BUILD_PATH)/camera-q-objects.tsv` through `--q-object-manifest`.
   Route 0 must not require SCC storage but still runs pure host tests. Do not
@@ -3264,7 +3495,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   Generate from the exact `$qElf`:
 
   ```powershell
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_default_seam_tick --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_default_tick --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_ceil:ceil --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_bridge_rotate_around_walls:rotate-walls --stop _saturn_camera_bridge_collide_with_walls:collide-walls --stop _saturn_camera_bridge_is_range_behind_surface:range-surface --stop _saturn_camera_bridge_find_water_level:water-level --stop _saturn_camera_bridge_find_poison_gas_level:poison-gas --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output tools/saturn/sh2_native_math_sim_audit_contract_v3.txt
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/generate_camera_q_audit_contract.py --elf $qElf --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --readelf D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --root _saturn_camera_q_default_seam_tick --root _saturn_camera_q_lakitu_seam_tick --root _saturn_camera_q_default_tick --root _saturn_camera_q_lakitu_tick --root _saturn_camera_q_next_lakitu_state --root _saturn_camera_q_publish_bridge --stop _saturn_camera_bridge_find_floor:floor --stop _saturn_camera_bridge_find_ceil:ceil --stop _saturn_camera_bridge_find_wall_collision:wall-collision --stop _saturn_camera_bridge_rotate_around_walls:rotate-walls --stop _saturn_camera_bridge_collide_with_walls:collide-walls --stop _saturn_camera_bridge_is_range_behind_surface:range-surface --stop _saturn_camera_bridge_find_water_level:water-level --stop _saturn_camera_bridge_find_poison_gas_level:poison-gas --stop _saturn_camera_cold_float_fallback_tick:cold-fallback --output tools/saturn/sh2_native_math_sim_audit_contract_v3.txt
   ```
 
   The generator itself launches objdump with `C:\msys64\usr\bin` prepended.
@@ -3359,7 +3590,8 @@ only to latch SQT1; it is not an additional SCC1 word.
   route ID 2, zoom 350, exact neutral input, exact 600-tick stability, an
   all-zero 16-byte SQT1 window, and valid artifact identities. Each baseline
   report records
-  `artifacts.audit_contract.{path,sha256,size}` for immutable v2.
+  `artifacts.audit_contract.{path,sha256,size}` for the corrected, re-pinned
+  v2.
 
 - [ ] **Step 6: Capture two fresh Q SCC1 runs**
 
@@ -3434,6 +3666,10 @@ only to latch SQT1; it is not an additional SCC1 word.
 - Modify: `tools/saturn/capture_camera_idle.py`
 - Modify: `tools/saturn/test_capture_camera_idle.py`
 - Modify: `tools/saturn/test_verify_sh2_native_math.py`
+- Revalidate unchanged:
+  `tools/saturn/test_compare_sh2_native_math_audit_reports.py`
+- Revalidate unchanged:
+  `docs/saturn/evidence/reports/task3-native-math-audit-repin-2026-07-29.json`
 - Modify: `docs/superpowers/plans/2026-07-29-sh2-native-math-purge.md`
 - Modify: `docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`
 - Modify: `docs/saturn/HANDOFF_2026-07-29-native-math-sprint.md`
@@ -3458,6 +3694,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   manifest hashes matching the committed v3 object records. Re-run:
 
   ```powershell
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_generate_camera_q_audit_contract.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_camera_q_mutation.py
@@ -3478,7 +3715,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   if ((Get-FileHash $qElf -Algorithm SHA256).Hash.ToLowerInvariant() -ne $qRun1.artifacts.elf.sha256) { throw "captured Q ELF changed" }
   if ((Get-FileHash $qObjectManifest -Algorithm SHA256).Hash.ToLowerInvariant() -ne $qRun1.artifacts.q_object_manifest.sha256) { throw "captured Q object manifest changed" }
   if ((Get-FileHash $qAuditContract -Algorithm SHA256).Hash.ToLowerInvariant() -ne $qRun1.artifacts.audit_contract.sha256) { throw "committed v3 differs from captured contract" }
-  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $qElf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v3.txt --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --json-output docs/saturn/evidence/reports/task3-camera-q-audit-v3-2026-07-29.json
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/verify_sh2_native_math.py $qElf tools/saturn/sh2_native_math_baseline_v1.txt --route-oracle tools/saturn/sh2_native_math_route_oracle_v1.txt --audit-route-oracle tools/saturn/sh2_native_math_sim_route_oracle_v1.txt --audit-contract tools/saturn/sh2_native_math_sim_audit_contract_v3.txt --v2-contract tools/saturn/sh2_native_math_sim_audit_contract_v2.txt --q-object-manifest $qObjectManifest --objdump D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-objdump.exe --readelf D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-readelf.exe --addr2line D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-addr2line.exe --json-output docs/saturn/evidence/reports/task3-camera-q-audit-v3-2026-07-29.json
   ```
 
   Require the same lower exact global total, zero pre-stop Q-closure helper
@@ -3604,6 +3841,7 @@ only to latch SQT1; it is not an additional SCC1 word.
   cmd.exe /d /c "set COMPILER_PATH=&& .venv-saturn-tools\Scripts\python.exe tools\saturn\test_camera_q.py"
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_camera_q_writers.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sourceboot_memory_map.py
+  .venv-saturn-tools/Scripts/python.exe tools/saturn/test_compare_sh2_native_math_audit_reports.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_generate_camera_q_audit_contract.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_sh2_native_math.py
   .venv-saturn-tools/Scripts/python.exe tools/saturn/test_verify_camera_q_mutation.py
@@ -3668,7 +3906,7 @@ only to latch SQT1; it is not an additional SCC1 word.
 | Q health | Nonzero generation and pinned nonzero bridge counts; zero overflow, saturation, divide, reseed, and range-fallback counts |
 | ABI/scope | Public Camera/Lakitu layout and non-Saturn behavior unchanged; radial/cutscene/rare modes remain explicit non-goals |
 | Original route | `bob-parity-v1` hash unchanged; two A/B pairs pass the hardened SBR4 output contract |
-| Static audit | V3 global total lower than v2; complete generated Q closure; zero helper edges before exact named stops |
+| Static audit | Corrected route-0/route-1 v2 closure/call/helper facts identical and reviewed re-pin report valid; v3 global total lower than corrected v2; complete generated Q closure; zero helper edges before exact named stops |
 | Performance | Q `sim_frt_ticks_accum` strictly lower in both independent default-camera A/B pairs |
 | Memory | SCC exact `0x2F7C0` replay-only NOBITS section; at least `0x4000` LWRAM remains; selected cart stage is hash-proven; final HWRAM margin is at least `0x1B00` (`0x1000` TLSF + `0x0B00` safety) |
 | Provenance | Pinned source, commit, license, inspected ranges, reuse mode, notices, and material changes recorded |
