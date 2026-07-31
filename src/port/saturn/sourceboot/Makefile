@@ -140,6 +140,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_camera_role.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
   $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \

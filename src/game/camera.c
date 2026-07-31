@@ -30,6 +30,7 @@
 #include "level_table.h"
 #if defined(TARGET_SATURN)
 #include "port/saturn/runtime/saturn_camera_probe.h"
+#include "port/saturn/runtime/saturn_camera_role.h"
 #endif
 
 #define CBUTTON_MASK (U_CBUTTONS | D_CBUTTONS | L_CBUTTONS | R_CBUTTONS)
@@ -3178,6 +3179,11 @@ void update_camera(struct Camera *c) {
     UNUSED u8 unused[24];
 
     gCamera = c;
+#if defined(TARGET_SATURN)
+    if (sm64_saturn_camera_role_update(c)) {
+        return;
+    }
+#endif
     update_camera_hud_status(c);
     if (c->cutscene == 0) {
         // Only process R_TRIG if 'fixed' is not selected in the menu

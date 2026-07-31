@@ -14,6 +14,7 @@
 #include "saturn_math_route_capture.h"
 #include "saturn_texture_residency.h"
 #include "saturn_source_runtime.h"
+#include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
@@ -79,6 +80,11 @@ static void sourceboot_run_source_tick(void)
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
     sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+    if (sm64_saturn_source_runtime_state()->input_replay_complete) {
+        sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);
+    }
+#endif
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
     sm64_saturn_sourceboot_camera_idle_probe_record(
         sm64_saturn_source_runtime_state(),
