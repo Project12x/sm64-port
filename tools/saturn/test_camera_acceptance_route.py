@@ -111,7 +111,7 @@ class DefaultCameraRouteTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
-            (temp / "yaul.h").write_text("#define R_TRIG 0x0010U\n", encoding="utf-8")
+            (temp / "yaul.h").write_text("/* host route fixture */\n", encoding="utf-8")
             harness = temp / "route_harness.c"
             harness.write_text(
                 """
@@ -137,15 +137,17 @@ int main(void) {
                 [
                     str(HOST_GCC), "-std=c11", "-Wall", "-Wextra", "-Werror",
                     "-I", str(temp),
+                    "-I", str(ROOT / "include"),
                     "-I", str(ROOT / "src/port/saturn/sourceboot"),
                     "-I", str(ROOT / "src/port/saturn/runtime"),
                     str(harness), str(ROUTE_SOURCE), "-o", str(executable),
                 ],
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
                 env=host_environment(),
             )
+            self.assertEqual(compile_result.returncode, 0, compile_result.stderr)
             self.assertEqual(compile_result.stderr, "")
             output = subprocess.run(
                 [str(executable)], check=True, capture_output=True, text=True,

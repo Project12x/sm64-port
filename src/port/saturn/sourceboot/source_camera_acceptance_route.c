@@ -1,5 +1,7 @@
 #include <yaul.h>
 
+#include <PR/os_cont.h>
+
 #include "source_camera_acceptance_route.h"
 
 static const sm64_saturn_input_replay_sample_t sBobDefaultCameraV1[] = {

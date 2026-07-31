@@ -3701,6 +3701,13 @@ static void test_frontend_quad_map_asymmetric_entry_refuses_merge(void)
     assert(frontend.resolved[1].y[3] == frontend.resolved[1].y[2]);
 }
 
+#if defined(SM64_SATURN_RUNTIME_CONTRACT_ONLY)
+int main(void)
+{
+    test_source_runtime_records_the_applied_camera_replay_pad();
+    return 0;
+}
+#else
 int main(void)
 {
     quad_build_lists();
@@ -3791,3 +3798,4 @@ int main(void)
     test_frontend_quad_map_asymmetric_entry_refuses_merge();
     return 0;
 }
+#endif
