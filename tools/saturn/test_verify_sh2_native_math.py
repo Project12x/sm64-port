@@ -14,7 +14,11 @@ from verify_sh2_native_math import (
     FunctionOwner,
     Interval,
     MAYBE_STACK_PTR,
+    StackMemory,
+    StackPtr,
+    StackSlot,
     UNKNOWN,
+    _unknown_state,
     abstract_value_json,
     analyze_code_only,
     build_instruction_memory,
@@ -969,17 +973,17 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
  6001004: 2f 82 mov.l r8,@r15
  6001006: 20 08 tst r0,r0
- 6001008: 89 03 bt 6001012 <_root+0x12>
+ 6001008: 89 02 bt 6001010 <_root+0x10>
  600100a: 6f 43 mov r15,r4
- 600100c: a0 03 bra 6001016 <_root+0x16>
+ 600100c: a0 01 bra 6001012 <_root+0x12>
  600100e: 00 09 nop
- 6001010: 00 09 nop
- 6001012: e4 00 mov #0,r4
+ 6001010: e4 00 mov #0,r4
+ 6001012: b0 0d bsr 6001030 <_zero_alias>
  6001014: 00 09 nop
- 6001016: b0 0b bsr 6001030 <_zero_alias>
- 6001018: 00 09 nop
- 600101a: 61 f2 mov.l @r15,r1
- 600101c: 41 0b jsr @r1
+ 6001016: 61 f2 mov.l @r15,r1
+ 6001018: 41 0b jsr @r1
+ 600101a: 00 09 nop
+ 600101c: 00 0b rts
  600101e: 00 09 nop
 06001020 <_child>:
  6001020: 00 0b rts
@@ -990,8 +994,50 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001034: 00 09 nop
 """
         result = self.analyze(dis)
-        self.assertFalse(any(call.address == 0x600101C for call in result.calls))
-        self.assertTrue(any(item.address == 0x600101C for item in result.unresolved_transfers))
+        self.assertFalse(any(call.address == 0x6001018 for call in result.calls))
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001018, "jsr")],
+        )
+
+    def test_stack_slot_join_preserves_maybe_stack_pointer(self) -> None:
+        left = StackMemory(((0, StackSlot(StackPtr(4))),))
+        right = StackMemory(((0, StackSlot(ConstSet("signed", frozenset({0})))),))
+        self.assertEqual(
+            join_value(left, right),
+            StackMemory(((0, StackSlot(MAYBE_STACK_PTR)),)),
+        )
+
+    def test_add_immediate_preserves_maybe_stack_pointer(self) -> None:
+        instruction = parse_instructions(" 6001000: 74 04 add #4,r4\n")[0x6001000]
+        state = _unknown_state()
+        state["r4"] = MAYBE_STACK_PTR
+        effects = []
+        _write_effect(
+            instruction,
+            state,
+            effects,
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertIs(state["r4"], MAYBE_STACK_PTR)
+        self.assertEqual(effects, [])
+
+    def test_store_through_maybe_stack_pointer_invalidates_frame(self) -> None:
+        instruction = parse_instructions(" 6001000: 24 02 mov.l r0,@r4\n")[0x6001000]
+        state = _unknown_state()
+        state["r4"] = MAYBE_STACK_PTR
+        state["stack_memory"] = StackMemory((
+            (0, StackSlot(ConstSet("symbol", frozenset()))),
+        ))
+        effects = []
+        _write_effect(
+            instruction,
+            state,
+            effects,
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertEqual(state["stack_memory"], StackMemory())
+        self.assertEqual(effects, [])
 
     def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
         dis = """

@@ -329,11 +329,13 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         for offset in sorted(left_slots.keys() | right_slots.keys()):
             left_slot = left_slots.get(offset, StackSlot(UNKNOWN))
             right_slot = right_slots.get(offset, StackSlot(UNKNOWN))
-            value = (
-                left_slot.value
-                if left_slot.value == right_slot.value
-                else UNKNOWN
-            )
+            pointer_slot = isinstance(
+                left_slot.value, (StackPtr, MaybeStackPtr)
+            ) or isinstance(right_slot.value, (StackPtr, MaybeStackPtr))
+            if pointer_slot:
+                value = join_value(left_slot.value, right_slot.value)
+            else:
+                value = left_slot.value if left_slot.value == right_slot.value else UNKNOWN
             stores = tuple(sorted(set(
                 (*left_slot.store_addresses, *right_slot.store_addresses)
             ))[:16])
@@ -1094,6 +1096,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     instruction.address,
                 )
             return
+        if isinstance(base, MaybeStackPtr):
+            _invalidate_stack(state)
+            return
 
     aliased_stack_load = re.fullmatch(
         r"@(?:\((\d+),(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d))),\s*(r(?:1[0-5]|\d))",
@@ -1245,6 +1250,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 state[immediate.group(2)] = UNKNOWN
                 if immediate.group(2) == "r15":
                     _invalidate_stack(state)
+        elif isinstance(value, MaybeStackPtr):
+            state[immediate.group(2)] = MAYBE_STACK_PTR
         elif isinstance(value, ConstSet) and all(isinstance(x, int) for x in value.values):
             state[immediate.group(2)] = ConstSet(
                 value.kind, frozenset(int(x) + delta for x in value.values)
