@@ -20,9 +20,11 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
-from typing import Any, Iterable
+from time import monotonic
+from typing import Any, Callable, Iterable
 
 
 @dataclass(frozen=True)
@@ -99,7 +101,32 @@ class ComparisonPredicate:
     false_range: tuple[str, int, int]
 
 
-AbstractValue = _Unknown | ConstSet | Interval | ComparisonPredicate
+@dataclass(frozen=True)
+class StackPtr:
+    offset: int
+
+
+@dataclass(frozen=True)
+class StackSlot:
+    value: AbstractValue
+    store_addresses: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class StackMemory:
+    slots: tuple[tuple[int, StackSlot], ...] = ()
+
+
+@dataclass(frozen=True)
+class StackOrigin:
+    offsets: tuple[int, ...] = ()
+    store_addresses: tuple[int, ...] = ()
+
+
+AbstractValue = (
+    _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | StackMemory
+    | StackOrigin
+)
 
 
 @dataclass(frozen=True)
@@ -175,6 +202,15 @@ class UnresolvedTransfer:
     caller: str
     address: int
     mnemonic: str
+    operand_register: str | None = None
+    final_value: AbstractValue | None = None
+    contributing_seeds: tuple[tuple[int, str], ...] = ()
+    contributing_seeds_truncated: bool = False
+    predecessor_addresses: tuple[int, ...] = ()
+    predecessor_addresses_truncated: bool = False
+    state_changed_at_entry_covered_join: bool = False
+    stack_source_offsets: tuple[int, ...] = ()
+    stack_store_addresses: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -213,7 +249,28 @@ def merge_code_analyses(left: CodeAnalysis, right: CodeAnalysis) -> CodeAnalysis
         ): x
         for x in [*left.implementation_transfers, *right.implementation_transfers]
     }
+    left_unresolved = {
+        (x.caller, x.address) for x in left.unresolved_transfers
+    }
+    right_unresolved = {
+        (x.caller, x.address) for x in right.unresolved_transfers
+    }
     resolved = {(x.caller, x.address) for x in calls.values()}
+    # Same-owner computed jumps can resolve entirely inside the CFG and emit no
+    # call fact. If the other isolated lane evaluated that transfer point
+    # without an unresolved diagnostic, it is nevertheless proven resolved.
+    resolved.update(
+        (x.caller, x.address)
+        for x in right.unresolved_transfers
+        if x.address in left.code_addresses
+        and (x.caller, x.address) not in left_unresolved
+    )
+    resolved.update(
+        (x.caller, x.address)
+        for x in left.unresolved_transfers
+        if x.address in right.code_addresses
+        and (x.caller, x.address) not in right_unresolved
+    )
     transfers = {
         (x.caller, x.address, x.mnemonic): x
         for x in [*left.unresolved_transfers, *right.unresolved_transfers]
@@ -249,6 +306,31 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         return UNKNOWN
     if left == right:
         return left
+    if isinstance(left, StackPtr) or isinstance(right, StackPtr):
+        return UNKNOWN
+    if isinstance(left, StackMemory) and isinstance(right, StackMemory):
+        left_slots, right_slots = dict(left.slots), dict(right.slots)
+        merged_slots: list[tuple[int, StackSlot]] = []
+        for offset in sorted(left_slots.keys() | right_slots.keys()):
+            left_slot = left_slots.get(offset, StackSlot(UNKNOWN))
+            right_slot = right_slots.get(offset, StackSlot(UNKNOWN))
+            value = (
+                left_slot.value
+                if left_slot.value == right_slot.value
+                else UNKNOWN
+            )
+            stores = tuple(sorted(set(
+                (*left_slot.store_addresses, *right_slot.store_addresses)
+            ))[:16])
+            merged_slots.append((offset, StackSlot(value, stores)))
+        return StackMemory(tuple(merged_slots))
+    if isinstance(left, StackOrigin) and isinstance(right, StackOrigin):
+        return StackOrigin(
+            tuple(sorted(set((*left.offsets, *right.offsets)))[:16]),
+            tuple(sorted(set(
+                (*left.store_addresses, *right.store_addresses)
+            ))[:16]),
+        )
     if isinstance(left, ConstSet) and isinstance(right, ConstSet):
         if left.kind != right.kind:
             return UNKNOWN
@@ -516,7 +598,7 @@ def parse_decoded_lines(
 
 
 OBJDUMP_ROW_RE = re.compile(
-    r"^\s*([0-9A-Fa-f]+):\s+((?:[0-9A-Fa-f]{2}\s+){1,4})([A-Za-z0-9_./]+)\s*(.*?)\s*$"
+    r"^\s*([0-9A-Fa-f]+):\s+((?:[0-9A-Fa-f]{2}\s+){2})([A-Za-z0-9_./]+)\s*(.*?)\s*$"
 )
 
 
@@ -592,9 +674,11 @@ def _symbol_from_annotation(annotation: str) -> SymbolAtom | None:
 
 
 def _unknown_state() -> dict[str, AbstractValue]:
-    return {f"r{x}": UNKNOWN for x in range(16)} | {
-        "mach": UNKNOWN, "macl": UNKNOWN, "t_predicate": UNKNOWN
-    }
+    return {f"r{x}": UNKNOWN for x in range(15)} | {
+        "r15": StackPtr(0),
+        "mach": UNKNOWN, "macl": UNKNOWN, "t_predicate": UNKNOWN,
+        "stack_memory": StackMemory(),
+    } | {f"r{x}_stack_origin": StackOrigin() for x in range(16)}
 
 
 def _join_state(
@@ -761,18 +845,44 @@ def comparison_refined_states(
     return _predicate_refined_states(comparison_predicate(instruction, state), state)
 
 
-def uncovered_decoded_line_seeds(
-    decoded_lines: dict[str, set[int]],
-    selected_names: set[str],
-    covered_addresses: set[int],
-) -> Iterator[tuple[str, int]]:
-    """Yield seeds not yet covered; callers may extend coverage between yields."""
-    for name in sorted(decoded_lines):
-        if name not in selected_names:
-            continue
-        for address in sorted(decoded_lines[name]):
-            if address not in covered_addresses:
-                yield name, address
+def _stack_slots(state: dict[str, AbstractValue]) -> dict[int, StackSlot]:
+    memory = state.get("stack_memory")
+    return dict(memory.slots) if isinstance(memory, StackMemory) else {}
+
+
+def _replace_stack_slots(
+    state: dict[str, AbstractValue], slots: dict[int, StackSlot]
+) -> None:
+    bounded = sorted(slots.items())[:64]
+    state["stack_memory"] = StackMemory(tuple(bounded))
+
+
+def _stack_store(
+    state: dict[str, AbstractValue], offset: int, value: AbstractValue, address: int
+) -> None:
+    slots = _stack_slots(state)
+    slots[offset] = StackSlot(value, (address,))
+    _replace_stack_slots(state, slots)
+
+
+def _stack_load(state: dict[str, AbstractValue], offset: int) -> StackSlot:
+    return _stack_slots(state).get(offset, StackSlot(UNKNOWN))
+
+
+def _invalidate_stack(state: dict[str, AbstractValue]) -> None:
+    state["stack_memory"] = StackMemory()
+
+
+def _invalidate_stack_range(
+    state: dict[str, AbstractValue], offset: int, width: int
+) -> None:
+    """Forget modeled longword slots overlapped by a bounded frame store."""
+    slots = {
+        slot_offset: slot
+        for slot_offset, slot in _stack_slots(state).items()
+        if slot_offset + 4 <= offset or offset + width <= slot_offset
+    }
+    _replace_stack_slots(state, slots)
 
 
 def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
@@ -791,9 +901,131 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
     }
     if mnemonic not in t_neutral:
         state["t_predicate"] = UNKNOWN
+    if mnemonic == "div0s" and re.fullmatch(
+        r"r(?:1[0-5]|\d),\s*r(?:1[0-5]|\d)", text
+    ):
+        # DIV0S changes Q/M/T only. Q/M are outside this call-target domain;
+        # conservatively forget T while preserving both GPR operands.
+        state["t_predicate"] = UNKNOWN
+        return
+
+    destination_register = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", text)
+    single_register = re.fullmatch(r"(r(?:1[0-5]|\d))", text)
+    written_register = (
+        destination_register.group(1) if destination_register
+        else single_register.group(1) if single_register else None
+    )
+    if written_register is not None:
+        predicate = state["t_predicate"]
+        if isinstance(predicate, ComparisonPredicate) \
+                and predicate.register == written_register:
+            # T itself survives flag-neutral moves, but its saved abstract
+            # relationship describes the value that was compared. Once that
+            # register is overwritten, refining the replacement value with the
+            # stale comparison would be unsound.
+            state["t_predicate"] = UNKNOWN
+        state[f"{written_register}_stack_origin"] = StackOrigin()
+
+    push = re.fullmatch(r"(r(?:1[0-5]|\d)),\s*@-r15", text)
+    if mnemonic == "mov.l" and push:
+        pointer = state["r15"]
+        if isinstance(pointer, StackPtr):
+            pointer = StackPtr(pointer.offset - 4)
+            state["r15"] = pointer
+            _stack_store(state, pointer.offset, state[push.group(1)], instruction.address)
+        else:
+            _invalidate_stack(state)
+        return
+    pop = re.fullmatch(r"@r15\+,\s*(r(?:1[0-5]|\d))", text)
+    if mnemonic == "mov.l" and pop:
+        pointer = state["r15"]
+        if isinstance(pointer, StackPtr):
+            slot = _stack_load(state, pointer.offset)
+            state[pop.group(1)] = slot.value
+            state[f"{pop.group(1)}_stack_origin"] = StackOrigin(
+                (pointer.offset,), slot.store_addresses
+            )
+            state["r15"] = StackPtr(pointer.offset + 4)
+        else:
+            state[pop.group(1)] = UNKNOWN
+            _invalidate_stack(state)
+        return
+    stack_store = re.fullmatch(
+        r"(r(?:1[0-5]|\d)),\s*@(?:\((\d+),r15\)|r15)", text
+    )
+    if mnemonic == "mov.l" and stack_store:
+        pointer = state["r15"]
+        if isinstance(pointer, StackPtr):
+            displacement = int(stack_store.group(2) or 0)
+            _stack_store(
+                state, pointer.offset + displacement,
+                state[stack_store.group(1)], instruction.address,
+            )
+        else:
+            _invalidate_stack(state)
+        return
+    stack_load = re.fullmatch(
+        r"@(?:\((\d+),r15\)|r15),\s*(r(?:1[0-5]|\d))", text
+    )
+    if mnemonic == "mov.l" and stack_load:
+        pointer = state["r15"]
+        if isinstance(pointer, StackPtr):
+            displacement = int(stack_load.group(1) or 0)
+            offset = pointer.offset + displacement
+            slot = _stack_load(state, offset)
+            state[stack_load.group(2)] = slot.value
+            state[f"{stack_load.group(2)}_stack_origin"] = StackOrigin(
+                (offset,), slot.store_addresses
+            )
+        else:
+            state[stack_load.group(2)] = UNKNOWN
+        return
+
+    aliased_stack_store = re.fullmatch(
+        r"(r(?:1[0-5]|\d)),\s*@(?:\((\d+),(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d)))",
+        text,
+    )
+    if mnemonic in {"mov.l", "mov.w", "mov.b"} and aliased_stack_store:
+        base_register = aliased_stack_store.group(3) or aliased_stack_store.group(4)
+        base = state[base_register]
+        if isinstance(base, StackPtr):
+            displacement = int(aliased_stack_store.group(2) or 0)
+            offset = base.offset + displacement
+            width = {"mov.b": 1, "mov.w": 2, "mov.l": 4}[mnemonic]
+            _invalidate_stack_range(state, offset, width)
+            if mnemonic == "mov.l" and offset % 4 == 0:
+                _stack_store(
+                    state, offset, state[aliased_stack_store.group(1)],
+                    instruction.address,
+                )
+            return
+
+    aliased_stack_load = re.fullmatch(
+        r"@(?:\((\d+),(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d))),\s*(r(?:1[0-5]|\d))",
+        text,
+    )
+    if mnemonic in {"mov.l", "mov.w", "mov.b"} and aliased_stack_load:
+        base_register = aliased_stack_load.group(2) or aliased_stack_load.group(3)
+        base = state[base_register]
+        if isinstance(base, StackPtr):
+            displacement = int(aliased_stack_load.group(1) or 0)
+            offset = base.offset + displacement
+            destination_name = aliased_stack_load.group(4)
+            if mnemonic == "mov.l" and offset % 4 == 0:
+                slot = _stack_load(state, offset)
+                state[destination_name] = slot.value
+                state[f"{destination_name}_stack_origin"] = StackOrigin(
+                    (offset,), slot.store_addresses
+                )
+            elif mnemonic == "mov.w":
+                state[destination_name] = Interval("signed", -0x8000, 0x7FFF)
+            else:
+                state[destination_name] = Interval("signed", -0x80, 0x7F)
+            return
+
     literal = _symbol_from_annotation(instruction.annotation)
-    destination = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", text)
-    single_destination = re.fullmatch(r"(r(?:1[0-5]|\d))", text)
+    destination = destination_register
+    single_destination = single_register
     if mnemonic in {"mov.l", "mov.w"} and literal and destination:
         state[destination.group(1)] = ConstSet("symbol", frozenset({literal}))
         return
@@ -910,7 +1142,15 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
     if mnemonic == "add" and immediate:
         delta = int(immediate.group(1), 0)
         value = state[immediate.group(2)]
-        if isinstance(value, ConstSet) and all(isinstance(x, int) for x in value.values):
+        if isinstance(value, StackPtr):
+            next_offset = value.offset + delta
+            if abs(next_offset) <= 4096 and next_offset % 4 == 0:
+                state[immediate.group(2)] = StackPtr(next_offset)
+            else:
+                state[immediate.group(2)] = UNKNOWN
+                if immediate.group(2) == "r15":
+                    _invalidate_stack(state)
+        elif isinstance(value, ConstSet) and all(isinstance(x, int) for x in value.values):
             state[immediate.group(2)] = ConstSet(
                 value.kind, frozenset(int(x) + delta for x in value.values)
             )
@@ -922,13 +1162,39 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
     move = re.fullmatch(r"(r(?:1[0-5]|\d)),\s*(r(?:1[0-5]|\d))", text)
     if mnemonic == "mov" and move:
         state[move.group(2)] = state[move.group(1)]
+        state[f"{move.group(2)}_stack_origin"] = state[
+            f"{move.group(1)}_stack_origin"
+        ]
+        if move.group(2) == "r15" and not isinstance(state["r15"], StackPtr):
+            _invalidate_stack(state)
         return
     binary = re.fullmatch(
         r"(r(?:1[0-5]|\d)),\s*(r(?:1[0-5]|\d))", text
     )
     if mnemonic == "add" and binary:
         source, target = state[binary.group(1)], state[binary.group(2)]
-        if isinstance(source, ConstSet) and isinstance(target, ConstSet) \
+        source_integers = (
+            source.values if isinstance(source, ConstSet)
+            and source.kind in {"signed", "unsigned"}
+            and all(isinstance(item, int) for item in source.values) else ()
+        )
+        target_integers = (
+            target.values if isinstance(target, ConstSet)
+            and target.kind in {"signed", "unsigned"}
+            and all(isinstance(item, int) for item in target.values) else ()
+        )
+        stack_offset: int | None = None
+        if isinstance(source, StackPtr) and len(target_integers) == 1:
+            stack_offset = source.offset + int(next(iter(target_integers)))
+        elif isinstance(target, StackPtr) and len(source_integers) == 1:
+            stack_offset = target.offset + int(next(iter(source_integers)))
+        if stack_offset is not None:
+            state[binary.group(2)] = (
+                StackPtr(stack_offset)
+                if abs(stack_offset) <= 4096 and stack_offset % 4 == 0
+                else UNKNOWN
+            )
+        elif isinstance(source, ConstSet) and isinstance(target, ConstSet) \
                 and source.kind == target.kind \
                 and source.kind in {"signed", "unsigned"} \
                 and all(isinstance(x, int) for x in source.values | target.values):
@@ -1021,11 +1287,28 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         return
     if destination:
         state[destination.group(1)] = UNKNOWN
+        known_destination_effects = {
+            "add", "addc", "addv", "and", "exts.b", "exts.w", "extu.b", "extu.w",
+            "lds", "mov", "mov.b", "mov.l", "mov.w", "mova", "movt", "neg", "negc",
+            "not", "or", "rotcl", "rotcr", "rotl", "rotr", "shad", "shal", "shar",
+            "shld", "shll", "shll2", "shll8", "shll16", "shlr", "shlr2", "shlr8",
+            "shlr16", "sts", "sub", "subc", "subv", "swap.b", "swap.w", "xor",
+            "xtrct", "div1", "dmuls.l", "dmulu.l", "mul.l", "muls.w", "mulu.w",
+        }
+        if mnemonic not in known_destination_effects:
+            effects.append(UnresolvedEffect(owner.name, instruction.address, mnemonic, text,
+                                            "unparseable register effect"))
         return
     if single_destination and mnemonic not in {"cmp/pl", "cmp/pz"}:
         state[single_destination.group(1)] = UNKNOWN
         return
     if mnemonic in {"mov.l", "mov.w", "mov.b", "sts.l"} and ",@" in text:
+        base_match = re.search(r"@(?!-)(?:\(\d+,(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d)))", text)
+        if base_match:
+            base_register = base_match.group(1) or base_match.group(2)
+            base = state.get(base_register, UNKNOWN)
+            if base is UNKNOWN:
+                _invalidate_stack(state)
         return
     if mnemonic == "lds.l" and text.endswith(",pr"):
         return
@@ -1040,7 +1323,180 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                                         "unparseable register effect"))
 
 
-def analyze_code_only(
+def _straight_line_leaf_gpr_clobbers(
+    target: int,
+    instructions: dict[int, Instruction],
+    owner: FunctionOwner,
+    memory: dict[int, int],
+    *,
+    max_instructions: int = 256,
+) -> frozenset[str] | None:
+    """Prove caller-saved GPR writes for a bounded, fully decoded leaf CFG.
+
+    GCC's SH runtime and small compiled C leaves can contain conditional
+    branches or bounded ``braf`` dispatches while still preserving most
+    caller-saved registers.  Blanket ABI clobbering then loses live call
+    targets that emitted callers deliberately keep in those registers.  This
+    summary is deliberately fail-closed: every reachable instruction and
+    delay slot must be modeled, every transfer must stay in the resolved
+    owner, nested calls and unbounded computed transfers are rejected, and
+    every reachable exit must restore the initial stack pointer.
+    """
+    initial_state = _unknown_state()
+    for index in range(15):
+        initial_state[f"r{index}"] = ConstSet(
+            "symbol", frozenset({SymbolAtom(f"<leaf-probe:r{index}>", index)})
+        )
+    initial_sp = initial_state["r15"]
+    clobbers: set[str] = set()
+    delay_control = {
+        "bf", "bf.s", "bra", "braf", "bsr", "bsrf", "bt", "bt.s",
+        "jmp", "jsr", "rte", "rts", "sleep", "trapa", ".word",
+    }
+    forbidden_control = {"bsr", "bsrf", "jmp", "jsr", "rte", "sleep", "trapa", ".word"}
+    states: dict[int, dict[str, AbstractValue]] = {}
+    queue: deque[tuple[int, dict[str, AbstractValue]]] = deque([(target, initial_state)])
+    reached_return = False
+    steps = 0
+
+    def in_owner(address: int) -> bool:
+        return owner.start <= address < owner.end and address in instructions
+
+    def apply(
+        instruction: Instruction, state: dict[str, AbstractValue]
+    ) -> dict[str, AbstractValue] | None:
+        result = dict(state)
+        before = {f"r{index}": result[f"r{index}"] for index in range(8)}
+        effects: list[UnresolvedEffect] = []
+        _write_effect(instruction, result, effects, owner, memory)
+        if effects:
+            return None
+        clobbers.update(
+            register for register, value in before.items()
+            if result[register] != value
+        )
+        return result
+
+    def delayed_state(
+        address: int, state: dict[str, AbstractValue]
+    ) -> dict[str, AbstractValue] | None:
+        delay_address = address + 2
+        delay = instructions.get(delay_address)
+        if not in_owner(delay_address) or delay is None or delay.mnemonic in delay_control:
+            return None
+        return apply(delay, state)
+
+    def schedule(address: int, state: dict[str, AbstractValue]) -> bool:
+        if not in_owner(address):
+            return False
+        previous = states.get(address)
+        merged, changed = _join_state(previous, state)
+        if changed:
+            states[address] = merged
+            queue.append((address, merged))
+        return True
+
+    def braf_targets(address: int, value: AbstractValue) -> tuple[int, ...] | None:
+        if isinstance(value, ConstSet) and all(isinstance(item, int) for item in value.values):
+            offsets = sorted(int(item) for item in value.values)
+        elif isinstance(value, Interval) and value.hi - value.lo + 1 <= 256:
+            offsets = list(range(value.lo, value.hi + 1))
+        else:
+            return None
+        targets = tuple(sorted({address + 4 + offset for offset in offsets}))
+        if not targets or len(targets) > 256 or any(
+            target & 1 or not in_owner(target) for target in targets
+        ):
+            return None
+        return targets
+
+    while queue:
+        address, incoming = queue.popleft()
+        # Ignore stale queued states superseded by a later join.
+        state = states.get(address)
+        if state is None:
+            state = dict(incoming)
+            states[address] = state
+        elif state != incoming:
+            continue
+        steps += 1
+        if steps > max_instructions:
+            return None
+        instruction = instructions.get(address)
+        if instruction is None:
+            return None
+        mnemonic = instruction.mnemonic
+        direct_target = _target_from_text(instruction.operands)
+
+        if mnemonic == "rts":
+            post = delayed_state(address, state)
+            if post is None or post["r15"] != initial_sp:
+                return None
+            reached_return = True
+            continue
+        if mnemonic in forbidden_control:
+            return None
+        if mnemonic in {"bt", "bf"}:
+            if direct_target is None or not in_owner(direct_target):
+                return None
+            true_state, false_state = _predicate_refined_states(
+                state["t_predicate"], state
+            )
+            taken, fallthrough = (
+                (true_state, false_state) if mnemonic == "bt"
+                else (false_state, true_state)
+            )
+            if taken is not None and not schedule(direct_target, taken):
+                return None
+            if fallthrough is not None and not schedule(address + 2, fallthrough):
+                return None
+            continue
+        if mnemonic in {"bt.s", "bf.s"}:
+            if direct_target is None or not in_owner(direct_target):
+                return None
+            true_state, false_state = _predicate_refined_states(
+                state["t_predicate"], state
+            )
+            taken, fallthrough = (
+                (true_state, false_state) if mnemonic == "bt.s"
+                else (false_state, true_state)
+            )
+            if taken is not None:
+                post = delayed_state(address, taken)
+                if post is None or not schedule(direct_target, post):
+                    return None
+            if fallthrough is not None:
+                post = delayed_state(address, fallthrough)
+                if post is None or not schedule(address + 4, post):
+                    return None
+            continue
+        if mnemonic == "bra":
+            if direct_target is None or not in_owner(direct_target):
+                return None
+            post = delayed_state(address, state)
+            if post is None or not schedule(direct_target, post):
+                return None
+            continue
+        if mnemonic == "braf":
+            register = re.fullmatch(r"@?(r(?:1[0-5]|\d))", instruction.operands)
+            targets = braf_targets(
+                address, state.get(register.group(1), UNKNOWN) if register else UNKNOWN
+            )
+            post = delayed_state(address, state)
+            if targets is None or post is None:
+                return None
+            if any(not schedule(next_address, post) for next_address in targets):
+                return None
+            continue
+
+        post = apply(instruction, state)
+        if post is None or not schedule(address + 2, post):
+            return None
+
+    return frozenset(clobbers) if reached_return else None
+
+
+def _analyze_code_only_pass(
     instructions: dict[int, Instruction],
     owners: Iterable[FunctionOwner],
     decoded_lines: dict[str, set[int]] | None = None,
@@ -1049,9 +1505,19 @@ def analyze_code_only(
     max_steps_per_seed: int = 100000,
     include_owner_entry: bool = True,
     owner_address_map: dict[int, FunctionOwner] | None = None,
-    stop_at_addresses: set[int] | None = None,
     local_islands: Iterable[LocalIsland] = (),
     profile_by_owner: dict[str, Counter[str]] | None = None,
+    edge_sink: set[tuple[str, int, int]] | None = None,
+    node_sink: set[tuple[str, int]] | None = None,
+    evaluated_state_sink: set[tuple[str, int]] | None = None,
+    frozen_edges: frozenset[tuple[str, int, int]] | None = None,
+    new_edge_sink: set[tuple[str, int, int]] | None = None,
+    interleave_initial_seeds: bool = False,
+    phase: str = "acceptance",
+    discovery_iteration: int = 0,
+    progress_callback: Callable[[dict[str, object]], None] | None = None,
+    progress_counter: Counter[str] | None = None,
+    protected_entry_nodes: frozenset[tuple[str, int]] = frozenset(),
 ) -> CodeAnalysis:
     owner_list = tuple(owners)
     owner_by_address = (
@@ -1067,31 +1533,60 @@ def analyze_code_only(
     lines = decoded_lines or {}
     island_list = tuple(local_islands)
     code_addresses: set[int] = set()
-    calls_by_site: dict[tuple[str, int, str], CallSite] = {}
-    facts_by_site: dict[tuple[object, ...], DirectCallFact] = {}
-    implementation_by_site: dict[tuple[object, ...], ImplementationTransferFact] = {}
-    unresolved: dict[tuple[str, int, str], UnresolvedTransfer] = {}
-    effects: dict[tuple[str, int, str], UnresolvedEffect] = {}
+    call_emissions: dict[tuple[object, ...], list[CallSite]] = {}
+    fact_emissions: dict[tuple[object, ...], list[DirectCallFact]] = {}
+    implementation_emissions: dict[
+        tuple[object, ...], list[ImplementationTransferFact]
+    ] = {}
+    unresolved_emissions: dict[tuple[object, ...], list[UnresolvedTransfer]] = {}
+    effect_emissions: dict[tuple[object, ...], list[UnresolvedEffect]] = {}
+    leaf_clobber_cache: dict[int, frozenset[str] | None] = {}
 
     for owner in owner_list:
         if selected_names is not None and owner.name not in selected_names:
             continue
         seeds = [
-            *([owner.start] if include_owner_entry else []),
-            *sorted(lines.get(owner.name, set())),
+            *([(owner.start, "entry")] if include_owner_entry else []),
+            *((address, "decodedline") for address in sorted(lines.get(owner.name, set()))),
         ]
+        owner_states = 0
+        if progress_callback is not None:
+            progress_callback({
+                "event": "owner_start",
+                "phase": phase,
+                "iteration": discovery_iteration,
+                "owner": owner.name,
+                "seeds": len(seeds),
+                "states": 0,
+                "edges": len(edge_sink or frozen_edges or ()),
+            })
         profile = (
             profile_by_owner.setdefault(owner.name, Counter())
             if profile_by_owner is not None else None
         )
         states: dict[tuple[object, ...], dict[str, AbstractValue]] = {}
+        evaluated_addresses: set[int] = set()
         widening: dict[tuple[object, ...], dict[str, tuple[bool, bool]]] = {}
+        provenance_by_key: dict[tuple[object, ...], tuple[tuple[int, str], ...]] = {}
+        provenance_truncated_by_key: dict[tuple[object, ...], bool] = {}
+        predecessors_by_key: dict[tuple[object, ...], tuple[int, ...]] = {}
+        predecessors_truncated_by_key: dict[tuple[object, ...], bool] = {}
+        entry_join_changed_by_key: dict[tuple[object, ...], bool] = {}
         queue: deque[
-            tuple[int, LocalIsland | None, int, int, dict[str, AbstractValue], bool]
-        ] = deque(
-            (seed, None, seed, seed, _unknown_state(), False)
-            for seed in seeds if seed in instructions
-        )
+            tuple[
+                tuple[int, str], LocalIsland | None, int, int,
+                dict[str, AbstractValue], bool, tuple[tuple[int, str], ...], bool,
+                int | None,
+            ]
+        ] = deque()
+        pending_seeds = deque(seed for seed in seeds if seed[0] in instructions)
+        if interleave_initial_seeds:
+            while pending_seeds:
+                seed = pending_seeds.popleft()
+                queue.append((
+                    seed, None, seed[0], seed[0], _unknown_state(), False,
+                    (seed,), False, None,
+                ))
         instruction_count = sum(
             1 for address in range(owner.start, owner.end, 2) if address in instructions
         )
@@ -1103,9 +1598,38 @@ def analyze_code_only(
         )
         aggregate_step_limit = max(1, instruction_count) * max(1, len(seeds)) * 512
         aggregate_steps = 0
-        steps_by_seed: defaultdict[int, int] = defaultdict(int)
-        while queue:
-            seed, island, island_entry, address, incoming, is_backedge = queue.popleft()
+        steps_by_seed: defaultdict[tuple[int, str], int] = defaultdict(int)
+        while queue or pending_seeds:
+            if not queue:
+                while pending_seeds and not queue:
+                    seed = pending_seeds.popleft()
+                    if seed[1] == "decodedline" and seed[0] in evaluated_addresses:
+                        if profile is not None:
+                            profile["covered_decoded_seeds_skipped"] += 1
+                        continue
+                    queue.append((
+                        seed, None, seed[0], seed[0], _unknown_state(), False,
+                        (seed,), False, None,
+                    ))
+                if not queue:
+                    continue
+            (
+                seed, island, island_entry, address, incoming, is_backedge,
+                incoming_provenance, incoming_provenance_truncated, predecessor,
+            ) = queue.popleft()
+            owner_states += 1
+            if progress_counter is not None:
+                progress_counter["states"] += 1
+            if progress_callback is not None and owner_states % 4096 == 0:
+                progress_callback({
+                    "event": "owner_progress",
+                    "phase": phase,
+                    "iteration": discovery_iteration,
+                    "owner": owner.name,
+                    "seeds": len(seeds),
+                    "states": owner_states,
+                    "edges": len(edge_sink or frozen_edges or ()),
+                })
             if profile is not None:
                 profile["worklist_states"] += 1
                 profile["max_constset_cardinality"] = max(
@@ -1131,37 +1655,136 @@ def analyze_code_only(
             region_end = island.end if island is not None else owner.end
             if not (region_start <= address < region_end) or address not in instructions:
                 continue
-            if island is None and stop_at_addresses is not None and address in stop_at_addresses:
-                if profile is not None:
-                    profile["stop_at_hits"] += 1
-                continue
             key = (
-                ("island", island.name, island_entry, address)
+                ("island", island.name, address)
                 if island is not None
-                else ("owner", seed, address)
+                else ("owner", address)
             )
             if profile is not None and key in states:
                 profile["revisits"] += 1
-            state, changed = _join_state(
-                states.get(key),
+            previous_state = states.get(key)
+            state, state_changed = _join_state(
+                previous_state,
                 incoming,
                 backedge=is_backedge,
                 widening=widening.setdefault(key, {}),
             )
-            if not changed:
+            if phase == "discovery":
+                # Discovery state and diagnostics are disposable. Re-evaluating a
+                # program point solely because another decoded-line seed added
+                # provenance or a predecessor multiplies work without discovering
+                # a new instruction or edge. Acceptance retains the full metadata.
+                provenance = ()
+                provenance_truncated = False
+                provenance_changed = False
+                predecessors = ()
+                predecessors_truncated = False
+                predecessors_changed = False
+                entry_join_changed = False
+            else:
+                provenance_values = sorted(set(
+                    (*provenance_by_key.get(key, ()), *incoming_provenance)
+                ))
+                provenance_truncated = (
+                    provenance_truncated_by_key.get(key, False)
+                    or incoming_provenance_truncated
+                    or len(provenance_values) > 16
+                )
+                provenance = tuple(provenance_values[:16])
+                provenance_changed = (
+                    provenance != provenance_by_key.get(key, ())
+                    or provenance_truncated != provenance_truncated_by_key.get(key, False)
+                )
+                predecessor_values = sorted(set((
+                    *predecessors_by_key.get(key, ()),
+                    *(() if predecessor is None else (predecessor,)),
+                )))
+                predecessors_truncated = (
+                    predecessors_truncated_by_key.get(key, False)
+                    or len(predecessor_values) > 16
+                )
+                predecessors = tuple(predecessor_values[:16])
+                predecessors_changed = (
+                    predecessors != predecessors_by_key.get(key, ())
+                    or predecessors_truncated != predecessors_truncated_by_key.get(key, False)
+                )
+                previous_provenance = provenance_by_key.get(key, ())
+                mixed_entry_decoded_join = (
+                    previous_state is not None
+                    and state_changed
+                    and any(kind == "entry" for _, kind in previous_provenance)
+                    and any(kind == "decodedline" for _, kind in incoming_provenance)
+                )
+                entry_join_changed = (
+                    entry_join_changed_by_key.get(key, False) or mixed_entry_decoded_join
+                )
+            if not (state_changed or provenance_changed or predecessors_changed):
                 continue
             states[key] = state
+            evaluated_addresses.add(address)
+            provenance_by_key[key] = provenance
+            provenance_truncated_by_key[key] = provenance_truncated
+            predecessors_by_key[key] = predecessors
+            predecessors_truncated_by_key[key] = predecessors_truncated
+            entry_join_changed_by_key[key] = entry_join_changed
+            call_emissions[key] = []
+            fact_emissions[key] = []
+            implementation_emissions[key] = []
+            unresolved_emissions[key] = []
+            effect_emissions[key] = []
             code_addresses.add(address)
+            if node_sink is not None:
+                node_sink.add((owner.name, address))
+            if evaluated_state_sink is not None:
+                evaluated_state_sink.add((owner.name, address))
             ins = instructions[address]
             mnemonic = ins.mnemonic
             caller_region = "island" if island is not None else "owner"
             caller_island = island.name if island is not None else None
             caller_offset = address - (island.start if island is not None else owner.start)
 
+            def unresolved_transfer(
+                register_name: str | None = None,
+                register_value: AbstractValue | None = None,
+            ) -> UnresolvedTransfer:
+                stack_origin = state.get(
+                    f"{register_name}_stack_origin", StackOrigin()
+                )
+                if not isinstance(stack_origin, StackOrigin):
+                    stack_origin = StackOrigin()
+                return UnresolvedTransfer(
+                    owner.name,
+                    address,
+                    mnemonic,
+                    register_name,
+                    register_value,
+                    provenance,
+                    provenance_truncated,
+                    predecessors,
+                    predecessors_truncated,
+                    entry_join_changed,
+                    stack_origin.offsets,
+                    stack_origin.store_addresses,
+                )
+
             def schedule(target: int, next_state: dict[str, AbstractValue]) -> None:
                 if region_start <= target < region_end and target in instructions:
+                    if seed[1] == "decodedline" and (
+                        owner.name, target
+                    ) in protected_entry_nodes:
+                        return
+                    edge = (owner.name, address, target)
+                    if edge_sink is not None:
+                        edge_sink.add(edge)
+                    if frozen_edges is not None and edge not in frozen_edges:
+                        if new_edge_sink is not None:
+                            new_edge_sink.add(edge)
+                        return
                     queue.append(
-                        (seed, island, island_entry, target, next_state, target <= address)
+                        (
+                            seed, island, island_entry, target, next_state,
+                            target <= address, provenance, provenance_truncated, address,
+                        )
                     )
 
             def schedule_island(
@@ -1170,119 +1793,180 @@ def analyze_code_only(
                 next_state: dict[str, AbstractValue],
             ) -> None:
                 if entry in instructions:
-                    queue.append((seed, target_island, entry, entry, next_state, False))
+                    if seed[1] == "decodedline" and (
+                        owner.name, entry
+                    ) in protected_entry_nodes:
+                        return
+                    edge = (owner.name, address, entry)
+                    if edge_sink is not None:
+                        edge_sink.add(edge)
+                    if frozen_edges is not None and edge not in frozen_edges:
+                        if new_edge_sink is not None:
+                            new_edge_sink.add(edge)
+                        return
+                    queue.append((
+                        seed, target_island, entry, entry, next_state, False,
+                        provenance, provenance_truncated, address,
+                    ))
 
             def after_slot(base_state: dict[str, AbstractValue]) -> dict[str, AbstractValue]:
                 slot_address = address + 2
                 result = dict(base_state)
                 if slot_address in instructions and region_start <= slot_address < region_end:
                     code_addresses.add(slot_address)
+                    if node_sink is not None:
+                        node_sink.add((owner.name, slot_address))
                     slot_effects: list[UnresolvedEffect] = []
                     _write_effect(
                         instructions[slot_address], result, slot_effects, owner, memory,
                         profile,
                     )
                     for effect in slot_effects:
-                        effects[(effect.function, effect.address, effect.mnemonic)] = effect
+                        effect_emissions[key].append(effect)
                 return result
 
             direct_target = _target_from_text(ins.operands)
             if mnemonic in {"bsr", "bsrf", "jsr"}:
-                target_address = direct_target
-                resolved_atom: SymbolAtom | None = None
+                if profile is not None:
+                    profile["call_transfer_evaluations"] += 1
+                register = None
+                value: AbstractValue | None = None
+                target_atoms: list[tuple[int, SymbolAtom | None]] = []
+                if direct_target is not None:
+                    target_atoms.append((direct_target, None))
                 if mnemonic in {"jsr", "bsrf"}:
                     register = re.search(r"@?(r(?:1[0-5]|\d))", ins.operands)
                     value = state.get(register.group(1), UNKNOWN) if register else UNKNOWN
                     atoms = value.values if isinstance(value, ConstSet) and value.kind == "symbol" else ()
-                    if len(atoms) == 1:
-                        atom = next(iter(atoms))
-                        resolved_atom = atom if isinstance(atom, SymbolAtom) else None
-                        target_address = resolved_atom.address if resolved_atom else None
+                    if atoms and all(isinstance(atom, SymbolAtom) for atom in atoms):
+                        target_atoms = sorted(
+                            ((atom.address, atom) for atom in atoms),
+                            key=lambda item: (item[0], item[1].name),
+                        )
                     elif mnemonic == "bsrf" and isinstance(value, ConstSet) and value.kind != "symbol":
                         ints = [x for x in value.values if isinstance(x, int)]
-                        target_address = address + 4 + ints[0] if len(ints) == 1 else None
-                    else:
-                        target_address = None
-                if target_address is None:
-                    if mnemonic == "jsr":
-                        register_name = register.group(1) if register else "unknown"
-                        synthetic = f"<indirect:{register_name}>"
-                        calls_by_site[(owner.name, address, synthetic)] = CallSite(
-                            owner.name, address, synthetic
-                        )
-                        facts_by_site[(owner.name, address, synthetic, 0)] = DirectCallFact(
-                            owner.name, caller_offset, synthetic, 0, 1,
-                            caller_region, caller_island
+                        target_atoms = (
+                            [(address + 4 + ints[0], None)] if len(ints) == 1 else []
                         )
                     else:
-                        unresolved[(owner.name, address, mnemonic)] = UnresolvedTransfer(
-                            owner.name, address, mnemonic
-                        )
-                else:
+                        target_atoms = []
+
+                resolved_targets: dict[tuple[object, ...], tuple[object, ...]] = {}
+                invalid_target = not target_atoms
+                for target_address, resolved_atom in target_atoms:
                     callee = owner_by_address.get(target_address)
                     target_island = (
                         None if callee is not None
                         else _island_for_direct_target(target_address, ins.operands, island_list)
                     )
                     if target_island is not None:
-                        implementation_by_site[(
-                            owner.name, caller_region, caller_island, caller_offset,
-                            target_island.name, target_address - target_island.start,
-                        )] = ImplementationTransferFact(
-                            owner.name,
-                            caller_offset,
-                            target_island.name,
+                        canonical = (
+                            "island", target_island.name,
                             target_address - target_island.start,
-                            1,
-                            caller_region,
-                            caller_island,
                         )
-                        callee_entry = after_slot(state)
-                        schedule_island(target_island, target_address, callee_entry)
-                        post = dict(callee_entry)
-                        for register in [
-                            *(f"r{x}" for x in range(8)),
-                            "mach", "macl", "t_predicate",
-                        ]:
-                            post[register] = UNKNOWN
-                        schedule(address + 4, post)
-                        unresolved.pop((owner.name, address, mnemonic), None)
-                        continue
-                    if callee is None and mnemonic in {"jsr", "bsrf"} \
+                        resolved_targets[canonical] = (
+                            "island", target_island, target_address,
+                        )
+                    elif callee is None and mnemonic in {"jsr", "bsrf"} \
                             and resolved_atom is not None and (
                                 "+" in resolved_atom.name or "[]" in resolved_atom.name
                                 or resolved_atom.name.endswith("*")
                             ):
                         synthetic = f"<indirect:{resolved_atom.name}>"
-                        calls_by_site[(owner.name, address, synthetic)] = CallSite(
-                            owner.name, address, synthetic
+                        resolved_targets[("synthetic", synthetic)] = (
+                            "synthetic", synthetic,
                         )
-                        facts_by_site[(owner.name, address, synthetic, 0)] = DirectCallFact(
-                            owner.name, caller_offset, synthetic, 0, 1,
-                            caller_region, caller_island
-                        )
-                        unresolved.pop((owner.name, address, mnemonic), None)
                     elif callee is None:
-                        unresolved[(owner.name, address, mnemonic)] = UnresolvedTransfer(
-                            owner.name, address, mnemonic
-                        )
+                        invalid_target = True
                     else:
-                        calls_by_site[(owner.name, address, callee.name)] = CallSite(
-                            owner.name, address, callee.name
+                        canonical = (
+                            "callee", callee.name, target_address - callee.start,
                         )
-                        facts_by_site[(owner.name, address, callee.name, target_address - callee.start)] = (
-                            DirectCallFact(
+                        resolved_targets[canonical] = (
+                            "callee", callee, target_address,
+                        )
+
+                if invalid_target:
+                    unresolved_emissions[key].append(unresolved_transfer(
+                        register.group(1)
+                        if mnemonic in {"bsrf", "jsr"} and register else None,
+                        value if mnemonic in {"bsrf", "jsr"} else None,
+                    ))
+                else:
+                    for canonical in sorted(resolved_targets):
+                        target = resolved_targets[canonical]
+                        if target[0] == "island":
+                            target_island = target[1]
+                            target_address = target[2]
+                            implementation_emissions[key].append(
+                                ImplementationTransferFact(
+                                    owner.name,
+                                    caller_offset,
+                                    target_island.name,
+                                    target_address - target_island.start,
+                                    1,
+                                    caller_region,
+                                    caller_island,
+                                )
+                            )
+                        elif target[0] == "synthetic":
+                            synthetic = target[1]
+                            call_emissions[key].append(
+                                CallSite(owner.name, address, synthetic)
+                            )
+                            fact_emissions[key].append(DirectCallFact(
+                                owner.name, caller_offset, synthetic, 0, 1,
+                                caller_region, caller_island
+                            ))
+                        else:
+                            callee = target[1]
+                            target_address = target[2]
+                            call_emissions[key].append(
+                                CallSite(owner.name, address, callee.name)
+                            )
+                            fact_emissions[key].append(DirectCallFact(
                                 owner.name, caller_offset, callee.name,
                                 target_address - callee.start, 1,
                                 caller_region, caller_island
+                            ))
+
+                callee_entry = after_slot(state)
+                if not invalid_target:
+                    for canonical in sorted(resolved_targets):
+                        target = resolved_targets[canonical]
+                        if target[0] == "island":
+                            schedule_island(target[1], target[2], callee_entry)
+                post = dict(callee_entry)
+                gpr_clobbers = {f"r{x}" for x in range(8)}
+                if not invalid_target and resolved_targets and all(
+                    target[0] == "callee" for target in resolved_targets.values()
+                ):
+                    proven_clobbers: set[str] = set()
+                    all_proven = True
+                    for target in resolved_targets.values():
+                        callee = target[1]
+                        target_address = target[2]
+                        if target_address not in leaf_clobber_cache:
+                            leaf_clobber_cache[target_address] = (
+                                _straight_line_leaf_gpr_clobbers(
+                                    target_address, instructions, callee, memory
+                                )
                             )
-                        )
-                        unresolved.pop((owner.name, address, mnemonic), None)
-                post = after_slot(state)
-                for register in [
-                    *(f"r{x}" for x in range(8)), "mach", "macl", "t_predicate"
+                        summary = leaf_clobber_cache[target_address]
+                        if summary is None:
+                            all_proven = False
+                            break
+                        proven_clobbers.update(summary)
+                    if all_proven:
+                        gpr_clobbers = proven_clobbers
+                for abi_register in [
+                    *sorted(gpr_clobbers), "mach", "macl", "t_predicate"
                 ]:
-                    post[register] = UNKNOWN
+                    post[abi_register] = UNKNOWN
+                    if abi_register.startswith("r"):
+                        post[f"{abi_register}_stack_origin"] = StackOrigin()
+                if profile is not None:
+                    profile["abi_continuations_scheduled"] += 1
                 schedule(address + 4, post)
                 continue
             if mnemonic in {"jmp", "braf"}:
@@ -1297,13 +1981,11 @@ def analyze_code_only(
                         symbol_atoms[0].name.endswith("*") or "[]" in symbol_atoms[0].name
                     ):
                         synthetic = f"<indirect:{symbol_atoms[0].name}>"
-                        calls_by_site[(owner.name, address, synthetic)] = CallSite(
-                            owner.name, address, synthetic
-                        )
-                        facts_by_site[(owner.name, address, synthetic, 0)] = DirectCallFact(
+                        call_emissions[key].append(CallSite(owner.name, address, synthetic))
+                        fact_emissions[key].append(DirectCallFact(
                             owner.name, caller_offset, synthetic, 0, 1,
                             caller_region, caller_island
-                        )
+                        ))
                         after_slot(state)
                         continue
                     targets = [x.address for x in symbol_atoms]
@@ -1315,9 +1997,10 @@ def analyze_code_only(
                     else None
                 )
                 if validated_targets is None:
-                    unresolved[(owner.name, address, mnemonic)] = UnresolvedTransfer(
-                        owner.name, address, mnemonic
-                    )
+                    unresolved_emissions[key].append(unresolved_transfer(
+                        register.group(1) if register else None,
+                        value,
+                    ))
                 else:
                     post = after_slot(state)
                     for target in validated_targets:
@@ -1325,14 +2008,14 @@ def analyze_code_only(
                         if callee and callee.name == owner.name:
                             schedule(target, post)
                         elif callee:
-                            facts_by_site[(owner.name, address, callee.name, target - callee.start)] = (
-                                DirectCallFact(
-                                    owner.name, caller_offset, callee.name,
-                                    target - callee.start, 1,
-                                    caller_region, caller_island
-                                )
+                            call_emissions[key].append(
+                                CallSite(owner.name, address, callee.name)
                             )
-                    unresolved.pop((owner.name, address, mnemonic), None)
+                            fact_emissions[key].append(DirectCallFact(
+                                owner.name, caller_offset, callee.name,
+                                target - callee.start, 1,
+                                caller_region, caller_island
+                            ))
                 continue
             if mnemonic in {"rts", "rte"}:
                 after_slot(state)
@@ -1340,9 +2023,7 @@ def analyze_code_only(
             if mnemonic == "bra":
                 post = after_slot(state)
                 if direct_target is None:
-                    unresolved[(owner.name, address, mnemonic)] = UnresolvedTransfer(
-                        owner.name, address, mnemonic
-                    )
+                    unresolved_emissions[key].append(unresolved_transfer())
                 else:
                     direct_owner = owner_by_address.get(direct_target)
                     target_island = (
@@ -1350,10 +2031,7 @@ def analyze_code_only(
                         else _island_for_direct_target(direct_target, ins.operands, island_list)
                     )
                     if target_island is not None:
-                        implementation_by_site[(
-                            owner.name, caller_region, caller_island, caller_offset,
-                            target_island.name, direct_target - target_island.start,
-                        )] = ImplementationTransferFact(
+                        implementation_emissions[key].append(ImplementationTransferFact(
                             owner.name,
                             caller_offset,
                             target_island.name,
@@ -1361,7 +2039,7 @@ def analyze_code_only(
                             1,
                             caller_region,
                             caller_island,
-                        )
+                        ))
                         schedule_island(target_island, direct_target, post)
                     else:
                         schedule(direct_target, post)
@@ -1404,13 +2082,45 @@ def analyze_code_only(
             new_effects: list[UnresolvedEffect] = []
             _write_effect(ins, next_state, new_effects, owner, memory, profile)
             for effect in new_effects:
-                effects[(effect.function, effect.address, effect.mnemonic)] = effect
+                effect_emissions[key].append(effect)
             schedule(address + 2, next_state)
 
-    resolved_addresses = {(call.caller, call.address) for call in calls_by_site.values()}
+        if progress_callback is not None:
+            progress_callback({
+                "event": "owner_complete",
+                "phase": phase,
+                "iteration": discovery_iteration,
+                "owner": owner.name,
+                "seeds": len(seeds),
+                "states": owner_states,
+                "edges": len(edge_sink or frozen_edges or ()),
+            })
+
+    calls_by_site = {
+        (item.caller, item.address, item.helper): item
+        for rows in call_emissions.values() for item in rows
+    }
+    facts_by_site = {
+        (
+            item.caller, item.caller_region, item.caller_island,
+            item.caller_offset, item.callee, item.callee_offset,
+        ): item
+        for rows in fact_emissions.values() for item in rows
+    }
+    implementation_by_site = {
+        (
+            item.caller, item.caller_region, item.caller_island,
+            item.caller_offset, item.target_island, item.target_offset,
+        ): item
+        for rows in implementation_emissions.values() for item in rows
+    }
     unresolved = {
-        key: item for key, item in unresolved.items()
-        if (item.caller, item.address) not in resolved_addresses
+        (item.caller, item.address, item.mnemonic): item
+        for rows in unresolved_emissions.values() for item in rows
+    }
+    effects = {
+        (item.function, item.address, item.mnemonic): item
+        for rows in effect_emissions.values() for item in rows
     }
     calls = sorted(calls_by_site.values(), key=lambda x: (x.caller, x.address, x.helper))
     return CodeAnalysis(
@@ -1428,6 +2138,281 @@ def analyze_code_only(
         sorted(effects.values(), key=lambda x: (x.function, x.address, x.mnemonic)),
         owner_list,
     )
+
+
+def _acceptance_component_seeds(
+    owner: FunctionOwner,
+    decoded_addresses: set[int],
+    nodes: set[tuple[str, int]],
+    edges: frozenset[tuple[str, int, int]],
+    entry_evaluated_nodes: set[tuple[str, int]],
+    metrics: Counter[str] | None = None,
+) -> set[int]:
+    """Return decoded candidates in components not evaluated from owner entry.
+
+    The acceptance pass processes these serially and skips a candidate once an
+    earlier seed actually evaluated it. Keeping every candidate here is needed
+    because weakly connected sibling arms can converge without either arm being
+    directionally reachable from the other.
+    """
+    owner_nodes = {address for name, address in nodes if name == owner.name}
+    owner_edges = {
+        (source, target)
+        for name, source, target in edges
+        if name == owner.name
+    }
+    neighbors: defaultdict[int, set[int]] = defaultdict(set)
+    for source, target in owner_edges:
+        neighbors[source].add(target)
+        neighbors[target].add(source)
+        owner_nodes.update((source, target))
+
+    entry_evaluated = {
+        address
+        for name, address in entry_evaluated_nodes
+        if name == owner.name
+    }
+
+    seeds: set[int] = set()
+    unreachable_nodes = owner_nodes - entry_evaluated
+    remaining = set(unreachable_nodes)
+    if metrics is not None and entry_evaluated:
+        metrics["weak_components"] += 1
+    while remaining:
+        if metrics is not None:
+            metrics["weak_components"] += 1
+        first = min(remaining)
+        component: set[int] = set()
+        pending = [first]
+        while pending:
+            address = pending.pop()
+            if address in component:
+                continue
+            component.add(address)
+            pending.extend(sorted(
+                (neighbor for neighbor in neighbors[address]
+                 if neighbor in unreachable_nodes),
+                reverse=True,
+            ))
+        remaining.difference_update(component)
+        candidates = sorted(component & decoded_addresses)
+        if candidates:
+            seeds.update(candidates)
+            if metrics is not None:
+                metrics["disconnected_components"] += 1
+    return seeds
+
+
+def analyze_code_only(
+    instructions: dict[int, Instruction],
+    owners: Iterable[FunctionOwner],
+    decoded_lines: dict[str, set[int]] | None = None,
+    selected_names: set[str] | None = None,
+    instruction_memory: dict[int, int] | None = None,
+    max_steps_per_seed: int = 100000,
+    include_owner_entry: bool = True,
+    owner_address_map: dict[int, FunctionOwner] | None = None,
+    local_islands: Iterable[LocalIsland] = (),
+    profile_by_owner: dict[str, Counter[str]] | None = None,
+    max_discovery_restarts: int = 8,
+    progress_callback: Callable[[dict[str, object]], None] | None = None,
+) -> CodeAnalysis:
+    """Discover a frozen CFG, then run acceptance dataflow from fresh states."""
+    owner_list = tuple(owners)
+    island_list = tuple(local_islands)
+    owner_map = (
+        owner_address_map
+        if owner_address_map is not None
+        else build_owner_address_map(owner_list)
+    )
+    memory = (
+        instruction_memory
+        if instruction_memory is not None
+        else build_instruction_memory(instructions)
+    )
+    source_lines = {
+        name: set(addresses)
+        for name, addresses in (decoded_lines or {}).items()
+    }
+    learned_edges: set[tuple[str, int, int]] = set()
+    analysis_started = monotonic()
+
+    def emit_progress(event: dict[str, object]) -> None:
+        if progress_callback is None:
+            return
+        row = dict(event)
+        row["elapsed_ms"] = int((monotonic() - analysis_started) * 1000)
+        progress_callback(row)
+
+    for restart_count in range(max_discovery_restarts + 1):
+        discovery_lines = {
+            name: set(addresses) for name, addresses in source_lines.items()
+        }
+        for owner_name, _source, target in learned_edges:
+            discovery_lines.setdefault(owner_name, set()).add(target)
+        discovered_edges = set(learned_edges)
+        discovered_nodes: set[tuple[str, int]] = set()
+        discovery_counter: Counter[str] = Counter()
+        discovery_seed_count = sum(
+            int(include_owner_entry) + len(discovery_lines.get(owner.name, set()))
+            for owner in owner_list
+            if selected_names is None or owner.name in selected_names
+        )
+        phase_started = monotonic()
+        emit_progress({
+            "event": "phase_start",
+            "phase": "discovery",
+            "iteration": restart_count,
+            "seeds": discovery_seed_count,
+            "states": 0,
+            "edges": len(discovered_edges),
+        })
+        _analyze_code_only_pass(
+            instructions,
+            owner_list,
+            discovery_lines,
+            selected_names,
+            memory,
+            max_steps_per_seed,
+            include_owner_entry,
+            owner_map,
+            island_list,
+            None,
+            discovered_edges,
+            discovered_nodes,
+            interleave_initial_seeds=True,
+            phase="discovery",
+            discovery_iteration=restart_count,
+            progress_callback=emit_progress,
+            progress_counter=discovery_counter,
+        )
+        frozen_edges = frozenset(discovered_edges)
+        emit_progress({
+            "event": "phase_complete",
+            "phase": "discovery",
+            "iteration": restart_count,
+            "seeds": discovery_seed_count,
+            "states": discovery_counter["states"],
+            "edges": len(frozen_edges),
+            "nodes": len(discovered_nodes),
+            "phase_elapsed_ms": int((monotonic() - phase_started) * 1000),
+        })
+        new_edges: set[tuple[str, int, int]] = set()
+        acceptance_counter: Counter[str] = Counter()
+        phase_started = monotonic()
+        emit_progress({
+            "event": "phase_start",
+            "phase": "acceptance",
+            "iteration": restart_count,
+            "seeds": int(include_owner_entry) * sum(
+                1 for owner in owner_list
+                if selected_names is None or owner.name in selected_names
+            ),
+            "states": 0,
+            "edges": len(frozen_edges),
+        })
+        entry_evaluated_nodes: set[tuple[str, int]] = set()
+        accepted_entry = _analyze_code_only_pass(
+            instructions,
+            owner_list,
+            {},
+            selected_names,
+            memory,
+            max_steps_per_seed,
+            include_owner_entry,
+            owner_map,
+            island_list,
+            profile_by_owner,
+            frozen_edges=frozen_edges,
+            new_edge_sink=new_edges,
+            phase="acceptance",
+            discovery_iteration=restart_count,
+            progress_callback=emit_progress,
+            progress_counter=acceptance_counter,
+            evaluated_state_sink=entry_evaluated_nodes,
+        )
+        acceptance_lines: dict[str, set[int]] = {}
+        component_metrics: Counter[str] = Counter()
+        for owner in owner_list:
+            if selected_names is not None and owner.name not in selected_names:
+                continue
+            acceptance_lines[owner.name] = _acceptance_component_seeds(
+                owner,
+                source_lines.get(owner.name, set()),
+                discovered_nodes,
+                frozen_edges,
+                entry_evaluated_nodes,
+                component_metrics,
+            )
+        acceptance_seed_count = sum(len(value) for value in acceptance_lines.values())
+        emit_progress({
+            "event": "components_complete",
+            "phase": "components",
+            "iteration": restart_count,
+            "seeds": acceptance_seed_count,
+            "acceptance_seeds": acceptance_seed_count,
+            "states": acceptance_counter["states"],
+            "edges": len(frozen_edges),
+            "weak_components": component_metrics["weak_components"],
+            "disconnected_components": component_metrics["disconnected_components"],
+        })
+        accepted_components = _analyze_code_only_pass(
+            instructions,
+            owner_list,
+            acceptance_lines,
+            selected_names,
+            memory,
+            max_steps_per_seed,
+            False,
+            owner_map,
+            island_list,
+            profile_by_owner,
+            frozen_edges=frozen_edges,
+            new_edge_sink=new_edges,
+            phase="acceptance",
+            discovery_iteration=restart_count,
+            progress_callback=emit_progress,
+            progress_counter=acceptance_counter,
+            # Component acceptance has its own state map. Let a decoded-only
+            # lane reach an entry-evaluated join so it can contribute proven
+            # may-call targets; merge_code_analyses keeps the entry lane intact.
+        )
+        accepted = merge_code_analyses(accepted_entry, accepted_components)
+        missing_edges = new_edges - frozen_edges
+        emit_progress({
+            "event": "phase_complete",
+            "phase": "acceptance",
+            "iteration": restart_count,
+            "seeds": acceptance_seed_count + int(include_owner_entry) * sum(
+                1 for owner in owner_list
+                if selected_names is None or owner.name in selected_names
+            ),
+            "states": acceptance_counter["states"],
+            "edges": len(frozen_edges),
+            "new_edges": len(missing_edges),
+            "phase_elapsed_ms": int((monotonic() - phase_started) * 1000),
+        })
+        if not missing_edges:
+            return accepted
+        if restart_count >= max_discovery_restarts:
+            raise ValueError("code-only discovery restart cap exceeded")
+        learned_edges.update(missing_edges)
+        emit_progress({
+            "event": "rediscovery_restart",
+            "phase": "rediscovery",
+            "iteration": restart_count + 1,
+            "seeds": len(missing_edges),
+            "states": 0,
+            "edges": len(learned_edges),
+            "owners": sorted({name for name, _source, _target in missing_edges}),
+        })
+        if profile_by_owner is not None:
+            for owner_name in sorted({name for name, _source, _target in missing_edges}):
+                profile_by_owner.setdefault(owner_name, Counter())[
+                    "phase2_discovery_restarts"
+                ] += 1
+
+    raise AssertionError("unreachable discovery restart loop")
 
 
 FUNCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+)\s+<([^>]+)>:$")
@@ -1772,14 +2757,20 @@ def source_locations(addr2line: str, elf: Path, calls: Iterable[CallSite]) -> di
     if not addresses:
         return {}
     locations: dict[int, str] = {}
+    resolved_tool, environment, startup_directory = sh_tool_launch(addr2line)
+    resolved_elf = elf.resolve()
     for batch in address_batches(addresses):
-        command = [addr2line, "-e", str(elf), "-f", "-C", *[f"0x{address:X}" for address in batch]]
+        command = [
+            resolved_tool, "-e", str(resolved_elf), "-f", "-C",
+            *[f"0x{address:X}" for address in batch],
+        ]
         result = subprocess.run(
             command,
             check=True,
             capture_output=True,
             text=True,
-            env=sh_tool_environment() if Path(addr2line).is_absolute() else None,
+            env=environment,
+            cwd=startup_directory,
         )
         lines = result.stdout.splitlines()
         for index, address in enumerate(batch):
@@ -1788,22 +2779,101 @@ def source_locations(addr2line: str, elf: Path, calls: Iterable[CallSite]) -> di
     return locations
 
 
-def sh_tool_environment() -> dict[str, str]:
+MSYS_RUNTIME_DLLS = ("msys-2.0.dll", "msys-gcc_s-seh-1.dll")
+
+
+def _resolved_executable(executable: str | Path) -> Path:
+    path = Path(executable)
+    if path.is_absolute():
+        return path
+    found = shutil.which(str(executable))
+    return Path(found) if found is not None else path
+
+
+def _msys_runtime_directory(executable: str | Path) -> Path | None:
+    tool = _resolved_executable(executable)
+    if not tool.is_file() or b"msys-2.0.dll" not in tool.read_bytes().lower():
+        return None
+    candidates = [
+        tool.parent,
+        Path(r"C:\msys64\usr\bin"),
+        *(Path(item) for item in os.environ.get("PATH", "").split(os.pathsep) if item),
+    ]
+    searched: list[Path] = []
+    for candidate in candidates:
+        if candidate in searched:
+            continue
+        searched.append(candidate)
+        if all((candidate / dependency).is_file() for dependency in MSYS_RUNTIME_DLLS):
+            return candidate
+    required = ", ".join(MSYS_RUNTIME_DLLS)
+    locations = ", ".join(str(path) for path in searched)
+    raise ValueError(
+        f"MSYS runtime for {tool} is incomplete; required DLLs not found "
+        f"together: {required}; searched: {locations}"
+    )
+
+
+def sh_tool_launch(
+    executable: str | Path,
+) -> tuple[str, dict[str, str] | None, Path | None]:
+    tool = _resolved_executable(executable)
+    runtime = _msys_runtime_directory(executable)
+    if runtime is None:
+        return str(executable), None, None
     environment = os.environ.copy()
-    prefix = r"C:\msys64\usr\bin"
-    environment["PATH"] = prefix + os.pathsep + environment.get("PATH", "")
-    return environment
+    environment["PATH"] = str(runtime) + os.pathsep + environment.get("PATH", "")
+    return str(tool), environment, runtime
+
+
+def sh_tool_environment(executable: str | Path) -> dict[str, str] | None:
+    return sh_tool_launch(executable)[1]
 
 
 def run_command(command: list[str]) -> str:
+    executable, environment, startup_directory = sh_tool_launch(command[0])
     return subprocess.run(
-        command, check=True, capture_output=True, text=True,
-        env=sh_tool_environment() if Path(command[0]).is_absolute() else None,
+        [executable, *command[1:]], check=True, capture_output=True, text=True,
+        env=environment, cwd=startup_directory,
     ).stdout
 
 
 def file_digest(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
+
+
+def abstract_value_json(value: AbstractValue | None) -> dict[str, Any]:
+    """Return a bounded, deterministic diagnostic representation."""
+    if value is None:
+        return {"kind": "NOT_APPLICABLE"}
+    if value is UNKNOWN:
+        return {"kind": "UNKNOWN"}
+    if isinstance(value, Interval):
+        return {
+            "kind": "Interval", "value_kind": value.kind,
+            "lo": value.lo, "hi": value.hi,
+        }
+    if isinstance(value, ComparisonPredicate):
+        return {
+            "kind": "ComparisonPredicate",
+            "register": value.register,
+            "true_range": list(value.true_range),
+            "false_range": list(value.false_range),
+        }
+    values = sorted(
+        value.values,
+        key=lambda item: (
+            0, int(item), "" if isinstance(item, int) else ""
+        ) if isinstance(item, int) else (1, item.address, item.name),
+    )
+    rows = [
+        item if isinstance(item, int) else {"name": item.name, "address": item.address}
+        for item in values[:16]
+    ]
+    return {
+        "kind": "ConstSet", "value_kind": value.kind, "values": rows,
+        "values_truncated": len(values) > 16,
+    }
 
 
 def _legacy_observation_facts(
@@ -1924,13 +2994,29 @@ def make_observation(
         return "owner", None, address - owner_by_name[caller].start
 
     unresolved_rows = [
-        {
+        ({
             "caller": x.caller,
             "caller_region": site(x.caller, x.address)[0],
             "caller_island": site(x.caller, x.address)[1],
             "caller_offset": site(x.caller, x.address)[2],
+            "instruction_address": x.address,
             "mnemonic": x.mnemonic,
-        }
+            "operand_register": x.operand_register,
+            "final_abstract_value": abstract_value_json(x.final_value),
+            "contributing_seeds": [
+                {"address": address, "kind": kind}
+                for address, kind in x.contributing_seeds
+            ],
+            "contributing_seeds_truncated": x.contributing_seeds_truncated,
+            "predecessor_addresses": list(x.predecessor_addresses),
+            "predecessor_addresses_truncated": x.predecessor_addresses_truncated,
+            "state_changed_at_entry_covered_join": (
+                x.state_changed_at_entry_covered_join
+            ),
+        } | ({
+            "stack_source_offsets": list(x.stack_source_offsets),
+            "stack_store_addresses": list(x.stack_store_addresses),
+        } if x.stack_source_offsets or x.stack_store_addresses else {}))
         for x in unresolved_transfers if x.caller in closure
     ]
     effect_rows = [
@@ -2062,10 +3148,13 @@ def main(argv: list[str] | None = None) -> int:
             verify_audit_contract_integrity(audit_contract_text, audit_contract)
         if not args.elf.is_file():
             raise ValueError("ELF is not readable")
-        disassembly = run_command([args.objdump, "-d", str(args.elf)])
-        sections_text = run_command([args.readelf, "-SW", str(args.elf)])
-        symbols_text = run_command([args.readelf, "-sW", str(args.elf)])
-        lines_text = run_command([args.readelf, "--debug-dump=decodedline", str(args.elf)])
+        elf_path = args.elf.resolve()
+        disassembly = run_command([args.objdump, "-d", str(elf_path)])
+        sections_text = run_command([args.readelf, "-SW", str(elf_path)])
+        symbols_text = run_command([args.readelf, "-sW", str(elf_path)])
+        lines_text = run_command([
+            args.readelf, "--debug-dump=decodedline", str(elf_path)
+        ])
         sections = parse_readelf_sections(sections_text)
         symbols = parse_readelf_symbols(symbols_text, sections)
         owners = resolve_function_owners(symbols, sections)
@@ -2088,34 +3177,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
             parsed_instructions = parse_instructions(disassembly)
             instruction_memory = build_instruction_memory(parsed_instructions)
-            entry_analysis = analyze_code_only(
+            analysis = analyze_code_only(
                 parsed_instructions,
                 owners,
-                {},
+                decoded_seeds,
                 candidate_names,
                 instruction_memory,
                 owner_address_map=owner_address_map,
                 local_islands=local_islands,
             )
-            analysis = entry_analysis
-            owner_by_name = {owner.name: owner for owner in owners}
-            covered_addresses = set(analysis.code_addresses)
-            for name, address in uncovered_decoded_line_seeds(
-                decoded_seeds, candidate_names, covered_addresses
-            ):
-                extra = analyze_code_only(
-                    parsed_instructions,
-                    (owner_by_name[name],),
-                    {name: {address}},
-                    {name},
-                    instruction_memory,
-                    include_owner_entry=False,
-                    owner_address_map=owner_address_map,
-                    stop_at_addresses=covered_addresses,
-                    local_islands=local_islands,
-                )
-                covered_addresses.update(extra.code_addresses)
-                analysis = merge_code_analyses(analysis, extra)
             direct_calls = analysis.calls
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]
             graph = defaultdict(set)
@@ -2127,7 +3197,7 @@ def main(argv: list[str] | None = None) -> int:
             graph, audit_oracle.roots, audit_oracle.indirect_edges
         )
         locations = {} if args.audit_observation_only else source_locations(
-            args.addr2line, args.elf, calls
+            args.addr2line, elf_path, calls
         )
         if not args.audit_observation_only:
             print_census(calls, route_functions, locations)

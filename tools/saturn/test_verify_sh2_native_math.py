@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -20,7 +21,6 @@ from verify_sh2_native_math import (
     enumerate_computed_targets,
     _write_effect,
     join_value,
-    merge_code_analyses,
     parse_decoded_lines,
     parse_instructions,
     parse_readelf_sections,
@@ -28,7 +28,6 @@ from verify_sh2_native_math import (
     refine_value,
     resolve_function_owners,
     resolve_local_islands,
-    uncovered_decoded_line_seeds,
     widen_interval,
     CallSite,
     address_batches,
@@ -37,10 +36,12 @@ from verify_sh2_native_math import (
     baseline_failures,
     census_rows,
     is_native_math_helper,
+    make_observation,
     parse_audit_contract,
     parse_baseline,
     parse_route_oracle,
     route_reachable_functions,
+    run_command,
     scan_call_graph,
     scan_disassembly,
     source_locations,
@@ -98,19 +99,44 @@ class NativeMathCensusTests(unittest.TestCase):
 
     def test_absolute_addr2line_gets_sh_tool_environment_without_parent_mutation(self) -> None:
         parent_path = os.environ.get("PATH", "")
-        with patch("verify_sh2_native_math.subprocess.run") as run:
-            run.return_value.stdout = "_root\nsource.c:1\n"
-            locations = source_locations(
-                "D:/toolchain/bin/sh-elf-addr2line.exe",
-                Path("fixture.elf"),
-                [CallSite("_root", 0x6001000, "___addsf3")],
-            )
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = Path(directory)
+            executable = runtime / "sh-elf-addr2line.exe"
+            executable.write_bytes(b"MZ\0msys-2.0.dll\0")
+            (runtime / "msys-2.0.dll").write_bytes(b"runtime")
+            (runtime / "msys-gcc_s-seh-1.dll").write_bytes(b"runtime")
+            with patch("verify_sh2_native_math.subprocess.run") as run:
+                run.return_value.stdout = "_root\nsource.c:1\n"
+                locations = source_locations(
+                    str(executable),
+                    Path("fixture.elf"),
+                    [CallSite("_root", 0x6001000, "___addsf3")],
+                )
         self.assertEqual(locations, {0x6001000: "source.c:1"})
         child_environment = run.call_args.kwargs["env"]
         self.assertTrue(child_environment["PATH"].startswith(
-            r"C:\msys64\usr\bin" + os.pathsep
+            str(runtime) + os.pathsep
         ))
+        self.assertEqual(run.call_args.kwargs.get("cwd"), runtime)
         self.assertEqual(os.environ.get("PATH", ""), parent_path)
+
+    def test_msys_tool_missing_runtime_fails_before_subprocess_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "sh-elf-readelf.exe"
+            executable.write_bytes(b"MZ\0msys-2.0.dll\0")
+
+            def only_executable_exists(path: Path) -> bool:
+                return path == executable
+
+            with patch.object(Path, "is_file", only_executable_exists), patch(
+                "verify_sh2_native_math.subprocess.run"
+            ) as run:
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"MSYS runtime.*msys-2\.0\.dll.*msys-gcc_s-seh-1\.dll",
+                ):
+                    run_command([str(executable), "--version"])
+            run.assert_not_called()
 
     def test_attributes_literal_pool_jsr_to_containing_function(self) -> None:
         calls = scan_disassembly(ROUTE_DISASSEMBLY)
@@ -388,8 +414,10 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
 """
         lines = "x.c 1 0x06001000\nx.c 9 0x06001008\n"
         result = self.analyze(dis, lines)
+        self.assertFalse(any(x.address == 0x6001008 for x in result.calls))
         self.assertTrue(any(
-            x.address == 0x6001008 and x.helper == "<indirect:r8>" for x in result.calls
+            x.address == 0x6001008 and x.mnemonic == "jsr"
+            for x in result.unresolved_transfers
         ))
 
     def test_join_domain_and_typed_interval_rules(self) -> None:
@@ -448,14 +476,443 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001010: 00 0b rts
  6001012: 00 09 nop
 06001020 <_child>:
+ 6001020: 89 02 bt 6001028 <_child+0x8>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: e0 00 mov #0,r0
+ 6001028: 00 0b rts
+ 600102a: e0 00 mov #0,r0
+"""
+        result = self.analyze(dis)
+        self.assertEqual([x.address for x in result.calls],
+                         [0x6001004, 0x600100C])
+        self.assertTrue(any(
+            x.address == 0x6001008 and x.mnemonic == "jsr"
+            for x in result.unresolved_transfers
+        ))
+
+    def test_joined_symbol_jsr_emits_deterministic_deduplicated_may_calls(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 20 08 tst r0,r0
+ 6001002: 89 02 bt 600100a <_root+0xa>
+ 6001004: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001006: a0 08 bra 600101a <_root+0x1a>
+ 6001008: 00 09 nop
+ 600100a: 22 08 tst r2,r2
+ 600100c: 89 02 bt 6001014 <_root+0x14>
+ 600100e: d1 07 mov.l 6001030 <_zero>,r1 ! 06001030 <_zero>
+ 6001010: a0 03 bra 600101a <_root+0x1a>
+ 6001012: 00 09 nop
+ 6001014: d1 06 mov.l 6001030 <_zero_alias>,r1 ! 06001030 <_zero_alias>
+ 6001016: a0 00 bra 600101a <_root+0x1a>
+ 6001018: 00 09 nop
+ 600101a: 41 0b jsr @r1
+ 600101c: 00 09 nop
+ 600101e: 00 0b rts
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 00 0b rts
+ 6001032: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        profile: dict[str, Counter[str]] = {}
+        result = analyze_code_only(
+            parse_instructions(dis), owners, profile_by_owner=profile
+        )
+        self.assertEqual(
+            [call for call in result.calls if call.caller == "_root"],
+            [
+                CallSite("_root", 0x600101A, "_child"),
+                CallSite("_root", 0x600101A, "_zero_alias"),
+            ],
+        )
+        self.assertEqual(
+            [(fact.callee, fact.callee_offset) for fact in result.direct_calls
+             if fact.caller == "_root"],
+            [("_child", 0), ("_zero_alias", 0)],
+        )
+        self.assertGreater(profile["_root"]["call_transfer_evaluations"], 0)
+        self.assertEqual(
+            profile["_root"]["abi_continuations_scheduled"],
+            profile["_root"]["call_transfer_evaluations"],
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_resolved_straight_line_leaf_preserves_unwritten_caller_register(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d7 07 mov.l 6001020 <_child>,r7 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 47 0b jsr @r7
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 44 21 shar r4
+ 6001032: 00 0b rts
+ 6001034: 44 21 shar r4
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_resolved_straight_line_leaf_still_clobbers_written_register(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d7 07 mov.l 6001020 <_child>,r7 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 47 0b jsr @r7
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 67 43 mov r4,r7
+ 6001032: 00 0b rts
+ 6001034: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertNotIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001008, "jsr")],
+        )
+
+    def test_resolved_conditional_leaf_preserves_unwritten_caller_register(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d3 07 mov.l 6001020 <_child>,r3 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 43 0b jsr @r3
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: 24 48 tst r4,r4
+ 6001032: 89 02 bt 600103a <_leaf+0xa>
+ 6001034: 60 43 mov r4,r0
+ 6001036: 00 0b rts
+ 6001038: 00 09 nop
+ 600103a: 60 53 mov r5,r0
+ 600103c: 00 0b rts
+ 600103e: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_resolved_bounded_braf_leaf_preserves_unwritten_caller_register(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d3 07 mov.l 6001020 <_child>,r3 ! 06001020 <_child>
+ 6001002: d2 0b mov.l 6001030 <_leaf>,r2 ! 06001030 <_leaf>
+ 6001004: 42 0b jsr @r2
+ 6001006: 00 09 nop
+ 6001008: 43 0b jsr @r3
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_leaf>:
+ 6001030: c9 01 and #1,r0
+ 6001032: 40 08 shll2 r0
+ 6001034: 00 23 braf r0
+ 6001036: 60 43 mov r4,r0
+ 6001038: 00 0b rts
+ 600103a: 00 09 nop
+ 600103c: 00 0b rts
+ 600103e: 40 01 shlr r0
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_discovery_unknown_does_not_invalidate_entry_jsr_may_calls(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 41 0b jsr @r1
+ 600100a: 00 09 nop
+ 600100c: 00 0b rts
+ 600100e: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001006, 0x6001008}},
+            {"_root"},
+        )
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_mixed_symbol_numeric_jsr_join_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 20 08 tst r0,r0
+ 6001002: 89 02 bt 600100a <_root+0xa>
+ 6001004: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001006: a0 01 bra 600100c <_root+0xc>
+ 6001008: 00 09 nop
+ 600100a: e1 01 mov #1,r1
+ 600100c: 41 0b jsr @r1
+ 600100e: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
  6001020: 00 0b rts
  6001022: 00 09 nop
 """
         result = self.analyze(dis)
-        self.assertEqual([x.address for x in result.calls],
-                         [0x6001004, 0x6001008, 0x600100C])
-        self.assertEqual(next(x for x in result.calls if x.address == 0x6001008).helper,
-                         "<indirect:r0>")
+        self.assertFalse(any(call.caller == "_root" for call in result.calls))
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x600100C, "jsr")],
+        )
+
+    def test_unowned_symbol_jsr_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_external>,r1 ! 06002000 <_external>
+ 6001002: 41 0b jsr @r1
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001002, "jsr")],
+        )
+
+    def test_stack_spill_in_call_delay_slot_survives_abi_clobber(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: d0 0e mov.l 6001040 <___mulsf3>,r0 ! 06001040 <___mulsf3>
+ 6001006: 40 0b jsr @r0
+ 6001008: 2f 82 mov.l r8,@r15
+ 600100a: 61 f2 mov.l @r15,r1
+ 600100c: 41 0b jsr @r1
+ 600100e: 7f 04 add #4,r15
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001006, "___mulsf3"), result.calls)
+        self.assertIn(CallSite("_root", 0x600100C, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_stack_push_pop_preserves_known_symbol_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001002: 2f 16 mov.l r1,@-r15
+ 6001004: d0 0e mov.l 6001040 <___mulsf3>,r0 ! 06001040 <___mulsf3>
+ 6001006: 40 0b jsr @r0
+ 6001008: 00 09 nop
+ 600100a: 61 f6 mov.l @r15+,r1
+ 600100c: 41 0b jsr @r1
+ 600100e: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x600100C, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_unknown_parameter_stack_save_reload_stays_unknown(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 2f 46 mov.l r4,@-r15
+ 6001002: 61 f6 mov.l @r15+,r1
+ 6001004: 41 0b jsr @r1
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001004, "jsr")],
+        )
+        transfer = result.unresolved_transfers[0]
+        self.assertEqual(transfer.stack_source_offsets, (-4,))
+        self.assertEqual(transfer.stack_store_addresses, (0x6001000,))
+
+    def test_conflicting_stack_targets_join_to_unknown(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: 20 08 tst r0,r0
+ 6001004: 89 03 bt 600100e <_root+0xe>
+ 6001006: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001008: a0 03 bra 6001012 <_root+0x12>
+ 600100a: 2f 12 mov.l r1,@r15
+ 600100e: d1 07 mov.l 6001030 <_zero_alias>,r1 ! 06001030 <_zero_alias>
+ 6001010: 2f 12 mov.l r1,@r15
+ 6001012: 61 f2 mov.l @r15,r1
+ 6001014: 41 0b jsr @r1
+ 6001016: 00 09 nop
+ 6001018: 00 0b rts
+ 600101a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 00 0b rts
+ 6001032: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x6001014 for call in result.calls))
+        self.assertTrue(any(item.address == 0x6001014 for item in result.unresolved_transfers))
+
+    def test_unknown_store_alias_invalidates_known_stack_slots(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 2f 82 mov.l r8,@r15
+ 6001006: 61 03 mov r0,r1
+ 6001008: 21 22 mov.l r2,@r1
+ 600100a: 61 f2 mov.l @r15,r1
+ 600100c: 41 0b jsr @r1
+ 600100e: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertFalse(any(call.address == 0x600100C for call in result.calls))
+        self.assertTrue(any(item.address == 0x600100C for item in result.unresolved_transfers))
+
+    def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f0 add #-16,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 1f 81 mov.l r8,@(4,r15)
+ 6001006: ee 00 mov #0,r14
+ 6001008: 3e fc add r15,r14
+ 600100a: 2e 22 mov.l r2,@r14
+ 600100c: 7e 04 add #4,r14
+ 600100e: 61 e2 mov.l @r14,r1
+ 6001010: 41 0b jsr @r1
+ 6001012: 00 09 nop
+ 6001014: 7f 10 add #16,r15
+ 6001016: 00 0b rts
+ 6001018: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001010, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_derived_stack_alias_overwrite_does_not_preserve_stale_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f0 add #-16,r15
+ 6001002: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001004: 1f 81 mov.l r8,@(4,r15)
+ 6001006: ee 04 mov #4,r14
+ 6001008: 3e fc add r15,r14
+ 600100a: 2e 22 mov.l r2,@r14
+ 600100c: 61 e2 mov.l @r14,r1
+ 600100e: 41 0b jsr @r1
+ 6001010: 00 09 nop
+ 6001012: 7f 10 add #16,r15
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertNotIn(CallSite("_root", 0x600100E, "_child"), result.calls)
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x600100E, "jsr")],
+        )
+
+    def test_div0s_sequence_has_known_semantics_without_symbol_creation(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d0 07 mov.l 6001020 <_child>,r0 ! 06001020 <_child>
+ 6001002: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001004: d2 0e mov.l 6001040 <___mulsf3>,r2 ! 06001040 <___mulsf3>
+ 6001006: d3 04 mov.l 6001030 <_zero_alias>,r3 ! 06001030 <_zero_alias>
+ 6001008: 21 27 div0s r2,r1
+ 600100a: 33 3a subc r3,r3
+ 600100c: 23 07 div0s r0,r3
+ 600100e: 41 24 rotcl r1
+ 6001010: 33 04 div1 r0,r3
+ 6001012: 42 0b jsr @r2
+ 6001014: 00 09 nop
+ 6001016: 43 0b jsr @r3
+ 6001018: 00 09 nop
+ 600101a: 00 0b rts
+ 600101c: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_zero_alias>:
+ 6001030: 00 0b rts
+ 6001032: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.unresolved_effects, [])
+        self.assertIn(CallSite("_root", 0x6001012, "___mulsf3"), result.calls)
+        self.assertFalse(any(call.address == 0x6001016 for call in result.calls))
+        self.assertTrue(any(item.address == 0x6001016 for item in result.unresolved_transfers))
 
     def test_unparseable_register_effect_fails_closed(self) -> None:
         dis = """
@@ -465,6 +922,23 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001004: 00 09 nop
 """
         self.assertTrue(self.analyze(dis).unresolved_effects)
+
+    def test_unknown_simple_destination_effect_kills_and_fails_closed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: e2 07 mov #7,r2
+ 6001002: 12 34 mystery r1,r2
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(
+            [
+                (effect.function, effect.address, effect.mnemonic, effect.operands)
+                for effect in result.unresolved_effects
+            ],
+            [("_root", 0x6001002, "mystery", "r1,r2")],
+        )
 
     def test_interval_widening_converges_for_both_signednesses(self) -> None:
         for kind, minimum, maximum in (
@@ -514,6 +988,411 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         analyze_code_only(instructions, owners, {"_root": {0x6001002}}, {"_root"}, memory)
         self.assertEqual(instructions.values_calls, 1)
 
+    def test_all_owner_seeds_share_one_state_map_and_build_global_indexes_once(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: e1 01 mov #1,r1
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 71 01 add #1,r1
+ 600100a: 00 0b rts
+ 600100c: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        instructions = parse_instructions(dis)
+        profile: dict[str, Counter[str]] = {}
+        with patch(
+            "verify_sh2_native_math.build_owner_address_map",
+            wraps=build_owner_address_map,
+        ) as owner_map_builder, patch(
+            "verify_sh2_native_math.build_instruction_memory",
+            wraps=build_instruction_memory,
+        ) as memory_builder:
+            result = analyze_code_only(
+                instructions,
+                owners,
+                {"_root": {0x6001006}},
+                {"_root"},
+                profile_by_owner=profile,
+            )
+        self.assertEqual(owner_map_builder.call_count, 1)
+        self.assertEqual(memory_builder.call_count, 1)
+        self.assertEqual(result.unresolved_transfers, [])
+        self.assertLess(profile["_root"]["worklist_states"], 20)
+
+    def test_discovery_seed_does_not_poison_entry_reachable_indirect_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 41 2b jmp @r1
+ 600100a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001006, 0x6001008}},
+            {"_root"},
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+        self.assertIn(CallSite("_root", 0x6001008, "_child"), result.calls)
+        observation = make_observation(
+            mode="code-only",
+            producer_commit="0" * 40,
+            parser_path=Path(__file__).with_name("verify_sh2_native_math.py"),
+            elf=Path(__file__),
+            route_oracle_path=Path(__file__).with_name(
+                "sh2_native_math_sim_route_oracle_v1.txt"
+            ),
+            contract_path=Path(__file__).with_name(
+                "sh2_native_math_sim_audit_contract_v2.txt"
+            ),
+            contract=parse_audit_contract(
+                "AUDIT_CONTRACT_VERSION 2\nEXPECTED_ROOT _root\nEXPECTED_TOTAL 0\n"
+                "FORBIDDEN_CALLER _forbidden\n"
+            ),
+            root="_root",
+            closure={"_root"},
+            calls=result.calls,
+            owners=owners,
+            direct_facts=result.direct_calls,
+            unresolved_transfers=result.unresolved_transfers,
+        )
+        self.assertEqual(observation["unresolved_indirect_transfers"], [])
+
+    def test_entry_covered_tail_jmp_decoded_row_is_not_seeded(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001002: 41 2b jmp @r1
+ 6001004: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001002}},
+            {"_root"},
+        )
+        self.assertIn(CallSite("_root", 0x6001002, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_syntactic_delay_slot_without_program_state_still_seeds_tail_jmp(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 06 bra 6001010 <_root+0x10>
+ 6001002: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001004: 41 2b jmp @r1
+ 6001006: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: d2 07 mov.l 6001040 <___mulsf3>,r2 ! 06001040 <___mulsf3>
+ 6001022: 42 0b jsr @r2
+ 6001024: 00 09 nop
+ 6001026: 00 0b rts
+ 6001028: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001002, 0x6001004}},
+            {"_root", "_child"},
+        )
+        self.assertIn(0x6001002, result.code_addresses)
+        self.assertIn(CallSite("_root", 0x6001004, "_child"), result.calls)
+        graph: dict[str, set[str]] = {}
+        for call in result.calls:
+            if not is_native_math_helper(call.helper):
+                graph.setdefault(call.caller, set()).add(call.helper)
+        closure = route_reachable_functions(graph, {"_root"})
+        self.assertIn("_child", closure)
+        self.assertIn(
+            CallSite("_child", 0x6001022, "___mulsf3"),
+            [call for call in result.calls if call.caller in closure],
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_first_uncovered_seed_covers_and_suppresses_later_decoded_seed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 41 2b jmp @r1
+ 600100a: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001004, 0x6001006}},
+            {"_root"},
+        )
+        self.assertEqual(len(result.unresolved_transfers), 1)
+        transfer = result.unresolved_transfers[0]
+        self.assertEqual(transfer.address, 0x6001008)
+        self.assertEqual(
+            transfer.contributing_seeds,
+            ((0x6001004, "decodedline"),),
+        )
+        self.assertNotIn((0x6001006, "decodedline"), transfer.contributing_seeds)
+
+    def test_phase_two_new_computed_edge_restarts_then_converges(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001010 <_root+0x10>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 41 2b jmp @r1
+ 600100a: 00 09 nop
+ 6001010: d2 03 mov.l 6001020 <_child>,r2 ! 06001020 <_child>
+ 6001012: 42 2b jmp @r2
+ 6001014: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        profile: dict[str, Counter[str]] = {}
+        progress: list[dict[str, object]] = []
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001006, 0x6001010}},
+            {"_root"},
+            profile_by_owner=profile,
+            progress_callback=progress.append,
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+        self.assertIn(CallSite("_root", 0x6001012, "_child"), result.calls)
+        self.assertEqual(profile["_root"]["phase2_discovery_restarts"], 1)
+        self.assertEqual(
+            [event["phase"] for event in progress if event["event"] == "phase_start"],
+            ["discovery", "acceptance", "discovery", "acceptance"],
+        )
+        component_events = [
+            event for event in progress if event["event"] == "components_complete"
+        ]
+        self.assertEqual(
+            [event["acceptance_seeds"] for event in component_events], [2, 1]
+        )
+        self.assertTrue(all(int(event["weak_components"]) >= 1 for event in component_events))
+        restart = next(event for event in progress if event["event"] == "rediscovery_restart")
+        self.assertEqual(restart["owners"], ["_root"])
+        owner_progress = [
+            event for event in progress
+            if event["event"] == "owner_complete" and event["owner"] == "_root"
+        ]
+        self.assertTrue(all(int(event["states"]) > 0 for event in owner_progress))
+        self.assertTrue(all("edges" in event and "elapsed_ms" in event for event in progress))
+
+    def test_phase_two_new_computed_edge_honors_restart_cap(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001010 <_root+0x10>
+ 6001002: a0 01 bra 6001008 <_root+0x8>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: 41 2b jmp @r1
+ 600100a: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        with self.assertRaisesRegex(ValueError, "discovery restart cap"):
+            analyze_code_only(
+                parse_instructions(dis),
+                owners,
+                {"_root": {0x6001006, 0x6001010}},
+                {"_root"},
+                max_discovery_restarts=0,
+            )
+
+    def test_discovery_coalesces_many_equivalent_seed_states(self) -> None:
+        root_start = 0x6001000
+        child_start = 0x6001400
+        nop_addresses = list(range(root_start + 2, root_start + 258, 2))
+        call_address = nop_addresses[-1] + 2
+        rows = [
+            "06001000 <_root>:",
+            " 6001000: d8 07 mov.l 6001020 <_root+0x20>,r8 ! 06001400 <_child>",
+            *(f" {address:x}: 00 09 nop" for address in nop_addresses),
+            f" {call_address:x}: 48 0b jsr @r8",
+            f" {call_address + 2:x}: 00 09 nop",
+            f" {call_address + 4:x}: 00 0b rts",
+            f" {call_address + 6:x}: 00 09 nop",
+            "06001400 <_child>:",
+            " 6001400: 00 0b rts",
+            " 6001402: 00 09 nop",
+        ]
+        instructions = parse_instructions("\n".join(rows))
+        owners = (
+            FunctionOwner("_root", root_start, child_start, 1),
+            FunctionOwner("_child", child_start, child_start + 16, 1),
+        )
+        progress: list[dict[str, object]] = []
+        result = analyze_code_only(
+            instructions,
+            owners,
+            {"_root": set(nop_addresses)},
+            {"_root"},
+            progress_callback=progress.append,
+        )
+        discovery = next(
+            event for event in progress
+            if event["event"] == "phase_complete" and event["phase"] == "discovery"
+        )
+        root_instruction_count = len(nop_addresses) + 5
+        self.assertLessEqual(int(discovery["states"]), root_instruction_count * 2)
+        self.assertIn(CallSite("_root", call_address, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_decoded_only_block_that_merges_into_entry_cfg_is_seeded(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: a0 06 bra 6001010 <_root+0x10>
+ 6001002: 00 09 nop
+ 6001004: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001006: 41 0b jsr @r1
+ 6001008: 00 09 nop
+ 600100a: a0 01 bra 6001010 <_root+0x10>
+ 600100c: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001004}},
+            {"_root"},
+        )
+        self.assertIn(CallSite("_root", 0x6001006, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_infeasible_discovery_branch_does_not_suppress_decoded_block(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: e0 ff mov #-1,r0
+ 6001002: 40 11 cmp/pz r0
+ 6001004: 89 02 bt 600100c <_root+0xc>
+ 6001006: a0 04 bra 6001012 <_root+0x12>
+ 6001008: 00 09 nop
+ 600100a: 00 09 nop
+ 600100c: d1 04 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 600100e: 41 0b jsr @r1
+ 6001010: 00 09 nop
+ 6001012: 00 0b rts
+ 6001014: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001004, 0x600100C}},
+            {"_root"},
+        )
+        self.assertIn(CallSite("_root", 0x600100E, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_decoded_lane_contributes_target_at_entry_evaluated_join(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_default>,r1 ! 06001020 <_default>
+ 6001002: a0 05 bra 6001010 <_root+0x10>
+ 6001004: 00 09 nop
+ 6001008: d1 05 mov.l 6001030 <_child>,r1 ! 06001030 <_child>
+ 600100a: a0 01 bra 6001010 <_root+0x10>
+ 600100c: 00 09 nop
+ 6001010: 41 0b jsr @r1
+ 6001012: 00 09 nop
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06001020 <_default>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001030 <_child>:
+ 6001030: 00 0b rts
+ 6001032: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001008}},
+            {"_root"},
+        )
+        self.assertEqual(
+            [call for call in result.calls if call.address == 0x6001010],
+            [
+                CallSite("_root", 0x6001010, "_child"),
+                CallSite("_root", 0x6001010, "_zero_alias"),
+            ],
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_each_uncovered_decoded_arm_in_a_weak_component_is_seeded(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+ 6001004: a0 05 bra 6001012 <_root+0x12>
+ 6001006: 00 09 nop
+ 6001008: d1 05 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 600100a: 41 0b jsr @r1
+ 600100c: 00 09 nop
+ 600100e: a0 00 bra 6001012 <_root+0x12>
+ 6001010: 00 09 nop
+ 6001012: 00 0b rts
+ 6001014: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
+        result = analyze_code_only(
+            parse_instructions(dis),
+            owners,
+            {"_root": {0x6001004, 0x6001008}},
+            {"_root"},
+        )
+        self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
     def test_fixed_point_guard_is_applied_per_decoded_line_seed(self) -> None:
         dis = """
 06001000 <_root>:
@@ -532,19 +1411,6 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         )
         self.assertIn(0x6001000, result.code_addresses)
         self.assertIn(0x6001002, result.code_addresses)
-
-    def test_decoded_seed_suppression_uses_live_code_coverage(self) -> None:
-        entry_result_coverage = {0x6001000}
-        covered = set(entry_result_coverage)
-        seeds = uncovered_decoded_line_seeds(
-            {"_root": {0x6001002, 0x6001004}, "_child": {0x6001020}},
-            {"_root"},
-            covered,
-        )
-        self.assertEqual(next(seeds), ("_root", 0x6001002))
-        replacement_result_coverage = entry_result_coverage | {0x6001002, 0x6001004}
-        covered.update(replacement_result_coverage)
-        self.assertEqual(list(seeds), [])
 
     def test_repeated_seed_analyses_reuse_full_owner_map(self) -> None:
         dis = """
@@ -596,6 +1462,39 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         result = self.analyze(dis)
         self.assertEqual(result.unresolved_transfers, [])
         self.assertEqual(result.direct_calls[0].callee, "<indirect:_callback_slot*>")
+
+    def test_resolved_cross_owner_tail_jmp_is_a_closure_edge_and_direct_fact(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d1 07 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001002: 41 2b jmp @r1
+ 6001004: 00 09 nop
+06001020 <_child>:
+ 6001020: d2 07 mov.l 6001040 <___mulsf3>,r2 ! 06001040 <___mulsf3>
+ 6001022: 42 0b jsr @r2
+ 6001024: 00 09 nop
+ 6001026: 00 0b rts
+ 6001028: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        graph: dict[str, set[str]] = {}
+        for call in result.calls:
+            if not is_native_math_helper(call.helper):
+                graph.setdefault(call.caller, set()).add(call.helper)
+        closure = route_reachable_functions(graph, {"_root"})
+        self.assertIn(CallSite("_root", 0x6001002, "_child"), result.calls)
+        self.assertIn("_child", closure)
+        self.assertIn(
+            CallSite("_child", 0x6001022, "___mulsf3"),
+            [call for call in result.calls if call.caller in closure],
+        )
+        self.assertTrue(any(
+            fact.caller == "_root" and fact.callee == "_child"
+            for fact in result.direct_calls
+        ))
 
     def test_signed_numeric_movw_literal_resolves_braf(self) -> None:
         dis = """
@@ -799,6 +1698,54 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(0x600100C, result.code_addresses)
         self.assertNotIn(0x6001008, result.code_addresses)
 
+    def test_bf_mnemonic_reaches_decoded_arm_with_entry_defined_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d8 07 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 6001002: 20 08 tst r0,r0
+ 6001004: 8b 01 bf 600100a <_root+0xa>
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+ 600100a: 48 0b jsr @r8
+ 600100c: 00 09 nop
+ 600100e: 00 0b rts
+ 6001010: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis, "x.c 7 0x0600100a\n")
+        self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_overwriting_compared_register_invalidates_stale_predicate_only(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: e0 ff mov #-1,r0
+ 6001002: 40 11 cmp/pz r0
+ 6001004: d0 06 mov.l 6001020 <_child>,r0 ! 06001020 <_child>
+ 6001006: 8f 04 bf.s 6001012 <_root+0x12>
+ 6001008: 00 09 nop
+ 600100a: 40 0b jsr @r0
+ 600100c: 00 09 nop
+ 600100e: a0 03 bra 6001018 <_root+0x18>
+ 6001010: 00 09 nop
+ 6001012: 40 0b jsr @r0
+ 6001014: 00 09 nop
+ 6001016: 00 0b rts
+ 6001018: 00 0b rts
+ 600101a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(
+            [call.address for call in result.calls if call.caller == "_root"],
+            [0x600100A, 0x6001012],
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+
     def test_invented_slash_delayed_branch_spelling_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported delayed-branch spelling"):
             parse_instructions(" 6001000: 8f 02 bf/s 6001008 <_root+0x8>\n")
@@ -820,40 +1767,6 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         result = self.analyze(dis)
         self.assertIn(0x600100C, result.code_addresses)
         self.assertNotIn(0x6001010, result.code_addresses)
-
-    def test_disconnected_seed_stops_at_entry_covered_merge(self) -> None:
-        dis = """
-06001000 <_root>:
- 6001000: e2 03 mov #3,r2
- 6001002: 31 26 cmp/hi r2,r1
- 6001004: 89 0a bt 600101c <_root+0x1c>
- 6001006: c7 13 mova 6001030 <_root+0x30>,r0
- 6001008: 01 1e mov.b @(r0,r1),r1
- 600100a: 01 23 braf r1
- 600100c: 00 09 nop
- 6001010: 00 09 nop
- 6001014: 00 0b rts
- 6001016: 00 0b rts
- 6001018: 00 0b rts
- 600101a: 00 0b rts
- 600101c: 00 0b rts
- 6001030: 04 06 .word 0x0406
- 6001032: 08 0a .word 0x080a
-"""
-        sections = parse_readelf_sections(self.SECTIONS)
-        owners = resolve_function_owners(parse_readelf_symbols(self.SYMBOLS, sections), sections)
-        instructions = parse_instructions(dis)
-        entry = analyze_code_only(instructions, owners, {}, {"_root"})
-        extra = analyze_code_only(
-            instructions,
-            owners,
-            {"_root": {0x6001006}},
-            {"_root"},
-            include_owner_entry=False,
-            stop_at_addresses=entry.code_addresses,
-        )
-        merged = merge_code_analyses(entry, extra)
-        self.assertEqual(merged.unresolved_transfers, [])
 
     def test_local_notype_div0_island_preserves_eight_exact_bsr_sites(self) -> None:
         symbols = """
@@ -1034,6 +1947,30 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             parse_instructions(bad_dis), owners, local_islands=islands
         )
         self.assertTrue(bad.unresolved_transfers)
+
+    def test_unnamed_local_notype_symbol_is_not_an_island_candidate(self) -> None:
+        symbols = """
+   1: 06001000 32 FUNC GLOBAL DEFAULT 1 _root
+   2: 06001100 0 NOTYPE LOCAL DEFAULT 1
+   3: 06001120 16 FUNC GLOBAL DEFAULT 1 _child
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        parsed = parse_readelf_symbols(symbols, sections)
+        owners = resolve_function_owners(parsed, sections)
+        self.assertEqual(resolve_local_islands(parsed, sections, owners), ())
+
+    def test_different_local_notype_names_at_same_address_are_ambiguous(self) -> None:
+        symbols = """
+   1: 06001000 32 FUNC GLOBAL DEFAULT 1 _root
+   2: 06001100 0 NOTYPE LOCAL DEFAULT 1 island_a
+   3: 06001100 0 NOTYPE LOCAL DEFAULT 1 island_b
+   4: 06001120 16 FUNC GLOBAL DEFAULT 1 _child
+"""
+        sections = parse_readelf_sections(self.SECTIONS)
+        parsed = parse_readelf_symbols(symbols, sections)
+        owners = resolve_function_owners(parsed, sections)
+        with self.assertRaisesRegex(ValueError, "ambiguous local-label aliases"):
+            resolve_local_islands(parsed, sections, owners)
 
     def test_local_island_with_no_halfwords_after_owner_exclusion_is_rejected(self) -> None:
         symbols = """
