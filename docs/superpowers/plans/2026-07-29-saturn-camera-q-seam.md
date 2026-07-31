@@ -794,10 +794,16 @@ only to latch SQT1; it is not an additional SCC1 word.
     only its three exact bounded offsets without adding `div0` to the closure;
   - a helper or ordinary direct call reached inside an island is attributed
     to the originating canonical owner at an island-relative site;
-  - island `rts` returns to the originating call's post-delay fallthrough and
-    applies the ABI caller-clobber set exactly once;
-  - island-to-island cycles terminate under the origin/island/address/state
-    fixed-point key;
+  - the same island called from two distinct `bsr` PCs schedules both distinct
+    `PC+4` caller continuations, even when its body analysis is memoized;
+  - island A `bsr`-calling island B schedules A's own clobbered `PC+4`
+    continuation and independently analyzes B under the same canonical
+    origin;
+  - an A-to-B-to-A island cycle terminates after conservative entry-state
+    merge/widening without suppressing any syntactic caller continuation;
+  - every island call and `rts` delay slot executes exactly once, and `rts`
+    terminates its island path without leaking callee state into either of two
+    callers;
   - data, GLOBAL/WEAK NOTYPE, OBJECT/TLS/SECTION/FILE, undefined/absolute,
     empty-name, ambiguous-alias, overlapping-range, and unrelated-owner
     candidates are rejected; a `.L*` candidate is admitted only when objdump
@@ -813,8 +819,9 @@ only to latch SQT1; it is not an additional SCC1 word.
     `UNKNOWN` and cannot inherit a symbol loaded on an entry path;
   - merging a known symbol with `UNKNOWN` or a different symbol produces
     `UNKNOWN`, so a stale call target cannot survive a join;
-  - `jsr`, `bsr`, and `bsrf` kill `r0-r7`, `pr`, `mach`, and `macl` after
-    their delay slots while preserving unwritten `r8-r15`;
+  - `jsr`, `bsr`, and `bsrf` schedule their `PC+4` continuation after the
+    delay slot with `r0-r7`, `mach`, and `macl` killed while preserving
+    unwritten `r8-r15`; `PR=PC+4` is architectural, not a lattice value;
   - a recognized but otherwise unmodeled register-writing instruction kills
     its destination;
   - an unparseable register effect produces `unresolved_effect` and fails;
@@ -903,9 +910,12 @@ only to latch SQT1; it is not an additional SCC1 word.
   only successors proved from that entry under these same CFG rules promote
   island halfwords to instructions. Never linearly scan its bounded range.
   Every function entry and non-entry line seed starts with all general
-  registers, `pr`, `mach`, `macl`, and fixed `r15` spill slots `UNKNOWN`.
+  registers, `mach`, `macl`, and fixed `r15` spill slots `UNKNOWN`. `PR` is
+  not a lattice value; delayed-call continuations are derived syntactically
+  from each call PC.
 
-  The finite abstract domain for each register and fixed spill slot is:
+  The finite abstract domain for each general register, `mach`, `macl`, and
+  fixed spill slot is:
 
   - `UNREACHED` bottom;
   - `UNKNOWN` top;
@@ -935,10 +945,12 @@ only to latch SQT1; it is not an additional SCC1 word.
   spill/reloads propagate source facts. Every other recognized
   register-writing instruction kills its destination. An unparseable
   destination or unknown register effect emits `unresolved_effect` and fails
-  an audited closure. `jsr`, `bsr`, and `bsrf` resolve their target from the
-  pre-delay state, execute the one delay slot, then kill the SH ABI
-  caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before their return
-  successor; unwritten `r8-r15` survive.
+  an audited closure. For `jsr`, `bsr`, and `bsrf` at `PC`, resolve the target
+  from the pre-delay state, execute the one delay slot exactly once to produce
+  one post-delay state, and note the architectural `PR=PC+4` without adding
+  `PR` to the lattice. Schedule the syntactic `PC+4` caller continuation from
+  that state with `r0-r7`, `mach`, and `macl` set to `UNKNOWN`; unwritten
+  `r8-r15` survive.
 
   Model only affine constant operations over compatible integer sets and
   typed intervals. Unsupported arithmetic kills its destination to
@@ -958,19 +970,29 @@ only to latch SQT1; it is not an additional SCC1 word.
   pre-slot state, execute exactly one slot, and propagate the post-slot state
   to its target/fallthrough. Map a reached direct target address to the
   containing canonical function and retain its nonzero offset. A `bsr` to an
-  admitted island is an intra-owner implementation transfer, not a new
-  closure edge: analyze from the exact island target with the post-delay,
-  pre-caller-clobber state, attribute
+  admitted island is a summary-style intra-owner implementation transfer, not
+  a new closure edge. The caller continuation was already scheduled at that
+  call's `PC+4` with return clobbers. Independently enqueue the exact island
+  target with the post-delay callee-entry state before clobbers, attribute
   helper/ordinary calls to the originating canonical owner using the
   island-relative site, and preserve that origin through transitive island
-  transfers. Key the work list by
-  `(origin owner, island, instruction address, abstract state)` so cycles
-  converge. Island `rts` ends the island path and resumes the originating
-  `bsr` caller's post-delay fallthrough after ABI caller clobbers. A direct
-  `bra` to an island carries the post-delay state and existing `pr`, replaces
-  ordinary fallthrough, and receives no synthetic return. Never require exact
-  function-entry targets, strip an offset before reachability is known, or
-  promote an island to an expected caller/callee node.
+  transfers.
+
+  If island A `bsr`-calls island B, first schedule A's own `PC+4`
+  continuation with clobbers, then independently enqueue B. Do this for every
+  call site before consulting the callee memo, so two callers of one memoized
+  island retain two continuations. Merge incoming callee-entry states at
+  `(origin owner, island, exact entry address)`; join/widen internal states at
+  `(origin owner, island, instruction address)`. These return-context-free
+  keys are sound because no island return state propagates. They terminate
+  A-to-B-to-A cycles under the finite domain.
+
+  Island `rts` executes its delay slot exactly once and terminates that island
+  path; it never resumes or mutates a caller continuation. A direct `bra` to
+  an island carries the post-delay state, replaces ordinary fallthrough, and
+  receives no synthetic return. Never require exact function-entry targets,
+  strip an offset before reachability is known, or promote an island to an
+  expected caller/callee node.
 
   Add `--readelf PATH`; it is mandatory for ordinary linked-ELF verification,
   observation, and v3 generation because those modes build a linked call
@@ -1167,10 +1189,11 @@ only to latch SQT1; it is not an additional SCC1 word.
   nine-element reviewed-file inventory matching those exact inputs. The
   reviewer inspects readelf/objdump from the retained hash-matched ELF and
   requires the exact island-review witness above, every island fact in the
-  proposal, helper attribution to its originating owner, and negative tests
-  forbidding broad NOTYPE admission or unrelated-function mapping. The review
-  record is durable evidence; an ignored reviewer note may supplement it but
-  cannot replace it.
+  proposal, helper attribution to its originating owner, the two-caller/
+  nested/cyclic summary-call tests with no `rts` state return, and negative
+  tests forbidding broad NOTYPE admission or unrelated-function mapping. The
+  review record is durable evidence; an ignored reviewer note may supplement
+  it but cannot replace it.
 
   Phase B begins only after that clean review. Read
   `corrected_helper_total` from the reviewed proposal. With `apply_patch`,

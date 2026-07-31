@@ -572,8 +572,9 @@ Function entries and filtered line rows first seed structural code discovery;
 only a seed or a proven successor can promote an objdump row to an
 instruction. Dataflow then runs on that discovered structure and may add a
 resolved indirect successor only when it remains inside a proven function
-range. Entry seeds use the defined ABI entry state; every general register
-and fixed `r15` spill slot starts `UNKNOWN`. Each non-entry line seed is a
+range. Entry seeds use the defined ABI entry state; every general register,
+`mach`, `macl`, and fixed `r15` spill slot starts `UNKNOWN`. Each non-entry
+line seed is a
 disconnected code-discovery seed with the same all-`UNKNOWN` state, never a
 copy of state from an earlier linear row. These disconnected seeds make C
 switch case blocks discoverable without inheriting stale literal-target
@@ -587,25 +588,40 @@ Successor construction distinguishes fallthrough, `bt`/`bf`,
 `braf`/`bsrf`, and executes the one SH delay-slot instruction before applying
 every delayed transfer. Direct call targets owned by a canonical function
 retain the exact nonzero function-relative target offset. A reachable `bsr`
-to a label island is instead an intra-owner implementation transfer: the
-island entry starts at the exact target with the post-delay,
-pre-caller-clobber state, keeps the originating canonical caller for
-attribution, and is not a closure caller/callee node. Calls from the island
-to ordinary functions or helpers are recorded under that originating owner
-with an island-relative site. An island-to-island transfer preserves the
-same origin transitively. The work-list key includes origin, island, address,
-and abstract state, so island cycles converge under the same join/widening
-fixed point. A direct `bra` to an island uses the same origin and post-delay
-state but replaces ordinary fallthrough; it is not given a synthetic return.
+to a label island is instead a summary-style intra-owner implementation
+transfer. For a call at `PC`, execute its delay slot exactly once;
+architecturally `PR=PC+4`. Independently schedule the caller continuation at
+`PC+4` with the post-delay state after applying the ABI caller-clobber
+abstraction, and enqueue the exact island target with the post-delay
+callee-entry state before those return clobbers. The island keeps the
+originating canonical caller for attribution and is not a closure
+caller/callee node.
+
+Calls from the island to ordinary functions or helpers are recorded under
+that originating owner with an island-relative site. If island A `bsr`-calls
+island B, the same split schedules A's own `PC+4` continuation with clobbers
+and independently enqueues B with the same canonical origin. Each call site
+schedules its own continuation even when island-body analysis is memoized.
+Island entry states merge conservatively by
+`(origin owner, island label, exact entry address)`; internal program-point
+states join/widen by `(origin owner, island label, instruction address)`.
+Because no return state is propagated, these keys need no return context,
+and A-to-B-to-A cycles terminate under the finite fixed point without
+suppressing either caller continuation. A direct `bra` to an island uses the
+same origin and post-delay state but replaces ordinary fallthrough; it is not
+given a synthetic return.
 
 Only the island entry and successors proved by the same SH CFG rules become
 instructions; the analyzer never linearly scans the island's bounded bytes.
 Literal halfwords inside the range therefore remain data. An island `rts`
-ends that island path and returns to the originating call's post-delay
-fallthrough after applying ABI caller-clobber semantics. Unresolved island
-effects/transfers fail exactly like unresolved function code.
+executes its delay slot exactly once and terminates that island path. It never
+propagates callee abstract state to any caller continuation; that continuation
+was already scheduled syntactically at its own `bsr`. `PR` therefore need not
+be a value in the abstract lattice. Unresolved island effects/transfers fail
+exactly like unresolved function code.
 
-The finite abstract domain for each register or fixed spill slot has
+The finite abstract domain for each general register, `mach`, `macl`, or fixed
+spill slot has
 `UNREACHED` as bottom, `UNKNOWN` as top, a `ConstSet` of integer constants or
 symbol-address atoms, and a typed 32-bit `Interval(signed|unsigned, lo, hi)`.
 Numeric `ConstSet` values carry the same signed/unsigned interpretation tag;
@@ -635,10 +651,11 @@ misaligned, non-enumerable, or non-owned target set emits
 `unresolved_transfer`. Modeled PC-relative loads, register moves, and
 spill/reload operations propagate their source facts. Every other recognized
 register-writing instruction kills its destination. `jsr`, `bsr`, and
-`bsrf` resolve the pre-delay target, execute the delay slot, then kill the SH
-ABI caller-clobbered set `r0-r7`, `pr`, `mach`, and `macl` before propagating
-the return successor; `r8-r14` and `r15` survive unless the instruction or
-slot writes them. An unparseable destination or unknown register effect emits
+`bsrf` resolve the pre-delay target, execute the delay slot once, and schedule
+their syntactic `PC+4` continuation from the post-delay state after setting
+`r0-r7`, `mach`, and `macl` to `UNKNOWN`; unwritten `r8-r15` survive. `PR`
+is an architectural `PC+4` side effect, not a lattice value. An unparseable
+destination or unknown register effect emits
 `unresolved_effect` and rejects an audited closure. It never falls back to
 linear scanning.
 
@@ -659,11 +676,13 @@ oversized unresolved interval, bounded jump-table enumeration, zero-size
 functions, same-start aliases, ambiguous overlaps, `end_sequence` rows, and
 an absent line table. Local-label-island fixtures model the real
 preceding-`div0` zero-size LOCAL/NOTYPE symbol and its three `+offset`
-targets, helper attribution to the originating function, `rts` return
-fallthrough/clobbers, transitive island cycles, and literal data skipped
-inside a bounded island. Negative fixtures reject data/nonlocal/unnamed
-labels, ambiguous aliases/overlaps, and unrelated containing-function
-mapping.
+targets and helper attribution to the originating function. They also call
+one island from two distinct `bsr` PCs and require both `PC+4` continuations;
+exercise nested A-to-B calls with A's continuation; terminate an A-to-B-to-A
+cycle; execute every call/`rts` delay slot exactly once; prove island `rts`
+state leaks into neither caller; and skip literal data inside a bounded
+island. Negative fixtures reject data/nonlocal/unnamed labels, ambiguous
+aliases/overlaps, and unrelated containing-function mapping.
 
 Task 3 captures legacy observations first, then corrected observations from
 the same route-0 and route-1 pure-layout ELFs built in a clean detached
