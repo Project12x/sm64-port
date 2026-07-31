@@ -56,22 +56,70 @@ Fresh target result:
 
 Primary evidence: `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab-2026-07-29.json`, `docs/saturn/evidence/reports/task2-remediation-sbr4-stage2-ab-repeat-2026-07-29.json`, and the role-bound capture artifacts beside them.
 
+## Superseding camera direction (2026-07-31)
+
+The owner has superseded the function-by-function camera-Q seam direction with
+`docs/superpowers/specs/2026-07-31-saturn-fixed-point-camera-core-design.md`.
+The old plan remains historical evidence and is not the executable next plan.
+
+The new direction is:
+
+1. retain the original float camera only in a separate baseline/replay build;
+2. measure source, held-camera bypass, and minimal fixed follow builds on the
+   same 2,000-tick BOB route to attribute camera cost quickly;
+3. proceed to a scene-neutral production fixed camera only when the recorded
+   attribution thresholds pass;
+4. target hybrid semantic parity and feel equivalence rather than private-state
+   or per-tick vector identity; and
+5. expand capability-by-capability toward the full game with no runtime float
+   camera fallback.
+
+BOB is the current proving ground, not the production boundary or end goal.
+
+### Work from the camera-Q sprint that remains authoritative
+
+- immutable BOB baseline/default-camera routes and role-bound replay builds;
+- SCC1 raw camera transport, schema/version discipline, and capture decoder;
+- camera FRT timing plus whole-simulation and render-workload counters;
+- SH linked-code/helper audits and object disassembly;
+- range capture and fixed-format evidence;
+- HWRAM staging, memory-map verification, and transport budgeting;
+- writer/call-graph closure, reinterpreted as the inventory of authoritative
+  camera inputs, events, transitions, and compatibility consumers;
+- host differential tools, retargeted to semantic windows and feel metrics;
+  and
+- the MSYS-safe SH tool launcher and correctly provided runtime DLLs.
+
+Existing additive Task 3 transport/probe changes in the working tree are
+preserved. Do not delete or rewrite them merely because the camera architecture
+changed.
+
+Retired assumptions are the complete private-global Q shadow, exact write-order
+mirroring, function-by-function translation, per-tick float import/publish, and
+runtime fallback into the source camera.
+
+### Reference and math strategy
+
+- The in-tree source camera remains the semantic oracle.
+- `malucard/sm64-psx` at the recorded unlicensed pin is behavior/architecture
+  study only. Its fixed Q20.12 camera provides the strongest capability map for
+  normal modes, obstruction, transitions, splines, shakes, and cutscenes, but
+  no code may be copied or closely adapted.
+- Pinned MIT libyaul is the first target-native math candidate: fixed multiply,
+  DIVU, trig/atan2, square root, vectors, normalization, and look-at are adopted
+  selectively only after camera-closure timing and disassembly.
+- Sonic Z-Treme, SlaveDriver, and Jo Engine remain pattern sources for compact
+  follow state, SH-2 scheduling/approximations, and the already attributed
+  multiply primitive respectively.
+- Do not vendor `libfixmath` or `libfixmatrix` for this sprint. A small,
+  auditable camera-math facade over existing target primitives is preferred.
+
 ## Required next action
 
-The owner approved
-`docs/superpowers/specs/2026-07-29-saturn-camera-q-seam-design.md`, including
-the separate non-vacuous default-camera route. The reviewed executable plan is
-`docs/superpowers/plans/2026-07-29-saturn-camera-q-seam.md`.
-
-Choose the execution workflow, then begin that plan at Task 1:
-
-1. **Subagent-Driven Development (recommended):** one fresh implementation
-   subagent per task, followed by spec-compliance and code-quality reviews.
-2. **Inline Execution:** execute the same tasks serially in this task with
-   the plan's mandatory review gates.
-
-No Task 3 production code has started. Do not skip the additive raw transport,
-HWRAM reclamation, writer-closure, or post-differential format-freeze gates.
+Finish written review of the 2026-07-31 fixed-camera design, then write a new
+implementation plan from that spec. The new plan begins with the Phase A
+attribution triplet and incorporates the useful additive transport/probe work
+already present; it must not resume the superseded camera-Q plan as written.
 
 ## Environment facts
 

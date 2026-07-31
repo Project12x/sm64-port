@@ -65,6 +65,9 @@ implementation is not.
 - Add BOB-authored camera rails or coordinates to production code.
 - Port SlaveDriver's sector camera, Sonic Z-Treme's renderer, or Jo Engine's
   SGL camera wrapper.
+- Vendor a general-purpose fixed-point or matrix library before a measured
+  camera operation demonstrates that the existing Saturn math substrate is
+  insufficient.
 - Delete the original camera before baseline evidence and later capability
   expansion no longer require it.
 
@@ -151,6 +154,30 @@ World-space scalar/vector values use a measured fixed-point format selected by
 the existing range-evidence process. Angles use the inherited 16-bit binary
 angle convention. The design does not assume Q16 or Q12 before captured ranges
 and differential tests choose the format.
+
+### Fixed Math Substrate
+
+The target camera uses a small, auditable camera-math facade rather than a new
+general-purpose dependency. Its initial operations are bounded add/subtract,
+SH-2 multiply, capped/asymptotic approach, binary-angle sin/cos and atan2,
+distance estimation, and the minimum normalization or division required by
+obstruction handling.
+
+Implementations are selected in this order:
+
+1. existing in-tree SM64 binary-angle tables and fixed helpers when their
+   target code generation passes the linked-code audit;
+2. pinned libyaul Q16.16, trig, square-root, vector, look-at, and hardware DIVU
+   APIs where measurement shows that their precision and cost fit;
+3. existing attributed SH-2 primitives and scheduling patterns from the
+   upstream ledger; and
+4. a camera-specific implementation only when the first three choices fail a
+   recorded precision, range, helper-edge, or timing requirement.
+
+Every selected primitive is benchmarked in the actual camera closure. A
+library API being fixed-point is not sufficient evidence that it is cheap on
+SH-2. Native 16-bit binary angles remain the public angle representation even
+if a libyaul adapter is used internally.
 
 ### Per-Tick Data Flow
 
@@ -291,26 +318,55 @@ Candidate builds never hide errors by invoking the source float camera.
 | Baseline/Q role infrastructure | Reused as source/bypass/fixed role separation |
 | Camera range capture | Fixed-format and saturation-envelope selection |
 | HWRAM/SCC transport and memory verifier | Evidence transport and camera-state budgeting |
-| Writer-closure analysis | Inventory of authoritative external camera inputs/events |
+| Writer-closure and call-graph analysis | Inventory of authoritative external camera inputs, events, mode transitions, and compatibility consumers; no requirement to mirror every private write |
+| Exact baseline state comparisons | Baseline characterization and regression diagnosis; candidate acceptance moves to semantic and feel envelopes |
+| Host differential tooling | Reused for fixed primitive validation, semantic-window comparison, and feel metrics rather than compulsory private-state identity |
+| Object disassembly and linked-helper closure | Proof that generic 64-bit expressions, soft-float, and libm helpers did not enter the target camera |
 | MSYS-safe SH tool launcher | Reproducible linked-object and ELF inspection |
 
 The retired work is limited to the proposed function-by-function Q-shadow
-translation, its per-tick float import/publish model, and its runtime float
-fallback bridge. Additive probes, routes, transports, audits, and reports remain
-valid sprint inputs.
+translation, exact private-global/write-order mirroring, its per-tick float
+import/publish model, and its runtime float fallback bridge. Additive probes,
+routes, transports, audits, reports, range evidence, and writer inventories
+remain valid sprint inputs. The existing SCC1 schema stays versioned; fields
+may be deprecated only after their replacement semantic or feel metric is
+captured.
 
 ## Prior Art and Reuse Decisions
 
-The project is deliberately GPL-compatible, but the camera core remains a new
-implementation because the available references do not match SM64's behavior
-or data model.
+The camera is not designed from a blank page. References have distinct roles:
+the source camera is the semantic oracle, `sm64-psx` is the fixed-point
+structural roadmap, libyaul and existing attributed SH-2 code supply target
+primitives, and Saturn game engines supply small behavioral or scheduling
+patterns. The production core remains a new Saturn implementation because the
+closest SM64 fixed-camera reference has no repository-wide reuse license and
+its generic 64-bit arithmetic is not an acceptable SH-2 hot-path substrate.
 
 | Reference | Pinned revision and license | Files inspected | Reuse mode |
 | --- | --- | --- | --- |
 | Sonic Z-Treme | `cff75451c1616aac1236fc2b44223902b55c706b`, GPL-3.0 | `SRC/game.c` (`update_camera`), `SRC/controls.c`, `ZTE/ZTE_DEF.H` (`camera_t`), `ZT_RENDERING.c` | Pattern-only for compact follow state, capped yaw/distance response, binary angles, and fixed trig. Direct copying is rejected because the behavior is Sonic-specific, lacks SM64 obstruction/mode semantics, and delegates transformation to SGL. |
 | SlaveDriver Engine | `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0-or-later | `SRUINS.C`, `WALLASM.S`, `UTIL.C` | Pattern-only for zero-float discipline, shift feedback, approximate distance, fixed view transforms, and SH-2 scheduling. Its camera is a first-person player/sector object and is an architectural mismatch for SM64. Existing attributed projection helpers remain separate reuse. |
 | Jo Engine | `556d081146211b6a1cfa6591d70f9487d406758b`, root MIT with BSD-style file notices | `jo_engine/jo/3d.h`, `jo_engine/3d.c`, `jo_engine/math.c` | Reuse the already attributed in-tree `dmuls.l`/`xtrct` fixed multiply. Its camera is only an SGL `slLookAt` wrapper and supplies no gameplay-camera behavior. |
+| `malucard/sm64-psx` | `27d80c0b6fc0be8d3b71dfb46486c14333d28a8d`; no root `LICENSE`, `LICENCE`, or `COPYING` | `include/types.h`, `src/game/camera.c`, `src/engine/math_util.c`, `src/port/fract_math.c`, `src/port/float_math.c` | Behavior and architecture study only. Its Q20.12 camera covers ordinary modes, walls, transitions, splines, shakes, and cutscenes, making it the roadmap for capability decomposition. No source is copied, closely ported, or adapted. Its `qmul`/`qdiv` use generic 64-bit C expressions and are not target primitives. |
+| yaul-org/libyaul | `6012f79f237773378c8014e70d8998ad95a38d98`, MIT | `gamemath/fix16.h`, `fix16/fix16.c`, `fix16/fix16_trig.c`, `fix16/fix16_sqrt.c`, `fix16/fix16_vec3.c`, `fix16/fix16_mat43.c`, `cpu/divu.h`, `libmic3d/camera.c` | Existing dependency/API use. Candidate primitives include SH-2 fixed multiply, DIVU, sin/cos/atan2, square root, vector normalization, and fixed look-at. Adopt selectively after camera-closure benchmarks; do not adopt libmic3d as the gameplay camera. Preserve MIT attribution for any close adaptation. |
 | In-tree SM64 camera | Current branch/project license | `src/game/camera.c`, camera headers, BOB route/capture tools | Behavioral oracle and compatibility contract; no function-by-function transliteration requirement. |
+
+### External Math Libraries Considered
+
+- `PetteriAimonen/libfixmath` is MIT and supplies Q16.16 arithmetic, but it is
+  not actively maintained, normally assumes 64-bit arithmetic, and offers
+  optional caches far larger than this camera should own. It is not added to
+  the Saturn target. It may be used as a host-only differential oracle if that
+  produces evidence unavailable from libyaul and the source baseline.
+- `PetteriAimonen/libfixmatrix` is MIT and small, but its general matrix,
+  quaternion, inversion, and equation-solving surface does not solve a
+  gameplay-camera problem that libyaul and the existing renderer do not
+  already cover. It is not added.
+
+This is an explicit dependency decision, not a permanent ban. A later sprint
+may reconsider a library only with a named missing operation, a pinned source
+revision and license, target disassembly, representative SH-2 timing, bounded
+memory cost, and a comparison against the existing libyaul/in-tree option.
 
 ## Full-Game Expansion
 
@@ -322,6 +378,10 @@ BOB closes the first normal-gameplay capability set. It does not declare the
 camera complete. Full-game completion requires every reachable camera
 capability to be implemented or deliberately redesigned with owner-approved
 behavior and evidence; no production float fallback remains.
+
+The `sm64-psx` fixed-camera function and capability inventory is used to avoid
+architectural dead ends when ordering later mode families, while the original
+source camera remains the authority for this project's expected behavior.
 
 ## Sprint Exit
 
