@@ -12,7 +12,15 @@
 
 #include "source_cart.h"
 
-#define SOURCE_CART_STAGE_BYTES (16U * CDFS_SECTOR_SIZE)
+#ifndef SATURN_SOURCE_CART_STAGE_SECTORS
+#define SATURN_SOURCE_CART_STAGE_SECTORS 16U
+#endif
+#define SOURCE_CART_STAGE_BYTES \
+    (SATURN_SOURCE_CART_STAGE_SECTORS * CDFS_SECTOR_SIZE)
+_Static_assert(SATURN_SOURCE_CART_STAGE_SECTORS == 4U ||
+               SATURN_SOURCE_CART_STAGE_SECTORS == 8U ||
+               SATURN_SOURCE_CART_STAGE_SECTORS == 16U,
+               "unsupported source-cart staging size");
 #define SOURCE_CART_FILELIST_ENTRIES 16
 
 extern const uint8_t __sourceboot_cart_rodata_start[];

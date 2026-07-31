@@ -28,6 +28,9 @@
 #include "paintings.h"
 #include "engine/graph_node.h"
 #include "level_table.h"
+#if defined(TARGET_SATURN)
+#include "port/saturn/runtime/saturn_camera_probe.h"
+#endif
 
 #define CBUTTON_MASK (U_CBUTTONS | D_CBUTTONS | L_CBUTTONS | R_CBUTTONS)
 
@@ -410,6 +413,162 @@ f32 unused8032CFE0 = 1000.0f;
 f32 unused8032CFE4 = 800.0f;
 u32 unused8032CFE8 = 0;
 f32 gCameraZoomDist = 800.0f;
+
+#if defined(TARGET_SATURN)
+static u32 saturn_camera_probe_f32_bits(f32 value)
+{
+    union {
+        f32 value;
+        u32 bits;
+    } raw;
+    raw.value = value;
+    return raw.bits;
+}
+
+static u32 saturn_camera_probe_pack_s16(s16 high, s16 low)
+{
+    return ((u32)(u16)high << 16) | (u32)(u16)low;
+}
+
+s32 sm64_saturn_camera_probe_read(
+        sm64_saturn_camera_probe_snapshot_t *snapshot)
+{
+    uint32_t *words;
+    u32 index;
+
+    if (snapshot == NULL)
+        return 0;
+    words = snapshot->state_words;
+    for (index = 0; index < SM64_SATURN_CAMERA_PROBE_STATE_WORDS; index++)
+        words[index] = 0U;
+    snapshot->camera_flags = 0U;
+    snapshot->source_dispatch = 0U;
+    snapshot->diagnostics.overflow_count = 0U;
+    snapshot->diagnostics.saturation_count = 0U;
+    snapshot->diagnostics.divide_fault_count = 0U;
+    snapshot->diagnostics.unexpected_reseed_count = 0U;
+    snapshot->diagnostics.range_fallback_count = 0U;
+    snapshot->diagnostics.bridge_export_count = 0U;
+    snapshot->diagnostics.bridge_import_count = 0U;
+    snapshot->diagnostics.shadow_generation = 0U;
+    if (gCamera == NULL)
+        return 0;
+
+    words[0] = saturn_camera_probe_f32_bits(gCamera->pos[0]);
+    words[1] = saturn_camera_probe_f32_bits(gCamera->pos[1]);
+    words[2] = saturn_camera_probe_f32_bits(gCamera->pos[2]);
+    words[3] = saturn_camera_probe_f32_bits(gCamera->focus[0]);
+    words[4] = saturn_camera_probe_f32_bits(gCamera->focus[1]);
+    words[5] = saturn_camera_probe_f32_bits(gCamera->focus[2]);
+    words[6] = saturn_camera_probe_pack_s16(gCamera->yaw, gCamera->nextYaw);
+    words[7] = ((u32)gCamera->mode << 24) |
+               ((u32)gCamera->defMode << 16) |
+               ((u32)gCamera->cutscene << 8) |
+               (u32)gCamera->doorStatus;
+    words[8] = saturn_camera_probe_f32_bits(gLakituState.curPos[0]);
+    words[9] = saturn_camera_probe_f32_bits(gLakituState.curPos[1]);
+    words[10] = saturn_camera_probe_f32_bits(gLakituState.curPos[2]);
+    words[11] = saturn_camera_probe_f32_bits(gLakituState.curFocus[0]);
+    words[12] = saturn_camera_probe_f32_bits(gLakituState.curFocus[1]);
+    words[13] = saturn_camera_probe_f32_bits(gLakituState.curFocus[2]);
+    words[14] = saturn_camera_probe_f32_bits(gLakituState.goalPos[0]);
+    words[15] = saturn_camera_probe_f32_bits(gLakituState.goalPos[1]);
+    words[16] = saturn_camera_probe_f32_bits(gLakituState.goalPos[2]);
+    words[17] = saturn_camera_probe_f32_bits(gLakituState.goalFocus[0]);
+    words[18] = saturn_camera_probe_f32_bits(gLakituState.goalFocus[1]);
+    words[19] = saturn_camera_probe_f32_bits(gLakituState.goalFocus[2]);
+    words[20] = saturn_camera_probe_f32_bits(gLakituState.pos[0]);
+    words[21] = saturn_camera_probe_f32_bits(gLakituState.pos[1]);
+    words[22] = saturn_camera_probe_f32_bits(gLakituState.pos[2]);
+    words[23] = saturn_camera_probe_f32_bits(gLakituState.focus[0]);
+    words[24] = saturn_camera_probe_f32_bits(gLakituState.focus[1]);
+    words[25] = saturn_camera_probe_f32_bits(gLakituState.focus[2]);
+    words[26] = saturn_camera_probe_pack_s16(gLakituState.yaw,
+                                             gLakituState.nextYaw);
+    words[27] = ((u32)(u16)gLakituState.roll << 16) |
+                ((u32)gLakituState.mode << 8) |
+                (u32)gLakituState.defMode;
+    words[28] = saturn_camera_probe_f32_bits(gLakituState.focHSpeed);
+    words[29] = saturn_camera_probe_f32_bits(gLakituState.focVSpeed);
+    words[30] = saturn_camera_probe_f32_bits(gLakituState.posHSpeed);
+    words[31] = saturn_camera_probe_f32_bits(gLakituState.posVSpeed);
+    words[32] = saturn_camera_probe_f32_bits(sOldPosition[0]);
+    words[33] = saturn_camera_probe_f32_bits(sOldPosition[1]);
+    words[34] = saturn_camera_probe_f32_bits(sOldPosition[2]);
+    words[35] = saturn_camera_probe_f32_bits(sOldFocus[0]);
+    words[36] = saturn_camera_probe_f32_bits(sOldFocus[1]);
+    words[37] = saturn_camera_probe_f32_bits(sOldFocus[2]);
+    words[38] = saturn_camera_probe_pack_s16(sModeInfo.newMode,
+                                             sModeInfo.lastMode);
+    words[39] = saturn_camera_probe_pack_s16(sModeInfo.max, sModeInfo.frame);
+    words[40] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.focus[0]);
+    words[41] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.focus[1]);
+    words[42] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.focus[2]);
+    words[43] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.pos[0]);
+    words[44] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.pos[1]);
+    words[45] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.pos[2]);
+    words[46] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionStart.dist);
+    words[47] = saturn_camera_probe_pack_s16(
+        sModeInfo.transitionStart.pitch, sModeInfo.transitionStart.yaw);
+    words[48] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.focus[0]);
+    words[49] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.focus[1]);
+    words[50] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.focus[2]);
+    words[51] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.pos[0]);
+    words[52] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.pos[1]);
+    words[53] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.pos[2]);
+    words[54] =
+        saturn_camera_probe_f32_bits(sModeInfo.transitionEnd.dist);
+    words[55] = saturn_camera_probe_pack_s16(
+        sModeInfo.transitionEnd.pitch, sModeInfo.transitionEnd.yaw);
+    words[56] = saturn_camera_probe_pack_s16(sModeTransition.posPitch,
+                                             sModeTransition.posYaw);
+    words[57] = saturn_camera_probe_f32_bits(sModeTransition.posDist);
+    words[58] = saturn_camera_probe_pack_s16(sModeTransition.focPitch,
+                                             sModeTransition.focYaw);
+    words[59] = saturn_camera_probe_f32_bits(sModeTransition.focDist);
+    words[60] = (u32)sModeTransition.framesLeft;
+    words[61] = saturn_camera_probe_f32_bits(sModeTransition.marioPos[0]);
+    words[62] = saturn_camera_probe_f32_bits(sModeTransition.marioPos[1]);
+    words[63] = saturn_camera_probe_f32_bits(sModeTransition.marioPos[2]);
+    words[64] = saturn_camera_probe_f32_bits(gCamera->areaCenX);
+    words[65] = saturn_camera_probe_f32_bits(gCamera->areaCenY);
+    words[66] = saturn_camera_probe_f32_bits(gCamera->areaCenZ);
+    words[67] = saturn_camera_probe_f32_bits(gCameraZoomDist);
+    words[68] = saturn_camera_probe_f32_bits(sZoomAmount);
+    words[69] = saturn_camera_probe_f32_bits(sPanDistance);
+    words[70] = saturn_camera_probe_f32_bits(sZeroZoomDist);
+    words[71] = saturn_camera_probe_pack_s16(sYawSpeed, sLakituDist);
+    words[72] = saturn_camera_probe_pack_s16(sLakituPitch, sModeOffsetYaw);
+    words[73] = (u32)(u16)sAreaYaw << 16;
+    words[74] = saturn_camera_probe_f32_bits(gLakituState.focusDistance);
+    words[75] = saturn_camera_probe_pack_s16(gLakituState.oldPitch,
+                                             gLakituState.oldYaw);
+    words[76] = (u32)(u16)gLakituState.oldRoll << 16;
+
+    snapshot->camera_flags =
+        SM64_SATURN_CAMERA_PROBE_FLAG_CAMERA_VALID;
+    if (gCamera->cutscene == 0U)
+        snapshot->camera_flags |=
+            SM64_SATURN_CAMERA_PROBE_FLAG_NO_CUTSCENE;
+    if (sModeTransition.framesLeft == 0)
+        snapshot->camera_flags |=
+            SM64_SATURN_CAMERA_PROBE_FLAG_NO_TRANSITION;
+    return 1;
+}
+#endif
 
 /**
  * A cutscene that plays when the player interacts with an object

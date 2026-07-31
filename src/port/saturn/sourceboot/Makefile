@@ -165,7 +165,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(SOURCEBOOT_QUAD_MAP_C)
 
 ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)
-SH_SRCS += source_camera_acceptance_route.c
+SH_SRCS += source_camera_acceptance_route.c source_camera_idle_probe.c
 endif
 
 # Keep the direct-Bob source closure in its own object/output tree. The demo
@@ -255,6 +255,9 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections \
   -Wl,--defsym=sm64_saturn_camera_variant_marker=$(SATURN_CAMERA_VARIANT) \
   -Wl,--defsym=sm64_saturn_camera_route_marker=$(SATURN_SOURCEBOOT_CAMERA_ROUTE)
+ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)
+SH_LDFLAGS += -Wl,--defsym=__sourceboot_required_hwram_margin=0x1B00
+endif
 
 # --- soft-float: GCC's soft-fp in place of libgcc's fp-bit ------------------
 #

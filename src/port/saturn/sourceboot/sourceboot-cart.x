@@ -131,7 +131,8 @@ SECTIONS
    * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES in
    * src/port/saturn/gfx/saturn_fast3d_frontend.h -- not to weaken this
    * assert. */
-  ASSERT (0x06100000 - ___end >= 4096,
+  PROVIDE (__sourceboot_required_hwram_margin = 0x1000);
+  ASSERT (0x06100000 - ___end >= __sourceboot_required_hwram_margin,
           "HWRAM margin below libyaul's TLSF control-block floor: the heap libyaul builds at ___end would overrun the top of HWRAM and mirror into low memory. Shrink a static HWRAM consumer.")
 
   /* VDP1 command staging array (vdp1_cmdt_t[]), resident in LWRAM rather
@@ -163,4 +164,20 @@ SECTIONS
     . = ALIGN (16);
     *(.lwram_bss)
   } > lwram
+
+  .lwram_camera_capture (NOLOAD) :
+  {
+    . = ALIGN (32);
+    __lwram_camera_capture_start = .;
+    KEEP(*(.lwram_camera_capture))
+    __lwram_camera_capture_end = .;
+  } > lwram
+
+  ASSERT (SIZEOF(.lwram_camera_capture) == 0 ||
+          SIZEOF(.lwram_camera_capture) == 0x2F7C0,
+          "SCC1 capture must be absent or exactly 0x2F7C0 bytes")
+  ASSERT (SIZEOF(.lwram_camera_capture) == 0 ||
+          ORIGIN(lwram) + LENGTH(lwram) -
+              __lwram_camera_capture_end >= 0x4000,
+          "SCC1 leaves less than the measured LWRAM margin")
 }

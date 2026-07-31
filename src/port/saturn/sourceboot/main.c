@@ -17,6 +17,7 @@
 #include "saturn_vdp1_backend.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
+#include "source_camera_idle_probe.h"
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
 #include "mario_eye_uv_tiles.h"
@@ -78,6 +79,11 @@ static void sourceboot_run_source_tick(void)
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
     sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+    sm64_saturn_sourceboot_camera_idle_probe_record(
+        sm64_saturn_source_runtime_state(),
+        sourceboot_sim_tick_count);
+#endif
 }
 
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
@@ -491,6 +497,9 @@ int main(void) {
             sm64_saturn_sourceboot_bob_parity_v1(&sample_count);
 #endif
         sm64_saturn_source_runtime_configure_input_replay(route, sample_count);
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+        sm64_saturn_sourceboot_camera_idle_probe_reset();
+#endif
     }
 #endif
 

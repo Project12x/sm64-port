@@ -1,0 +1,320 @@
+#!/usr/bin/env python3
+"""Inspect sourceboot ELFs and enforce camera transport memory budgets."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+YAUL_BIN = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin")
+READELF = YAUL_BIN / "sh-elf-readelf.exe"
+NM = YAUL_BIN / "sh-elf-nm.exe"
+HWRAM_TOP = 0x06100000
+LWRAM_TOP = 0x00300000
+SCC_START = 0x002CBB20
+SCC_SIZE = 0x2F7C0
+SCC_END = 0x002FB2E0
+PHASE_PREDECESSORS = {
+    "fixed-baseline": {"transport"},
+    "candidate-q12": {"fixed-baseline"},
+    "candidate-q16": {"fixed-baseline"},
+    "final-baseline": {"fixed-baseline"},
+    "frozen-numeric": {"candidate-q12", "candidate-q16"},
+    "shadow": {"frozen-numeric"},
+    "lakitu": {"shadow"},
+    "default-core": {"lakitu"},
+    "bridges": {"default-core"},
+    "complete-island": {"bridges"},
+    "final-q": {"complete-island"},
+}
+
+
+@dataclass(frozen=True)
+class Section:
+    name: str
+    address: int
+    size: int
+    kind: str
+
+
+@dataclass(frozen=True)
+class Symbol:
+    name: str
+    address: int
+    size: int
+
+
+@dataclass
+class ElfLayout:
+    path: Path
+    sha256: str
+    sections: dict[str, Section]
+    symbols: dict[str, Symbol]
+
+
+def _tool_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment["PATH"] = r"C:\msys64\usr\bin" + os.pathsep + environment.get("PATH", "")
+    return environment
+
+
+def _run(tool: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        [str(tool), *arguments], check=False, capture_output=True, text=True,
+        env=_tool_environment(),
+    )
+    if completed.returncode != 0:
+        raise ValueError(f"{tool.name} failed: {completed.stderr.strip()}")
+    return completed.stdout
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def inspect_elf(path: Path) -> ElfLayout:
+    path = path.resolve()
+    section_output = _run(READELF, "-SW", str(path))
+    symbol_output = _run(NM, "-S", "--defined-only", str(path))
+    sections: dict[str, Section] = {}
+    section_re = re.compile(
+        r"\[\s*\d+\]\s+(\S+)\s+(\S+)\s+([0-9a-fA-F]+)\s+"
+        r"[0-9a-fA-F]+\s+([0-9a-fA-F]+)"
+    )
+    for line in section_output.splitlines():
+        match = section_re.search(line)
+        if match:
+            name, kind, address, size = match.groups()
+            sections[name] = Section(name, int(address, 16), int(size, 16), kind)
+    symbols: dict[str, Symbol] = {}
+    for line in symbol_output.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and re.fullmatch(r"[0-9a-fA-F]+", parts[0]) and \
+                re.fullmatch(r"[0-9a-fA-F]+", parts[1]):
+            name = parts[-1]
+            symbols[name] = Symbol(name, int(parts[0], 16), int(parts[1], 16))
+        elif len(parts) >= 3 and re.fullmatch(r"[0-9a-fA-F]+", parts[0]):
+            name = parts[-1]
+            symbols[name] = Symbol(name, int(parts[0], 16), 0)
+    return ElfLayout(path, _sha256(path), sections, symbols)
+
+
+def _ranges_overlap(left: Section, right: Section) -> bool:
+    return left.address < right.address + right.size and \
+        right.address < left.address + left.size
+
+
+def _tag_gate(layout: ElfLayout, route: int, stage_sectors: int) -> None:
+    text = str(layout.path).replace("\\", "/")
+    if "e2-bob" not in text:
+        return
+    for tag in (f"camroute{route}", f"stage{stage_sectors}"):
+        if tag not in text:
+            raise ValueError(f"ELF path lacks role tag {tag}")
+
+
+def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
+                    required_final_margin: int) -> dict[str, Any]:
+    _tag_gate(layout, route, stage_sectors)
+    end = layout.symbols.get("___end")
+    if end is None:
+        raise ValueError("ELF lacks ___end")
+    if HWRAM_TOP - end.address < required_final_margin:
+        raise ValueError("ELF HWRAM margin is below required final floor")
+    stage = layout.symbols.get("s_source_cart_stage")
+    if stage is None or stage.size != stage_sectors * 2048:
+        raise ValueError("ELF cart-stage symbol size is wrong")
+    route_marker = layout.symbols.get("sm64_saturn_camera_route_marker")
+    variant_marker = layout.symbols.get("sm64_saturn_camera_variant_marker")
+    if route_marker is None or route_marker.address != route:
+        raise ValueError("ELF camera route marker is wrong")
+    if variant_marker is None or variant_marker.address not in (1, 2):
+        raise ValueError("ELF camera variant marker is wrong")
+    capture = layout.sections.get(".lwram_camera_capture")
+    capture_symbol = layout.symbols.get("sourceboot_camera_idle_capture")
+    if route == 0:
+        if capture is not None and capture.size != 0:
+            raise ValueError("route 0 contains SCC1 capture storage")
+        if capture_symbol is not None:
+            raise ValueError("route 0 contains SCC1 capture symbol")
+    else:
+        if capture is None or capture.kind != "NOBITS" or \
+                capture.address != SCC_START or capture.size != SCC_SIZE:
+            raise ValueError("route 1 SCC1 section layout is wrong")
+        if capture_symbol is None or capture_symbol.address != SCC_START or \
+                capture_symbol.size != SCC_SIZE:
+            raise ValueError("route 1 SCC1 symbol layout is wrong")
+        if capture.address + capture.size != SCC_END:
+            raise ValueError("route 1 SCC1 end address is wrong")
+        for name in (".lwram_cmdts", ".lwram_bss"):
+            section = layout.sections.get(name)
+            if section is None:
+                raise ValueError(f"ELF lacks {name}")
+            if _ranges_overlap(capture, section):
+                raise ValueError(f"SCC1 overlaps {name}")
+        if LWRAM_TOP - SCC_END < 0x4000:
+            raise ValueError("SCC1 leaves less than the LWRAM floor")
+    return {
+        "path": str(layout.path), "elf_sha256": layout.sha256,
+        "end": end.address, "hwram_margin": HWRAM_TOP - end.address,
+        "stage_bytes": stage.size,
+        "capture_address": capture.address if capture else None,
+        "capture_size": capture.size if capture else 0,
+    }
+
+
+def select_transport(
+    *, baseline_elf: Path, stage8_elf: Path, stage4_elf: Path,
+    baseline_end: int, required_post_transport_margin: int,
+    required_final_margin: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    baseline_layout = inspect_elf(baseline_elf)
+    stage8_layout = inspect_elf(stage8_elf)
+    stage4_layout = inspect_elf(stage4_elf)
+    baseline = validate_layout(
+        baseline_layout, route=0, stage_sectors=16,
+        required_final_margin=required_final_margin,
+    )
+    if baseline["end"] != baseline_end:
+        raise ValueError("baseline ___end does not match the pinned baseline")
+    stage8 = validate_layout(
+        stage8_layout, route=1, stage_sectors=8,
+        required_final_margin=required_final_margin,
+    )
+    stage4 = validate_layout(
+        stage4_layout, route=1, stage_sectors=4,
+        required_final_margin=required_final_margin,
+    )
+    selected = stage8 if stage8["hwram_margin"] >= required_post_transport_margin else stage4
+    selected_sectors = 8 if selected is stage8 else 4
+    if selected["hwram_margin"] < required_post_transport_margin:
+        raise ValueError("neither transport staging size leaves the required HWRAM margin")
+    fixture = {
+        "schema": "sm64-saturn-camera-memory-v1",
+        "stage_sectors": selected_sectors,
+        "required_post_transport_margin": required_post_transport_margin,
+        "required_final_margin": required_final_margin,
+        "baseline_end": baseline["end"],
+        "selected_end": selected["end"],
+        "selected_elf_sha256": selected["elf_sha256"],
+        "cart_stage_bytes": selected["stage_bytes"],
+        "hwram_delta": selected["end"] - baseline["end"],
+        "hwram_margin": selected["hwram_margin"],
+        "lwram_capture_start": SCC_START,
+        "lwram_capture_end": SCC_END,
+        "lwram_remaining": LWRAM_TOP - SCC_END,
+    }
+    report = {
+        "schema": "sm64-saturn-sourceboot-memory-phase-v1",
+        "phase": "transport",
+        "selected_stage_sectors": selected_sectors,
+        "required_post_transport_margin": required_post_transport_margin,
+        "required_final_margin": required_final_margin,
+        "baseline": baseline, "stage8": stage8, "stage4": stage4,
+        "selected": selected,
+        "lwram": {
+            "current_end": SCC_START, "capture_start": SCC_START,
+            "capture_end": SCC_END, "remaining": LWRAM_TOP - SCC_END,
+            "discovery_allowance": LWRAM_TOP - SCC_END - 0x2000,
+        },
+    }
+    return fixture, report
+
+
+def check_phase(
+    *, elf: Path, phase: str, stage_sectors: int,
+    previous_report: dict[str, Any] | None, required_final_margin: int,
+) -> dict[str, Any]:
+    if phase not in PHASE_PREDECESSORS:
+        raise ValueError("phase is stale or terminal")
+    if previous_report is None:
+        raise ValueError("phase report requires a predecessor")
+    predecessor = previous_report.get("phase")
+    if predecessor not in PHASE_PREDECESSORS[phase]:
+        raise ValueError("phase report does not follow the approved predecessor graph")
+    selected_stage = previous_report.get("selected_stage_sectors")
+    if selected_stage != stage_sectors:
+        raise ValueError("phase stage does not match the selected transport stage")
+    previous_selected = previous_report.get("selected")
+    if not isinstance(previous_selected, dict) or \
+            not isinstance(previous_selected.get("end"), int) or \
+            not isinstance(previous_selected.get("elf_sha256"), str):
+        raise ValueError("predecessor report lacks hash-bound selected layout")
+    layout = inspect_elf(elf)
+    current = validate_layout(
+        layout, route=1, stage_sectors=stage_sectors,
+        required_final_margin=required_final_margin,
+    )
+    return {
+        "schema": "sm64-saturn-sourceboot-memory-phase-v1",
+        "phase": phase, "predecessor_phase": predecessor,
+        "predecessor_elf_sha256": previous_selected["elf_sha256"],
+        "selected_stage_sectors": stage_sectors,
+        "required_final_margin": required_final_margin,
+        "incremental_end_delta": current["end"] - previous_selected["end"],
+        "selected": current,
+    }
+
+
+def _integer(value: str) -> int:
+    return int(value, 0)
+
+
+def _write(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    select = commands.add_parser("select-transport")
+    select.add_argument("--baseline-elf", type=Path, required=True)
+    select.add_argument("--stage8-elf", type=Path, required=True)
+    select.add_argument("--stage4-elf", type=Path, required=True)
+    select.add_argument("--baseline-end", type=_integer, required=True)
+    select.add_argument("--required-post-transport-margin", type=_integer, required=True)
+    select.add_argument("--required-final-margin", type=_integer, required=True)
+    select.add_argument("--fixture-output", type=Path, required=True)
+    select.add_argument("--output", type=Path, required=True)
+    phase = commands.add_parser("check-phase")
+    phase.add_argument("--elf", type=Path, required=True)
+    phase.add_argument("--phase", required=True)
+    phase.add_argument("--stage-sectors", type=int, choices=(4, 8), required=True)
+    phase.add_argument("--previous-report", type=Path, required=True)
+    phase.add_argument("--required-final-margin", type=_integer, required=True)
+    phase.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    if args.command == "select-transport":
+        fixture, report = select_transport(
+            baseline_elf=args.baseline_elf, stage8_elf=args.stage8_elf,
+            stage4_elf=args.stage4_elf, baseline_end=args.baseline_end,
+            required_post_transport_margin=args.required_post_transport_margin,
+            required_final_margin=args.required_final_margin,
+        )
+        _write(args.fixture_output, fixture)
+        _write(args.output, report)
+    else:
+        previous = json.loads(args.previous_report.read_text(encoding="utf-8"))
+        report = check_phase(
+            elf=args.elf, phase=args.phase, stage_sectors=args.stage_sectors,
+            previous_report=previous,
+            required_final_margin=args.required_final_margin,
+        )
+        _write(args.output, report)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
