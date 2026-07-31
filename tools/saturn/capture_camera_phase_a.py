@@ -47,6 +47,9 @@ def capture_camera_phase_a(role_runs: Mapping[str, Any]) -> dict[str, Any]:
     if set(role_runs) != set(ROLES):
         raise ValueError("Phase A requires exactly source baseline, bypass, and fixed role pairs")
     pairs = {role: _runs(role_runs[role], role) for role in ROLES}
+    for pair in pairs.values():
+        for report in pair:
+            _diagnostics(report)
     digests = {run.get("route_manifest_sha256", run.get("route_manifest_digest"))
                for pair in pairs.values() for run in pair}
     if len(digests) != 1 or not isinstance(next(iter(digests)), str):

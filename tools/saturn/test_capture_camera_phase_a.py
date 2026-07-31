@@ -64,11 +64,14 @@ class CaptureCameraPhaseATest(unittest.TestCase):
         changed["camera-bypass-diagnostic"][1]["route_manifest_sha256"] = "f" * 64
         with self.assertRaisesRegex(ValueError, "digest"):
             capture_camera_phase_a(changed)
-        bad = {role: list(items) for role, items in runs.items()}
-        bad["camera-fixed-candidate"][0] = dict(bad["camera-fixed-candidate"][0])
-        bad["camera-fixed-candidate"][0]["unsupported_diagnostics"] = 1
-        with self.assertRaisesRegex(ValueError, "unsupported diagnostics"):
-            capture_camera_phase_a(bad)
+        for run_index in (0, 1):
+            with self.subTest(run_index=run_index):
+                bad = {role: list(items) for role, items in runs.items()}
+                bad["camera-fixed-candidate"][run_index] = dict(
+                    bad["camera-fixed-candidate"][run_index])
+                bad["camera-fixed-candidate"][run_index]["unsupported_diagnostics"] = 1
+                with self.assertRaisesRegex(ValueError, "unsupported diagnostics"):
+                    capture_camera_phase_a(bad)
 
 
 if __name__ == "__main__":
