@@ -1107,6 +1107,40 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             MAYBE_STACK_PTR,
         )
 
+    def test_register_add_degrades_exact_stack_pointer_with_constset(self) -> None:
+        self.assertIs(
+            self._register_add_result(
+                ConstSet("signed", frozenset({0, 4})), StackPtr(8)
+            ),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_degrades_exact_stack_pointer_with_interval(self) -> None:
+        self.assertIs(
+            self._register_add_result(Interval("signed", -4, 4), StackPtr(8)),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_degrades_exact_stack_pointer_with_unknown(self) -> None:
+        self.assertIs(
+            self._register_add_result(UNKNOWN, StackPtr(8)),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_degrades_two_exact_stack_pointers(self) -> None:
+        self.assertIs(
+            self._register_add_result(StackPtr(4), StackPtr(8)),
+            MAYBE_STACK_PTR,
+        )
+
+    def test_register_add_retains_exact_stack_pointer_with_singleton_offset(self) -> None:
+        self.assertEqual(
+            self._register_add_result(
+                ConstSet("signed", frozenset({4})), StackPtr(8)
+            ),
+            StackPtr(12),
+        )
+
     def test_store_through_maybe_stack_pointer_invalidates_frame(self) -> None:
         instruction = parse_instructions(" 6001000: 24 02 mov.l r0,@r4\n")[0x6001000]
         state = _unknown_state()
