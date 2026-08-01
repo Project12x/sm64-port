@@ -4,3 +4,10 @@
 # renderer's existing shipped regression gate.
 ROUTE_ORACLE_VERSION 1
 ROOT _game_loop_one_iteration
+# Phase A declarations are dispatcher-granular: every unresolved dynamic
+# transfer owned by a listed dispatcher inherits that dispatcher's callback
+# set. Static helper transfers must still be recovered as direct facts.
+INDIRECT_EDGE _geo_process_held_object _geo_switch_mario_hand_grab_pos
+INDIRECT_EDGE _geo_process_node_and_siblings _geo_camera_main
+INDIRECT_EDGE _level_script_execute _level_cmd_set_register
+INDIRECT_EDGE _sm64_saturn_source_runtime_read_controllers _controller_saturn_read

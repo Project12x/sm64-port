@@ -44,6 +44,12 @@ class RouteOracle:
 
 
 @dataclass(frozen=True)
+class IndirectEdgeAudit:
+    closure: frozenset[str]
+    unlisted_transfers: tuple[UnresolvedTransfer, ...]
+
+
+@dataclass(frozen=True)
 class BaselineContract:
     version: int
     hot_ceiling: int
@@ -761,6 +767,145 @@ def build_instruction_memory(instructions: dict[int, Instruction]) -> dict[int, 
     return memory
 
 
+def prove_sourceboot_null_task_submit(
+    instructions: dict[int, Instruction],
+    owners: Iterable[FunctionOwner],
+) -> frozenset[int]:
+    """Return statically proven-null sourceboot task-submit storage slots."""
+    owner_list = tuple(owners)
+    by_name = {owner.name: owner for owner in owner_list}
+    main = by_name.get("_main")
+    configure = by_name.get("_sm64_saturn_source_runtime_configure")
+    dispatcher = by_name.get("_exec_display_list")
+    if main is None or configure is None or dispatcher is None:
+        return frozenset()
+
+    def body(owner: FunctionOwner) -> list[Instruction]:
+        return [
+            instructions[address]
+            for address in sorted(instructions)
+            if owner.start <= address < owner.end
+        ]
+
+    configure_rows = body(configure)
+    slot_loads = [
+        (index, _symbol_from_annotation(row.annotation))
+        for index, row in enumerate(configure_rows)
+        if row.mnemonic == "mov.l"
+        and _symbol_from_annotation(row.annotation) is not None
+        and _symbol_from_annotation(row.annotation).name == "_sTaskSubmit"
+    ]
+    if len(slot_loads) != 1:
+        return frozenset()
+    load_index, slot = slot_loads[0]
+    assert slot is not None
+    load_destination = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", configure_rows[load_index].operands)
+    if load_destination is None or load_index + 1 >= len(configure_rows):
+        return frozenset()
+    if configure_rows[load_index + 1].mnemonic != "mov.l" or not re.fullmatch(
+        rf"r4,@{re.escape(load_destination.group(1))}",
+        configure_rows[load_index + 1].operands.replace(" ", ""),
+    ):
+        return frozenset()
+    if any(owner.start <= slot.address < owner.end for owner in owner_list):
+        return frozenset()
+
+    all_slot_references: list[tuple[str, Instruction]] = []
+    for owner in owner_list:
+        for row in body(owner):
+            atom = _symbol_from_annotation(row.annotation)
+            if atom is not None and atom.address == slot.address:
+                all_slot_references.append((owner.name, row))
+    if len(all_slot_references) != 2 or {
+        name for name, _ in all_slot_references
+    } != {configure.name, dispatcher.name}:
+        return frozenset()
+
+    configure_references: list[tuple[str, Instruction]] = []
+    for owner in owner_list:
+        for row in body(owner):
+            atom = _symbol_from_annotation(row.annotation)
+            if atom == SymbolAtom(configure.name, configure.start):
+                configure_references.append((owner.name, row))
+    if len(configure_references) != 1 \
+            or configure_references[0][0] != main.name:
+        return frozenset()
+
+    main_rows = body(main)
+    configure_calls: list[Instruction] = []
+    register_atoms: dict[str, SymbolAtom] = {}
+    for row in main_rows:
+        atom = _symbol_from_annotation(row.annotation)
+        destination = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", row.operands)
+        if row.mnemonic in {"mov.l", "mov.w"} and atom is not None and destination:
+            register_atoms[destination.group(1)] = atom
+        if row.mnemonic == "jsr":
+            register = re.fullmatch(r"@(r(?:1[0-5]|\d))", row.operands)
+            if register and register_atoms.get(register.group(1)) == SymbolAtom(
+                configure.name, configure.start
+            ):
+                configure_calls.append(row)
+        if destination and not (
+            row.mnemonic in {"mov.l", "mov.w"} and atom is not None
+        ):
+            register_atoms.pop(destination.group(1), None)
+    if not configure_calls or any(
+        (slot_row := instructions.get(call.address + 2)) is None
+        or slot_row.mnemonic != "mov"
+        or not re.fullmatch(r"#(?:0x)?0,\s*r4", slot_row.operands)
+        for call in configure_calls
+    ):
+        return frozenset()
+
+    dispatcher_rows = body(dispatcher)
+    for index, row in enumerate(dispatcher_rows):
+        atom = _symbol_from_annotation(row.annotation)
+        base = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", row.operands)
+        if row.mnemonic != "mov.l" or atom != slot or base is None:
+            continue
+        if index + 4 >= len(dispatcher_rows):
+            continue
+        load, test, branch = dispatcher_rows[index + 1:index + 4]
+        target = re.fullmatch(
+            rf"@{re.escape(base.group(1))},\s*(r(?:1[0-5]|\d))", load.operands
+        )
+        if load.mnemonic != "mov.l" or target is None:
+            continue
+        target_register = target.group(1)
+        if test.mnemonic != "tst" or test.operands.replace(" ", "") != (
+            f"{target_register},{target_register}"
+        ):
+            continue
+        branch_target = _target_from_text(branch.operands)
+        if branch.mnemonic != "bt" or branch_target is None:
+            continue
+        guarded_exit_is_return = False
+        for exit_address in range(branch_target, branch_target + 8, 2):
+            guarded_exit = instructions.get(exit_address)
+            if guarded_exit is None:
+                break
+            if guarded_exit.mnemonic == "rts":
+                guarded_exit_is_return = True
+                break
+            if guarded_exit.mnemonic in DELAY_SLOT_CONTROL \
+                    or guarded_exit.mnemonic.startswith(("bt", "bf")):
+                break
+        if not guarded_exit_is_return:
+            continue
+        for transfer in dispatcher_rows[index + 4:index + 7]:
+            if transfer.mnemonic in {"jmp", "jsr"} \
+                    and transfer.operands == f"@{target_register}":
+                return frozenset({slot.address})
+            intervening_destination = re.search(
+                r",\s*(r(?:1[0-5]|\d))\s*$", transfer.operands
+            )
+            if transfer.mnemonic not in {"mov.l", "mov.w"} \
+                    or intervening_destination is None \
+                    or intervening_destination.group(1) == target_register:
+                break
+    return frozenset()
+
+
 def comparison_predicate(
     instruction: Instruction | None,
     state: dict[str, AbstractValue],
@@ -801,6 +946,14 @@ def comparison_predicate(
         lower = 1 if instruction.mnemonic == "cmp/pl" else 0
         true_range = ("signed", lower, 0x7FFFFFFF)
         false_range = ("signed", -0x80000000, lower - 1)
+    elif instruction.mnemonic == "tst" and binary \
+            and binary.group(1) == binary.group(2):
+        candidate = state[binary.group(1)]
+        if isinstance(candidate, (ConstSet, Interval)) \
+                and candidate.kind == "unsigned":
+            register = binary.group(1)
+            true_range = ("unsigned", 0, 0)
+            false_range = ("unsigned", 1, 0xFFFFFFFF)
     if register is None or true_range is None or false_range is None:
         return UNKNOWN
     return ComparisonPredicate(register, true_range, false_range)
@@ -996,7 +1149,8 @@ DELAY_SLOT_CONTROL = frozenset({
 def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                   effects: list[UnresolvedEffect], owner: FunctionOwner,
                   memory: dict[int, int] | None = None,
-                  profile: Counter[str] | None = None) -> None:
+                  profile: Counter[str] | None = None,
+                  known_null_addresses: frozenset[int] = frozenset()) -> None:
     text = instruction.operands
     mnemonic = instruction.mnemonic
     if mnemonic.startswith("cmp/") or mnemonic == "tst":
@@ -1204,6 +1358,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if len(atoms) == 1:
             atom = next(iter(atoms))
             if isinstance(atom, SymbolAtom):
+                if mnemonic == "mov.l" and atom.address in known_null_addresses:
+                    state[dereference.group(2)] = ConstSet(
+                        "unsigned", frozenset({0})
+                    )
+                    return
                 state[dereference.group(2)] = ConstSet(
                     "symbol", frozenset({SymbolAtom(f"{atom.name}*", atom.address)})
                 )
@@ -1694,6 +1853,7 @@ def _analyze_code_only_pass(
     progress_callback: Callable[[dict[str, object]], None] | None = None,
     progress_counter: Counter[str] | None = None,
     protected_entry_nodes: frozenset[tuple[str, int]] = frozenset(),
+    known_null_addresses: frozenset[int] = frozenset(),
 ) -> CodeAnalysis:
     owner_list = tuple(owners)
     owner_by_address = (
@@ -2003,7 +2163,7 @@ def _analyze_code_only_pass(
                 slot_effects: list[UnresolvedEffect] = []
                 _write_effect(
                     instructions[slot_address], result, slot_effects, owner, memory,
-                    profile,
+                    profile, known_null_addresses,
                 )
                 for effect in slot_effects:
                     effect_emissions[key].append(effect)
@@ -2286,7 +2446,10 @@ def _analyze_code_only_pass(
                 continue
             next_state = dict(state)
             new_effects: list[UnresolvedEffect] = []
-            _write_effect(ins, next_state, new_effects, owner, memory, profile)
+            _write_effect(
+                ins, next_state, new_effects, owner, memory, profile,
+                known_null_addresses,
+            )
             for effect in new_effects:
                 effect_emissions[key].append(effect)
             fallthrough_address = address + 2
@@ -2427,6 +2590,7 @@ def analyze_code_only(
     profile_by_owner: dict[str, Counter[str]] | None = None,
     max_discovery_restarts: int = 8,
     progress_callback: Callable[[dict[str, object]], None] | None = None,
+    known_null_addresses: frozenset[int] = frozenset(),
 ) -> CodeAnalysis:
     """Discover a frozen CFG, then run acceptance dataflow from fresh states."""
     owner_list = tuple(owners)
@@ -2496,6 +2660,7 @@ def analyze_code_only(
             discovery_iteration=restart_count,
             progress_callback=emit_progress,
             progress_counter=discovery_counter,
+            known_null_addresses=known_null_addresses,
         )
         frozen_edges = frozenset(discovered_edges)
         emit_progress({
@@ -2541,6 +2706,7 @@ def analyze_code_only(
             progress_callback=emit_progress,
             progress_counter=acceptance_counter,
             evaluated_state_sink=entry_evaluated_nodes,
+            known_null_addresses=known_null_addresses,
         )
         acceptance_lines: dict[str, set[int]] = {}
         component_metrics: Counter[str] = Counter()
@@ -2587,6 +2753,7 @@ def analyze_code_only(
             # Component acceptance has its own state map. Let a decoded-only
             # lane reach an entry-evaluated join so it can contribute proven
             # may-call targets; merge_code_analyses keeps the entry lane intact.
+            known_null_addresses=known_null_addresses,
         )
         accepted = merge_code_analyses(accepted_entry, accepted_components)
         missing_edges = new_edges - frozen_edges
@@ -2640,7 +2807,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "3bde797d9f07323b112b297c49ff4debd2a786c81d1e1be382feaf857f278a2f"
+SIM_ROUTE_ORACLE_V1_SHA256 = "e8e68b700eef84b8613c7421a302d9df2c747165491084bdc722edbcf444b88e"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {
@@ -2778,7 +2945,13 @@ def parse_route_oracle(text: str) -> RouteOracle:
         elif parts[0] == "ROOT" and len(parts) == 2:
             roots.add(parts[1])
         elif parts[0] == "INDIRECT_EDGE" and len(parts) == 3:
-            indirect_edges.add((parts[1], parts[2]))
+            edge = (parts[1], parts[2])
+            if edge in indirect_edges:
+                raise ValueError(
+                    f"route oracle line {line_number}: duplicate INDIRECT_EDGE "
+                    f"{parts[1]} {parts[2]}"
+                )
+            indirect_edges.add(edge)
         else:
             raise ValueError(
                 f"route oracle line {line_number}: expected ROOT <linked-symbol> or "
@@ -2910,6 +3083,54 @@ def route_reachable_functions(
                 reachable.add(target)
                 pending.append(target)
     return reachable
+
+
+def audit_indirect_edges(
+    graph: dict[str, set[str]],
+    oracle: RouteOracle,
+    owners: tuple[FunctionOwner, ...],
+    unresolved_transfers: Iterable[UnresolvedTransfer],
+) -> IndirectEdgeAudit:
+    """Validate and apply dispatcher-granular indirect callback declarations."""
+    edges = set(oracle.indirect_edges)
+    transfers = tuple(unresolved_transfers)
+    closure = route_reachable_functions(graph, oracle.roots, edges)
+    owner_names = {
+        name
+        for owner in owners
+        for name in (owner.name, *owner.aliases)
+    }
+    dispatchers_with_transfers = {item.caller for item in transfers}
+
+    for dispatcher, callback in sorted(edges):
+        if dispatcher not in closure:
+            raise ValueError(
+                f"INDIRECT_EDGE has unreachable dispatcher: {dispatcher} -> {callback}"
+            )
+        if callback not in owner_names:
+            raise ValueError(
+                f"INDIRECT_EDGE has missing callback owner: {dispatcher} -> {callback}"
+            )
+        if dispatcher not in dispatchers_with_transfers:
+            raise ValueError(
+                f"unconsumed INDIRECT_EDGE has no unresolved transfer in {dispatcher}: "
+                f"{dispatcher} -> {callback}"
+            )
+        closure_without_edge = route_reachable_functions(
+            graph, oracle.roots, edges - {(dispatcher, callback)}
+        )
+        if callback in closure_without_edge:
+            raise ValueError(
+                f"INDIRECT_EDGE has no closure contribution: {dispatcher} -> {callback}"
+            )
+
+    declared_dispatchers = {dispatcher for dispatcher, _ in edges}
+    unlisted = tuple(
+        item
+        for item in transfers
+        if item.caller in closure and item.caller not in declared_dispatchers
+    )
+    return IndirectEdgeAudit(frozenset(closure), unlisted)
 
 
 def baseline_failures(calls: Iterable[CallSite], route_functions: set[str], baseline: BaselineContract) -> list[str]:
@@ -3390,6 +3611,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
             parsed_instructions = parse_instructions(disassembly)
             instruction_memory = build_instruction_memory(parsed_instructions)
+            known_null_addresses = prove_sourceboot_null_task_submit(
+                parsed_instructions, owners
+            )
             analysis = analyze_code_only(
                 parsed_instructions,
                 owners,
@@ -3398,6 +3622,7 @@ def main(argv: list[str] | None = None) -> int:
                 instruction_memory,
                 owner_address_map=owner_address_map,
                 local_islands=local_islands,
+                known_null_addresses=known_null_addresses,
             )
             direct_calls = analysis.calls
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]
@@ -3406,9 +3631,20 @@ def main(argv: list[str] | None = None) -> int:
                 if not is_native_math_helper(call.helper):
                     graph[call.caller].add(call.helper)
         route_functions = route_reachable_functions(graph, oracle.roots, oracle.indirect_edges)
-        audit_functions = None if audit_oracle is None else route_reachable_functions(
-            graph, audit_oracle.roots, audit_oracle.indirect_edges
-        )
+        audit_edge_result = None
+        if audit_oracle is None:
+            audit_functions = None
+        elif analysis is None:
+            if audit_oracle.indirect_edges:
+                raise ValueError(
+                    "INDIRECT_EDGE validation requires code-only analysis"
+                )
+            audit_functions = route_reachable_functions(graph, audit_oracle.roots)
+        else:
+            audit_edge_result = audit_indirect_edges(
+                graph, audit_oracle, owners, analysis.unresolved_transfers
+            )
+            audit_functions = set(audit_edge_result.closure)
         locations = {} if args.audit_observation_only else source_locations(
             args.addr2line, elf_path, calls
         )
@@ -3434,12 +3670,20 @@ def main(argv: list[str] | None = None) -> int:
                         f"{audit_contract.expected_total}, found {actual_total}"
                     )
             if analysis is not None:
-                unresolved = [
-                    x for x in analysis.unresolved_transfers if x.caller in audit_functions
-                ]
+                assert audit_edge_result is not None
+                unresolved = list(audit_edge_result.unlisted_transfers)
                 effects = [x for x in analysis.unresolved_effects if x.function in audit_functions]
-                if unresolved:
-                    failures.append(f"audit has {len(unresolved)} unresolved indirect transfers")
+                owner_by_name = {owner.name: owner for owner in owners}
+                for transfer in unresolved:
+                    owner = owner_by_name.get(transfer.caller)
+                    site = (
+                        f"+{transfer.address - owner.start}"
+                        if owner is not None else f"at 0x{transfer.address:x}"
+                    )
+                    failures.append(
+                        "audit has unlisted unresolved indirect transfer: "
+                        f"{transfer.caller} {site} {transfer.mnemonic}"
+                    )
                 if effects:
                     failures.append(f"audit has {len(effects)} unresolved register effects")
             if args.audit_observation_only:
@@ -3459,7 +3703,10 @@ def main(argv: list[str] | None = None) -> int:
                     implementation_facts=(
                         None if analysis is None else analysis.implementation_transfers
                     ),
-                    unresolved_transfers=[] if analysis is None else analysis.unresolved_transfers,
+                    unresolved_transfers=(
+                        [] if audit_edge_result is None
+                        else list(audit_edge_result.unlisted_transfers)
+                    ),
                     unresolved_effects=[] if analysis is None else analysis.unresolved_effects,
                     islands=local_islands,
                 )

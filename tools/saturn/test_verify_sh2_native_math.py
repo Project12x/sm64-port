@@ -20,6 +20,7 @@ from verify_sh2_native_math import (
     StackSlot,
     SymbolAtom,
     UNKNOWN,
+    UnresolvedTransfer,
     _unknown_state,
     abstract_value_json,
     analyze_code_only,
@@ -39,6 +40,7 @@ from verify_sh2_native_math import (
     widen_interval,
     CallSite,
     address_batches,
+    audit_indirect_edges,
     audit_failures,
     baseline_digest,
     baseline_failures,
@@ -48,6 +50,7 @@ from verify_sh2_native_math import (
     parse_audit_contract,
     parse_baseline,
     parse_route_oracle,
+    prove_sourceboot_null_task_submit,
     route_reachable_functions,
     run_command,
     scan_call_graph,
@@ -102,6 +105,229 @@ INDIRECT_ROUTE_DISASSEMBLY = """
 
 
 class NativeMathCensusTests(unittest.TestCase):
+    @staticmethod
+    def indirect_owner(name: str, start: int) -> FunctionOwner:
+        return FunctionOwner(name, start, start + 0x20, 1)
+
+    def test_declared_graph_node_callback_extends_closure_and_covers_transfer(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _geo_process_node_and_siblings _geo_camera_main\n"
+        )
+        transfer = UnresolvedTransfer(
+            "_geo_process_node_and_siblings", 0x6001010, "jsr", "r3"
+        )
+        result = audit_indirect_edges(
+            {"_root": {"_geo_process_node_and_siblings"}}, oracle,
+            (
+                self.indirect_owner("_root", 0x6001000),
+                self.indirect_owner("_geo_process_node_and_siblings", 0x6001020),
+                self.indirect_owner("_geo_camera_main", 0x6001040),
+            ),
+            [transfer],
+        )
+        self.assertEqual(
+            result.closure,
+            frozenset({"_root", "_geo_process_node_and_siblings", "_geo_camera_main"}),
+        )
+        self.assertEqual(result.unlisted_transfers, ())
+
+    def test_undeclared_dynamic_transfer_remains_unlisted(self) -> None:
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _root\n")
+        transfer = UnresolvedTransfer("_root", 0x6001004, "jmp", "r2")
+        result = audit_indirect_edges(
+            {}, oracle, (self.indirect_owner("_root", 0x6001000),), [transfer]
+        )
+        self.assertEqual(result.unlisted_transfers, (transfer,))
+
+    def test_duplicate_indirect_edge_input_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "duplicate INDIRECT_EDGE"):
+            parse_route_oracle(
+                "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                "INDIRECT_EDGE _root _callback\n"
+                "INDIRECT_EDGE _root _callback\n"
+            )
+
+    def test_indirect_edge_with_unreachable_dispatcher_is_rejected(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _stale_dispatcher _callback\n"
+        )
+        with self.assertRaisesRegex(ValueError, "unreachable dispatcher.*_stale_dispatcher"):
+            audit_indirect_edges(
+                {}, oracle,
+                (
+                    self.indirect_owner("_root", 0x6001000),
+                    self.indirect_owner("_stale_dispatcher", 0x6001020),
+                    self.indirect_owner("_callback", 0x6001040),
+                ),
+                [UnresolvedTransfer("_stale_dispatcher", 0x6001024, "jsr", "r1")],
+            )
+
+    def test_indirect_edge_with_missing_callback_owner_is_rejected(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _root _missing_callback\n"
+        )
+        with self.assertRaisesRegex(ValueError, "missing callback owner.*_missing_callback"):
+            audit_indirect_edges(
+                {}, oracle, (self.indirect_owner("_root", 0x6001000),),
+                [UnresolvedTransfer("_root", 0x6001004, "jsr", "r1")],
+            )
+
+    def test_unconsumed_indirect_edge_is_rejected(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _root _callback\n"
+        )
+        with self.assertRaisesRegex(ValueError, "unconsumed INDIRECT_EDGE.*_root"):
+            audit_indirect_edges(
+                {}, oracle,
+                (
+                    self.indirect_owner("_root", 0x6001000),
+                    self.indirect_owner("_callback", 0x6001020),
+                ),
+                [],
+            )
+
+    def test_indirect_edge_without_closure_contribution_is_rejected(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _root _callback\n"
+        )
+        with self.assertRaisesRegex(ValueError, "no closure contribution.*_callback"):
+            audit_indirect_edges(
+                {"_root": {"_callback"}}, oracle,
+                (
+                    self.indirect_owner("_root", 0x6001000),
+                    self.indirect_owner("_callback", 0x6001020),
+                ),
+                [UnresolvedTransfer("_root", 0x6001004, "jsr", "r1")],
+            )
+
+    def test_indirect_edge_to_callback_reachable_by_another_path_is_rejected(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _dispatcher _callback\n"
+        )
+        with self.assertRaisesRegex(ValueError, "no closure contribution.*_callback"):
+            audit_indirect_edges(
+                {"_root": {"_dispatcher", "_callback"}}, oracle,
+                (
+                    self.indirect_owner("_root", 0x6001000),
+                    self.indirect_owner("_dispatcher", 0x6001020),
+                    self.indirect_owner("_callback", 0x6001040),
+                ),
+                [UnresolvedTransfer("_dispatcher", 0x6001024, "jsr", "r1")],
+            )
+
+    def test_six_sites_in_one_dispatcher_inherit_the_same_callback_set(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _dispatcher _callback_a\n"
+            "INDIRECT_EDGE _dispatcher _callback_b\n"
+        )
+        transfers = [
+            UnresolvedTransfer("_dispatcher", 0x6001100 + offset * 2, "jsr", "r3")
+            for offset in range(6)
+        ]
+        result = audit_indirect_edges(
+            {"_root": {"_dispatcher"}}, oracle,
+            (
+                self.indirect_owner("_root", 0x6001000),
+                self.indirect_owner("_dispatcher", 0x6001100),
+                self.indirect_owner("_callback_a", 0x6001200),
+                self.indirect_owner("_callback_b", 0x6001300),
+            ),
+            transfers,
+        )
+        self.assertTrue({"_callback_a", "_callback_b"} <= result.closure)
+        self.assertEqual(result.unlisted_transfers, ())
+
+    def test_sourceboot_null_task_submit_proof_clears_only_the_guarded_transfer(self) -> None:
+        disassembly = """
+06001000 <_main>:
+ 6001000: d1 3f mov.l 6001100 <_sm64_saturn_source_runtime_configure>,r1 ! 06001100 <_sm64_saturn_source_runtime_configure>
+ 6001002: 41 0b jsr @r1
+ 6001004: e4 00 mov #0,r4
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06001100 <_sm64_saturn_source_runtime_configure>:
+ 6001100: d1 7f mov.l 6001300 <_sTaskSubmit>,r1 ! 06001300 <_sTaskSubmit>
+ 6001102: 21 42 mov.l r4,@r1
+ 6001104: 00 0b rts
+ 6001106: 00 09 nop
+06001200 <_exec_display_list>:
+ 6001200: d2 3f mov.l 6001300 <_sTaskSubmit>,r2 ! 06001300 <_sTaskSubmit>
+ 6001202: 62 22 mov.l @r2,r2
+ 6001204: 22 28 tst r2,r2
+ 6001206: 89 04 bt 6001212 <_exec_display_list+0x12>
+ 6001208: d1 03 mov.l 6001218 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
+ 600120a: 42 2b jmp @r2
+ 600120c: 65 12 mov.l @r1,r5
+ 6001212: 52 12 mov.l @(8,r1),r2
+ 6001214: 72 01 add #1,r2
+ 6001216: 00 0b rts
+ 6001218: 11 22 mov.l r2,@(8,r1)
+"""
+        instructions = parse_instructions(disassembly)
+        owners = (
+            self.indirect_owner("_main", 0x6001000),
+            self.indirect_owner("_sm64_saturn_source_runtime_configure", 0x6001100),
+            self.indirect_owner("_exec_display_list", 0x6001200),
+        )
+        null_slots = prove_sourceboot_null_task_submit(instructions, owners)
+        self.assertEqual(null_slots, frozenset({0x6001300}))
+        result = analyze_code_only(
+            instructions, owners, selected_names={"_exec_display_list"},
+            known_null_addresses=null_slots,
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+
+    def test_sourceboot_nonnull_or_unknown_task_submit_remains_unresolved(self) -> None:
+        template = """
+06001000 <_main>:
+ 6001000: d1 3f mov.l 6001100 <_sm64_saturn_source_runtime_configure>,r1 ! 06001100 <_sm64_saturn_source_runtime_configure>
+ 6001002: 41 0b jsr @r1
+ 6001004: {argument}
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06001100 <_sm64_saturn_source_runtime_configure>:
+ 6001100: d1 7f mov.l 6001300 <_sTaskSubmit>,r1 ! 06001300 <_sTaskSubmit>
+ 6001102: 21 42 mov.l r4,@r1
+ 6001104: 00 0b rts
+ 6001106: 00 09 nop
+06001200 <_exec_display_list>:
+ 6001200: d2 3f mov.l 6001300 <_sTaskSubmit>,r2 ! 06001300 <_sTaskSubmit>
+ 6001202: 62 22 mov.l @r2,r2
+ 6001204: 22 28 tst r2,r2
+ 6001206: 89 02 bt 600120e <_exec_display_list+0xe>
+ 6001208: 42 2b jmp @r2
+ 600120a: 00 09 nop
+ 600120e: 00 0b rts
+ 6001210: 00 09 nop
+"""
+        owners = (
+            self.indirect_owner("_main", 0x6001000),
+            self.indirect_owner("_sm64_saturn_source_runtime_configure", 0x6001100),
+            self.indirect_owner("_exec_display_list", 0x6001200),
+        )
+        for argument in ("e4 01 mov #1,r4", "00 09 nop"):
+            with self.subTest(argument=argument):
+                instructions = parse_instructions(template.format(argument=argument))
+                self.assertEqual(
+                    prove_sourceboot_null_task_submit(instructions, owners), frozenset()
+                )
+                result = analyze_code_only(
+                    instructions, owners, selected_names={"_exec_display_list"}
+                )
+                self.assertEqual(
+                    [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+                    [(0x6001208, "jmp")],
+                )
+
     def test_addr2line_addresses_are_batched_for_windows_command_limits(self) -> None:
         self.assertEqual(list(address_batches([1, 2, 3, 4, 5], 2)), [(1, 2), (3, 4), (5,)])
 
