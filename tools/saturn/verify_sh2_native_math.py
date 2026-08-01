@@ -118,6 +118,8 @@ MAYBE_STACK_PTR = MaybeStackPtr()
 class StackSlot:
     value: AbstractValue
     store_addresses: tuple[int, ...] = ()
+    exact_symbols: frozenset[SymbolAtom] = frozenset()
+    unknown_store: bool = False
 
 
 @dataclass(frozen=True)
@@ -339,7 +341,14 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
             stores = tuple(sorted(set(
                 (*left_slot.store_addresses, *right_slot.store_addresses)
             ))[:16])
-            merged_slots.append((offset, StackSlot(value, stores)))
+            symbols = left_slot.exact_symbols | right_slot.exact_symbols
+            merged_slots.append((offset, StackSlot(
+                value,
+                stores,
+                symbols if len(symbols) <= 2 else frozenset(),
+                left_slot.unknown_store or right_slot.unknown_store
+                or len(symbols) > 1,
+            )))
         return StackMemory(tuple(merged_slots))
     if isinstance(left, StackOrigin) and isinstance(right, StackOrigin):
         return StackOrigin(
@@ -878,7 +887,18 @@ def _stack_store(
     state: dict[str, AbstractValue], offset: int, value: AbstractValue, address: int
 ) -> None:
     slots = _stack_slots(state)
-    slots[offset] = StackSlot(value, (address,))
+    atoms = (
+        value.values
+        if isinstance(value, ConstSet) and value.kind == "symbol"
+        and len(value.values) == 1
+        and all(isinstance(item, SymbolAtom) for item in value.values)
+        else frozenset()
+    )
+    slots[offset] = StackSlot(
+        value, (address,),
+        frozenset(item for item in atoms if isinstance(item, SymbolAtom)),
+        not bool(atoms),
+    )
     _replace_stack_slots(state, slots)
 
 
@@ -886,29 +906,60 @@ def _stack_load(state: dict[str, AbstractValue], offset: int) -> StackSlot:
     return _stack_slots(state).get(offset, StackSlot(UNKNOWN))
 
 
+def _stack_slot_value(slot: StackSlot) -> AbstractValue:
+    if slot.value is UNKNOWN and not slot.unknown_store \
+            and len(slot.exact_symbols) == 1:
+        return ConstSet("symbol", slot.exact_symbols)
+    return slot.value
+
+
+def _poison_stack_slot(slot: StackSlot) -> StackSlot:
+    return StackSlot(UNKNOWN, slot.store_addresses, slot.exact_symbols, True)
+
+
 def _invalidate_stack(state: dict[str, AbstractValue]) -> None:
-    state["stack_memory"] = StackMemory()
+    slots = {
+        offset: _poison_stack_slot(slot)
+        for offset, slot in _stack_slots(state).items()
+    }
+    _replace_stack_slots(state, slots)
 
 
 def _invalidate_stack_range(
     state: dict[str, AbstractValue], offset: int, width: int
 ) -> None:
     """Forget modeled longword slots overlapped by a bounded frame store."""
-    slots = {
-        slot_offset: slot
-        for slot_offset, slot in _stack_slots(state).items()
-        if slot_offset + 4 <= offset or offset + width <= slot_offset
-    }
+    slots = {}
+    for slot_offset, slot in _stack_slots(state).items():
+        slots[slot_offset] = (
+            slot
+            if slot_offset + 4 <= offset or offset + width <= slot_offset
+            else _poison_stack_slot(slot)
+        )
     _replace_stack_slots(state, slots)
 
 
 def _invalidate_escaped_argument_slots(state: dict[str, AbstractValue]) -> None:
-    """Forget the frame when any possible frame address escapes as an argument."""
-    if any(
-        isinstance(state[register], (StackPtr, MaybeStackPtr))
-        for register in ("r4", "r5", "r6", "r7")
-    ):
+    """Forget slots whose address may escape through an argument register."""
+    arguments = tuple(state[register] for register in ("r4", "r5", "r6", "r7"))
+    if any(isinstance(argument, MaybeStackPtr) for argument in arguments):
         _invalidate_stack(state)
+        return
+    escaped_offsets = {
+        argument.offset
+        for argument in arguments
+        if isinstance(argument, StackPtr)
+    }
+    if not escaped_offsets:
+        return
+    slots = {}
+    for slot_offset, slot in _stack_slots(state).items():
+        escaped = any(
+            slot_offset <= escaped_offset <= slot_offset + 4
+            for escaped_offset in escaped_offsets
+        )
+        slots[slot_offset] = _poison_stack_slot(slot) if escaped else slot
+    _replace_stack_slots(state, slots)
 
 
 def _exact_integer(value: AbstractValue) -> int | None:
@@ -997,7 +1048,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         pointer = state["r15"]
         if isinstance(pointer, StackPtr):
             slot = _stack_load(state, pointer.offset)
-            state[pop.group(1)] = slot.value
+            state[pop.group(1)] = _stack_slot_value(slot)
             state[f"{pop.group(1)}_stack_origin"] = StackOrigin(
                 (pointer.offset,), slot.store_addresses
             )
@@ -1029,7 +1080,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             displacement = int(stack_load.group(1) or 0)
             offset = pointer.offset + displacement
             slot = _stack_load(state, offset)
-            state[stack_load.group(2)] = slot.value
+            state[stack_load.group(2)] = _stack_slot_value(slot)
             state[f"{stack_load.group(2)}_stack_origin"] = StackOrigin(
                 (offset,), slot.store_addresses
             )
@@ -1113,7 +1164,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             destination_name = aliased_stack_load.group(4)
             if mnemonic == "mov.l" and offset % 4 == 0:
                 slot = _stack_load(state, offset)
-                state[destination_name] = slot.value
+                state[destination_name] = _stack_slot_value(slot)
                 state[f"{destination_name}_stack_origin"] = StackOrigin(
                     (offset,), slot.store_addresses
                 )

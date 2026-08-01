@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from verify_sh2_native_math import (
     ConstSet,
+    DirectCallFact,
     FunctionOwner,
     Interval,
     MAYBE_STACK_PTR,
@@ -337,6 +338,14 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         symbols = parse_readelf_symbols(self.SYMBOLS, sections)
         owners = resolve_function_owners(symbols, sections)
         return analyze_code_only(parse_instructions(disassembly), owners, parse_decoded_lines(lines, owners))
+
+    def analyze_named_fixture(self, disassembly: str, symbols_text: str):
+        sections = parse_readelf_sections(
+            "  [ 1] .text PROGBITS 06001000 001000 003000 00 AX 0 0 4\n"
+        )
+        symbols = parse_readelf_symbols(symbols_text, sections)
+        owners = resolve_function_owners(symbols, sections)
+        return analyze_code_only(parse_instructions(disassembly), owners)
 
     def _register_add_result(self, source, target=MAYBE_STACK_PTR):
         instruction = parse_instructions(" 6001000: 34 5c add r5,r4\n")[0x6001000]
@@ -806,6 +815,229 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
         self.assertEqual(result.unresolved_transfers, [])
 
+    def test_geo_process_held_object_recovers_spilled_vec3f_helper(self) -> None:
+        dis = """
+06001000 <_geo_process_held_object>:
+ 6001000: 2f 86 mov.l r8,@-r15
+ 6001002: 2f 96 mov.l r9,@-r15
+ 6001004: 2f a6 mov.l r10,@-r15
+ 6001006: 2f b6 mov.l r11,@-r15
+ 6001008: 2f c6 mov.l r12,@-r15
+ 600100a: 2f d6 mov.l r13,@-r15
+ 600100c: 2f e6 mov.l r14,@-r15
+ 600100e: 4f 22 sts.l pr,@-r15
+ 6001010: 7f 84 add #-124,r15
+ 6001012: 6c f3 mov r15,r12
+ 6001014: 7c 3c add #60,r12
+ 6001016: a0 73 bra 6001100 <_geo_process_held_object+0x100>
+ 6001018: 00 09 nop
+ 6001100: d7 7e mov.l 60012fc <_geo_process_held_object+0x2fc>,r7 ! 06003000 <_saturn_vec3f_to_q16>
+ 6001102: 1f 72 mov.l r7,@(8,r15)
+ 6001104: 64 c3 mov r12,r4
+ 6001106: d2 7e mov.l 6001300 <_frame_writer>,r2 ! 06003020 <_frame_writer>
+ 6001108: 42 0b jsr @r2
+ 600110a: 00 09 nop
+ 600110c: 57 f2 mov.l @(8,r15),r7
+ 600110e: 00 09 nop
+ 6001110: 00 09 nop
+ 6001112: 00 09 nop
+ 6001114: 00 09 nop
+ 6001116: 00 09 nop
+ 6001118: 00 09 nop
+ 600111a: 00 09 nop
+ 600111c: 00 09 nop
+ 600111e: 00 09 nop
+ 6001120: 00 09 nop
+ 6001122: 00 09 nop
+ 6001124: 00 09 nop
+ 6001126: 00 09 nop
+ 6001128: 47 0b jsr @r7
+ 600112a: 00 09 nop
+ 600112c: 00 0b rts
+ 600112e: 00 09 nop
+06003000 <_saturn_vec3f_to_q16>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06003020 <_frame_writer>:
+ 6003020: 24 02 mov.l r0,@r4
+ 6003022: 00 0b rts
+ 6003024: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 304 FUNC GLOBAL DEFAULT 1 _geo_process_held_object
+   2: 06003000 4 FUNC GLOBAL DEFAULT 1 _saturn_vec3f_to_q16
+   3: 06003020 6 FUNC GLOBAL DEFAULT 1 _frame_writer
+""")
+        self.assertIn(
+            CallSite("_geo_process_held_object", 0x6001128, "_saturn_vec3f_to_q16"),
+            result.calls,
+        )
+        self.assertIn(
+            DirectCallFact(
+                "_geo_process_held_object", 296, "_saturn_vec3f_to_q16", 0
+            ),
+            result.direct_calls,
+        )
+        self.assertFalse(any(x.address == 0x6001128 for x in result.unresolved_transfers))
+
+    def test_geo_process_node_and_siblings_recovers_loop_spilled_q16_helper(self) -> None:
+        dis = """
+06001000 <_geo_process_node_and_siblings>:
+ 6001000: 2f 86 mov.l r8,@-r15
+ 6001002: 2f 96 mov.l r9,@-r15
+ 6001004: 2f a6 mov.l r10,@-r15
+ 6001006: 2f b6 mov.l r11,@-r15
+ 6001008: 2f c6 mov.l r12,@-r15
+ 600100a: 2f d6 mov.l r13,@-r15
+ 600100c: 2f e6 mov.l r14,@-r15
+ 600100e: 4f 22 sts.l pr,@-r15
+ 6001010: 7f 8c add #-116,r15
+  6001012: 7f 8c add #-116,r15
+  6001014: a4 e4 bra 60019e0 <_geo_process_node_and_siblings+0x9e0>
+ 6001016: 65 f3 mov r15,r5
+ 60019e0: 93 24 mov.w 6001a2c <_geo_process_node_and_siblings+0xa2c>,r3 ! a8
+ 60019e2: 6d 13 mov r1,r13
+ 60019e4: d7 1e mov.l 6001a60 <_geo_process_node_and_siblings+0xa60>,r7 ! 06003000 <_sm64_saturn_float_to_q16>
+ 60019e6: 62 13 mov r1,r2
+ 60019e8: 33 fc add r15,r3
+ 60019ea: 7d 10 add #16,r13
+ 60019ec: 72 50 add #80,r2
+ 60019ee: 61 d3 mov r13,r1
+ 60019f0: 71 f0 add #-16,r1
+ 60019f2: 65 f3 mov r15,r5
+ 60019f4: 64 16 mov.l @r1+,r4
+ 60019f6: 1f 18 mov.l r1,@(32,r15)
+ 60019f8: 1f 27 mov.l r2,@(28,r15)
+ 60019fa: 1f 39 mov.l r3,@(36,r15)
+ 60019fc: 47 0b jsr @r7
+ 60019fe: 1f 7a mov.l r7,@(40,r15)
+ 6001a00: 51 f8 mov.l @(32,r15),r1
+ 6001a02: 00 09 nop
+ 6001a04: 3d 10 cmp/eq r1,r13
+ 6001a06: 52 f7 mov.l @(28,r15),r2
+ 6001a08: 7e 04 add #4,r14
+ 6001a0a: 53 f9 mov.l @(36,r15),r3
+ 6001a0c: 8f f2 bf.s 60019f4 <_geo_process_node_and_siblings+0x9f4>
+ 6001a0e: 57 fa mov.l @(40,r15),r7
+ 6001a10: 00 0b rts
+ 6001a12: 00 09 nop
+06003000 <_sm64_saturn_float_to_q16>:
+ 6003000: 67 03 mov r0,r7
+ 6003002: 24 02 mov.l r0,@r4
+ 6003004: 00 0b rts
+ 6003006: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 2580 FUNC GLOBAL DEFAULT 1 _geo_process_node_and_siblings
+   2: 06003000 8 FUNC GLOBAL DEFAULT 1 _sm64_saturn_float_to_q16
+""")
+        self.assertIn(
+            CallSite(
+                "_geo_process_node_and_siblings", 0x60019FC,
+                "_sm64_saturn_float_to_q16",
+            ),
+            result.calls,
+            result.unresolved_transfers,
+        )
+        self.assertIn(
+            DirectCallFact(
+                "_geo_process_node_and_siblings", 2556,
+                "_sm64_saturn_float_to_q16", 0,
+            ),
+            result.direct_calls,
+        )
+        self.assertFalse(any(x.address == 0x60019FC for x in result.unresolved_transfers))
+
+    def test_gu_mtx_f2l_recovers_loop_spilled_fixsfsi_helper(self) -> None:
+        dis = """
+06001000 <_guMtxF2L>:
+ 6001000: 2f 86 mov.l r8,@-r15
+ 6001002: 68 43 mov r4,r8
+ 6001004: 2f 96 mov.l r9,@-r15
+ 6001006: 78 50 add #80,r8
+ 6001008: 2f a6 mov.l r10,@-r15
+ 600100a: 2f b6 mov.l r11,@-r15
+ 600100c: 6b 43 mov r4,r11
+ 600100e: 2f c6 mov.l r12,@-r15
+ 6001010: 7b 10 add #16,r11
+ 6001012: 2f d6 mov.l r13,@-r15
+ 6001014: 2f e6 mov.l r14,@-r15
+ 6001016: 4f 22 sts.l pr,@-r15
+ 6001018: 7f b0 add #-80,r15
+ 600101a: 69 f3 mov r15,r9
+ 600101c: dc 1f mov.l 60010bc <_guMtxF2L+0xbc>,r12 ! 7fffffff
+ 600101e: 79 10 add #16,r9
+ 6001020: 9d 3b mov.w 600109a <_guMtxF2L+0x9a>,r13 ! 8d
+ 6001022: d3 1f mov.l 60010a0 <_guMtxF2L+0xa0>,r3 ! 807fffff
+ 6001024: d7 1f mov.l 60010a4 <_guMtxF2L+0xa4>,r7 ! 06003000 <___fixsfsi>
+ 6001026: 1f 53 mov.l r5,@(12,r15)
+ 6001028: 65 93 mov r9,r5
+ 600102a: 6a b3 mov r11,r10
+ 600102c: 7a f0 add #-16,r10
+ 600102e: 6e 93 mov r9,r14
+ 6001030: d1 1a mov.l 60010bc <_guMtxF2L+0xbc>,r1 ! 7fffffff
+ 6001032: 64 a6 mov.l @r10+,r4
+ 6001034: 24 18 tst r1,r4
+ 6001036: 8d 0b bt.s 6001050 <_guMtxF2L+0x50>
+ 6001038: e0 00 mov #0,r0
+ 600103a: 66 43 mov r4,r6
+ 600103c: 46 29 shlr16 r6
+ 600103e: 36 6c add r6,r6
+ 6001040: 46 19 shlr8 r6
+ 6001042: 66 6c extu.b r6,r6
+ 6001044: 36 d0 cmp/hi r13,r6
+ 6001046: 8b 1a bf 600107e <_guMtxF2L+0x7e>
+ 6001048: 60 43 mov r4,r0
+ 600104a: 40 00 shll r0
+ 600104c: 30 0a subc r0,r0
+ 600104e: 20 ca xor r12,r0
+ 6001050: 2e 02 mov.l r0,@r14
+ 6001052: 3a b0 cmp/eq r11,r10
+ 6001054: 8f ec bf.s 6001030 <_guMtxF2L+0x30>
+ 6001056: 7e 04 add #4,r14
+ 6001058: 6b a3 mov r10,r11
+ 600105a: 7b 10 add #16,r11
+ 600105c: 3b 80 cmp/eq r8,r11
+ 600105e: 8f e4 bf.s 600102a <_guMtxF2L+0x2a>
+ 6001060: 79 10 add #16,r9
+ 6001062: 00 0b rts
+ 6001064: 00 09 nop
+ 600107e: 76 10 add #16,r6
+ 6001080: 46 28 shll16 r6
+ 6001082: 46 01 shlr r6
+ 6001084: 24 39 and r3,r4
+ 6001086: 46 18 shll8 r6
+ 6001088: 1f 31 mov.l r3,@(4,r15)
+ 600108a: 24 6b or r6,r4
+ 600108c: 1f 52 mov.l r5,@(8,r15)
+ 600108e: 47 0b jsr @r7
+ 6001090: 2f 72 mov.l r7,@r15
+ 6001092: 67 f2 mov.l @r15,r7
+ 6001094: 55 f2 mov.l @(8,r15),r5
+ 6001096: af db bra 6001050 <_guMtxF2L+0x50>
+ 6001098: 53 f1 mov.l @(4,r15),r3
+06003000 <___fixsfsi>:
+ 6003000: d2 07 mov.l 6003020 <_shift_helper>,r2 ! 06003020 <_shift_helper>
+ 6003002: 42 0b jsr @r2
+ 6003004: 67 03 mov r0,r7
+ 6003006: 00 0b rts
+ 6003008: 00 09 nop
+06003020 <_shift_helper>:
+ 6003020: 00 0b rts
+ 6003022: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 154 FUNC GLOBAL DEFAULT 1 _guMtxF2L
+   2: 06003000 10 FUNC GLOBAL DEFAULT 1 ___fixsfsi
+   3: 06003020 4 FUNC GLOBAL DEFAULT 1 _shift_helper
+""")
+        self.assertIn(CallSite("_guMtxF2L", 0x600108E, "___fixsfsi"), result.calls)
+        self.assertIn(
+            DirectCallFact("_guMtxF2L", 142, "___fixsfsi", 0),
+            result.direct_calls,
+        )
+        self.assertFalse(any(x.address == 0x600108E for x in result.unresolved_transfers))
+
     def test_dereferenced_graph_node_func_pointer_stays_unresolved(self) -> None:
         dis = """
 06001000 <_root>:
@@ -818,6 +1050,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
 """
         result = self.analyze(dis)
         self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
         self.assertEqual(
             [(item.address, item.mnemonic) for item in result.unresolved_transfers],
             [(0x6001004, "jsr")],
@@ -1229,7 +1462,10 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             effects,
             FunctionOwner("_root", 0x6001000, 0x6001002, 1),
         )
-        self.assertEqual(state["stack_memory"], StackMemory())
+        self.assertEqual(
+            state["stack_memory"],
+            StackMemory(((0, StackSlot(UNKNOWN, (), frozenset(), True)),)),
+        )
         self.assertEqual(effects, [])
 
     def test_derived_stack_alias_preserves_nonoverlapping_target_spill(self) -> None:
