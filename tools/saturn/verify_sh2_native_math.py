@@ -2807,7 +2807,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "e8e68b700eef84b8613c7421a302d9df2c747165491084bdc722edbcf444b88e"
+SIM_ROUTE_ORACLE_V1_SHA256 = "9bce57fd1b033d4ab096ad301af5f357f6eb2ae271505b25f732ff65c86f7b8f"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {
@@ -3085,6 +3085,13 @@ def route_reachable_functions(
     return reachable
 
 
+def is_structurally_dynamic_callback_transfer(
+    transfer: UnresolvedTransfer,
+) -> bool:
+    """Return whether an unresolved transfer has no static stack provenance."""
+    return not transfer.stack_source_offsets and not transfer.stack_store_addresses
+
+
 def audit_indirect_edges(
     graph: dict[str, set[str]],
     oracle: RouteOracle,
@@ -3100,7 +3107,14 @@ def audit_indirect_edges(
         for owner in owners
         for name in (owner.name, *owner.aliases)
     }
-    dispatchers_with_transfers = {item.caller for item in transfers}
+    dynamic_transfers = tuple(
+        item
+        for item in transfers
+        if is_structurally_dynamic_callback_transfer(item)
+    )
+    dispatchers_with_dynamic_transfers = {
+        item.caller for item in dynamic_transfers
+    }
 
     for dispatcher, callback in sorted(edges):
         if dispatcher not in closure:
@@ -3111,9 +3125,10 @@ def audit_indirect_edges(
             raise ValueError(
                 f"INDIRECT_EDGE has missing callback owner: {dispatcher} -> {callback}"
             )
-        if dispatcher not in dispatchers_with_transfers:
+        if dispatcher not in dispatchers_with_dynamic_transfers:
             raise ValueError(
-                f"unconsumed INDIRECT_EDGE has no unresolved transfer in {dispatcher}: "
+                "unconsumed INDIRECT_EDGE has no structurally dynamic unresolved "
+                f"transfer in {dispatcher}: "
                 f"{dispatcher} -> {callback}"
             )
         closure_without_edge = route_reachable_functions(
@@ -3128,7 +3143,11 @@ def audit_indirect_edges(
     unlisted = tuple(
         item
         for item in transfers
-        if item.caller in closure and item.caller not in declared_dispatchers
+        if item.caller in closure
+        and (
+            item.caller not in declared_dispatchers
+            or item not in dynamic_transfers
+        )
     )
     return IndirectEdgeAudit(frozenset(closure), unlisted)
 

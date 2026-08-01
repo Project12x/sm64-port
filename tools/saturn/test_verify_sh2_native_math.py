@@ -244,6 +244,68 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertTrue({"_callback_a", "_callback_b"} <= result.closure)
         self.assertEqual(result.unlisted_transfers, ())
 
+    def test_omitted_route_derived_target_is_absent_from_indirect_closure(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _dispatcher _geo_camera_main\n"
+        )
+        result = audit_indirect_edges(
+            {"_root": {"_dispatcher"}}, oracle,
+            (
+                self.indirect_owner("_root", 0x6001000),
+                self.indirect_owner("_dispatcher", 0x6001100),
+                self.indirect_owner("_geo_camera_main", 0x6001200),
+                self.indirect_owner("_geo_skybox_main", 0x6001300),
+            ),
+            [UnresolvedTransfer("_dispatcher", 0x6001104, "jsr", "r0")],
+        )
+        self.assertIn("_geo_camera_main", result.closure)
+        self.assertNotIn("_geo_skybox_main", result.closure)
+
+    def test_checked_in_sim_oracle_declares_complete_bob_callback_sets(self) -> None:
+        text = Path(__file__).with_name(
+            "sh2_native_math_sim_route_oracle_v1.txt"
+        ).read_text(encoding="utf-8")
+        oracle = parse_route_oracle(text)
+        required_edges = {
+            ("_geo_process_node_and_siblings", "_geo_skybox_main"),
+            ("_geo_process_node_and_siblings", "_geo_camera_fov"),
+            ("_geo_process_node_and_siblings", "_geo_camera_main"),
+            ("_geo_process_node_and_siblings", "_geo_envfx_main"),
+            ("_geo_process_node_and_siblings", "_geo_cannon_circle_base"),
+            ("_level_script_execute", "_level_cmd_init_level"),
+            ("_level_script_execute", "_level_cmd_get_or_set_var"),
+            ("_level_script_execute", "_level_cmd_call"),
+            ("_level_script_execute", "_level_cmd_load_and_execute"),
+            ("_level_script_execute", "_level_cmd_clear_level"),
+            ("_level_script_execute", "_level_cmd_jump"),
+            ("_level_script_execute", "_level_cmd_set_register"),
+        }
+        self.assertEqual(required_edges - oracle.indirect_edges, set())
+
+    def test_declared_dispatcher_does_not_mask_stack_derived_static_helper(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _geo_process_node_and_siblings _geo_camera_main\n"
+        )
+        dynamic_callback = UnresolvedTransfer(
+            "_geo_process_node_and_siblings", 0x6001110, "jsr", "r0"
+        )
+        regressed_static_helper = UnresolvedTransfer(
+            "_geo_process_node_and_siblings", 0x6001190, "jsr", "r7",
+            stack_source_offsets=(-224,), stack_store_addresses=(0x6001180,),
+        )
+        result = audit_indirect_edges(
+            {"_root": {"_geo_process_node_and_siblings"}}, oracle,
+            (
+                self.indirect_owner("_root", 0x6001000),
+                self.indirect_owner("_geo_process_node_and_siblings", 0x6001100),
+                self.indirect_owner("_geo_camera_main", 0x6001200),
+            ),
+            [dynamic_callback, regressed_static_helper],
+        )
+        self.assertEqual(result.unlisted_transfers, (regressed_static_helper,))
+
     def test_sourceboot_null_task_submit_proof_clears_only_the_guarded_transfer(self) -> None:
         disassembly = """
 06001000 <_main>:
