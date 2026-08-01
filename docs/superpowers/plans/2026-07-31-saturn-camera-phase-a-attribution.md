@@ -186,7 +186,7 @@
 - [ ] **Step 1: Build each role with a unique output tag and run the same route.** Use the corrected MSYS environment and the sourceboot linker verifier; do not run source and candidate cameras together. The three builds use this common command prefix and vary only `SATURN_CAMERA_VARIANT`:
 
   ```powershell
-  $buildBase = "cd /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge && source /d/Code/RetroDev/sm64-saturn-port/sm64-port/.yaul.env && cd src/port/saturn/sourceboot && make -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_SOURCEBOOT_CAMERA_ROUTE=1 SATURN_ATAN2_VARIANT=2 SATURN_SOURCE_CART_STAGE_SECTORS=16 SATURN_RENDERER_PIPELINE=2 HOST_CC=C:/msys64/mingw64/bin/gcc.exe"
+  $buildBase = "cd /d/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge && source /d/Code/RetroDev/sm64-saturn-port/sm64-port/.yaul.env && cd src/port/saturn/sourceboot && make -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_SOURCEBOOT_CAMERA_ROUTE=1 SATURN_ATAN2_VARIANT=2 SATURN_SOURCE_CART_STAGE_SECTORS=16 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_RENDERER_PIPELINE=2 HOST_CC=C:/msys64/mingw64/bin/gcc.exe"
   $baseline = "$buildBase SATURN_CAMERA_VARIANT=1 verify"
   $bypass = "$buildBase SATURN_CAMERA_VARIANT=2 verify"
   $candidate = "$buildBase SATURN_CAMERA_VARIANT=3 verify"
