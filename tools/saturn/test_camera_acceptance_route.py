@@ -260,7 +260,18 @@ int main(void) {
         self.assertIn("-camv3-stage16", fixed_dir)
 
         route_one_dir = make_value(variants["camera_route"].stdout, "SH_OUTPUT_DIR")
-        self.assertIn("-idle0-disc0-range0-stage16-r6000", route_one_dir)
+        self.assertIn("-idle0-disc0-range0-stage8-r6000", route_one_dir)
+
+        oversized_camera_stage = sourceboot_make(
+            "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+            "SATURN_SOURCEBOOT_CAMERA_ROUTE=1",
+            "SATURN_SOURCE_CART_STAGE_SECTORS=16",
+        )
+        self.assertEqual(oversized_camera_stage.returncode, 2)
+        self.assertIn(
+            "camera evidence route requires an 8- or 4-sector cart stage",
+            oversized_camera_stage.stderr,
+        )
 
         for assignment, message in (
             ("SATURN_CAMERA_VARIANT=4", "SATURN_CAMERA_VARIANT must be 1 (float), 2 (bypass), or 3 (fixed)"),

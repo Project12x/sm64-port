@@ -32,7 +32,10 @@ SATURN_SOURCEBOOT_CAMERA_ROUTE ?= 0
 SATURN_CAMERA_IDLE_START_TICK ?= 0
 SATURN_CAMERA_IDLE_DISCOVERY ?= 0
 SATURN_CAMERA_RANGE_CAPTURE ?= 0
-SATURN_SOURCE_CART_STAGE_SECTORS ?= 16
+# Camera evidence carries the fixed SCC1 LWRAM reservation and the camera-Q
+# transport contract already selected the smallest non-fallback cart stage:
+# eight sectors.  Route 0 retains the historical 16-sector boot throughput.
+SATURN_SOURCE_CART_STAGE_SECTORS ?= $(if $(filter 1,$(SATURN_SOURCEBOOT_CAMERA_ROUTE)),8,16)
 ifneq ($(words $(filter $(SATURN_CAMERA_VARIANT),1 2 3)),1)
   $(error SATURN_CAMERA_VARIANT must be 1 (float), 2 (bypass), or 3 (fixed))
 endif
@@ -42,6 +45,9 @@ endif
 ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)
   ifneq ($(SATURN_SOURCEBOOT_ROUTE_REPLAY),1)
     $(error SATURN_SOURCEBOOT_CAMERA_ROUTE=1 requires SATURN_SOURCEBOOT_ROUTE_REPLAY=1)
+  endif
+  ifneq ($(words $(filter $(SATURN_SOURCE_CART_STAGE_SECTORS),4 8)),1)
+    $(error camera evidence route requires an 8- or 4-sector cart stage)
   endif
 endif
 ifneq ($(words $(filter $(SATURN_CAMERA_IDLE_DISCOVERY),0 1)),1)
