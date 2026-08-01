@@ -20,6 +20,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
+from camera_idle_contract import ROLE_IDS
 from capture_hwtest import (
     STDERR_CAPTURE_LIMIT,
     artifact_identity,
@@ -32,6 +33,45 @@ from compare_route_reports import MAGIC as ROUTE_MAGIC
 from compare_route_reports import PROBE_BYTES as ROUTE_PROBE_BYTES
 from compare_route_reports import VERSION as ROUTE_VERSION
 from compare_route_reports import decode_probe
+
+
+def resolve_capture_identity(
+    game: Path, *, renderer_pipeline: int, camera_role: str
+) -> dict[str, Any]:
+    """Bind a route-view capture request to its sibling ELF camera markers."""
+    if renderer_pipeline <= 0:
+        raise ValueError("renderer pipeline must be positive")
+    try:
+        expected_variant = ROLE_IDS[camera_role]
+    except KeyError as error:
+        raise ValueError(f"unsupported capture role {camera_role!r}") from error
+    elf = newest_sibling_elf(game)
+    if elf is None:
+        raise ValueError(f"no sibling ELF for {game}")
+    # Import lazily: capture_camera_idle reuses this module's YmirClient.
+    from capture_camera_idle import resolve_symbols
+
+    symbols = resolve_symbols(elf)
+    if symbols["sm64_saturn_camera_variant_marker"] != expected_variant:
+        raise ValueError("ELF camera variant marker disagrees with capture role")
+    if symbols["sm64_saturn_camera_route_marker"] != 1:
+        raise ValueError("ELF camera route marker is not route 1")
+    return {
+        "renderer_pipeline": renderer_pipeline,
+        "camera_role": camera_role,
+        "camera_variant": symbols["sm64_saturn_camera_variant_marker"],
+        "camera_route": symbols["sm64_saturn_camera_route_marker"],
+        "elf": elf,
+    }
+
+
+def screenshot_filename(
+    view_id: str, route_tick: int, name_suffix: str, identity: dict[str, Any]
+) -> str:
+    return (
+        f"ymir-bob-pipe{identity['renderer_pipeline']}-{view_id}-"
+        f"tick{route_tick}-{name_suffix}.png"
+    )
 
 
 class YmirClient:
@@ -218,6 +258,11 @@ def main() -> int:
     parser.add_argument("--degradation-poly-tier", type=int, required=True)
     parser.add_argument("--build-slave-render", type=int, choices=(0, 1), required=True)
     parser.add_argument("--build-hot-promotion", type=int, choices=(0, 1), required=True)
+    parser.add_argument("--renderer-pipeline", type=int, default=8)
+    parser.add_argument(
+        "--expected-camera-role", choices=tuple(ROLE_IDS),
+        default="camera-source-baseline",
+    )
     args = parser.parse_args()
 
     args.ymir = args.ymir.resolve()
@@ -237,6 +282,14 @@ def main() -> int:
             "game image is older than its build ELF "
             f"({args.game.name} {game_mtime:.3f} < {elf.name} {elf_mtime:.3f})"
         )
+    try:
+        identity = resolve_capture_identity(
+            args.game,
+            renderer_pipeline=args.renderer_pipeline,
+            camera_role=args.expected_camera_role,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     try:
         manifest, viewpoints = parse_view_manifest(args.manifest)
     except (OSError, ValueError, json.JSONDecodeError) as error:
@@ -293,7 +346,7 @@ def main() -> int:
             capture_result = client.call("video.capture")
             image_path = (
                 args.screenshot_dir
-                / f"ymir-bob-pipe8-{viewpoint['id']}-tick{target}-{args.name_suffix}.png"
+                / screenshot_filename(viewpoint["id"], target, args.name_suffix, identity)
             )
             captures.append(
                 {
@@ -316,7 +369,6 @@ def main() -> int:
         raise
 
     wall_seconds = time.perf_counter() - wall_start
-    elf = newest_sibling_elf(args.game)
     report = {
         "evidence_kind": "ymir-emulator-route-views",
         "ymir": str(args.ymir),
@@ -324,7 +376,7 @@ def main() -> int:
         "game": str(args.game),
         "artifacts": {
             "game": artifact_identity(args.game),
-            "elf": artifact_identity(elf),
+            "elf": artifact_identity(identity["elf"]),
         },
         "view_manifest": str(args.manifest),
         "route_version": manifest.get("route_version"),
@@ -346,7 +398,12 @@ def main() -> int:
             "demo_path": 1,
             "slave_render": args.build_slave_render,
             "hot_promotion": args.build_hot_promotion,
-            "renderer_pipeline": 8,
+            "renderer_pipeline": identity["renderer_pipeline"],
+        },
+        "camera_identity": {
+            "expected_role": identity["camera_role"],
+            "variant_marker": identity["camera_variant"],
+            "route_marker": identity["camera_route"],
         },
         "emulation_timing": emulation_timing(emulated_frames, wall_seconds),
         "views": captures,
