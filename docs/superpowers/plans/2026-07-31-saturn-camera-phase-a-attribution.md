@@ -173,6 +173,14 @@
 
 ### Task 5: Capture the three roles and record the go/no-go decision
 
+**Prerequisite:** Do not begin these captures until the pinned `hot1/clip1`
+indirect-transfer gate reports zero unexplained transfers and zero unresolved
+effects on both routes. The indirect entries are statically derived from the
+pinned GeoLayout/route data, not replay-observed targets. In particular, the
+nine GraphNode-family sites are seven genuine callback dispatches plus two
+statically knowable helper calls; together with `_guMtxF2L +142`, those helper
+calls are three static-helper provenance repairs, not callbacks.
+
 **Files:**
 - Create: `docs/saturn/evidence/reports/camera-phase-a-attribution-2026-07-31.json`
 - Create: `docs/saturn/evidence/reports/camera-phase-a-attribution-2026-07-31.md`
