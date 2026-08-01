@@ -34,6 +34,7 @@ SYMBOL_NAMES = (
     "sm64_saturn_camera_variant_marker",
     "sm64_saturn_camera_route_marker",
 )
+C_SYMBOL_NAMES = frozenset(SYMBOL_NAMES[:3])
 
 
 def _tool_environment() -> dict[str, str]:
@@ -53,9 +54,12 @@ def resolve_symbols(elf: Path, *, nm: Path = NM) -> dict[str, int]:
     resolved: dict[str, int] = {}
     for line in completed.stdout.splitlines():
         parts = line.split()
-        if len(parts) >= 3 and parts[-1] in wanted:
+        name = parts[-1] if len(parts) >= 3 else ""
+        if name.startswith("_") and name[1:] in C_SYMBOL_NAMES:
+            name = name[1:]
+        if name in wanted:
             try:
-                resolved[parts[-1]] = int(parts[0], 16)
+                resolved[name] = int(parts[0], 16)
             except ValueError:
                 continue
     missing = wanted - resolved.keys()

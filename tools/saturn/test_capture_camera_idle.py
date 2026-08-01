@@ -104,6 +104,29 @@ class CaptureCameraIdleTest(unittest.TestCase):
         self.assertTrue(child_path.startswith(r"C:\msys64\usr\bin" + os.pathsep))
         self.assertIn("role.elf", run.call_args.args[0])
 
+    def test_resolves_sh_abi_prefixed_c_symbols_under_canonical_names(self) -> None:
+        nm = """
+00210000 B _sourceboot_camera_idle_capture
+06010200 B _sourceboot_route_checkpoint
+06010400 B _g_sm64_saturn_source_cart_probe
+00000003 A sm64_saturn_camera_variant_marker
+00000001 A sm64_saturn_camera_route_marker
+"""
+        with mock.patch("capture_camera_idle.subprocess.run") as run:
+            run.return_value = mock.Mock(returncode=0, stdout=nm, stderr="")
+            symbols = capture.resolve_symbols(Path("role.elf"))
+
+        self.assertEqual(
+            symbols,
+            {
+                "sourceboot_camera_idle_capture": 0x00210000,
+                "sourceboot_route_checkpoint": 0x06010200,
+                "g_sm64_saturn_source_cart_probe": 0x06010400,
+                "sm64_saturn_camera_variant_marker": 3,
+                "sm64_saturn_camera_route_marker": 1,
+            },
+        )
+
     def test_exact_reader_uses_two_full_chunks_and_one_exact_tail(self) -> None:
         address = 0x00210000
         raw = b"\x11" * 65536 + b"\x22" * 65536 + b"\x33" * 63424
