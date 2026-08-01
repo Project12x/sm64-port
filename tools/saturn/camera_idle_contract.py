@@ -130,7 +130,8 @@ def validate_raw_layout(capture: Scc1Capture) -> None:
                 _signed16(word)
             if offset in (77, 80) and (word & 0xFFFF) != 0:
                 raise Scc1Error("SCC1 packed reserved bits are nonzero")
-        if _sample_word(sample, 71) != ZOOM_DIST_BITS:
+        if (header[5] != ROLE_IDS["camera-fixed-candidate"] and
+                _sample_word(sample, 71) != ZOOM_DIST_BITS):
             raise Scc1Error("SCC1 gCameraZoomDist witness is invalid")
 
 

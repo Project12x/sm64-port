@@ -16,6 +16,7 @@ from camera_idle_contract import (
     Scc1Error, compare_same_role, decode_scc1,
     validate_scc1,
 )
+from verify_camera_idle_capture import decoded_scc1
 
 SCC1_MAGIC = 0x53434331
 SCC1_VERSION = 1
@@ -129,6 +130,21 @@ class Scc1DecodeTest(unittest.TestCase):
 
 
 class Scc1ValidationTest(unittest.TestCase):
+    def test_zoom_witness_is_source_only_and_fixed_role_preserves_raw_value(self) -> None:
+        source_raw = mutate_every_sample_word(build_scc1(variant=1), 71, f32(800.0))
+        with self.assertRaises(Scc1Error):
+            decode_scc1(source_raw)
+
+        fixed_raw = mutate_every_sample_word(build_scc1(variant=3), 71, f32(800.0))
+        capture = decode_scc1(fixed_raw)
+        validate_scc1(capture, expected_role="camera-fixed-candidate",
+                      expected_idle_start_tick=31, expected_route_id=2)
+        self.assertEqual(capture.samples[0].state_words[67], 0x44480000)
+        self.assertEqual(
+            decoded_scc1(capture)["samples"][0]["state_words"][67],
+            0x44480000,
+        )
+
     def test_validates_each_phase_a_role_without_legacy_bridge_counts(self) -> None:
         for role_id, role_name in ROLE_NAMES.items():
             with self.subTest(role=role_name):
