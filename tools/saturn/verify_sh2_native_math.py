@@ -329,8 +329,9 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         left_slots, right_slots = dict(left.slots), dict(right.slots)
         merged_slots: list[tuple[int, StackSlot]] = []
         for offset in sorted(left_slots.keys() | right_slots.keys()):
-            left_slot = left_slots.get(offset, StackSlot(UNKNOWN))
-            right_slot = right_slots.get(offset, StackSlot(UNKNOWN))
+            absent_slot = StackSlot(UNKNOWN, unknown_store=True)
+            left_slot = left_slots.get(offset, absent_slot)
+            right_slot = right_slots.get(offset, absent_slot)
             pointer_slot = isinstance(
                 left_slot.value, (StackPtr, MaybeStackPtr)
             ) or isinstance(right_slot.value, (StackPtr, MaybeStackPtr))

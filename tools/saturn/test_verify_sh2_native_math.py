@@ -18,6 +18,7 @@ from verify_sh2_native_math import (
     StackMemory,
     StackPtr,
     StackSlot,
+    SymbolAtom,
     UNKNOWN,
     _unknown_state,
     abstract_value_json,
@@ -1126,6 +1127,44 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         result = self.analyze(dis)
         self.assertFalse(any(call.address == 0x6001014 for call in result.calls))
         self.assertTrue(any(item.address == 0x6001014 for item in result.unresolved_transfers))
+
+    def test_missing_predecessor_stack_store_does_not_recover_target(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: 20 08 tst r0,r0
+ 6001004: 89 04 bt 6001010 <_root+0x10>
+ 6001006: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001008: 2f 12 mov.l r1,@r15
+ 600100a: a0 02 bra 6001012 <_root+0x12>
+ 600100c: 00 09 nop
+ 6001010: 00 09 nop
+ 6001012: 61 f2 mov.l @r15,r1
+ 6001014: 41 0b jsr @r1
+ 6001016: 00 09 nop
+ 6001018: 00 0b rts
+ 600101a: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001014, "jsr")],
+        )
+        atom = SymbolAtom("_child", 0x6001020)
+        joined = join_value(
+            StackMemory(),
+            StackMemory(((-4, StackSlot(
+                ConstSet("symbol", frozenset({atom})),
+                (0x6001008,),
+                frozenset({atom}),
+            )),)),
+        )
+        self.assertTrue(dict(joined.slots)[-4].unknown_store)
 
     def test_unknown_store_alias_invalidates_known_stack_slots(self) -> None:
         dis = """
