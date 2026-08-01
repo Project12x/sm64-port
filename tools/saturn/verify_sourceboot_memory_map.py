@@ -33,6 +33,11 @@ PHASE_PREDECESSORS = {
     "complete-island": {"bridges"},
     "final-q": {"complete-island"},
 }
+CAMERA_VARIANT_ROLES = {
+    1: "camera-source-baseline",
+    2: "camera-bypass-diagnostic",
+    3: "camera-fixed-candidate",
+}
 
 
 @dataclass(frozen=True)
@@ -138,8 +143,8 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
     variant_marker = layout.symbols.get("sm64_saturn_camera_variant_marker")
     if route_marker is None or route_marker.address != route:
         raise ValueError("ELF camera route marker is wrong")
-    if variant_marker is None or variant_marker.address not in (1, 2):
-        raise ValueError("ELF camera variant marker is wrong")
+    if variant_marker is None or variant_marker.address not in CAMERA_VARIANT_ROLES:
+        raise ValueError("ELF camera variant marker is not a Phase A camera role")
     capture = layout.sections.get(".lwram_camera_capture")
     capture_symbol = layout.symbols.get("sourceboot_camera_idle_capture")
     if route == 0:

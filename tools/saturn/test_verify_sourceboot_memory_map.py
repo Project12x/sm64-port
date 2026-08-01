@@ -11,7 +11,8 @@ from unittest import mock
 import verify_sourceboot_memory_map as verify
 
 
-def image(name: str, *, end: int, stage: int, scc: bool) -> verify.ElfLayout:
+def image(name: str, *, end: int, stage: int, scc: bool,
+          camera_variant: int = 1) -> verify.ElfLayout:
     sections = {
         ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x4000, "NOBITS"),
         ".lwram_bss": verify.Section(".lwram_bss", 0x00240000, 0x8BB20, "NOBITS"),
@@ -19,7 +20,9 @@ def image(name: str, *, end: int, stage: int, scc: bool) -> verify.ElfLayout:
     symbols = {
         "___end": verify.Symbol("___end", end, 0),
         "s_source_cart_stage": verify.Symbol("s_source_cart_stage", 0x06080000, stage * 2048),
-        "sm64_saturn_camera_variant_marker": verify.Symbol("sm64_saturn_camera_variant_marker", 1, 0),
+        "sm64_saturn_camera_variant_marker": verify.Symbol(
+            "sm64_saturn_camera_variant_marker", camera_variant, 0
+        ),
         "sm64_saturn_camera_route_marker": verify.Symbol("sm64_saturn_camera_route_marker", 1 if scc else 0, 0),
     }
     if scc:
@@ -33,6 +36,28 @@ def image(name: str, *, end: int, stage: int, scc: bool) -> verify.ElfLayout:
 
 
 class VerifySourcebootMemoryMapTest(unittest.TestCase):
+    def test_accepts_all_three_named_phase_a_camera_roles(self) -> None:
+        for variant in (1, 2, 3):
+            with self.subTest(variant=variant):
+                layout = image("role", end=0x060F9000, stage=8, scc=True,
+                               camera_variant=variant)
+                verify.validate_layout(layout, route=1, stage_sectors=8,
+                                       required_final_margin=0x1B00)
+        invalid = image("unknown-role", end=0x060F9000, stage=8, scc=True,
+                        camera_variant=4)
+        with self.assertRaisesRegex(ValueError, "variant marker is not a Phase A camera role"):
+            verify.validate_layout(invalid, route=1, stage_sectors=8,
+                                   required_final_margin=0x1B00)
+
+    def test_make_verify_passes_the_resolved_readelf_to_native_math_audits(self) -> None:
+        makefile = (Path(__file__).resolve().parents[2] / "src" / "port" /
+                    "saturn" / "sourceboot" / "Makefile").read_text(encoding="utf-8")
+        audit_invocations = makefile.count(
+            '"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_sh2_native_math.py"'
+        )
+        self.assertEqual(audit_invocations, 2)
+        self.assertEqual(makefile.count('--readelf "$(SOURCEBOOT_SH_READELF)"'), 2)
+
     def test_selects_stage8_when_it_meets_post_transport_floor(self) -> None:
         baseline = image("baseline", end=0x060FDCB0, stage=16, scc=False)
         stage8 = image("stage8", end=0x060FA400, stage=8, scc=True)

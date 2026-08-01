@@ -7,6 +7,7 @@ SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump
+SOURCEBOOT_SH_READELF := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf
 SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line
 SOURCEBOOT_NATIVE_MATH_BASELINE := $(ROOT)/tools/saturn/sh2_native_math_baseline_v1.txt
 SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE := $(ROOT)/tools/saturn/sh2_native_math_route_oracle_v1.txt
@@ -610,6 +611,7 @@ verify: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
 	    --route-oracle "$(SOURCEBOOT_NATIVE_MATH_ROUTE_ORACLE)" \
 	    $$audit_args \
 	    --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
+	    --readelf "$(SOURCEBOOT_SH_READELF)" \
 	    --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)" || exit $$?; \
 	  "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/verify_dual_cpu_coherency.py" \
 	    "$(SH_BUILD_PATH)/$(SH_PROGRAM).sym"; \
@@ -623,6 +625,7 @@ verify-sim-math-route: verify-sim-math-route-config $(SH_BUILD_PATH)/$(SH_PROGRA
 	  --audit-route-oracle "$(SOURCEBOOT_NATIVE_MATH_SIM_ROUTE_ORACLE)" \
 	  --audit-contract "$(SOURCEBOOT_NATIVE_MATH_SIM_AUDIT_CONTRACT)" \
 	  --objdump "$(SOURCEBOOT_SH_OBJDUMP)" \
+	  --readelf "$(SOURCEBOOT_SH_READELF)" \
 	  --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"
 
 verify-sim-math-route-config:
