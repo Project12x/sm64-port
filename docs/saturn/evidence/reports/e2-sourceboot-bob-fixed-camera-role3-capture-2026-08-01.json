@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "ymir-sourceboot-fixed-camera-role3-boot-capture-summary",
+  "recorded_at_utc": "2026-08-01T22:27:38.5981730Z",
+  "result": "success",
+  "scope": {
+    "boot_and_capture_only": true,
+    "fps_measurement": false,
+    "camera_feel_evaluation": false,
+    "visual_acceptance": false,
+    "retail_hardware_validation": false
+  },
+  "source": {
+    "branch": "sh2/native-math-purge",
+    "commit": "08e182b4a94cea0cf5c79ab6a3a54967312bcb27",
+    "capture_resolver_commit": "1cc2d57",
+    "role_aware_scc1_commit": "08e182b"
+  },
+  "attempt": {
+    "authorized_attempts": 1,
+    "attempts_run": 1,
+    "exit_code": 0,
+    "wall_clock_seconds": 277.9,
+    "timeout_seconds": 1200,
+    "target_rebuilt": false,
+    "second_attempt_run": false
+  },
+  "inputs": {
+    "ymir": {
+      "repo_commit": "bf3e4a4a58031663d404ecc999348d72473135ba",
+      "size": 3255296,
+      "sha256": "fcc88d82b2ea7afdf400bcf67d45139d02354379388f7f9dba731b63a38d3943"
+    },
+    "bios": {
+      "size": 524288,
+      "sha256": "96e106f740ab448cf89f0dd49dfbac7fe5391cb6bd6e14ad5e3061c13330266f"
+    },
+    "cue": {
+      "size": 88,
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+    },
+    "iso": {
+      "size": 4577280,
+      "sha256": "d495b116e01adfd19a5ed3e375a00345d4556f7dd6ac132a46596f05b57a008e"
+    },
+    "elf": {
+      "size": 8031216,
+      "sha256": "397e603a1ef812a04c66334de6138d244b6c8e69d11696afed3e1c376faa8a1b"
+    },
+    "source_data": {
+      "size": 3184016,
+      "sha256": "45ddc102ef09a7ad88b1e1ceb0abe4edcc99cd7b81346bbb53c173e094cafc7f"
+    },
+    "route_manifest": {
+      "route_version": "bob-default-camera-v1",
+      "route_id": 2,
+      "sha256": "656cb9df8ca7a38d04adef0273349c91922db2b9c94d956ea83667b8d07a168f"
+    }
+  },
+  "capture": {
+    "declared_role": "camera-fixed-candidate",
+    "absolute_camera_route_marker": 1,
+    "absolute_camera_variant_marker": 3,
+    "scc1_camera_variant": 3,
+    "scc1_route_id": 2,
+    "expected_idle_start_tick": 0,
+    "observed_idle_start_tick": 0,
+    "scc1_address": "0x002CBB20",
+    "scc1_bytes": 194496,
+    "sample_count": 600,
+    "first_source_tick": 2000,
+    "last_source_tick": 2599,
+    "neutral_input": true,
+    "stable_samples_validated": true,
+    "sample_state_flags": "0x0000003F",
+    "fixed_role_zoom_bits": "0x44480000",
+    "route_window_address": "0x060DDD58",
+    "route_window_bytes": 176,
+    "frame_serial": 500,
+    "replay_ticks": 2000,
+    "camera_mode": 1,
+    "camera_invocations": 2000,
+    "camera_ticks_last": 681,
+    "camera_ticks_accum": 1362961,
+    "camera_ticks_max": 788,
+    "fault_flags": 0
+  },
+  "cart_transport": {
+    "stage": "READY",
+    "status": "OK",
+    "cart_id": 92,
+    "cart_size": 4194304,
+    "copied_size": 3184016,
+    "expected_size": 3184016
+  },
+  "raw_reports": {
+    "capture": {
+      "size": 2878642,
+      "sha256": "c35b4767835d4cf9dfd0a5c6c5797fa2d5163a137b7419c1b13a1ca18423c0d0"
+    },
+    "cart_proof": {
+      "size": 2402,
+      "sha256": "843087dbd96d3df8d34af419903454779ecf1ab16b4a847ae5b4486b045d1c2e"
+    }
+  },
+  "conclusion": "The pinned role-3 fixed-camera artifact booted far enough to publish and pass the complete SCC1 and SCAR capture contracts. This report does not establish FPS, camera feel, visual correctness, acceptance, or retail-hardware behavior."
+}
