@@ -59,7 +59,7 @@ bool sm64_saturn_camera_role_update(struct Camera *camera)
     }
     if (gMarioState != NULL)
         sm64_saturn_camera_fixed_step(&s_fixed_camera, gMarioState, 0, 0);
-    sm64_saturn_camera_fixed_publish(&s_fixed_camera, camera);
+    sm64_saturn_camera_fixed_publish(&s_fixed_camera, camera, &gLakituState);
     return true;
 #else
     (void)camera;

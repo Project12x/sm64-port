@@ -163,7 +163,8 @@ void sm64_saturn_camera_fixed_step(sm64_saturn_camera_fixed_state_t *state,
 }
 
 void sm64_saturn_camera_fixed_publish(const sm64_saturn_camera_fixed_state_t *state,
-                                      struct Camera *camera)
+                                      struct Camera *camera,
+                                      struct LakituState *lakitu)
 {
     uint32_t axis;
     union { uint32_t bits; f32 value; } published;
@@ -171,9 +172,19 @@ void sm64_saturn_camera_fixed_publish(const sm64_saturn_camera_fixed_state_t *st
     for (axis = 0U; axis < 3U; axis++) {
         published.bits = sm64_saturn_camera_fixed_export_bits(state->rendered_focus[axis]);
         memcpy(&camera->focus[axis], &published.value, sizeof(published.value));
+        memcpy(&lakitu->focus[axis], &published.value, sizeof(published.value));
         published.bits = sm64_saturn_camera_fixed_export_bits(state->rendered_position[axis]);
         memcpy(&camera->pos[axis], &published.value, sizeof(published.value));
+        memcpy(&lakitu->pos[axis], &published.value, sizeof(published.value));
     }
     camera->yaw = state->yaw;
     camera->nextYaw = state->yaw;
+    lakitu->mode = camera->mode;
+    lakitu->defMode = camera->defMode;
+    lakitu->yaw = camera->yaw;
+    lakitu->nextYaw = camera->nextYaw;
+    published.bits = sm64_saturn_camera_fixed_export_bits(state->distance);
+    memcpy(&lakitu->focusDistance, &published.value, sizeof(published.value));
+    lakitu->oldPitch = state->pitch;
+    lakitu->oldYaw = (int16_t)((uint16_t)state->yaw + 0x8000U);
 }

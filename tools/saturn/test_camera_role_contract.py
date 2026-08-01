@@ -13,6 +13,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 HOST_GCC = Path("C:/msys64/mingw64/bin/gcc.exe")
 ROLE_SOURCE = ROOT / "src/port/saturn/runtime/saturn_camera_role.c"
+FIXED_SOURCE = ROOT / "src/port/saturn/runtime/saturn_camera_fixed.c"
+TRIG_SOURCE = ROOT / "src/port/saturn/gfx/saturn_trig_q16.inc.c"
 
 
 def host_environment() -> dict[str, str]:
@@ -23,6 +25,77 @@ def host_environment() -> dict[str, str]:
 
 
 class SaturnCameraRoleContractTest(unittest.TestCase):
+    def test_fixed_role_publishes_renderer_facing_lakitu_state(self) -> None:
+        harness_source = r'''
+#include <stdint.h>
+#include <string.h>
+#include "game/camera.h"
+#include "game/mario.h"
+#include "port/saturn/runtime/saturn_camera_role.h"
+
+struct Camera *gCamera;
+struct LakituState gLakituState;
+struct MarioState *gMarioState;
+
+static int source_updates;
+
+static void call_update(struct Camera *camera) {
+    gCamera = camera;
+    if (!sm64_saturn_camera_role_update(camera))
+        source_updates++;
+}
+
+int main(void) {
+    struct Camera camera;
+    struct MarioState mario;
+    memset(&camera, 0, sizeof(camera));
+    memset(&mario, 0, sizeof(mario));
+    memset(&gLakituState, 0x5A, sizeof(gLakituState));
+
+    camera.focus[0] = 100.0f; camera.focus[1] = 120.0f; camera.focus[2] = 200.0f;
+    camera.pos[0] = 100.0f; camera.pos[1] = 120.0f; camera.pos[2] = 1000.0f;
+    camera.mode = 9; camera.defMode = 10;
+    mario.pos[0] = 100.0f; mario.pos[1] = 0.0f; mario.pos[2] = 200.0f;
+    gMarioState = &mario;
+
+    call_update(&camera);
+    if (source_updates != 0)
+        return 10;
+    if (gLakituState.pos[0] != 100.0f || gLakituState.pos[1] != 120.0f ||
+        gLakituState.pos[2] != 1000.0f || gLakituState.focus[0] != 100.0f ||
+        gLakituState.focus[1] != 120.0f || gLakituState.focus[2] != 200.0f)
+        return 11;
+    if (gLakituState.mode != 9 || gLakituState.defMode != 10 ||
+        gLakituState.yaw != 0 || gLakituState.nextYaw != 0)
+        return 12;
+    if (gLakituState.oldPitch != 0 || gLakituState.oldYaw != (int16_t)0x8000)
+        return 13;
+    if (gLakituState.focusDistance != 800.0f)
+        return 14;
+    return 0;
+}
+'''
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            harness = directory / "fixed_role_harness.c"
+            executable = directory / "fixed_role_harness.exe"
+            harness.write_text(harness_source, encoding="utf-8")
+            result = subprocess.run(
+                [str(HOST_GCC), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                 "-DNON_MATCHING=1", "-DAVOID_UB=1", "-DTARGET_SATURN=1",
+                 "-DSATURN_CAMERA_VARIANT=3",
+                 "-I", str(ROOT), "-I", str(ROOT / "include"), "-I", str(ROOT / "src"),
+                 str(harness), str(ROLE_SOURCE), str(FIXED_SOURCE), str(TRIG_SOURCE),
+                 "-o", str(executable)],
+                capture_output=True, text=True, env=host_environment(), check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            run_result = subprocess.run(
+                [str(executable)], capture_output=True, text=True,
+                env=host_environment(), check=False,
+            )
+            self.assertEqual(run_result.returncode, 0, run_result.stderr)
+
     def test_bypass_holds_the_seeded_camera_and_lakitu_pose(self) -> None:
         harness_source = r'''
 #include <stdint.h>

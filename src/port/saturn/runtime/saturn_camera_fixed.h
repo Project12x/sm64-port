@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 struct Camera;
+struct LakituState;
 struct MarioState;
 
 typedef struct sm64_saturn_camera_fixed_state {
@@ -26,6 +27,7 @@ void sm64_saturn_camera_fixed_step(sm64_saturn_camera_fixed_state_t *state,
                                    const struct MarioState *mario,
                                    int16_t input_yaw, int16_t input_pitch);
 void sm64_saturn_camera_fixed_publish(const sm64_saturn_camera_fixed_state_t *state,
-                                      struct Camera *camera);
+                                      struct Camera *camera,
+                                      struct LakituState *lakitu);
 
 #endif

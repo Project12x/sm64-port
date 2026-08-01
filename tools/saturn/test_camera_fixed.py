@@ -41,9 +41,11 @@ static uint32_t bits(f32 value) {
 
 int main(void) {
     struct Camera camera;
+    struct LakituState lakitu;
     struct MarioState mario;
     sm64_saturn_camera_fixed_state_t state;
     memset(&camera, 0, sizeof(camera));
+    memset(&lakitu, 0, sizeof(lakitu));
     memset(&mario, 0, sizeof(mario));
 
     camera.focus[0] = 1.0f; camera.focus[1] = 2.0f; camera.focus[2] = 3.0f;
@@ -72,12 +74,12 @@ int main(void) {
     state.rendered_focus[2] = 0;
     state.rendered_position[0] = 0x00010000;
     state.yaw = -7;
-    sm64_saturn_camera_fixed_publish(&state, &camera);
+    sm64_saturn_camera_fixed_publish(&state, &camera, &lakitu);
     if (bits(camera.focus[0]) != 0x3fc00000U ||
         bits(camera.focus[1]) != 0xbfc00000U || bits(camera.focus[2]) != 0U ||
         bits(camera.pos[0]) != 0x3f800000U || camera.yaw != -7) return 14;
     state.rendered_focus[0] = INT32_MIN;
-    sm64_saturn_camera_fixed_publish(&state, &camera);
+    sm64_saturn_camera_fixed_publish(&state, &camera, &lakitu);
     if (bits(camera.focus[0]) != 0xc7000000U) return 16;
     if ((state.diagnostics & SM64_SATURN_CAMERA_FIXED_DIAG_UNSUPPORTED_OBSTRUCTION) == 0)
         return 15;
