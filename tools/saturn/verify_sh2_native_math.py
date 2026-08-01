@@ -1985,7 +1985,7 @@ def _analyze_code_only_pass(
 
                 resolved_targets: dict[tuple[object, ...], tuple[object, ...]] = {}
                 invalid_target = not target_atoms
-                for target_address, resolved_atom in target_atoms:
+                for target_address, _resolved_atom in target_atoms:
                     callee = owner_by_address.get(target_address)
                     target_island = (
                         None if callee is not None
@@ -1998,15 +1998,6 @@ def _analyze_code_only_pass(
                         )
                         resolved_targets[canonical] = (
                             "island", target_island, target_address,
-                        )
-                    elif callee is None and mnemonic in {"jsr", "bsrf"} \
-                            and resolved_atom is not None and (
-                                "+" in resolved_atom.name or "[]" in resolved_atom.name
-                                or resolved_atom.name.endswith("*")
-                            ):
-                        synthetic = f"<indirect:{resolved_atom.name}>"
-                        resolved_targets[("synthetic", synthetic)] = (
-                            "synthetic", synthetic,
                         )
                     elif callee is None:
                         invalid_target = True
@@ -2051,15 +2042,6 @@ def _analyze_code_only_pass(
                                 )
                             )
                             schedule_island(target[1], target[2], callee_entry)
-                        elif target[0] == "synthetic":
-                            synthetic = target[1]
-                            call_emissions[key].append(
-                                CallSite(owner.name, address, synthetic)
-                            )
-                            fact_emissions[key].append(DirectCallFact(
-                                owner.name, caller_offset, synthetic, 0, 1,
-                                caller_region, caller_island
-                            ))
                         else:
                             callee = target[1]
                             target_address = target[2]
@@ -2117,19 +2099,6 @@ def _analyze_code_only_pass(
                     targets = [int(x) + (address + 4 if mnemonic == "braf" else 0) for x in value.values]
                 elif isinstance(value, ConstSet) and value.kind == "symbol":
                     symbol_atoms = [x for x in value.values if isinstance(x, SymbolAtom)]
-                    if mnemonic == "jmp" and len(symbol_atoms) == 1 and (
-                        symbol_atoms[0].name.endswith("*") or "[]" in symbol_atoms[0].name
-                    ):
-                        post = after_slot(state)
-                        if post is None:
-                            continue
-                        synthetic = f"<indirect:{symbol_atoms[0].name}>"
-                        call_emissions[key].append(CallSite(owner.name, address, synthetic))
-                        fact_emissions[key].append(DirectCallFact(
-                            owner.name, caller_offset, synthetic, 0, 1,
-                            caller_region, caller_island
-                        ))
-                        continue
                     targets = [x.address for x in symbol_atoms]
                 elif isinstance(value, Interval) and value.hi - value.lo + 1 <= 256:
                     targets = list(range(value.lo, value.hi + 1))

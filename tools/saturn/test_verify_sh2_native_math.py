@@ -765,6 +765,64 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(CallSite("_root", 0x600100C, "_child"), result.calls)
         self.assertEqual(result.unresolved_transfers, [])
 
+    def test_literal_target_in_r7_resolves_direct_helper_call(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d7 07 mov.l 6001020 <___mulsf3>,r7 ! 06001040 <___mulsf3>
+ 6001002: 47 0b jsr @r7
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001002, "___mulsf3"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_delay_slot_spill_restores_r7_target_after_caller_saved_clobber(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d7 07 mov.l 6001020 <_child>,r7 ! 06001020 <_child>
+ 6001002: d0 0e mov.l 6001040 <___mulsf3>,r0 ! 06001040 <___mulsf3>
+ 6001004: 40 0b jsr @r0
+ 6001006: 2f 72 mov.l r7,@r15
+ 6001008: 61 f2 mov.l @r15,r1
+ 600100a: 41 0b jsr @r1
+ 600100c: 00 09 nop
+ 600100e: 00 0b rts
+ 6001010: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 67 03 mov r0,r7
+ 6001042: 00 0b rts
+ 6001044: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertIn(CallSite("_root", 0x6001004, "___mulsf3"), result.calls)
+        self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
+        self.assertEqual(result.unresolved_transfers, [])
+
+    def test_dereferenced_graph_node_func_pointer_stays_unresolved(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: d7 07 mov.l 6001020 <_GraphNodeFunc>,r7 ! 06002000 <_GraphNodeFunc>
+ 6001002: 67 72 mov.l @r7,r7
+ 6001004: 47 0b jsr @r7
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001004, "jsr")],
+        )
+
     def test_stack_push_pop_preserves_known_symbol_target(self) -> None:
         dis = """
 06001000 <_root>:
@@ -2058,7 +2116,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertEqual(first.direct_calls[0].callee, "_child")
         self.assertIn(0x6001004, second.code_addresses)
 
-    def test_flag_only_tst_preserves_modeled_callback_for_jmp(self) -> None:
+    def test_dereferenced_callback_jmp_stays_unresolved_after_flag_only_tst(self) -> None:
         dis = """
 06001000 <_root>:
  6001000: d2 04 mov.l 6001014 <_root+0x14>,r2 ! 06002000 <_callback_slot>
@@ -2068,8 +2126,11 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001008: 00 09 nop
 """
         result = self.analyze(dis)
-        self.assertEqual(result.unresolved_transfers, [])
-        self.assertEqual(result.direct_calls[0].callee, "<indirect:_callback_slot*>")
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001006, "jmp")],
+        )
 
     def test_resolved_cross_owner_tail_jmp_is_a_closure_edge_and_direct_fact(self) -> None:
         dis = """
