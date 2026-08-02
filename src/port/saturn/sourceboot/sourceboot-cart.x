@@ -167,7 +167,11 @@ SECTIONS
 
   .lwram_camera_capture (NOLOAD) :
   {
-    . = ALIGN (32);
+    /* Do not align an empty optional section: GNU ld counts the alignment
+     * fill in SIZEOF, which made a route-0 build report a phantom 0x10-byte
+     * SCC1 capture after .lwram_bss grew.  The populated capture object is
+     * already declared aligned(32), so its input-section alignment remains
+     * enforced without manufacturing bytes when no capture is linked. */
     __lwram_camera_capture_start = .;
     KEEP(*(.lwram_camera_capture))
     __lwram_camera_capture_end = .;
