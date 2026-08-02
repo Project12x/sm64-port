@@ -280,23 +280,54 @@ class NativeMathCensusTests(unittest.TestCase):
                 bob_geo,
             )
         )
-        sourceboot_script = (
-            repo_root / "src/port/saturn/sourceboot/source_entry.c"
-        ).read_text(encoding="utf-8")
-        sourceboot_commands = frozenset(re.findall(
-            r"^\s*(INIT_LEVEL|SET_REG|GET_OR_SET|CALL|EXECUTE|CLEAR_LEVEL|JUMP)\(",
-            sourceboot_script,
-            flags=re.MULTILINE,
-        ))
-        sourceboot_callbacks = {
-            "INIT_LEVEL": "_level_cmd_init_level",
-            "SET_REG": "_level_cmd_set_register",
-            "GET_OR_SET": "_level_cmd_get_or_set_var",
-            "CALL": "_level_cmd_call",
-            "EXECUTE": "_level_cmd_load_and_execute",
-            "CLEAR_LEVEL": "_level_cmd_clear_level",
-            "JUMP": "_level_cmd_jump",
+        sourceboot_commands = frozenset(
+            command
+            for source_path in (
+                repo_root / "src/port/saturn/sourceboot/source_entry.c",
+                repo_root / "levels/bob/script.c",
+            )
+            for command in re.findall(
+                r"^\s*([A-Z][A-Z0-9_]+)\s*\(",
+                source_path.read_text(encoding="utf-8"),
+                flags=re.MULTILINE,
+            )
+        )
+        command_header = (repo_root / "include/level_commands.h").read_text(
+            encoding="utf-8"
+        )
+        level_script = (repo_root / "src/engine/level_script.c").read_text(
+            encoding="utf-8"
+        )
+        handlers_by_opcode = {
+            int(opcode, 16): "_" + handler
+            for opcode, handler in re.findall(
+                r"/\*([0-9A-F]{2})\*/\s+(level_cmd_[a-z0-9_]+)",
+                level_script,
+            )
         }
+
+        def command_handler(command: str) -> str | None:
+            # OBJECT is the only reached macro that aliases another command
+            # macro rather than owning its own opcode.
+            command = {"OBJECT": "OBJECT_WITH_ACTS"}.get(command, command)
+            definition = re.search(
+                rf"^#define {command}\b[\s\S]*?(?=^#define |\Z)",
+                command_header,
+                flags=re.MULTILINE,
+            )
+            if definition is None:
+                return None
+            opcode = re.search(r"CMD_[A-Z]+\(0x([0-9A-F]{2})", definition.group())
+            if opcode is None:
+                return None
+            return handlers_by_opcode.get(int(opcode.group(1), 16))
+
+        sourceboot_callbacks = {
+            command: command_handler(command)
+            for command in sourceboot_commands
+            if command_handler(command) is not None
+        }
+        self.assertEqual(set(sourceboot_callbacks), sourceboot_commands)
         required_edges = {
             ("_geo_process_node_and_siblings", "_geo_skybox_main"),
             ("_geo_process_node_and_siblings", "_geo_camera_fov"),
@@ -327,7 +358,7 @@ class NativeMathCensusTests(unittest.TestCase):
                 for dispatcher, callback in oracle.static_manifest_edges
                 if dispatcher == "_level_script_execute"
             },
-            {sourceboot_callbacks[command] for command in sourceboot_commands},
+            set(sourceboot_callbacks.values()),
         )
 
     def test_declared_dispatcher_does_not_mask_stack_derived_static_helper(self) -> None:
@@ -1454,7 +1485,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         transfer = result.unresolved_transfers[0]
         self.assertEqual(transfer.stack_source_offsets, (-4,))
         self.assertEqual(transfer.stack_store_addresses, (0x6001000,))
-        self.assertEqual(transfer.provenance, "static")
+        self.assertEqual(transfer.provenance, "dynamic")
 
     def test_conflicting_stack_targets_join_to_unknown(self) -> None:
         dis = """

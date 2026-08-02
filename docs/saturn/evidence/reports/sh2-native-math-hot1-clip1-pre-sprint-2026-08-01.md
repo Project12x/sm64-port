@@ -11,7 +11,8 @@ launched.
 
 ## Reproducible build
 
-- Producer commit: `cb7adc8355e7ceb16fc9d9289557a6146d1a23a5`
+- Producer source commit (the ELF): `cb7adc8355e7ceb16fc9d9289557a6146d1a23a5`
+- Auditor/tool commit (the gate that inspected that ELF): `196f4ca`
 - ELF:
   `build/saturn/sourceboot/e2-bob-demo-replay-camroute1-atan2v2-camv3-idle0-disc0-range0-stage8-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2/obj/sm64-saturn-sourceboot-e2.elf`
 - ELF SHA-256:
@@ -47,15 +48,18 @@ tools ran with their MSYS2 DLL dependencies discoverable.
 The `_guMtxF2L` stack-spill form is not in that list: the parser's existing
 stack-spill recovery test proves its `jsr @r7` resolves to the direct helper
 fact.  A transfer retaining stack provenance is now explicitly classified
-`static` and cannot be cleared by a dispatcher declaration.
+`static` only when that stack slot retains a linked function-address literal;
+an unknown function-pointer parameter moved through the stack remains
+`dynamic`.
 
 ## Declared static callback manifest
 
 These entries are declarations for parser-classified `dynamic` transfers
 only.  GraphNode callbacks are statically derived from the pinned
 `levels/bob/areas/1/geo.inc.c`; level-script callbacks are statically derived
-from the command macros in pinned `src/port/saturn/sourceboot/source_entry.c`.
-The test suite checks both derivations against the checked-in manifest.
+from the command macros in pinned `src/port/saturn/sourceboot/source_entry.c`
+and its `EXECUTE(level_bob_entry)` target `levels/bob/script.c`. The test
+suite checks both derivations against the checked-in manifest.
 
 - `_geo_process_node_and_siblings` → `_geo_skybox_main`,
   `_geo_camera_fov`, `_geo_camera_main`, `_geo_envfx_main`,
@@ -64,7 +68,17 @@ The test suite checks both derivations against the checked-in manifest.
 - `_level_script_execute` → `_level_cmd_init_level`,
   `_level_cmd_get_or_set_var`, `_level_cmd_call`,
   `_level_cmd_load_and_execute`, `_level_cmd_clear_level`,
-  `_level_cmd_jump`, `_level_cmd_set_register`
+  `_level_cmd_jump`, `_level_cmd_set_register`, `_level_cmd_alloc_level_pool`,
+  `_level_cmd_free_level_pool`, `_level_cmd_load_model_from_dl`,
+  `_level_cmd_load_model_from_geo`, `_level_cmd_begin_area`,
+  `_level_cmd_call_loop`, `_level_cmd_end_area`, `_level_cmd_exit`,
+  `_level_cmd_jump_and_link`, `_level_cmd_load_mio0`,
+  `_level_cmd_load_mio0_texture`, `_level_cmd_load_raw`,
+  `_level_cmd_set_macro_objects`, `_level_cmd_init_mario`,
+  `_level_cmd_set_mario_start_pos`, `_level_cmd_place_object`,
+  `_level_cmd_return`, `_level_cmd_set_music`, `_level_cmd_show_dialog`,
+  `_level_cmd_sleep2`, `_level_cmd_set_terrain_data`,
+  `_level_cmd_set_terrain_type`, `_level_cmd_create_warp_node`
 - `_sm64_saturn_source_runtime_read_controllers` → `_controller_saturn_read`
 
 An `INDIRECT_EDGE` is stale when its reachable dispatcher names a callback
