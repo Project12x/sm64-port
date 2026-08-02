@@ -525,14 +525,13 @@ These run through every milestone:
 - add slave-SH2 work only when a measured job is large, coarse, and bus-aware.
 
 Wave 1 of the 2026-08-01 PS1-parity FPS sprint is **blocked, not accepted or
-rejected**. The initial compile failure and the subsequent 15840-byte LWRAM
-overflow were fixed by reviewed follow-ups, but the guarded hot1/clip1 retry
-at `ade8602` fails at link on libyaul's HWRAM TLSF control-block safety floor:
-the heap at `___end` would overrun HWRAM and mirror into low memory. No fresh
-ELF/CUE or Ymir counter/capture evidence exists. Commit `23c3cdd` remains the
-next comparison baseline; the target HWRAM static-consumer budget and unchanged
-truthful native-math gate must both permit a fresh image before the serial BOB
-comparison resumes. See
+rejected**. Reviewed follow-ups now permit a fresh hot1/clip1 ELF at `afb1d37`,
+but the unchanged truthful native-math gate rejects it: 866 observed helpers
+versus the fixed 582 contract and 22 unlisted unresolved transfers. The CUE/ISO
+in the profile directory are stale and were not launched; no Ymir
+counter/capture evidence exists. Commit `23c3cdd` remains the next comparison
+baseline; the native-math audit must pass with fresh disc identities before the
+serial BOB comparison resumes. See
 `docs/saturn/evidence/reports/ps1-parity-wave1-bob-2026-08-01.md`.
 
 ## Immediate execution queue
