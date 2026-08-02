@@ -60,11 +60,10 @@ f32 find_floor(UNUSED f32 xPos, UNUSED f32 yPos, UNUSED f32 zPos,
 {
     return 0.0f;
 }
-void guMtxF2L(float mf[4][4], Mtx *m)
-{
-    memcpy(m, mf, sizeof(Mtx));
-}
 Vec3f gVec3fZero = {0.0f, 0.0f, 0.0f};
+
+void guOrthoF(float m[4][4], float left, float right, float bottom,
+              float top, float near, float far, float scale);
 
 #define Q16_TOL_TRIG   4        /* ulps, table-identical trig */
 #define Q16_TOL_NORM   64       /* ulps (~0.001), sqrt/divide chains */
@@ -149,8 +148,159 @@ static void diff_lookat(Vec3f from, Vec3f to, s16 roll)
     assert(got.m[3][3] == (1 << 16));
 }
 
+static void test_q16_normalize(void)
+{
+    static const struct {
+        int32_t input[3];
+        int32_t expected[3];
+        int32_t tolerance;
+    } cases[] = {
+        { { 0, 0, 0 }, { 0, 0, 0 }, 0 },
+        { { 1 << 16, 0, 0 }, { 1 << 16, 0, 0 }, 0 },
+        { { 0, -(1 << 16), 0 }, { 0, -(1 << 16), 0 }, 0 },
+        { { 3 << 16, 4 << 16, 0 }, { 39321, 52428, 0 }, 1 },
+        { { -(2 << 16), 3 << 16, -(6 << 16) },
+          { -18724, 28086, -56173 }, 2 },
+        { { 32760 << 16, -(120 << 16), 45 << 16 },
+          { 65535, -240, 90 }, 16 },
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        int32_t got[3];
+        memcpy(got, cases[i].input, sizeof(got));
+        sm64_saturn_q16_vec3_normalize(got);
+        for (int axis = 0; axis < 3; axis++) {
+            int64_t diff = (int64_t) got[axis] - cases[i].expected[axis];
+            if (diff < 0) diff = -diff;
+            if (diff > cases[i].tolerance) {
+                fprintf(stderr,
+                        "normalize case %zu axis %d: got %d want %d (diff %lld > %d)\n",
+                        i, axis, got[axis], cases[i].expected[axis],
+                        (long long) diff, cases[i].tolerance);
+                exit(1);
+            }
+        }
+    }
+}
+
+static uint32_t float_bits(float value)
+{
+    union { float f; uint32_t u; } bits = { value };
+    return bits.u;
+}
+
+static void test_q16_boundary_conversions(void)
+{
+    static const struct { uint32_t bits; int32_t expected; } float_cases[] = {
+        { 0x00000000U, 0 }, { 0x80000000U, 0 },
+        { 0x33800000U, 0 }, { 0x34000000U, 0 },
+        { 0x37800000U, 1 }, { 0xB7800000U, -1 },
+        { 0x3F000000U, 32768 }, { 0xBF000000U, -32768 },
+        { 0x3F800000U, 65536 }, { 0xBF800000U, -65536 },
+        { 0x46F00000U, 30720 << 16 },
+        { 0x47000000U, INT32_MAX }, { 0xC7000000U, INT32_MIN },
+        { 0x7F800000U, INT32_MAX }, { 0xFF800000U, INT32_MIN },
+        { 0x7FC00000U, INT32_MAX }, { 0xFFC00000U, INT32_MIN },
+    };
+    static const int32_t q_cases[] = {
+        0, 1, -1, 32767, -32767, 65535, 65536, -65536,
+        123456789, -123456789, INT32_MAX, INT32_MIN,
+    };
+
+    for (size_t i = 0; i < sizeof(float_cases) / sizeof(float_cases[0]); i++) {
+        union { uint32_t u; float f; } value = { float_cases[i].bits };
+        assert(sm64_saturn_float_to_q16(value.f) == float_cases[i].expected);
+    }
+    for (size_t i = 0; i < sizeof(q_cases) / sizeof(q_cases[0]); i++) {
+        const float oracle = (float) q_cases[i] / 65536.0f;
+        assert(float_bits(sm64_saturn_q16_to_float(q_cases[i]))
+               == float_bits(oracle));
+    }
+}
+
+static void assert_mtx_identity(const sm64_saturn_mtx_t *mtx)
+{
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            assert(mtx->m[row][col] == (row == col ? 1 << 16 : 0));
+        }
+    }
+}
+
+static void diff_perspective(float fovy, float aspect, s16 near, s16 far)
+{
+    Mat4 want;
+    sm64_saturn_mtx_t got;
+    u16 want_norm = 0;
+    u16 got_norm = 0;
+
+    guPerspectiveF(want, &want_norm, fovy, aspect, near, far, 1.0f);
+    assert(sm64_saturn_mtxq_perspective(
+        &got, &got_norm, f_to_q(fovy), f_to_q(aspect), near, far));
+    assert(got_norm == want_norm);
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            assert_close(got.m[row][col], want[row][col], 160,
+                         "perspective", row, col);
+        }
+    }
+}
+
+static void diff_ortho(float left, float right, float bottom, float top,
+                       float near, float far)
+{
+    Mat4 want;
+    sm64_saturn_mtx_t got;
+
+    guOrthoF(want, left, right, bottom, top, near, far, 1.0f);
+    assert(sm64_saturn_mtxq_ortho(
+        &got, f_to_q(left), f_to_q(right), f_to_q(bottom), f_to_q(top),
+        f_to_q(near), f_to_q(far)));
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            assert_close(got.m[row][col], want[row][col], 4,
+                         "ortho", row, col);
+        }
+    }
+}
+
+static void test_projection_singular_contract(void)
+{
+    sm64_saturn_mtx_t got;
+    u16 norm = 0;
+
+    memset(&got, 0xA5, sizeof(got));
+    assert(!sm64_saturn_mtxq_perspective(
+        &got, &norm, f_to_q(0.0f), f_to_q(4.0f / 3.0f), 100, 20000));
+    assert_mtx_identity(&got);
+
+    memset(&got, 0xA5, sizeof(got));
+    assert(!sm64_saturn_mtxq_perspective(
+        &got, &norm, f_to_q(45.0f), 0, 100, 20000));
+    assert_mtx_identity(&got);
+
+    memset(&got, 0xA5, sizeof(got));
+    assert(!sm64_saturn_mtxq_perspective(
+        &got, &norm, f_to_q(45.0f), f_to_q(4.0f / 3.0f), 100, 100));
+    assert_mtx_identity(&got);
+
+    memset(&got, 0xA5, sizeof(got));
+    assert(!sm64_saturn_mtxq_ortho(
+        &got, 0, 0, -(120 << 16), 120 << 16, -(2 << 16), 2 << 16));
+    assert_mtx_identity(&got);
+}
+
 int main(void)
 {
+    test_q16_boundary_conversions();
+    test_q16_normalize();
+    diff_perspective(45.0f, 4.0f / 3.0f, 100, 20000);
+    diff_perspective(60.0f, 320.0f / 240.0f, 50, 12800);
+    diff_perspective(90.0f, 16.0f / 9.0f, 1, 30000);
+    diff_ortho(-160.0f, 160.0f, 120.0f, -120.0f, -2.0f, 2.0f);
+    diff_ortho(-16000.0f, 16000.0f, 15000.0f, -15000.0f,
+               -16000.0f, 16000.0f);
+    test_projection_singular_contract();
     /* Fixture 1: the exact real captured camera state from the live
      * corruption evidence (e2-sourceboot-gmatstack-corruption doc). */
     {

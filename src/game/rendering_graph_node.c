@@ -103,6 +103,12 @@ static void saturn_vec3f_to_q16(int32_t out[3], Vec3f in) {
     out[2] = sm64_saturn_float_to_q16(in[2]);
 }
 
+static void saturn_vec3s_to_q16(int32_t out[3], Vec3s in) {
+    out[0] = (int32_t) in[0] * (1 << 16);
+    out[1] = (int32_t) in[1] * (1 << 16);
+    out[2] = (int32_t) in[2] * (1 << 16);
+}
+
 static void saturn_mat4_to_q16(sm64_saturn_mtx_t *out, Mat4 in) {
     for (s32 i = 0; i < 4; i++) {
         for (s32 j = 0; j < 4; j++) {
@@ -308,12 +314,29 @@ static void geo_process_master_list(struct GraphNodeMasterList *node) {
 static void geo_process_ortho_projection(struct GraphNodeOrthoProjection *node) {
     if (node->node.children != NULL) {
         Mtx *mtx = alloc_display_list(sizeof(*mtx));
+#ifdef TARGET_SATURN
+        sm64_saturn_mtx_t orthoQ;
+        const int32_t scaleQ = sm64_saturn_float_to_q16(node->scale);
+        const int32_t leftQ = (int32_t) (((int64_t)
+            (gCurGraphNodeRoot->x - gCurGraphNodeRoot->width) * scaleQ) / 2);
+        const int32_t rightQ = (int32_t) (((int64_t)
+            (gCurGraphNodeRoot->x + gCurGraphNodeRoot->width) * scaleQ) / 2);
+        const int32_t topQ = (int32_t) (((int64_t)
+            (gCurGraphNodeRoot->y - gCurGraphNodeRoot->height) * scaleQ) / 2);
+        const int32_t bottomQ = (int32_t) (((int64_t)
+            (gCurGraphNodeRoot->y + gCurGraphNodeRoot->height) * scaleQ) / 2);
+
+        (void) sm64_saturn_mtxq_ortho(&orthoQ, leftQ, rightQ, bottomQ, topQ,
+                                      -(2 << 16), 2 << 16);
+        saturn_mtxq_write_wire(mtx, &orthoQ);
+#else
         f32 left = (gCurGraphNodeRoot->x - gCurGraphNodeRoot->width) / 2.0f * node->scale;
         f32 right = (gCurGraphNodeRoot->x + gCurGraphNodeRoot->width) / 2.0f * node->scale;
         f32 top = (gCurGraphNodeRoot->y - gCurGraphNodeRoot->height) / 2.0f * node->scale;
         f32 bottom = (gCurGraphNodeRoot->y + gCurGraphNodeRoot->height) / 2.0f * node->scale;
 
         guOrtho(mtx, left, right, bottom, top, -2.0f, 2.0f, 1.0f);
+#endif
         gSPPerspNormalize(gDisplayListHead++, 0xFFFF);
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
 
@@ -332,6 +355,25 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
         u16 perspNorm;
         Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
+#ifdef TARGET_SATURN
+        sm64_saturn_mtx_t perspectiveQ;
+        int32_t aspectQ;
+
+        if (!sm64_saturn_div_s64_s32(
+                (int64_t) gCurGraphNodeRoot->width << 16,
+                gCurGraphNodeRoot->height, &aspectQ)) {
+            aspectQ = 1 << 16;
+        }
+#ifdef VERSION_EU
+        aspectQ = sm64_saturn_q16_mul(
+            aspectQ, sm64_saturn_float_to_q16(1.1f));
+#endif
+        (void) sm64_saturn_mtxq_perspective(
+            &perspectiveQ, &perspNorm,
+            sm64_saturn_float_to_q16(node->fov), aspectQ,
+            node->near, node->far);
+        saturn_mtxq_write_wire(mtx, &perspectiveQ);
+#else
 #ifdef VERSION_EU
         f32 aspect = ((f32) gCurGraphNodeRoot->width / (f32) gCurGraphNodeRoot->height) * 1.1f;
 #else
@@ -339,6 +381,7 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
 #endif
 
         guPerspective(mtx, &perspNorm, node->fov, aspect, node->near, node->far, 1.0f);
+#endif
         gSPPerspNormalize(gDisplayListHead++, perspNorm);
 
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
@@ -463,21 +506,21 @@ static void geo_process_camera(struct GraphNodeCamera *node) {
  */
 static void geo_process_translation_rotation(struct GraphNodeTranslationRotation *node) {
     UNUSED Mat4 mtxf;
-    Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
-    vec3s_to_vec3f(translation, node->translation);
 #ifdef TARGET_SATURN
     {
         sm64_saturn_mtx_t nodeQ;
         int32_t tQ[3];
-        saturn_vec3f_to_q16(tQ, translation);
+        saturn_vec3s_to_q16(tQ, node->translation);
         sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, tQ, node->rotation[0],
                                                   node->rotation[1], node->rotation[2]);
         (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
                                       &gMatStackQ[gMatStackIndex + 1]);
     }
 #else
+    Vec3f translation;
+    vec3s_to_vec3f(translation, node->translation);
     mtxf_rotate_zxy_and_translate(mtxf, translation, node->rotation);
     mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
 #endif
@@ -505,20 +548,20 @@ static void geo_process_translation_rotation(struct GraphNodeTranslationRotation
  */
 static void geo_process_translation(struct GraphNodeTranslation *node) {
     UNUSED Mat4 mtxf;
-    Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
-    vec3s_to_vec3f(translation, node->translation);
 #ifdef TARGET_SATURN
     {
         sm64_saturn_mtx_t nodeQ;
         int32_t tQ[3];
-        saturn_vec3f_to_q16(tQ, translation);
+        saturn_vec3s_to_q16(tQ, node->translation);
         sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, tQ, 0, 0, 0);
         (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
                                       &gMatStackQ[gMatStackIndex + 1]);
     }
 #else
+    Vec3f translation;
+    vec3s_to_vec3f(translation, node->translation);
     mtxf_rotate_zxy_and_translate(mtxf, translation, gVec3sZero);
     mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
 #endif
@@ -585,18 +628,18 @@ static void geo_process_rotation(struct GraphNodeRotation *node) {
  */
 static void geo_process_scale(struct GraphNodeScale *node) {
     UNUSED Mat4 transform;
-    Vec3f scaleVec;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
-    vec3f_set(scaleVec, node->scale, node->scale, node->scale);
 #ifdef TARGET_SATURN
     {
-        int32_t sQ[3];
-        saturn_vec3f_to_q16(sQ, scaleVec);
+        const int32_t scaleQ = sm64_saturn_float_to_q16(node->scale);
+        int32_t sQ[3] = { scaleQ, scaleQ, scaleQ };
         sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
                                      &gMatStackQ[gMatStackIndex], sQ);
     }
 #else
+    Vec3f scaleVec;
+    vec3f_set(scaleVec, node->scale, node->scale, node->scale);
     mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex], scaleVec);
 #endif
     gMatStackIndex++;
@@ -623,15 +666,13 @@ static void geo_process_scale(struct GraphNodeScale *node) {
  * For the rest it acts as a normal display list node.
  */
 static void geo_process_billboard(struct GraphNodeBillboard *node) {
-    Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     gMatStackIndex++;
-    vec3s_to_vec3f(translation, node->translation);
 #ifdef TARGET_SATURN
     {
         int32_t tQ[3];
-        saturn_vec3f_to_q16(tQ, translation);
+        saturn_vec3s_to_q16(tQ, node->translation);
         sm64_saturn_mtxq_billboard(&gMatStackQ[gMatStackIndex],
                                    &gMatStackQ[gMatStackIndex - 1], tQ,
                                    gCurGraphNodeCamera->roll);
@@ -650,6 +691,8 @@ static void geo_process_billboard(struct GraphNodeBillboard *node) {
         saturn_mtxq_write_wire(mtx, &gMatStackQ[gMatStackIndex]);
     }
 #else
+    Vec3f translation;
+    vec3s_to_vec3f(translation, node->translation);
     mtxf_billboard(gMatStack[gMatStackIndex], gMatStack[gMatStackIndex - 1], translation,
                    gCurGraphNodeCamera->roll);
     if (gCurGraphNodeHeldObject != NULL) {

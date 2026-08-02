@@ -107,69 +107,84 @@ static inline int64_t sm64_saturn_isqrt64(int64_t v)
     return root;
 }
 
-/* Exact float <-> Q16.16 conversion WITHOUT floating-point arithmetic.
+/* Exact float <-> Q16.16 conversion WITHOUT floating-point arithmetic OR
+ * compiler conversion helpers. The IEEE-754 fields are decoded/packed with
+ * integer operations, removing _fixsfsi/_floatsisf from graph transforms.
  *
- * Rationale: the entire reason these kernels exist is that this
- * toolchain's soft-float *arithmetic* (multiply/add) is proven broken.
- * Pure int<->float *conversions* (_fixsfsi/_floatsisf) are separate,
- * far simpler libgcc routines with no evidence of defect -- but scaling
- * by 65536 must NOT introduce a float multiply. Both helpers therefore
- * scale by adjusting the IEEE-754 exponent field directly (+/-16), a
- * pure integer bit operation, then use only the bare conversion.
- *
- * float_to_q16: out-of-range magnitudes saturate to INT32_MAX/MIN
+ * float_to_q16: truncates toward zero like the source cast. Out-of-range
+ * magnitudes (including infinities and NaNs) saturate to INT32_MAX/MIN
  * (positions beyond +-32767 world units are outside this port's
- * documented range assumption -- see saturn_matrix.h's decode note --
- * and saturating beats the UB of a raw out-of-range _fixsfsi). */
+ * documented range assumption -- see saturn_matrix.h's decode note). */
 static inline int32_t sm64_saturn_float_to_q16(float f)
 {
     union { float f; uint32_t u; } bits;
-    int32_t exponent;
+    uint32_t exponent;
+    uint32_t magnitude;
 
     bits.f = f;
-    if ((bits.u & 0x7FFFFFFFu) == 0) {
+    exponent = (bits.u >> 23) & 0xFFU;
+    if (exponent == 0U) {
         return 0;
     }
-    exponent = (int32_t) ((bits.u >> 23) & 0xFF);
-    /* magnitude >= 2^15 would scale past Q16.16's ceiling: saturate.
-     * (biased exponent 127+15 = 142.) This is the only range check
-     * needed -- verified by hand, not just asserted: once this is
-     * false, exponent <= 141, so exponent + 16 <= 157 always lands
-     * inside the valid biased-exponent range (1..254), and no second
-     * guard below it is ever reachable. */
-    if (exponent >= 142) {
+    if (exponent >= 142U) {
         return (bits.u & 0x80000000u) ? INT32_MIN : INT32_MAX;
     }
-    /* exponent == 0 here means a subnormal float (exact zero already
-     * returned above) -- magnitude under 2^-126. Rebiasing a subnormal's
-     * zero exponent field to 16 produces a bit pattern that is not the
-     * mathematically correct scaled value (subnormals have no implicit
-     * leading 1, unlike the normals this trick is designed for): the
-     * reinterpreted result lands in [2^-111, 2^-110) instead of the
-     * true, far smaller f*2^16. Both are still many orders of magnitude
-     * below 1, so both truncate to (int32_t)0 below -- the same answer
-     * correct scaling would have given, reached for the wrong bit-level
-     * reason but landing on the right final value. Every subnormal
-     * float is far too small to survive Q16.16 truncation regardless. */
-    bits.u = (bits.u & 0x807FFFFFu) | ((uint32_t) (exponent + 16) << 23);
-    return (int32_t) bits.f; /* single _fixsfsi, truncates toward zero */
+    if (exponent <= 110U) {
+        return 0;
+    }
+    magnitude = (bits.u & 0x007FFFFFU) | 0x00800000U;
+    if (exponent < 134U) {
+        magnitude >>= 134U - exponent;
+    } else {
+        magnitude <<= exponent - 134U;
+    }
+    return (bits.u & 0x80000000U) != 0U
+        ? -(int32_t) magnitude : (int32_t) magnitude;
 }
 
-/* Q16.16 -> float, exact, no floating-point arithmetic (see
- * sm64_saturn_float_to_q16 above for the full rationale). Only ever
- * divides (exponent decreases), so unlike its inverse there is no
- * overflow boundary to guard here. */
+/* Q16.16 -> float with IEEE round-to-nearest-even, matching `(float)q`
+ * followed by an exact power-of-two scale, but without _floatsisf. */
 static inline float sm64_saturn_q16_to_float(int32_t q)
 {
     union { float f; uint32_t u; } bits;
-    int32_t exponent;
+    const uint32_t sign = q < 0 ? 0x80000000U : 0U;
+    uint32_t magnitude = q < 0 ? 0U - (uint32_t) q : (uint32_t) q;
+    uint32_t scan;
+    uint32_t significand;
+    int highest = 0;
+    int exponent;
 
     if (q == 0) {
         return 0.0f;
     }
-    bits.f = (float) q; /* single _floatsisf; |q| < 2^31 always valid */
-    exponent = (int32_t) ((bits.u >> 23) & 0xFF);
-    bits.u = (bits.u & 0x807FFFFFu) | ((uint32_t) (exponent - 16) << 23);
+
+    scan = magnitude;
+    if (scan >= (UINT32_C(1) << 16)) { scan >>= 16; highest += 16; }
+    if (scan >= (UINT32_C(1) << 8))  { scan >>= 8;  highest += 8; }
+    if (scan >= (UINT32_C(1) << 4))  { scan >>= 4;  highest += 4; }
+    if (scan >= (UINT32_C(1) << 2))  { scan >>= 2;  highest += 2; }
+    if (scan >= (UINT32_C(1) << 1))  { highest += 1; }
+
+    exponent = highest + 111; /* 127 bias minus the Q16 fractional bits. */
+    if (highest <= 23) {
+        significand = magnitude << (23 - highest);
+    } else {
+        const int shift = highest - 23;
+        const uint32_t discarded_mask = (UINT32_C(1) << shift) - 1U;
+        const uint32_t discarded = magnitude & discarded_mask;
+        const uint32_t halfway = UINT32_C(1) << (shift - 1);
+        significand = magnitude >> shift;
+        if (discarded > halfway
+            || (discarded == halfway && (significand & 1U) != 0U)) {
+            significand++;
+            if (significand == (UINT32_C(1) << 24)) {
+                significand >>= 1;
+                exponent++;
+            }
+        }
+    }
+    bits.u = sign | ((uint32_t) exponent << 23)
+           | (significand & 0x007FFFFFU);
     return bits.f;
 }
 

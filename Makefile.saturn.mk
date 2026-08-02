@@ -61,7 +61,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-runtime-camera-contract verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-runtime-camera-contract verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -356,10 +356,67 @@ verify-mtxq-ctors:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/mtxq_ctor_diff_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/engine/math_util.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guPerspectiveF.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guOrthoF.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guMtxF2L.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -lm \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-test$(HOST_EXEEXT)"
+
+# Mutation gate for Task 5's one-reciprocal normalization. The fixture must
+# reject a one-bit reciprocal perturbation; a passing mutant means the
+# differential corpus cannot detect corruption in the new shared scale.
+verify-mtxq-ctors-mutation:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -std=c11 -D_GNU_SOURCE -Wall -Wextra -Werror \
+	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+	  -DSM64_SATURN_TEST_MUTATE_NORMALIZE_RECIPROCAL=1 \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/mtxq_ctor_diff_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/engine/math_util.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guPerspectiveF.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guOrthoF.c" \
+	  "$(SATURN_REPO_ROOT)/lib/src/guMtxF2L.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
+	  -lm \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-mutation$(HOST_EXEEXT)"
+	@if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-ctors-mutation$(HOST_EXEEXT)"; then \
+	  printf '%s\n' 'mtxq ctor mutation unexpectedly passed' >&2; exit 1; \
+	else \
+	  printf '%s\n' 'mtxq ctor mutation rejected as expected'; \
+	fi
+
+verify-graph-q16-contract:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -E -P -DTARGET_SATURN=1 -DSATURN_MTX_IS_Q16=1 \
+	  -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+	  -I"$(SATURN_REPO_ROOT)" -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  "$(SATURN_REPO_ROOT)/src/game/rendering_graph_node.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/rendering-graph-node-saturn.i"
+	$(CC) -E -P -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 -DF3DEX_GBI_2E=1 \
+	  -I"$(SATURN_REPO_ROOT)" -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/platform" \
+	  "$(SATURN_REPO_ROOT)/src/game/rendering_graph_node.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/rendering-graph-node-source.i"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_graph_q16_contract.py" \
+	  --saturn "$(SATURN_REPO_ROOT)/build/saturn/host-tests/rendering-graph-node-saturn.i" \
+	  --source "$(SATURN_REPO_ROOT)/build/saturn/host-tests/rendering-graph-node-source.i"
+
+verify-mtxq-conversion-assembly:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(CC) -S -O2 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/mtxq_conversion_probe.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-conversion-probe.s"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_mtxq_conversion_assembly.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/mtxq-conversion-probe.s"
 
 # Bit-exactness gate for the soft-float replacement. sourceboot links
 # third_party/gcc-soft-fp (built into libsm64softfp.a) ahead of libgcc, taking

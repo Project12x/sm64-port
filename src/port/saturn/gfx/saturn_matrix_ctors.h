@@ -3,6 +3,7 @@
 
 #include "saturn_matrix.h"
 #include "saturn_matrix_kernels.h"
+#include "saturn_render_native_math.h"
 
 /* Q16.16 constructors mirroring src/engine/math_util.c's mtxf_* matrix
  * builders, formula-for-formula (same row/column conventions, same sign
@@ -20,7 +21,8 @@
  *   Q16.16 deltas ((60000<<16)^2 * 3 = 1.16e19) would overflow int64
  *   (max 9.2e18). Direction = (Q16.16 delta) / (integer magnitude)
  *   yields a Q16.16 unit component directly, one 64/32 divide per
- *   component (libgcc __divdi3 -- exact integer, not soft-float).
+ *   component. Normalization computes one Q16 reciprocal through the
+ *   libyaul-backed SH-2 DIVU seam, then reuses it for all components.
  * - Sub-unit truncation from the >>16 delta reduction shifts direction
  *   by at most 1 part in the magnitude (irrelevant at world scale;
  *   documented, accepted for bring-up). */
@@ -34,12 +36,116 @@ static inline void sm64_saturn_q16_vec3_normalize(int32_t v[3])
     int64_t mag2 = (int64_t) v[0] * v[0] + (int64_t) v[1] * v[1]
                  + (int64_t) v[2] * v[2];
     int64_t mag = sm64_saturn_isqrt64(mag2); /* Q16 */
+    int32_t reciprocal_q16;
     if (mag == 0) {
         return;
     }
-    v[0] = (int32_t) (((int64_t) v[0] << 16) / mag);
-    v[1] = (int32_t) (((int64_t) v[1] << 16) / mag);
-    v[2] = (int32_t) (((int64_t) v[2] << 16) / mag);
+    if (mag > INT32_MAX
+        || !sm64_saturn_div_s64_s32(INT64_C(1) << 32, (int32_t) mag,
+                                     &reciprocal_q16)) {
+        return;
+    }
+#if defined(SM64_SATURN_TEST_MUTATE_NORMALIZE_RECIPROCAL)
+    reciprocal_q16 ^= 1;
+#endif
+    v[0] = sm64_saturn_q16_mul(v[0], reciprocal_q16);
+    v[1] = sm64_saturn_q16_mul(v[1], reciprocal_q16);
+    v[2] = sm64_saturn_q16_mul(v[2], reciprocal_q16);
+}
+
+/* Graph projection constructors. Inputs are lowered once at the graph-node
+ * boundary; these mirror guPerspectiveF/guOrthoF's scale==1 call sites and
+ * use the same row-major layout consumed by the Saturn Fast3D frontend.
+ * Invalid/singular inputs produce identity and return false, keeping the
+ * target path deterministic without falling back into float math. */
+static inline bool
+sm64_saturn_mtxq_perspective(sm64_saturn_mtx_t *dest, uint16_t *persp_norm,
+                             int32_t fovy_degrees_q16, int32_t aspect_q16,
+                             int16_t near, int16_t far)
+{
+    int32_t cotangent_q16;
+    int32_t xscale_q16;
+    int32_t depth_scale_q16;
+    int32_t depth_translate_q16;
+    const int32_t half_fovy_angle = (fovy_degrees_q16 / 360) / 2;
+    const int32_t sine_q16 = sm64_saturn_sins_q16(half_fovy_angle);
+    const int32_t cosine_q16 = sm64_saturn_coss_q16(half_fovy_angle);
+    const int32_t depth_denominator = (int32_t) near - (int32_t) far;
+    const int32_t depth_sum = (int32_t) near + (int32_t) far;
+
+    sm64_saturn_matrix_identity(dest);
+    if (sine_q16 == 0 || aspect_q16 == 0 || depth_denominator == 0
+        || !sm64_saturn_div_s64_s32((int64_t) cosine_q16 << 16,
+                                     sine_q16, &cotangent_q16)
+        || !sm64_saturn_div_s64_s32((int64_t) cotangent_q16 << 16,
+                                     aspect_q16, &xscale_q16)
+        || !sm64_saturn_div_s64_s32((int64_t) depth_sum << 16,
+                                     depth_denominator, &depth_scale_q16)
+        || !sm64_saturn_div_s64_s32(
+               ((int64_t) 2 * near * far) << 16,
+               depth_denominator, &depth_translate_q16)) {
+        return false;
+    }
+
+    dest->m[0][0] = xscale_q16;
+    dest->m[1][1] = cotangent_q16;
+    dest->m[2][2] = depth_scale_q16;
+    dest->m[2][3] = -(1 << 16);
+    dest->m[3][2] = depth_translate_q16;
+    dest->m[3][3] = 0;
+
+    if (persp_norm != NULL) {
+        if (depth_sum <= 2) {
+            *persp_norm = UINT16_MAX;
+        } else {
+            int32_t norm = 131072 / depth_sum;
+            *persp_norm = (uint16_t) (norm > 0 ? norm : 1);
+        }
+    }
+    return true;
+}
+
+static inline bool
+sm64_saturn_mtxq_ortho(sm64_saturn_mtx_t *dest,
+                       int32_t left_q16, int32_t right_q16,
+                       int32_t bottom_q16, int32_t top_q16,
+                       int32_t near_q16, int32_t far_q16)
+{
+    const int64_t width = (int64_t) right_q16 - left_q16;
+    const int64_t height = (int64_t) top_q16 - bottom_q16;
+    const int64_t depth = (int64_t) far_q16 - near_q16;
+    int32_t sx, sy, sz, tx, ty, tz;
+
+    sm64_saturn_matrix_identity(dest);
+    if (width == 0 || height == 0 || depth == 0
+        || width > INT32_MAX || width < INT32_MIN
+        || height > INT32_MAX || height < INT32_MIN
+        || depth > INT32_MAX || depth < INT32_MIN
+        || !sm64_saturn_div_s64_s32(INT64_C(2) << 32,
+                                     (int32_t) width, &sx)
+        || !sm64_saturn_div_s64_s32(INT64_C(2) << 32,
+                                     (int32_t) height, &sy)
+        || !sm64_saturn_div_s64_s32(-(INT64_C(2) << 32),
+                                     (int32_t) depth, &sz)
+        || !sm64_saturn_div_s64_s32(
+               -((int64_t) right_q16 + left_q16) * (INT64_C(1) << 16),
+               (int32_t) width, &tx)
+        || !sm64_saturn_div_s64_s32(
+               -((int64_t) top_q16 + bottom_q16) * (INT64_C(1) << 16),
+               (int32_t) height, &ty)
+        || !sm64_saturn_div_s64_s32(
+               -((int64_t) far_q16 + near_q16) * (INT64_C(1) << 16),
+               (int32_t) depth, &tz)) {
+        return false;
+    }
+
+    dest->m[0][0] = sx;
+    dest->m[1][1] = sy;
+    dest->m[2][2] = sz;
+    dest->m[3][0] = tx;
+    dest->m[3][1] = ty;
+    dest->m[3][2] = tz;
+    return true;
 }
 
 /* Mirrors mtxf_lookat (math_util.c:194-266) including its exact
@@ -78,8 +184,8 @@ sm64_saturn_mtxq_lookat(sm64_saturn_mtx_t *mtx, const int32_t from[3],
         mag = 1;
     }
     /* float code: d *= -1/len. Negated Q16.16 unit components: */
-    dx_q = (int32_t) (-dx_wide / mag);
-    dz_q = (int32_t) (-dz_wide / mag);
+    (void) sm64_saturn_div_s64_s32(-dx_wide, (int32_t) mag, &dx_q);
+    (void) sm64_saturn_div_s64_s32(-dz_wide, (int32_t) mag, &dz_q);
 
     colY[0] = sm64_saturn_q16_mul(sm64_saturn_sins_q16(roll), dz_q);
     colY[1] = sm64_saturn_coss_q16(roll);
@@ -96,9 +202,9 @@ sm64_saturn_mtxq_lookat(sm64_saturn_mtx_t *mtx, const int32_t from[3],
         if (mag == 0) {
             mag = 1;
         }
-        colZ[0] = (int32_t) (-vx / mag);
-        colZ[1] = (int32_t) (-vy / mag);
-        colZ[2] = (int32_t) (-vz / mag);
+        (void) sm64_saturn_div_s64_s32(-vx, (int32_t) mag, &colZ[0]);
+        (void) sm64_saturn_div_s64_s32(-vy, (int32_t) mag, &colZ[1]);
+        (void) sm64_saturn_div_s64_s32(-vz, (int32_t) mag, &colZ[2]);
     }
 
     /* colX = colY x colZ; renormalize (float code divides by +len) */
