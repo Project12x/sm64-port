@@ -1751,6 +1751,180 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
         self.assertEqual(result.unresolved_transfers, [])
 
+    def test_next_lakitu_state_exact_r2_target_survives_neighboring_frame_stores(self) -> None:
+        """Catch loss of the pinned +108 ___subsf3 target in the real instruction shape."""
+        dis = """
+06001000 <_next_lakitu_state>:
+ 6001000: a0 1a bra 6001038 <_next_lakitu_state+0x38>
+ 6001002: 7f 94 add #-108,r15
+ 6001038: c8 04 tst #4,r0
+ 600103a: 8d 46 bt.s 60010ca <_next_lakitu_state+0xca>
+ 600103c: e2 7c mov #124,r2
+ 600103e: d1 68 mov.l 60011e0 <_next_lakitu_state+0x1e0>,r1 ! 06003000 <_sMarioCamState>
+ 6001040: 32 fc add r15,r2
+ 6001042: 5c 24 mov.l @(16,r2),r12
+ 6001044: 66 d3 mov r13,r6
+ 6001046: 61 12 mov.l @r1,r1
+ 6001048: 69 f3 mov r15,r9
+ 600104a: 5a 25 mov.l @(20,r2),r10
+ 600104c: 6e f3 mov r15,r14
+ 600104e: d2 65 mov.l 60011e4 <_next_lakitu_state+0x1e4>,r2 ! 06002000 <___subsf3>
+ 6001050: 63 c3 mov r12,r3
+ 6001052: d8 65 mov.l 60011e8 <_next_lakitu_state+0x1e8>,r8 ! 06002100 <___addsf3>
+ 6001054: 71 04 add #4,r1
+ 6001056: 76 14 add #20,r6
+ 6001058: 79 54 add #84,r9
+ 600105a: 7e 60 add #96,r14
+ 600105c: 73 0c add #12,r3
+ 600105e: 67 c6 mov.l @r12+,r7
+ 6001060: 64 16 mov.l @r1+,r4
+ 6001062: 65 66 mov.l @r6+,r5
+ 6001064: 1f 63 mov.l r6,@(12,r15)
+ 6001066: 1f 12 mov.l r1,@(8,r15)
+ 6001068: 1f 21 mov.l r2,@(4,r15)
+ 600106a: 1f 34 mov.l r3,@(16,r15)
+  600106c: 42 0b jsr @r2
+  600106e: 1f 7a mov.l r7,@(40,r15)
+ 6001070: 54 fa mov.l @(40,r15),r4
+ 6001072: 65 03 mov r0,r5
+ 6001074: 48 0b jsr @r8
+ 6001076: 1f 05 mov.l r0,@(20,r15)
+ 6001078: 57 f5 mov.l @(20,r15),r7
+ 600107a: 29 02 mov.l r0,@r9
+ 600107c: 65 73 mov r7,r5
+ 600107e: 48 0b jsr @r8
+ 6001080: 64 a6 mov.l @r10+,r4
+ 6001082: 53 f4 mov.l @(16,r15),r3
+ 6001084: 79 04 add #4,r9
+ 6001086: 2e 02 mov.l r0,@r14
+ 6001088: 33 c0 cmp/eq r12,r3
+ 600108a: 51 f2 mov.l @(8,r15),r1
+ 600108c: 7e 04 add #4,r14
+ 600108e: 52 f1 mov.l @(4,r15),r2
+ 6001090: 8f e5 bf.s 600105e <_next_lakitu_state+0x5e>
+ 6001092: 56 f3 mov.l @(12,r15),r6
+ 6001094: 00 0b rts
+ 6001096: 00 09 nop
+ 60010ca: 00 0b rts
+ 60010cc: 00 09 nop
+06002000 <___subsf3>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06002100 <___addsf3>:
+ 6002100: 00 0b rts
+ 6002102: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 206 FUNC GLOBAL DEFAULT 1 _next_lakitu_state
+   2: 06002000 4 FUNC GLOBAL DEFAULT 1 ___subsf3
+   3: 06002100 4 FUNC GLOBAL DEFAULT 1 ___addsf3
+""")
+        self.assertIn(
+            DirectCallFact(
+                "_next_lakitu_state", 108, "___subsf3", 0, 1,
+                "owner", None,
+            ),
+            result.direct_calls,
+            result.unresolved_transfers,
+        )
+        self.assertFalse(any(
+            item.caller == "_next_lakitu_state" and item.address == 0x600106C
+            for item in result.unresolved_transfers
+        ))
+
+    def test_update_lakitu_exact_delay_spill_survives_adjacent_output_pointer(self) -> None:
+        """Catch poisoning the pinned +464 ___addsf3 spill at its exclusive end."""
+        dis = self._update_lakitu_spill_fixture("""
+ 60011b2: 67 f3 mov r15,r7
+ 60011b4: 56 b6 mov.l @(24,r11),r6
+ 60011b6: 77 10 add #16,r7
+""")
+        result = self.analyze_named_fixture(dis, self._update_lakitu_spill_symbols())
+        self.assertIn(
+            DirectCallFact(
+                "_update_lakitu", 464, "___addsf3", 0, 1,
+                "owner", None,
+            ),
+            result.direct_calls,
+            result.unresolved_transfers,
+        )
+        self.assertFalse(any(
+            item.caller == "_update_lakitu" and item.address == 0x60011D0
+            for item in result.unresolved_transfers
+        ))
+
+    def test_update_lakitu_unknown_frame_alias_still_poison_spill(self) -> None:
+        """An unbounded near-match output alias must not fabricate the +464 call."""
+        dis = self._update_lakitu_spill_fixture("""
+ 60011b2: 67 f3 mov r15,r7
+ 60011b4: 66 43 mov r4,r6
+ 60011b6: 37 6c add r6,r7
+""")
+        result = self.analyze_named_fixture(dis, self._update_lakitu_spill_symbols())
+        self.assertNotIn(
+            DirectCallFact(
+                "_update_lakitu", 464, "___addsf3", 0, 1,
+                "owner", None,
+            ),
+            result.direct_calls,
+        )
+        self.assertTrue(any(
+            item.caller == "_update_lakitu" and item.address == 0x60011D0
+            for item in result.unresolved_transfers
+        ))
+
+    @staticmethod
+    def _update_lakitu_spill_symbols() -> str:
+        return """
+   1: 06001000 488 FUNC GLOBAL DEFAULT 1 _update_lakitu
+   2: 06002000 4 FUNC GLOBAL DEFAULT 1 ___addsf3
+   3: 06002100 6 FUNC GLOBAL DEFAULT 1 _find_floor
+   4: 06002200 4 FUNC GLOBAL DEFAULT 1 ___eqsf2
+"""
+
+    @staticmethod
+    def _update_lakitu_spill_fixture(alias_setup: str) -> str:
+        return f"""
+06001000 <_update_lakitu>:
+ 6001000: a0 d1 bra 60011a6 <_update_lakitu+0x1a6>
+ 6001002: 7f d4 add #-44,r15
+ 60011a6: d1 3a mov.l 6001290 <_update_lakitu+0x290>,r1 ! 06002000 <___addsf3>
+ 60011a8: d5 3a mov.l 6001294 <_update_lakitu+0x294>,r5 ! 41a00000
+ 60011aa: 41 0b jsr @r1
+ 60011ac: 1f 13 mov.l r1,@(12,r15)
+ 60011ae: 65 03 mov r0,r5
+ 60011b0: d0 39 mov.l 6001298 <_update_lakitu+0x298>,r0 ! 06002100 <_find_floor>
+{alias_setup.rstrip()}
+ 60011b8: 40 0b jsr @r0
+ 60011ba: 54 b4 mov.l @(16,r11),r4
+ 60011bc: 64 03 mov r0,r4
+ 60011be: 6d 03 mov r0,r13
+ 60011c0: d0 36 mov.l 600129c <_update_lakitu+0x29c>,r0 ! 06002200 <___eqsf2>
+ 60011c2: d5 37 mov.l 60012a0 <_update_lakitu+0x2a0>,r5 ! c62be000
+ 60011c4: 40 0b jsr @r0
+ 60011c6: 00 09 nop
+ 60011c8: 20 08 tst r0,r0
+ 60011ca: 8d 0b bt.s 60011e4 <_update_lakitu+0x1e4>
+ 60011cc: 51 f3 mov.l @(12,r15),r1
+ 60011ce: d5 35 mov.l 60012a4 <_update_lakitu+0x2a4>,r5 ! 42c80000
+ 60011d0: 41 0b jsr @r1
+ 60011d2: 64 d3 mov r13,r4
+ 60011d4: 00 0b rts
+ 60011d6: 00 09 nop
+ 60011e4: 00 0b rts
+ 60011e6: 00 09 nop
+06002000 <___addsf3>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06002100 <_find_floor>:
+ 6002100: 27 02 mov.l r0,@r7
+ 6002102: 00 0b rts
+ 6002104: 00 09 nop
+06002200 <___eqsf2>:
+ 6002200: 00 0b rts
+ 6002202: 00 09 nop
+"""
+
     def test_fresh_wave1_non_escaped_frame_spills_recover_seventeen_direct_calls(self) -> None:
         """Catch loss of exact literal spills across non-frame output stores."""
         dis = """
@@ -2713,7 +2887,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertFalse(any(call.address == 0x6001010 for call in result.calls))
         self.assertTrue(any(item.address == 0x6001010 for item in result.unresolved_transfers))
 
-    def test_nonleaf_call_invalidates_neighbor_of_escaped_stack_address(self) -> None:
+    def test_nonleaf_call_preserves_neighbor_of_escaped_stack_address(self) -> None:
         dis = """
 06001000 <_root>:
  6001000: 7f f8 add #-8,r15
@@ -2739,8 +2913,10 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
  6001034: 00 09 nop
 """
         result = self.analyze(dis)
-        self.assertFalse(any(call.address == 0x6001012 for call in result.calls))
-        self.assertTrue(any(item.address == 0x6001012 for item in result.unresolved_transfers))
+        self.assertIn(CallSite("_root", 0x6001012, "_child"), result.calls)
+        self.assertFalse(any(
+            item.address == 0x6001012 for item in result.unresolved_transfers
+        ))
 
     def test_joined_maybe_stack_argument_invalidates_escaped_frame(self) -> None:
         dis = """

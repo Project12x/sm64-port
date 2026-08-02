@@ -114,6 +114,14 @@ class StackPtr:
 
 
 @dataclass(frozen=True)
+class StackPtrRange:
+    """A monotone range of frame-relative addresses (None is unbounded)."""
+
+    lo: int | None
+    hi: int | None
+
+
+@dataclass(frozen=True)
 class MaybeStackPtr:
     pass
 
@@ -166,7 +174,8 @@ class StackOrigin:
 
 
 AbstractValue = (
-    _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | MaybeStackPtr
+    _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | StackPtrRange
+    | MaybeStackPtr
     | StackAlias | ExternalStackAliases | StackMemory | StackOrigin
 )
 
@@ -356,9 +365,26 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         return left
     if left == right:
         return left
-    if isinstance(left, (StackPtr, MaybeStackPtr)) \
-            or isinstance(right, (StackPtr, MaybeStackPtr)):
+    if isinstance(left, MaybeStackPtr) or isinstance(right, MaybeStackPtr):
         return MAYBE_STACK_PTR
+    if isinstance(left, (StackPtr, StackPtrRange)) \
+            or isinstance(right, (StackPtr, StackPtrRange)):
+        if not isinstance(left, (StackPtr, StackPtrRange)) \
+                or not isinstance(right, (StackPtr, StackPtrRange)):
+            return MAYBE_STACK_PTR
+
+        def bounds(value: StackPtr | StackPtrRange) -> tuple[int | None, int | None]:
+            return (
+                (value.offset, value.offset)
+                if isinstance(value, StackPtr)
+                else (value.lo, value.hi)
+            )
+
+        left_lo, left_hi = bounds(left)
+        right_lo, right_hi = bounds(right)
+        lo = None if left_lo is None or right_lo is None else min(left_lo, right_lo)
+        hi = None if left_hi is None or right_hi is None else max(left_hi, right_hi)
+        return StackPtrRange(lo, hi)
     if isinstance(left, StackAlias) and isinstance(right, StackAlias):
         return StackAlias(
             left.may_alias or right.may_alias,
@@ -380,8 +406,10 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
             left_slot = left_slots.get(offset, absent_slot)
             right_slot = right_slots.get(offset, absent_slot)
             pointer_slot = isinstance(
-                left_slot.value, (StackPtr, MaybeStackPtr)
-            ) or isinstance(right_slot.value, (StackPtr, MaybeStackPtr))
+                left_slot.value, (StackPtr, StackPtrRange, MaybeStackPtr)
+            ) or isinstance(
+                right_slot.value, (StackPtr, StackPtrRange, MaybeStackPtr)
+            )
             if pointer_slot:
                 value = join_value(left_slot.value, right_slot.value)
             else:
@@ -789,6 +817,31 @@ def _join_state(
     if backedge and widening is not None:
         for register, value in merged.items():
             previous = old[register]
+            if isinstance(previous, (StackPtr, StackPtrRange)) \
+                    and isinstance(value, StackPtrRange):
+                previous_lo = (
+                    previous.offset if isinstance(previous, StackPtr) else previous.lo
+                )
+                previous_hi = (
+                    previous.offset if isinstance(previous, StackPtr) else previous.hi
+                )
+                lower_expands = (
+                    previous_lo is not None
+                    and (value.lo is None or value.lo < previous_lo)
+                )
+                upper_expands = (
+                    previous_hi is not None
+                    and (value.hi is None or value.hi > previous_hi)
+                )
+                lower, upper = widening.get(register, (False, False))
+                merged[register] = StackPtrRange(
+                    None if lower_expands and lower else value.lo,
+                    None if upper_expands and upper else value.hi,
+                )
+                widening[register] = (
+                    lower or lower_expands, upper or upper_expands
+                )
+                continue
             if (
                 isinstance(previous, ConstSet)
                 and isinstance(value, ConstSet)
@@ -1205,7 +1258,7 @@ def _register_frame_derived_stack_alias(
 def _register_value_is_frame_derived(
     state: dict[str, AbstractValue], register: str
 ) -> bool:
-    return isinstance(state[register], (StackPtr, MaybeStackPtr)) \
+    return isinstance(state[register], (StackPtr, StackPtrRange, MaybeStackPtr)) \
         or _register_frame_derived_stack_alias(state, register)
 
 
@@ -1368,15 +1421,49 @@ def _invalidate_escaped_argument_slots(state: dict[str, AbstractValue]) -> None:
         for argument in arguments
         if isinstance(argument, StackPtr)
     }
-    if not escaped_offsets:
+    escaped_ranges = tuple(
+        argument for argument in arguments if isinstance(argument, StackPtrRange)
+    )
+    if not escaped_offsets and not escaped_ranges:
         return
     slots = {}
     for slot_offset, slot in _stack_slots(state).items():
         escaped = any(
-            slot_offset <= escaped_offset <= slot_offset + 4
+            slot_offset <= escaped_offset < slot_offset + 4
             for escaped_offset in escaped_offsets
+        ) or any(
+            _bounded_pointer_store_may_overlap_slot(
+                escaped_range, 0, 1, slot_offset
+            )
+            for escaped_range in escaped_ranges
         )
         slots[slot_offset] = _poison_stack_slot(slot) if escaped else slot
+    _replace_stack_slots(state, slots)
+
+
+def _bounded_pointer_store_may_overlap_slot(
+    pointer: StackPtrRange, displacement: int, width: int, slot_offset: int
+) -> bool:
+    store_lo = None if pointer.lo is None else pointer.lo + displacement
+    store_hi = None if pointer.hi is None else pointer.hi + displacement + width
+    return (store_hi is None or slot_offset < store_hi) \
+        and (store_lo is None or store_lo < slot_offset + 4)
+
+
+def _invalidate_stack_pointer_range(
+    state: dict[str, AbstractValue], pointer: StackPtrRange,
+    displacement: int, width: int,
+) -> None:
+    slots = {
+        slot_offset: (
+            _poison_stack_slot(slot)
+            if _bounded_pointer_store_may_overlap_slot(
+                pointer, displacement, width, slot_offset
+            )
+            else slot
+        )
+        for slot_offset, slot in _stack_slots(state).items()
+    }
     _replace_stack_slots(state, slots)
 
 
@@ -1543,6 +1630,13 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     state, offset, state[source_register], instruction.address,
                     _register_stack_alias(state, source_register),
                 )
+        elif isinstance(base, StackPtrRange):
+            state[base_register] = StackPtrRange(
+                None if base.lo is None else base.lo - width,
+                None if base.hi is None else base.hi - width,
+            )
+            state[f"{base_register}_stack_origin"] = StackOrigin()
+            _invalidate_stack_pointer_range(state, base, -width, width)
         elif isinstance(base, MaybeStackPtr) \
                 or _register_may_alias_stack(state, base_register):
             state[base_register] = UNKNOWN
@@ -1583,7 +1677,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 and state[register].kind == "symbol"
                 for register in address_registers
             ) and not any(
-                isinstance(state[register], (StackPtr, MaybeStackPtr))
+                isinstance(
+                    state[register], (StackPtr, StackPtrRange, MaybeStackPtr)
+                )
                 for register in address_registers
             ) and not address_may_alias_stack
             if known_nonstack_base:
@@ -1634,6 +1730,13 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     instruction.address,
                     _register_stack_alias(state, aliased_stack_store.group(1)),
                 )
+            return
+        if isinstance(base, StackPtrRange):
+            displacement = int(aliased_stack_store.group(2) or 0)
+            width = {"mov.b": 1, "mov.w": 2, "mov.l": 4}[mnemonic]
+            _invalidate_stack_pointer_range(
+                state, base, displacement, width
+            )
             return
         if isinstance(base, MaybeStackPtr):
             _invalidate_stack(state)
@@ -1842,6 +1945,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 state[immediate.group(2)] = UNKNOWN
                 if immediate.group(2) == "r15":
                     _invalidate_stack(state)
+        elif isinstance(value, StackPtrRange):
+            state[immediate.group(2)] = StackPtrRange(
+                None if value.lo is None else value.lo + delta,
+                None if value.hi is None else value.hi + delta,
+            )
         elif isinstance(value, MaybeStackPtr):
             state[immediate.group(2)] = MAYBE_STACK_PTR
         elif isinstance(value, ConstSet) and all(isinstance(x, int) for x in value.values):
@@ -1875,7 +1983,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             for value in (source, target)
         )
         has_stack_operand = any(
-            isinstance(value, (StackPtr, MaybeStackPtr))
+            isinstance(value, (StackPtr, StackPtrRange, MaybeStackPtr))
             for value in (source, target)
         )
         result_may_alias_stack = (
@@ -1900,8 +2008,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             stack_offset = source.offset + int(next(iter(target_integers)))
         elif isinstance(target, StackPtr) and len(source_integers) == 1:
             stack_offset = target.offset + int(next(iter(source_integers)))
-        stack_alias_result = isinstance(source, (StackPtr, MaybeStackPtr)) \
-            or isinstance(target, (StackPtr, MaybeStackPtr))
+        stack_alias_result = isinstance(
+            source, (StackPtr, StackPtrRange, MaybeStackPtr)
+        ) or isinstance(target, (StackPtr, StackPtrRange, MaybeStackPtr))
         if stack_offset is not None:
             state[binary.group(2)] = (
                 StackPtr(stack_offset)
@@ -3811,6 +3920,10 @@ def abstract_value_json(value: AbstractValue | None) -> dict[str, Any]:
         return {"kind": "UNKNOWN"}
     if isinstance(value, MaybeStackPtr):
         return {"kind": "MaybeStackPtr"}
+    if isinstance(value, StackPtr):
+        return {"kind": "StackPtr", "offset": value.offset}
+    if isinstance(value, StackPtrRange):
+        return {"kind": "StackPtrRange", "lo": value.lo, "hi": value.hi}
     if isinstance(value, Interval):
         return {
             "kind": "Interval", "value_kind": value.kind,
