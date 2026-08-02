@@ -410,6 +410,173 @@ class NativeMathCensusTests(unittest.TestCase):
             set(sourceboot_callbacks.values()),
         )
 
+    def test_checked_in_sim_oracle_matches_all_source_derived_dispatcher_sets(self) -> None:
+        repo_root = Path(__file__).parents[2]
+        derived = _derive_bob_dispatcher_targets(repo_root)
+        self.assertEqual(derived, BOB_DISPATCHER_TARGETS)
+
+        oracle = parse_route_oracle(
+            Path(__file__).with_name(
+                "sh2_native_math_sim_route_oracle_v1.txt"
+            ).read_text(encoding="utf-8")
+        )
+        expected_edges = frozenset(
+            (dispatcher, callback)
+            for dispatcher, callbacks in BOB_DISPATCHER_TARGETS.items()
+            for callback in callbacks
+        )
+        manifest_edges = frozenset(
+            edge for edge in oracle.static_manifest_edges
+            if edge[0] in BOB_DISPATCHER_TARGETS
+        )
+        declared_edges = frozenset(
+            edge for edge in oracle.indirect_edges
+            if edge[0] in BOB_DISPATCHER_TARGETS
+        )
+        self.assertEqual(manifest_edges, expected_edges)
+        self.assertEqual(declared_edges, expected_edges)
+
+    def test_source_manifest_comparison_rejects_omitted_and_underived_callbacks(self) -> None:
+        expected_edges = frozenset(
+            (dispatcher, callback)
+            for dispatcher, callbacks in BOB_DISPATCHER_TARGETS.items()
+            for callback in callbacks
+        )
+        omitted = expected_edges - {
+            ("_level_cmd_call", "_lvl_init_from_save_file")
+        }
+        underived = expected_edges | {
+            ("_level_cmd_call", "_geo_camera_main")
+        }
+        with self.assertRaises(AssertionError):
+            self.assertEqual(omitted, expected_edges)
+        with self.assertRaises(AssertionError):
+            self.assertEqual(underived, expected_edges)
+
+    def test_four_wave1_dispatchers_consume_only_declared_dynamic_transfers(self) -> None:
+        sites = {
+            "_geo_call_global_function_nodes_helper": (0x6001000, 40),
+            "_level_cmd_call": (0x6001100, 18),
+            "_level_cmd_call_loop": (0x6001200, 18),
+            "_process_geo_layout": (0x6001300, 90),
+        }
+        for dispatcher, (start, offset) in sites.items():
+            with self.subTest(dispatcher=dispatcher):
+                callback = sorted(BOB_DISPATCHER_TARGETS[dispatcher])[0]
+                transfer = UnresolvedTransfer(
+                    dispatcher, start + offset, "jsr", "r1"
+                )
+                owners = (
+                    self.indirect_owner("_root", 0x6000000),
+                    self.indirect_owner(dispatcher, start),
+                    self.indirect_owner(callback, 0x6002000),
+                )
+                graph = {"_root": {dispatcher}}
+                undeclared = audit_indirect_edges(
+                    graph,
+                    parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _root\n"),
+                    owners,
+                    [transfer],
+                )
+                self.assertEqual(undeclared.unlisted_transfers, (transfer,))
+
+                oracle = parse_route_oracle(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                    f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+                    f"INDIRECT_EDGE {dispatcher} {callback}\n"
+                )
+                declared = audit_indirect_edges(
+                    graph, oracle, owners, [transfer]
+                )
+                self.assertEqual(declared.unlisted_transfers, ())
+
+    def test_static_transfer_remains_unlisted_in_each_wave1_dispatcher(self) -> None:
+        sites = {
+            "_geo_call_global_function_nodes_helper": (0x6001000, 40),
+            "_level_cmd_call": (0x6001100, 18),
+            "_level_cmd_call_loop": (0x6001200, 18),
+            "_process_geo_layout": (0x6001300, 90),
+        }
+        for dispatcher, (start, offset) in sites.items():
+            with self.subTest(dispatcher=dispatcher):
+                callback = sorted(BOB_DISPATCHER_TARGETS[dispatcher])[0]
+                dynamic = UnresolvedTransfer(
+                    dispatcher, start + offset, "jsr", "r1"
+                )
+                static = UnresolvedTransfer(
+                    dispatcher, start + offset + 2, "jsr", "r7",
+                    stack_source_offsets=(-32,),
+                    stack_store_addresses=(start + offset - 8,),
+                    provenance="static",
+                )
+                oracle = parse_route_oracle(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                    f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+                    f"INDIRECT_EDGE {dispatcher} {callback}\n"
+                )
+                result = audit_indirect_edges(
+                    {"_root": {dispatcher}},
+                    oracle,
+                    (
+                        self.indirect_owner("_root", 0x6000000),
+                        self.indirect_owner(dispatcher, start),
+                        self.indirect_owner(callback, 0x6002000),
+                    ),
+                    [dynamic, static],
+                )
+                self.assertEqual(result.unlisted_transfers, (static,))
+
+    def test_phase_a_dispatcher_granularity_applies_complete_bob_set_per_site(self) -> None:
+        dispatcher = "_process_geo_layout"
+        callbacks = BOB_DISPATCHER_TARGETS[dispatcher]
+        oracle_text = "ROUTE_ORACLE_VERSION 1\nROOT _root\n" + "".join(
+            f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+            f"INDIRECT_EDGE {dispatcher} {callback}\n"
+            for callback in sorted(callbacks)
+        )
+        transfers = (
+            UnresolvedTransfer(dispatcher, 0x600135A, "jsr", "r1"),
+            UnresolvedTransfer(dispatcher, 0x600135C, "jsr", "r2"),
+        )
+        result = audit_indirect_edges(
+            {"_root": {dispatcher}},
+            parse_route_oracle(oracle_text),
+            (
+                self.indirect_owner("_root", 0x6000000),
+                self.indirect_owner(dispatcher, 0x6001300),
+                *(self.indirect_owner(callback, 0x6002000 + index * 0x20)
+                  for index, callback in enumerate(sorted(callbacks))),
+            ),
+            transfers,
+        )
+        self.assertTrue(callbacks <= result.closure)
+        self.assertEqual(result.unlisted_transfers, ())
+
+    def test_source_manifest_allows_one_callback_required_by_two_dispatchers(self) -> None:
+        callback = "_lvl_init_or_update"
+        dispatchers = ("_level_cmd_call", "_level_cmd_call_loop")
+        oracle_text = "ROUTE_ORACLE_VERSION 1\nROOT _root\n" + "".join(
+            f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+            f"INDIRECT_EDGE {dispatcher} {callback}\n"
+            for dispatcher in dispatchers
+        )
+        result = audit_indirect_edges(
+            {"_root": set(dispatchers)},
+            parse_route_oracle(oracle_text),
+            (
+                self.indirect_owner("_root", 0x6000000),
+                self.indirect_owner(dispatchers[0], 0x6001100),
+                self.indirect_owner(dispatchers[1], 0x6001200),
+                self.indirect_owner(callback, 0x6002000),
+            ),
+            (
+                UnresolvedTransfer(dispatchers[0], 0x6001112, "jsr", "r1"),
+                UnresolvedTransfer(dispatchers[1], 0x6001212, "jsr", "r1"),
+            ),
+        )
+        self.assertIn(callback, result.closure)
+        self.assertEqual(result.unlisted_transfers, ())
+
     def test_declared_dispatcher_does_not_mask_stack_derived_static_helper(self) -> None:
         oracle = parse_route_oracle(
             "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
@@ -503,6 +670,233 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(result.unresolved_transfers, [])
         self.assertEqual(result.calls, [])
         self.assertEqual(result.direct_calls, [])
+
+
+BOB_DISPATCHER_TARGETS = {
+    "_geo_call_global_function_nodes_helper": frozenset({
+        "_geo_camera_fov",
+        "_geo_camera_main",
+        "_geo_cannon_circle_base",
+        "_geo_envfx_main",
+        "_geo_skybox_main",
+    }),
+    "_level_cmd_call": frozenset({
+        "_lvl_init_from_save_file",
+        "_lvl_init_or_update",
+        "_lvl_set_current_level",
+        "_sourceboot_mark_save_file_exists",
+    }),
+    "_level_cmd_call_loop": frozenset({"_lvl_init_or_update"}),
+    "_process_geo_layout": frozenset({
+        "_geo_layout_cmd_branch",
+        "_geo_layout_cmd_branch_and_link",
+        "_geo_layout_cmd_close_node",
+        "_geo_layout_cmd_end",
+        "_geo_layout_cmd_node_animated_part",
+        "_geo_layout_cmd_node_background",
+        "_geo_layout_cmd_node_billboard",
+        "_geo_layout_cmd_node_camera",
+        "_geo_layout_cmd_node_culling_radius",
+        "_geo_layout_cmd_node_display_list",
+        "_geo_layout_cmd_node_generated",
+        "_geo_layout_cmd_node_held_obj",
+        "_geo_layout_cmd_node_level_of_detail",
+        "_geo_layout_cmd_node_master_list",
+        "_geo_layout_cmd_node_object_parent",
+        "_geo_layout_cmd_node_ortho_projection",
+        "_geo_layout_cmd_node_perspective",
+        "_geo_layout_cmd_node_root",
+        "_geo_layout_cmd_node_rotation",
+        "_geo_layout_cmd_node_scale",
+        "_geo_layout_cmd_node_shadow",
+        "_geo_layout_cmd_node_start",
+        "_geo_layout_cmd_node_switch_case",
+        "_geo_layout_cmd_node_translation",
+        "_geo_layout_cmd_node_translation_rotation",
+        "_geo_layout_cmd_open_node",
+        "_geo_layout_cmd_return",
+    }),
+}
+
+
+def _strip_c_comments(text: str) -> str:
+    return re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+
+
+def _derive_bob_dispatcher_targets(repo_root: Path) -> dict[str, frozenset[str]]:
+    """Derive Phase-A callback sets from the pinned sourceboot/BOB roots."""
+    level_paths = (
+        repo_root / "src/port/saturn/sourceboot/source_entry.c",
+        repo_root / "levels/bob/script.c",
+        repo_root / "levels/scripts.c",
+    )
+    level_definitions: dict[str, str] = {}
+    for path in level_paths:
+        for match in re.finditer(
+            r"(?:static\s+)?const\s+LevelScript\s+([A-Za-z_]\w*)"
+            r"\s*\[\]\s*=\s*\{(.*?)^\};",
+            path.read_text(encoding="utf-8"),
+            flags=re.MULTILINE | re.DOTALL,
+        ):
+            name, body = match.groups()
+            if name in level_definitions:
+                raise ValueError(f"duplicate LevelScript definition: {name}")
+            level_definitions[name] = _strip_c_comments(body)
+
+    reachable_scripts: set[str] = set()
+    pending_scripts = ["level_script_entry"]
+    while pending_scripts:
+        name = pending_scripts.pop()
+        if name in reachable_scripts:
+            continue
+        if name not in level_definitions:
+            raise ValueError(f"missing reached LevelScript definition: {name}")
+        reachable_scripts.add(name)
+        body = level_definitions[name]
+        pending_scripts.extend(re.findall(
+            r"^\s*(?:JUMP|JUMP_LINK)\s*\(\s*([A-Za-z_]\w*)\s*\)",
+            body,
+            flags=re.MULTILINE,
+        ))
+        pending_scripts.extend(re.findall(
+            r"^\s*(?:EXECUTE|EXIT_AND_EXECUTE)\s*\(\s*[^,]+,\s*"
+            r"[^,]+,\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)",
+            body,
+            flags=re.MULTILINE,
+        ))
+
+    reached_level_text = "\n".join(
+        level_definitions[name] for name in sorted(reachable_scripts)
+    )
+    call_targets = frozenset(
+        "_" + target for target in re.findall(
+            r"^\s*CALL\s*\(\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)",
+            reached_level_text,
+            flags=re.MULTILINE,
+        )
+    )
+    call_loop_targets = frozenset(
+        "_" + target for target in re.findall(
+            r"^\s*CALL_LOOP\s*\(\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)",
+            reached_level_text,
+            flags=re.MULTILINE,
+        )
+    )
+
+    geo_roots = set(re.findall(
+        r"LOAD_MODEL_FROM_GEO\s*\(\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)",
+        reached_level_text,
+    ))
+    area_roots = set(re.findall(
+        r"AREA\s*\(\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)",
+        reached_level_text,
+    ))
+    geo_roots.update(area_roots)
+
+    geo_definitions: dict[str, str] = {}
+    geo_paths = sorted((repo_root / "actors").rglob("geo.inc.c"))
+    geo_paths.extend(sorted((repo_root / "levels/bob").rglob("*.c")))
+    for path in geo_paths:
+        for match in re.finditer(
+            r"(?:static\s+)?const\s+GeoLayout\s+([A-Za-z_]\w*)"
+            r"\s*\[\]\s*=\s*\{(.*?)^\};",
+            path.read_text(encoding="utf-8"),
+            flags=re.MULTILINE | re.DOTALL,
+        ):
+            name, body = match.groups()
+            if name in geo_definitions:
+                raise ValueError(f"duplicate GeoLayout definition: {name}")
+            geo_definitions[name] = _strip_c_comments(body)
+
+    def reachable_geo_layouts(roots: set[str]) -> set[str]:
+        reached: set[str] = set()
+        pending = list(roots)
+        while pending:
+            name = pending.pop()
+            if name in reached:
+                continue
+            if name not in geo_definitions:
+                raise ValueError(f"missing reached GeoLayout definition: {name}")
+            reached.add(name)
+            body = geo_definitions[name]
+            pending.extend(re.findall(
+                r"GEO_BRANCH_AND_LINK\s*\(\s*([A-Za-z_]\w*)\s*\)", body
+            ))
+            pending.extend(re.findall(
+                r"GEO_BRANCH\s*\(\s*[^,]+,\s*([A-Za-z_]\w*)\s*\)", body
+            ))
+        return reached
+
+    reached_geo = reachable_geo_layouts(geo_roots)
+    reached_geo_commands = {
+        command
+        for name in reached_geo
+        for command in re.findall(r"\b(GEO_[A-Z0-9_]+)\s*\(", geo_definitions[name])
+    }
+    command_header = (repo_root / "include/geo_commands.h").read_text(
+        encoding="utf-8"
+    )
+    macro_bodies = {
+        match.group(1): match.group(2)
+        for match in re.finditer(
+            r"^#define\s+(GEO_[A-Z0-9_]+)(?:\([^\n]*\))?\s*"
+            r"(.*?)(?=^#define\s+|\Z)",
+            command_header,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+    }
+
+    def command_opcode(name: str, seen: frozenset[str] = frozenset()) -> int:
+        if name in seen or name not in macro_bodies:
+            raise ValueError(f"cannot derive GeoLayout opcode for {name}")
+        body = macro_bodies[name]
+        encoded = re.search(r"CMD_BBH\(0x([0-9A-Fa-f]{2})", body)
+        if encoded is not None:
+            return int(encoded.group(1), 16)
+        aliases = re.findall(r"\b(GEO_[A-Z0-9_]+)\s*\(", body)
+        if len(aliases) != 1:
+            raise ValueError(f"cannot derive unique GeoLayout alias for {name}")
+        return command_opcode(aliases[0], seen | {name})
+
+    geo_engine = (repo_root / "src/engine/geo_layout.c").read_text(
+        encoding="utf-8"
+    )
+    jump_table = re.search(
+        r"GeoLayoutJumpTable\[\]\s*=\s*\{(.*?)\};", geo_engine, re.DOTALL
+    )
+    if jump_table is None:
+        raise ValueError("GeoLayoutJumpTable definition is missing")
+    handlers = re.findall(
+        r"\b(geo_layout_cmd_[a-z0-9_]+)\s*,", jump_table.group(1)
+    )
+    process_targets = frozenset(
+        "_" + handlers[command_opcode(command)]
+        for command in reached_geo_commands
+    )
+
+    active_area_geo = reachable_geo_layouts(area_roots)
+    active_area_text = "\n".join(
+        geo_definitions[name] for name in sorted(active_area_geo)
+    )
+    global_targets = frozenset(
+        "_" + target for target in re.findall(
+            r"GEO_(?:BACKGROUND|CAMERA_FRUSTUM_WITH_FUNC|CAMERA|ASM)"
+            r"\([^)]*,\s*(geo_[A-Za-z0-9_]+)\)",
+            active_area_text,
+        )
+    )
+
+    return {
+        "_geo_call_global_function_nodes_helper": global_targets,
+        "_level_cmd_call": call_targets,
+        "_level_cmd_call_loop": call_loop_targets,
+        "_process_geo_layout": process_targets,
+    }
+
+
+# Keep the source-derivation machinery at module scope without splitting the
+# one unittest fixture that owns the shared audit helpers above and below it.
+class NativeMathCensusTests(NativeMathCensusTests):
 
     def test_sourceboot_null_task_submit_rejects_dead_window_branch_targets_and_gaps(self) -> None:
         def fixture(branch_target: int, transfer_address: int) -> str:

@@ -3280,7 +3280,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "33bc521c42d1c4466f7d3ae02d415e2e181a10412db787487bdaf1da584a5e5f"
+SIM_ROUTE_ORACLE_V1_SHA256 = "e1940600e1bbece8aa8c870c81f32e4c006c6bd22606c9c444ab256f65242ff5"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {
@@ -3630,9 +3630,24 @@ def audit_indirect_edges(
             graph, oracle.roots, edges - {(dispatcher, callback)}
         )
         if callback in closure_without_edge:
-            raise ValueError(
-                f"INDIRECT_EDGE has no closure contribution: {dispatcher} -> {callback}"
+            callback_edges = {
+                edge for edge in edges if edge[1] == callback
+            }
+            closure_without_callback = route_reachable_functions(
+                graph, oracle.roots, edges - callback_edges
             )
+            source_manifest_confirms_group = bool(
+                oracle.static_manifest_edges
+                and callback_edges <= oracle.static_manifest_edges
+            )
+            if (
+                callback in closure_without_callback
+                or not source_manifest_confirms_group
+            ):
+                raise ValueError(
+                    "INDIRECT_EDGE has no closure contribution: "
+                    f"{dispatcher} -> {callback}"
+                )
 
     declared_dispatchers = {dispatcher for dispatcher, _ in edges}
     unlisted = tuple(
