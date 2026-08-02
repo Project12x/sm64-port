@@ -16,6 +16,7 @@
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
 #include "saturn_matrix_kernels.h"
+#include "saturn_terrain_emit_policy.h"
 #include "saturn_transform.h"
 #include "bob_scene.h"
 #include "bob_bsp.h"
@@ -1337,8 +1338,13 @@ static void demo_emit_terrain_result(
     vdp1_cmdt_vtx_set(cmdt, shape_vertices);
     const bool recovery =
         (result->flags & SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL) != 0U;
-    const bool textured =
-        (result->flags & SM64_SATURN_TERRAIN_RESULT_TEXTURED) != 0U;
+    const sm64_saturn_shade_path_t shade_path =
+        sm64_saturn_terrain_shade_path(
+            recovery ? (uint16_t)(result->flags &
+                                   ~SM64_SATURN_TERRAIN_RESULT_TEXTURED)
+                     : result->flags,
+            result->gouraud);
+    const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED;
     if (textured && !SATURN_DEMO_BSP_FRAGMENT_FLAT &&
         !recovery) {
         const bool bound = sm64_saturn_ir_texture_bind_clut16(
@@ -1353,27 +1359,39 @@ static void demo_emit_terrain_result(
             return;
         }
     }
-    sm64_saturn_gouraud_table_t *table = NULL;
-    uintptr_t gouraud_address = 0U;
-    if (!textured || recovery)
-        table = sm64_saturn_gouraud_bank_alloc(gouraud_bank, &gouraud_address);
-    if (table != NULL) {
-        for (uint8_t corner = 0U; corner < 4U; corner++)
-            table->colors[corner] = (uint16_t)(result->gouraud[corner] | 0x8000U);
-        vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
-            .color_mode = VDP1_CMDT_CM_RGB_32768,
-            .cc_mode = VDP1_CMDT_CC_GOURAUD});
-        vdp1_cmdt_color_set(cmdt, (rgb1555_t){
-            .raw = sm64_saturn_gouraud_neutral_color()});
-        vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)gouraud_address);
-    } else {
+    if (shade_path == SM64_SATURN_SHADE_FLAT_REPLACE) {
         vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
             .color_mode = VDP1_CMDT_CM_RGB_32768,
             .cc_mode = VDP1_CMDT_CC_REPLACE});
-        vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0],
-                                          primitive->rgb[1], primitive->rgb[2]));
+        vdp1_cmdt_color_set(cmdt, (rgb1555_t){
+            .raw = (uint16_t)(result->gouraud[0] | 0x8000U)});
+        profile->flat_primitives++;
+    } else {
+        sm64_saturn_gouraud_table_t *table = NULL;
+        uintptr_t gouraud_address = 0U;
         if (!textured || recovery)
-            profile->gouraud_bank_overflow++;
+            table = sm64_saturn_gouraud_bank_alloc(gouraud_bank,
+                                                    &gouraud_address);
+        if (table != NULL) {
+            for (uint8_t corner = 0U; corner < 4U; corner++)
+                table->colors[corner] =
+                    (uint16_t)(result->gouraud[corner] | 0x8000U);
+            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                .cc_mode = VDP1_CMDT_CC_GOURAUD});
+            vdp1_cmdt_color_set(cmdt, (rgb1555_t){
+                .raw = sm64_saturn_gouraud_neutral_color()});
+            vdp1_cmdt_gouraud_base_set(cmdt, (vdp1_vram_t)gouraud_address);
+            profile->gouraud_primitives++;
+        } else {
+            vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
+                .color_mode = VDP1_CMDT_CM_RGB_32768,
+                .cc_mode = VDP1_CMDT_CC_REPLACE});
+            vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0],
+                                              primitive->rgb[1], primitive->rgb[2]));
+            if (!textured || recovery)
+                profile->gouraud_bank_overflow++;
+        }
     }
     profile->triangles_vdp1_emitted++;
     profile->triangles_emitted++;

@@ -399,6 +399,11 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_lod_primitives_suppressed;
     uint32_t demo_lod_texture_downgrades;
     uint32_t demo_lod_resident_bytes;
+    /* Terrain emission-path evidence. These count intentional flat RGB1555
+     * commands separately from successful Gouraud allocations; allocation
+     * exhaustion remains reported by gouraud_bank_overflow above. */
+    uint32_t flat_primitives;
+    uint32_t gouraud_primitives;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

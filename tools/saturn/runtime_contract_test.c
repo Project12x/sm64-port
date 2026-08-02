@@ -6,6 +6,7 @@
 #include "saturn_frame_profile.h"
 #include "saturn_gouraud.h"
 #include "saturn_gouraud_bank.h"
+#include "saturn_terrain_emit_policy.h"
 #include "saturn_command_arena.h"
 #include "saturn_memory_arena.h"
 #include "saturn_projected_workarea.h"
@@ -3701,10 +3702,41 @@ static void test_frontend_quad_map_asymmetric_entry_refuses_merge(void)
     assert(frontend.resolved[1].y[3] == frontend.resolved[1].y[2]);
 }
 
+/* Catches a policy mutation that sends identical untextured vertex colors
+ * through the Gouraud bank, or that lets a texture fall through to either
+ * untextured path.  The zero colors fixture is intentionally literal: black
+ * is still one flat RGB1555 color, not a missing color array. */
+static void test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud(void)
+{
+    const uint16_t flat_colors[4] = {0x801FU, 0x801FU, 0x801FU, 0x801FU};
+    const uint16_t gradient_colors[4] = {0x801FU, 0x801FU, 0x83E0U, 0x801FU};
+    const uint16_t black_colors[4] = {0U, 0U, 0U, 0U};
+
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_OPAQUE, flat_colors) ==
+           SM64_SATURN_SHADE_FLAT_REPLACE);
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_OPAQUE, gradient_colors) ==
+           SM64_SATURN_SHADE_GOURAUD);
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_TEXTURED, gradient_colors) ==
+           SM64_SATURN_SHADE_TEXTURED);
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_TEXTURED, NULL) ==
+           SM64_SATURN_SHADE_TEXTURED);
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_OPAQUE, black_colors) ==
+           SM64_SATURN_SHADE_FLAT_REPLACE);
+    assert(sm64_saturn_terrain_shade_path(
+               SM64_SATURN_TERRAIN_RESULT_OPAQUE, NULL) ==
+           SM64_SATURN_SHADE_GOURAUD);
+}
+
 #if defined(SM64_SATURN_RUNTIME_CONTRACT_ONLY)
 int main(void)
 {
     test_source_runtime_records_the_applied_camera_replay_pad();
+    test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud();
     return 0;
 }
 #else
@@ -3782,6 +3814,7 @@ int main(void)
     test_frontend_rejected_fog_triangle_is_not_counted();
     test_gouraud_bank_alloc_and_used_prefix();
     test_gouraud_bank_overflow_returns_null();
+    test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud();
     test_frontend_quad_map_merges_adjacent_pair();
     test_frontend_quad_map_merged_depth_covers_both_halves();
     test_frontend_quad_map_merges_non_adjacent_pair();
