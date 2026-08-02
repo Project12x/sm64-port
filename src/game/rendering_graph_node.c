@@ -352,7 +352,7 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
         node->fnNode.func(GEO_CONTEXT_RENDER, &node->fnNode.node, gMatStack[gMatStackIndex]);
     }
     if (node->fnNode.node.children != NULL) {
-        u16 perspNorm;
+        u16 perspNorm = UINT16_MAX;
         Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
 #ifdef TARGET_SATURN

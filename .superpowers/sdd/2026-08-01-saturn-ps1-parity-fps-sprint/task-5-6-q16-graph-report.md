@@ -55,6 +55,11 @@ emulator.
   bridge and the look-at C divisions before each was removed.
 - Conversion assembly gate first failed on host `cvttss2sil`; after integer
   IEEE decode/pack it reports integer/bit operations only.
+- Review round 1 poisoned the perspective normalization output with `0xA55A`;
+  all three singular fixtures initially returned identity while preserving the
+  poison. The constructor now establishes `UINT16_MAX` before validation, the
+  graph caller initializes the same deterministic fallback, and the poisoned
+  regressions pass.
 
 ## Fresh host verification
 
@@ -73,8 +78,10 @@ The combined serial command completed with exit code 0:
   dynamic FOV values are quantized; tested 45/60/90-degree cases stay within
   the explicit 160-Q16-ulp matrix tolerance. BOB's normal FOV is covered.
 - Singular perspective/ortho inputs deterministically produce identity and
-  return false. The graph's source-derived dimensions and near/far values are
-  non-singular; the caller intentionally does not re-enter the float fallback.
+  return false. Singular perspective also writes `UINT16_MAX` to a non-null
+  normalization output. The graph's source-derived dimensions and near/far
+  values are non-singular; the caller intentionally does not re-enter the
+  float fallback.
 - Host assembly proves the boundary conversion implementation contains no
   native float conversion/arithmetic. The linked SH-2 absence of
   `___divdi3`, `___fixsfsi`, and `___floatsisf` at the exact accepted callers

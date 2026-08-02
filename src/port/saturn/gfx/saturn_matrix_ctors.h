@@ -73,6 +73,9 @@ sm64_saturn_mtxq_perspective(sm64_saturn_mtx_t *dest, uint16_t *persp_norm,
     const int32_t depth_denominator = (int32_t) near - (int32_t) far;
     const int32_t depth_sum = (int32_t) near + (int32_t) far;
 
+    if (persp_norm != NULL) {
+        *persp_norm = UINT16_MAX;
+    }
     sm64_saturn_matrix_identity(dest);
     if (sine_q16 == 0 || aspect_q16 == 0 || depth_denominator == 0
         || !sm64_saturn_div_s64_s32((int64_t) cosine_q16 << 16,

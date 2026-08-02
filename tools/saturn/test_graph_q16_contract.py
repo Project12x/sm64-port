@@ -72,6 +72,8 @@ def main() -> int:
     forbid(saturn_ortho, "guOrtho", "Saturn ortho")
 
     saturn_perspective = function_body(saturn, "geo_process_perspective")
+    if re.search(r"\bu16\s+perspNorm\s*=\s*\(0xffff\)\s*;", saturn_perspective) is None:
+        raise AssertionError("Saturn perspective: perspNorm lacks deterministic initialization")
     require(saturn_perspective, "sm64_saturn_mtxq_perspective", "Saturn perspective")
     require(saturn_perspective, "saturn_mtxq_write_wire", "Saturn perspective")
     forbid(saturn_perspective, "guPerspective", "Saturn perspective")

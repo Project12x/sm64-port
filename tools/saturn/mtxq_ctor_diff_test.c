@@ -267,22 +267,27 @@ static void diff_ortho(float left, float right, float bottom, float top,
 static void test_projection_singular_contract(void)
 {
     sm64_saturn_mtx_t got;
-    u16 norm = 0;
+    u16 norm = 0xA55A;
 
     memset(&got, 0xA5, sizeof(got));
     assert(!sm64_saturn_mtxq_perspective(
         &got, &norm, f_to_q(0.0f), f_to_q(4.0f / 3.0f), 100, 20000));
     assert_mtx_identity(&got);
+    assert(norm == UINT16_MAX);
 
     memset(&got, 0xA5, sizeof(got));
+    norm = 0xA55A;
     assert(!sm64_saturn_mtxq_perspective(
         &got, &norm, f_to_q(45.0f), 0, 100, 20000));
     assert_mtx_identity(&got);
+    assert(norm == UINT16_MAX);
 
     memset(&got, 0xA5, sizeof(got));
+    norm = 0xA55A;
     assert(!sm64_saturn_mtxq_perspective(
         &got, &norm, f_to_q(45.0f), f_to_q(4.0f / 3.0f), 100, 100));
     assert_mtx_identity(&got);
+    assert(norm == UINT16_MAX);
 
     memset(&got, 0xA5, sizeof(got));
     assert(!sm64_saturn_mtxq_ortho(
