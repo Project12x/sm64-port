@@ -525,12 +525,13 @@ These run through every milestone:
 - add slave-SH2 work only when a measured job is large, coarse, and bus-aware.
 
 Wave 1 of the 2026-08-01 PS1-parity FPS sprint is **blocked, not accepted or
-rejected**. The initial `3fef49c` standalone-template compile failure was
-fixed at `5244b7b`, but the guarded hot1/clip1 retry fails at link: the
-`.lwram_camera_capture` section overflows `lwram` by 15840 bytes. No fresh
+rejected**. The initial compile failure and the subsequent 15840-byte LWRAM
+overflow were fixed by reviewed follow-ups, but the guarded hot1/clip1 retry
+at `ade8602` fails at link on libyaul's HWRAM TLSF control-block safety floor:
+the heap at `___end` would overrun HWRAM and mirror into low memory. No fresh
 ELF/CUE or Ymir counter/capture evidence exists. Commit `23c3cdd` remains the
-next comparison baseline; the target link budget and unchanged truthful
-native-math gate must both permit a fresh image before the serial BOB
+next comparison baseline; the target HWRAM static-consumer budget and unchanged
+truthful native-math gate must both permit a fresh image before the serial BOB
 comparison resumes. See
 `docs/saturn/evidence/reports/ps1-parity-wave1-bob-2026-08-01.md`.
 
