@@ -52,6 +52,7 @@ from verify_sh2_native_math import (
     parse_baseline,
     parse_route_oracle,
     prove_sourceboot_null_task_submit,
+    sourceboot_null_task_submit_dead_nodes,
     route_reachable_functions,
     run_command,
     scan_call_graph,
@@ -502,6 +503,79 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(result.unresolved_transfers, [])
         self.assertEqual(result.calls, [])
         self.assertEqual(result.direct_calls, [])
+
+    def test_sourceboot_null_task_submit_rejects_dead_window_branch_targets_and_gaps(self) -> None:
+        def fixture(branch_target: int, transfer_address: int) -> str:
+            delay_address = transfer_address + 2
+            return f"""
+06001000 <_main>:
+ 6001000: d1 3f mov.l 6001100 <_sm64_saturn_source_runtime_configure>,r1 ! 06001100 <_sm64_saturn_source_runtime_configure>
+ 6001002: e5 00 mov #0,r5
+ 6001004: 41 0b jsr @r1
+ 6001006: e4 00 mov #0,r4
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+06001100 <_sm64_saturn_source_runtime_configure>:
+ 6001100: d1 7f mov.l 6001300 <_sTaskSubmit>,r1 ! 06001300 <_sTaskSubmit>
+ 6001102: 21 42 mov.l r4,@r1
+ 6001104: d1 7f mov.l 6001304 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
+ 6001106: 00 0b rts
+ 6001108: 21 52 mov.l r5,@r1
+06001200 <_exec_display_list>:
+ 6001200: 24 48 tst r4,r4
+ 6001202: 8b 01 bf 6001208 <_exec_display_list+0x8>
+ 6001204: 00 0b rts
+ 6001206: 00 09 nop
+ 6001214: d2 06 mov.l 6001234 <_sTaskSubmit>,r2 ! 06001300 <_sTaskSubmit>
+ 6001216: 62 22 mov.l @r2,r2
+ 6001218: 22 28 tst r2,r2
+ 600121a: 89 f4 bt {branch_target:x} <_exec_display_list>
+ 600121c: d1 06 mov.l 6001238 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
+ {transfer_address:x}: 42 2b jmp @r2
+ {delay_address:x}: 65 12 mov.l @r1,r5
+"""
+
+        owners = (
+            self.indirect_owner("_main", 0x6001000),
+            self.indirect_owner("_sm64_saturn_source_runtime_configure", 0x6001100),
+            FunctionOwner("_exec_display_list", 0x6001200, 0x6001224, 1),
+        )
+        near_matches = (
+            ("branch_to_intervening", 0x600121C, 0x600121E),
+            ("branch_to_transfer", 0x600121E, 0x600121E),
+            ("branch_to_delay_slot", 0x6001220, 0x600121E),
+            ("noncontiguous_transfer", 0x6001204, 0x6001220),
+        )
+        for label, branch_target, transfer_address in near_matches:
+            with self.subTest(label=label):
+                instructions = parse_instructions(
+                    fixture(branch_target, transfer_address)
+                )
+                # Exercise the dead-block recognizer with an independently
+                # established known-null slot. Some malformed branch targets
+                # are also rejected earlier by the whole-image proof, but the
+                # recognizer must remain fail-closed at its own boundary.
+                null_slots = frozenset({0x6001300})
+                self.assertEqual(
+                    prove_sourceboot_null_task_submit(instructions, owners),
+                    frozenset(),
+                )
+                self.assertEqual(
+                    sourceboot_null_task_submit_dead_nodes(
+                        instructions, owners, null_slots
+                    ),
+                    frozenset(),
+                )
+                result = analyze_code_only(
+                    instructions, owners,
+                    decoded_lines={"_exec_display_list": {transfer_address}},
+                    selected_names={"_exec_display_list"},
+                    known_null_addresses=null_slots,
+                )
+                self.assertTrue(any(
+                    item.address == transfer_address
+                    for item in result.unresolved_transfers
+                ))
 
     def test_sourceboot_nonnull_or_unknown_task_submit_remains_unresolved(self) -> None:
         template = """
@@ -1471,33 +1545,55 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
   13: 060030c0 4 FUNC GLOBAL DEFAULT 1 _random_float
 """)
         expected = {
-            ("_create_skybox_facing_camera", 132, "_atan2s"),
-            ("_envfx_update_snow_blizzard", 324, "___mulsf3"),
-            ("_envfx_update_snow_blizzard", 334, "___addsf3"),
-            ("_envfx_update_snow_blizzard", 376, "___mulsf3"),
-            ("_envfx_update_snow_blizzard", 384, "___addsf3"),
-            ("_envfx_update_snow_blizzard", 474, "___floatsisf"),
-            ("_envfx_update_snow_normal", 332, "___mulsf3"),
-            ("_envfx_update_snow_normal", 358, "___mulsf3"),
-            ("_envfx_update_snow_normal", 464, "___floatsisf"),
-            ("_envfx_update_snow_water", 156, "___floatsisf"),
-            ("_envfx_update_snow_water", 164, "___subsf3"),
-            ("_envfx_update_snow_water", 190, "_random_float"),
-            ("_envfx_update_snow_water", 198, "___floatsisf"),
-            ("_envfx_update_snow_water", 208, "___subsf3"),
-            ("_orbit_from_positions", 128, "_sqrtf"),
-            ("_pos_from_orbit", 128, "___addsf3"),
-            ("_pos_from_orbit", 162, "___addsf3"),
+            DirectCallFact("_create_skybox_facing_camera", 132, "_atan2s", 0),
+            DirectCallFact("_envfx_update_snow_blizzard", 324, "___mulsf3", 0),
+            DirectCallFact("_envfx_update_snow_blizzard", 334, "___addsf3", 0),
+            DirectCallFact("_envfx_update_snow_blizzard", 376, "___mulsf3", 0),
+            DirectCallFact("_envfx_update_snow_blizzard", 384, "___addsf3", 0),
+            DirectCallFact("_envfx_update_snow_blizzard", 474, "___floatsisf", 0),
+            DirectCallFact("_envfx_update_snow_normal", 332, "___mulsf3", 0),
+            DirectCallFact("_envfx_update_snow_normal", 358, "___mulsf3", 0),
+            DirectCallFact("_envfx_update_snow_normal", 464, "___floatsisf", 0),
+            DirectCallFact("_envfx_update_snow_water", 156, "___floatsisf", 0),
+            DirectCallFact("_envfx_update_snow_water", 164, "___subsf3", 0),
+            DirectCallFact("_envfx_update_snow_water", 190, "_random_float", 0),
+            DirectCallFact("_envfx_update_snow_water", 198, "___floatsisf", 0),
+            DirectCallFact("_envfx_update_snow_water", 208, "___subsf3", 0),
+            DirectCallFact("_orbit_from_positions", 128, "_sqrtf", 0),
+            DirectCallFact("_pos_from_orbit", 128, "___addsf3", 0),
+            DirectCallFact("_pos_from_orbit", 162, "___addsf3", 0),
         }
-        self.assertEqual(
-            {
-                (fact.caller, fact.caller_offset, fact.callee)
-                for fact in result.direct_calls
-                if (fact.caller, fact.caller_offset, fact.callee) in expected
-            },
-            expected,
-        )
+        self.assertEqual(set(result.direct_calls), expected)
         self.assertEqual(result.unresolved_transfers, [])
+
+    def test_reloaded_external_frame_alias_invalidates_literal_spill(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d7 0f mov.l 6001040 <___mulsf3>,r7 ! 06001040 <___mulsf3>
+ 6001004: 2f 72 mov.l r7,@r15
+ 6001006: 68 f3 mov r15,r8
+ 6001008: d1 3d mov.l 6001100 <_escaped_frame>,r1 ! 06002000 <_escaped_frame>
+ 600100a: 21 82 mov.l r8,@r1
+ 600100c: d1 3c mov.l 6001100 <_escaped_frame>,r1 ! 06002000 <_escaped_frame>
+ 600100e: 62 12 mov.l @r1,r2
+ 6001010: 22 02 mov.l r0,@r2
+ 6001012: 61 f2 mov.l @r15,r1
+ 6001014: 41 0b jsr @r1
+ 6001016: 00 09 nop
+ 6001018: 00 0b rts
+ 600101a: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001014, "jsr")],
+        )
 
     def test_geo_process_held_object_recovers_spilled_vec3f_helper(self) -> None:
         dis = """
@@ -1743,48 +1839,172 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
     def test_fresh_wave1_data_driven_dispatchers_stay_unresolved(self) -> None:
         dis = """
 06001000 <_geo_call_global_function_nodes_helper>:
- 6001000: 51 41 mov.l @(4,r4),r1
- 6001002: 41 0b jsr @r1
+ 6001000: 00 09 nop
+ 6001002: 00 09 nop
  6001004: 00 09 nop
- 6001006: 00 0b rts
+ 6001006: 00 09 nop
  6001008: 00 09 nop
+ 600100a: 00 09 nop
+ 600100c: 00 09 nop
+ 600100e: 00 09 nop
+ 6001010: 00 09 nop
+ 6001012: 00 09 nop
+ 6001014: 00 09 nop
+ 6001016: 00 09 nop
+ 6001018: 00 09 nop
+ 600101a: 00 09 nop
+ 600101c: 00 09 nop
+ 600101e: 50 85 mov.l @(20,r8),r0
+ 6001020: 20 08 tst r0,r0
+ 6001022: 8d 03 bt.s 600102c <_geo_call_global_function_nodes_helper+0x2c>
+ 6001024: e6 00 mov #0,r6
+ 6001026: 65 83 mov r8,r5
+ 6001028: 40 0b jsr @r0
+ 600102a: 64 b3 mov r11,r4
+ 600102c: 00 0b rts
+ 600102e: 00 09 nop
 06001100 <_level_cmd_call>:
- 6001100: 51 41 mov.l @(4,r4),r1
- 6001102: 41 0b jsr @r1
- 6001104: 00 09 nop
- 6001106: 00 0b rts
- 6001108: 00 09 nop
+ 6001100: 2f 86 mov.l r8,@-r15
+ 6001102: 2f 96 mov.l r9,@-r15
+ 6001104: d8 09 mov.l 600112c <_sCurrentCmd>,r8 ! 06003800 <_sCurrentCmd>
+ 6001106: 4f 22 sts.l pr,@-r15
+ 6001108: 64 82 mov.l @r8,r4
+ 600110a: d9 09 mov.l 6001130 <_sRegister>,r9 ! 06003804 <_sRegister>
+ 600110c: 51 41 mov.l @(4,r4),r1
+ 600110e: 85 41 mov.w @(2,r4),r0
+ 6001110: 65 92 mov.l @r9,r5
+ 6001112: 41 0b jsr @r1
+ 6001114: 64 03 mov r0,r4
+ 6001116: 00 0b rts
+ 6001118: 00 09 nop
 06001200 <_level_cmd_call_loop>:
- 6001200: 51 41 mov.l @(4,r4),r1
- 6001202: 41 0b jsr @r1
- 6001204: 00 09 nop
- 6001206: 00 0b rts
- 6001208: 00 09 nop
+ 6001200: 2f 86 mov.l r8,@-r15
+ 6001202: 2f 96 mov.l r9,@-r15
+ 6001204: d8 0c mov.l 6001238 <_sCurrentCmd>,r8 ! 06003800 <_sCurrentCmd>
+ 6001206: 4f 22 sts.l pr,@-r15
+ 6001208: 64 82 mov.l @r8,r4
+ 600120a: d9 0c mov.l 600123c <_sRegister>,r9 ! 06003804 <_sRegister>
+ 600120c: 51 41 mov.l @(4,r4),r1
+ 600120e: 85 41 mov.w @(2,r4),r0
+ 6001210: 65 92 mov.l @r9,r5
+ 6001212: 41 0b jsr @r1
+ 6001214: 64 03 mov r0,r4
+ 6001216: 00 0b rts
+ 6001218: 00 09 nop
 06001300 <_process_geo_layout>:
- 6001300: d1 07 mov.l 6001320 <_GeoLayoutJumpTable>,r1 ! 06003800 <_GeoLayoutJumpTable>
- 6001302: 01 1e mov.l @(r0,r1),r1
- 6001304: 41 0b jsr @r1
+ 6001300: 00 09 nop
+ 6001302: 00 09 nop
+ 6001304: 00 09 nop
  6001306: 00 09 nop
- 6001308: 00 0b rts
+ 6001308: 00 09 nop
  600130a: 00 09 nop
+ 600130c: 00 09 nop
+ 600130e: 00 09 nop
+ 6001310: 00 09 nop
+ 6001312: 00 09 nop
+ 6001314: 00 09 nop
+ 6001316: 00 09 nop
+ 6001318: 00 09 nop
+ 600131a: 00 09 nop
+ 600131c: 00 09 nop
+ 600131e: 00 09 nop
+ 6001320: 00 09 nop
+ 6001322: 00 09 nop
+ 6001324: 00 09 nop
+ 6001326: 00 09 nop
+ 6001328: 00 09 nop
+ 600132a: 00 09 nop
+ 600132c: 00 09 nop
+ 600132e: 00 09 nop
+ 6001330: 00 09 nop
+ 6001332: 00 09 nop
+ 6001334: 00 09 nop
+ 6001336: 00 09 nop
+ 6001338: 00 09 nop
+ 600133a: 00 09 nop
+ 600133c: d8 13 mov.l 600138c <_GeoLayoutJumpTable>,r8 ! 06003808 <_GeoLayoutJumpTable>
+ 600133e: 61 b2 mov.l @r11,r1
+ 6001340: 21 18 tst r1,r1
+ 6001342: 8b 06 bf 6001352 <_process_geo_layout+0x52>
+ 6001344: 00 0b rts
+ 6001346: 00 09 nop
+ 6001348: 00 09 nop
+ 600134a: 00 09 nop
+ 600134c: 00 09 nop
+ 600134e: 00 09 nop
+ 6001350: 00 09 nop
+ 6001352: 60 10 mov.b @r1,r0
+ 6001354: 60 0c extu.b r0,r0
+ 6001356: 40 08 shll2 r0
+ 6001358: 01 8e mov.l @(r0,r8),r1
+ 600135a: 41 0b jsr @r1
+ 600135c: 00 09 nop
+ 600135e: 00 0b rts
+ 6001360: 00 09 nop
 """
         result = self.analyze_named_fixture(dis, """
-   1: 06001000 10 FUNC GLOBAL DEFAULT 1 _geo_call_global_function_nodes_helper
-   2: 06001100 10 FUNC GLOBAL DEFAULT 1 _level_cmd_call
-   3: 06001200 10 FUNC GLOBAL DEFAULT 1 _level_cmd_call_loop
-   4: 06001300 12 FUNC GLOBAL DEFAULT 1 _process_geo_layout
+   1: 06001000 48 FUNC GLOBAL DEFAULT 1 _geo_call_global_function_nodes_helper
+   2: 06001100 26 FUNC GLOBAL DEFAULT 1 _level_cmd_call
+   3: 06001200 26 FUNC GLOBAL DEFAULT 1 _level_cmd_call_loop
+   4: 06001300 98 FUNC GLOBAL DEFAULT 1 _process_geo_layout
 """)
         self.assertEqual(result.calls, [])
         self.assertEqual(result.direct_calls, [])
+        owner_starts = {
+            "_geo_call_global_function_nodes_helper": 0x6001000,
+            "_level_cmd_call": 0x6001100,
+            "_level_cmd_call_loop": 0x6001200,
+            "_process_geo_layout": 0x6001300,
+        }
         self.assertEqual(
-            [(item.caller, item.address, item.mnemonic)
+            [(item.caller, item.address - owner_starts[item.caller], item.mnemonic)
              for item in result.unresolved_transfers],
             [
-                ("_geo_call_global_function_nodes_helper", 0x6001002, "jsr"),
-                ("_level_cmd_call", 0x6001102, "jsr"),
-                ("_level_cmd_call_loop", 0x6001202, "jsr"),
-                ("_process_geo_layout", 0x6001304, "jsr"),
+                ("_geo_call_global_function_nodes_helper", 40, "jsr"),
+                ("_level_cmd_call", 18, "jsr"),
+                ("_level_cmd_call_loop", 18, "jsr"),
+                ("_process_geo_layout", 90, "jsr"),
             ],
+        )
+
+    def test_extu_w_preserves_exact_unsigned_low_word(self) -> None:
+        state = _unknown_state()
+        state["r6"] = ConstSet("unsigned", frozenset({0x1234ABCD}))
+        instruction = parse_instructions(
+            " 6001000: 65 6d extu.w r6,r5\n"
+        )[0x6001000]
+        _write_effect(
+            instruction, state, [],
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertEqual(
+            state["r5"], ConstSet("unsigned", frozenset({0xABCD}))
+        )
+
+    def test_exts_b_preserves_exact_signed_low_byte(self) -> None:
+        state = _unknown_state()
+        state["r6"] = ConstSet("unsigned", frozenset({0xFF}))
+        instruction = parse_instructions(
+            " 6001000: 65 6e exts.b r6,r5\n"
+        )[0x6001000]
+        _write_effect(
+            instruction, state, [],
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertEqual(state["r5"], ConstSet("signed", frozenset({-1})))
+
+    def test_exts_w_preserves_exact_signed_low_word(self) -> None:
+        state = _unknown_state()
+        state["r6"] = ConstSet("unsigned", frozenset({0x8001}))
+        instruction = parse_instructions(
+            " 6001000: 65 6f exts.w r6,r5\n"
+        )[0x6001000]
+        _write_effect(
+            instruction, state, [],
+            FunctionOwner("_root", 0x6001000, 0x6001002, 1),
+        )
+        self.assertEqual(
+            state["r5"], ConstSet("signed", frozenset({-0x7FFF}))
         )
 
     def test_stack_push_pop_preserves_known_symbol_target(self) -> None:

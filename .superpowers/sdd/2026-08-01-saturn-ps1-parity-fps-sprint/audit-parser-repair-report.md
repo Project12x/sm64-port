@@ -150,3 +150,100 @@ not authorization to repin the immutable `582` contract.
 - This task did not add suppressions or fabricated direct facts and did not
   alter any oracle or route file.
 - No target build, Ymir session, or CUE generation was run.
+
+## Review fix round
+
+The initial repair was rejected in review for insufficient fail-closed proof
+boundaries and incomplete negative coverage. This round addresses every
+finding without changing the audit contract, route oracles, manifests, target
+sources, or generated target artifacts.
+
+### Exact configured-null recognition
+
+Both `prove_sourceboot_null_task_submit()` and the decoded-dead-node recognizer
+now require the exact seven contiguous SH-2 instructions used by the fresh
+profile:
+
+1. `_sTaskSubmit` address load;
+2. callback dereference;
+3. `tst` of that callback register;
+4. non-delayed `bt`;
+5. `_sTaskSubmitContext` address load;
+6. `jmp` through the tested callback register; and
+7. the exact context load in the jump delay slot.
+
+Every row must be two bytes after its predecessor. The taken branch target must
+be outside the three-node dead window (context load, transfer, and delay slot),
+and the whole-image proof still requires the guarded exit to reach `rts`
+without crossing another control transfer.
+
+The new known-null negative fixture covers branch targets into the intervening
+context load, transfer, and delay slot, plus a noncontiguous transfer/delay
+layout. Before the production change, all four subcases incorrectly returned
+dead nodes. They now return no dead nodes and retain the indirect transfer.
+
+### Escaped local-frame aliases
+
+External alias provenance is now stored separately as exact external storage
+addresses (or an unknown-address marker). Only concrete `StackPtr` and
+`MaybeStackPtr` abstract values create an escape record. Reloading the same
+known/global storage location restores the stack-alias risk; a subsequent
+write through that value invalidates stack facts. A memory-writing or
+unresolved call also invalidates facts after a recorded external escape.
+Disconnected decoded seeds start with unknown external alias state and remain
+fail-closed.
+
+The red regression stored `r15` in `_escaped_frame`, reloaded it through that
+global, wrote through it, then reloaded a spilled `___mulsf3` literal. Before
+the change, the analyzer fabricated a concrete helper call. The fixed analyzer
+emits no call/direct fact and reports the final `jsr` unresolved.
+
+An exploratory coarse one-bit escape model was rejected during integration:
+it tainted unrelated globals and reintroduced 24 static false positives. The
+address-specific model above preserves the required escape behavior while the
+final real-ELF census recovers every static site.
+
+### Strengthened fixture contracts
+
+- The 17-site fixture now compares the complete `DirectCallFact` set against
+  17 literal expected facts. Extra facts, changed callee offsets, counts, or
+  regions fail the test; there is no expected-set filter.
+- The four genuine dispatcher fixture now mirrors the fresh instruction shapes
+  and exact call offsets: `_geo_call_global_function_nodes_helper +40`,
+  `_level_cmd_call +18`, `_level_cmd_call_loop +18`, and
+  `_process_geo_layout +90`. All four remain dynamic and unresolved.
+- Focused semantic tests cover exact results for `extu.w`, `exts.b`, and
+  `exts.w`.
+
+### Review-round verification
+
+Focused command (nine null/alias/direct-fact/dispatcher/extension tests):
+
+```text
+..\..\.venv-saturn-tools\Scripts\python.exe -m unittest <nine named tests>
+```
+
+Result: `Ran 9 tests in 0.018s` / `OK`.
+
+Complete host suite:
+
+```text
+.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_verify_sh2_native_math.py
+```
+
+Result: `Ran 161 tests in 0.133s` / `OK`.
+
+Final observation-only/code-only census of the existing ELF:
+
+- Parser SHA-256: `305a99ebc4f196314c0b21c8eebf416ecff6058598f3bcfcd395f7fe827152f9`
+- Helper total: `881`
+- Unresolved transfers: exactly the four genuine dispatcher sites listed
+  above
+- `_exec_display_list +30`: absent
+- All 17 prior static-call misses: absent
+- Contract-before expected total: `582`
+- Contract SHA-256: `87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`
+
+The census exits nonzero only because the separate checked-manifest task has
+not listed the four genuine dispatchers. No target build, CUE generation, or
+Ymir launch was performed in this review round.

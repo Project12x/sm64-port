@@ -133,6 +133,14 @@ NON_STACK_ALIAS = StackAlias(False)
 
 
 @dataclass(frozen=True)
+class ExternalStackAliases:
+    """External storage locations that may contain this frame's address."""
+
+    addresses: frozenset[int] = frozenset()
+    unknown_address: bool = False
+
+
+@dataclass(frozen=True)
 class StackSlot:
     value: AbstractValue
     store_addresses: tuple[int, ...] = ()
@@ -156,7 +164,7 @@ class StackOrigin:
 
 AbstractValue = (
     _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | MaybeStackPtr
-    | StackAlias | StackMemory | StackOrigin
+    | StackAlias | ExternalStackAliases | StackMemory | StackOrigin
 )
 
 
@@ -350,6 +358,12 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
         return MAYBE_STACK_PTR
     if isinstance(left, StackAlias) and isinstance(right, StackAlias):
         return StackAlias(left.may_alias or right.may_alias)
+    if isinstance(left, ExternalStackAliases) \
+            and isinstance(right, ExternalStackAliases):
+        return ExternalStackAliases(
+            left.addresses | right.addresses,
+            left.unknown_address or right.unknown_address,
+        )
     if left is UNKNOWN or right is UNKNOWN:
         return UNKNOWN
     if isinstance(left, StackMemory) and isinstance(right, StackMemory):
@@ -738,14 +752,18 @@ def _unknown_state(
         "mach": UNKNOWN, "macl": UNKNOWN, "t_predicate": UNKNOWN,
         "stack_memory": StackMemory(),
     } | {f"r{x}_stack_origin": StackOrigin() for x in range(16)} | {
-        # Incoming arguments may point into caller-owned storage, but cannot
-        # name this callee's fresh frame until a local address escapes.
+        # Incoming argument registers cannot name this callee's fresh frame.
+        # Other unknown registers and decoded-only seeds stay fail-closed.
         f"r{x}_stack_alias": (
             NON_STACK_ALIAS
             if entry_arguments_nonstack and 4 <= x <= 7
             else MAY_ALIAS_STACK
         )
         for x in range(16)
+    } | {
+        "external_stack_aliases": ExternalStackAliases(
+            unknown_address=not entry_arguments_nonstack
+        ),
     }
 
 
@@ -898,9 +916,15 @@ def prove_sourceboot_null_task_submit(
         base = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", row.operands)
         if row.mnemonic != "mov.l" or atom != slot or base is None:
             continue
-        if index + 4 >= len(dispatcher_rows):
+        if index + 6 >= len(dispatcher_rows):
             continue
-        load, test, branch = dispatcher_rows[index + 1:index + 4]
+        window = dispatcher_rows[index:index + 7]
+        if any(
+            item.address != row.address + (window_index * 2)
+            for window_index, item in enumerate(window)
+        ):
+            continue
+        load, test, branch, context_load, transfer, delay = window[1:]
         target = re.fullmatch(
             rf"@{re.escape(base.group(1))},\s*(r(?:1[0-5]|\d))", load.operands
         )
@@ -913,6 +937,27 @@ def prove_sourceboot_null_task_submit(
             continue
         branch_target = _target_from_text(branch.operands)
         if branch.mnemonic != "bt" or branch_target is None:
+            continue
+        context_atom = _symbol_from_annotation(context_load.annotation)
+        context_destination = re.search(
+            r",\s*(r(?:1[0-5]|\d))\s*$", context_load.operands
+        )
+        if context_load.mnemonic != "mov.l" or context_atom is None \
+                or context_atom.name != "_sTaskSubmitContext" \
+                or context_destination is None:
+            continue
+        context_register = context_destination.group(1)
+        dead_addresses = {
+            context_load.address, transfer.address, delay.address
+        }
+        if branch_target in dead_addresses:
+            continue
+        if transfer.mnemonic != "jmp" \
+                or transfer.operands != f"@{target_register}":
+            continue
+        if delay.mnemonic != "mov.l" or delay.operands.replace(" ", "") != (
+            f"@{context_register},r5"
+        ):
             continue
         guarded_exit_is_return = False
         for exit_address in range(branch_target, branch_target + 8, 2):
@@ -927,17 +972,7 @@ def prove_sourceboot_null_task_submit(
                 break
         if not guarded_exit_is_return:
             continue
-        for transfer in dispatcher_rows[index + 4:index + 7]:
-            if transfer.mnemonic in {"jmp", "jsr"} \
-                    and transfer.operands == f"@{target_register}":
-                return frozenset({slot.address})
-            intervening_destination = re.search(
-                r",\s*(r(?:1[0-5]|\d))\s*$", transfer.operands
-            )
-            if transfer.mnemonic not in {"mov.l", "mov.w"} \
-                    or intervening_destination is None \
-                    or intervening_destination.group(1) == target_register:
-                break
+        return frozenset({slot.address})
     return frozenset()
 
 
@@ -965,9 +1000,15 @@ def sourceboot_null_task_submit_dead_nodes(
         if row.mnemonic != "mov.l" or atom is None \
                 or atom.address not in known_null_addresses or base is None:
             continue
-        if index + 4 >= len(rows):
+        if index + 6 >= len(rows):
             continue
-        load, test, branch = rows[index + 1:index + 4]
+        window = rows[index:index + 7]
+        if any(
+            item.address != row.address + (window_index * 2)
+            for window_index, item in enumerate(window)
+        ):
+            continue
+        load, test, branch, context_load, transfer, delay = window[1:]
         target = re.fullmatch(
             rf"@{re.escape(base.group(1))},\s*(r(?:1[0-5]|\d))",
             load.operands,
@@ -979,24 +1020,33 @@ def sourceboot_null_task_submit_dead_nodes(
             f"{target_register},{target_register}"
         ):
             continue
-        if branch.mnemonic != "bt" or _target_from_text(branch.operands) is None:
+        branch_target = _target_from_text(branch.operands)
+        if branch.mnemonic != "bt" or branch_target is None:
             continue
-        for transfer_index in range(index + 4, min(index + 7, len(rows))):
-            transfer = rows[transfer_index]
-            if transfer.mnemonic in {"jmp", "jsr"} \
-                    and transfer.operands == f"@{target_register}":
-                end_index = min(transfer_index + 2, len(rows))
-                return frozenset(
-                    (dispatcher.name, item.address)
-                    for item in rows[index + 4:end_index]
-                )
-            intervening_destination = re.search(
-                r",\s*(r(?:1[0-5]|\d))\s*$", transfer.operands
-            )
-            if transfer.mnemonic not in {"mov.l", "mov.w"} \
-                    or intervening_destination is None \
-                    or intervening_destination.group(1) == target_register:
-                break
+        context_atom = _symbol_from_annotation(context_load.annotation)
+        context_destination = re.search(
+            r",\s*(r(?:1[0-5]|\d))\s*$", context_load.operands
+        )
+        if context_load.mnemonic != "mov.l" or context_atom is None \
+                or context_atom.name != "_sTaskSubmitContext" \
+                or context_destination is None:
+            continue
+        context_register = context_destination.group(1)
+        dead_addresses = {
+            context_load.address, transfer.address, delay.address
+        }
+        if branch_target in dead_addresses:
+            continue
+        if transfer.mnemonic != "jmp" \
+                or transfer.operands != f"@{target_register}":
+            continue
+        if delay.mnemonic != "mov.l" or delay.operands.replace(" ", "") != (
+            f"@{context_register},r5"
+        ):
+            continue
+        return frozenset(
+            (dispatcher.name, address) for address in sorted(dead_addresses)
+        )
     return frozenset()
 
 
@@ -1135,6 +1185,75 @@ def _set_register_stack_alias(
     state: dict[str, AbstractValue], register: str, may_alias: bool
 ) -> None:
     state[f"{register}_stack_alias"] = StackAlias(may_alias)
+
+
+def _external_stack_aliases(
+    state: dict[str, AbstractValue]
+) -> ExternalStackAliases:
+    aliases = state.get("external_stack_aliases")
+    return (
+        aliases if isinstance(aliases, ExternalStackAliases)
+        else ExternalStackAliases(unknown_address=True)
+    )
+
+
+def _external_address_may_alias_stack(
+    state: dict[str, AbstractValue], address: int
+) -> bool:
+    aliases = _external_stack_aliases(state)
+    return aliases.unknown_address or address in aliases.addresses
+
+
+def _mark_external_stack_alias(
+    state: dict[str, AbstractValue], addresses: Iterable[int] = ()
+) -> None:
+    aliases = _external_stack_aliases(state)
+    exact = frozenset(addresses)
+    state["external_stack_aliases"] = ExternalStackAliases(
+        aliases.addresses | exact,
+        aliases.unknown_address or not exact,
+    )
+
+
+def _concrete_symbol_addresses(
+    value: AbstractValue, displacement: int = 0
+) -> frozenset[int]:
+    if not isinstance(value, ConstSet) or value.kind != "symbol":
+        return frozenset()
+    atoms = tuple(value.values)
+    if not atoms or not all(
+        isinstance(atom, SymbolAtom)
+        and not atom.name.endswith(("*", "[]"))
+        for atom in atoms
+    ):
+        return frozenset()
+    return frozenset(
+        atom.address + displacement
+        for atom in atoms
+        if isinstance(atom, SymbolAtom)
+    )
+
+
+def _indexed_external_may_alias_stack(
+    state: dict[str, AbstractValue], base_address: int,
+    indexes: AbstractValue,
+) -> bool:
+    aliases = _external_stack_aliases(state)
+    if aliases.unknown_address:
+        return True
+    if isinstance(indexes, ConstSet) and all(
+        isinstance(item, int) for item in indexes.values
+    ):
+        return any(
+            base_address + int(item) in aliases.addresses
+            for item in indexes.values
+        )
+    if isinstance(indexes, Interval):
+        return any(
+            indexes.lo <= address - base_address <= indexes.hi
+            for address in aliases.addresses
+        )
+    return bool(aliases.addresses)
 
 
 def _replace_stack_slots(
@@ -1406,6 +1525,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             state[address_registers[1]],
         )
         if offset is None:
+            address_may_alias_stack = any(
+                _register_may_alias_stack(state, register)
+                for register in address_registers
+            )
             known_nonstack_base = any(
                 isinstance(state[register], ConstSet)
                 and state[register].kind == "symbol"
@@ -1413,11 +1536,25 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             ) and not any(
                 isinstance(state[register], (StackPtr, MaybeStackPtr))
                 for register in address_registers
-            )
-            if not known_nonstack_base and any(
-                _register_may_alias_stack(state, register)
-                for register in address_registers
-            ):
+            ) and not address_may_alias_stack
+            if known_nonstack_base:
+                if isinstance(
+                    state[indexed_stack_store.group(1)],
+                    (StackPtr, MaybeStackPtr),
+                ):
+                    external_addresses: set[int] = set()
+                    for base_register, index_register in (
+                        address_registers, address_registers[::-1]
+                    ):
+                        index = _exact_integer(state[index_register])
+                        if index is not None:
+                            external_addresses.update(
+                                _concrete_symbol_addresses(
+                                    state[base_register], index
+                                )
+                            )
+                    _mark_external_stack_alias(state, external_addresses)
+            elif address_may_alias_stack:
                 _invalidate_stack(state)
         else:
             width = {"mov.b": 1, "mov.w": 2, "mov.l": 4}[mnemonic]
@@ -1437,6 +1574,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         text,
     )
     if mnemonic in {"mov.l", "mov.w", "mov.b"} and aliased_stack_store:
+        source_register = aliased_stack_store.group(1)
         base_register = aliased_stack_store.group(3) or aliased_stack_store.group(4)
         base = state[base_register]
         if isinstance(base, StackPtr):
@@ -1456,6 +1594,15 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if isinstance(base, MaybeStackPtr):
             _invalidate_stack(state)
             return
+        if _register_may_alias_stack(state, base_register):
+            _invalidate_stack(state)
+            return
+        if isinstance(state[source_register], (StackPtr, MaybeStackPtr)):
+            displacement = int(aliased_stack_store.group(2) or 0)
+            _mark_external_stack_alias(
+                state, _concrete_symbol_addresses(base, displacement)
+            )
+        return
 
     aliased_stack_load = re.fullmatch(
         r"@(?:\((\d+),(r(?:1[0-5]|\d))\)|(r(?:1[0-5]|\d))),\s*(r(?:1[0-5]|\d))",
@@ -1528,7 +1675,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 state[dereference.group(2)] = ConstSet(
                     "symbol", frozenset({SymbolAtom(f"{atom.name}*", atom.address)})
                 )
-                _set_register_stack_alias(state, dereference.group(2), False)
+                _set_register_stack_alias(
+                    state, dereference.group(2),
+                    _external_address_may_alias_stack(state, atom.address),
+                )
                 return
         state[dereference.group(2)] = UNKNOWN
         _set_register_stack_alias(state, dereference.group(2), True)
@@ -1553,7 +1703,12 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 offset = int(memory_load.group(1))
                 derived = SymbolAtom(f"{atom.name}+{offset}", atom.address + offset)
                 state[memory_load.group(3)] = ConstSet("symbol", frozenset({derived}))
-                _set_register_stack_alias(state, memory_load.group(3), False)
+                _set_register_stack_alias(
+                    state, memory_load.group(3),
+                    _external_address_may_alias_stack(
+                        state, atom.address + offset
+                    ),
+                )
                 return
         state[memory_load.group(3)] = UNKNOWN
         _set_register_stack_alias(state, memory_load.group(3), True)
@@ -1610,7 +1765,12 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                         state[indexed_load.group(3)] = ConstSet(
                             "symbol", frozenset({derived})
                         )
-                        _set_register_stack_alias(state, indexed_load.group(3), False)
+                        _set_register_stack_alias(
+                            state, indexed_load.group(3),
+                            _indexed_external_may_alias_stack(
+                                state, atom.address, indexes
+                            ),
+                        )
                     return
         state[indexed_load.group(3)] = UNKNOWN
         _set_register_stack_alias(state, indexed_load.group(3), True)
@@ -2538,14 +2698,26 @@ def _analyze_code_only_pass(
                     if all_proven:
                         gpr_clobbers = proven_clobbers
                 if not all_proven or proven_leaf_writes_memory:
+                    call_may_alias_stack = any(
+                        _register_may_alias_stack(post, register)
+                        for register in ("r4", "r5", "r6", "r7")
+                    ) or bool(_external_stack_aliases(post).addresses) \
+                        or _external_stack_aliases(post).unknown_address
                     _invalidate_escaped_argument_slots(post)
+                    if _external_stack_aliases(post).addresses \
+                            or _external_stack_aliases(post).unknown_address:
+                        _invalidate_stack(post)
+                else:
+                    call_may_alias_stack = False
                 for abi_register in [
                     *sorted(gpr_clobbers), "mach", "macl", "t_predicate"
                 ]:
                     post[abi_register] = UNKNOWN
                     if abi_register.startswith("r"):
                         post[f"{abi_register}_stack_origin"] = StackOrigin()
-                        post[f"{abi_register}_stack_alias"] = MAY_ALIAS_STACK
+                        post[f"{abi_register}_stack_alias"] = StackAlias(
+                            call_may_alias_stack
+                        )
                 if profile is not None:
                     profile["abi_continuations_scheduled"] += 1
                 schedule(continuation, post)
