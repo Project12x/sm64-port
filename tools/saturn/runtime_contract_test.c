@@ -7,6 +7,8 @@
 #include "saturn_gouraud.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_terrain_emit_policy.h"
+#include "saturn_terrain_command_template.h"
+#include "saturn_terrain_fused.h"
 #include "saturn_command_arena.h"
 #include "saturn_memory_arena.h"
 #include "saturn_projected_workarea.h"
@@ -469,29 +471,38 @@ static void test_bounded_terrain_result_spans(void)
 {
     sm64_saturn_terrain_result_t master_records[4];
     sm64_saturn_terrain_result_t slave_records[4];
+    uint8_t master_commands[4][SM64_SATURN_TERRAIN_COMMAND_BYTES];
+    uint8_t slave_commands[4][SM64_SATURN_TERRAIN_COMMAND_BYTES];
     sm64_saturn_terrain_result_spans_t spans;
     sm64_saturn_terrain_result_t *slot = NULL;
+    uint8_t *commands = NULL;
 
     sm64_saturn_terrain_result_spans_init(
-        &spans, master_records, 4U, slave_records, 4U, 1U);
-    assert(sm64_saturn_terrain_result_reserve(&spans.master, 3U, &slot));
+        &spans, master_records, &master_commands[0][0], 4U,
+        slave_records, &slave_commands[0][0], 4U, 1U);
+    assert(sm64_saturn_terrain_result_reserve(
+        &spans.master, 3U, &slot, &commands));
     assert(slot == &master_records[0]);
+    assert(commands == &master_commands[0][0]);
     assert(spans.master.count == 3U);
-    assert(!sm64_saturn_terrain_result_reserve(&spans.master, 1U, &slot));
+    assert(!sm64_saturn_terrain_result_reserve(
+        &spans.master, 1U, &slot, &commands));
     assert(slot == NULL);
+    assert(commands == NULL);
     assert(spans.master.reserve_rejects == 1U);
 
     sm64_saturn_terrain_result_arena_reset(&spans.master);
-    assert(sm64_saturn_terrain_result_reserve(&spans.master, 1U, &slot));
+    assert(sm64_saturn_terrain_result_reserve(
+        &spans.master, 1U, &slot, &commands));
     assert(slot == &master_records[0]);
     slot->corner_count = 3U;
-    slot->flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE;
     assert(sm64_saturn_terrain_result_commit(&spans.master, slot));
     slot->corner_count = 2U;
     assert(!sm64_saturn_terrain_result_commit(&spans.master, slot));
     assert(spans.master.malformed_rejects == 1U);
 
-    assert(sm64_saturn_terrain_result_reserve(&spans.slave, 3U, &slot));
+    assert(sm64_saturn_terrain_result_reserve(
+        &spans.slave, 3U, &slot, &commands));
     assert(slot == &slave_records[0]);
     assert(spans.slave.count == 3U);
     sm64_saturn_terrain_result_arena_reset(&spans.slave);
@@ -3736,6 +3747,95 @@ static void test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud(
            SM64_SATURN_SHADE_GOURAUD);
 }
 
+static void test_fused_terrain_publication_matches_split_path(void)
+{
+    assert(sizeof(sm64_saturn_visible_terrain_t) == 12U);
+    assert(sizeof(sm64_saturn_visible_terrain_t) +
+               SM64_SATURN_TERRAIN_COMMAND_BYTES == 44U);
+    sm64_saturn_visible_terrain_t master_visible[3];
+    sm64_saturn_visible_terrain_t slave_visible[3];
+    uint8_t master_commands[3][SM64_SATURN_VDP1_COMMAND_BYTES];
+    uint8_t slave_commands[3][SM64_SATURN_VDP1_COMMAND_BYTES];
+    sm64_saturn_terrain_result_spans_t spans;
+    sm64_saturn_terrain_emit_ref_t refs[6];
+    sm64_saturn_terrain_emit_ref_t scratch[6];
+    const sm64_saturn_terrain_resolved_command_t resolved = {
+        .control = 0x0004U,
+        .pmod = 0x0488U,
+        .colr = 0xC210U,
+        .srca = 0x0123U,
+        .size = 0x0820U,
+    };
+    const int16_t primitive_2[4][2] = {
+        {-10, -20}, {30, -20}, {30, 40}, {-10, 40}};
+    const int16_t primitive_1[4][2] = {
+        {4, 5}, {14, 5}, {14, 15}, {4, 15}};
+    const int16_t primitive_3_triangle[4][2] = {
+        {-7, 8}, {9, 8}, {1, 19}, {1, 19}};
+    uint8_t split_primitive_2[SM64_SATURN_VDP1_COMMAND_BYTES];
+    uint8_t split_primitive_1[SM64_SATURN_VDP1_COMMAND_BYTES];
+    uint8_t split_primitive_3[SM64_SATURN_VDP1_COMMAND_BYTES];
+
+    memset(split_primitive_2, 0, sizeof(split_primitive_2));
+    memcpy(split_primitive_2 + 12U, primitive_2,
+           8U * sizeof(int16_t));
+    assert(sm64_saturn_terrain_template_patch_resolved_record(
+        split_primitive_1, &resolved, primitive_1, 0U, false, false, 0U));
+    assert(sm64_saturn_terrain_template_patch_resolved_record(
+        split_primitive_3, &resolved, primitive_3_triangle,
+        0U, false, false, 0U));
+
+    sm64_saturn_terrain_result_spans_init(
+        &spans, master_visible, &master_commands[0][0], 3U,
+        slave_visible, &slave_commands[0][0], 3U, 0U);
+    assert(sm64_saturn_terrain_result_publish(
+        &spans.master, 2U, 12U, 300U, 4U,
+        SM64_SATURN_TERRAIN_CLIP_FRONT, NULL, primitive_2));
+    assert(sm64_saturn_terrain_result_publish(
+        &spans.slave, 3U, 18U, 500U, 3U,
+        SM64_SATURN_TERRAIN_CLIP_CROSSES, &resolved,
+        primitive_3_triangle));
+    assert(sm64_saturn_terrain_result_publish(
+        &spans.master, 1U, 17U, 500U, 4U,
+        SM64_SATURN_TERRAIN_CLIP_FRONT, &resolved, primitive_1));
+    sm64_saturn_terrain_result_arena_seal(&spans.master, 41U);
+    sm64_saturn_terrain_result_arena_seal(&spans.slave, 41U);
+
+    assert(sm64_saturn_terrain_merge_visible(
+        &spans, 41U, refs, scratch, 6U) == 3U);
+    assert(refs[0].record->primitive_id == 1U);
+    assert(refs[1].record->primitive_id == 3U);
+    assert(refs[2].record->primitive_id == 2U);
+    assert(refs[0].record->bsp_leaf == 17U);
+    assert(refs[1].record->clip_class ==
+           SM64_SATURN_TERRAIN_CLIP_CROSSES);
+    assert(sm64_saturn_terrain_result_corner_count(refs[1].record) == 3U);
+    assert(memcmp(sm64_saturn_terrain_emit_ref_command(&spans, &refs[0]),
+                  split_primitive_1,
+                  SM64_SATURN_VDP1_COMMAND_BYTES) == 0);
+    assert(memcmp(sm64_saturn_terrain_emit_ref_command(&spans, &refs[1]),
+                  split_primitive_3,
+                  SM64_SATURN_VDP1_COMMAND_BYTES) == 0);
+    assert(memcmp(sm64_saturn_terrain_emit_ref_command(&spans, &refs[2]),
+                  split_primitive_2,
+                  SM64_SATURN_VDP1_COMMAND_BYTES) == 0);
+    assert(sm64_saturn_terrain_result_template_patched(refs[0].record));
+    assert(!sm64_saturn_terrain_result_template_patched(refs[2].record));
+
+    const uint16_t saved_command_index = master_visible[0].command_index;
+    master_visible[0].command_index = 3U;
+    assert(sm64_saturn_terrain_merge_visible(
+        &spans, 41U, refs, scratch, 6U) == SIZE_MAX);
+    master_visible[0].command_index = saved_command_index;
+
+    sm64_saturn_terrain_result_arena_seal(&spans.slave, 40U);
+    assert(sm64_saturn_terrain_merge_visible(
+        &spans, 41U, refs, scratch, 6U) == SIZE_MAX);
+    sm64_saturn_terrain_result_arena_seal(&spans.master, 40U);
+    assert(sm64_saturn_terrain_merge_visible(
+        &spans, 40U, refs, scratch, 2U) == SIZE_MAX);
+}
+
 #if defined(SM64_SATURN_RUNTIME_CONTRACT_ONLY)
 int main(void)
 {
@@ -3755,6 +3855,7 @@ int main(void)
     test_default_camera_replay_keeps_the_2000_tick_boundary();
     test_source_runtime_records_the_applied_camera_replay_pad();
     test_bounded_terrain_result_spans();
+    test_fused_terrain_publication_matches_split_path();
     test_view_space_terrain_clip();
     test_frame_profile();
     test_bounded_memory_arena();

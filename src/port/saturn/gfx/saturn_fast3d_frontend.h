@@ -404,6 +404,13 @@ typedef struct sm64_saturn_fast3d_profile {
      * exhaustion remains reported by gouraud_bank_overflow above. */
     uint32_t flat_primitives;
     uint32_t gouraud_primitives;
+    /* Compact/fused terrain staging. Descriptor traffic excludes the private
+     * 32-byte command images; legacy fallbacks count records whose immutable
+     * material template could not be patched by the owning classify lane. */
+    uint32_t demo_bob_terrain_descriptor_bytes_written;
+    uint32_t demo_bob_terrain_descriptor_bytes_read;
+    uint32_t demo_bob_terrain_legacy_fallbacks;
+    uint32_t demo_bob_terrain_sequence_rejects;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

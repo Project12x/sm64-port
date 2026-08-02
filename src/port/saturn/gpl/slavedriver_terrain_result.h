@@ -3,10 +3,11 @@
  * result discipline from WALLS.C:1240-1408 at commit
  * a8986591557b6e680550d3c23970284d3b38ff8f.
  *
- * This adaptation deliberately carries project-owned projected vertices and
- * material identities rather than SlaveDriver's sector/tile pointers. The
- * worker may reserve and fill only its caller-owned result span; VDP1 command,
- * texture, and Gouraud allocators remain master-owned.
+ * This adaptation carries compact project-owned primitive/command identities
+ * rather than SlaveDriver's sector/tile pointers. The worker may reserve and
+ * fill only its caller-owned descriptor and command spans; texture residency,
+ * Gouraud allocation, final command concatenation, and VDP1 remain
+ * master-owned.
  */
 #ifndef SM64_SATURN_SLAVEDRIVER_TERRAIN_RESULT_H
 #define SM64_SATURN_SLAVEDRIVER_TERRAIN_RESULT_H
@@ -15,14 +16,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "../gfx/saturn_projected_workarea.h"
-
 #if defined(__sh__)
 #include <cpu/cache.h>
 #include <yaul/scu/map.h>
 #endif
 
 #define SM64_SATURN_TERRAIN_RESULT_CORNERS 4U
+#define SM64_SATURN_TERRAIN_COMMAND_BYTES 32U
+#define SM64_SATURN_TERRAIN_RESULT_TEMPLATE_PATCHED 0x80U
+#define SM64_SATURN_TERRAIN_RESULT_CORNER_COUNT_MASK 0x7FU
 
 typedef enum sm64_saturn_terrain_result_flags {
     SM64_SATURN_TERRAIN_RESULT_OPAQUE = 1U << 0,
@@ -38,27 +40,32 @@ typedef enum sm64_saturn_terrain_result_flags {
     SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED = 1U << 6
 } sm64_saturn_terrain_result_flags_t;
 
-typedef struct sm64_saturn_terrain_result {
-    sm64_saturn_projected_vertex_t corners[SM64_SATURN_TERRAIN_RESULT_CORNERS];
-    uint16_t gouraud[SM64_SATURN_TERRAIN_RESULT_CORNERS];
+/* The worker publishes identity and ordering only. Screen coordinates already
+ * live in its private 32-byte command image; material, texture, flags, and
+ * colors remain in the immutable primitive/template banks. The high bit of
+ * corner_count records whether immutable command state was patched, leaving
+ * the descriptor at twelve bytes without a parallel validity stream. */
+typedef struct sm64_saturn_visible_terrain {
     uint16_t primitive_id;
-    uint16_t leaf_id;
-    uint16_t material_id;
-    uint16_t texture_slot;
+    uint16_t command_index;
     uint32_t painter_key;
-    uint16_t flags;
+    uint16_t bsp_leaf;
     uint8_t corner_count;
     uint8_t clip_class;
-} sm64_saturn_terrain_result_t;
+} sm64_saturn_visible_terrain_t;
+
+typedef sm64_saturn_visible_terrain_t sm64_saturn_terrain_result_t;
 
 typedef struct sm64_saturn_terrain_result_arena {
     sm64_saturn_terrain_result_t *records;
+    uint8_t *commands;
     uint16_t capacity;
     uint16_t count;
     uint16_t peak;
     uint16_t headroom;
     uint32_t reserve_rejects;
     uint32_t malformed_rejects;
+    volatile uint32_t published_sequence;
 } sm64_saturn_terrain_result_arena_t;
 
 typedef struct sm64_saturn_terrain_result_spans {
@@ -94,25 +101,47 @@ sm64_saturn_terrain_result_uncached_records(
 #endif
 }
 
-_Static_assert(sizeof(sm64_saturn_terrain_result_t) <= 64U,
-               "terrain result must remain a compact bounded record");
+static inline uint8_t *sm64_saturn_terrain_result_commands(
+    uint8_t commands[][SM64_SATURN_TERRAIN_COMMAND_BYTES])
+{
+    return commands == NULL ? NULL : &commands[0][0];
+}
+
+static inline const uint8_t *sm64_saturn_terrain_result_uncached_commands(
+    const uint8_t *commands)
+{
+#if defined(__sh__)
+    const uintptr_t physical =
+        ((uintptr_t)commands & ~((uintptr_t)CPU_ADDRESS_PARTITION_MASK)) -
+        LWRAM(0);
+    return (const uint8_t *)LWRAM_UNCACHED(physical);
+#else
+    return commands;
+#endif
+}
+
+_Static_assert(sizeof(sm64_saturn_terrain_result_t) == 12U,
+               "visible terrain descriptor must remain twelve bytes");
 _Static_assert(offsetof(sm64_saturn_terrain_result_t, painter_key) % 4U == 0U,
                "painter key must be naturally aligned");
 
 static inline void sm64_saturn_terrain_result_arena_init(
     sm64_saturn_terrain_result_arena_t *arena,
     sm64_saturn_terrain_result_t *records,
+    uint8_t *commands,
     uint16_t capacity,
     uint16_t headroom)
 {
     if (arena == NULL) return;
     arena->records = records;
+    arena->commands = commands;
     arena->capacity = capacity;
     arena->count = 0U;
     arena->peak = 0U;
     arena->headroom = headroom > capacity ? capacity : headroom;
     arena->reserve_rejects = 0U;
     arena->malformed_rejects = 0U;
+    arena->published_sequence = 0U;
 }
 
 static inline void sm64_saturn_terrain_result_arena_reset(
@@ -123,6 +152,7 @@ static inline void sm64_saturn_terrain_result_arena_reset(
     arena->peak = 0U;
     arena->reserve_rejects = 0U;
     arena->malformed_rejects = 0U;
+    arena->published_sequence = 0U;
 }
 
 /* Reserve the complete output count before any clipped fan writes. The
@@ -131,10 +161,13 @@ static inline void sm64_saturn_terrain_result_arena_reset(
 static inline bool sm64_saturn_terrain_result_reserve(
     sm64_saturn_terrain_result_arena_t *arena,
     uint16_t requested,
-    sm64_saturn_terrain_result_t **out)
+    sm64_saturn_terrain_result_t **out,
+    uint8_t **out_commands)
 {
     if (out != NULL) *out = NULL;
+    if (out_commands != NULL) *out_commands = NULL;
     if (arena == NULL || requested == 0U || arena->records == NULL ||
+        arena->commands == NULL ||
         requested > (uint16_t)(arena->capacity - arena->headroom) ||
         arena->count > (uint16_t)(arena->capacity - arena->headroom) - requested) {
         if (arena != NULL) arena->reserve_rejects++;
@@ -144,6 +177,10 @@ static inline bool sm64_saturn_terrain_result_reserve(
     arena->count = (uint16_t)(arena->count + requested);
     if (arena->count > arena->peak) arena->peak = arena->count;
     if (out != NULL) *out = slot;
+    if (out_commands != NULL)
+        *out_commands = arena->commands +
+            (size_t)(arena->count - requested) *
+                SM64_SATURN_TERRAIN_COMMAND_BYTES;
     return true;
 }
 
@@ -151,8 +188,38 @@ static inline bool sm64_saturn_terrain_result_validate(
     const sm64_saturn_terrain_result_t *result)
 {
     return result != NULL &&
-           result->corner_count >= 3U &&
-           result->corner_count <= SM64_SATURN_TERRAIN_RESULT_CORNERS;
+           (result->corner_count &
+            SM64_SATURN_TERRAIN_RESULT_CORNER_COUNT_MASK) >= 3U &&
+           (result->corner_count &
+            SM64_SATURN_TERRAIN_RESULT_CORNER_COUNT_MASK) <=
+               SM64_SATURN_TERRAIN_RESULT_CORNERS;
+}
+
+static inline uint8_t sm64_saturn_terrain_result_corner_count(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result == NULL ? 0U :
+        (uint8_t)(result->corner_count &
+                  SM64_SATURN_TERRAIN_RESULT_CORNER_COUNT_MASK);
+}
+
+static inline bool sm64_saturn_terrain_result_template_patched(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result != NULL &&
+        (result->corner_count &
+         SM64_SATURN_TERRAIN_RESULT_TEMPLATE_PATCHED) != 0U;
+}
+
+static inline void sm64_saturn_terrain_result_arena_seal(
+    sm64_saturn_terrain_result_arena_t *arena, uint32_t sequence)
+{
+    if (arena != NULL) {
+#if defined(__GNUC__)
+        __asm__ volatile("" ::: "memory");
+#endif
+        arena->published_sequence = sequence;
+    }
 }
 
 static inline bool sm64_saturn_terrain_result_commit(
@@ -169,16 +236,20 @@ static inline bool sm64_saturn_terrain_result_commit(
 static inline void sm64_saturn_terrain_result_spans_init(
     sm64_saturn_terrain_result_spans_t *spans,
     sm64_saturn_terrain_result_t *master_records,
+    uint8_t *master_commands,
     uint16_t master_capacity,
     sm64_saturn_terrain_result_t *slave_records,
+    uint8_t *slave_commands,
     uint16_t slave_capacity,
     uint16_t headroom)
 {
     if (spans == NULL) return;
     sm64_saturn_terrain_result_arena_init(
-        &spans->master, master_records, master_capacity, headroom);
+        &spans->master, master_records, master_commands,
+        master_capacity, headroom);
     sm64_saturn_terrain_result_arena_init(
-        &spans->slave, slave_records, slave_capacity, headroom);
+        &spans->slave, slave_records, slave_commands,
+        slave_capacity, headroom);
 }
 
 #endif
