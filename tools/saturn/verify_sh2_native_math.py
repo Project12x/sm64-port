@@ -126,9 +126,11 @@ class StackAlias:
     """Whether a register value may address this function's local frame."""
 
     may_alias: bool
+    frame_derived: bool = False
 
 
 MAY_ALIAS_STACK = StackAlias(True)
+FRAME_DERIVED_STACK_ALIAS = StackAlias(True, True)
 NON_STACK_ALIAS = StackAlias(False)
 
 
@@ -147,6 +149,7 @@ class StackSlot:
     exact_symbols: frozenset[SymbolAtom] = frozenset()
     unknown_store: bool = False
     may_alias_stack: bool = True
+    frame_derived_stack_alias: bool = False
 
 
 @dataclass(frozen=True)
@@ -357,7 +360,10 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
             or isinstance(right, (StackPtr, MaybeStackPtr)):
         return MAYBE_STACK_PTR
     if isinstance(left, StackAlias) and isinstance(right, StackAlias):
-        return StackAlias(left.may_alias or right.may_alias)
+        return StackAlias(
+            left.may_alias or right.may_alias,
+            left.frame_derived or right.frame_derived,
+        )
     if isinstance(left, ExternalStackAliases) \
             and isinstance(right, ExternalStackAliases):
         return ExternalStackAliases(
@@ -391,6 +397,8 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
                 left_slot.unknown_store or right_slot.unknown_store
                 or len(symbols) > 1,
                 left_slot.may_alias_stack or right_slot.may_alias_stack,
+                left_slot.frame_derived_stack_alias
+                or right_slot.frame_derived_stack_alias,
             )))
         return StackMemory(tuple(merged_slots))
     if isinstance(left, StackOrigin) and isinstance(right, StackOrigin):
@@ -755,8 +763,9 @@ def _unknown_state(
         # Incoming argument registers cannot name this callee's fresh frame.
         # Other unknown registers and decoded-only seeds stay fail-closed.
         f"r{x}_stack_alias": (
-            NON_STACK_ALIAS
-            if entry_arguments_nonstack and 4 <= x <= 7
+            FRAME_DERIVED_STACK_ALIAS
+            if x == 15 or not entry_arguments_nonstack
+            else NON_STACK_ALIAS if 4 <= x <= 7
             else MAY_ALIAS_STACK
         )
         for x in range(16)
@@ -1174,17 +1183,40 @@ def _stack_slots(state: dict[str, AbstractValue]) -> dict[int, StackSlot]:
     return dict(memory.slots) if isinstance(memory, StackMemory) else {}
 
 
+def _register_stack_alias(
+    state: dict[str, AbstractValue], register: str
+) -> StackAlias:
+    alias = state.get(f"{register}_stack_alias", MAY_ALIAS_STACK)
+    return alias if isinstance(alias, StackAlias) else MAY_ALIAS_STACK
+
+
 def _register_may_alias_stack(
     state: dict[str, AbstractValue], register: str
 ) -> bool:
-    alias = state.get(f"{register}_stack_alias", MAY_ALIAS_STACK)
-    return not isinstance(alias, StackAlias) or alias.may_alias
+    return _register_stack_alias(state, register).may_alias
+
+
+def _register_frame_derived_stack_alias(
+    state: dict[str, AbstractValue], register: str
+) -> bool:
+    return _register_stack_alias(state, register).frame_derived
+
+
+def _register_value_is_frame_derived(
+    state: dict[str, AbstractValue], register: str
+) -> bool:
+    return isinstance(state[register], (StackPtr, MaybeStackPtr)) \
+        or _register_frame_derived_stack_alias(state, register)
 
 
 def _set_register_stack_alias(
-    state: dict[str, AbstractValue], register: str, may_alias: bool
+    state: dict[str, AbstractValue], register: str,
+    alias: bool | StackAlias, frame_derived: bool = False,
 ) -> None:
-    state[f"{register}_stack_alias"] = StackAlias(may_alias)
+    state[f"{register}_stack_alias"] = (
+        alias if isinstance(alias, StackAlias)
+        else StackAlias(alias, frame_derived)
+    )
 
 
 def _external_stack_aliases(
@@ -1265,7 +1297,7 @@ def _replace_stack_slots(
 
 def _stack_store(
     state: dict[str, AbstractValue], offset: int, value: AbstractValue, address: int,
-    may_alias_stack: bool = True,
+    stack_alias: StackAlias = MAY_ALIAS_STACK,
 ) -> None:
     slots = _stack_slots(state)
     atoms = (
@@ -1279,7 +1311,8 @@ def _stack_store(
         value, (address,),
         frozenset(item for item in atoms if isinstance(item, SymbolAtom)),
         not bool(atoms),
-        may_alias_stack,
+        stack_alias.may_alias,
+        stack_alias.frame_derived,
     )
     _replace_stack_slots(state, slots)
 
@@ -1298,7 +1331,7 @@ def _stack_slot_value(slot: StackSlot) -> AbstractValue:
 def _poison_stack_slot(slot: StackSlot) -> StackSlot:
     return StackSlot(
         UNKNOWN, slot.store_addresses, slot.exact_symbols, True,
-        slot.may_alias_stack,
+        slot.may_alias_stack, slot.frame_derived_stack_alias,
     )
 
 
@@ -1428,7 +1461,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             source_register = push.group(1)
             _stack_store(
                 state, pointer.offset, state[source_register], instruction.address,
-                _register_may_alias_stack(state, source_register),
+                _register_stack_alias(state, source_register),
             )
         else:
             _invalidate_stack(state)
@@ -1444,7 +1477,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 slot.unknown_store,
             )
             _set_register_stack_alias(
-                state, pop.group(1), slot.may_alias_stack
+                state, pop.group(1), StackAlias(
+                    slot.may_alias_stack, slot.frame_derived_stack_alias
+                )
             )
             state["r15"] = StackPtr(pointer.offset + 4)
         else:
@@ -1462,7 +1497,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             _stack_store(
                 state, pointer.offset + displacement,
                 state[stack_store.group(1)], instruction.address,
-                _register_may_alias_stack(state, stack_store.group(1)),
+                _register_stack_alias(state, stack_store.group(1)),
             )
         else:
             _invalidate_stack(state)
@@ -1482,7 +1517,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 slot.unknown_store,
             )
             _set_register_stack_alias(
-                state, stack_load.group(2), slot.may_alias_stack
+                state, stack_load.group(2), StackAlias(
+                    slot.may_alias_stack, slot.frame_derived_stack_alias
+                )
             )
         else:
             state[stack_load.group(2)] = UNKNOWN
@@ -1504,12 +1541,24 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             if mnemonic == "mov.l" and offset % 4 == 0:
                 _stack_store(
                     state, offset, state[source_register], instruction.address,
-                    _register_may_alias_stack(state, source_register),
+                    _register_stack_alias(state, source_register),
                 )
-        else:
+        elif isinstance(base, MaybeStackPtr) \
+                or _register_may_alias_stack(state, base_register):
             state[base_register] = UNKNOWN
             state[f"{base_register}_stack_origin"] = StackOrigin()
             _invalidate_stack(state)
+        else:
+            if source_register.startswith("r") \
+                    and _register_value_is_frame_derived(
+                        state, source_register
+                    ):
+                _mark_external_stack_alias(
+                    state, _concrete_symbol_addresses(base, -width)
+                )
+            state[base_register] = UNKNOWN
+            state[f"{base_register}_stack_origin"] = StackOrigin()
+            _set_register_stack_alias(state, base_register, False)
         return
 
     indexed_stack_store = re.fullmatch(
@@ -1538,9 +1587,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 for register in address_registers
             ) and not address_may_alias_stack
             if known_nonstack_base:
-                if isinstance(
-                    state[indexed_stack_store.group(1)],
-                    (StackPtr, MaybeStackPtr),
+                if _register_value_is_frame_derived(
+                    state, indexed_stack_store.group(1)
                 ):
                     external_addresses: set[int] = set()
                     for base_register, index_register in (
@@ -1563,9 +1611,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 _stack_store(
                     state, offset, state[indexed_stack_store.group(1)],
                     instruction.address,
-                    _register_may_alias_stack(
-                        state, indexed_stack_store.group(1)
-                    ),
+                    _register_stack_alias(state, indexed_stack_store.group(1)),
                 )
         return
 
@@ -1586,9 +1632,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 _stack_store(
                     state, offset, state[aliased_stack_store.group(1)],
                     instruction.address,
-                    _register_may_alias_stack(
-                        state, aliased_stack_store.group(1)
-                    ),
+                    _register_stack_alias(state, aliased_stack_store.group(1)),
                 )
             return
         if isinstance(base, MaybeStackPtr):
@@ -1597,7 +1641,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if _register_may_alias_stack(state, base_register):
             _invalidate_stack(state)
             return
-        if isinstance(state[source_register], (StackPtr, MaybeStackPtr)):
+        if _register_value_is_frame_derived(state, source_register):
             displacement = int(aliased_stack_store.group(2) or 0)
             _mark_external_stack_alias(
                 state, _concrete_symbol_addresses(base, displacement)
@@ -1623,7 +1667,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     slot.unknown_store,
                 )
                 _set_register_stack_alias(
-                    state, destination_name, slot.may_alias_stack
+                    state, destination_name, StackAlias(
+                        slot.may_alias_stack, slot.frame_derived_stack_alias
+                    )
                 )
             elif mnemonic == "mov.w":
                 state[destination_name] = Interval("signed", -0x8000, 0x7FFF)

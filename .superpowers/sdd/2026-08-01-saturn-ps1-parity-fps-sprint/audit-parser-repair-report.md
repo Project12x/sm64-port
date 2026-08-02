@@ -247,3 +247,75 @@ Final observation-only/code-only census of the existing ELF:
 The census exits nonzero only because the separate checked-manifest task has
 not listed the four genuine dispatchers. No target build, CUE generation, or
 Ymir launch was performed in this review round.
+
+## Second review fix: derived-frame external escapes
+
+An independent re-review found one remaining soundness gap in the external
+escape model. After `mov r15,r8; add #1,r8`, the value in `r8` is no longer a
+concrete `StackPtr`, but its alias provenance still derives from the current
+frame. Ordinary and predecrement stores of that value to known external
+storage were not recorded as frame escapes. A later reload and write through
+the escaped pointer could therefore leave a literal spill intact and fabricate
+a direct helper call.
+
+### Red/green regressions
+
+Two focused fixtures were added before the production repair:
+
+- an ordinary `mov.l r8,@r2` escape to a known global; and
+- a predecrement `mov.l r8,@-r2` escape to the preceding known global word.
+
+Both fixtures spill `___mulsf3`, reload the escaped frame address, write
+through it, then reload and call the spill. In the red run, both tests emitted
+`CallSite(..., ___mulsf3)` instead of leaving the transfer unresolved. After
+the repair, both produce no call or direct-call fact and report only the final
+`jsr` as unresolved.
+
+### Scoped implementation
+
+`StackAlias` now distinguishes generic fail-closed may-alias state from
+provenance derived from the current frame. That derived bit follows moves,
+stack spills/reloads, and control-flow joins. External ordinary, indexed, and
+predecrement stores record an escape when their source is either a concrete
+stack pointer or carries derived-frame provenance. Predecrement stores also
+apply the effective `base - width` address when the external base is concrete.
+
+This is deliberately narrower than treating every unknown may-alias register
+as an escaped frame pointer. Generic unknown state does not by itself taint a
+known global, preserving the address-specific behavior that avoided the coarse
+model's real-ELF false positives.
+
+### Verification state
+
+The initial green runs completed before final verification:
+
+- focused escape controls: `Ran 3 tests` / `OK`;
+- complete host suite: `Ran 163 tests` / `OK`.
+
+A new observation-only/code-only audit of the existing ELF was started with
+producer commit `3a8513f33a25aac6d636490eb1c6e784ae3420d1`, but was terminated after
+the agreed bounded four-minute window because it produced no stdout and had
+not completed. It produced no JSON result, so this run is recorded as
+incomplete rather than passed or failed. The immediately preceding
+observation audit at the same committed producer revision remains documented
+above: helper total `881` and exactly the four genuine dispatcher sites.
+
+Fresh final verification, run from `tools/saturn`:
+
+```text
+..\..\.venv-saturn-tools\Scripts\python.exe -m unittest \
+  test_verify_sh2_native_math.CodeOnlyAnalysisTests.test_unknown_frame_derived_alias_escaped_to_global_invalidates_spill \
+  test_verify_sh2_native_math.CodeOnlyAnalysisTests.test_predecrement_unknown_frame_alias_escape_invalidates_later_spill \
+  test_verify_sh2_native_math.CodeOnlyAnalysisTests.test_reloaded_external_frame_alias_invalidates_literal_spill
+```
+
+Result: `Ran 3 tests in 0.007s` / `OK`.
+
+```text
+..\..\.venv-saturn-tools\Scripts\python.exe test_verify_sh2_native_math.py
+```
+
+Result: `Ran 163 tests in 0.204s` / `OK`.
+
+The audit contract remains `EXPECTED_TOTAL 582`; no manifest, route oracle,
+target source, target build, CUE artifact, or Ymir session is part of this fix.

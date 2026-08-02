@@ -1595,6 +1595,66 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             [(0x6001014, "jsr")],
         )
 
+    def test_unknown_frame_derived_alias_escaped_to_global_invalidates_spill(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: 68 f3 mov r15,r8
+ 6001004: 78 01 add #1,r8
+ 6001006: d2 3d mov.l 6001100 <_escaped_frame>,r2 ! 06002000 <_escaped_frame>
+ 6001008: 22 82 mov.l r8,@r2
+ 600100a: d7 0d mov.l 6001040 <___mulsf3>,r7 ! 06001040 <___mulsf3>
+ 600100c: 2f 72 mov.l r7,@r15
+ 600100e: d2 3c mov.l 6001100 <_escaped_frame>,r2 ! 06002000 <_escaped_frame>
+ 6001010: 61 22 mov.l @r2,r1
+ 6001012: 21 02 mov.l r0,@r1
+ 6001014: 61 f2 mov.l @r15,r1
+ 6001016: 41 0b jsr @r1
+ 6001018: 00 09 nop
+ 600101a: 00 0b rts
+ 600101c: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001016, "jsr")],
+        )
+
+    def test_predecrement_unknown_frame_alias_escape_invalidates_later_spill(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: 68 f3 mov r15,r8
+ 6001004: 78 01 add #1,r8
+ 6001006: d2 3d mov.l 6001104 <_escaped_frame_end>,r2 ! 06002004 <_escaped_frame_end>
+ 6001008: 22 86 mov.l r8,@-r2
+ 600100a: d7 0d mov.l 6001040 <___mulsf3>,r7 ! 06001040 <___mulsf3>
+ 600100c: 2f 72 mov.l r7,@r15
+ 600100e: d2 3c mov.l 6001100 <_escaped_frame>,r2 ! 06002000 <_escaped_frame>
+ 6001010: 61 22 mov.l @r2,r1
+ 6001012: 21 02 mov.l r0,@r1
+ 6001014: 61 f2 mov.l @r15,r1
+ 6001016: 41 0b jsr @r1
+ 6001018: 00 09 nop
+ 600101a: 00 0b rts
+ 600101c: 00 09 nop
+06001040 <___mulsf3>:
+ 6001040: 00 0b rts
+ 6001042: 00 09 nop
+"""
+        result = self.analyze(dis)
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers],
+            [(0x6001016, "jsr")],
+        )
+
     def test_geo_process_held_object_recovers_spilled_vec3f_helper(self) -> None:
         dis = """
 06001000 <_geo_process_held_object>:
