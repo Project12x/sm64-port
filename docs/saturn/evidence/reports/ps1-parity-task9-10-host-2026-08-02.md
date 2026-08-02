@@ -33,11 +33,11 @@ LWRAM staging capacity. The two merge-reference banks remain two 8-byte fields
 (record pointer plus sort key); command ownership is recovered from the record
 range rather than adding a command pointer to every reference.
 
-Outside those lane banks, the two target arena headers grow by 8 bytes total,
+Outside those lane banks, the two target arena headers grow by 16 bytes total,
 the renderer adds one 4-byte publication sequence, and the append-only profile
 adds four 4-byte counters. Including those known static objects, the net target
-RAM reduction is therefore **41,588 bytes**. The 41,616-byte number is the
-exact LWRAM lane-bank reduction; the 41,588-byte number is the whole known
+RAM reduction is therefore **41,580 bytes**. The 41,616-byte number is the
+exact LWRAM lane-bank reduction; the 41,580-byte number is the whole known
 static-data delta for this change.
 
 For every published result, the descriptor no longer transports four
@@ -56,11 +56,15 @@ the final 32-byte copy into the master VDP1 arena remains.
 
 ## Host contracts
 
-The deterministic fixture sends the same synthetic primitive set through the
-existing split command patcher and the fused publication/merge API. It compares
+The deterministic fixture sends the same synthetic primitive set through a
+retained split command-patch oracle and the fused publication/merge API. It compares
 primitive identity, BSP leaf, clip class, corner count, final coordinates and
 command bytes, far-to-near painter order, and equal-depth source-ID tie order.
 It includes both a template-patched record and the explicit fallback image.
+This is a descriptor/command/order contract, not a host execution of Yaul's
+target-only material emitter: textured binding, final Gouraud allocation/GRDA,
+recovery fallback, LOD suppression, and their profile counters still require
+the planned target comparison before parity can be claimed.
 
 Mutation coverage rejects:
 
