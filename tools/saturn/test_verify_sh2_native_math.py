@@ -437,21 +437,185 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(declared_edges, expected_edges)
 
     def test_source_manifest_comparison_rejects_omitted_and_underived_callbacks(self) -> None:
+        derived = _derive_bob_dispatcher_targets(Path(__file__).parents[2])
         expected_edges = frozenset(
             (dispatcher, callback)
-            for dispatcher, callbacks in BOB_DISPATCHER_TARGETS.items()
+            for dispatcher, callbacks in derived.items()
             for callback in callbacks
         )
         omitted = expected_edges - {
-            ("_level_cmd_call", "_lvl_init_from_save_file")
+            ("_init_graph_node_generated", "_geo_envfx_main")
         }
         underived = expected_edges | {
-            ("_level_cmd_call", "_geo_camera_main")
+            ("_play_mode_change_level", "_geo_camera_main")
         }
         with self.assertRaises(AssertionError):
             self.assertEqual(omitted, expected_edges)
         with self.assertRaises(AssertionError):
             self.assertEqual(underived, expected_edges)
+
+    def test_pinned_bob_camera_trigger_table_derives_empty_and_stays_undeclared(self) -> None:
+        repo_root = Path(__file__).parents[2]
+        self.assertEqual(_derive_bob_camera_trigger_targets(repo_root), frozenset())
+        oracle = parse_route_oracle(
+            Path(__file__).with_name(
+                "sh2_native_math_sim_route_oracle_v1.txt"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            {
+                edge for edge in oracle.static_manifest_edges
+                if edge[0] == "_camera_course_processing"
+            },
+            set(),
+        )
+        self.assertEqual(
+            {
+                edge for edge in oracle.indirect_edges
+                if edge[0] == "_camera_course_processing"
+            },
+            set(),
+        )
+        transfers = (
+            UnresolvedTransfer(
+                "_camera_course_processing", 0x601011E, "jsr", "r1"
+            ),
+            UnresolvedTransfer(
+                "_camera_course_processing", 0x601013C, "jsr", "r1"
+            ),
+        )
+        result = audit_indirect_edges(
+            {"_root": {"_camera_course_processing"}},
+            parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _root\n"),
+            (
+                self.indirect_owner("_root", 0x6000000),
+                self.indirect_owner("_camera_course_processing", 0x6010000),
+            ),
+            transfers,
+        )
+        self.assertEqual(result.unlisted_transfers, transfers)
+
+    def test_post_manifest_dispatchers_consume_only_matching_exact_dynamic_sites(self) -> None:
+        sites = (
+            ("_init_graph_node_perspective", 84),
+            ("_init_graph_node_switch_case", 74),
+            ("_init_graph_node_camera", 90),
+            ("_init_graph_node_generated", 60),
+            ("_init_graph_node_background", 70),
+            ("_init_graph_node_held_object", 78),
+            ("_play_cutscene", 186),
+            ("_play_mode_change_level", 14),
+        )
+        for index, (dispatcher, offset) in enumerate(sites):
+            with self.subTest(dispatcher=dispatcher):
+                start = 0x6010000 + index * 0x100
+                callback = sorted(POST_MANIFEST_DISPATCHER_TARGETS[dispatcher])[0]
+                transfer = UnresolvedTransfer(
+                    dispatcher, start + offset, "jsr", "r1"
+                )
+                oracle = parse_route_oracle(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                    f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+                    f"INDIRECT_EDGE {dispatcher} {callback}\n"
+                )
+                owners = (
+                    self.indirect_owner("_root", 0x6000000),
+                    self.indirect_owner(dispatcher, start),
+                    self.indirect_owner(callback, 0x6020000),
+                )
+                declared = audit_indirect_edges(
+                    {"_root": {dispatcher}}, oracle, owners, [transfer]
+                )
+                self.assertEqual(declared.unlisted_transfers, ())
+
+                wrong_dispatcher = "_wrong_dispatcher"
+                wrong_oracle = parse_route_oracle(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                    f"STATIC_MANIFEST_EDGE {wrong_dispatcher} {callback}\n"
+                    f"INDIRECT_EDGE {wrong_dispatcher} {callback}\n"
+                )
+                with self.assertRaisesRegex(ValueError, "unconsumed INDIRECT_EDGE"):
+                    audit_indirect_edges(
+                        {"_root": {dispatcher, wrong_dispatcher}},
+                        wrong_oracle,
+                        owners + (
+                            self.indirect_owner(wrong_dispatcher, 0x6030000),
+                        ),
+                        [transfer],
+                    )
+
+    def test_static_near_match_remains_unlisted_in_each_post_manifest_family(self) -> None:
+        sites = {
+            "_init_graph_node_perspective": 84,
+            "_init_graph_node_switch_case": 74,
+            "_init_graph_node_camera": 90,
+            "_init_graph_node_generated": 60,
+            "_init_graph_node_background": 70,
+            "_init_graph_node_held_object": 78,
+            "_play_cutscene": 186,
+            "_play_mode_change_level": 14,
+        }
+        for index, (dispatcher, offset) in enumerate(sites.items()):
+            with self.subTest(dispatcher=dispatcher):
+                start = 0x6040000 + index * 0x100
+                callback = sorted(POST_MANIFEST_DISPATCHER_TARGETS[dispatcher])[0]
+                dynamic = UnresolvedTransfer(
+                    dispatcher, start + offset, "jsr", "r1"
+                )
+                static = UnresolvedTransfer(
+                    dispatcher, start + offset + 2, "jsr", "r7",
+                    stack_source_offsets=(-32,),
+                    stack_store_addresses=(start + offset - 8,),
+                    provenance="static",
+                )
+                oracle = parse_route_oracle(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+                    f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+                    f"INDIRECT_EDGE {dispatcher} {callback}\n"
+                )
+                result = audit_indirect_edges(
+                    {"_root": {dispatcher}},
+                    oracle,
+                    (
+                        self.indirect_owner("_root", 0x6000000),
+                        self.indirect_owner(dispatcher, start),
+                        self.indirect_owner(callback, 0x6050000),
+                    ),
+                    (dynamic, static),
+                )
+                self.assertEqual(result.unlisted_transfers, (static,))
+
+    def test_checked_source_group_allows_shared_camera_callback_contribution(self) -> None:
+        callback = "_geo_camera_main"
+        dispatchers = (
+            "_geo_call_global_function_nodes_helper",
+            "_init_graph_node_camera",
+        )
+        self.assertTrue(all(
+            callback in BOB_DISPATCHER_TARGETS[dispatcher]
+            for dispatcher in dispatchers
+        ))
+        oracle_text = "ROUTE_ORACLE_VERSION 1\nROOT _root\n" + "".join(
+            f"STATIC_MANIFEST_EDGE {dispatcher} {callback}\n"
+            f"INDIRECT_EDGE {dispatcher} {callback}\n"
+            for dispatcher in dispatchers
+        )
+        result = audit_indirect_edges(
+            {"_root": set(dispatchers)},
+            parse_route_oracle(oracle_text),
+            (
+                self.indirect_owner("_root", 0x6000000),
+                self.indirect_owner(dispatchers[0], 0x6060000),
+                self.indirect_owner(dispatchers[1], 0x6060100),
+                self.indirect_owner(callback, 0x6060200),
+            ),
+            (
+                UnresolvedTransfer(dispatchers[0], 0x6060028, "jsr", "r1"),
+                UnresolvedTransfer(dispatchers[1], 0x606015A, "jsr", "r1"),
+            ),
+        )
+        self.assertIn(callback, result.closure)
+        self.assertEqual(result.unlisted_transfers, ())
 
     def test_four_wave1_dispatchers_consume_only_declared_dynamic_transfers(self) -> None:
         sites = {
@@ -672,6 +836,124 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(result.direct_calls, [])
 
 
+CUTSCENE_SHOT_TARGETS = frozenset({
+    "_cutscene_bbh_death",
+    "_cutscene_bowser_arena",
+    "_cutscene_bowser_arena_dialog",
+    "_cutscene_bowser_arena_end",
+    "_cutscene_cap_switch_press",
+    "_cutscene_credits",
+    "_cutscene_dance_closeup",
+    "_cutscene_dance_default_rotate",
+    "_cutscene_dance_fly_away",
+    "_cutscene_death_standing",
+    "_cutscene_death_stomach",
+    "_cutscene_dialog",
+    "_cutscene_dialog_end",
+    "_cutscene_dialog_set_flag",
+    "_cutscene_door_end",
+    "_cutscene_door_fix_cam",
+    "_cutscene_door_follow_mario",
+    "_cutscene_door_loop",
+    "_cutscene_door_mode",
+    "_cutscene_door_move_behind_mario",
+    "_cutscene_door_start",
+    "_cutscene_double_doors_end",
+    "_cutscene_end_waving",
+    "_cutscene_ending_cake_for_mario",
+    "_cutscene_ending_dialog",
+    "_cutscene_ending_kiss",
+    "_cutscene_ending_mario_fall",
+    "_cutscene_ending_mario_land",
+    "_cutscene_ending_mario_land_closeup",
+    "_cutscene_ending_mario_to_peach",
+    "_cutscene_ending_peach_appears",
+    "_cutscene_ending_peach_descends",
+    "_cutscene_ending_peach_wakeup",
+    "_cutscene_ending_stars_free_peach",
+    "_cutscene_ending_stop",
+    "_cutscene_enter_cannon_end",
+    "_cutscene_enter_cannon_raise",
+    "_cutscene_enter_cannon_start",
+    "_cutscene_enter_painting",
+    "_cutscene_enter_pool",
+    "_cutscene_enter_pyramid_top",
+    "_cutscene_exit_bowser_death",
+    "_cutscene_exit_bowser_succ",
+    "_cutscene_exit_fall_to_castle_grounds",
+    "_cutscene_exit_non_painting_succ",
+    "_cutscene_exit_painting",
+    "_cutscene_exit_painting_end",
+    "_cutscene_exit_to_castle_grounds_end",
+    "_cutscene_exit_waterfall",
+    "_cutscene_grand_star",
+    "_cutscene_grand_star_fly",
+    "_cutscene_intro_peach_dialog",
+    "_cutscene_intro_peach_fly_to_pipe",
+    "_cutscene_intro_peach_letter",
+    "_cutscene_intro_peach_mario_appears",
+    "_cutscene_intro_peach_reset_fov",
+    "_cutscene_key_dance",
+    "_cutscene_mario_dialog",
+    "_cutscene_non_painting_death",
+    "_cutscene_non_painting_end",
+    "_cutscene_prepare_cannon",
+    "_cutscene_prepare_cannon_end",
+    "_cutscene_pyramid_top_explode",
+    "_cutscene_pyramid_top_explode_end",
+    "_cutscene_quicksand_death",
+    "_cutscene_read_message",
+    "_cutscene_read_message_end",
+    "_cutscene_read_message_set_flag",
+    "_cutscene_red_coin_star",
+    "_cutscene_red_coin_star_end",
+    "_cutscene_sliding_doors_open",
+    "_cutscene_star_spawn",
+    "_cutscene_star_spawn_back",
+    "_cutscene_star_spawn_end",
+    "_cutscene_suffocation",
+    "_cutscene_unlock_key_door",
+    "_cutscene_unused_exit_focus_mario",
+    "_cutscene_unused_exit_start",
+    "_cutscene_unused_loop",
+    "_cutscene_unused_start",
+})
+
+
+POST_MANIFEST_DISPATCHER_TARGETS = {
+    "_init_graph_node_perspective": frozenset({"_geo_camera_fov"}),
+    "_init_graph_node_switch_case": frozenset({
+        "_geo_switch_anim_state",
+        "_geo_switch_mario_cap_effect",
+        "_geo_switch_mario_cap_on_off",
+        "_geo_switch_mario_eyes",
+        "_geo_switch_mario_hand",
+        "_geo_switch_mario_stand_run",
+    }),
+    "_init_graph_node_camera": frozenset({"_geo_camera_main"}),
+    "_init_graph_node_generated": frozenset({
+        "_geo_cannon_circle_base",
+        "_geo_envfx_main",
+        "_geo_mario_hand_foot_scaler",
+        "_geo_mario_head_rotation",
+        "_geo_mario_rotate_wing_cap_wings",
+        "_geo_mario_tilt_torso",
+        "_geo_mirror_mario_backface_culling",
+        "_geo_mirror_mario_set_alpha",
+        "_geo_move_mario_part_from_parent",
+        "_geo_scale_bowser_key",
+        "_geo_update_held_mario_pos",
+        "_geo_update_layer_transparency",
+    }),
+    "_init_graph_node_background": frozenset({"_geo_skybox_main"}),
+    "_init_graph_node_held_object": frozenset({
+        "_geo_switch_mario_hand_grab_pos"
+    }),
+    "_play_cutscene": CUTSCENE_SHOT_TARGETS,
+    "_play_mode_change_level": frozenset({"_basic_update"}),
+}
+
+
 BOB_DISPATCHER_TARGETS = {
     "_geo_call_global_function_nodes_helper": frozenset({
         "_geo_camera_fov",
@@ -716,11 +998,85 @@ BOB_DISPATCHER_TARGETS = {
         "_geo_layout_cmd_open_node",
         "_geo_layout_cmd_return",
     }),
+    **POST_MANIFEST_DISPATCHER_TARGETS,
 }
 
 
 def _strip_c_comments(text: str) -> str:
     return re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+
+
+def _derive_bob_camera_trigger_targets(repo_root: Path) -> frozenset[str]:
+    """Derive the camera-trigger events selected by sourceboot's level."""
+    sourceboot = _strip_c_comments(
+        (repo_root / "src/port/saturn/sourceboot/source_entry.c").read_text(
+            encoding="utf-8"
+        )
+    )
+    selected_levels = frozenset(re.findall(
+        r"\bSET_REG\s*\(\s*(LEVEL_[A-Z0-9_]+)\s*\)", sourceboot
+    ))
+    if selected_levels != frozenset({"LEVEL_BOB"}):
+        raise ValueError(
+            "sourceboot must select exactly LEVEL_BOB for the pinned route"
+        )
+    selected_level = next(iter(selected_levels))
+
+    level_defines = _strip_c_comments(
+        (repo_root / "levels/level_defines.h").read_text(encoding="utf-8")
+    )
+    selected_tables: list[str] = []
+    for match in re.finditer(
+        r"^\s*DEFINE_LEVEL\s*\((.*?)\)\s*$",
+        level_defines,
+        flags=re.MULTILINE,
+    ):
+        fields = tuple(field.strip() for field in match.group(1).split(","))
+        if len(fields) != 11:
+            raise ValueError("cannot derive DEFINE_LEVEL camera-table field")
+        if fields[1] == selected_level:
+            selected_tables.append(fields[10])
+    if len(selected_tables) != 1:
+        raise ValueError(
+            f"expected one {selected_level} camera-table selection, got "
+            f"{selected_tables}"
+        )
+
+    camera_source = _strip_c_comments(
+        (repo_root / "src/game/camera.c").read_text(encoding="utf-8")
+    )
+    if re.search(r"^\s*#define\s+_\s+NULL\s*$", camera_source, re.MULTILINE) is None:
+        raise ValueError("camera-table null alias is missing")
+    if re.search(
+        r"^\s*#define\s+DEFINE_LEVEL\([^\n]*cameratable\)\s+cameratable,\s*$",
+        camera_source,
+        re.MULTILINE,
+    ) is None:
+        raise ValueError("sCameraTriggers DEFINE_LEVEL projection is missing")
+    if re.search(
+        r"sCameraTriggers\s*\[[^]]+\]\s*=\s*\{\s*"
+        r"NULL,\s*#include\s+\"levels/level_defines\.h\"\s*\};",
+        camera_source,
+        re.DOTALL,
+    ) is None:
+        raise ValueError("sCameraTriggers level-table include is missing")
+
+    selected_table = selected_tables[0]
+    if selected_table == "_":
+        return frozenset()
+
+    definition = re.search(
+        rf"struct\s+CameraTrigger\s+{re.escape(selected_table)}\s*\[\]\s*="
+        r"\s*\{(.*?)^\s*\};",
+        camera_source,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if definition is None:
+        raise ValueError(f"missing selected CameraTrigger table: {selected_table}")
+    events = re.findall(
+        r"\{\s*[^,]+,\s*([A-Za-z_]\w*|NULL)\s*,", definition.group(1)
+    )
+    return frozenset("_" + event for event in events if event != "NULL")
 
 
 def _derive_bob_dispatcher_targets(repo_root: Path) -> dict[str, frozenset[str]]:
@@ -886,11 +1242,118 @@ def _derive_bob_dispatcher_targets(repo_root: Path) -> dict[str, frozenset[str]]
         )
     )
 
+    reached_geo_text = "\n".join(
+        geo_definitions[name] for name in sorted(reached_geo)
+    )
+    initializer_patterns = {
+        "_init_graph_node_perspective":
+            r"GEO_CAMERA_FRUSTUM_WITH_FUNC\s*\(\s*[^,]+,\s*[^,]+,\s*"
+            r"[^,]+,\s*(geo_[A-Za-z0-9_]+)\s*\)",
+        "_init_graph_node_switch_case":
+            r"GEO_SWITCH_CASE\s*\(\s*[^,]+,\s*"
+            r"(geo_[A-Za-z0-9_]+)\s*\)",
+        "_init_graph_node_camera":
+            r"GEO_CAMERA\s*\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*"
+            r"[^,]+,\s*[^,]+,\s*[^,]+,\s*(geo_[A-Za-z0-9_]+)\s*\)",
+        "_init_graph_node_generated":
+            r"GEO_ASM\s*\(\s*[^,]+,\s*(geo_[A-Za-z0-9_]+)\s*\)",
+        "_init_graph_node_background":
+            r"GEO_BACKGROUND\s*\(\s*[^,]+,\s*"
+            r"(geo_[A-Za-z0-9_]+)\s*\)",
+        "_init_graph_node_held_object":
+            r"GEO_HELD_OBJECT\s*\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*"
+            r"[^,]+,\s*(geo_[A-Za-z0-9_]+)\s*\)",
+    }
+    initializer_targets = {
+        dispatcher: frozenset(
+            "_" + target for target in re.findall(pattern, reached_geo_text)
+        )
+        for dispatcher, pattern in initializer_patterns.items()
+    }
+    empty_initializers = sorted(
+        dispatcher for dispatcher, targets in initializer_targets.items()
+        if not targets
+    )
+    if empty_initializers:
+        raise ValueError(
+            f"reached BOB GeoLayouts have no callbacks for {empty_initializers}"
+        )
+
+    camera_source = _strip_c_comments(
+        (repo_root / "src/game/camera.c").read_text(encoding="utf-8")
+    )
+    play_cutscene = re.search(
+        r"void\s+play_cutscene\s*\([^)]*\)\s*\{(.*?)^\}",
+        camera_source,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    if play_cutscene is None:
+        raise ValueError("play_cutscene definition is missing")
+    selected_cutscene_arrays = frozenset(re.findall(
+        r"\bCUTSCENE\s*\(\s*[^,]+,\s*(sCutscene[A-Za-z0-9_]+)\s*\)",
+        play_cutscene.group(1),
+    ))
+    cutscene_definitions = {
+        match.group(1): match.group(2)
+        for match in re.finditer(
+            r"struct\s+Cutscene\s+(sCutscene[A-Za-z0-9_]+)\s*\[\]\s*="
+            r"\s*\{(.*?)^\s*\};",
+            camera_source,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+    }
+    missing_cutscene_arrays = sorted(
+        selected_cutscene_arrays - cutscene_definitions.keys()
+    )
+    if missing_cutscene_arrays:
+        raise ValueError(
+            f"missing play_cutscene shot tables: {missing_cutscene_arrays}"
+        )
+    cutscene_targets = frozenset(
+        "_" + shot
+        for array in selected_cutscene_arrays
+        for shot in re.findall(
+            r"\{\s*(cutscene_[A-Za-z0-9_]+)\s*,",
+            cutscene_definitions[array],
+        )
+    )
+    if not cutscene_targets:
+        raise ValueError("play_cutscene has no statically selected shots")
+
+    transition_sources = "\n".join(
+        _strip_c_comments(path.read_text(encoding="utf-8"))
+        for path in sorted((repo_root / "src").rglob("*.c"))
+    )
+    transition_assignments = frozenset(
+        value.strip() for value in re.findall(
+            r"\bsTransitionUpdate\s*(?<![=!<>])=(?!=)\s*([^;]+);",
+            transition_sources,
+        )
+    )
+    if transition_assignments != frozenset({"updateFunction", "NULL"}):
+        raise ValueError(
+            "unexpected direct sTransitionUpdate assignments: "
+            f"{sorted(transition_assignments)}"
+        )
+    transition_arguments = frozenset(re.findall(
+        r"\blevel_set_transition\s*\(\s*[^,]+,\s*"
+        r"([A-Za-z_]\w*|NULL)\s*\)",
+        transition_sources,
+    ))
+    transition_targets = frozenset(
+        "_" + target for target in transition_arguments if target != "NULL"
+    )
+    if not transition_targets:
+        raise ValueError("no non-null sTransitionUpdate target is reachable")
+
     return {
         "_geo_call_global_function_nodes_helper": global_targets,
         "_level_cmd_call": call_targets,
         "_level_cmd_call_loop": call_loop_targets,
         "_process_geo_layout": process_targets,
+        **initializer_targets,
+        "_play_cutscene": cutscene_targets,
+        "_play_mode_change_level": transition_targets,
     }
 
 

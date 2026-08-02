@@ -115,5 +115,213 @@ OK
 An observation-only run against the preserved camv3 ELF was stopped by the
 90-second bound after producing no stdout and no JSON result. It is recorded
 as incomplete, not passed or failed. No target build, CUE/ISO generation, or
-Ymir session was run. `EXPECTED_TOTAL 582` and both route-oracle manifest edge
-sets remain unchanged.
+Ymir session was run. At that static-recovery stage, `EXPECTED_TOTAL 582` and
+both route-oracle manifest edge sets remained unchanged; the following
+host-only step deliberately extends the checked edge sets while preserving the
+582 contract.
+
+## Checked post-manifest dynamic dispatchers
+
+The next host-only step adds 103 checked dispatcher/target pairs for eight of
+the ten genuine dynamic transfers exposed by the camv3 closure:
+
+- the six callback-bearing `init_graph_node_*` families: 22 pairs;
+- `_play_cutscene +186`: 80 pairs; and
+- `_play_mode_change_level +14`: one pair.
+
+Every pair is present once as `STATIC_MANIFEST_EDGE` and once as
+`INDIRECT_EDGE`. The pinned oracle digest is now
+`084313eeeb16ace7a05b252a0519bfbc86cc2f43db1260292d1db77da388af44`.
+`EXPECTED_TOTAL 582` remains unchanged.
+
+### BOB camera-table correction
+
+The two `_camera_course_processing` transfers at `+286` and `+316` are not
+declared in this change. Source derivation found that the sourceboot route
+selects `LEVEL_BOB` in
+`src/port/saturn/sourceboot/source_entry.c`, whose `DEFINE_LEVEL` row in
+`levels/level_defines.h` supplies `_` as its camera-table field. In
+`src/game/camera.c`, `_` is defined as `NULL` while that header is projected
+into `sCameraTriggers`. Thus `sCameraTriggers[LEVEL_BOB]` is NULL and its exact
+event set is empty.
+
+The nearby `sCamBOB` array is explicitly documented as unused and is not the
+selected table. Declaring `cam_bob_tower` or `cam_bob_default_free_roam` would
+therefore fabricate route provenance. Tests require both oracle edge sets for
+`_camera_course_processing` to stay empty and require both exact dynamic
+transfers to remain unlisted. A separate configured-null-table proof is needed
+to discharge them without inventing callbacks.
+
+### GeoLayout initializer derivation and exact sets
+
+The derivation reuses the pinned recursive sourceboot/BOB closure documented
+above: nine reached `LevelScript` arrays provide the `AREA` and
+`LOAD_MODEL_FROM_GEO` roots, and `GEO_BRANCH`/`GEO_BRANCH_AND_LINK` traversal
+reaches 125 GeoLayout arrays from `actors/**/geo.inc.c` and
+`levels/bob/**/*.c`. The six sets are read from the precise callback arguments
+of the corresponding reached macros defined by `include/geo_commands.h`.
+
+`_init_graph_node_perspective` (`GEO_CAMERA_FRUSTUM_WITH_FUNC`):
+
+- `_geo_camera_fov`
+
+`_init_graph_node_switch_case` (`GEO_SWITCH_CASE`):
+
+- `_geo_switch_anim_state`
+- `_geo_switch_mario_cap_effect`
+- `_geo_switch_mario_cap_on_off`
+- `_geo_switch_mario_eyes`
+- `_geo_switch_mario_hand`
+- `_geo_switch_mario_stand_run`
+
+`_init_graph_node_camera` (`GEO_CAMERA`):
+
+- `_geo_camera_main`
+
+`_init_graph_node_generated` (`GEO_ASM`):
+
+- `_geo_cannon_circle_base`
+- `_geo_envfx_main`
+- `_geo_mario_hand_foot_scaler`
+- `_geo_mario_head_rotation`
+- `_geo_mario_rotate_wing_cap_wings`
+- `_geo_mario_tilt_torso`
+- `_geo_mirror_mario_backface_culling`
+- `_geo_mirror_mario_set_alpha`
+- `_geo_move_mario_part_from_parent`
+- `_geo_scale_bowser_key`
+- `_geo_update_held_mario_pos`
+- `_geo_update_layer_transparency`
+
+`_init_graph_node_background` (`GEO_BACKGROUND`):
+
+- `_geo_skybox_main`
+
+`_init_graph_node_held_object` (`GEO_HELD_OBJECT`):
+
+- `_geo_switch_mario_hand_grab_pos`
+
+### Cutscene derivation and exact set
+
+`src/game/camera.c` does not provide source dataflow that bounds
+`c->cutscene` to a narrower BOB-only value set. The fail-closed manifest
+therefore follows all 43 unique `struct Cutscene` arrays selected by the
+compiled `CUTSCENE` cases in `play_cutscene`; the unreferenced
+`sCutsceneWaterDeath` array is excluded. Their 80 unique shot callbacks are:
+
+- `_cutscene_bbh_death`
+- `_cutscene_bowser_arena`
+- `_cutscene_bowser_arena_dialog`
+- `_cutscene_bowser_arena_end`
+- `_cutscene_cap_switch_press`
+- `_cutscene_credits`
+- `_cutscene_dance_closeup`
+- `_cutscene_dance_default_rotate`
+- `_cutscene_dance_fly_away`
+- `_cutscene_death_standing`
+- `_cutscene_death_stomach`
+- `_cutscene_dialog`
+- `_cutscene_dialog_end`
+- `_cutscene_dialog_set_flag`
+- `_cutscene_door_end`
+- `_cutscene_door_fix_cam`
+- `_cutscene_door_follow_mario`
+- `_cutscene_door_loop`
+- `_cutscene_door_mode`
+- `_cutscene_door_move_behind_mario`
+- `_cutscene_door_start`
+- `_cutscene_double_doors_end`
+- `_cutscene_end_waving`
+- `_cutscene_ending_cake_for_mario`
+- `_cutscene_ending_dialog`
+- `_cutscene_ending_kiss`
+- `_cutscene_ending_mario_fall`
+- `_cutscene_ending_mario_land`
+- `_cutscene_ending_mario_land_closeup`
+- `_cutscene_ending_mario_to_peach`
+- `_cutscene_ending_peach_appears`
+- `_cutscene_ending_peach_descends`
+- `_cutscene_ending_peach_wakeup`
+- `_cutscene_ending_stars_free_peach`
+- `_cutscene_ending_stop`
+- `_cutscene_enter_cannon_end`
+- `_cutscene_enter_cannon_raise`
+- `_cutscene_enter_cannon_start`
+- `_cutscene_enter_painting`
+- `_cutscene_enter_pool`
+- `_cutscene_enter_pyramid_top`
+- `_cutscene_exit_bowser_death`
+- `_cutscene_exit_bowser_succ`
+- `_cutscene_exit_fall_to_castle_grounds`
+- `_cutscene_exit_non_painting_succ`
+- `_cutscene_exit_painting`
+- `_cutscene_exit_painting_end`
+- `_cutscene_exit_to_castle_grounds_end`
+- `_cutscene_exit_waterfall`
+- `_cutscene_grand_star`
+- `_cutscene_grand_star_fly`
+- `_cutscene_intro_peach_dialog`
+- `_cutscene_intro_peach_fly_to_pipe`
+- `_cutscene_intro_peach_letter`
+- `_cutscene_intro_peach_mario_appears`
+- `_cutscene_intro_peach_reset_fov`
+- `_cutscene_key_dance`
+- `_cutscene_mario_dialog`
+- `_cutscene_non_painting_death`
+- `_cutscene_non_painting_end`
+- `_cutscene_prepare_cannon`
+- `_cutscene_prepare_cannon_end`
+- `_cutscene_pyramid_top_explode`
+- `_cutscene_pyramid_top_explode_end`
+- `_cutscene_quicksand_death`
+- `_cutscene_read_message`
+- `_cutscene_read_message_end`
+- `_cutscene_read_message_set_flag`
+- `_cutscene_red_coin_star`
+- `_cutscene_red_coin_star_end`
+- `_cutscene_sliding_doors_open`
+- `_cutscene_star_spawn`
+- `_cutscene_star_spawn_back`
+- `_cutscene_star_spawn_end`
+- `_cutscene_suffocation`
+- `_cutscene_unlock_key_door`
+- `_cutscene_unused_exit_focus_mario`
+- `_cutscene_unused_exit_start`
+- `_cutscene_unused_loop`
+- `_cutscene_unused_start`
+
+### Transition-update derivation
+
+The complete `src/**/*.c` assignment path contains only
+`sTransitionUpdate = updateFunction` and clears to `NULL`. Every call to
+`level_set_transition` passes either `NULL` or `basic_update`; the sole
+non-call state is omitted. The exact `_play_mode_change_level` set is:
+
+- `_basic_update`
+
+### Validation and limitations
+
+The tests compare the complete source-derived mapping with a hand-checked
+literal mapping and with both oracle edge sets. They exercise omission and
+underived-addition mutations against the derived map, the eight exact linked
+offsets, mismatched dispatcher ownership, one static near-match per family,
+and grouped contribution for `_geo_camera_main`, which is shared by
+`_geo_call_global_function_nodes_helper` and `_init_graph_node_camera`.
+
+The accepted Phase-A limitation remains dispatcher granularity: each dynamic
+site inherits its dispatcher's complete source-derived callback set. In
+particular, `_play_cutscene +186` inherits all 80 shots because no narrower
+static route proof exists. Parser-classified static transfers remain unlisted.
+
+The focused RED first failed because all eight derived families were absent
+from the oracle and because the BOB camera-table derivation did not yet exist.
+After implementation, the focused set passed six tests. The complete host
+verifier suite passed:
+
+```text
+Ran 176 tests in 0.920s
+OK
+```
+
+No external library or upstream code was used. No target build, cross-tool
+audit, CUE/ISO generation, Ymir session, or FPS measurement was run.
