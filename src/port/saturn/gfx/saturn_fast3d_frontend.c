@@ -11,6 +11,7 @@
 #include "saturn_fast3d_frontend.h"
 #include "saturn_projected_workarea.h"
 #include "saturn_quad_map.h"
+#include "saturn_render_native_math.h"
 
 /* saturn_fast3d_frontend.h stores quad-map entries as plain uint32_t so it
  * need not include a generated build artifact (see its comment on
@@ -78,6 +79,7 @@ static void sm64_saturn_fast3d_count_command(
             profile->triangle_count += 2U;
             break;
 #endif
+
         case (uint8_t)G_TEXTURE:
         case G_SETTIMG:
         case G_SETTILE:
@@ -263,6 +265,43 @@ static bool sm64_saturn_fast3d_quad_entry_corners_valid(uint32_t entry)
     return true;
 }
 
+#ifdef SATURN_MTX_IS_Q16
+/* Q16.16 perspective divide used by the target hot path.  A tiny positive
+ * clip w can produce a quotient outside the signed Q16 range; the float
+ * reference then clamps that value at the VDP1 coordinate boundary.  Keep
+ * the same defined behaviour by saturating the quotient instead of dropping
+ * the triangle on a helper overflow. */
+static int32_t sm64_saturn_fast3d_q16_div_clamped(int32_t numerator,
+                                                   int32_t denominator)
+{
+    int32_t result;
+    if (denominator == 0) {
+        return numerator < 0 ? INT32_MIN : INT32_MAX;
+    }
+    if (sm64_saturn_div_s64_s32((int64_t)numerator * INT64_C(65536),
+                                denominator, &result)) {
+        return result;
+    }
+    return ((numerator < 0) != (denominator < 0)) ? INT32_MIN : INT32_MAX;
+}
+
+/* Map a normalized Q16 coordinate to pixels with truncation toward zero,
+ * matching the source float cast before the int16 narrowing/clamp. */
+static int32_t sm64_saturn_fast3d_q16_viewport_coord(int32_t ndc,
+                                                      int16_t origin,
+                                                      int16_t extent,
+                                                      bool flip_y)
+{
+    const int64_t one = INT64_C(1) << 16;
+    const int64_t adjusted = flip_y ? (one - ndc) : (ndc + one);
+    int32_t pixels;
+    if (!sm64_saturn_div_s64_s32(adjusted * extent, 2 * one, &pixels)) {
+        pixels = adjusted < 0 ? INT32_MIN : INT32_MAX;
+    }
+    return (int32_t)origin + pixels;
+}
+#endif
+
 /* Painter-ordering bucket for one primitive's furthest corner. Factored out
  * of the resolve stage because a merged quad must RECOMPUTE its bucket over
  * all four corners (max of both triangles' max_z) rather than inherit
@@ -270,9 +309,18 @@ static bool sm64_saturn_fast3d_quad_entry_corners_valid(uint32_t entry)
  * site, whose reasoning extends from three corners to four. */
 static uint16_t sm64_saturn_fast3d_depth_bucket(int32_t max_z)
 {
-    return (uint16_t)(((int64_t)(max_z - SM64_SATURN_NEAR_DEPTH) *
-        (SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1)) /
-        (SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH));
+    int32_t bucket = 0;
+    const int64_t scaled = (int64_t)(max_z - SM64_SATURN_NEAR_DEPTH) *
+        (SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1);
+    if (!sm64_saturn_div_s64_s32(
+            scaled, SM64_SATURN_FAR_DEPTH - SM64_SATURN_NEAR_DEPTH,
+            &bucket)) {
+        bucket = scaled < 0 ? 0 : SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1;
+    }
+    if (bucket < 0) bucket = 0;
+    if (bucket >= SM64_SATURN_FAST3D_DEPTH_BUCKETS)
+        bucket = SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1;
+    return (uint16_t)bucket;
 }
 
 static __attribute__((unused)) const sm64_saturn_fast3d_cached_vertex_t *
@@ -360,16 +408,24 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
     sm64_saturn_fast3d_profile_t *profile = &frontend->profile;
     const sm64_saturn_mtx_t *mp =
         sm64_saturn_matrix_stack_mp(&frontend->matrix_stack);
+#ifndef SATURN_MTX_IS_Q16
     const sm64_saturn_mtx_float_cache_t *mp_float =
         &frontend->matrix_stack.mp_float;
+#endif
     /* Bring-up diagnostic -- see the profile struct's
      * dbg_mp_compose_overflowed_ever comment (saturn_fast3d_frontend.h). */
     profile->dbg_mp_compose_overflowed_ever =
         frontend->matrix_stack.mp_overflowed ? 1U : 0U;
     const uint8_t idx[3] = {i0, i1, i2};
+#ifdef SATURN_MTX_IS_Q16
+    int32_t cx[3], cy[3]; /* normalized clip-space x/w and y/w, Q16.16 */
+    int32_t cw[3];        /* raw clip w in world units, not Q16 scale */
+    int32_t clip_w_q16[3];
+#else
     float cx[3], cy[3], cw[3]; /* pre-viewport clip-space x/w, y/w, and
                                  * raw w (NOT further scaled -- see the
                                  * NEAR/FAR_DEPTH comment above) */
+#endif
     sm64_saturn_projected_vertex_t projected_storage[4];
     sm64_saturn_projected_workarea_t workarea;
     uint16_t projected_indices[4];
@@ -511,31 +567,24 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
             return;
         }
         const sm64_saturn_fast3d_vertex_t *v = &frontend->vertices[idx[c]];
-        /* Row-vector transform, matching gfx_pc.c's gfx_sp_vertex
-         * (~L616-619): out[col] = sum_row v[row]*M[row][col] + M[3][col].
-         * Uses float here for the perspective divide/cull math -- v->x/
-         * y/z are already float (GBI_FLOATS, see Task 5's note).  The
-         * Q16.16 MP columns are decoded once per lazy MP recomposition
-         * into matrix_stack.mp_float, rather than twelve times per
-         * corner here.  sm64_saturn_q16_to_float produces exactly the
-         * same float bits as q / 65536.0f without a soft-float scale.
-         * The dot-product operation order is otherwise unchanged, so
-         * this cache is bit-exact; the later all-Q16.16 projection is a
-         * separate, behavior-gated optimization. */
-        const float mx = v->x, my = v->y, mz = v->z;
-        const float x = mx * mp_float->x[0] +
-                        my * mp_float->x[1] +
-                        mz * mp_float->x[2] +
-                        mp_float->x[3];
-        const float y = mx * mp_float->y[0] +
-                        my * mp_float->y[1] +
-                        mz * mp_float->y[2] +
-                        mp_float->y[3];
-        const float w = mx * mp_float->w[0] +
-                        my * mp_float->w[1] +
-                        mz * mp_float->w[2] +
-                        mp_float->w[3];
-        if (w <= 0.0f) {
+#ifdef SATURN_MTX_IS_Q16
+        /* Row-vector transform in the authoritative Q16.16 domain.  Vertex
+         * positions are decoded from their IEEE representation once; no
+         * target float multiply, divide, or libgcc soft-float helper remains
+         * in this loop. */
+        const int32_t mx = sm64_saturn_float_to_q16(v->x);
+        const int32_t my = sm64_saturn_float_to_q16(v->y);
+        const int32_t mz = sm64_saturn_float_to_q16(v->z);
+        const int32_t x = sm64_saturn_q16_mul(mx, mp->m[0][0]) +
+                          sm64_saturn_q16_mul(my, mp->m[1][0]) +
+                          sm64_saturn_q16_mul(mz, mp->m[2][0]) + mp->m[3][0];
+        const int32_t y = sm64_saturn_q16_mul(mx, mp->m[0][1]) +
+                          sm64_saturn_q16_mul(my, mp->m[1][1]) +
+                          sm64_saturn_q16_mul(mz, mp->m[2][1]) + mp->m[3][1];
+        const int32_t w = sm64_saturn_q16_mul(mx, mp->m[0][3]) +
+                          sm64_saturn_q16_mul(my, mp->m[1][3]) +
+                          sm64_saturn_q16_mul(mz, mp->m[2][3]) + mp->m[3][3];
+        if (w <= 0) {
             profile->reject_near_far++;
             profile->reject_w_nonpositive++;
             /* Bring-up diagnostic -- see the profile struct's
@@ -546,16 +595,16 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
              * geometry stays within +-8192) -- comfortably beyond any real
              * value, comfortably short of the hundred-million-plus
              * magnitudes a fixed-point overflow produces. */
-            if (w <= -1.0e6f) {
+            if (w == INT32_MIN) {
                 profile->reject_w_nonpositive_overflow_suspect++;
             }
             if (profile->reject_w_nonpositive == 1U) {
                 /* Bring-up diagnostic -- see the profile struct's
                  * dbg_first_w_reject_* comment (saturn_fast3d_frontend.h). */
-                profile->dbg_first_w_reject_mx = mx;
-                profile->dbg_first_w_reject_my = my;
-                profile->dbg_first_w_reject_mz = mz;
-                profile->dbg_first_w_reject_w = w;
+                profile->dbg_first_w_reject_mx = v->x;
+                profile->dbg_first_w_reject_my = v->y;
+                profile->dbg_first_w_reject_mz = v->z;
+                profile->dbg_first_w_reject_w = sm64_saturn_q16_to_float(w);
                 profile->dbg_first_w_reject_mp03 = mp->m[0][3];
                 profile->dbg_first_w_reject_mp13 = mp->m[1][3];
                 profile->dbg_first_w_reject_mp23 = mp->m[2][3];
@@ -568,13 +617,59 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
             }
             return;
         }
+        cx[c] = sm64_saturn_fast3d_q16_div_clamped(x, w);
+        cy[c] = sm64_saturn_fast3d_q16_div_clamped(y, w);
+        clip_w_q16[c] = w;
+        cw[c] = w >> 16;
+#else
+        /* Compatibility path for host/float-wire builds. */
+        const float mx = v->x, my = v->y, mz = v->z;
+        const float x = mx * mp_float->x[0] + my * mp_float->x[1] +
+                        mz * mp_float->x[2] + mp_float->x[3];
+        const float y = mx * mp_float->y[0] + my * mp_float->y[1] +
+                        mz * mp_float->y[2] + mp_float->y[3];
+        const float w = mx * mp_float->w[0] + my * mp_float->w[1] +
+                        mz * mp_float->w[2] + mp_float->w[3];
+        if (w <= 0.0f) {
+            profile->reject_near_far++;
+            profile->reject_w_nonpositive++;
+            if (w <= -1.0e6f) profile->reject_w_nonpositive_overflow_suspect++;
+            if (profile->reject_w_nonpositive == 1U) {
+                profile->dbg_first_w_reject_mx = mx;
+                profile->dbg_first_w_reject_my = my;
+                profile->dbg_first_w_reject_mz = mz;
+                profile->dbg_first_w_reject_w = w;
+                profile->dbg_first_w_reject_mp03 = mp->m[0][3];
+                profile->dbg_first_w_reject_mp13 = mp->m[1][3];
+                profile->dbg_first_w_reject_mp23 = mp->m[2][3];
+                profile->dbg_first_w_reject_mp33 = mp->m[3][3];
+                profile->dbg_first_w_reject_triangle_ordinal = profile->triangles_transformed;
+                profile->dbg_first_w_reject_corner = (uint8_t)c;
+                profile->dbg_first_w_reject_stack_depth = frontend->matrix_stack.depth;
+            }
+            return;
+        }
         cx[c] = x / w;
         cy[c] = y / w;
         cw[c] = w;
+#endif
     }
 
 #ifdef SM64_SATURN_FAST3D_Q16_TRACE
+#ifdef SATURN_MTX_IS_Q16
+    {
+        float trace_cx[3], trace_cy[3], trace_cw[3];
+        for (int c = 0; c < 3; c++) {
+            trace_cx[c] = sm64_saturn_q16_to_float(cx[c]);
+            trace_cy[c] = sm64_saturn_q16_to_float(cy[c]);
+            trace_cw[c] = sm64_saturn_q16_to_float(clip_w_q16[c]);
+        }
+        sm64_saturn_fast3d_q16_trace_capture(frontend, idx,
+                                             trace_cx, trace_cy, trace_cw);
+    }
+#else
     sm64_saturn_fast3d_q16_trace_capture(frontend, idx, cx, cy, cw);
+#endif
 #endif
 
     /* Backface cull in pre-viewport, Y-up clip space -- matching both
@@ -585,6 +680,24 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * below -- that space is Y-down (see the viewport decode's Y-flip
      * in Task 7) and would invert this sign. */
     if (frontend->geometry_mode & G_CULL_BOTH) {
+#ifdef SATURN_MTX_IS_Q16
+        const int64_t dx1 = (int64_t)cx[0] - cx[1];
+        const int64_t dy1 = (int64_t)cy[0] - cy[1];
+        const int64_t dx2 = (int64_t)cx[2] - cx[1];
+        const int64_t dy2 = (int64_t)cy[2] - cy[1];
+        const int64_t cross = dx1 * dy2 - dy1 * dx2;
+        switch (frontend->geometry_mode & G_CULL_BOTH) {
+            case G_CULL_FRONT:
+                if (cross <= 0) { profile->reject_backface++; return; }
+                break;
+            case G_CULL_BACK:
+                if (cross >= 0) { profile->reject_backface++; return; }
+                break;
+            case G_CULL_BOTH:
+                profile->reject_backface++;
+                return;
+        }
+#else
         const float dx1 = cx[0] - cx[1];
         const float dy1 = cy[0] - cy[1];
         const float dx2 = cx[2] - cx[1];
@@ -602,6 +715,7 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
                 profile->reject_backface++;
                 return;
         }
+#endif
     }
 
     /* Clamp before narrowing to int16_t -- a small positive w (camera
@@ -630,6 +744,20 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
      * is ever raised past the window size, this clamp is what keeps
      * emitted coordinates hardware-valid. */
     for (int c = 0; c < 3; c++) {
+#ifdef SATURN_MTX_IS_Q16
+        const int32_t screen_x_i =
+            sm64_saturn_fast3d_q16_viewport_coord(cx[c], frontend->viewport.x,
+                                                  frontend->viewport.width,
+                                                  false);
+        const int32_t screen_y_i =
+            sm64_saturn_fast3d_q16_viewport_coord(cy[c], frontend->viewport.y,
+                                                  frontend->viewport.height,
+                                                  true);
+        screen_x[c] = (int16_t)(screen_x_i < -2048 ? -2048 :
+                                (screen_x_i > 2047 ? 2047 : screen_x_i));
+        screen_y[c] = (int16_t)(screen_y_i < -1024 ? -1024 :
+                                (screen_y_i > 1023 ? 1023 : screen_y_i));
+#else
         const float screen_x_f = frontend->viewport.x +
             (cx[c] * 0.5f + 0.5f) * frontend->viewport.width;
         const float screen_y_f = frontend->viewport.y +
@@ -640,6 +768,7 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         screen_y[c] = (int16_t)(screen_y_f < -1024.0f ? -1024 :
                                 (screen_y_f > 1023.0f ? 1023 :
                                  screen_y_f));
+#endif
     }
 
     sm64_saturn_projected_workarea_init(&workarea, projected_storage, 4);
@@ -648,9 +777,15 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
             &workarea,
             (sm64_saturn_projected_vertex_t){
                 screen_x[c], screen_y[c],
+#ifdef SATURN_MTX_IS_Q16
+                cw[c] /* raw units -- do not scale by 65536.0f
+                                 * here, see the NEAR/FAR_DEPTH comment
+                                 * above this function */
+#else
                 (int32_t)cw[c] /* raw units -- do not scale by 65536.0f
                                  * here, see the NEAR/FAR_DEPTH comment
                                  * above this function */
+#endif
             },
             &projected_indices[c]);
     }

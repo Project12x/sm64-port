@@ -31,12 +31,13 @@ typedef struct sm64_saturn_mtx {
     int32_t m[4][4];
 } sm64_saturn_mtx_t;
 
-/* Float view of the three MP columns consumed by resolve_triangle.
+/* Float view of the three MP columns consumed by the non-Q16 resolve path.
  *
- * This is a compatibility cache for the still-float projection path, not
- * a second matrix truth: mp remains the authoritative Q16.16 value.  The
- * cache is refreshed only when mp itself is recomposed.  Keeping only X,
- * Y and W avoids converting the unused Z column.
+ * This is a compatibility cache for host/float-wire builds, not a second
+ * matrix truth: mp remains the authoritative Q16.16 value.  The target
+ * SATURN_MTX_IS_Q16 resolve path reads mp directly and never refreshes or
+ * consumes this cache. Keeping only X, Y and W avoids converting the unused
+ * Z column.
  *
  * Each value is the exact IEEE-754 result of Q16.16 -> float conversion.
  * sm64_saturn_q16_to_float performs the power-of-two scale by adjusting
