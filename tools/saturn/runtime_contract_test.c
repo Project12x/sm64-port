@@ -478,8 +478,12 @@ static void test_bounded_terrain_result_spans(void)
     assert(slot == &master_records[0]);
     assert(spans.master.count == 3U);
     assert(!sm64_saturn_terrain_result_reserve(&spans.master, 1U, &slot));
+    assert(slot == NULL);
     assert(spans.master.reserve_rejects == 1U);
 
+    sm64_saturn_terrain_result_arena_reset(&spans.master);
+    assert(sm64_saturn_terrain_result_reserve(&spans.master, 1U, &slot));
+    assert(slot == &master_records[0]);
     slot->corner_count = 3U;
     slot->flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE;
     assert(sm64_saturn_terrain_result_commit(&spans.master, slot));
