@@ -139,6 +139,7 @@ class StackOrigin:
     offsets: tuple[int, ...] = ()
     store_addresses: tuple[int, ...] = ()
     exact_symbols: frozenset[SymbolAtom] = frozenset()
+    unknown_store: bool = False
 
 
 AbstractValue = (
@@ -370,6 +371,7 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
                 (*left.store_addresses, *right.store_addresses)
             ))[:16]),
             left.exact_symbols | right.exact_symbols,
+            left.unknown_store or right.unknown_store,
         )
     if isinstance(left, ConstSet) and isinstance(right, ConstSet):
         if left.kind != right.kind:
@@ -1212,7 +1214,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             slot = _stack_load(state, pointer.offset)
             state[pop.group(1)] = _stack_slot_value(slot)
             state[f"{pop.group(1)}_stack_origin"] = StackOrigin(
-                (pointer.offset,), slot.store_addresses, slot.exact_symbols
+                (pointer.offset,), slot.store_addresses, slot.exact_symbols,
+                slot.unknown_store,
             )
             state["r15"] = StackPtr(pointer.offset + 4)
         else:
@@ -1244,7 +1247,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             slot = _stack_load(state, offset)
             state[stack_load.group(2)] = _stack_slot_value(slot)
             state[f"{stack_load.group(2)}_stack_origin"] = StackOrigin(
-                (offset,), slot.store_addresses, slot.exact_symbols
+                (offset,), slot.store_addresses, slot.exact_symbols,
+                slot.unknown_store,
             )
         else:
             state[stack_load.group(2)] = UNKNOWN
@@ -1328,7 +1332,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 slot = _stack_load(state, offset)
                 state[destination_name] = _stack_slot_value(slot)
                 state[f"{destination_name}_stack_origin"] = StackOrigin(
-                    (offset,), slot.store_addresses, slot.exact_symbols
+                    (offset,), slot.store_addresses, slot.exact_symbols,
+                    slot.unknown_store,
                 )
             elif mnemonic == "mov.w":
                 state[destination_name] = Interval("signed", -0x8000, 0x7FFF)
@@ -2110,10 +2115,10 @@ def _analyze_code_only_pass(
                     stack_origin.store_addresses,
                     (
                         "static"
-                        if any(
-                            atom.address in owner_by_address
-                            for atom in stack_origin.exact_symbols
-                        )
+                        if not stack_origin.unknown_store
+                        and len(stack_origin.exact_symbols) == 1
+                        and next(iter(stack_origin.exact_symbols)).address
+                        in owner_by_address
                         else "dynamic"
                     ),
                 )
@@ -2822,7 +2827,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "87ed0eaf5e7e4cfe34cd651ee6ca021fa04e9d96072701b7044da612490d7b05"
+SIM_ROUTE_ORACLE_V1_SHA256 = "33bc521c42d1c4466f7d3ae02d415e2e181a10412db787487bdaf1da584a5e5f"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {

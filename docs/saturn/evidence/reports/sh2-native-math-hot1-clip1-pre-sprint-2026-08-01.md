@@ -48,18 +48,20 @@ tools ran with their MSYS2 DLL dependencies discoverable.
 The `_guMtxF2L` stack-spill form is not in that list: the parser's existing
 stack-spill recovery test proves its `jsr @r7` resolves to the direct helper
 fact.  A transfer retaining stack provenance is now explicitly classified
-`static` only when that stack slot retains a linked function-address literal;
-an unknown function-pointer parameter moved through the stack remains
-`dynamic`.
+`static` only when that stack slot retains one linked function-address
+literal and no unknown-store path; an unknown function-pointer parameter
+moved through the stack, including one merged with a literal-backed path,
+remains `dynamic`.
 
 ## Declared static callback manifest
 
 These entries are declarations for parser-classified `dynamic` transfers
 only.  GraphNode callbacks are statically derived from the pinned
 `levels/bob/areas/1/geo.inc.c`; level-script callbacks are statically derived
-from the command macros in pinned `src/port/saturn/sourceboot/source_entry.c`
-and its `EXECUTE(level_bob_entry)` target `levels/bob/script.c`. The test
-suite checks both derivations against the checked-in manifest.
+by recursively traversing the pinned sourceboot level-script entry, its
+`EXECUTE(level_bob_entry)` target `levels/bob/script.c`, and that script's
+`JUMP_LINK(script_func_global_1/4/15)` targets in `levels/scripts.c`. The
+test suite checks both derivations against the checked-in manifest.
 
 - `_geo_process_node_and_siblings` → `_geo_skybox_main`,
   `_geo_camera_fov`, `_geo_camera_main`, `_geo_envfx_main`,

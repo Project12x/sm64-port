@@ -6,9 +6,10 @@ ROUTE_ORACLE_VERSION 1
 ROOT _game_loop_one_iteration
 # This is the static route manifest, not a replay observation.  The
 # GraphNode entries are derived from levels/bob/areas/1/geo.inc.c; the
-# level-script entries are derived from sourceboot/source_entry.c and its
-# executed levels/bob/script.c command chain. The remaining two entries are
-# sourceboot's retained
+# level-script entries are derived by recursively traversing the sourceboot
+# level-script entry, its EXECUTE(level_bob_entry) target in
+# levels/bob/script.c, and that script's JUMP_LINK targets in levels/scripts.c.
+# The remaining two entries are sourceboot's retained
 # Mario-held-object and controller callback dispositions.  A declaration not
 # present here is stale by definition: its reachable dispatcher names a
 # target absent from this statically derived manifest.

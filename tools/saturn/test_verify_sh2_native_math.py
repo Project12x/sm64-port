@@ -280,18 +280,63 @@ class NativeMathCensusTests(unittest.TestCase):
                 bob_geo,
             )
         )
-        sourceboot_commands = frozenset(
-            command
-            for source_path in (
-                repo_root / "src/port/saturn/sourceboot/source_entry.c",
-                repo_root / "levels/bob/script.c",
-            )
-            for command in re.findall(
-                r"^\s*([A-Z][A-Z0-9_]+)\s*\(",
-                source_path.read_text(encoding="utf-8"),
-                flags=re.MULTILINE,
-            )
+        script_sources = (
+            repo_root / "src/port/saturn/sourceboot/source_entry.c",
+            repo_root / "levels/bob/script.c",
+            repo_root / "levels/scripts.c",
         )
+        script_definitions: dict[str, str] = {}
+        for source_path in script_sources:
+            for match in re.finditer(
+                r"(?:static\s+)?const\s+LevelScript\s+([A-Za-z_][A-Za-z0-9_]*)"
+                r"\s*\[\]\s*=\s*\{(.*?)^\};",
+                source_path.read_text(encoding="utf-8"),
+                flags=re.MULTILINE | re.DOTALL,
+            ):
+                name, body = match.groups()
+                self.assertNotIn(name, script_definitions)
+                script_definitions[name] = body
+
+        def nested_script_targets(body: str) -> set[str]:
+            # The target is the sole JUMP/JUMP_LINK argument and EXECUTE's
+            # fourth argument. Strip C comments first so named argument
+            # annotations cannot look like targets.
+            uncommented = re.sub(r"/\*.*?\*/", "", body, flags=re.DOTALL)
+            return {
+                *re.findall(
+                    r"^\s*(?:JUMP|JUMP_LINK)\s*\(\s*"
+                    r"([A-Za-z_][A-Za-z0-9_]*)\s*\)",
+                    uncommented,
+                    flags=re.MULTILINE,
+                ),
+                *re.findall(
+                    r"^\s*(?:EXECUTE|EXIT_AND_EXECUTE)\s*\(\s*[^,]+,\s*"
+                    r"[^,]+,\s*[^,]+,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)",
+                    uncommented,
+                    flags=re.MULTILINE,
+                ),
+            }
+
+        reachable_scripts: set[str] = set()
+        pending_scripts = ["level_script_entry"]
+        sourceboot_commands: set[str] = set()
+        while pending_scripts:
+            script_name = pending_scripts.pop()
+            if script_name in reachable_scripts:
+                continue
+            self.assertIn(script_name, script_definitions)
+            reachable_scripts.add(script_name)
+            body = script_definitions[script_name]
+            sourceboot_commands.update(re.findall(
+                r"^\s*([A-Z][A-Z0-9_]+)\s*\(",
+                body,
+                flags=re.MULTILINE,
+            ))
+            pending_scripts.extend(nested_script_targets(body))
+        self.assertTrue({
+            "level_bob_entry", "script_func_global_1", "script_func_global_4",
+            "script_func_global_15",
+        } <= reachable_scripts)
         command_header = (repo_root / "include/level_commands.h").read_text(
             encoding="utf-8"
         )
@@ -328,6 +373,9 @@ class NativeMathCensusTests(unittest.TestCase):
             if command_handler(command) is not None
         }
         self.assertEqual(set(sourceboot_callbacks), sourceboot_commands)
+        self.assertTrue({
+            "_level_cmd_load_model_from_dl", "_level_cmd_load_model_from_geo",
+        } <= set(sourceboot_callbacks.values()))
         required_edges = {
             ("_geo_process_node_and_siblings", "_geo_skybox_main"),
             ("_geo_process_node_and_siblings", "_geo_camera_fov"),
@@ -1485,6 +1533,32 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         transfer = result.unresolved_transfers[0]
         self.assertEqual(transfer.stack_source_offsets, (-4,))
         self.assertEqual(transfer.stack_store_addresses, (0x6001000,))
+        self.assertEqual(transfer.provenance, "dynamic")
+
+    def test_literal_and_unknown_stack_merge_stays_dynamic(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 7f fc add #-4,r15
+ 6001002: 20 08 tst r0,r0
+ 6001004: 89 03 bt 600100e <_root+0xe>
+ 6001006: d1 06 mov.l 6001020 <_child>,r1 ! 06001020 <_child>
+ 6001008: a0 02 bra 6001010 <_root+0x10>
+ 600100a: 2f 12 mov.l r1,@r15
+ 600100e: 2f 42 mov.l r4,@r15
+ 6001010: 61 f2 mov.l @r15,r1
+ 6001012: 41 0b jsr @r1
+ 6001014: 00 09 nop
+ 6001016: 00 0b rts
+ 6001018: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis)
+        transfer = next(
+            item for item in result.unresolved_transfers
+            if item.address == 0x6001012
+        )
         self.assertEqual(transfer.provenance, "dynamic")
 
     def test_conflicting_stack_targets_join_to_unknown(self) -> None:
