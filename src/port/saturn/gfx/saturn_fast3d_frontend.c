@@ -318,7 +318,7 @@ static uint16_t sm64_saturn_fast3d_depth_bucket(int32_t max_z)
         bucket = scaled < 0 ? 0 : SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1;
     }
     if (bucket < 0) bucket = 0;
-    if (bucket >= SM64_SATURN_FAST3D_DEPTH_BUCKETS)
+    if (bucket >= (int32_t)SM64_SATURN_FAST3D_DEPTH_BUCKETS)
         bucket = SM64_SATURN_FAST3D_DEPTH_BUCKETS - 1;
     return (uint16_t)bucket;
 }
@@ -420,7 +420,9 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
 #ifdef SATURN_MTX_IS_Q16
     int32_t cx[3], cy[3]; /* normalized clip-space x/w and y/w, Q16.16 */
     int32_t cw[3];        /* raw clip w in world units, not Q16 scale */
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
     int32_t clip_w_q16[3];
+#endif
 #else
     float cx[3], cy[3], cw[3]; /* pre-viewport clip-space x/w, y/w, and
                                  * raw w (NOT further scaled -- see the
@@ -619,7 +621,9 @@ sm64_saturn_fast3d_resolve_triangle(sm64_saturn_fast3d_frontend_t *frontend,
         }
         cx[c] = sm64_saturn_fast3d_q16_div_clamped(x, w);
         cy[c] = sm64_saturn_fast3d_q16_div_clamped(y, w);
+#ifdef SM64_SATURN_FAST3D_Q16_TRACE
         clip_w_q16[c] = w;
+#endif
         cw[c] = w >> 16;
 #else
         /* Compatibility path for host/float-wire builds. */

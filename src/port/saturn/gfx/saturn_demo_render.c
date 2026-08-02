@@ -598,8 +598,12 @@ static void __attribute__((unused)) demo_build_clipped_quad(
         const int32_t front_z = s_view[primitive->indices[front]].z;
         const int32_t denominator = front_z - back_z;
         if (denominator <= 0) continue;
-        const int32_t ratio = (int32_t)(((int64_t)(front_z -
-            SATURN_DEMO_NEAR_DEPTH) << 16) / denominator);
+        int32_t ratio;
+        if (!sm64_saturn_div_s64_s32(
+                (int64_t)(front_z - SATURN_DEMO_NEAR_DEPTH) << 16,
+                denominator, &ratio)) {
+            ratio = INT32_MAX;
+        }
         output[corner].x = (int16_t)(edge.x -
             (int32_t)(((int64_t)(edge.x - output[corner].x) * ratio) >> 16));
         output[corner].y = (int16_t)(edge.y -
@@ -842,9 +846,14 @@ static uint16_t demo_bucket(int32_t z)
 {
     if (z <= SATURN_DEMO_NEAR_DEPTH) return 0;
     if (z >= DEMO_FAR_DEPTH) return DEMO_BUCKETS - 1U;
-    return (uint16_t)(((z - SATURN_DEMO_NEAR_DEPTH) *
-                       (DEMO_BUCKETS - 1U)) /
-                      (DEMO_FAR_DEPTH - SATURN_DEMO_NEAR_DEPTH));
+    int32_t bucket;
+    const int64_t scaled = (int64_t)(z - SATURN_DEMO_NEAR_DEPTH) *
+        (DEMO_BUCKETS - 1U);
+    if (!sm64_saturn_div_s64_s32(
+            scaled, DEMO_FAR_DEPTH - SATURN_DEMO_NEAR_DEPTH, &bucket)) {
+        bucket = DEMO_BUCKETS - 1U;
+    }
+    return (uint16_t)bucket;
 }
 
 static bool __attribute__((unused)) demo_primitive_in_radius(
