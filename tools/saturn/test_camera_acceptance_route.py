@@ -25,6 +25,8 @@ MANIFEST = ROOT / "tools/saturn/routes/bob_default_camera_v1.json"
 ROUTE_SOURCE = ROOT / "src/port/saturn/sourceboot/source_camera_acceptance_route.c"
 ROUTE_HEADER = ROOT / "src/port/saturn/sourceboot/source_camera_acceptance_route.h"
 ROUTE_HELPER = ROOT / "tools/saturn/camera_acceptance_route.py"
+RUNTIME_SOURCE = ROOT / "src/port/saturn/runtime/saturn_source_runtime.c"
+SOURCEBOOT_MAIN = ROOT / "src/port/saturn/sourceboot/main.c"
 HOST_GCC = Path("C:/msys64/mingw64/bin/gcc.exe")
 MSYS_MAKE = Path("C:/msys64/usr/bin/make.exe")
 YAUL_INSTALL_ROOT = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install")
@@ -295,5 +297,51 @@ int main(void) {
             self.assertNotIn("-idle", route_zero_dir)
             self.assertNotIn("-disc", route_zero_dir)
             self.assertNotIn("-range", route_zero_dir)
+
+    def test_live_input_keeps_replay_bootstrap_but_disables_pad_overwrite(self) -> None:
+        live = sourceboot_make(
+            "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+            "SATURN_SOURCEBOOT_CAMERA_ROUTE=1", "SATURN_SOURCEBOOT_LIVE_INPUT=1",
+        )
+        self.assertEqual(live.returncode, 0, live.stderr)
+        live_dir = make_value(live.stdout, "SH_OUTPUT_DIR")
+        self.assertIn("-replay-camroute1-live-input-boot600-atan2v2", live_dir)
+
+        invalid_value = sourceboot_make("SATURN_SOURCEBOOT_LIVE_INPUT=2")
+        self.assertEqual(invalid_value.returncode, 2)
+        self.assertIn("SATURN_SOURCEBOOT_LIVE_INPUT must be 0 or 1", invalid_value.stderr)
+
+        missing_replay = sourceboot_make("SATURN_SOURCEBOOT_LIVE_INPUT=1")
+        self.assertEqual(missing_replay.returncode, 2)
+        self.assertIn(
+            "SATURN_SOURCEBOOT_LIVE_INPUT=1 requires SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+            missing_replay.stderr,
+        )
+
+        bootstrap = sourceboot_make(
+            "SATURN_DEMO_PATH=1", "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+            "SATURN_SOURCEBOOT_LIVE_INPUT=1",
+            "SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=600",
+        )
+        self.assertEqual(bootstrap.returncode, 0, bootstrap.stderr)
+        self.assertIn("-live-input-boot600-", make_value(bootstrap.stdout, "SH_OUTPUT_DIR"))
+        invalid_bootstrap = sourceboot_make(
+            "SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=601"
+        )
+        self.assertEqual(invalid_bootstrap.returncode, 2)
+        self.assertIn(
+            "SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS",
+            invalid_bootstrap.stderr,
+        )
+
+        runtime = RUNTIME_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("#if !SATURN_SOURCEBOOT_LIVE_INPUT\n    if (sInputReplay.enabled)", runtime)
+        self.assertIn("SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS", runtime)
+        main = SOURCEBOOT_MAIN.read_text(encoding="utf-8")
+        self.assertIn(
+            "#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT\n"
+            "    sourceboot_capture_route_checkpoint();",
+            main,
+        )
 if __name__ == "__main__":
     unittest.main()

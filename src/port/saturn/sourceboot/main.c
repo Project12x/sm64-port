@@ -38,6 +38,9 @@
 #ifndef SATURN_SOURCEBOOT_CAMERA_ROUTE
 #define SATURN_SOURCEBOOT_CAMERA_ROUTE 0
 #endif
+#ifndef SATURN_SOURCEBOOT_LIVE_INPUT
+#define SATURN_SOURCEBOOT_LIVE_INPUT 0
+#endif
 
 #define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
 #define SOURCEBOOT_MAX_SIM_CATCHUP 4U
@@ -81,12 +84,12 @@ static void sourceboot_run_source_tick(void)
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
     sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
-#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     if (sm64_saturn_source_runtime_state()->input_replay_complete) {
         sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);
     }
 #endif
-#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1
+#if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     sm64_saturn_sourceboot_camera_idle_probe_record(
         sm64_saturn_source_runtime_state(),
         sourceboot_sim_tick_count);
@@ -781,8 +784,8 @@ int main(void) {
             SOURCEBOOT_VDP2_DISPLAY_MASK;
         sourceboot_fast3d.profile.vdp2_vram_bytes =
             SOURCEBOOT_VDP2_VRAM_BYTES;
-#if SATURN_SOURCEBOOT_ROUTE_REPLAY
-        sourceboot_capture_route_checkpoint();
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT
+    sourceboot_capture_route_checkpoint();
 #endif
 
         /* Variable-sync mode was selected once in user_init(). Unlike Yaul's

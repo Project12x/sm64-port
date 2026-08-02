@@ -238,8 +238,34 @@ static void geo_process_master_list_sub(struct GraphNodeMasterList *node) {
     // As a result, environment mapping is broken on Fast3DEX2 without the
     // changes below.
 #ifdef F3DEX_GBI_2
+#ifdef TARGET_SATURN
+    /* The Saturn path always submits the same fixed reflection basis here:
+     * eye=(0,0,0), at=(1,0,0), up=(0,0,1).  Materialising those two LookAt
+     * lights directly avoids guLookAtReflect's three soft-float normalizations
+     * on every master-list traversal.  These values are the exact FTOFRAC8
+     * encodings of right=(0,-1,0) and up=(0,0,1). */
+    lookAt.l[0].l.dir[0] = 0x00;
+    lookAt.l[0].l.dir[1] = 0x80;
+    lookAt.l[0].l.dir[2] = 0x00;
+    lookAt.l[1].l.dir[0] = 0x00;
+    lookAt.l[1].l.dir[1] = 0x00;
+    lookAt.l[1].l.dir[2] = 0x7F;
+    lookAt.l[0].l.col[0] = lookAt.l[0].l.col[1] = lookAt.l[0].l.col[2] = 0x00;
+    lookAt.l[0].l.pad1 = 0x00;
+    lookAt.l[0].l.colc[0] = lookAt.l[0].l.colc[1] = lookAt.l[0].l.colc[2] = 0x00;
+    lookAt.l[0].l.pad2 = 0x00;
+    lookAt.l[1].l.col[0] = 0x00;
+    lookAt.l[1].l.col[1] = 0x80;
+    lookAt.l[1].l.col[2] = 0x00;
+    lookAt.l[1].l.pad1 = 0x00;
+    lookAt.l[1].l.colc[0] = 0x00;
+    lookAt.l[1].l.colc[1] = 0x80;
+    lookAt.l[1].l.colc[2] = 0x00;
+    lookAt.l[1].l.pad2 = 0x00;
+#else
     Mtx lMtx;
     guLookAtReflect(&lMtx, &lookAt, 0, 0, 0, /* eye */ 0, 0, 1, /* at */ 1, 0, 0 /* up */);
+#endif
 #endif
 
     if (enableZBuffer != 0) {

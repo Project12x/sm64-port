@@ -27,6 +27,13 @@ static void vdp2_tvmd_vblank_out_wait(void)
 #endif
 #include "saturn_source_runtime.h"
 
+#ifndef SATURN_SOURCEBOOT_LIVE_INPUT
+#define SATURN_SOURCEBOOT_LIVE_INPUT 0
+#endif
+#ifndef SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS
+#define SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS 600U
+#endif
+
 static sm64_saturn_source_task_submit_fn sTaskSubmit;
 static void *sTaskSubmitContext;
 static sm64_saturn_source_runtime_state_t sState;
@@ -77,6 +84,7 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
 
     controller_saturn.read(&pads[0]);
     sState.input_polls++;
+#if !SATURN_SOURCEBOOT_LIVE_INPUT
     if (sInputReplay.enabled) {
         /* Do not spend deterministic route samples while the source boot is
          * still constructing its authoritative Mario state.  Renderer
@@ -97,6 +105,21 @@ void sm64_saturn_source_runtime_read_controllers(OSContPad *pads,
             sState.input_replay_complete = sInputReplay.complete;
         }
     }
+#else
+    /* Live-input images still need the deterministic route's opening ticks:
+     * those samples enter BOB and establish the source-owned Mario/camera
+     * state. After that bounded bootstrap, the Saturn controller is the sole
+     * authority so manual testing is meaningful. */
+    if (sInputReplay.enabled &&
+        sInputReplay.ticks_consumed < SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS) {
+        sm64_saturn_input_replay_apply(&sInputReplay, &pads[0].button,
+                                       &pads[0].stick_x, &pads[0].stick_y);
+        pads[0].errnum = 0;
+        sState.input_replay_ticks = sInputReplay.ticks_consumed;
+        sState.input_replay_sample = sInputReplay.sample_index;
+        sState.input_replay_complete = sInputReplay.complete;
+    }
+#endif
     sState.last_applied_buttons = pads[0].button;
     sState.last_applied_stick_x = pads[0].stick_x;
     sState.last_applied_stick_y = pads[0].stick_y;

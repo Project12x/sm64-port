@@ -30,6 +30,10 @@
 #include "saturn_quad_map.h"
 #include "PR/gbi.h"
 
+#ifndef SATURN_SOURCEBOOT_LIVE_INPUT
+#define SATURN_SOURCEBOOT_LIVE_INPUT 0
+#endif
+
 struct MarioState *gMarioState;
 
 static void runtime_contract_controller_init(void)
@@ -437,6 +441,21 @@ static void test_source_runtime_records_the_applied_camera_replay_pad(void)
     assert(state->last_applied_buttons == 0U);
     assert(state->last_applied_stick_x == 0);
     assert(state->last_applied_stick_y == 0);
+
+#if SATURN_SOURCEBOOT_LIVE_INPUT
+    /* Live-input mode keeps the route configured for scene/bootstrap entry,
+     * but the hardware/controller boundary remains authoritative. The fake
+     * controller above is the host proof that replay cannot overwrite it. */
+    sm64_saturn_source_runtime_read_controllers(&pad, 1U);
+    assert(pad.button == 0xFFFFU && pad.stick_x == -41 && pad.stick_y == 42);
+    assert(state->input_replay_ticks == 0U);
+    assert(!state->input_replay_complete);
+    assert(state->last_applied_buttons == 0xFFFFU);
+    assert(state->last_applied_stick_x == -41);
+    assert(state->last_applied_stick_y == 42);
+    gMarioState = NULL;
+    return;
+#endif
 
     for (uint32_t tick = 1U; tick <= 120U; tick++) {
         sm64_saturn_source_runtime_read_controllers(&pad, 1U);
