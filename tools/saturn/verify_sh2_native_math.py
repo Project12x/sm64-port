@@ -122,11 +122,23 @@ MAYBE_STACK_PTR = MaybeStackPtr()
 
 
 @dataclass(frozen=True)
+class StackAlias:
+    """Whether a register value may address this function's local frame."""
+
+    may_alias: bool
+
+
+MAY_ALIAS_STACK = StackAlias(True)
+NON_STACK_ALIAS = StackAlias(False)
+
+
+@dataclass(frozen=True)
 class StackSlot:
     value: AbstractValue
     store_addresses: tuple[int, ...] = ()
     exact_symbols: frozenset[SymbolAtom] = frozenset()
     unknown_store: bool = False
+    may_alias_stack: bool = True
 
 
 @dataclass(frozen=True)
@@ -144,7 +156,7 @@ class StackOrigin:
 
 AbstractValue = (
     _Unknown | ConstSet | Interval | ComparisonPredicate | StackPtr | MaybeStackPtr
-    | StackMemory | StackOrigin
+    | StackAlias | StackMemory | StackOrigin
 )
 
 
@@ -336,6 +348,8 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
     if isinstance(left, (StackPtr, MaybeStackPtr)) \
             or isinstance(right, (StackPtr, MaybeStackPtr)):
         return MAYBE_STACK_PTR
+    if isinstance(left, StackAlias) and isinstance(right, StackAlias):
+        return StackAlias(left.may_alias or right.may_alias)
     if left is UNKNOWN or right is UNKNOWN:
         return UNKNOWN
     if isinstance(left, StackMemory) and isinstance(right, StackMemory):
@@ -362,6 +376,7 @@ def join_value(left: AbstractValue | object, right: AbstractValue | object) -> A
                 symbols if len(symbols) <= 2 else frozenset(),
                 left_slot.unknown_store or right_slot.unknown_store
                 or len(symbols) > 1,
+                left_slot.may_alias_stack or right_slot.may_alias_stack,
             )))
         return StackMemory(tuple(merged_slots))
     if isinstance(left, StackOrigin) and isinstance(right, StackOrigin):
@@ -715,12 +730,23 @@ def _symbol_from_annotation(annotation: str) -> SymbolAtom | None:
     return SymbolAtom(_symbol_base(match.group(2)), int(match.group(1), 16))
 
 
-def _unknown_state() -> dict[str, AbstractValue]:
+def _unknown_state(
+    *, entry_arguments_nonstack: bool = True
+) -> dict[str, AbstractValue]:
     return {f"r{x}": UNKNOWN for x in range(15)} | {
         "r15": StackPtr(0),
         "mach": UNKNOWN, "macl": UNKNOWN, "t_predicate": UNKNOWN,
         "stack_memory": StackMemory(),
-    } | {f"r{x}_stack_origin": StackOrigin() for x in range(16)}
+    } | {f"r{x}_stack_origin": StackOrigin() for x in range(16)} | {
+        # Incoming arguments may point into caller-owned storage, but cannot
+        # name this callee's fresh frame until a local address escapes.
+        f"r{x}_stack_alias": (
+            NON_STACK_ALIAS
+            if entry_arguments_nonstack and 4 <= x <= 7
+            else MAY_ALIAS_STACK
+        )
+        for x in range(16)
+    }
 
 
 def _join_state(
@@ -915,6 +941,65 @@ def prove_sourceboot_null_task_submit(
     return frozenset()
 
 
+def sourceboot_null_task_submit_dead_nodes(
+    instructions: dict[int, Instruction],
+    owners: Iterable[FunctionOwner],
+    known_null_addresses: frozenset[int],
+) -> frozenset[tuple[str, int]]:
+    """Return the exact decoded-only callback block killed by the null proof."""
+    if not known_null_addresses:
+        return frozenset()
+    dispatcher = next(
+        (owner for owner in owners if owner.name == "_exec_display_list"), None
+    )
+    if dispatcher is None:
+        return frozenset()
+    rows = [
+        instructions[address]
+        for address in sorted(instructions)
+        if dispatcher.start <= address < dispatcher.end
+    ]
+    for index, row in enumerate(rows):
+        atom = _symbol_from_annotation(row.annotation)
+        base = re.search(r",\s*(r(?:1[0-5]|\d))\s*$", row.operands)
+        if row.mnemonic != "mov.l" or atom is None \
+                or atom.address not in known_null_addresses or base is None:
+            continue
+        if index + 4 >= len(rows):
+            continue
+        load, test, branch = rows[index + 1:index + 4]
+        target = re.fullmatch(
+            rf"@{re.escape(base.group(1))},\s*(r(?:1[0-5]|\d))",
+            load.operands,
+        )
+        if load.mnemonic != "mov.l" or target is None:
+            continue
+        target_register = target.group(1)
+        if test.mnemonic != "tst" or test.operands.replace(" ", "") != (
+            f"{target_register},{target_register}"
+        ):
+            continue
+        if branch.mnemonic != "bt" or _target_from_text(branch.operands) is None:
+            continue
+        for transfer_index in range(index + 4, min(index + 7, len(rows))):
+            transfer = rows[transfer_index]
+            if transfer.mnemonic in {"jmp", "jsr"} \
+                    and transfer.operands == f"@{target_register}":
+                end_index = min(transfer_index + 2, len(rows))
+                return frozenset(
+                    (dispatcher.name, item.address)
+                    for item in rows[index + 4:end_index]
+                )
+            intervening_destination = re.search(
+                r",\s*(r(?:1[0-5]|\d))\s*$", transfer.operands
+            )
+            if transfer.mnemonic not in {"mov.l", "mov.w"} \
+                    or intervening_destination is None \
+                    or intervening_destination.group(1) == target_register:
+                break
+    return frozenset()
+
+
 def comparison_predicate(
     instruction: Instruction | None,
     state: dict[str, AbstractValue],
@@ -1039,6 +1124,19 @@ def _stack_slots(state: dict[str, AbstractValue]) -> dict[int, StackSlot]:
     return dict(memory.slots) if isinstance(memory, StackMemory) else {}
 
 
+def _register_may_alias_stack(
+    state: dict[str, AbstractValue], register: str
+) -> bool:
+    alias = state.get(f"{register}_stack_alias", MAY_ALIAS_STACK)
+    return not isinstance(alias, StackAlias) or alias.may_alias
+
+
+def _set_register_stack_alias(
+    state: dict[str, AbstractValue], register: str, may_alias: bool
+) -> None:
+    state[f"{register}_stack_alias"] = StackAlias(may_alias)
+
+
 def _replace_stack_slots(
     state: dict[str, AbstractValue], slots: dict[int, StackSlot]
 ) -> None:
@@ -1047,7 +1145,8 @@ def _replace_stack_slots(
 
 
 def _stack_store(
-    state: dict[str, AbstractValue], offset: int, value: AbstractValue, address: int
+    state: dict[str, AbstractValue], offset: int, value: AbstractValue, address: int,
+    may_alias_stack: bool = True,
 ) -> None:
     slots = _stack_slots(state)
     atoms = (
@@ -1061,6 +1160,7 @@ def _stack_store(
         value, (address,),
         frozenset(item for item in atoms if isinstance(item, SymbolAtom)),
         not bool(atoms),
+        may_alias_stack,
     )
     _replace_stack_slots(state, slots)
 
@@ -1077,7 +1177,10 @@ def _stack_slot_value(slot: StackSlot) -> AbstractValue:
 
 
 def _poison_stack_slot(slot: StackSlot) -> StackSlot:
-    return StackSlot(UNKNOWN, slot.store_addresses, slot.exact_symbols, True)
+    return StackSlot(
+        UNKNOWN, slot.store_addresses, slot.exact_symbols, True,
+        slot.may_alias_stack,
+    )
 
 
 def _invalidate_stack(state: dict[str, AbstractValue]) -> None:
@@ -1203,7 +1306,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if isinstance(pointer, StackPtr):
             pointer = StackPtr(pointer.offset - 4)
             state["r15"] = pointer
-            _stack_store(state, pointer.offset, state[push.group(1)], instruction.address)
+            source_register = push.group(1)
+            _stack_store(
+                state, pointer.offset, state[source_register], instruction.address,
+                _register_may_alias_stack(state, source_register),
+            )
         else:
             _invalidate_stack(state)
         return
@@ -1217,9 +1324,13 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 (pointer.offset,), slot.store_addresses, slot.exact_symbols,
                 slot.unknown_store,
             )
+            _set_register_stack_alias(
+                state, pop.group(1), slot.may_alias_stack
+            )
             state["r15"] = StackPtr(pointer.offset + 4)
         else:
             state[pop.group(1)] = UNKNOWN
+            _set_register_stack_alias(state, pop.group(1), True)
             _invalidate_stack(state)
         return
     stack_store = re.fullmatch(
@@ -1232,6 +1343,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             _stack_store(
                 state, pointer.offset + displacement,
                 state[stack_store.group(1)], instruction.address,
+                _register_may_alias_stack(state, stack_store.group(1)),
             )
         else:
             _invalidate_stack(state)
@@ -1250,8 +1362,12 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 (offset,), slot.store_addresses, slot.exact_symbols,
                 slot.unknown_store,
             )
+            _set_register_stack_alias(
+                state, stack_load.group(2), slot.may_alias_stack
+            )
         else:
             state[stack_load.group(2)] = UNKNOWN
+            _set_register_stack_alias(state, stack_load.group(2), True)
         return
 
     predecrement_store = re.fullmatch(
@@ -1267,7 +1383,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             state[f"{base_register}_stack_origin"] = StackOrigin()
             _invalidate_stack_range(state, offset, width)
             if mnemonic == "mov.l" and offset % 4 == 0:
-                _stack_store(state, offset, state[source_register], instruction.address)
+                _stack_store(
+                    state, offset, state[source_register], instruction.address,
+                    _register_may_alias_stack(state, source_register),
+                )
         else:
             state[base_register] = UNKNOWN
             state[f"{base_register}_stack_origin"] = StackOrigin()
@@ -1279,12 +1398,27 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         text,
     )
     if mnemonic in {"mov.l", "mov.w", "mov.b"} and indexed_stack_store:
+        address_registers = (
+            indexed_stack_store.group(2), indexed_stack_store.group(3)
+        )
         offset = _indexed_stack_offset(
-            state[indexed_stack_store.group(2)],
-            state[indexed_stack_store.group(3)],
+            state[address_registers[0]],
+            state[address_registers[1]],
         )
         if offset is None:
-            _invalidate_stack(state)
+            known_nonstack_base = any(
+                isinstance(state[register], ConstSet)
+                and state[register].kind == "symbol"
+                for register in address_registers
+            ) and not any(
+                isinstance(state[register], (StackPtr, MaybeStackPtr))
+                for register in address_registers
+            )
+            if not known_nonstack_base and any(
+                _register_may_alias_stack(state, register)
+                for register in address_registers
+            ):
+                _invalidate_stack(state)
         else:
             width = {"mov.b": 1, "mov.w": 2, "mov.l": 4}[mnemonic]
             _invalidate_stack_range(state, offset, width)
@@ -1292,6 +1426,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 _stack_store(
                     state, offset, state[indexed_stack_store.group(1)],
                     instruction.address,
+                    _register_may_alias_stack(
+                        state, indexed_stack_store.group(1)
+                    ),
                 )
         return
 
@@ -1311,6 +1448,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 _stack_store(
                     state, offset, state[aliased_stack_store.group(1)],
                     instruction.address,
+                    _register_may_alias_stack(
+                        state, aliased_stack_store.group(1)
+                    ),
                 )
             return
         if isinstance(base, MaybeStackPtr):
@@ -1335,10 +1475,15 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     (offset,), slot.store_addresses, slot.exact_symbols,
                     slot.unknown_store,
                 )
+                _set_register_stack_alias(
+                    state, destination_name, slot.may_alias_stack
+                )
             elif mnemonic == "mov.w":
                 state[destination_name] = Interval("signed", -0x8000, 0x7FFF)
+                _set_register_stack_alias(state, destination_name, True)
             else:
                 state[destination_name] = Interval("signed", -0x80, 0x7F)
+                _set_register_stack_alias(state, destination_name, True)
             return
 
     literal = _symbol_from_annotation(instruction.annotation)
@@ -1346,6 +1491,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
     single_destination = single_register
     if mnemonic in {"mov.l", "mov.w"} and literal and destination:
         state[destination.group(1)] = ConstSet("symbol", frozenset({literal}))
+        _set_register_stack_alias(state, destination.group(1), False)
         return
     numeric_literal = re.fullmatch(r"(?:0x)?([0-9A-Fa-f]+)", instruction.annotation)
     if mnemonic in {"mov.l", "mov.w"} and numeric_literal and destination:
@@ -1354,6 +1500,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if value & (1 << (bits - 1)):
             value -= 1 << bits
         state[destination.group(1)] = ConstSet("signed", frozenset({value}))
+        _set_register_stack_alias(state, destination.group(1), False)
         return
     dereference = re.fullmatch(
         r"@(r(?:1[0-5]|\d)),\s*(r(?:1[0-5]|\d))", text
@@ -1362,9 +1509,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         base = state[dereference.group(1)]
         if mnemonic == "mov.b":
             state[dereference.group(2)] = Interval("signed", -0x80, 0x7F)
+            _set_register_stack_alias(state, dereference.group(2), True)
             return
         if mnemonic == "mov.w":
             state[dereference.group(2)] = Interval("signed", -0x8000, 0x7FFF)
+            _set_register_stack_alias(state, dereference.group(2), True)
             return
         atoms = base.values if isinstance(base, ConstSet) and base.kind == "symbol" else ()
         if len(atoms) == 1:
@@ -1374,12 +1523,15 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     state[dereference.group(2)] = ConstSet(
                         "unsigned", frozenset({0})
                     )
+                    _set_register_stack_alias(state, dereference.group(2), False)
                     return
                 state[dereference.group(2)] = ConstSet(
                     "symbol", frozenset({SymbolAtom(f"{atom.name}*", atom.address)})
                 )
+                _set_register_stack_alias(state, dereference.group(2), False)
                 return
         state[dereference.group(2)] = UNKNOWN
+        _set_register_stack_alias(state, dereference.group(2), True)
         return
     memory_load = re.fullmatch(
         r"@\((\d+),(r(?:1[0-5]|\d))\),\s*(r(?:1[0-5]|\d))", text
@@ -1388,9 +1540,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         base = state[memory_load.group(2)]
         if mnemonic == "mov.b":
             state[memory_load.group(3)] = Interval("signed", -0x80, 0x7F)
+            _set_register_stack_alias(state, memory_load.group(3), True)
             return
         if mnemonic == "mov.w":
             state[memory_load.group(3)] = Interval("signed", -0x8000, 0x7FFF)
+            _set_register_stack_alias(state, memory_load.group(3), True)
             return
         atoms = base.values if isinstance(base, ConstSet) and base.kind == "symbol" else ()
         if len(atoms) == 1:
@@ -1399,8 +1553,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 offset = int(memory_load.group(1))
                 derived = SymbolAtom(f"{atom.name}+{offset}", atom.address + offset)
                 state[memory_load.group(3)] = ConstSet("symbol", frozenset({derived}))
+                _set_register_stack_alias(state, memory_load.group(3), False)
                 return
         state[memory_load.group(3)] = UNKNOWN
+        _set_register_stack_alias(state, memory_load.group(3), True)
         return
     indexed_load = re.fullmatch(
         r"@\((r(?:1[0-5]|\d)),(r(?:1[0-5]|\d))\),\s*(r(?:1[0-5]|\d))", text
@@ -1435,6 +1591,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     loaded.append(value)
                 if loaded:
                     state[indexed_load.group(3)] = ConstSet("signed", frozenset(loaded))
+                    _set_register_stack_alias(state, indexed_load.group(3), False)
                     return
             atoms = bases.values if isinstance(bases, ConstSet) and bases.kind == "symbol" else ()
             if len(atoms) == 1:
@@ -1442,25 +1599,31 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                 if isinstance(atom, SymbolAtom):
                     if mnemonic == "mov.b":
                         state[indexed_load.group(3)] = Interval("signed", -0x80, 0x7F)
+                        _set_register_stack_alias(state, indexed_load.group(3), True)
                     elif mnemonic == "mov.w":
                         state[indexed_load.group(3)] = Interval(
                             "signed", -0x8000, 0x7FFF
                         )
+                        _set_register_stack_alias(state, indexed_load.group(3), True)
                     else:
                         derived = SymbolAtom(f"{atom.name}[]", atom.address)
                         state[indexed_load.group(3)] = ConstSet(
                             "symbol", frozenset({derived})
                         )
+                        _set_register_stack_alias(state, indexed_load.group(3), False)
                     return
         state[indexed_load.group(3)] = UNKNOWN
+        _set_register_stack_alias(state, indexed_load.group(3), True)
         return
     immediate = re.fullmatch(r"#(-?(?:0x[0-9a-fA-F]+|\d+)),\s*(r(?:1[0-5]|\d))", text)
     if mnemonic == "mov" and immediate:
         state[immediate.group(2)] = ConstSet("signed", frozenset({int(immediate.group(1), 0)}))
+        _set_register_stack_alias(state, immediate.group(2), False)
         return
     if mnemonic == "and" and immediate:
         mask = int(immediate.group(1), 0)
         state[immediate.group(2)] = Interval("unsigned", 0, mask)
+        _set_register_stack_alias(state, immediate.group(2), False)
         return
     if mnemonic == "add" and immediate:
         delta = int(immediate.group(1), 0)
@@ -1490,6 +1653,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         state[f"{move.group(2)}_stack_origin"] = state[
             f"{move.group(1)}_stack_origin"
         ]
+        state[f"{move.group(2)}_stack_alias"] = state[
+            f"{move.group(1)}_stack_alias"
+        ]
         if move.group(2) == "r15" and not isinstance(state["r15"], StackPtr):
             _invalidate_stack(state)
         return
@@ -1498,6 +1664,21 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
     )
     if mnemonic == "add" and binary:
         source, target = state[binary.group(1)], state[binary.group(2)]
+        has_symbol_base = any(
+            isinstance(value, ConstSet) and value.kind == "symbol"
+            for value in (source, target)
+        )
+        has_stack_operand = any(
+            isinstance(value, (StackPtr, MaybeStackPtr))
+            for value in (source, target)
+        )
+        result_may_alias_stack = (
+            has_stack_operand
+            or not has_symbol_base and (
+                _register_may_alias_stack(state, binary.group(1))
+                or _register_may_alias_stack(state, binary.group(2))
+            )
+        )
         source_integers = (
             source.values if isinstance(source, ConstSet)
             and source.kind in {"signed", "unsigned"}
@@ -1552,6 +1733,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                     doubled.add(result)
                 values = frozenset(doubled)
                 state[binary.group(2)] = ConstSet(source.kind, values)
+                _set_register_stack_alias(
+                    state, binary.group(2), result_may_alias_stack
+                )
                 return
             minimum, maximum = ((-0x80000000, 0x7FFFFFFF)
                                 if source.kind == "signed" else (0, 0xFFFFFFFF))
@@ -1563,24 +1747,57 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             )
         else:
             state[binary.group(2)] = UNKNOWN
+        _set_register_stack_alias(
+            state, binary.group(2), result_may_alias_stack
+        )
         return
     if mnemonic == "and" and binary:
         source, target = state[binary.group(1)], state[binary.group(2)]
+        result_may_alias_stack = (
+            _register_may_alias_stack(state, binary.group(1))
+            or _register_may_alias_stack(state, binary.group(2))
+        )
         if isinstance(source, ConstSet) and len(source.values) == 1:
             mask = next(iter(source.values))
             if isinstance(mask, int) and mask >= 0:
                 state[binary.group(2)] = Interval("unsigned", 0, mask)
+                _set_register_stack_alias(
+                    state, binary.group(2), result_may_alias_stack
+                )
                 return
         state[binary.group(2)] = UNKNOWN
+        _set_register_stack_alias(
+            state, binary.group(2), result_may_alias_stack
+        )
         return
-    if mnemonic == "extu.b" and binary:
+    if mnemonic in {"extu.b", "extu.w", "exts.b", "exts.w"} and binary:
         source = state[binary.group(1)]
         if isinstance(source, ConstSet) and all(isinstance(x, int) for x in source.values):
+            bits = 8 if mnemonic.endswith(".b") else 16
+            mask = (1 << bits) - 1
+            sign = 1 << (bits - 1)
+            values = []
+            for item in source.values:
+                value = int(item) & mask
+                if mnemonic.startswith("exts") and value & sign:
+                    value -= 1 << bits
+                values.append(value)
             state[binary.group(2)] = ConstSet(
-                "unsigned", frozenset(int(x) & 0xFF for x in source.values)
+                "unsigned" if mnemonic.startswith("extu") else "signed",
+                frozenset(values),
             )
         else:
-            state[binary.group(2)] = Interval("unsigned", 0, 0xFF)
+            if mnemonic == "extu.b":
+                state[binary.group(2)] = Interval("unsigned", 0, 0xFF)
+            elif mnemonic == "extu.w":
+                state[binary.group(2)] = Interval("unsigned", 0, 0xFFFF)
+            elif mnemonic == "exts.b":
+                state[binary.group(2)] = Interval("signed", -0x80, 0x7F)
+            else:
+                state[binary.group(2)] = Interval("signed", -0x8000, 0x7FFF)
+        state[f"{binary.group(2)}_stack_alias"] = state[
+            f"{binary.group(1)}_stack_alias"
+        ]
         return
     if mnemonic in {"shll", "shll2", "shll8", "shll16"} and single_destination:
         value = state[single_destination.group(1)]
@@ -1613,9 +1830,11 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         state[destination.group(1)] = (
             ConstSet("unsigned", frozenset({address})) if address is not None else UNKNOWN
         )
+        _set_register_stack_alias(state, destination.group(1), False)
         return
     if destination:
         state[destination.group(1)] = UNKNOWN
+        _set_register_stack_alias(state, destination.group(1), True)
         known_destination_effects = {
             "add", "addc", "addv", "and", "exts.b", "exts.w", "extu.b", "extu.w",
             "lds", "mov", "mov.b", "mov.l", "mov.w", "mova", "movt", "neg", "negc",
@@ -1630,6 +1849,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         return
     if single_destination and mnemonic not in {"cmp/pl", "cmp/pz"}:
         state[single_destination.group(1)] = UNKNOWN
+        _set_register_stack_alias(state, single_destination.group(1), True)
         known_single_register_effects = {
             "dt", "movt", "rotcl", "rotcr", "rotl", "rotr", "shal", "shar",
             "shll", "shll2", "shll8", "shll16", "shlr", "shlr2", "shlr8",
@@ -1646,7 +1866,9 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if base_match:
             base_register = base_match.group(1) or base_match.group(2)
             base = state.get(base_register, UNKNOWN)
-            if base is UNKNOWN:
+            if base is UNKNOWN and _register_may_alias_stack(
+                state, base_register
+            ):
                 _invalidate_stack(state)
             return
         _invalidate_stack(state)
@@ -1932,7 +2154,9 @@ def _analyze_code_only_pass(
             while pending_seeds:
                 seed = pending_seeds.popleft()
                 queue.append((
-                    seed, None, seed[0], seed[0], _unknown_state(), False,
+                    seed, None, seed[0], seed[0], _unknown_state(
+                        entry_arguments_nonstack=seed[1] == "entry"
+                    ), False,
                     (seed,), False, None,
                 ))
         instruction_count = sum(
@@ -1956,7 +2180,9 @@ def _analyze_code_only_pass(
                             profile["covered_decoded_seeds_skipped"] += 1
                         continue
                     queue.append((
-                        seed, None, seed[0], seed[0], _unknown_state(), False,
+                        seed, None, seed[0], seed[0], _unknown_state(
+                            entry_arguments_nonstack=seed[1] == "entry"
+                        ), False,
                         (seed,), False, None,
                     ))
                 if not queue:
@@ -2319,6 +2545,7 @@ def _analyze_code_only_pass(
                     post[abi_register] = UNKNOWN
                     if abi_register.startswith("r"):
                         post[f"{abi_register}_stack_origin"] = StackOrigin()
+                        post[f"{abi_register}_stack_alias"] = MAY_ALIAS_STACK
                 if profile is not None:
                     profile["abi_continuations_scheduled"] += 1
                 schedule(continuation, post)
@@ -2629,6 +2856,9 @@ def analyze_code_only(
         name: set(addresses)
         for name, addresses in (decoded_lines or {}).items()
     }
+    known_dead_nodes = sourceboot_null_task_submit_dead_nodes(
+        instructions, owner_list, known_null_addresses
+    )
     learned_edges: set[tuple[str, int, int]] = set()
     analysis_started = monotonic()
 
@@ -2730,13 +2960,18 @@ def analyze_code_only(
         )
         acceptance_lines: dict[str, set[int]] = {}
         component_metrics: Counter[str] = Counter()
+        live_discovered_nodes = discovered_nodes - known_dead_nodes
         for owner in owner_list:
             if selected_names is not None and owner.name not in selected_names:
                 continue
+            dead_owner_addresses = {
+                address for name, address in known_dead_nodes
+                if name == owner.name
+            }
             acceptance_lines[owner.name] = _acceptance_component_seeds(
                 owner,
-                source_lines.get(owner.name, set()),
-                discovered_nodes,
+                source_lines.get(owner.name, set()) - dead_owner_addresses,
+                live_discovered_nodes,
                 frozen_edges,
                 entry_evaluated_nodes,
                 component_metrics,

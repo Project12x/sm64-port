@@ -455,38 +455,48 @@ class NativeMathCensusTests(unittest.TestCase):
         disassembly = """
 06001000 <_main>:
  6001000: d1 3f mov.l 6001100 <_sm64_saturn_source_runtime_configure>,r1 ! 06001100 <_sm64_saturn_source_runtime_configure>
- 6001002: 41 0b jsr @r1
- 6001004: e4 00 mov #0,r4
- 6001006: 00 0b rts
- 6001008: 00 09 nop
+ 6001002: e5 00 mov #0,r5
+ 6001004: 41 0b jsr @r1
+ 6001006: e4 00 mov #0,r4
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
 06001100 <_sm64_saturn_source_runtime_configure>:
  6001100: d1 7f mov.l 6001300 <_sTaskSubmit>,r1 ! 06001300 <_sTaskSubmit>
  6001102: 21 42 mov.l r4,@r1
- 6001104: 00 0b rts
- 6001106: 00 09 nop
+ 6001104: d1 7f mov.l 6001304 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
+ 6001106: 00 0b rts
+ 6001108: 21 52 mov.l r5,@r1
 06001200 <_exec_display_list>:
- 6001200: d2 3f mov.l 6001300 <_sTaskSubmit>,r2 ! 06001300 <_sTaskSubmit>
- 6001202: 62 22 mov.l @r2,r2
- 6001204: 22 28 tst r2,r2
- 6001206: 89 04 bt 6001212 <_exec_display_list+0x12>
- 6001208: d1 03 mov.l 6001218 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
- 600120a: 42 2b jmp @r2
- 600120c: 65 12 mov.l @r1,r5
- 6001212: 52 12 mov.l @(8,r1),r2
- 6001214: 72 01 add #1,r2
- 6001216: 00 0b rts
- 6001218: 11 22 mov.l r2,@(8,r1)
+ 6001200: 24 48 tst r4,r4
+ 6001202: d1 0b mov.l 6001230 <_sState>,r1 ! 06001308 <_sState>
+ 6001204: 8b 03 bf 600120e <_exec_display_list+0xe>
+ 6001206: 52 12 mov.l @(8,r1),r2
+ 6001208: 72 01 add #1,r2
+ 600120a: 00 0b rts
+ 600120c: 11 22 mov.l r2,@(8,r1)
+ 600120e: 52 11 mov.l @(4,r1),r2
+ 6001210: 72 01 add #1,r2
+ 6001212: 11 21 mov.l r2,@(4,r1)
+ 6001214: d2 06 mov.l 6001234 <_sTaskSubmit>,r2 ! 06001300 <_sTaskSubmit>
+ 6001216: 62 22 mov.l @r2,r2
+ 6001218: 22 28 tst r2,r2
+ 600121a: 89 f4 bt 6001206 <_exec_display_list+0x6>
+ 600121c: d1 06 mov.l 6001238 <_sTaskSubmitContext>,r1 ! 06001304 <_sTaskSubmitContext>
+ 600121e: 42 2b jmp @r2
+ 6001220: 65 12 mov.l @r1,r5
 """
         instructions = parse_instructions(disassembly)
         owners = (
             self.indirect_owner("_main", 0x6001000),
             self.indirect_owner("_sm64_saturn_source_runtime_configure", 0x6001100),
-            self.indirect_owner("_exec_display_list", 0x6001200),
+            FunctionOwner("_exec_display_list", 0x6001200, 0x6001222, 1),
         )
         null_slots = prove_sourceboot_null_task_submit(instructions, owners)
         self.assertEqual(null_slots, frozenset({0x6001300}))
         result = analyze_code_only(
-            instructions, owners, selected_names={"_exec_display_list"},
+            instructions, owners,
+            decoded_lines={"_exec_display_list": {0x600121C}},
+            selected_names={"_exec_display_list"},
             known_null_addresses=null_slots,
         )
         self.assertEqual(result.unresolved_transfers, [])
@@ -890,6 +900,30 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             for x in result.unresolved_transfers
         ))
 
+    def test_disconnected_seed_does_not_assume_entry_argument_alias_provenance(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+ 6001008: d8 05 mov.l 6001020 <_child>,r8 ! 06001020 <_child>
+ 600100a: 2f 82 mov.l r8,@r15
+ 600100c: 24 02 mov.l r0,@r4
+ 600100e: 61 f2 mov.l @r15,r1
+ 6001010: 41 0b jsr @r1
+ 6001012: 00 09 nop
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        result = self.analyze(dis, "x.c 9 0x06001008\n")
+        self.assertFalse(any(call.address == 0x6001010 for call in result.calls))
+        self.assertTrue(any(
+            item.address == 0x6001010
+            for item in result.unresolved_transfers
+        ))
+
     def test_join_domain_and_typed_interval_rules(self) -> None:
         self.assertEqual(join_value(ConstSet("unsigned", frozenset({1})),
                                     ConstSet("unsigned", frozenset({2}))),
@@ -1249,6 +1283,222 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
         self.assertEqual(result.unresolved_transfers, [])
 
+    def test_fresh_wave1_non_escaped_frame_spills_recover_seventeen_direct_calls(self) -> None:
+        """Catch loss of exact literal spills across non-frame output stores."""
+        dis = """
+06001000 <_create_skybox_facing_camera>:
+ 6001000: 7f f8 add #-8,r15
+ 6001002: d1 7f mov.l 6001200 <_create_skybox_facing_camera+0x200>,r1 ! 06003000 <_atan2s>
+ 6001004: 1f 11 mov.l r1,@(4,r15)
+ 6001006: d8 7f mov.l 6001204 <_create_skybox_facing_camera+0x204>,r8 ! 06003800 <_sSkyBoxInfo>
+ 6001008: 62 43 mov r4,r2
+ 600100a: 38 2c add r2,r8
+ 600100c: a0 38 bra 6001080 <_create_skybox_facing_camera+0x80>
+ 600100e: 00 09 nop
+ 6001080: 28 01 mov.w r0,@r8
+ 6001082: 51 f1 mov.l @(4,r15),r1
+ 6001084: 41 0b jsr @r1
+ 6001086: 00 09 nop
+ 6001088: 00 0b rts
+ 600108a: 00 09 nop
+06001200 <_envfx_update_snow_blizzard>:
+ 6001200: 7f f4 add #-12,r15
+ 6001202: d1 7f mov.l 6001400 <_envfx_update_snow_blizzard+0x200>,r1 ! 06003020 <___mulsf3>
+ 6001204: 2f 12 mov.l r1,@r15
+ 6001206: d2 7f mov.l 6001404 <_envfx_update_snow_blizzard+0x204>,r2 ! 06003040 <___addsf3>
+ 6001208: 1f 21 mov.l r2,@(4,r15)
+ 600120a: d3 7f mov.l 6001408 <_envfx_update_snow_blizzard+0x208>,r3 ! 06003060 <___floatsisf>
+ 600120c: 1f 32 mov.l r3,@(8,r15)
+ 600120e: 68 43 mov r4,r8
+ 6001210: a0 8e bra 6001330 <_envfx_update_snow_blizzard+0x130>
+ 6001212: 00 09 nop
+ 6001330: 28 02 mov.l r0,@r8
+ 6001332: a0 06 bra 6001342 <_envfx_update_snow_blizzard+0x142>
+ 6001334: 00 09 nop
+ 6001342: 61 f2 mov.l @r15,r1
+ 6001344: 41 0b jsr @r1
+ 6001346: 00 09 nop
+ 6001348: 00 09 nop
+ 600134a: 51 f1 mov.l @(4,r15),r1
+ 600134c: 00 09 nop
+ 600134e: 41 0b jsr @r1
+ 6001350: 00 09 nop
+ 6001352: a0 10 bra 6001376 <_envfx_update_snow_blizzard+0x176>
+ 6001354: 00 09 nop
+ 6001376: 61 f2 mov.l @r15,r1
+ 6001378: 41 0b jsr @r1
+ 600137a: 00 09 nop
+ 600137c: 00 09 nop
+ 600137e: 51 f1 mov.l @(4,r15),r1
+ 6001380: 41 0b jsr @r1
+ 6001382: 00 09 nop
+ 6001384: a0 28 bra 60013d8 <_envfx_update_snow_blizzard+0x1d8>
+ 6001386: 00 09 nop
+ 60013d8: 51 f2 mov.l @(8,r15),r1
+ 60013da: 41 0b jsr @r1
+ 60013dc: 00 09 nop
+ 60013de: 00 0b rts
+ 60013e0: 00 09 nop
+06001400 <_envfx_update_snow_normal>:
+ 6001400: 7f f8 add #-8,r15
+ 6001402: d1 7f mov.l 6001600 <_envfx_update_snow_normal+0x200>,r1 ! 06003020 <___mulsf3>
+ 6001404: 2f 12 mov.l r1,@r15
+ 6001406: d2 7f mov.l 6001604 <_envfx_update_snow_normal+0x204>,r2 ! 06003060 <___floatsisf>
+ 6001408: 1f 21 mov.l r2,@(4,r15)
+ 600140a: 68 43 mov r4,r8
+ 600140c: a0 90 bra 6001530 <_envfx_update_snow_normal+0x130>
+ 600140e: 00 09 nop
+ 6001530: 28 02 mov.l r0,@r8
+ 6001532: a0 0a bra 600154a <_envfx_update_snow_normal+0x14a>
+ 6001534: 00 09 nop
+ 600154a: 61 f2 mov.l @r15,r1
+ 600154c: 41 0b jsr @r1
+ 600154e: 00 09 nop
+ 6001550: a0 08 bra 6001564 <_envfx_update_snow_normal+0x164>
+ 6001552: 00 09 nop
+ 6001564: 61 f2 mov.l @r15,r1
+ 6001566: 41 0b jsr @r1
+ 6001568: 00 09 nop
+ 600156a: a0 30 bra 60015ce <_envfx_update_snow_normal+0x1ce>
+ 600156c: 00 09 nop
+ 60015ce: 51 f1 mov.l @(4,r15),r1
+ 60015d0: 41 0b jsr @r1
+ 60015d2: 00 09 nop
+ 60015d4: 00 0b rts
+ 60015d6: 00 09 nop
+06001600 <_envfx_update_snow_water>:
+ 6001600: 7f f4 add #-12,r15
+ 6001602: d1 7f mov.l 6001800 <_envfx_update_snow_water+0x200>,r1 ! 06003060 <___floatsisf>
+ 6001604: 2f 12 mov.l r1,@r15
+ 6001606: d2 7f mov.l 6001804 <_envfx_update_snow_water+0x204>,r2 ! 06003080 <___subsf3>
+ 6001608: 1f 21 mov.l r2,@(4,r15)
+ 600160a: d3 7f mov.l 6001808 <_envfx_update_snow_water+0x208>,r3 ! 060030c0 <_random_float>
+ 600160c: 1f 32 mov.l r3,@(8,r15)
+ 600160e: 68 43 mov r4,r8
+ 6001610: a0 41 bra 6001696 <_envfx_update_snow_water+0x96>
+ 6001612: 00 09 nop
+ 6001696: 28 02 mov.l r0,@r8
+ 6001698: 00 09 nop
+ 600169a: 61 f2 mov.l @r15,r1
+ 600169c: 41 0b jsr @r1
+ 600169e: 00 09 nop
+ 60016a0: 00 09 nop
+ 60016a2: 51 f1 mov.l @(4,r15),r1
+ 60016a4: 41 0b jsr @r1
+ 60016a6: 00 09 nop
+ 60016a8: a0 08 bra 60016bc <_envfx_update_snow_water+0xbc>
+ 60016aa: 00 09 nop
+ 60016bc: 51 f2 mov.l @(8,r15),r1
+ 60016be: 41 0b jsr @r1
+ 60016c0: 00 09 nop
+ 60016c2: 00 09 nop
+ 60016c4: 61 f2 mov.l @r15,r1
+ 60016c6: 41 0b jsr @r1
+ 60016c8: 00 09 nop
+ 60016ca: 00 09 nop
+ 60016cc: 00 09 nop
+ 60016ce: 51 f1 mov.l @(4,r15),r1
+ 60016d0: 41 0b jsr @r1
+ 60016d2: 00 09 nop
+ 60016d4: 00 0b rts
+ 60016d6: 00 09 nop
+06001800 <_orbit_from_positions>:
+ 6001800: 7f fc add #-4,r15
+ 6001802: d1 7f mov.l 6001a00 <_orbit_from_positions+0x200>,r1 ! 060030a0 <_sqrtf>
+ 6001804: 2f 12 mov.l r1,@r15
+ 6001806: 6e 63 mov r6,r14
+ 6001808: a0 38 bra 600187c <_orbit_from_positions+0x7c>
+ 600180a: 00 09 nop
+ 600187c: 2e 01 mov.w r0,@r14
+ 600187e: 61 f2 mov.l @r15,r1
+ 6001880: 41 0b jsr @r1
+ 6001882: 00 09 nop
+ 6001884: 00 0b rts
+ 6001886: 00 09 nop
+06001900 <_pos_from_orbit>:
+ 6001900: 7f fc add #-4,r15
+ 6001902: d1 7f mov.l 6001b00 <_pos_from_orbit+0x200>,r1 ! 06003040 <___addsf3>
+ 6001904: 2f 12 mov.l r1,@r15
+ 6001906: 69 53 mov r5,r9
+ 6001908: a0 38 bra 600197c <_pos_from_orbit+0x7c>
+ 600190a: 00 09 nop
+ 600197c: 29 01 mov.w r0,@r9
+ 600197e: 61 f2 mov.l @r15,r1
+ 6001980: 41 0b jsr @r1
+ 6001982: 00 09 nop
+ 6001984: a0 0c bra 60019a0 <_pos_from_orbit+0xa0>
+ 6001986: 00 09 nop
+ 60019a0: 61 f2 mov.l @r15,r1
+ 60019a2: 41 0b jsr @r1
+ 60019a4: 00 09 nop
+ 60019a6: 00 0b rts
+ 60019a8: 00 09 nop
+06003000 <_atan2s>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06003020 <___mulsf3>:
+ 6003020: 00 0b rts
+ 6003022: 00 09 nop
+06003040 <___addsf3>:
+ 6003040: 00 0b rts
+ 6003042: 00 09 nop
+06003060 <___floatsisf>:
+ 6003060: 00 0b rts
+ 6003062: 00 09 nop
+06003080 <___subsf3>:
+ 6003080: 00 0b rts
+ 6003082: 00 09 nop
+060030a0 <_sqrtf>:
+ 60030a0: 00 0b rts
+ 60030a2: 00 09 nop
+060030c0 <_random_float>:
+ 60030c0: 00 0b rts
+ 60030c2: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 256 FUNC GLOBAL DEFAULT 1 _create_skybox_facing_camera
+   2: 06001200 512 FUNC GLOBAL DEFAULT 1 _envfx_update_snow_blizzard
+   3: 06001400 512 FUNC GLOBAL DEFAULT 1 _envfx_update_snow_normal
+   4: 06001600 512 FUNC GLOBAL DEFAULT 1 _envfx_update_snow_water
+   5: 06001800 256 FUNC GLOBAL DEFAULT 1 _orbit_from_positions
+   6: 06001900 176 FUNC GLOBAL DEFAULT 1 _pos_from_orbit
+   7: 06003000 4 FUNC GLOBAL DEFAULT 1 _atan2s
+   8: 06003020 4 FUNC GLOBAL DEFAULT 1 ___mulsf3
+   9: 06003040 4 FUNC GLOBAL DEFAULT 1 ___addsf3
+  10: 06003060 4 FUNC GLOBAL DEFAULT 1 ___floatsisf
+  11: 06003080 4 FUNC GLOBAL DEFAULT 1 ___subsf3
+  12: 060030a0 4 FUNC GLOBAL DEFAULT 1 _sqrtf
+  13: 060030c0 4 FUNC GLOBAL DEFAULT 1 _random_float
+""")
+        expected = {
+            ("_create_skybox_facing_camera", 132, "_atan2s"),
+            ("_envfx_update_snow_blizzard", 324, "___mulsf3"),
+            ("_envfx_update_snow_blizzard", 334, "___addsf3"),
+            ("_envfx_update_snow_blizzard", 376, "___mulsf3"),
+            ("_envfx_update_snow_blizzard", 384, "___addsf3"),
+            ("_envfx_update_snow_blizzard", 474, "___floatsisf"),
+            ("_envfx_update_snow_normal", 332, "___mulsf3"),
+            ("_envfx_update_snow_normal", 358, "___mulsf3"),
+            ("_envfx_update_snow_normal", 464, "___floatsisf"),
+            ("_envfx_update_snow_water", 156, "___floatsisf"),
+            ("_envfx_update_snow_water", 164, "___subsf3"),
+            ("_envfx_update_snow_water", 190, "_random_float"),
+            ("_envfx_update_snow_water", 198, "___floatsisf"),
+            ("_envfx_update_snow_water", 208, "___subsf3"),
+            ("_orbit_from_positions", 128, "_sqrtf"),
+            ("_pos_from_orbit", 128, "___addsf3"),
+            ("_pos_from_orbit", 162, "___addsf3"),
+        }
+        self.assertEqual(
+            {
+                (fact.caller, fact.caller_offset, fact.callee)
+                for fact in result.direct_calls
+                if (fact.caller, fact.caller_offset, fact.callee) in expected
+            },
+            expected,
+        )
+        self.assertEqual(result.unresolved_transfers, [])
+
     def test_geo_process_held_object_recovers_spilled_vec3f_helper(self) -> None:
         dis = """
 06001000 <_geo_process_held_object>:
@@ -1488,6 +1738,53 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertEqual(
             [(item.address, item.mnemonic) for item in result.unresolved_transfers],
             [(0x6001004, "jsr")],
+        )
+
+    def test_fresh_wave1_data_driven_dispatchers_stay_unresolved(self) -> None:
+        dis = """
+06001000 <_geo_call_global_function_nodes_helper>:
+ 6001000: 51 41 mov.l @(4,r4),r1
+ 6001002: 41 0b jsr @r1
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06001100 <_level_cmd_call>:
+ 6001100: 51 41 mov.l @(4,r4),r1
+ 6001102: 41 0b jsr @r1
+ 6001104: 00 09 nop
+ 6001106: 00 0b rts
+ 6001108: 00 09 nop
+06001200 <_level_cmd_call_loop>:
+ 6001200: 51 41 mov.l @(4,r4),r1
+ 6001202: 41 0b jsr @r1
+ 6001204: 00 09 nop
+ 6001206: 00 0b rts
+ 6001208: 00 09 nop
+06001300 <_process_geo_layout>:
+ 6001300: d1 07 mov.l 6001320 <_GeoLayoutJumpTable>,r1 ! 06003800 <_GeoLayoutJumpTable>
+ 6001302: 01 1e mov.l @(r0,r1),r1
+ 6001304: 41 0b jsr @r1
+ 6001306: 00 09 nop
+ 6001308: 00 0b rts
+ 600130a: 00 09 nop
+"""
+        result = self.analyze_named_fixture(dis, """
+   1: 06001000 10 FUNC GLOBAL DEFAULT 1 _geo_call_global_function_nodes_helper
+   2: 06001100 10 FUNC GLOBAL DEFAULT 1 _level_cmd_call
+   3: 06001200 10 FUNC GLOBAL DEFAULT 1 _level_cmd_call_loop
+   4: 06001300 12 FUNC GLOBAL DEFAULT 1 _process_geo_layout
+""")
+        self.assertEqual(result.calls, [])
+        self.assertEqual(result.direct_calls, [])
+        self.assertEqual(
+            [(item.caller, item.address, item.mnemonic)
+             for item in result.unresolved_transfers],
+            [
+                ("_geo_call_global_function_nodes_helper", 0x6001002, "jsr"),
+                ("_level_cmd_call", 0x6001102, "jsr"),
+                ("_level_cmd_call_loop", 0x6001202, "jsr"),
+                ("_process_geo_layout", 0x6001304, "jsr"),
+            ],
         )
 
     def test_stack_push_pop_preserves_known_symbol_target(self) -> None:
