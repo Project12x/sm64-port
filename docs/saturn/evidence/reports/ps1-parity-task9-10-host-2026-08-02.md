@@ -33,6 +33,13 @@ LWRAM staging capacity. The two merge-reference banks remain two 8-byte fields
 (record pointer plus sort key); command ownership is recovered from the record
 range rather than adding a command pointer to every reference.
 
+Outside those lane banks, the two target arena headers grow by 8 bytes total,
+the renderer adds one 4-byte publication sequence, and the append-only profile
+adds four 4-byte counters. Including those known static objects, the net target
+RAM reduction is therefore **41,588 bytes**. The 41,616-byte number is the
+exact LWRAM lane-bank reduction; the 41,588-byte number is the whole known
+static-data delta for this change.
+
 For every published result, the descriptor no longer transports four
 projected vertices (32 bytes), four Gouraud colors (8 bytes), material ID (2
 bytes), texture slot (2 bytes), or copied flags (2 bytes). It adds a 2-byte
