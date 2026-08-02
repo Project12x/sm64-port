@@ -542,6 +542,13 @@ $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER)
 # so state the dependency here.
 $(SH_BUILD_PATH)/$(SH_PROGRAM).elf: $(SOFTFP_LIB)
 
+.PHONY: terrain-command-template-target-compile
+terrain-command-template-target-compile:
+	$(SH_CC) $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
+	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
+	  -fsyntax-only \
+	  $(ROOT)/src/port/saturn/gfx/saturn_terrain_command_template.c
+
 $(SOURCEBOOT_CART_IMAGE): $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@printf -- "$(V_BEGIN_YELLOW)$(@F)$(V_END)\n"
 	$(ECHO)$(SOURCEBOOT_RAW_OBJCOPY) -O binary --only-section=.cart_rodata $< $@

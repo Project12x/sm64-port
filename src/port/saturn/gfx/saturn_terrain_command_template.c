@@ -17,7 +17,7 @@ bool sm64_saturn_terrain_template_build(
     out->flags = primitive->flags;
     out->color = primitive->colors[0];
     out->texture_slot = primitive->texture_slot;
-    out->shade_path = (uint16_t)sm64_saturn_terrain_shade_path(
+    out->shade_path = sm64_saturn_terrain_shade_path(
         primitive->flags, primitive->colors);
     return true;
 }

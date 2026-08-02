@@ -18,6 +18,7 @@
 #include "../gfx/saturn_projected_workarea.h"
 
 #if defined(__sh__)
+#include <cpu/cache.h>
 #include <yaul/scu/map.h>
 #endif
 
