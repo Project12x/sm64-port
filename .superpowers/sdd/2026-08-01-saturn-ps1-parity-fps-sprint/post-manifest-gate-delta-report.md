@@ -302,10 +302,16 @@ non-call state is omitted. The exact `_play_mode_change_level` set is:
 ### Validation and limitations
 
 The tests compare the complete source-derived mapping with a hand-checked
-literal mapping and with both oracle edge sets. They exercise omission and
-underived-addition mutations against the derived map, the eight exact linked
-offsets, mismatched dispatcher ownership, one static near-match per family,
-and grouped contribution for `_geo_camera_main`, which is shared by
+literal mapping and with both oracle edge sets through one shared validator.
+The omission mutation removes the real `_init_graph_node_generated ->
+_geo_envfx_main` line from both the `STATIC_MANIFEST_EDGE` and `INDIRECT_EDGE`
+sections of the checked oracle text, reparses it, and requires that same full
+validator to reject it. Underived-addition mutations insert
+`_play_mode_change_level -> _geo_camera_main` into the static section only,
+the indirect section only, and both sections; all three reparsed variants must
+be rejected. Tests also cover the eight exact linked offsets, mismatched
+dispatcher ownership, one static near-match per family, and grouped
+contribution for `_geo_camera_main`, which is shared by
 `_geo_call_global_function_nodes_helper` and `_init_graph_node_camera`.
 
 The accepted Phase-A limitation remains dispatcher granularity: each dynamic
@@ -315,11 +321,13 @@ static route proof exists. Parser-classified static transfers remain unlisted.
 
 The focused RED first failed because all eight derived families were absent
 from the oracle and because the BOB camera-table derivation did not yet exist.
-After implementation, the focused set passed six tests. The complete host
-verifier suite passed:
+After implementation, the focused set passed six tests. A review-fix RED then
+failed because the reusable complete source/oracle validator was absent; after
+the checked-oracle test and real mutation test shared that validator, the two
+focused tests passed. The complete host verifier suite passed:
 
 ```text
-Ran 176 tests in 0.920s
+Ran 176 tests in 1.969s
 OK
 ```
 

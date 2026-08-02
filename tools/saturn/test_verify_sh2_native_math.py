@@ -412,47 +412,60 @@ class NativeMathCensusTests(unittest.TestCase):
 
     def test_checked_in_sim_oracle_matches_all_source_derived_dispatcher_sets(self) -> None:
         repo_root = Path(__file__).parents[2]
-        derived = _derive_bob_dispatcher_targets(repo_root)
-        self.assertEqual(derived, BOB_DISPATCHER_TARGETS)
-
-        oracle = parse_route_oracle(
-            Path(__file__).with_name(
-                "sh2_native_math_sim_route_oracle_v1.txt"
-            ).read_text(encoding="utf-8")
-        )
-        expected_edges = frozenset(
-            (dispatcher, callback)
-            for dispatcher, callbacks in BOB_DISPATCHER_TARGETS.items()
-            for callback in callbacks
-        )
-        manifest_edges = frozenset(
-            edge for edge in oracle.static_manifest_edges
-            if edge[0] in BOB_DISPATCHER_TARGETS
-        )
-        declared_edges = frozenset(
-            edge for edge in oracle.indirect_edges
-            if edge[0] in BOB_DISPATCHER_TARGETS
-        )
-        self.assertEqual(manifest_edges, expected_edges)
-        self.assertEqual(declared_edges, expected_edges)
+        oracle_text = Path(__file__).with_name(
+            "sh2_native_math_sim_route_oracle_v1.txt"
+        ).read_text(encoding="utf-8")
+        _assert_bob_source_oracle_matches(self, repo_root, oracle_text)
 
     def test_source_manifest_comparison_rejects_omitted_and_underived_callbacks(self) -> None:
-        derived = _derive_bob_dispatcher_targets(Path(__file__).parents[2])
-        expected_edges = frozenset(
-            (dispatcher, callback)
-            for dispatcher, callbacks in derived.items()
-            for callback in callbacks
+        repo_root = Path(__file__).parents[2]
+        oracle_text = Path(__file__).with_name(
+            "sh2_native_math_sim_route_oracle_v1.txt"
+        ).read_text(encoding="utf-8")
+        omitted = oracle_text
+        for line in (
+            "STATIC_MANIFEST_EDGE _init_graph_node_generated _geo_envfx_main\n",
+            "INDIRECT_EDGE _init_graph_node_generated _geo_envfx_main\n",
+        ):
+            self.assertEqual(omitted.count(line), 1)
+            omitted = omitted.replace(line, "", 1)
+        with self.assertRaises(AssertionError):
+            _assert_bob_source_oracle_matches(self, repo_root, omitted)
+
+        static_anchor = (
+            "STATIC_MANIFEST_EDGE _sm64_saturn_source_runtime_read_controllers "
+            "_controller_saturn_read\n"
         )
-        omitted = expected_edges - {
-            ("_init_graph_node_generated", "_geo_envfx_main")
-        }
-        underived = expected_edges | {
-            ("_play_mode_change_level", "_geo_camera_main")
-        }
-        with self.assertRaises(AssertionError):
-            self.assertEqual(omitted, expected_edges)
-        with self.assertRaises(AssertionError):
-            self.assertEqual(underived, expected_edges)
+        indirect_anchor = (
+            "INDIRECT_EDGE _sm64_saturn_source_runtime_read_controllers "
+            "_controller_saturn_read\n"
+        )
+        underived_static = (
+            "STATIC_MANIFEST_EDGE _play_mode_change_level _geo_camera_main\n"
+        )
+        underived_indirect = (
+            "INDIRECT_EDGE _play_mode_change_level _geo_camera_main\n"
+        )
+        mutations = (
+            oracle_text.replace(
+                static_anchor, underived_static + static_anchor, 1
+            ),
+            oracle_text.replace(
+                indirect_anchor, underived_indirect + indirect_anchor, 1
+            ),
+            oracle_text.replace(
+                static_anchor, underived_static + static_anchor, 1
+            ).replace(
+                indirect_anchor, underived_indirect + indirect_anchor, 1
+            ),
+        )
+        for mutated in mutations:
+            with self.subTest(
+                static=underived_static in mutated,
+                indirect=underived_indirect in mutated,
+            ):
+                with self.assertRaises(AssertionError):
+                    _assert_bob_source_oracle_matches(self, repo_root, mutated)
 
     def test_pinned_bob_camera_trigger_table_derives_empty_and_stays_undeclared(self) -> None:
         repo_root = Path(__file__).parents[2]
@@ -1355,6 +1368,31 @@ def _derive_bob_dispatcher_targets(repo_root: Path) -> dict[str, frozenset[str]]
         "_play_cutscene": cutscene_targets,
         "_play_mode_change_level": transition_targets,
     }
+
+
+def _assert_bob_source_oracle_matches(
+    test_case: unittest.TestCase, repo_root: Path, oracle_text: str,
+) -> None:
+    """Require the full source-derived dispatcher map in both oracle sections."""
+    derived = _derive_bob_dispatcher_targets(repo_root)
+    test_case.assertEqual(derived, BOB_DISPATCHER_TARGETS)
+
+    oracle = parse_route_oracle(oracle_text)
+    expected_edges = frozenset(
+        (dispatcher, callback)
+        for dispatcher, callbacks in derived.items()
+        for callback in callbacks
+    )
+    manifest_edges = frozenset(
+        edge for edge in oracle.static_manifest_edges
+        if edge[0] in derived
+    )
+    declared_edges = frozenset(
+        edge for edge in oracle.indirect_edges
+        if edge[0] in derived
+    )
+    test_case.assertEqual(manifest_edges, expected_edges)
+    test_case.assertEqual(declared_edges, expected_edges)
 
 
 # Keep the source-derivation machinery at module scope without splitting the
