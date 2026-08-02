@@ -1218,9 +1218,13 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                 (uint16_t)(first_command + fragment), primitive_index,
                 s_primitive_leaf_id[primitive_index],
                 (uint32_t)s_primitive_depth[primitive_index], result_corners,
-                s_primitive_clipped[primitive_index] != 0U
+                (s_primitive_clipped[primitive_index] != 0U
                     ? SM64_SATURN_TERRAIN_CLIP_CROSSES
-                    : SM64_SATURN_TERRAIN_CLIP_FRONT,
+                    : SM64_SATURN_TERRAIN_CLIP_FRONT) |
+                (s_primitive_recovery[primitive_index] != 0U
+                    ? SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL : 0U) |
+                (s_primitive_lod_texture_downgraded[primitive_index] != 0U
+                    ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U),
                 resolved, shape_vertices);
         }
     }
@@ -1418,9 +1422,9 @@ static void demo_emit_terrain_result(
         profile->reject_vdp1_arena_capacity++;
         return;
     }
-    const bool recovery = s_primitive_recovery[result->primitive_id] != 0U;
+    const bool recovery = sm64_saturn_terrain_result_recovery(result);
     const bool texture_suppressed =
-        s_primitive_lod_texture_downgraded[result->primitive_id] != 0U;
+        sm64_saturn_terrain_result_texture_suppressed(result);
     const uint16_t effective_flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE |
         (primitive->textured != 0U && !texture_suppressed && !recovery
             ? SM64_SATURN_TERRAIN_RESULT_TEXTURED

@@ -11,6 +11,9 @@ Terrain classification now writes a 12-byte visible descriptor and a private
 its span with the current nonzero frame sequence only after its descriptor and
 command writes. The master validates both sequences, counts, descriptor shape,
 and command indices before publishing compact sort references.
+Recovery and texture-suppression state are packed into otherwise-unused bits
+of the descriptor's clip byte, so the master never rereads slave-written
+material decisions through a stale cached alias.
 
 For valid immutable templates, classification patches CTRL/PMOD/COLR/SRCA,
 SIZE, and final screen coordinates once. Emission copies that prepared command
@@ -59,6 +62,9 @@ Mutation coverage rejects:
 - a merged count larger than the destination capacity;
 - malformed two-corner descriptors; and
 - clipped-fan reservations that would cross lane headroom.
+
+The dynamic-state fixture also proves recovery and texture-suppression bits
+survive publication independently of the owning CPU's cached working arrays.
 
 Observed TDD sequence:
 

@@ -3790,7 +3790,10 @@ static void test_fused_terrain_publication_matches_split_path(void)
         slave_visible, &slave_commands[0][0], 3U, 0U);
     assert(sm64_saturn_terrain_result_publish(
         &spans.master, 2U, 12U, 300U, 4U,
-        SM64_SATURN_TERRAIN_CLIP_FRONT, NULL, primitive_2));
+        SM64_SATURN_TERRAIN_CLIP_FRONT |
+            SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
+            SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED,
+        NULL, primitive_2));
     assert(sm64_saturn_terrain_result_publish(
         &spans.slave, 3U, 18U, 500U, 3U,
         SM64_SATURN_TERRAIN_CLIP_CROSSES, &resolved,
@@ -3807,7 +3810,7 @@ static void test_fused_terrain_publication_matches_split_path(void)
     assert(refs[1].record->primitive_id == 3U);
     assert(refs[2].record->primitive_id == 2U);
     assert(refs[0].record->bsp_leaf == 17U);
-    assert(refs[1].record->clip_class ==
+    assert(sm64_saturn_terrain_result_clip_class(refs[1].record) ==
            SM64_SATURN_TERRAIN_CLIP_CROSSES);
     assert(sm64_saturn_terrain_result_corner_count(refs[1].record) == 3U);
     assert(memcmp(sm64_saturn_terrain_emit_ref_command(&spans, &refs[0]),
@@ -3821,6 +3824,8 @@ static void test_fused_terrain_publication_matches_split_path(void)
                   SM64_SATURN_VDP1_COMMAND_BYTES) == 0);
     assert(sm64_saturn_terrain_result_template_patched(refs[0].record));
     assert(!sm64_saturn_terrain_result_template_patched(refs[2].record));
+    assert(sm64_saturn_terrain_result_recovery(refs[2].record));
+    assert(sm64_saturn_terrain_result_texture_suppressed(refs[2].record));
 
     const uint16_t saved_command_index = master_visible[0].command_index;
     master_visible[0].command_index = 3U;

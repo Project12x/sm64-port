@@ -211,6 +211,31 @@ static inline bool sm64_saturn_terrain_result_template_patched(
          SM64_SATURN_TERRAIN_RESULT_TEMPLATE_PATCHED) != 0U;
 }
 
+static inline uint8_t sm64_saturn_terrain_result_clip_class(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result == NULL ? 0U :
+        (uint8_t)(result->clip_class &
+            ~(SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
+              SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED));
+}
+
+static inline bool sm64_saturn_terrain_result_recovery(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result != NULL &&
+        (result->clip_class &
+         SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL) != 0U;
+}
+
+static inline bool sm64_saturn_terrain_result_texture_suppressed(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result != NULL &&
+        (result->clip_class &
+         SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED) != 0U;
+}
+
 static inline void sm64_saturn_terrain_result_arena_seal(
     sm64_saturn_terrain_result_arena_t *arena, uint32_t sequence)
 {
