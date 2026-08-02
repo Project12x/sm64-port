@@ -35,6 +35,7 @@ typedef struct sm64_saturn_terrain_resolved_command {
 } sm64_saturn_terrain_resolved_command_t;
 
 #define SM64_SATURN_VDP1_COMMAND_BYTES 32U
+#define SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES 16U
 
 bool sm64_saturn_terrain_template_build(
     sm64_saturn_terrain_command_template_t *out,
@@ -75,8 +76,8 @@ static inline bool sm64_saturn_terrain_template_patch(
 }
 
 static inline bool sm64_saturn_terrain_template_patch_resolved(
-    void *out_command, uint16_t pmod, uint16_t colr, uint16_t srca,
-    uint16_t size, const int16_t vertices[4][2], uint16_t link,
+    void *out_command, uint16_t control, uint16_t pmod, uint16_t colr,
+    uint16_t srca, uint16_t size, const int16_t vertices[4][2], uint16_t link,
     bool end_state, bool patch_gouraud, uintptr_t gouraud_address)
 {
     if (out_command == NULL || vertices == NULL)
@@ -84,7 +85,7 @@ static inline bool sm64_saturn_terrain_template_patch_resolved(
 
     uint8_t *out = out_command;
     memset(out, 0, SM64_SATURN_VDP1_COMMAND_BYTES);
-    const uint16_t control = (uint16_t)(0x0004U |
+    control = (uint16_t)((control & 0x7FFFU) |
         (end_state ? 0x8000U : 0U));
     memcpy(out, &control, sizeof(control));
     memcpy(out + 2U, &link, sizeof(link));
@@ -98,6 +99,22 @@ static inline bool sm64_saturn_terrain_template_patch_resolved(
         memcpy(out + 28U, &encoded, sizeof(encoded));
     }
     return true;
+}
+
+static inline bool sm64_saturn_terrain_compact_cache_fits(
+    uint32_t primitive_count, uint32_t byte_budget)
+{
+    if (primitive_count >
+        UINT32_MAX / SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES ||
+        primitive_count > UINT32_MAX - 7U)
+        return false;
+    const uint32_t validity_bytes = (primitive_count + 7U) / 8U;
+    const uint32_t material_bytes =
+        primitive_count * SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES;
+    if (material_bytes > UINT32_MAX - validity_bytes)
+        return false;
+    const uint32_t bytes = material_bytes + validity_bytes;
+    return bytes <= byte_budget;
 }
 
 #endif

@@ -102,8 +102,8 @@ static void test_compact_resolved_state_matches_full_templates(void)
         /* Flat REPLACE. */
         {0x0004U, 0U, 0x00C0U, 0x9234U, 0U, 0U,
          0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U},
-        /* Textured REPLACE, including resolved source and size. */
-        {0x0004U, 0U, 0x04C0U, 0x0040U, 0x0123U, 0x0410U,
+        /* Textured REPLACE is a distorted sprite, not a polygon. */
+        {0x0002U, 0U, 0x04C0U, 0x0040U, 0x0123U, 0x0410U,
          0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U},
         /* Gouraud; GRDA is deliberately dynamic. */
         {0x0004U, 0U, 0x00C4U, 0x8000U, 0U, 0U,
@@ -119,10 +119,16 @@ static void test_compact_resolved_state_matches_full_templates(void)
             old_path, full, vertices, 7U, path == 1U,
             patches_gouraud[path], 0x00123458U));
         assert(sm64_saturn_terrain_template_patch_resolved(
-            compact_path, full[2], full[3], full[4], full[5], vertices, 7U,
-            path == 1U, patches_gouraud[path], 0x00123458U));
+            compact_path, full[0], full[2], full[3], full[4], full[5],
+            vertices, 7U, path == 1U, patches_gouraud[path], 0x00123458U));
         assert(memcmp(old_path, compact_path, sizeof(old_path)) == 0);
     }
+}
+
+static void test_compact_cache_rejects_fragment_profile_above_budget(void)
+{
+    assert(sm64_saturn_terrain_compact_cache_fits(867U, 0x3710U));
+    assert(!sm64_saturn_terrain_compact_cache_fits(2108U, 0x3710U));
 }
 
 static void test_runtime_material_changes_use_fallback(void)
@@ -187,6 +193,7 @@ int main(void)
     test_builds_each_shade_path();
     test_patch_changes_only_runtime_words();
     test_compact_resolved_state_matches_full_templates();
+    test_compact_cache_rejects_fragment_profile_above_budget();
     test_runtime_material_changes_use_fallback();
     test_invalid_inputs_fail_closed();
     return 0;
