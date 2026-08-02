@@ -2,13 +2,16 @@
 
 ## Decision
 
-**BLOCKED — neither accepted nor rejected.** The Wave 1 head did not compile
-far enough to produce a fresh ELF, so the native-math audit did not run and no
-fresh CUE could be built. The predecessor image, Ymir capture, route-state
-comparison, pixels, counters, and timing comparison were therefore not run.
+**BLOCKED — neither accepted nor rejected.** The initial Wave 1 head did not
+compile. Its reviewed successor, `5244b7b`, fixes that translation-unit error
+but still fails at link because the `lwram` region overflows. No retry reached
+a fresh ELF, so the native-math audit did not run and no fresh CUE could be
+built. The predecessor image, Ymir capture, route-state comparison, pixels,
+counters, and timing comparison were therefore not run.
 Commit `23c3cdda4bcb1e749b05cde9ae1910e02ed5eff6` remains the next comparison
-baseline; `3fef49c45514f2dcdd10d62c44d14c17780d0e37` has no Task 4 target
-acceptance evidence.
+baseline; neither `3fef49c45514f2dcdd10d62c44d14c17780d0e37` nor
+`5244b7bb9c64d54de20ae0b01c5bc63a2e98cb31` has Task 4 target acceptance
+evidence.
 
 The fixed native-math contract remains 582. It was not changed or bypassed.
 
@@ -58,21 +61,51 @@ This failure occurred before link and before `verify_sh2_native_math.py`.
 Consequently it is not a new 582-contract audit result: the truthful audit was
 not reached.
 
+## Retry after the reviewed SH2 compile fix
+
+The retry used source commit
+`5244b7bb9c64d54de20ae0b01c5bc63a2e98cb31` (`fix: compile standalone terrain
+templates on SH2`). The original Task 1 `/tmp/sm64-saturn-MSYS` temporary
+directory caused the Windows-hosted compiler to fail creating a temporary file
+despite Bash reporting the directory writable. That environmental attempt
+exited 2 before link. A fresh worktree-local temporary directory was then used
+with the identical source profile, `-B -j1`, one MSYS2 Bash process, and no
+other target activity.
+
+The second retry compiled the standalone template successfully, then failed at
+the final link:
+
+```text
+ld: ...sm64-saturn-sourceboot-e2.elf section `.lwram_camera_capture'
+  will not fit in region `lwram'
+ld: region `lwram' overflowed by 15840 bytes
+collect2: error: ld returned 1 exit status
+TASK4_RETRY2_GATE_EXIT=2
+```
+
+This is a distinct failure from the first source include error and is also
+before `verify_sh2_native_math.py`; it does not permit a performance
+comparison or change the fixed 582 audit contract.
+
 ## Source and artifact identities
 
 | Role | Identity | Result |
 | --- | --- | --- |
 | predecessor | `23c3cdda4bcb1e749b05cde9ae1910e02ed5eff6` (`docs: design PS1-parity optimization sprint`) | not checked out or built after the Wave 1 gate failed |
-| Wave 1 head | `3fef49c45514f2dcdd10d62c44d14c17780d0e37` (`perf: prebuild terrain command state`) | compilation failed before fresh ELF |
+| initial Wave 1 head | `3fef49c45514f2dcdd10d62c44d14c17780d0e37` (`perf: prebuild terrain command state`) | source compilation failed before fresh ELF |
+| retry head | `5244b7bb9c64d54de20ae0b01c5bc63a2e98cb31` (`fix: compile standalone terrain templates on SH2`) | source compilation completed; link failed, `lwram` overflow 15840 bytes |
 | output profile | `e2-bob-demo-replay-camroute1-atan2v2-camv3-idle0-disc0-range0-stage8-r6000-slave1-poly0-hot1-clip1-bsp1-frag0-pipe2` | partial object rebuild only |
 
 The output directory already contained older artifacts. They were inspected
 only to reject them as stale; none was launched or treated as Wave 1 evidence.
-The freshness check was made at `2026-08-02T03:49:54Z`.
+The first freshness check was made at `2026-08-02T03:49:54Z`. After the retry,
+at `2026-08-02T04:04:24Z`, no ELF remained at the output path; the failed
+linker had removed it. The CUE and ISO retained their earlier timestamps and
+hashes and were rejected as stale.
 
 | Existing artifact | Last write UTC | SHA-256 | Disposition |
 | --- | --- | --- | --- |
-| `obj/sm64-saturn-sourceboot-e2.elf` | `2026-08-02T02:26:19.9308640Z` | `e1877d8a836b0b0a951a7028407f5a3ddd7dd28e170114e5ed01db8a3a47f27d` | stale Task 1 ELF, matching the recorded pre-sprint identity |
+| `obj/sm64-saturn-sourceboot-e2.elf` | missing after retry | previous hash: `e1877d8a836b0b0a951a7028407f5a3ddd7dd28e170114e5ed01db8a3a47f27d` | no retry ELF; the prior stale Task 1 ELF was removed by the failed link |
 | `sm64-saturn-sourceboot-e2.cue` | `2026-08-01T23:51:55.1270563Z` | `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7` | stale, not launched |
 | `sm64-saturn-sourceboot-e2.iso` | `2026-08-01T23:51:53.8310566Z` | `de639f7e9defdb98c80c1cdb79dffe09f1932731a06c4fddec44b051ecd18240` | stale, not launched |
 
@@ -102,11 +135,10 @@ The requested measurement fields are all **not measured**:
 
 ## Concerns and next gate
 
-- The new standalone command-template translation unit exposes an SH-only
-  include-contract problem that host tests did not exercise.
-- An older ELF and disc image remain in the same profile directory. Any future
-  capture must repeat the freshness/source-identity preflight and must not use
-  these hashes as Wave 1 products.
-- After the target compile issue is addressed outside Task 4, rerun the same
+- The standalone command-template include problem is fixed at `5244b7b`, but
+  the resulting profile now exceeds the linker `lwram` region by 15840 bytes.
+- The CUE and ISO in the profile directory are stale and there is now no ELF;
+  any future capture must repeat the source/hash freshness preflight.
+- After the target link budget is addressed outside Task 4, rerun the same
   truthful native-math gate first. Only a fresh artifact path permitted by that
   gate may proceed to the serial predecessor/head CUE and Ymir comparison.
