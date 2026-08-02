@@ -205,22 +205,21 @@ static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
 static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
     SM64_SATURN_BOB_PRIMITIVE_COUNT]
     __attribute__((section(".lwram_bss")));
-/* Portable material metadata is built while the generated scene is promoted.
- * The matching VDP1 words are resolved once the texture/CLUT partitions are
- * resident, then copied and patched per visible primitive. Invalid entries
- * remain isolated on the legacy emitter instead of disabling the bank. */
+/* Portable material metadata and compact resolved VDP1 material words are
+ * built while the generated scene is promoted. They intentionally remain in
+ * HWRAM: LWRAM is for the live command list and cross-CPU terrain data. */
 static sm64_saturn_terrain_command_template_t s_bob_terrain_templates[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT]
-    __attribute__((section(".lwram_bss")));
-static vdp1_cmdt_t s_bob_terrain_command_templates[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT]
-    __attribute__((section(".lwram_bss")));
-static uint8_t s_bob_terrain_template_valid[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT]
-    __attribute__((section(".lwram_bss")));
+    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static sm64_saturn_terrain_resolved_command_t
+    s_bob_terrain_resolved_templates[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+#define DEMO_TERRAIN_TEMPLATE_VALID_BYTES \
+    ((SM64_SATURN_BOB_PRIMITIVE_COUNT + 7U) / 8U)
+static uint8_t s_bob_terrain_template_valid[DEMO_TERRAIN_TEMPLATE_VALID_BYTES];
 static uint8_t s_bob_terrain_templates_resolved;
 _Static_assert(sizeof(vdp1_cmdt_t) == SM64_SATURN_VDP1_COMMAND_BYTES,
                "terrain patcher requires the 32-byte VDP1 command format");
+_Static_assert(sizeof(sm64_saturn_terrain_resolved_command_t) == 8U,
+               "compact terrain template state must remain eight bytes");
 _Static_assert(offsetof(vdp1_cmdt_t, cmd_ctrl) == 0U &&
                    offsetof(vdp1_cmdt_t, cmd_link) == 2U &&
                    offsetof(vdp1_cmdt_t, cmd_vertices) == 12U &&
@@ -230,6 +229,26 @@ _Static_assert(sizeof(int16_vec2_t) == 2U * sizeof(int16_t) &&
                    offsetof(int16_vec2_t, x) == 0U &&
                    offsetof(int16_vec2_t, y) == sizeof(int16_t),
                "terrain patch vertices require packed x/y pairs");
+
+static bool demo_terrain_template_valid(uint16_t primitive_index)
+{
+    return primitive_index < SM64_SATURN_BOB_PRIMITIVE_COUNT &&
+        (s_bob_terrain_template_valid[primitive_index >> 3U] &
+         (uint8_t)(1U << (primitive_index & 7U))) != 0U;
+}
+
+static void demo_terrain_template_valid_set(uint16_t primitive_index,
+                                            bool valid)
+{
+    if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
+        return;
+    const uint8_t mask = (uint8_t)(1U << (primitive_index & 7U));
+    uint8_t *const bits = &s_bob_terrain_template_valid[primitive_index >> 3U];
+    if (valid)
+        *bits |= mask;
+    else
+        *bits &= (uint8_t)~mask;
+}
 #if SATURN_DEMO_HOT_PROMOTION
 /* Optional Z-Treme-style hot arena. The source bank remains the LWRAM
  * authority; these HWRAM arrays are populated once before the frame loop and
@@ -770,10 +789,9 @@ void sm64_saturn_demo_render_init(void)
             .texture_slot = primitive->tile_offset > UINT16_MAX
                 ? UINT16_MAX : (uint16_t)primitive->tile_offset,
         };
-        s_bob_terrain_template_valid[primitive_index] =
-            sm64_saturn_terrain_template_build(
-                &s_bob_terrain_templates[primitive_index], &template_input)
-                ? 1U : 0U;
+        demo_terrain_template_valid_set(
+            primitive_index, sm64_saturn_terrain_template_build(
+                &s_bob_terrain_templates[primitive_index], &template_input));
     }
     s_bob_terrain_templates_resolved = 0U;
     demo_build_primitive_work_metadata();
@@ -1363,51 +1381,56 @@ static void demo_resolve_terrain_command_templates(
     for (uint16_t primitive_index = 0U;
          primitive_index < SM64_SATURN_BOB_PRIMITIVE_COUNT;
          primitive_index++) {
-        if (s_bob_terrain_template_valid[primitive_index] == 0U)
+        if (!demo_terrain_template_valid(primitive_index))
             continue;
 
         const sm64_saturn_terrain_command_template_t *metadata =
             &s_bob_terrain_templates[primitive_index];
         const sm64_saturn_bob_primitive_t *primitive =
             &s_bob_primitives_active[primitive_index];
-        vdp1_cmdt_t *command =
-            &s_bob_terrain_command_templates[primitive_index];
-        memset(command, 0, sizeof(*command));
+        vdp1_cmdt_t command;
+        memset(&command, 0, sizeof(command));
         switch ((sm64_saturn_shade_path_t)metadata->shade_path) {
         case SM64_SATURN_SHADE_FLAT_REPLACE:
-            vdp1_cmdt_polygon_set(command);
-            vdp1_cmdt_draw_mode_set(command, (vdp1_cmdt_draw_mode_t){
+            vdp1_cmdt_polygon_set(&command);
+            vdp1_cmdt_draw_mode_set(&command, (vdp1_cmdt_draw_mode_t){
                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                 .cc_mode = VDP1_CMDT_CC_REPLACE});
-            vdp1_cmdt_color_set(command, (rgb1555_t){
+            vdp1_cmdt_color_set(&command, (rgb1555_t){
                 .raw = (uint16_t)(metadata->color | 0x8000U)});
             break;
         case SM64_SATURN_SHADE_GOURAUD:
-            vdp1_cmdt_polygon_set(command);
-            vdp1_cmdt_draw_mode_set(command, (vdp1_cmdt_draw_mode_t){
+            vdp1_cmdt_polygon_set(&command);
+            vdp1_cmdt_draw_mode_set(&command, (vdp1_cmdt_draw_mode_t){
                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                 .cc_mode = VDP1_CMDT_CC_GOURAUD});
-            vdp1_cmdt_color_set(command, (rgb1555_t){
+            vdp1_cmdt_color_set(&command, (rgb1555_t){
                 .raw = sm64_saturn_gouraud_neutral_color()});
             break;
         case SM64_SATURN_SHADE_TEXTURED:
             if (SATURN_DEMO_BSP_FRAGMENT_FLAT ||
                 !sm64_saturn_ir_texture_bind_clut16(
-                    command, partitions, primitive->tile_offset,
+                    &command, partitions, primitive->tile_offset,
                     primitive->tile_size, primitive->tile_size,
                     (uint16_t)(primitive->clut_offset /
                                sizeof(vdp1_clut_t)),
                     VDP1_CMDT_CC_REPLACE, placeholder_vertices)) {
-                s_bob_terrain_template_valid[primitive_index] = 0U;
+                demo_terrain_template_valid_set(primitive_index, false);
             }
             break;
         default:
-            s_bob_terrain_template_valid[primitive_index] = 0U;
+            demo_terrain_template_valid_set(primitive_index, false);
             break;
         }
-        if (s_bob_terrain_template_valid[primitive_index] != 0U) {
-            vdp1_cmdt_end_clear(command);
-            command->cmd_link = 0U;
+        if (demo_terrain_template_valid(primitive_index)) {
+            vdp1_cmdt_end_clear(&command);
+            command.cmd_link = 0U;
+            s_bob_terrain_resolved_templates[primitive_index] =
+                (sm64_saturn_terrain_resolved_command_t){
+                    .pmod = command.cmd_pmod,
+                    .colr = command.cmd_colr,
+                    .srca = command.cmd_srca,
+                    .size = command.cmd_size};
         }
     }
     s_bob_terrain_templates_resolved = 1U;
@@ -1456,7 +1479,7 @@ static void demo_emit_terrain_result(
     const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED;
     const bool template_matches =
         result->primitive_id < SM64_SATURN_BOB_PRIMITIVE_COUNT &&
-        s_bob_terrain_template_valid[result->primitive_id] != 0U &&
+        demo_terrain_template_valid(result->primitive_id) &&
         sm64_saturn_terrain_template_matches(
             &s_bob_terrain_templates[result->primitive_id], effective_flags,
             result->gouraud, result->texture_slot);
@@ -1466,8 +1489,11 @@ static void demo_emit_terrain_result(
         if (shade_path == SM64_SATURN_SHADE_GOURAUD)
             table = sm64_saturn_gouraud_bank_alloc(gouraud_bank,
                                                     &gouraud_address);
-        const bool patched = sm64_saturn_terrain_template_patch(
-            cmdt, &s_bob_terrain_command_templates[result->primitive_id],
+        const sm64_saturn_terrain_resolved_command_t *const resolved =
+            &s_bob_terrain_resolved_templates[result->primitive_id];
+        const bool patched = sm64_saturn_terrain_template_patch_resolved(
+            cmdt, resolved->pmod, resolved->colr, resolved->srca,
+            resolved->size,
             (const int16_t (*)[2])(const void *)shape_vertices,
             0U, false, table != NULL, gouraud_address);
         if (patched) {
@@ -1497,7 +1523,7 @@ static void demo_emit_terrain_result(
             profile->triangles_emitted++;
             return;
         }
-        s_bob_terrain_template_valid[result->primitive_id] = 0U;
+        demo_terrain_template_valid_set(result->primitive_id, false);
     }
 
     /* Per-entry fallback: dynamic LOD/recovery state may legitimately choose

@@ -23,6 +23,17 @@ typedef struct sm64_saturn_terrain_command_template {
     uint16_t shade_path;
 } sm64_saturn_terrain_command_template_t;
 
+/* The resolved VDP1 material state is deliberately compact: CTRL is always
+ * POLYGON, LINK/vertices/GRDA are dynamic, and the remaining words are zero.
+ * Keeping only these four immutable words cuts each cached image from 32 to
+ * 8 bytes without changing the command submitted to VDP1. */
+typedef struct sm64_saturn_terrain_resolved_command {
+    uint16_t pmod;
+    uint16_t colr;
+    uint16_t srca;
+    uint16_t size;
+} sm64_saturn_terrain_resolved_command_t;
+
 #define SM64_SATURN_VDP1_COMMAND_BYTES 32U
 
 bool sm64_saturn_terrain_template_build(
@@ -55,6 +66,32 @@ static inline bool sm64_saturn_terrain_template_patch(
                          (end_state ? 0x8000U : 0U));
     memcpy(out, &control, sizeof(control));
     memcpy(out + 2U, &link, sizeof(link));
+    memcpy(out + 12U, vertices, 8U * sizeof(int16_t));
+    if (patch_gouraud) {
+        const uint16_t encoded = (uint16_t)((gouraud_address >> 3) & 0xFFFFU);
+        memcpy(out + 28U, &encoded, sizeof(encoded));
+    }
+    return true;
+}
+
+static inline bool sm64_saturn_terrain_template_patch_resolved(
+    void *out_command, uint16_t pmod, uint16_t colr, uint16_t srca,
+    uint16_t size, const int16_t vertices[4][2], uint16_t link,
+    bool end_state, bool patch_gouraud, uintptr_t gouraud_address)
+{
+    if (out_command == NULL || vertices == NULL)
+        return false;
+
+    uint8_t *out = out_command;
+    memset(out, 0, SM64_SATURN_VDP1_COMMAND_BYTES);
+    const uint16_t control = (uint16_t)(0x0004U |
+        (end_state ? 0x8000U : 0U));
+    memcpy(out, &control, sizeof(control));
+    memcpy(out + 2U, &link, sizeof(link));
+    memcpy(out + 4U, &pmod, sizeof(pmod));
+    memcpy(out + 6U, &colr, sizeof(colr));
+    memcpy(out + 8U, &srca, sizeof(srca));
+    memcpy(out + 10U, &size, sizeof(size));
     memcpy(out + 12U, vertices, 8U * sizeof(int16_t));
     if (patch_gouraud) {
         const uint16_t encoded = (uint16_t)((gouraud_address >> 3) & 0xFFFFU);

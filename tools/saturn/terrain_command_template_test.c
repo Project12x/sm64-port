@@ -94,6 +94,37 @@ static void test_patch_changes_only_runtime_words(void)
     assert(no_gouraud_patch[14] == command_template[14]);
 }
 
+static void test_compact_resolved_state_matches_full_templates(void)
+{
+    const int16_t vertices[4][2] = {
+        {-20, -10}, {20, -10}, {20, 10}, {-20, 10}};
+    const uint16_t full_templates[][16] = {
+        /* Flat REPLACE. */
+        {0x0004U, 0U, 0x00C0U, 0x9234U, 0U, 0U,
+         0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U},
+        /* Textured REPLACE, including resolved source and size. */
+        {0x0004U, 0U, 0x04C0U, 0x0040U, 0x0123U, 0x0410U,
+         0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U},
+        /* Gouraud; GRDA is deliberately dynamic. */
+        {0x0004U, 0U, 0x00C4U, 0x8000U, 0U, 0U,
+         0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U},
+    };
+    const bool patches_gouraud[] = {false, false, true};
+
+    for (uint8_t path = 0U; path < 3U; path++) {
+        uint16_t old_path[16];
+        uint16_t compact_path[16];
+        const uint16_t *full = full_templates[path];
+        assert(sm64_saturn_terrain_template_patch(
+            old_path, full, vertices, 7U, path == 1U,
+            patches_gouraud[path], 0x00123458U));
+        assert(sm64_saturn_terrain_template_patch_resolved(
+            compact_path, full[2], full[3], full[4], full[5], vertices, 7U,
+            path == 1U, patches_gouraud[path], 0x00123458U));
+        assert(memcmp(old_path, compact_path, sizeof(old_path)) == 0);
+    }
+}
+
 static void test_runtime_material_changes_use_fallback(void)
 {
     sm64_saturn_terrain_command_template_t flat_template;
@@ -155,6 +186,7 @@ int main(void)
 {
     test_builds_each_shade_path();
     test_patch_changes_only_runtime_words();
+    test_compact_resolved_state_matches_full_templates();
     test_runtime_material_changes_use_fallback();
     test_invalid_inputs_fail_closed();
     return 0;
