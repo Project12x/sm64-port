@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -267,6 +268,35 @@ class NativeMathCensusTests(unittest.TestCase):
             "sh2_native_math_sim_route_oracle_v1.txt"
         ).read_text(encoding="utf-8")
         oracle = parse_route_oracle(text)
+        repo_root = Path(__file__).parents[2]
+        bob_geo = (repo_root / "levels/bob/areas/1/geo.inc.c").read_text(
+            encoding="utf-8"
+        )
+        bob_callbacks = frozenset(
+            "_" + callback
+            for callback in re.findall(
+                r"GEO_(?:BACKGROUND|CAMERA_FRUSTUM_WITH_FUNC|CAMERA|ASM)"
+                r"\([^)]*,\s*(geo_[A-Za-z0-9_]+)\)",
+                bob_geo,
+            )
+        )
+        sourceboot_script = (
+            repo_root / "src/port/saturn/sourceboot/source_entry.c"
+        ).read_text(encoding="utf-8")
+        sourceboot_commands = frozenset(re.findall(
+            r"^\s*(INIT_LEVEL|SET_REG|GET_OR_SET|CALL|EXECUTE|CLEAR_LEVEL|JUMP)\(",
+            sourceboot_script,
+            flags=re.MULTILINE,
+        ))
+        sourceboot_callbacks = {
+            "INIT_LEVEL": "_level_cmd_init_level",
+            "SET_REG": "_level_cmd_set_register",
+            "GET_OR_SET": "_level_cmd_get_or_set_var",
+            "CALL": "_level_cmd_call",
+            "EXECUTE": "_level_cmd_load_and_execute",
+            "CLEAR_LEVEL": "_level_cmd_clear_level",
+            "JUMP": "_level_cmd_jump",
+        }
         required_edges = {
             ("_geo_process_node_and_siblings", "_geo_skybox_main"),
             ("_geo_process_node_and_siblings", "_geo_camera_fov"),
@@ -282,6 +312,23 @@ class NativeMathCensusTests(unittest.TestCase):
             ("_level_script_execute", "_level_cmd_set_register"),
         }
         self.assertEqual(required_edges - oracle.indirect_edges, set())
+        self.assertEqual(oracle.static_manifest_edges, oracle.indirect_edges)
+        self.assertEqual(
+            {
+                callback
+                for dispatcher, callback in oracle.static_manifest_edges
+                if dispatcher == "_geo_process_node_and_siblings"
+            },
+            bob_callbacks,
+        )
+        self.assertEqual(
+            {
+                callback
+                for dispatcher, callback in oracle.static_manifest_edges
+                if dispatcher == "_level_script_execute"
+            },
+            {sourceboot_callbacks[command] for command in sourceboot_commands},
+        )
 
     def test_declared_dispatcher_does_not_mask_stack_derived_static_helper(self) -> None:
         oracle = parse_route_oracle(
@@ -294,6 +341,7 @@ class NativeMathCensusTests(unittest.TestCase):
         regressed_static_helper = UnresolvedTransfer(
             "_geo_process_node_and_siblings", 0x6001190, "jsr", "r7",
             stack_source_offsets=(-224,), stack_store_addresses=(0x6001180,),
+            provenance="static",
         )
         result = audit_indirect_edges(
             {"_root": {"_geo_process_node_and_siblings"}}, oracle,
@@ -305,6 +353,24 @@ class NativeMathCensusTests(unittest.TestCase):
             [dynamic_callback, regressed_static_helper],
         )
         self.assertEqual(result.unlisted_transfers, (regressed_static_helper,))
+
+    def test_stale_indirect_edge_target_is_rejected_against_static_manifest(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "STATIC_MANIFEST_EDGE _dispatcher _callback\n"
+            "INDIRECT_EDGE _dispatcher _stale\n"
+        )
+        with self.assertRaisesRegex(ValueError, "stale INDIRECT_EDGE target"):
+            audit_indirect_edges(
+                {"_root": {"_dispatcher"}}, oracle,
+                (
+                    self.indirect_owner("_root", 0x6001000),
+                    self.indirect_owner("_dispatcher", 0x6001020),
+                    self.indirect_owner("_callback", 0x6001040),
+                    self.indirect_owner("_stale", 0x6001060),
+                ),
+                [UnresolvedTransfer("_dispatcher", 0x6001024, "jsr", "r1")],
+            )
 
     def test_sourceboot_null_task_submit_proof_clears_only_the_guarded_transfer(self) -> None:
         disassembly = """
@@ -1388,6 +1454,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         transfer = result.unresolved_transfers[0]
         self.assertEqual(transfer.stack_source_offsets, (-4,))
         self.assertEqual(transfer.stack_store_addresses, (0x6001000,))
+        self.assertEqual(transfer.provenance, "static")
 
     def test_conflicting_stack_targets_join_to_unknown(self) -> None:
         dis = """

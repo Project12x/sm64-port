@@ -4,6 +4,27 @@
 # renderer's existing shipped regression gate.
 ROUTE_ORACLE_VERSION 1
 ROOT _game_loop_one_iteration
+# This is the static route manifest, not a replay observation.  The
+# GraphNode entries are derived from levels/bob/areas/1/geo.inc.c; the
+# level-script entries are derived from sourceboot/source_entry.c's pinned
+# command sequence.  The remaining two entries are sourceboot's retained
+# Mario-held-object and controller callback dispositions.  A declaration not
+# present here is stale by definition: its reachable dispatcher names a
+# target absent from this statically derived manifest.
+STATIC_MANIFEST_EDGE _geo_process_held_object _geo_switch_mario_hand_grab_pos
+STATIC_MANIFEST_EDGE _geo_process_node_and_siblings _geo_skybox_main
+STATIC_MANIFEST_EDGE _geo_process_node_and_siblings _geo_camera_fov
+STATIC_MANIFEST_EDGE _geo_process_node_and_siblings _geo_camera_main
+STATIC_MANIFEST_EDGE _geo_process_node_and_siblings _geo_envfx_main
+STATIC_MANIFEST_EDGE _geo_process_node_and_siblings _geo_cannon_circle_base
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_init_level
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_get_or_set_var
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_call
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_load_and_execute
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_clear_level
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_jump
+STATIC_MANIFEST_EDGE _level_script_execute _level_cmd_set_register
+STATIC_MANIFEST_EDGE _sm64_saturn_source_runtime_read_controllers _controller_saturn_read
 # Phase A declarations are dispatcher-granular: every unresolved dynamic
 # transfer owned by a listed dispatcher inherits that dispatcher's callback
 # set. Static helper transfers must still be recovered as direct facts.

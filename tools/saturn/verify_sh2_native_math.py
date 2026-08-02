@@ -40,6 +40,7 @@ class CallSite:
 class RouteOracle:
     version: int
     roots: frozenset[str]
+    static_manifest_edges: frozenset[tuple[str, str]]
     indirect_edges: frozenset[tuple[str, str]]
 
 
@@ -233,6 +234,10 @@ class UnresolvedTransfer:
     state_changed_at_entry_covered_join: bool = False
     stack_source_offsets: tuple[int, ...] = ()
     stack_store_addresses: tuple[int, ...] = ()
+    # The parser must classify an unresolved indirect transfer before the
+    # dispatcher declaration gate sees it. Declarations model callback
+    # dispatch only; a static stack-derived target remains an audit failure.
+    provenance: str = "dynamic"
 
 
 @dataclass(frozen=True)
@@ -2101,6 +2106,11 @@ def _analyze_code_only_pass(
                     entry_join_changed,
                     stack_origin.offsets,
                     stack_origin.store_addresses,
+                    (
+                        "static"
+                        if stack_origin.offsets or stack_origin.store_addresses
+                        else "dynamic"
+                    ),
                 )
 
             def schedule(target: int, next_state: dict[str, AbstractValue]) -> None:
@@ -2807,7 +2817,7 @@ STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
 # not a quiet edit to a text allowlist.
 ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "9bce57fd1b033d4ab096ad301af5f357f6eb2ae271505b25f732ff65c86f7b8f"
+SIM_ROUTE_ORACLE_V1_SHA256 = "207da20b296dd442eb45c4f2e05f29db637470036daae8238b8feda5baf96670"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
 
 LIBM_NAMES = {
@@ -2932,6 +2942,7 @@ def parse_route_oracle(text: str) -> RouteOracle:
     """Parse a versioned, checked-in replay-route root fixture."""
     version: int | None = None
     roots: set[str] = set()
+    static_manifest_edges: set[tuple[str, str]] = set()
     indirect_edges: set[tuple[str, str]] = set()
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
@@ -2944,6 +2955,14 @@ def parse_route_oracle(text: str) -> RouteOracle:
             version = int(parts[1], 10)
         elif parts[0] == "ROOT" and len(parts) == 2:
             roots.add(parts[1])
+        elif parts[0] == "STATIC_MANIFEST_EDGE" and len(parts) == 3:
+            edge = (parts[1], parts[2])
+            if edge in static_manifest_edges:
+                raise ValueError(
+                    f"route oracle line {line_number}: duplicate STATIC_MANIFEST_EDGE "
+                    f"{parts[1]} {parts[2]}"
+                )
+            static_manifest_edges.add(edge)
         elif parts[0] == "INDIRECT_EDGE" and len(parts) == 3:
             edge = (parts[1], parts[2])
             if edge in indirect_edges:
@@ -2955,13 +2974,19 @@ def parse_route_oracle(text: str) -> RouteOracle:
         else:
             raise ValueError(
                 f"route oracle line {line_number}: expected ROOT <linked-symbol> or "
+                "STATIC_MANIFEST_EDGE <dispatch-symbol> <callback-symbol> or "
                 "INDIRECT_EDGE <dispatch-symbol> <callback-symbol>"
             )
     if version != 1:
         raise ValueError(f"unsupported route oracle version {version!r}")
     if not roots:
         raise ValueError("route oracle has no ROOT")
-    return RouteOracle(version, frozenset(roots), frozenset(indirect_edges))
+    return RouteOracle(
+        version,
+        frozenset(roots),
+        frozenset(static_manifest_edges),
+        frozenset(indirect_edges),
+    )
 
 
 def parse_baseline(text: str) -> BaselineContract:
@@ -3088,8 +3113,8 @@ def route_reachable_functions(
 def is_structurally_dynamic_callback_transfer(
     transfer: UnresolvedTransfer,
 ) -> bool:
-    """Return whether an unresolved transfer has no static stack provenance."""
-    return not transfer.stack_source_offsets and not transfer.stack_store_addresses
+    """Return whether a parser-classified callback transfer is dynamic."""
+    return transfer.provenance == "dynamic"
 
 
 def audit_indirect_edges(
@@ -3117,6 +3142,13 @@ def audit_indirect_edges(
     }
 
     for dispatcher, callback in sorted(edges):
+        if oracle.static_manifest_edges and (
+            dispatcher, callback
+        ) not in oracle.static_manifest_edges:
+            raise ValueError(
+                "stale INDIRECT_EDGE target is absent from the static route manifest: "
+                f"{dispatcher} -> {callback}"
+            )
         if dispatcher not in closure:
             raise ValueError(
                 f"INDIRECT_EDGE has unreachable dispatcher: {dispatcher} -> {callback}"
@@ -3466,6 +3498,7 @@ def make_observation(
             "state_changed_at_entry_covered_join": (
                 x.state_changed_at_entry_covered_join
             ),
+            "provenance": x.provenance,
         } | ({
             "stack_source_offsets": list(x.stack_source_offsets),
             "stack_store_addresses": list(x.stack_store_addresses),
