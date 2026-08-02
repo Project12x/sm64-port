@@ -23,11 +23,13 @@ typedef struct sm64_saturn_terrain_command_template {
     uint16_t shade_path;
 } sm64_saturn_terrain_command_template_t;
 
-/* The resolved VDP1 material state is deliberately compact: CTRL is always
- * POLYGON, LINK/vertices/GRDA are dynamic, and the remaining words are zero.
- * Keeping only these four immutable words cuts each cached image from 32 to
- * 8 bytes without changing the command submitted to VDP1. */
+/* The resolved VDP1 material state is deliberately compact: LINK,
+ * vertices, END, and GRDA remain dynamic. CTRL must be retained too: a
+ * textured primitive is a distorted sprite, while flat/Gouraud paths are
+ * polygons. Keeping only these five immutable words cuts each cached image
+ * from 32 to 10 bytes without changing the command submitted to VDP1. */
 typedef struct sm64_saturn_terrain_resolved_command {
+    uint16_t control;
     uint16_t pmod;
     uint16_t colr;
     uint16_t srca;
@@ -35,11 +37,15 @@ typedef struct sm64_saturn_terrain_resolved_command {
 } sm64_saturn_terrain_resolved_command_t;
 
 #define SM64_SATURN_VDP1_COMMAND_BYTES 32U
-#define SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES 16U
+#define SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES 10U
 
 bool sm64_saturn_terrain_template_build(
     sm64_saturn_terrain_command_template_t *out,
     const sm64_saturn_terrain_primitive_t *primitive);
+
+bool sm64_saturn_terrain_template_build_from_bob(
+    sm64_saturn_terrain_command_template_t *out, bool textured,
+    const uint8_t rgb[3], uint32_t tile_offset);
 
 bool sm64_saturn_terrain_template_matches(
     const sm64_saturn_terrain_command_template_t *template_value,
@@ -101,19 +107,40 @@ static inline bool sm64_saturn_terrain_template_patch_resolved(
     return true;
 }
 
-static inline bool sm64_saturn_terrain_compact_cache_fits(
-    uint32_t primitive_count, uint32_t byte_budget)
+static inline bool sm64_saturn_terrain_template_patch_resolved_record(
+    void *out_command, const sm64_saturn_terrain_resolved_command_t *resolved,
+    const int16_t vertices[4][2], uint16_t link, bool end_state,
+    bool patch_gouraud, uintptr_t gouraud_address)
+{
+    if (resolved == NULL)
+        return false;
+    return sm64_saturn_terrain_template_patch_resolved(
+        out_command, resolved->control, resolved->pmod, resolved->colr,
+        resolved->srca, resolved->size, vertices, link, end_state,
+        patch_gouraud, gouraud_address);
+}
+
+static inline uint32_t sm64_saturn_terrain_compact_cache_bytes(
+    uint32_t primitive_count)
 {
     if (primitive_count >
         UINT32_MAX / SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES ||
         primitive_count > UINT32_MAX - 7U)
-        return false;
-    const uint32_t validity_bytes = (primitive_count + 7U) / 8U;
+        return UINT32_MAX;
     const uint32_t material_bytes =
         primitive_count * SM64_SATURN_TERRAIN_COMPACT_ENTRY_BYTES;
-    if (material_bytes > UINT32_MAX - validity_bytes)
+    const uint32_t validity_bytes = (primitive_count + 7U) / 8U;
+    return material_bytes > UINT32_MAX - validity_bytes
+        ? UINT32_MAX : material_bytes + validity_bytes;
+}
+
+static inline bool sm64_saturn_terrain_compact_cache_fits(
+    uint32_t primitive_count, uint32_t byte_budget)
+{
+    const uint32_t bytes =
+        sm64_saturn_terrain_compact_cache_bytes(primitive_count);
+    if (bytes == UINT32_MAX)
         return false;
-    const uint32_t bytes = material_bytes + validity_bytes;
     return bytes <= byte_budget;
 }
 

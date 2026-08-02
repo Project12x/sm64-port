@@ -218,11 +218,9 @@ static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
 /* Keep types available without allocating an over-budget fragment cache. */
 #define DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY 1U
 #endif
-/* Portable material metadata and compact resolved VDP1 material words are
- * built while the generated scene is promoted. They intentionally remain in
- * HWRAM: LWRAM is for the live command list and cross-CPU terrain data. */
-static sm64_saturn_terrain_command_template_t s_bob_terrain_templates[
-    DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY];
+/* Compact resolved VDP1 words remain in HWRAM. The immutable portable BOB
+ * primitive already contains the metadata needed to derive a match, so a
+ * second per-primitive metadata cache would only consume TLSF headroom. */
 static sm64_saturn_terrain_resolved_command_t
     s_bob_terrain_resolved_templates[DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY];
 #define DEMO_TERRAIN_TEMPLATE_VALID_BYTES \
@@ -232,8 +230,8 @@ static uint8_t s_bob_terrain_templates_resolved;
 static uint8_t s_bob_terrain_templates_enabled;
 _Static_assert(sizeof(vdp1_cmdt_t) == SM64_SATURN_VDP1_COMMAND_BYTES,
                "terrain patcher requires the 32-byte VDP1 command format");
-_Static_assert(sizeof(sm64_saturn_terrain_resolved_command_t) == 8U,
-               "compact terrain template state must remain eight bytes");
+_Static_assert(sizeof(sm64_saturn_terrain_resolved_command_t) == 10U,
+               "compact terrain template state must retain all VDP1 words");
 _Static_assert(offsetof(vdp1_cmdt_t, cmd_ctrl) == 0U &&
                    offsetof(vdp1_cmdt_t, cmd_link) == 2U &&
                    offsetof(vdp1_cmdt_t, cmd_vertices) == 12U &&
@@ -797,21 +795,11 @@ void sm64_saturn_demo_render_init(void)
              primitive_index++) {
         const sm64_saturn_bob_primitive_t *primitive =
             &s_bob_primitives_active[primitive_index];
-        const uint16_t shade = (uint16_t)(
-            ((uint16_t)primitive->rgb[0] << 10) |
-            ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
-        const sm64_saturn_terrain_primitive_t template_input = {
-            .flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE |
-                (primitive->textured != 0U
-                    ? SM64_SATURN_TERRAIN_RESULT_TEXTURED
-                    : SM64_SATURN_TERRAIN_RESULT_GOURAUD),
-            .colors = {shade, shade, shade, shade},
-            .texture_slot = primitive->tile_offset > UINT16_MAX
-                ? UINT16_MAX : (uint16_t)primitive->tile_offset,
-        };
-            demo_terrain_template_valid_set(
-                primitive_index, sm64_saturn_terrain_template_build(
-                    &s_bob_terrain_templates[primitive_index], &template_input));
+        sm64_saturn_terrain_command_template_t metadata;
+        demo_terrain_template_valid_set(
+            primitive_index, sm64_saturn_terrain_template_build_from_bob(
+                &metadata, primitive->textured != 0U, primitive->rgb,
+                primitive->tile_offset));
         }
     }
     s_bob_terrain_templates_resolved = 0U;
@@ -1406,20 +1394,25 @@ static void demo_resolve_terrain_command_templates(
         if (!demo_terrain_template_valid(primitive_index))
             continue;
 
-        sm64_saturn_terrain_command_template_t *metadata =
-            &s_bob_terrain_templates[primitive_index];
+        sm64_saturn_terrain_command_template_t metadata;
         const sm64_saturn_bob_primitive_t *primitive =
             &s_bob_primitives_active[primitive_index];
+        if (!sm64_saturn_terrain_template_build_from_bob(
+                &metadata, primitive->textured != 0U, primitive->rgb,
+                primitive->tile_offset)) {
+            demo_terrain_template_valid_set(primitive_index, false);
+            continue;
+        }
         vdp1_cmdt_t command;
         memset(&command, 0, sizeof(command));
-        switch ((sm64_saturn_shade_path_t)metadata->shade_path) {
+        switch ((sm64_saturn_shade_path_t)metadata.shade_path) {
         case SM64_SATURN_SHADE_FLAT_REPLACE:
             vdp1_cmdt_polygon_set(&command);
             vdp1_cmdt_draw_mode_set(&command, (vdp1_cmdt_draw_mode_t){
                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                 .cc_mode = VDP1_CMDT_CC_REPLACE});
             vdp1_cmdt_color_set(&command, (rgb1555_t){
-                .raw = (uint16_t)(metadata->color | 0x8000U)});
+                .raw = (uint16_t)(metadata.color | 0x8000U)});
             break;
         case SM64_SATURN_SHADE_GOURAUD:
             vdp1_cmdt_polygon_set(&command);
@@ -1447,14 +1440,9 @@ static void demo_resolve_terrain_command_templates(
         if (demo_terrain_template_valid(primitive_index)) {
             vdp1_cmdt_end_clear(&command);
             command.cmd_link = 0U;
-            /* Texture binding selects the distorted-sprite command. Preserve
-             * that resolved CTRL base in the otherwise-unused textured color
-             * field; flat/Gouraud retain their material color and use POLYGON. */
-            if ((sm64_saturn_shade_path_t)metadata->shade_path ==
-                SM64_SATURN_SHADE_TEXTURED)
-                metadata->color = command.cmd_ctrl;
             s_bob_terrain_resolved_templates[primitive_index] =
                 (sm64_saturn_terrain_resolved_command_t){
+                    .control = command.cmd_ctrl,
                     .pmod = command.cmd_pmod,
                     .colr = command.cmd_colr,
                     .srca = command.cmd_srca,
@@ -1505,12 +1493,17 @@ static void demo_emit_terrain_result(
     const sm64_saturn_shade_path_t shade_path =
         sm64_saturn_terrain_shade_path(effective_flags, result->gouraud);
     const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED;
+    sm64_saturn_terrain_command_template_t metadata;
+    const bool metadata_valid = sm64_saturn_terrain_template_build_from_bob(
+        &metadata, primitive->textured != 0U, primitive->rgb,
+        primitive->tile_offset);
     const bool template_matches =
         s_bob_terrain_templates_enabled != 0U &&
         result->primitive_id < SM64_SATURN_BOB_PRIMITIVE_COUNT &&
         demo_terrain_template_valid(result->primitive_id) &&
+        metadata_valid &&
         sm64_saturn_terrain_template_matches(
-            &s_bob_terrain_templates[result->primitive_id], effective_flags,
+            &metadata, effective_flags,
             result->gouraud, result->texture_slot);
     if (template_matches) {
         sm64_saturn_gouraud_table_t *table = NULL;
@@ -1520,13 +1513,8 @@ static void demo_emit_terrain_result(
                                                     &gouraud_address);
         const sm64_saturn_terrain_resolved_command_t *const resolved =
             &s_bob_terrain_resolved_templates[result->primitive_id];
-        const sm64_saturn_terrain_command_template_t *const metadata =
-            &s_bob_terrain_templates[result->primitive_id];
-        const uint16_t control = shade_path == SM64_SATURN_SHADE_TEXTURED
-            ? metadata->color : 0x0004U;
-        const bool patched = sm64_saturn_terrain_template_patch_resolved(
-            cmdt, control, resolved->pmod, resolved->colr, resolved->srca,
-            resolved->size,
+        const bool patched = sm64_saturn_terrain_template_patch_resolved_record(
+            cmdt, resolved,
             (const int16_t (*)[2])(const void *)shape_vertices,
             0U, false, table != NULL, gouraud_address);
         if (patched) {

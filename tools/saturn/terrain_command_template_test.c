@@ -114,15 +114,53 @@ static void test_compact_resolved_state_matches_full_templates(void)
     for (uint8_t path = 0U; path < 3U; path++) {
         uint16_t old_path[16];
         uint16_t compact_path[16];
+        uint16_t compact_record_path[16];
         const uint16_t *full = full_templates[path];
+        const sm64_saturn_terrain_resolved_command_t resolved = {
+            .control = full[0], .pmod = full[2], .colr = full[3],
+            .srca = full[4], .size = full[5]};
         assert(sm64_saturn_terrain_template_patch(
             old_path, full, vertices, 7U, path == 1U,
             patches_gouraud[path], 0x00123458U));
         assert(sm64_saturn_terrain_template_patch_resolved(
             compact_path, full[0], full[2], full[3], full[4], full[5],
             vertices, 7U, path == 1U, patches_gouraud[path], 0x00123458U));
+        assert(sm64_saturn_terrain_template_patch_resolved_record(
+            compact_record_path, &resolved, vertices, 7U, path == 1U,
+            patches_gouraud[path], 0x00123458U));
         assert(memcmp(old_path, compact_path, sizeof(old_path)) == 0);
+        assert(memcmp(old_path, compact_record_path, sizeof(old_path)) == 0);
     }
+}
+
+static void test_resolved_record_derives_bob_static_inputs_within_budget(void)
+{
+    const uint8_t rgb[3] = {12U, 17U, 3U};
+    sm64_saturn_terrain_command_template_t metadata;
+    assert(sm64_saturn_terrain_template_build_from_bob(
+        &metadata, true, rgb, 0x1234U));
+    assert(metadata.flags == (SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+                              SM64_SATURN_TERRAIN_RESULT_TEXTURED));
+    assert(metadata.texture_slot == 0x1234U);
+    assert(metadata.shade_path == SM64_SATURN_SHADE_TEXTURED);
+
+    const sm64_saturn_terrain_resolved_command_t resolved = {
+        .control = 0x0002U, .pmod = 0x04C0U, .colr = 0x0040U,
+        .srca = 0x0123U, .size = 0x0410U};
+    const int16_t vertices[4][2] = {
+        {-20, -10}, {20, -10}, {20, 10}, {-20, 10}};
+    uint16_t compact[16];
+    assert(sm64_saturn_terrain_template_patch_resolved_record(
+        compact, &resolved, vertices, 7U, false, false, 0U));
+    assert(compact[0] == resolved.control);
+    assert(compact[2] == resolved.pmod);
+    assert(compact[3] == resolved.colr);
+    assert(compact[4] == resolved.srca);
+    assert(compact[5] == resolved.size);
+    assert(sizeof(resolved) == 10U);
+    assert(sm64_saturn_terrain_compact_cache_bytes(867U) == 0x224BU);
+    assert(0x3710U - sm64_saturn_terrain_compact_cache_bytes(867U) >=
+           0x14C5U);
 }
 
 static void test_compact_cache_rejects_fragment_profile_above_budget(void)
@@ -193,6 +231,7 @@ int main(void)
     test_builds_each_shade_path();
     test_patch_changes_only_runtime_words();
     test_compact_resolved_state_matches_full_templates();
+    test_resolved_record_derives_bob_static_inputs_within_budget();
     test_compact_cache_rejects_fragment_profile_above_budget();
     test_runtime_material_changes_use_fallback();
     test_invalid_inputs_fail_closed();

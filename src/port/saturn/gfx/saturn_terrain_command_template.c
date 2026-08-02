@@ -22,6 +22,25 @@ bool sm64_saturn_terrain_template_build(
     return true;
 }
 
+bool sm64_saturn_terrain_template_build_from_bob(
+    sm64_saturn_terrain_command_template_t *out, bool textured,
+    const uint8_t rgb[3], uint32_t tile_offset)
+{
+    if (rgb == NULL)
+        return false;
+    const uint16_t shade = (uint16_t)(((uint16_t)rgb[0] << 10) |
+                                      ((uint16_t)rgb[1] << 5) | rgb[2]);
+    const sm64_saturn_terrain_primitive_t primitive = {
+        .flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+            (textured ? SM64_SATURN_TERRAIN_RESULT_TEXTURED
+                      : SM64_SATURN_TERRAIN_RESULT_GOURAUD),
+        .colors = {shade, shade, shade, shade},
+        .texture_slot = tile_offset > UINT16_MAX
+            ? UINT16_MAX : (uint16_t)tile_offset,
+    };
+    return sm64_saturn_terrain_template_build(out, &primitive);
+}
+
 bool sm64_saturn_terrain_template_matches(
     const sm64_saturn_terrain_command_template_t *template_value,
     uint16_t flags, const uint16_t colors[4], uint16_t texture_slot)
