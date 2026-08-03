@@ -4878,6 +4878,32 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertIn(CallSite("_root", 0x600100A, "_child"), result.calls)
         self.assertEqual(result.unresolved_transfers, [])
 
+    def test_bounded_bf_mnemonic_reaches_taken_arm_without_decoded_seed(self) -> None:
+        dis = """
+06001000 <_root>:
+ 6001000: 20 08 tst r0,r0
+ 6001002: 8b 01 bf 6001008 <_root+0x8>
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+ 6001008: b0 0a bsr 6001020 <_child>
+ 600100a: 00 09 nop
+ 600100c: 00 09 nop
+ 600100e: 00 0b rts
+ 6001010: 00 09 nop
+06001020 <_child>:
+ 6001020: 00 0b rts
+ 6001022: 00 09 nop
+"""
+        owners = (
+            FunctionOwner("_root", 0x6001000, 0x6001012, 1),
+            FunctionOwner("_child", 0x6001020, 0x6001024, 1),
+        )
+        oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _root\n")
+        bounded = verifier.prepare_route_bounded_code_only(
+            dis, "", owners, (oracle,)
+        )
+        self.assertEqual(bounded.selected_names, frozenset({"_root", "_child"}))
+
     def test_overwriting_compared_register_invalidates_stale_predicate_only(self) -> None:
         dis = """
 06001000 <_root>:

@@ -3645,7 +3645,10 @@ def analyze_code_only(
 
 
 FUNCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+)\s+<([^>]+)>:$")
-INSTRUCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+):\s+(?:[0-9A-Fa-f]{2}\s+){1,4}(.+)$")
+# SH-2 instructions are exactly 16 bits.  Accepting a third apparent byte
+# consumes the hexadecimal-looking ``bf`` branch mnemonic in compact objdump
+# fixtures and drops its taken CFG arm.
+INSTRUCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+):\s+(?:[0-9A-Fa-f]{2}\s+){2}(.+)$")
 LITERAL_LOAD_RE = re.compile(
     r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>"
 )
