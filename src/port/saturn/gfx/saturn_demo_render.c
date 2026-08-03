@@ -1836,7 +1836,10 @@ static void demo_reserve_mario_gouraud(
     for (uint16_t i = 0; i < s_actor_draw_count; i++) {
         s_actor_gouraud[i] = sm64_saturn_gouraud_bank_alloc(
             gouraud_bank, &s_actor_gouraud_addresses[i]);
-        if (s_actor_gouraud[i] == NULL) profile->gouraud_bank_overflow++;
+        if (s_actor_gouraud[i] == NULL) {
+            profile->gouraud_bank_overflow++;
+            profile->pipeline_faults++;
+        }
     }
 #else
     (void)gouraud_bank;

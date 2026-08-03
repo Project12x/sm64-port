@@ -6,6 +6,7 @@ Commits:
 
 - `perf: expose dual-SH2 and dual-VDP frame stages`
 - `perf: count all dual-pipeline fault paths`
+- `perf: count Mario Gouraud reservation faults`
 
 Changed files:
 
@@ -31,6 +32,7 @@ Tests:
 - GREEN: `.venv-saturn-tools/Scripts/python.exe tools/saturn/test_tools.py Fast3dProfileDecodeTests.test_dual_pipeline_counters_append_and_decode Fast3dProfileLayoutTests.test_offsets_match_a_compiled_offsetof_probe` passed (2 tests).
 - GREEN: host compilation and execution equivalent to `verify-runtime-contracts` passed: `gcc -std=c11 -Wall -Wextra -Werror ... tools/saturn/runtime_contract_test.c ... -o build/saturn/host-tests/runtime-contract-test.exe; build/saturn/host-tests/runtime-contract-test.exe`.
 - Corrective GREEN: reran the focused decoder/`offsetof` checks and the host runtime-contract compile/run after adding diagnostic-only `pipeline_faults` increments for the bounded peer-transform fence failure and both Gouraud allocation-exhaustion fallbacks; all passed.
+- Corrective GREEN: reran the same focused checks after adding the live Mario Gouraud-reservation exhaustion increment; all passed.
 - Attempted required command: `make -f Makefile.saturn.mk verify-tools verify-runtime-contracts`. `make` is absent from PATH. The available `C:\msys64\usr\bin\make.exe` ran `verify-tools`, which completed with one stale profile-fixture failure and 17 unrelated route-schema errors; it did not reach `verify-runtime-contracts`. Running that target alone through MSYS failed before compilation because MSYS converted the workspace path to an inaccessible `\\d\\...` path.
 
 Residual concerns:
@@ -41,3 +43,4 @@ Residual concerns:
 Corrective scope:
 
 - `pipeline_faults` now increments once for the existing latched peer-transform wait failure before the serial fallback clears it, and once for each existing Gouraud-bank exhaustion fallback. These additions do not alter ownership, polling bounds, fallback execution, or presentation.
+- The live `demo_reserve_mario_gouraud()` allocation failure also increments `pipeline_faults` before its existing flat Mario fallback; unused legacy emission code was not changed.
