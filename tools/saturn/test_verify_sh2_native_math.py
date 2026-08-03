@@ -5272,49 +5272,115 @@ fixture.c 3 0x06003002
         )
         self.assertEqual(prepared.closure, frozenset({"_route_root"}))
 
-    def test_internal_owner_literal_pool_call_to_data_is_not_a_graph_edge(self) -> None:
+    def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (
-            FunctionOwner("_route_root", 0x06001000, 0x06001040, 1),
-            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner(
+                "_demo_prepare_position_owners", 0x06001000, 0x06001040, 1
+            ),
+            FunctionOwner("_memset", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_owned_decoy", 0x06003000, 0x06003008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_demo_prepare_position_owners"}),
+            frozenset(),
+            frozenset(),
         )
         disassembly = """
-06001000 <_route_root>:
- 6001000: b0 7e bsr 6002000 <_route_child>
+06001000 <_demo_prepare_position_owners>:
+ 6001000: a0 06 bra 6001010 <_demo_prepare_position_owners+0x10>
  6001002: 00 09 nop
- 6001004: 00 0b rts
+ 6001004: b0 02 bsr 6009000 <_gDialogTextAlpha>
  6001006: 00 09 nop
- 6001010: b0 02 bsr 6009000 <_gDialogTextAlpha>
+ 6001008: d1 02 mov.l 6001014 <_demo_prepare_position_owners+0x14>,r1 ! 06009000 <_gDialogTextAlpha>
+ 600100a: 41 0b jsr @r1
+ 600100c: 00 09 nop
+ 6001010: 00 09 nop
  6001012: 00 09 nop
- 6001020: d1 02 mov.l 600102c <_route_root+0x2c>,r1 ! 06009000 <_gDialogTextAlpha>
- 6001022: 41 0b jsr @r1
+ 6001014: 00 09 nop
+ 6001016: 00 09 nop
+ 6001018: 00 09 nop
+ 600101a: d1 04 mov.l 600102c <_demo_prepare_position_owners+0x2c>,r1 ! 06002000 <_memset>
+ 600101c: 00 09 nop
+ 600101e: 41 0b jsr @r1
+ 6001020: 00 09 nop
+ 6001022: 00 0b rts
  6001024: 00 09 nop
-06002000 <_route_child>:
+06002000 <_memset>:
  6002000: 00 0b rts
  6002002: 00 09 nop
+06003000 <_owned_decoy>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
 """
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly,
             (
                 "fixture.c 1 0x06001000\n"
-                "fixture.c - 0x06001010 end_sequence\n"
+                "fixture.c - 0x06001004 end_sequence\n"
                 "fixture.c 2 0x06002000\n"
             ),
+            owners,
+            (oracle,),
+        )
+        self.assertEqual(
+            prepared.graph["_demo_prepare_position_owners"], {"_memset"}
+        )
+        self.assertEqual(
+            prepared.closure,
+            frozenset({"_demo_prepare_position_owners", "_memset"}),
+        )
+        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly.replace(
+                    "6009000 <_gDialogTextAlpha>",
+                    "6003000 <_owned_decoy>",
+                    1,
+                ),
+                "fixture.c 1 0x06001000\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_provenance_follows_both_conditional_arms(self) -> None:
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001020, 1),
+            FunctionOwner("_route_left", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_route_right", 0x06003000, 0x06003008, 1),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 03 bt 600100a <_route_root+0xa>
+ 6001002: b0 7d bsr 6002000 <_route_left>
+ 6001004: 00 09 nop
+ 6001006: a0 04 bra 6001012 <_route_root+0x12>
+ 6001008: 00 09 nop
+ 600100a: b0 79 bsr 6003000 <_route_right>
+ 600100c: 00 09 nop
+ 600100e: 00 0b rts
+ 6001010: 00 09 nop
+ 6001012: 00 0b rts
+ 6001014: 00 09 nop
+06002000 <_route_left>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06003000 <_route_right>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.c 1 0x06001000\n",
             owners,
             (self.ORACLE,),
         )
         self.assertEqual(
-            prepared.graph["_route_root"], {"_route_child"}
+            prepared.graph["_route_root"], {"_route_left", "_route_right"}
         )
         self.assertEqual(
-            prepared.closure, frozenset({"_route_root", "_route_child"})
+            prepared.closure,
+            frozenset({"_route_root", "_route_left", "_route_right"}),
         )
-        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
-            bounded_verifier.prepare_route_bounded_code_only(
-                disassembly,
-                "fixture.c 1 0x06002000\n",
-                owners,
-                (self.ORACLE,),
-            )
 
     def test_executable_targetless_bsr_fails_closed(self) -> None:
         disassembly = """
@@ -5330,6 +5396,17 @@ fixture.c 3 0x06003002
                 "fixture.c 1 0x06001000\n",
                 self.OWNERS[:1],
                 (self.ORACLE,),
+            )
+
+    def test_cfg_provenance_rejects_reachable_unknown_bra_target(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: a0 02 bra <unknown>
+ 6001002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "unknown bra target"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", self.OWNERS[:1], (self.ORACLE,)
             )
 
     def test_executable_direct_call_to_unowned_target_fails_closed(self) -> None:

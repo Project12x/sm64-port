@@ -3570,13 +3570,14 @@ def scan_direct_calls(
     caller = "<outside-function>"
     registers: dict[str, tuple[str, int]] = {}
     stack_slots: dict[int, tuple[str, int]] = {}
+    unproven_registers: dict[str, tuple[str, int]] = {}
+    unproven_stack_slots: dict[int, tuple[str, int]] = {}
     calls: list[CallSite] = []
 
     def source_is_proven(address: int) -> bool:
         return (
             proven_source_addresses is None
             or address in proven_source_addresses
-            or _island_at_code_address(island_list, address) is not None
         )
 
     def target_is_executable(address: int) -> bool:
@@ -3660,6 +3661,8 @@ def scan_direct_calls(
             if owner_list is None or next_region != active_region:
                 registers.clear()
                 stack_slots.clear()
+                unproven_registers.clear()
+                unproven_stack_slots.clear()
             active_region = next_region
             continue
 
@@ -3674,17 +3677,31 @@ def scan_direct_calls(
             if source_region is None:
                 registers.clear()
                 stack_slots.clear()
+                unproven_registers.clear()
+                unproven_stack_slots.clear()
                 active_region = None
                 continue
             if source_region != active_region:
                 registers.clear()
                 stack_slots.clear()
+                unproven_registers.clear()
+                unproven_stack_slots.clear()
             active_region = source_region
             caller = source_region[0]
 
+        row_is_proven = source_is_proven(address)
+        if proven_source_addresses is not None and not row_is_proven:
+            row_registers = unproven_registers
+            row_stack_slots = unproven_stack_slots
+        else:
+            unproven_registers.clear()
+            unproven_stack_slots.clear()
+            row_registers = registers
+            row_stack_slots = stack_slots
+
         load = LITERAL_LOAD_RE.search(text)
         if load:
-            registers[load.group(1)] = (
+            row_registers[load.group(1)] = (
                 load.group(3), int(load.group(2), 16)
             )
             continue
@@ -3695,27 +3712,27 @@ def scan_direct_calls(
         stack_store = STACK_STORE_RE.search(text)
         if stack_store:
             slot = int(stack_store.group(2), 10)
-            target = registers.get(stack_store.group(1))
+            target = row_registers.get(stack_store.group(1))
             if target is None:
-                stack_slots.pop(slot, None)
+                row_stack_slots.pop(slot, None)
             else:
-                stack_slots[slot] = target
+                row_stack_slots[slot] = target
             continue
 
         stack_load = STACK_LOAD_RE.search(text)
         if stack_load:
             slot = int(stack_load.group(1), 10)
             target_register = stack_load.group(2)
-            target = stack_slots.get(slot)
+            target = row_stack_slots.get(slot)
             if target is None:
-                registers.pop(target_register, None)
+                row_registers.pop(target_register, None)
             else:
-                registers[target_register] = target
+                row_registers[target_register] = target
             continue
 
         jsr = JSR_RE.search(text)
         if jsr:
-            target = registers.get(jsr.group(1))
+            target = row_registers.get(jsr.group(1))
             if target is not None:
                 displayed, target_address = target
                 symbol = _symbol_base(displayed)
@@ -3752,9 +3769,9 @@ def scan_direct_calls(
         destination = DESTINATION_RE.search(text)
         if destination:
             destination_register = destination.group(1)
-            registers.pop(destination_register, None)
+            row_registers.pop(destination_register, None)
             if destination_register == "15":
-                stack_slots.clear()
+                row_stack_slots.clear()
     return calls
 
 
@@ -4498,12 +4515,13 @@ def _selected_island_decoded_lines(
     return result
 
 
-def _bounded_decoded_code_sources(
+def _bounded_decoded_code_seeds(
     text: str,
     owners: tuple[FunctionOwner, ...],
+    islands: tuple[LocalIsland, ...],
     owner_address_map: dict[int, FunctionOwner] | None = None,
 ) -> frozenset[int]:
-    """Return exact normal-function instruction sources proved by DWARF rows."""
+    """Return aligned non-terminal DWARF roots in validated code regions."""
     owner_by_address = (
         owner_address_map
         if owner_address_map is not None
@@ -4517,9 +4535,137 @@ def _bounded_decoded_code_sources(
         if match is None:
             continue
         address = int(match.group(1), 16)
-        if not address & 1 and address in owner_by_address:
+        if not address & 1 and (
+            address in owner_by_address
+            or _island_at_code_address(islands, address) is not None
+        ):
             result.add(address)
     return frozenset(result)
+
+
+def _bounded_control_flow_sources(
+    blocks: dict[str, str],
+    owners: tuple[FunctionOwner, ...],
+    islands: tuple[LocalIsland, ...],
+    decoded_text: str,
+    owner_address_map: dict[int, FunctionOwner] | None = None,
+) -> tuple[frozenset[int], list[tuple[str, int, str]]]:
+    """Prove instruction sources from entries, DWARF roots, and SH control flow."""
+    owner_by_identity = {owner.name: owner for owner in owners}
+    island_by_identity = {
+        _local_island_identity(island): island for island in islands
+    }
+    decoded_seeds = _bounded_decoded_code_seeds(
+        decoded_text, owners, islands, owner_address_map
+    )
+    proven: set[int] = set()
+    errors: list[tuple[str, int, str]] = []
+
+    for identity, block in blocks.items():
+        rows: dict[int, tuple[str, str]] = {}
+        for line in block.splitlines():
+            match = INSTRUCTION_RE.match(line)
+            if match is None:
+                continue
+            address = int(match.group(1), 16)
+            operation = match.group(2).strip().split("!", 1)[0].strip()
+            parts = operation.split(None, 1)
+            mnemonic = parts[0]
+            operands = "" if len(parts) == 1 else parts[1]
+            rows[address] = (mnemonic.lower(), operands)
+        if not rows:
+            continue
+
+        owner = owner_by_identity.get(identity)
+        island = island_by_identity.get(identity)
+        if owner is not None:
+            entry = owner.start
+            region_base = owner.start
+        elif island is not None:
+            candidates = [address for address in rows if address >= island.code_start]
+            if not candidates:
+                continue
+            entry = min(candidates)
+            region_base = island.start
+        else:
+            continue
+
+        pending = deque([
+            *([entry] if entry in rows else []),
+            *sorted(decoded_seeds.intersection(rows)),
+        ])
+        visited: set[int] = set()
+
+        def structural_error(address: int, detail: str) -> None:
+            errors.append((
+                identity,
+                address,
+                "bounded code provenance has unresolved direct control flow: "
+                f"{identity}+0x{address - region_base:x}: {detail}",
+            ))
+
+        def schedule(address: int) -> None:
+            if address in rows and address not in visited:
+                pending.append(address)
+
+        def delay_slot(address: int) -> None:
+            slot = address + 2
+            if slot in rows:
+                proven.add(slot)
+
+        while pending:
+            address = pending.popleft()
+            if address in visited or address not in rows:
+                continue
+            visited.add(address)
+            proven.add(address)
+            mnemonic, operands = rows[address]
+            target = _target_from_text(operands)
+
+            if mnemonic in {"rts", "rte", "jmp", "braf"}:
+                delay_slot(address)
+                continue
+            if mnemonic == "bra":
+                delay_slot(address)
+                if target is None:
+                    structural_error(address, "unknown bra target")
+                elif target in rows:
+                    schedule(target)
+                else:
+                    target_identity = _bounded_code_identity(
+                        owners, islands, target
+                    )
+                    if target_identity is None:
+                        structural_error(address, f"unowned bra target 0x{target:08x}")
+                continue
+            if mnemonic in {"bt", "bf"}:
+                if target is None or target not in rows:
+                    structural_error(address, "unknown or out-of-region branch target")
+                else:
+                    schedule(target)
+                schedule(address + 2)
+                continue
+            if mnemonic in {"bt.s", "bf.s", "bt/s", "bf/s"}:
+                delay_slot(address)
+                if target is None or target not in rows:
+                    structural_error(address, "unknown or out-of-region branch target")
+                else:
+                    schedule(target)
+                schedule(address + 4)
+                continue
+            if mnemonic == "bsr":
+                delay_slot(address)
+                if target in rows:
+                    schedule(target)
+                schedule(address + 4)
+                continue
+            if mnemonic in {"jsr", "bsrf"}:
+                delay_slot(address)
+                schedule(address + 4)
+                continue
+            schedule(address + 2)
+
+    return frozenset(proven), errors
 
 
 def _bounded_island_origins(
@@ -4594,13 +4740,16 @@ def prepare_route_bounded_code_only(
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
-    proven_source_addresses = _bounded_decoded_code_sources(
-        decoded_text, owner_list, owner_address_map
+    proven_source_addresses, deferred_errors = _bounded_control_flow_sources(
+        blocks,
+        owner_list,
+        island_list,
+        decoded_text,
+        owner_address_map,
     )
     # Closure is not known until after this text scan. Preserve potential
-    # executable-call failures by caller, then enforce them only for the
-    # route-selected normal functions (island sources are always proven).
-    deferred_errors: list[tuple[str, int, str]] = []
+    # structural and executable-call failures by caller, then enforce them
+    # only for route-selected normal functions or their selected islands.
     for call in scan_direct_calls(
         disassembly,
         owner_list,
