@@ -8,11 +8,8 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <assert.h>
-#if defined(__sh__)
-#include <cpu/cache.h>
-#endif
-
 #include "game/camera.h"
+#include "saturn_dual_frame_bank.h"
 #include "saturn_gouraud.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
@@ -101,19 +98,11 @@
 #endif
 #define DEMO_TERRAIN_TRANSFORM_CACHE __attribute__((section(".lwram_bss")))
 
-/* Shared transform-once cache. Both SH-2s write disjoint position indices,
- * cross the uncached phase fence below, purge their own caches, then read
- * the complete bank while producing disjoint compact-result spans.
- *
- * CORRECTED PREMISE (Pipe 5 root cause): an earlier version of this comment
- * claimed LWRAM "does not require a full cache purge". That was false --
- * LWRAM at 0x00200000 is CACHEABLE on the SH-2 exactly like HWRAM; only the
- * 0x2xxxxxxx mirror bypasses the cache. Cross-CPU reads of this bank
- * through cached aliases consumed stale lines, which is why the post-fence
- * cpu_cache_purge() in demo_transform_owned_positions() exists. This adapts
- * SlaveDriver's transform-shared-wall-vertices-once pattern INCLUDING its
- * per-pass cache flush (WALLS.C:1806-1810), and Z-Treme's shared full/LOD
- * pntbl ownership. */
+/* Shared transform-once cache. Both SH-2s write their disjoint indices through
+ * these normal cached pointers.  After the uncached release fence, each
+ * reader keeps its own range cached and reads the peer range via the explicit
+ * cache-through alias selected by demo_*_read().  This is deliberately more
+ * precise than the earlier whole-cache-purge recovery. */
 static sm64_saturn_vec3i_t s_view[SM64_SATURN_BOB_POSITION_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static sm64_saturn_projected_vertex_t s_projected[
@@ -129,7 +118,7 @@ static uint8_t s_position_owner[SM64_SATURN_BOB_POSITION_COUNT]
 static uint32_t s_visible_position_words[DEMO_VISIBLE_POSITION_WORDS]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static sm64_saturn_visible_position_set_t s_visible_position_set;
-/* Cross-CPU fence flags and result-span headers MUST live in the uncached
+/* Cross-CPU fence records and result-span headers MUST live in the uncached
  * partition (.uncached, addresses >= 0x20000000). The SH7604 has no
  * inter-CPU cache coherency: a cached-alias poll spins on the reader's own
  * stale line (it wrote the 0 reset itself), and a cached-alias span header
@@ -137,11 +126,10 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
  * Pipe 5 root cause -- both Mario and terrain vanished from one incoherent
  * header (stale count = slave terrain dropped; post-eviction fresh count =
  * arena overflow starving Mario's reservation). SlaveDriver's discipline is
- * a full cache flush per slave pass (WALLS.C:1806-1810) plus cache-through
- * result writes (WALLS.C:1272); tools/saturn/verify_dual_cpu_coherency.py
- * pins these placements at build time. */
+ * an uncached release record plus cache-through peer reads; tools/saturn/
+ * verify_dual_cpu_coherency.py pins these placements at build time. */
 #define DEMO_CROSS_CPU_SHARED __attribute__((section(".uncached")))
-static volatile uint16_t s_transform_phase_ready[2]
+static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
 static volatile uint16_t s_transform_phase_failed
     DEMO_CROSS_CPU_SHARED;
@@ -297,6 +285,42 @@ static const sm64_saturn_bob_primitive_t *s_bob_primitives_active;
 static uint8_t s_bob_resident_ready;
 static uint16_t s_slave_begin = SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U;
 static uint16_t s_last_master_wait_ticks;
+static uint32_t s_transform_publish_sequence;
+
+/* Ownership is master-produced immutable frame metadata.  The slave never
+ * treats a potentially stale cached copy as permission to read a peer output
+ * through its cached alias. */
+static inline uint8_t demo_position_owner_read(uint8_t lane,
+                                                uint16_t position)
+{
+    return *((const uint8_t *)sm64_saturn_dual_frame_read_range(
+        lane, 0U, s_position_owner) + position);
+}
+
+static inline const sm64_saturn_vec3i_t *demo_view_read(uint8_t lane,
+                                                          uint16_t position)
+{
+    return (const sm64_saturn_vec3i_t *)
+        sm64_saturn_dual_frame_read_range(
+            lane, demo_position_owner_read(lane, position), s_view) + position;
+}
+
+static inline const sm64_saturn_projected_vertex_t *demo_projected_read(
+    uint8_t lane, uint16_t position)
+{
+    return (const sm64_saturn_projected_vertex_t *)
+        sm64_saturn_dual_frame_read_range(
+            lane, demo_position_owner_read(lane, position), s_projected) +
+        position;
+}
+
+static inline const uint8_t *demo_position_valid_read(uint8_t lane,
+                                                        uint16_t position)
+{
+    return (const uint8_t *)sm64_saturn_dual_frame_read_range(
+        lane, demo_position_owner_read(lane, position), s_position_valid) +
+        position;
+}
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
 static void demo_bsp_append(int16_t node,
@@ -597,24 +621,28 @@ static void __attribute__((unused)) demo_build_clipped_quad(
 {
     for (uint8_t corner = 0U; corner < 4U; corner++) {
         const uint16_t index = primitive->indices[corner];
-        output[corner] = s_projected[index];
-        if (s_view[index].z > SATURN_DEMO_NEAR_DEPTH) continue;
+        output[corner] = *demo_projected_read(0U, index);
+        if (demo_view_read(0U, index)->z > SATURN_DEMO_NEAR_DEPTH) continue;
 
         const uint8_t next = (uint8_t)((corner + 1U) & 3U);
         const uint8_t previous = (uint8_t)((corner + 3U) & 3U);
         uint8_t front = UINT8_MAX;
-        if (s_view[primitive->indices[next]].z > SATURN_DEMO_NEAR_DEPTH &&
-            s_view[primitive->indices[previous]].z <=
+        if (demo_view_read(0U, primitive->indices[next])->z >
+                SATURN_DEMO_NEAR_DEPTH &&
+            demo_view_read(0U, primitive->indices[previous])->z <=
                 SATURN_DEMO_NEAR_DEPTH) {
             front = next;
         } else if (
-            s_view[primitive->indices[previous]].z > SATURN_DEMO_NEAR_DEPTH &&
-            s_view[primitive->indices[next]].z <= SATURN_DEMO_NEAR_DEPTH) {
+            demo_view_read(0U, primitive->indices[previous])->z >
+                SATURN_DEMO_NEAR_DEPTH &&
+            demo_view_read(0U, primitive->indices[next])->z <=
+                SATURN_DEMO_NEAR_DEPTH) {
             front = previous;
         }
         if (front == UINT8_MAX &&
-            s_view[primitive->indices[next]].z > SATURN_DEMO_NEAR_DEPTH &&
-            s_view[primitive->indices[previous]].z >
+            demo_view_read(0U, primitive->indices[next])->z >
+                SATURN_DEMO_NEAR_DEPTH &&
+            demo_view_read(0U, primitive->indices[previous])->z >
                 SATURN_DEMO_NEAR_DEPTH) {
             /* An isolated back corner has two valid edge intersections;
              * choose the next edge deterministically. */
@@ -623,9 +651,10 @@ static void __attribute__((unused)) demo_build_clipped_quad(
         if (front == UINT8_MAX) continue;
 
         const sm64_saturn_projected_vertex_t edge =
-            s_projected[primitive->indices[front]];
-        const int32_t back_z = s_view[index].z;
-        const int32_t front_z = s_view[primitive->indices[front]].z;
+            *demo_projected_read(0U, primitive->indices[front]);
+        const int32_t back_z = demo_view_read(0U, index)->z;
+        const int32_t front_z =
+            demo_view_read(0U, primitive->indices[front])->z;
         const int32_t denominator = front_z - back_z;
         if (denominator <= 0) continue;
         int32_t ratio;
@@ -652,7 +681,8 @@ static void demo_primitive_screen_vertices(
             : NULL;
     for (uint8_t corner = 0U; corner < 4U; corner++) {
         const sm64_saturn_projected_vertex_t point = projected != NULL
-            ? projected[corner] : s_projected[primitive->indices[corner]];
+            ? projected[corner]
+            : *demo_projected_read(0U, primitive->indices[corner]);
         vertices[corner].x = point.x;
         vertices[corner].y = point.y;
     }
@@ -680,6 +710,7 @@ typedef struct demo_classify_context {
     uint32_t clip_recovery[2];
     uint32_t clip_overflow[2];
     uint16_t required_positions;
+    uint32_t transform_sequence;
     bool dual_phase;
 } demo_classify_context_t;
 
@@ -941,7 +972,7 @@ static bool demo_transform_owned_positions(
          position < SM64_SATURN_BOB_POSITION_COUNT; position++) {
         if (!sm64_saturn_visible_position_set_test(
                 &s_visible_position_set, position) ||
-            s_position_owner[position] != lane)
+            demo_position_owner_read(lane, position) != lane)
             continue;
         if ((position % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) {
@@ -957,18 +988,18 @@ static bool demo_transform_owned_positions(
         context->transformed[lane]++;
     }
 
-    /* Both CPUs write disjoint LWRAM indices, then cross this small phase
-     * fence before either consumes the shared transformed bank. This is the
-     * same transform-once/index-many ownership used by SlaveDriver's wall
-     * vertices and Z-Treme's shared full/LOD point table. */
-    __asm__ volatile("" ::: "memory");
-    s_transform_phase_ready[lane] = 1U;
+    /* Bulk writes are complete before this uncached release.  The sequence
+     * and count are published before ready, which is deliberately last. */
+    sm64_saturn_dual_frame_publish(
+        &s_transform_frame_bank, lane, context->transform_sequence,
+        (uint16_t)context->transformed[lane]);
     if (!context->dual_phase) return true;
 
     uint32_t spins = 0U;
-    const uint8_t peer = lane ^ 1U;
-    while (s_transform_phase_ready[peer] == 0U &&
-           s_transform_phase_failed == 0U &&
+    uint16_t peer_count = 0U;
+    while (!sm64_saturn_dual_frame_peer_ready(
+               &s_transform_frame_bank, lane, context->transform_sequence,
+               &peer_count) && s_transform_phase_failed == 0U &&
            spins++ < 4000000U) {
         if ((spins & 0x3FFFU) == 0U &&
             sm64_saturn_dual_worker_cancelled()) {
@@ -976,21 +1007,19 @@ static bool demo_transform_owned_positions(
             break;
         }
     }
-    if (s_transform_phase_ready[peer] == 0U) {
+    if (!sm64_saturn_dual_frame_peer_ready(
+            &s_transform_frame_bank, lane, context->transform_sequence,
+            &peer_count)) {
         s_transform_phase_failed = 1U;
         return false;
     }
-    __asm__ volatile("" ::: "memory");
-#if defined(__sh__)
-    /* Each CPU drops its cached view of the shared transform bank before
-     * consuming the peer's half. The peer's write-through stores reached
-     * LWRAM, but this CPU's cache may hold pre-fence lines for those
-     * indices. One whole-cache purge per CPU per frame is SlaveDriver's own
-     * discipline at every slave pass boundary (WALLS.C:1806-1810); the
-     * SH7604 cache is write-through, so purge is invalidate-only and there
-     * is nothing dirty to lose. */
-    cpu_cache_purge();
-#endif
+    /* peer_count is intentionally observed here as part of the accepted
+     * uncached header; it supplies a bounded, diagnostic cross-check without
+     * changing the work split. */
+    if (peer_count > context->required_positions) {
+        s_transform_phase_failed = 1U;
+        return false;
+    }
     return true;
 }
 
@@ -1031,7 +1060,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         for (uint8_t corner = 0U; corner < 4U; corner++) {
             const uint16_t index = primitive->indices[corner];
             if (index >= SM64_SATURN_BOB_POSITION_COUNT ||
-                s_position_valid[index] == 0U)
+                *demo_position_valid_read(lane, index) == 0U)
                 transform_valid = false;
         }
         if (!transform_valid) {
@@ -1040,7 +1069,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         }
         bool any_front = false;
         for (uint8_t corner = 0U; corner < 4U; corner++) {
-            if (s_view[primitive->indices[corner]].z >
+            if (demo_view_read(lane, primitive->indices[corner])->z >
                 SATURN_DEMO_NEAR_DEPTH) {
                 any_front = true;
                 break;
@@ -1051,10 +1080,10 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
             s_primitive_visible[i] = 0U;
             continue;
         }
-        int32_t depth = s_view[primitive->indices[0]].z;
+        int32_t depth = demo_view_read(lane, primitive->indices[0])->z;
         for (uint8_t corner = 1U; corner < 4U; corner++)
-            if (s_view[primitive->indices[corner]].z > depth)
-                depth = s_view[primitive->indices[corner]].z;
+            if (demo_view_read(lane, primitive->indices[corner])->z > depth)
+                depth = demo_view_read(lane, primitive->indices[corner])->z;
         const uint8_t lod_tier = demo_lod_select(i, depth);
         s_primitive_lod_suppressed[i] = 0U;
         s_primitive_lod_texture_downgraded[i] = 0U;
@@ -1076,7 +1105,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         sm64_saturn_terrain_clip_vertex_t clip_input[4];
         for (uint8_t corner = 0U; corner < 4U; corner++) {
             const sm64_saturn_vec3i_t view =
-                s_view[primitive->indices[corner]];
+                *demo_view_read(lane, primitive->indices[corner]);
             clip_input[corner] = (sm64_saturn_terrain_clip_vertex_t){
                 .view = view,
                 .shade = (uint16_t)(((uint16_t)primitive->rgb[0] << 10) |
@@ -1149,10 +1178,10 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
          * classified as near before its far half had been painted.  Proper
          * BSP splitting remains the long-term fix; max-z is the conservative
          * unsplit fallback used by the reference path. */
-        int32_t z = s_projected[primitive->indices[0]].z;
+        int32_t z = demo_projected_read(lane, primitive->indices[0])->z;
         for (uint8_t corner = 1U; corner < 4U; corner++) {
             const int32_t corner_z =
-                s_projected[primitive->indices[corner]].z;
+                demo_projected_read(lane, primitive->indices[corner])->z;
             if (corner_z > z) z = corner_z;
         }
         const sm64_saturn_projected_vertex_t *area_vertices =
@@ -1163,13 +1192,14 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         bool has_area = false;
         for (uint8_t fan = 1U; fan + 1U < area_count; fan++) {
             const sm64_saturn_projected_vertex_t a = area_vertices != NULL
-                ? area_vertices[0] : s_projected[primitive->indices[0]];
+                ? area_vertices[0]
+                : *demo_projected_read(lane, primitive->indices[0]);
             const sm64_saturn_projected_vertex_t b = area_vertices != NULL
                 ? area_vertices[fan] :
-                  s_projected[primitive->indices[fan]];
+                  *demo_projected_read(lane, primitive->indices[fan]);
             const sm64_saturn_projected_vertex_t c = area_vertices != NULL
                 ? area_vertices[fan + 1U] :
-                  s_projected[primitive->indices[fan + 1U]];
+                  *demo_projected_read(lane, primitive->indices[fan + 1U]);
             const int32_t cross =
                 (int32_t)(b.x - a.x) * (c.y - a.y) -
                 (int32_t)(b.y - a.y) * (c.x - a.x);
@@ -1252,9 +1282,10 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                     source_corner = corner < result_corners
                         ? corner : (uint8_t)(result_corners - 1U);
                 }
-                const sm64_saturn_projected_vertex_t screen = projected != NULL
-                    ? projected[source_corner]
-                    : s_projected[primitive->indices[source_corner]];
+            const sm64_saturn_projected_vertex_t screen = projected != NULL
+                ? projected[source_corner]
+                : *demo_projected_read(lane,
+                                       primitive->indices[source_corner]);
                 shape_vertices[corner][0] = screen.x;
                 shape_vertices[corner][1] = screen.y;
             }
@@ -2020,9 +2051,11 @@ void sm64_saturn_demo_render_frame(
     const bool dual_transform_phase = false;
 #endif
     memset(s_position_valid, 0, sizeof(s_position_valid));
-    s_transform_phase_ready[0] = 0U;
-    s_transform_phase_ready[1] = 0U;
+    sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
     s_transform_phase_failed = 0U;
+    s_transform_publish_sequence++;
+    if (s_transform_publish_sequence == 0U)
+        s_transform_publish_sequence = 1U;
     demo_prepare_position_owners(work_split, dual_transform_phase);
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
@@ -2041,6 +2074,7 @@ void sm64_saturn_demo_render_frame(
         .near_rejected = {0U, 0U},
         .degenerate = {0U, 0U},
         .required_positions = required_positions,
+        .transform_sequence = s_transform_publish_sequence,
         .dual_phase = dual_transform_phase
     };
     s_terrain_publish_sequence++;
@@ -2100,8 +2134,7 @@ void sm64_saturn_demo_render_frame(
         memset(classify.clip_to_two, 0, sizeof(classify.clip_to_two));
         memset(classify.clip_recovery, 0, sizeof(classify.clip_recovery));
         memset(classify.clip_overflow, 0, sizeof(classify.clip_overflow));
-        s_transform_phase_ready[0] = 0U;
-        s_transform_phase_ready[1] = 0U;
+        sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
         s_transform_phase_failed = 0U;
         classify.dual_phase = false;
         demo_prepare_position_owners(s_render_work_count, false);
