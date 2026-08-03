@@ -10,6 +10,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AREA_C = REPO_ROOT / "src" / "game" / "area.c"
+SOURCEBOOT_C = REPO_ROOT / "src" / "port" / "saturn" / "sourceboot" / "main.c"
 
 
 def extract_c_function(path: Path, name: str) -> str:
@@ -44,8 +45,8 @@ def extract_if_block(body: str, condition: str) -> str:
 
 
 class SourceRenderSuppressionTests(unittest.TestCase):
-    def test_saturn_ir_path_skips_geo_but_keeps_state_updates(self) -> None:
-        """Fails if the IR path builds source geometry or skips state mutations."""
+    def test_dormant_policy_guard_keeps_known_outside_state_calls(self) -> None:
+        """Keep the dormant guard structurally separated from known state calls."""
         body = extract_c_function(AREA_C, "render_game")
         self.assertIn("sm64_saturn_source_runtime_scene_graph_suppressed", body)
         guarded = extract_if_block(body, "!scene_graph_suppressed")
@@ -58,6 +59,13 @@ class SourceRenderSuppressionTests(unittest.TestCase):
         ):
             self.assertIn(call, body)
             self.assertNotIn(call, guarded)
+
+    def test_sourceboot_cannot_enable_scene_graph_suppression(self) -> None:
+        """Fail closed until a behavior-tested state-only geo seam exists."""
+        body = extract_c_function(SOURCEBOOT_C, "sourceboot_run_source_tick")
+        self.assertNotIn(
+            "sm64_saturn_source_runtime_set_scene_graph_suppressed(", body
+        )
 
 
 if __name__ == "__main__":

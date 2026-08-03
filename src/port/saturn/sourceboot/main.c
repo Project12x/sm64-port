@@ -80,16 +80,13 @@ static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
 #if SATURN_DEMO_PATH
-    /* The IR demo consumes the source-owned simulation state, so no original
-     * Fast3D scene/display construction is needed during this tick.  Keep
-     * the two policy switches paired in this helper so every return path
-     * restores the ordinary source behavior. */
+    /* Keep final display submission suppressed while the IR demo owns the
+     * frame.  Do not enable scene-graph suppression here: geo_process_root()
+     * still owns source animation and stateful geo-callback updates. */
     sm64_saturn_source_runtime_set_display_suppressed(true);
-    sm64_saturn_source_runtime_set_scene_graph_suppressed(true);
 #endif
     game_loop_one_iteration();
 #if SATURN_DEMO_PATH
-    sm64_saturn_source_runtime_set_scene_graph_suppressed(false);
     sm64_saturn_source_runtime_set_display_suppressed(false);
 #endif
 #if SATURN_DEMO_PATH
