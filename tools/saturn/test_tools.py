@@ -67,6 +67,8 @@ from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_bob_bsp import (  # noqa: E402
+    _flatten as flatten_bob_bsp,
+    _polygons as bob_bsp_polygons,
     compile_bsp as compile_bob_bsp,
     header_text as header_bob_bsp,
 )
@@ -968,12 +970,14 @@ class BobMeshIRTests(unittest.TestCase):
         root = TOOLS.parents[1]
         mesh = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
         manifest = json.loads((root / "build/saturn/sourceboot/generated/bob_tiles_manifest.json").read_text(encoding="utf-8"))
-        header = emit_bob_scene(mesh, manifest)
+        bsp = compile_bob_bsp(mesh)
+        header = emit_bob_scene(mesh, manifest, bsp)
         # Textured source triangles share castleviewer's repeated-C lowering;
         # no offline affine companion is retained in the runtime pool.
         self.assertIn("SM64_SATURN_BOB_POSITION_COUNT 1625U", header)
         self.assertIn("SM64_SATURN_BOB_PRIMITIVE_COUNT 867U", header)
-        self.assertEqual(header, emit_bob_scene(mesh, manifest))
+        self.assertIn("SM64_SATURN_BOB_SCENE_LEAF_SPAN_COUNT 1183U", header)
+        self.assertEqual(header, emit_bob_scene(mesh, manifest, bsp))
         self.assertEqual(header.count("    {{"), 867)
         self.assertIn("512U, 32U", header)
 
@@ -1010,6 +1014,68 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertIn("sm64_saturn_bob_bsp_leaf_ranges", header)
         self.assertIn("sm64_saturn_bob_bsp_octant_child_order", header)
         self.assertEqual(header, header_bob_bsp(scene))
+
+    def test_bob_bsp_leaf_spans_are_deterministic_complete_and_unique(self) -> None:
+        """The runtime work producer must not need an all-primitive scan.
+
+        A span is the deterministic, deduplicated local reference list for
+        one generated BSP node.  A primitive may conservatively occur in more
+        than one node after an exact BSP split, but it must occur at most once
+        in any individual span; the runtime keeps the predecessor traversal's
+        first-reference-wins order while it appends accepted spans.
+        """
+        root = TOOLS.parents[1]
+        scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
+        first = compile_bob_bsp(scene)
+        second = compile_bob_bsp(scene)
+        spans = first["leaf_spans"]
+        self.assertEqual(spans, second["leaf_spans"])
+        self.assertEqual(len(spans["leaf_first_ref"]), first["node_count"])
+        self.assertEqual(len(spans["leaf_ref_count"]), first["node_count"])
+        packed = spans["primitive_refs"]
+        self.assertEqual(spans["primitive_ref_count"], len(packed))
+        for start, count in zip(spans["leaf_first_ref"],
+                                spans["leaf_ref_count"]):
+            self.assertGreaterEqual(start, 0)
+            self.assertGreaterEqual(count, 0)
+            self.assertLessEqual(start + count, len(packed))
+            refs = packed[start:start + count]
+            self.assertEqual(len(refs), len(set(refs)))
+            self.assertTrue(all(0 <= ref < first["input_render_polygons"]
+                                for ref in refs))
+        # The packed spans are a conservative replacement for the legacy
+        # node-local reference stream: no compiled primitive can disappear.
+        self.assertEqual(set(packed), set(range(first["input_render_polygons"])))
+        # Compare deterministic representative admitted-node masks against
+        # the predecessor's node-local references. The compact stream must
+        # retain both first-reference-wins membership and source order.
+        legacy_root, _stats = build_bsp(bob_bsp_polygons(scene))
+        _nodes, legacy_refs, _children, legacy_ranges, _subtree, _octants, _leaves = \
+            flatten_bob_bsp(legacy_root)
+        for admitted_nodes in (range(first["node_count"]),
+                               range(0, first["node_count"], 3),
+                               range(1, first["node_count"], 7)):
+            legacy_order: list[int] = []
+            compact_order: list[int] = []
+            legacy_seen: set[int] = set()
+            compact_seen: set[int] = set()
+            for node in admitted_nodes:
+                start, count = legacy_ranges[node]
+                for primitive in legacy_refs[start:start + count]:
+                    if primitive not in legacy_seen:
+                        legacy_seen.add(primitive)
+                        legacy_order.append(primitive)
+                start = spans["leaf_first_ref"][node]
+                count = spans["leaf_ref_count"][node]
+                for primitive in packed[start:start + count]:
+                    if primitive not in compact_seen:
+                        compact_seen.add(primitive)
+                        compact_order.append(primitive)
+            self.assertEqual(compact_order, legacy_order)
+        header = header_bob_bsp(scene)
+        self.assertIn("sm64_saturn_bob_leaf_first_ref", header)
+        self.assertIn("sm64_saturn_bob_leaf_ref_count", header)
+        self.assertIn("sm64_saturn_bob_primitive_refs", header)
 
     def test_bob_bsp_fragment_texture_cost_exposes_budget_gap(self) -> None:
         root = TOOLS.parents[1]

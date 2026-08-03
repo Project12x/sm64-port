@@ -141,16 +141,17 @@ static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_reordered[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_emit_count;
 static uint8_t s_bsp_seen[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_spatial_admitted[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_spatial_seen[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+#define DEMO_SPATIAL_REF_SEEN_WORDS \
+    ((SM64_SATURN_BOB_PRIMITIVE_COUNT + 31U) / 32U)
+/* This compact first-reference-wins bitset replaces the former 867-byte
+ * admission array. It is reset as a fixed number of words and never scanned:
+ * traversal alone appends generated spans to the bounded work list. */
+static uint32_t s_spatial_ref_seen[DEMO_SPATIAL_REF_SEEN_WORDS];
 /* The generated BSP is expected to be a tree, but the runtime must not turn
  * a malformed/self-referential bake into unbounded recursion.  Z-Treme's
  * fixed-capacity traversal has the same safety property: each node is visited
  * at most once per frame. */
 static uint8_t s_spatial_node_seen[SM64_SATURN_BOB_BSP_NODE_COUNT];
-static uint16_t s_spatial_admission_order[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint16_t s_spatial_admitted_count;
 static uint16_t s_render_work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_render_work_count;
 static uint16_t s_primitive_leaf_id[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -405,6 +406,38 @@ static void demo_fragment_bsp_append(
 #endif
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+static void demo_spatial_append_leaf_span(
+    uint16_t leaf, sm64_saturn_fast3d_profile_t *profile)
+{
+    if (leaf >= SM64_SATURN_BOB_LEAF_SPAN_COUNT) return;
+    const uint16_t first = sm64_saturn_bob_leaf_first_ref[leaf];
+    const uint16_t count = sm64_saturn_bob_leaf_ref_count[leaf];
+    if (first > SM64_SATURN_BOB_PRIMITIVE_REF_COUNT ||
+        count > SM64_SATURN_BOB_PRIMITIVE_REF_COUNT - first) {
+        profile->pipeline_faults++;
+        return;
+    }
+    for (uint16_t offset = 0U; offset < count; offset++) {
+        const uint16_t primitive = sm64_saturn_bob_primitive_refs[first + offset];
+        if (primitive >= SM64_SATURN_BOB_PRIMITIVE_COUNT) {
+            profile->pipeline_faults++;
+            continue;
+        }
+        const uint16_t word = primitive >> 5;
+        const uint32_t bit = UINT32_C(1) << (primitive & 31U);
+        if ((s_spatial_ref_seen[word] & bit) != 0U) continue;
+        s_spatial_ref_seen[word] |= bit;
+        if (s_render_work_count < SM64_SATURN_BOB_PRIMITIVE_COUNT) {
+            s_render_work_order[s_render_work_count++] = primitive;
+            profile->demo_bob_primitives_spatial_admitted++;
+        } else {
+            /* Match the predecessor: once capacity is exhausted, later
+             * duplicate references cannot displace an earlier survivor. */
+            profile->demo_bob_primitives_spatial_dropped++;
+        }
+    }
+}
+
 static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
     int16_t node, sm64_saturn_ztreme_frustum_result_t inherited,
     const sm64_saturn_ztreme_frustum_t *frustum,
@@ -479,23 +512,9 @@ static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
     demo_spatial_admit_node(ordered_near, state, frustum, profile);
 
     /* Local refs are admitted after the near child and before the far child,
-     * which gives overflow a deterministic near-to-far survival order. */
-    const uint16_t start = sm64_saturn_bob_bsp_ref_ranges[node][0];
-    const uint16_t count = sm64_saturn_bob_bsp_ref_ranges[node][1];
-    for (uint16_t offset = 0U; offset < count; offset++) {
-        const uint16_t primitive = sm64_saturn_bob_bsp_refs[start + offset];
-        if (primitive >= SM64_SATURN_BOB_PRIMITIVE_COUNT ||
-            s_spatial_seen[primitive] != 0U)
-            continue;
-        s_spatial_seen[primitive] = 1U;
-        if (s_spatial_admitted_count < SM64_SATURN_BOB_PRIMITIVE_COUNT) {
-            s_spatial_admitted[primitive] = 1U;
-            s_spatial_admission_order[s_spatial_admitted_count++] = primitive;
-            profile->demo_bob_primitives_spatial_admitted++;
-        } else {
-            profile->demo_bob_primitives_spatial_dropped++;
-        }
-    }
+     * preserving predecessor source order while avoiding a post-traversal
+     * all-primitive admission scan. */
+    demo_spatial_append_leaf_span((uint16_t)node, profile);
 
     demo_spatial_admit_node(ordered_far, state, frustum, profile);
     return state;
@@ -505,11 +524,9 @@ static void demo_spatial_admit(
     const sm64_saturn_camera_transform_t *camera,
     sm64_saturn_fast3d_profile_t *profile)
 {
-    memset(s_spatial_admitted, 0, sizeof(s_spatial_admitted));
-    memset(s_spatial_seen, 0, sizeof(s_spatial_seen));
+    memset(s_spatial_ref_seen, 0, sizeof(s_spatial_ref_seen));
     memset(s_spatial_node_seen, 0, sizeof(s_spatial_node_seen));
-    memset(s_spatial_admission_order, 0, sizeof(s_spatial_admission_order));
-    s_spatial_admitted_count = 0U;
+    s_render_work_count = 0U;
     const sm64_saturn_ztreme_frustum_t frustum = {
         .position = {camera->position.x, camera->position.y, camera->position.z},
         .right = {camera->right.x, camera->right.y, camera->right.z},
@@ -527,13 +544,10 @@ static void demo_spatial_admit(
 
 static void demo_prepare_render_work_order(void)
 {
-    s_render_work_count = 0U;
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-    for (uint16_t i = 0U; i < s_spatial_admitted_count; i++) {
-        s_render_work_order[s_render_work_count++] =
-            s_spatial_admission_order[i];
-    }
+    /* BSP traversal has already appended the bounded work list. */
 #else
+    s_render_work_count = 0U;
     for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++)
         s_render_work_order[s_render_work_count++] = i;
 #endif
@@ -1055,9 +1069,7 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         s_primitive_corner_count[i] =
             primitive->source1 == 0xFFFFU ? 3U : 4U;
         bool spatial_rejected = false;
-#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-        spatial_rejected = s_spatial_admitted[i] == 0U;
-#else
+#if !(SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS)
         spatial_rejected = !demo_primitive_in_radius(primitive, camera);
 #endif
         if (spatial_rejected) {

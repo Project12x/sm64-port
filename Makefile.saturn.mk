@@ -607,10 +607,11 @@ compile-bob-tiles: compile-bob-area
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json"
 
-compile-bob-scene: compile-bob-tiles
+compile-bob-scene: compile-bob-tiles compile-bob-bsp
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/emit_bob_scene.py" \
 	  --mesh "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json" \
+	  --bsp "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json" \
 	  --output "$(BOB_MESH_GENERATED)/bob_scene.h"
 
 compile-bob-sky: check-host-tools
