@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "saturn_gouraud_bank.h"
 #include "saturn_terrain_command_template.h"
 
 static sm64_saturn_terrain_primitive_t primitive(
@@ -52,6 +53,80 @@ static void test_builds_each_shade_path(void)
     assert(output.color == 0x0100U);
     assert(output.shade_path == SM64_SATURN_SHADE_GOURAUD);
     assert((output.patch_mask & SM64_SATURN_TERRAIN_PATCH_GOURAUD) != 0U);
+}
+
+static bool test_shade_path_classifies_post_light_inputs_before_reservation(void)
+{
+    const uint16_t equal_colors[4] = {
+        0x4210U, 0x4210U, 0x4210U, 0x4210U};
+    const uint16_t near_equal_colors[4] = {
+        0x4210U, 0x4211U, 0x4210U, 0x4210U};
+    /* These are the post-clip colors from an interpolated edge, not four
+     * copies of the source primitive's first color. */
+    const uint16_t clipped_interpolated_colors[4] = {
+        0x2110U, 0x3190U, 0x4210U, 0x3190U};
+
+    if (sm64_saturn_terrain_shade_path(
+            SM64_SATURN_TERRAIN_RESULT_OPAQUE, equal_colors) !=
+        SM64_SATURN_SHADE_FLAT_REPLACE)
+        return false;
+    if (sm64_saturn_terrain_shade_path(
+            SM64_SATURN_TERRAIN_RESULT_OPAQUE, near_equal_colors) !=
+        SM64_SATURN_SHADE_GOURAUD)
+        return false;
+    if (sm64_saturn_terrain_shade_path(
+            SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+                SM64_SATURN_TERRAIN_RESULT_CLIPPED,
+            clipped_interpolated_colors) != SM64_SATURN_SHADE_GOURAUD)
+        return false;
+    if (sm64_saturn_terrain_shade_path(
+            SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+                SM64_SATURN_TERRAIN_RESULT_TEXTURED,
+            near_equal_colors) != SM64_SATURN_SHADE_TEXTURED_REPLACE)
+        return false;
+    /* A tier downgrade intentionally sacrifices the gradient; it must choose
+     * a flat source color before any Gouraud-bank reservation. */
+    return sm64_saturn_terrain_shade_path(
+        SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+            SM64_SATURN_TERRAIN_RESULT_TEXTURED |
+            SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED,
+        clipped_interpolated_colors) == SM64_SATURN_SHADE_FLAT_REPLACE;
+}
+
+static bool test_compact_shade_and_bank_accounting(void)
+{
+    sm64_saturn_gouraud_table_t staging[2];
+    sm64_saturn_gouraud_bank_t bank;
+    uintptr_t address = 0U;
+    const uint16_t equal_colors[4] = {
+        0x4210U, 0x4210U, 0x4210U, 0x4210U};
+    const uint16_t gradient_colors[4] = {
+        0x4210U, 0x4211U, 0x4210U, 0x4210U};
+    const sm64_saturn_shade_path_t flat = sm64_saturn_terrain_shade_path(
+        SM64_SATURN_TERRAIN_RESULT_OPAQUE, equal_colors);
+    const sm64_saturn_shade_path_t gradient = sm64_saturn_terrain_shade_path(
+        SM64_SATURN_TERRAIN_RESULT_OPAQUE, gradient_colors);
+
+    if (!sm64_saturn_gouraud_bank_init(&bank, staging, 2U, 0x25C00000U))
+        return false;
+    sm64_saturn_gouraud_bank_begin(&bank);
+    if (sm64_saturn_terrain_shade_path_from_compact_flags(
+            sm64_saturn_terrain_shade_path_compact_flags(flat)) != flat)
+        return false;
+    if (sm64_saturn_terrain_shade_path_from_compact_flags(
+            sm64_saturn_terrain_shade_path_compact_flags(gradient)) != gradient)
+        return false;
+    if (flat != SM64_SATURN_SHADE_FLAT_REPLACE)
+        return false;
+    sm64_saturn_gouraud_bank_note_saved(&bank);
+    if (bank.used != 0U || bank.saved_tables != 1U ||
+        bank.saved_bytes != sizeof(sm64_saturn_gouraud_table_t))
+        return false;
+    if (gradient != SM64_SATURN_SHADE_GOURAUD ||
+        sm64_saturn_gouraud_bank_alloc(&bank, &address) == NULL)
+        return false;
+    return bank.used == 1U && bank.saved_tables == 1U &&
+           bank.saved_bytes == sizeof(sm64_saturn_gouraud_table_t);
 }
 
 static void test_patch_changes_only_runtime_words(void)
@@ -362,6 +437,9 @@ static void test_invalid_inputs_fail_closed(void)
 int main(void)
 {
     test_builds_each_shade_path();
+    if (!test_shade_path_classifies_post_light_inputs_before_reservation())
+        return 1;
+    if (!test_compact_shade_and_bank_accounting()) return 1;
     test_patch_changes_only_runtime_words();
     test_resolved_template_poison_preserves_every_immutable_word();
     test_resolved_template_rejects_every_missing_patch_permission();

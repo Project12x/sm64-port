@@ -41,6 +41,10 @@ typedef struct sm64_saturn_gouraud_bank {
     uintptr_t vram_base;
     uint16_t capacity;
     uint16_t used;
+    /* Per-frame diagnostics. These are evidence only: no scheduling or
+     * promotion decision may depend on how many flat entries were avoided. */
+    uint32_t saved_tables;
+    uint32_t saved_bytes;
 } sm64_saturn_gouraud_bank_t;
 
 /* Returns false (and configures an always-NULL bank) for capacity 0 --
@@ -55,6 +59,8 @@ sm64_saturn_gouraud_bank_init(sm64_saturn_gouraud_bank_t *bank,
     bank->vram_base = vram_base;
     bank->capacity = capacity;
     bank->used = 0;
+    bank->saved_tables = 0U;
+    bank->saved_bytes = 0U;
     return capacity > 0;
 }
 
@@ -62,6 +68,23 @@ static inline void
 sm64_saturn_gouraud_bank_begin(sm64_saturn_gouraud_bank_t *bank)
 {
     bank->used = 0;
+    bank->saved_tables = 0U;
+    bank->saved_bytes = 0U;
+}
+
+/* Called only after classification has chosen FLAT_REPLACE.  Keeping this
+ * accounting beside the bounded allocator makes its 8-byte unit explicit and
+ * lets host fixtures prove that flat input did not consume a staging slot. */
+static inline void sm64_saturn_gouraud_bank_note_saved(
+    sm64_saturn_gouraud_bank_t *bank)
+{
+    if (bank == NULL)
+        return;
+    if (bank->saved_tables != UINT32_MAX)
+        bank->saved_tables++;
+    const uint32_t table_bytes = (uint32_t)sizeof(sm64_saturn_gouraud_table_t);
+    bank->saved_bytes = bank->saved_bytes > UINT32_MAX - table_bytes
+        ? UINT32_MAX : bank->saved_bytes + table_bytes;
 }
 
 /* Returns the staging slot to fill and writes the table's device

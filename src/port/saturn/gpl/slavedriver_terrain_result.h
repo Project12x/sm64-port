@@ -215,9 +215,7 @@ static inline uint8_t sm64_saturn_terrain_result_clip_class(
     const sm64_saturn_terrain_result_t *result)
 {
     return result == NULL ? 0U :
-        (uint8_t)(result->clip_class &
-            ~(SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
-              SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED));
+        (uint8_t)(result->clip_class & 0x03U);
 }
 
 static inline bool sm64_saturn_terrain_result_recovery(

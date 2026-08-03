@@ -1532,6 +1532,23 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
         const bool recovery = s_primitive_recovery[primitive_index] != 0U;
         const bool texture_suppressed =
             s_primitive_lod_texture_downgraded[primitive_index] != 0U;
+        const uint16_t shade = (uint16_t)(
+            ((uint16_t)primitive->rgb[0] << 10) |
+            ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
+        const uint16_t colors[4] = {shade, shade, shade, shade};
+        const uint16_t material_flags =
+            SM64_SATURN_TERRAIN_RESULT_OPAQUE |
+            (primitive->textured != 0U
+                ? SM64_SATURN_TERRAIN_RESULT_TEXTURED : 0U) |
+            (texture_suppressed
+                ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U);
+        /* Classification happens in the owning worker before the compact
+         * record crosses CPUs. Recovery deliberately remains conservative
+         * because its template uses the dynamic Gouraud material; normal
+         * equal post-light colors and LOD-suppressed colors select REPLACE. */
+        const sm64_saturn_shade_path_t shade_path =
+            sm64_saturn_terrain_shade_path(material_flags,
+                recovery ? NULL : colors);
         const sm64_saturn_terrain_resolved_command_t *resolved =
             demo_terrain_resolved_template(
                 primitive_index, recovery, texture_suppressed);
@@ -1570,7 +1587,8 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                 (s_primitive_recovery[primitive_index] != 0U
                     ? SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL : 0U) |
                 (s_primitive_lod_texture_downgraded[primitive_index] != 0U
-                    ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U),
+                    ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U) |
+                sm64_saturn_terrain_shade_path_compact_flags(shade_path),
                 resolved, shape_vertices);
         }
     }
@@ -1704,7 +1722,11 @@ static void demo_resolve_terrain_command_templates(
         for (uint8_t variant = DEMO_TERRAIN_TEMPLATE_BASE;
              variant < DEMO_TERRAIN_TEMPLATE_VARIANT_COUNT; variant++) {
             const bool force_gouraud =
-                variant != DEMO_TERRAIN_TEMPLATE_BASE;
+                variant == DEMO_TERRAIN_TEMPLATE_RECOVERY;
+            const sm64_saturn_shade_path_t variant_shade_path =
+                variant == DEMO_TERRAIN_TEMPLATE_TEXTURE_SUPPRESSED
+                    ? SM64_SATURN_SHADE_FLAT_REPLACE
+                    : (sm64_saturn_shade_path_t)metadata.shade_path;
             bool valid = true;
             vdp1_cmdt_t command;
             memset(&command, 0, sizeof(command));
@@ -1718,7 +1740,7 @@ static void demo_resolve_terrain_command_templates(
                     .cc_mode = VDP1_CMDT_CC_GOURAUD});
                 vdp1_cmdt_color_set(&command, (rgb1555_t){
                     .raw = sm64_saturn_gouraud_neutral_color()});
-            } else switch ((sm64_saturn_shade_path_t)metadata.shade_path) {
+            } else switch (variant_shade_path) {
             case SM64_SATURN_SHADE_FLAT_REPLACE:
                 vdp1_cmdt_polygon_set(&command);
                 vdp1_cmdt_draw_mode_set(&command, (vdp1_cmdt_draw_mode_t){
@@ -1760,7 +1782,7 @@ static void demo_resolve_terrain_command_templates(
                 resolved->patch_mask = SM64_SATURN_TERRAIN_PATCH_END |
                     SM64_SATURN_TERRAIN_PATCH_LINK |
                     SM64_SATURN_TERRAIN_PATCH_XY |
-                    ((force_gouraud || metadata.shade_path ==
+                    ((force_gouraud || variant_shade_path ==
                         SM64_SATURN_SHADE_GOURAUD)
                         ? SM64_SATURN_TERRAIN_PATCH_GOURAUD : 0U);
             }
@@ -1790,17 +1812,15 @@ static void demo_emit_terrain_result(
     const bool recovery = sm64_saturn_terrain_result_recovery(result);
     const bool texture_suppressed =
         sm64_saturn_terrain_result_texture_suppressed(result);
-    const uint16_t effective_flags = SM64_SATURN_TERRAIN_RESULT_OPAQUE |
-        (primitive->textured != 0U && !texture_suppressed && !recovery
-            ? SM64_SATURN_TERRAIN_RESULT_TEXTURED
-            : SM64_SATURN_TERRAIN_RESULT_GOURAUD);
     const uint16_t shade = (uint16_t)(
         ((uint16_t)primitive->rgb[0] << 10) |
         ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
-    const uint16_t colors[4] = {shade, shade, shade, shade};
+    /* The worker made this decision while it still owned classification.
+     * The master reads only the compact tag: it remains the sole owner of
+     * the finite Gouraud bank, command list, and final draw order. */
     const sm64_saturn_shade_path_t shade_path =
-        sm64_saturn_terrain_shade_path(effective_flags, colors);
-    const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED;
+        sm64_saturn_terrain_shade_path_from_compact_flags(result->clip_class);
+    const bool textured = shade_path == SM64_SATURN_SHADE_TEXTURED_REPLACE;
     const sm64_saturn_terrain_resolved_command_t *const resolved =
         demo_terrain_resolved_template(result->primitive_id, recovery,
                                        texture_suppressed);
@@ -1826,6 +1846,7 @@ static void demo_emit_terrain_result(
             profile->triangles_emitted++;
             return;
         } else if (shade_path == SM64_SATURN_SHADE_FLAT_REPLACE) {
+            sm64_saturn_gouraud_bank_note_saved(gouraud_bank);
             profile->flat_primitives++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
@@ -1877,6 +1898,7 @@ static void demo_emit_terrain_result(
         }
     }
     if (shade_path == SM64_SATURN_SHADE_FLAT_REPLACE) {
+        sm64_saturn_gouraud_bank_note_saved(gouraud_bank);
         vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
             .color_mode = VDP1_CMDT_CM_RGB_32768,
             .cc_mode = VDP1_CMDT_CC_REPLACE});
