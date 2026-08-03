@@ -14,3 +14,6 @@
 - The `diag-skip-geo` host policy gate now executes the real Make validation
   matrix and inspects the actual normal compile-time branch, preventing inert
   comments or the wrong source region from satisfying diagnostic containment.
+- `diag-skip-geo` now rejects observable whitespace-padded and malformed flag
+  values before any prerequisite, compiler-flag, or output-tag decision, closing
+  a spelling that could activate the unsafe diagnostic without demo/replay.

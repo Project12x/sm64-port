@@ -24,6 +24,15 @@ SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 SATURN_EXPERIMENTAL_SKIP_GEO_WALK ?= 0
+# Preserve the caller's exact spelling long enough to reject hidden activation
+# forms, then make every validation, branch, compiler flag, and output tag
+# consume one canonical value. Command-line variables require `override` here.
+SATURN_EXPERIMENTAL_SKIP_GEO_WALK_RAW := $(value SATURN_EXPERIMENTAL_SKIP_GEO_WALK)
+SATURN_EXPERIMENTAL_SKIP_GEO_WALK_NORMALIZED := $(strip $(SATURN_EXPERIMENTAL_SKIP_GEO_WALK_RAW))
+override SATURN_EXPERIMENTAL_SKIP_GEO_WALK := $(SATURN_EXPERIMENTAL_SKIP_GEO_WALK_NORMALIZED)
+ifneq (x$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK_RAW)x,x$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK_NORMALIZED)x)
+  $(error SATURN_EXPERIMENTAL_SKIP_GEO_WALK must be 0 or 1 without surrounding whitespace)
+endif
 SATURN_SOURCEBOOT_LIVE_INPUT ?= 0
 SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS ?= 600
 SATURN_ATAN2_VARIANT ?= 2

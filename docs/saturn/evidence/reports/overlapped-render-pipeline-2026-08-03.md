@@ -18,14 +18,14 @@ controller-owned manual checkpoint until the seam and tests below exist.
 
 ### Current verdict and scope
 
-**ACTIVE — review-fix round 1; rereview required.** Implementation commit
-`98f26f26` adds the default-off `diag-skip-geo` configuration, and documentation
-commit `f2b7ebf0` records its initial gates. The first independent specification
-review is **NO-GO**: production containment is correct, but the initial host test
-did not execute Make validation, inspected text before the experimental `#if`
-rather than the actual normal `#else`, and this execution report had no Task 1D
-entry. Review-fix round 1 addresses both Important findings without changing
-the sealed runtime source. Independent spec rereview and quality review remain
+**ACTIVE — quality-fix round 2/5; quality rereview required.** Implementation
+commit `98f26f26` adds the default-off `diag-skip-geo` configuration. Review-fix
+round 1 is `fe1074b8`; its scoped independent spec rereview marks both prior
+Important findings **ADDRESSED** with no new Critical or Important findings.
+The independent quality review is **NO-GO**: trailing whitespace could activate
+the diagnostic while bypassing its demo/replay prerequisites, the tests admitted
+two containment mutants, and the live plan contradicted the sealed D1 exception.
+Quality-fix round 2 closes those findings; independent quality rereview remains
 open, so Task 1D is not `source-complete`.
 
 This configuration is non-promotable. It exists only to measure an upper bound
@@ -67,6 +67,43 @@ Final post-refactor verification used the same focused command: exit 0;
 `Ran 4 tests in 4.499s`; `OK`. `git diff --check` over the seven Task 1D files
 also exited 0; only LF-to-CRLF checkout warnings were emitted.
 
+### Quality-fix round 2/5 TDD evidence
+
+RED command:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
+```
+
+RED result: exit 1; `Ran 4 tests in 15.485s`; `FAILED (failures=3)`.
+The real Make parse accepted `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1 `,
+`= 1`, and `=1<TAB>` even with the diagnostic prerequisites present. The
+observable trailing-space and trailing-tab cases proved the reviewed bypass.
+
+The first production fix reduced this to one failure: exit 1;
+`Ran 4 tests in 11.928s`; `FAILED (failures=1)`. GNU Make canonicalizes the
+leading-space spelling before the Makefile can observe it. The test now records
+that spelling as accepted only with demo+replay present and verifies that the
+canonical value drives the compiler flag and diagnostic tag.
+
+GREEN command: the same focused command.
+
+GREEN result: exit 0; `Ran 4 tests in 11.766s`; `OK`. The Makefile preserves
+the exact caller spelling, derives one stripped canonical value, rejects any
+observable padding difference before validation or activation, and uses the
+canonical value for prerequisite checks, the compiler definition, and output
+tag. Malformed empty, `01`, `1x`, `1 0`, and non-binary values are rejected.
+The tag test now compares otherwise identical demo+replay configurations with
+the experimental flag at 0 and 1, so demo-keyed tagging fails. The source test
+reconstructs prefix + actual normal `#else` + suffix and rejects the scene-graph
+setter anywhere outside the exact direct experimental branch. The test locates
+GNU Make from `SATURN_MSYS_MAKE`, `PATH`, or `MSYS2_ROOT`, and discovers Yaul
+from `YAUL_INSTALL_ROOT` or a parent `.yaul.env`; it no longer pins this clone's
+absolute paths.
+
+Final focused verification used the same command: exit 0;
+`Ran 4 tests in 11.980s`; `OK`.
+
 Runtime-contract command:
 
 ```powershell
@@ -80,20 +117,24 @@ create it with `PermissionError: [WinError 5]`; Make stopped at
 failure. It remains an unpassed infrastructure gate, not a runtime-contract
 failure and not a green result.
 
+Quality-fix round 2 reran this exact command and reproduced the same exit 1 /
+WinError 5 failure before the host runtime-contract executable.
+
 ### Commits, review, and open gates
 
 - Implementation: `98f26f26`.
 - Initial documentation transition: `f2b7ebf0`.
 - Review-fix round 1: `fe1074b8`.
-- Independent spec review: **NO-GO** on the initial range; both Important
-  findings are addressed here, but rereview is pending.
-- Independent quality review: not run.
+- Independent spec review: initial **NO-GO**; scoped rereview marks both prior
+  Important findings **ADDRESSED** with no new Critical or Important findings.
+- Independent quality review: **NO-GO**; three Important findings addressed in
+  quality-fix round 2/5, with quality rereview pending.
 - Runtime-contract wrapper: blocked by the recorded MSYS/Windows path issue.
 - Target build and the one authorized Ymir run: not run; pending successful
   review and controller-owned serial execution.
 - A1: still blocked on a behavior-tested state/render separation seam.
 
-No target build or Ymir run occurred during Task 1D implementation or this
+No target build or Ymir run occurred during Task 1D implementation or either
 review-fix round.
 
 ## Fail-closed safety closure

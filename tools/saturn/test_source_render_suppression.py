@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -15,8 +16,6 @@ AREA_C = REPO_ROOT / "src" / "game" / "area.c"
 SOURCEBOOT_C = REPO_ROOT / "src" / "port" / "saturn" / "sourceboot" / "main.c"
 SOURCEBOOT_MAKEFILE = REPO_ROOT / "src" / "port" / "saturn" / "sourceboot" / "Makefile"
 SOURCEBOOT_DIR = SOURCEBOOT_MAKEFILE.parent
-MSYS_MAKE = Path("C:/msys64/usr/bin/make.exe")
-YAUL_INSTALL_ROOT = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install")
 
 
 def extract_c_function(path: Path, name: str) -> str:
@@ -50,7 +49,9 @@ def extract_if_block(body: str, condition: str) -> str:
     raise AssertionError(f"guard if ({condition}) is not terminated")
 
 
-def extract_preprocessor_branches(body: str, condition: str) -> tuple[str, str]:
+def extract_preprocessor_partition(
+    body: str, condition: str
+) -> tuple[str, str, str, str]:
     directives = list(
         re.finditer(
             r"(?m)^[ \t]*#(if|ifdef|ifndef|else|elif|endif)\b([^\r\n]*)",
@@ -83,8 +84,10 @@ def extract_preprocessor_branches(body: str, condition: str) -> tuple[str, str]:
                 if else_directive is None:
                     raise AssertionError(f"#if {condition} has no #else branch")
                 return (
+                    body[: opening.start()],
                     body[branch_start : else_directive.start()],
                     body[else_directive.end() : directive.start()],
+                    body[directive.end() :],
                 )
         elif depth == 1 and kind == "else":
             if else_directive is not None:
@@ -95,9 +98,45 @@ def extract_preprocessor_branches(body: str, condition: str) -> tuple[str, str]:
     raise AssertionError(f"#if {condition} is not terminated")
 
 
-def yaul_environment() -> dict[str, str]:
+def msys_path_to_windows(value: str) -> Path:
+    match = re.fullmatch(r"/([A-Za-z])/(.*)", value)
+    if match is not None:
+        return Path(f"{match.group(1)}:/{match.group(2)}")
+    return Path(value)
+
+
+def local_yaul_install_root() -> Path:
+    configured = os.environ.get("YAUL_INSTALL_ROOT")
+    if configured:
+        return msys_path_to_windows(configured)
+
+    for directory in (REPO_ROOT, *REPO_ROOT.parents):
+        env_file = directory / ".yaul.env"
+        if not env_file.is_file():
+            continue
+        match = re.search(
+            r"(?m)^export YAUL_INSTALL_ROOT=([^\r\n#]+)",
+            env_file.read_text(encoding="utf-8"),
+        )
+        if match is not None:
+            return msys_path_to_windows(match.group(1).strip().strip('"'))
+    raise AssertionError("YAUL_INSTALL_ROOT is unset and no parent .yaul.env exists")
+
+
+def local_msys_make() -> Path:
+    configured = os.environ.get("SATURN_MSYS_MAKE")
+    if configured:
+        return Path(configured)
+    discovered = shutil.which("make")
+    if discovered:
+        return Path(discovered)
+    msys_root = Path(os.environ.get("MSYS2_ROOT", "C:/msys64"))
+    return msys_root / "usr" / "bin" / "make.exe"
+
+
+def yaul_environment(yaul_install_root: Path, msys_make: Path) -> dict[str, str]:
     environment = os.environ.copy()
-    environment["YAUL_INSTALL_ROOT"] = str(YAUL_INSTALL_ROOT)
+    environment["YAUL_INSTALL_ROOT"] = str(yaul_install_root)
     environment["YAUL_PROG_SH_PREFIX"] = "sh-elf"
     environment["YAUL_ARCH_SH_PREFIX"] = "sh-elf"
     environment["YAUL_ARCH_M68K_PREFIX"] = "m68keb-elf"
@@ -106,18 +145,20 @@ def yaul_environment() -> dict[str, str]:
     environment["YAUL_OPTION_MALLOC_IMPL"] = "tlsf"
     environment["DEBUG_RELEASE"] = "1"
     environment["PATH"] = (
-        f"C:\\msys64\\usr\\bin;{YAUL_INSTALL_ROOT}\\bin;"
+        f"{msys_make.parent};{yaul_install_root}\\bin;"
         + environment.get("PATH", "")
     )
     return environment
 
 
 def sourceboot_make(*assignments: str) -> subprocess.CompletedProcess[str]:
+    msys_make = local_msys_make()
+    yaul_install_root = local_yaul_install_root()
     return subprocess.run(
-        [str(MSYS_MAKE), "-C", str(SOURCEBOOT_DIR), "-pn", *assignments],
+        [str(msys_make), "-C", str(SOURCEBOOT_DIR), "-pn", *assignments],
         capture_output=True,
         text=True,
-        env=yaul_environment(),
+        env=yaul_environment(yaul_install_root, msys_make),
     )
 
 
@@ -174,9 +215,19 @@ class SourceRenderSuppressionTests(unittest.TestCase):
         )
         default = sourceboot_make()
         self.assertEqual(default.returncode, 0, default.stderr)
-        self.assertEqual(make_value(default.stdout, "SATURN_EXPERIMENTAL_SKIP_GEO_WALK"), "0")
-        default_output = make_value(default.stdout, "SH_OUTPUT_DIR")
-        self.assertNotIn("diag-skip-geo", default_output)
+        self.assertEqual(
+            make_value(default.stdout, "SATURN_EXPERIMENTAL_SKIP_GEO_WALK"),
+            "0",
+        )
+
+        sealed_baseline = sourceboot_make(
+            "SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0",
+            "SATURN_DEMO_PATH=1",
+            "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+        )
+        self.assertEqual(sealed_baseline.returncode, 0, sealed_baseline.stderr)
+        baseline_output = make_value(sealed_baseline.stdout, "SH_OUTPUT_DIR")
+        self.assertNotIn("diag-skip-geo", baseline_output)
 
         diagnostic = sourceboot_make(
             "SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1",
@@ -190,12 +241,19 @@ class SourceRenderSuppressionTests(unittest.TestCase):
         )
         diagnostic_output = make_value(diagnostic.stdout, "SH_OUTPUT_DIR")
         self.assertEqual(diagnostic_output.count("diag-skip-geo"), 1)
-        self.assertNotEqual(diagnostic_output, default_output)
+        self.assertEqual(
+            diagnostic_output.replace("-diag-skip-geo", ""),
+            baseline_output,
+        )
 
     def test_make_configuration_rejects_unsealed_diagnostic_values(self) -> None:
         """The real Make parse rejects non-binary and incompletely sealed modes."""
         cases = (
             (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=2",), "must be 0 or 1"),
+            (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=",), "must be 0 or 1"),
+            (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=01",), "must be 0 or 1"),
+            (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1x",), "must be 0 or 1"),
+            (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1 0",), "must be 0 or 1"),
             (("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1",), "requires SATURN_DEMO_PATH=1"),
             ((
                 "SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1",
@@ -212,21 +270,70 @@ class SourceRenderSuppressionTests(unittest.TestCase):
                 self.assertEqual(rejected.returncode, 2, rejected.stderr)
                 self.assertIn(message, rejected.stderr)
 
+        for padded in ("1 ", "1\t"):
+            with self.subTest(padded=repr(padded)):
+                rejected = sourceboot_make(
+                    f"SATURN_EXPERIMENTAL_SKIP_GEO_WALK={padded}",
+                    "SATURN_DEMO_PATH=1",
+                    "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+                )
+                self.assertEqual(rejected.returncode, 2, rejected.stderr)
+                self.assertIn("must be 0 or 1", rejected.stderr)
+
+        # GNU Make removes leading assignment whitespace before the Makefile
+        # can observe it. It is safe only because the canonical 1 still runs
+        # the demo/replay prerequisite checks and drives every later decision.
+        unsealed_canonicalized = sourceboot_make(
+            "SATURN_EXPERIMENTAL_SKIP_GEO_WALK= 1"
+        )
+        self.assertEqual(
+            unsealed_canonicalized.returncode,
+            2,
+            unsealed_canonicalized.stderr,
+        )
+        self.assertIn(
+            "requires SATURN_DEMO_PATH=1",
+            unsealed_canonicalized.stderr,
+        )
+        canonicalized = sourceboot_make(
+            "SATURN_EXPERIMENTAL_SKIP_GEO_WALK= 1",
+            "SATURN_DEMO_PATH=1",
+            "SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+        )
+        self.assertEqual(canonicalized.returncode, 0, canonicalized.stderr)
+        self.assertEqual(
+            make_value(
+                canonicalized.stdout, "SATURN_EXPERIMENTAL_SKIP_GEO_WALK"
+            ),
+            "1",
+        )
+        self.assertEqual(
+            make_value(canonicalized.stdout, "SH_OUTPUT_DIR").count(
+                "diag-skip-geo"
+            ),
+            1,
+        )
+
     def test_skip_geo_diagnostic_scopes_exactly_one_loop_in_each_branch(self) -> None:
         """The diagnostic branch is paired and the actual #else stays setter-free."""
         body = extract_c_function(SOURCEBOOT_C, "sourceboot_run_source_tick")
-        branch, normal = extract_preprocessor_branches(
+        prefix, branch, normal, suffix = extract_preprocessor_partition(
             body, "SATURN_EXPERIMENTAL_SKIP_GEO_WALK"
         )
+        prefix = strip_c_comments(prefix)
         branch = strip_c_comments(branch)
         normal = strip_c_comments(normal)
-        setter = "sm64_saturn_source_runtime_set_scene_graph_suppressed("
-        self.assertEqual(branch.count(setter), 2)
+        suffix = strip_c_comments(suffix)
+        setter_call = re.compile(
+            r"\bsm64_saturn_source_runtime_set_scene_graph_suppressed\s*\("
+        )
+        self.assertEqual(len(setter_call.findall(branch)), 2)
         self.assertEqual(branch.count("game_loop_one_iteration("), 1)
-        self.assertRegex(branch, re.compile(r"^\s*sm64_saturn_source_runtime_set_scene_graph_suppressed\(true\);\s*game_loop_one_iteration\(\);\s*sm64_saturn_source_runtime_set_scene_graph_suppressed\(false\);\s*$", re.S))
-        self.assertNotIn(setter, normal)
+        self.assertRegex(branch, re.compile(r"^\s*sm64_saturn_source_runtime_set_scene_graph_suppressed\s*\(\s*true\s*\);\s*game_loop_one_iteration\s*\(\s*\);\s*sm64_saturn_source_runtime_set_scene_graph_suppressed\s*\(\s*false\s*\);\s*$", re.S))
+        self.assertIsNone(setter_call.search(normal))
         self.assertEqual(normal.count("game_loop_one_iteration("), 1)
         self.assertRegex(normal, r"^\s*game_loop_one_iteration\(\);\s*$")
+        self.assertIsNone(setter_call.search(prefix + normal + suffix))
 
 
 if __name__ == "__main__":

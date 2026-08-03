@@ -48,19 +48,19 @@ the unsafe suppression Step 5 unchecked/BLOCKED and marks the CUE/Ymir step
 NOT AUTHORIZED. No code or tests were run in this documentation transition;
 only `git diff --check` is required before the tracked documentation commit.
 
-Task 1D: **ACTIVE in review-fix round 1**, not source-complete. Runtime
-containment is implemented at `98f26f26` and initially documented by
-`f2b7ebf0`. Independent spec review is **NO-GO**: the original test merely
-searched Makefile strings, inspected text before the diagnostic `#if` instead
-of its actual normal `#else`, and omitted Task 1D from the central execution
-report. Review-fix round 1 `fe1074b8` addresses both Important findings without
-changing runtime source. Its TDD red was 4 tests with 6 missing-helper errors; its green
-was 4 tests in 8.173s, exercising six real Make parses plus structural matching
-of the direct preprocessor branches. The fresh runtime-contract wrapper again
-failed before executing the host contract because MSYS supplied
-`\\d\\Code...` to Windows Python (WinError 5). This remains an open
-infrastructure gate, not a contract failure or pass. Independent spec rereview,
-quality review, target build, and Ymir remain open. A1 remains **BLOCKED**.
-Owner authorized one sealed `diag-skip-geo` upper-bound CUE on 2026-08-03; it
-is non-promotable and knowingly invalidates graph-owned state. No target build
-or Ymir run occurred.
+Task 1D: **ACTIVE in quality-fix round 2/5**, not source-complete. Runtime
+containment is implemented at `98f26f26`; review-fix round 1 is `fe1074b8`.
+The scoped spec rereview marks both prior Important findings **ADDRESSED** with
+no new Critical or Important findings. Independent quality review is **NO-GO**:
+trailing whitespace bypassed the demo/replay prerequisite check while still
+activating the compile definition/tag, the tests admitted demo-keyed tagging
+and setters outside the direct branch, and the plan contradicted the sealed D1
+exception. Round 2's TDD red was 4 tests with 3 failures; after one intermediate
+leading-space correction, green was 4 tests in 11.766s. The Makefile now rejects
+observable whitespace and malformed values before activation. Tests compare
+otherwise identical demo+replay configurations, scan the complete normal
+compile-time path, and discover tool paths without clone-specific constants.
+The plan/spec/evidence consistently define D1 as the sole owner-authorized,
+non-promotable exception; it does not reopen A1. Quality rereview, the known
+host-wrapper path gate, target build, and Ymir remain open. A1 remains
+**BLOCKED**. No target build or Ymir run occurred.

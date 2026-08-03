@@ -33,17 +33,19 @@ and the evidence report before starting another task.
   `geo_process_root()` also suppresses authoritative animation, painting/warp,
   environment-water, moving-texture, flying-carpet, camera, and matrix-derived
   object-state mutations. Safety commit `77ee306c` removes the sourceboot
-  enable/disable calls, so accepted Saturn builds fail closed with a full geo
-  walk. No bounded state-only seam has been demonstrated; the controller-owned
-  serial CUE/Ymir gate must not start.
+  enable/disable calls, so normal/promotable Saturn builds fail closed with a
+  full geo walk. No bounded state-only seam has been demonstrated; the
+  controller-owned serial CUE/Ymir gate must not start.
 - [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** active in
-  review-fix round 1. Implementation `98f26f26` is contained, but the initial
-  spec review is NO-GO because Make validation and the real normal `#else`
-  lacked required mutation coverage and the execution-evidence report omitted
-  Task 1D. Both Important findings are addressed in review-fix `fe1074b8`;
-  independent rereview, the host-blocked runtime wrapper, target build, and
-  Ymir remain open. A1 remains blocked. Authorized by the owner on 2026-08-03,
-  this is a deliberately broken, compile-time-only
+  quality-fix round 2/5. The scoped spec rereview confirms both prior Important
+  findings addressed, but independent quality review is NO-GO: trailing
+  whitespace could bypass demo/replay prerequisites, and two containment
+  mutants plus the live authorization records were not closed. This fix wave
+  rejects hidden activation spellings, broadens the mutation coverage, and
+  reconciles D1 as the sole sealed diagnostic exception. Quality rereview, the
+  host-blocked runtime wrapper, target build, and Ymir remain open. A1 remains
+  blocked. Authorized by the owner on 2026-08-03, this is a deliberately broken,
+  compile-time-only
   BOB proving build that must never become the default, a replay baseline, or
   evidence of full-game correctness. It exists solely to quantify whether the
   blocked whole-walk removal merits a dedicated state/render separation sprint.
@@ -208,8 +210,9 @@ and the evidence report before starting another task.
   Safety correction `77ee306c` removes both scene-graph setter calls from
   `sourceboot_run_source_tick()`. Only final display submission remains paired
   around the source tick. A focused source test rejects any sourceboot call to
-  the reserved scene-graph setter, so every accepted Saturn build retains
-  `geo_process_root()` until a behavior-tested state-only seam exists.
+  the reserved scene-graph setter, so every normal/promotable Saturn build
+  retains `geo_process_root()` until a behavior-tested state-only seam exists.
+  The sole sealed Task 1D diagnostic exception is specified separately below.
 
 - [ ] **Step 7: Run focused and aggregate host gates**
 
@@ -267,8 +270,9 @@ and the evidence report before starting another task.
 ### Task 1D: Produce one non-promotable geo-walk upper-bound diagnostic CUE
 
 **Purpose:** Distinguish a dominant duplicate-geo bottleneck from a marginal
-one without re-enabling unsafe suppression in any accepted Saturn build. BOB is
-only the deterministic demonstrator. The required destination remains a
+one without re-enabling unsafe suppression in any normal/promotable Saturn
+build. D1 is the sole sealed diagnostic exception. BOB is only the
+deterministic demonstrator. The required destination remains a
 scene-neutral full game, and this task must not introduce BOB-specific runtime
 types, ownership rules, or production fallbacks.
 
@@ -283,15 +287,15 @@ types, ownership rules, or production fallbacks.
   required by the portfolio documentation policy
 
 **Diagnostic contract:**
-- Default value is `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0`; production/sourceboot
-  builds cannot skip the geo walk.
+- Default value is `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0`; normal/promotable
+  sourceboot builds cannot skip the geo walk.
 - Value `1` is legal only when all of `SATURN_DEMO_PATH=1`,
   `SATURN_SOURCEBOOT_ROUTE_REPLAY=1`, and an explicit diagnostic output tag are
   present. Reject every other configuration at Make parse time.
 - The sourceboot tick enables scene-graph suppression only inside the explicit
   diagnostic build and restores false immediately after the one source tick;
   no state can leak to a following tick or a normal build.
-- The image name and telemetry must state `diag-skip-geo`; no normal pipeline
+- The diagnostic image name must state `diag-skip-geo`; no normal pipeline
   role/output directory may be overwritten.
 - Host tests must mutation-check default-off, forbidden combinations, paired
   restoration, and absence of any BOB-only semantic branch in generic runtime
@@ -314,8 +318,8 @@ types, ownership rules, or production fallbacks.
 
 - [x] **Step 3: Implement only the sealed diagnostic seam**
 
-  Add the compile-time constraint, paired sourceboot setter, output tag, and
-  telemetry label. Do not split or emulate geo callbacks; that is A1's future
+  Add the compile-time constraint, paired sourceboot setter, and output tag.
+  Do not split or emulate geo callbacks; that is A1's future
   full-game state/render separation work.
 
 - [ ] **Step 4: Run focused containment and runtime-contract gates**
@@ -325,8 +329,9 @@ types, ownership rules, or production fallbacks.
   source-level policy only. No aggregate green claim substitutes for these
   focused gates.
 
-  Focused containment is green after review-fix round 1: 4 tests exercise real
-  Make parsing and the actual preprocessor branches. The runtime-contract
+  Focused containment is green after quality-fix round 2/5: 4 tests exercise
+  real Make parsing, malformed/padded activation spellings, flag-keyed output
+  identity, and the complete normal preprocessor path. The runtime-contract
   wrapper remains unchecked because MSYS translates the worktree path to
   `\\d\\Code...`; Windows Python fails to create that path with WinError 5
   before the host contract executable runs.
@@ -339,10 +344,13 @@ types, ownership rules, or production fallbacks.
   the manual build.
 
   Initial spec review: **NO-GO**, two Important findings and one Minor audit
-  note. Review-fix round 1 `fe1074b8` replaces inert Makefile string checks with real
-  parse-time acceptance/rejection checks, inspects the matching normal
-  `#else`, and adds complete Task 1D execution evidence. Independent spec
-  rereview and quality review remain unchecked.
+  note. Review-fix round 1 `fe1074b8` replaces inert Makefile string checks
+  with real parse-time acceptance/rejection checks, inspects the matching
+  normal `#else`, and adds complete Task 1D execution evidence. The scoped
+  spec rereview marks both findings **ADDRESSED** with no new Critical or
+  Important findings. Independent quality review is **NO-GO**; quality-fix
+  round 2/5 is active for its three Important findings. Quality rereview is
+  still unchecked.
 
 - [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
 
@@ -1144,8 +1152,11 @@ make -C src/port/saturn/sourceboot -B -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_R
 
 `SATURN_RENDERER_PIPELINE=4` must be validated and passed into target
 preprocessor flags by Task 10. The former Task 1 `pipe3` scene-graph
-suppression checkpoint is prohibited after `77ee306c`; no experimental role
-may re-enable it without the approved A1 seam and tests.
+suppression checkpoint is prohibited after `77ee306c`. The only exception is
+the owner-authorized, default-off, demo+replay-sealed Task 1D
+`diag-skip-geo` upper-bound diagnostic; it is non-promotable and cannot count
+as an A1 seam, replay baseline, or full-game evidence. No other experimental
+role may re-enable suppression without the approved A1 seam and tests.
 
 ## Completion criteria
 
