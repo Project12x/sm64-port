@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "../gpl/slavedriver_terrain_result.h"
+#include "saturn_gouraud_bank.h"
 
 typedef enum sm64_saturn_shade_path {
     SM64_SATURN_SHADE_FLAT_REPLACE,
@@ -32,6 +33,10 @@ typedef enum sm64_saturn_shade_path {
 static inline sm64_saturn_shade_path_t sm64_saturn_terrain_shade_path(
     uint16_t flags, const uint16_t colors[4])
 {
+    /* Recovery owns a Gouraud resolved-template variant. It overrides a
+     * material downgrade so PMOD and GRDA remain coherent. */
+    if ((flags & SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL) != 0U)
+        return SM64_SATURN_SHADE_GOURAUD;
     /* Tier degradation has already accepted the flat-material tradeoff. It
      * must win before the distinct source colors reach the Gouraud allocator. */
     if ((flags & SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED) != 0U)
@@ -44,6 +49,36 @@ static inline sm64_saturn_shade_path_t sm64_saturn_terrain_shade_path(
         colors[0] == colors[3])
         return SM64_SATURN_SHADE_FLAT_REPLACE;
     return SM64_SATURN_SHADE_GOURAUD;
+}
+
+/* Master-only lowering seam. This is deliberately Yaul-free so host tests
+ * exercise the same reserve/fill path as demo_emit_terrain_result(). */
+typedef struct sm64_saturn_terrain_gouraud_lowering {
+    sm64_saturn_gouraud_table_t *table;
+    uintptr_t address;
+    bool patch;
+} sm64_saturn_terrain_gouraud_lowering_t;
+
+static inline bool sm64_saturn_terrain_lower_gouraud(
+    sm64_saturn_gouraud_bank_t *bank, sm64_saturn_shade_path_t path,
+    const uint16_t colors[4], sm64_saturn_terrain_gouraud_lowering_t *out)
+{
+    if (out == NULL)
+        return false;
+    out->table = NULL;
+    out->address = 0U;
+    out->patch = false;
+    if (path != SM64_SATURN_SHADE_GOURAUD)
+        return true;
+    if (colors == NULL)
+        return false;
+    out->table = sm64_saturn_gouraud_bank_alloc(bank, &out->address);
+    if (out->table == NULL)
+        return true;
+    for (uint8_t corner = 0U; corner < 4U; corner++)
+        out->table->colors[corner] = (uint16_t)(colors[corner] | 0x8000U);
+    out->patch = true;
+    return true;
 }
 
 static inline uint8_t sm64_saturn_terrain_shade_path_compact_flags(

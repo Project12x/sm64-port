@@ -1540,6 +1540,7 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
             SM64_SATURN_TERRAIN_RESULT_OPAQUE |
             (primitive->textured != 0U
                 ? SM64_SATURN_TERRAIN_RESULT_TEXTURED : 0U) |
+            (recovery ? SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL : 0U) |
             (texture_suppressed
                 ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U);
         /* The current compact BOB bake exposes one primitive RGB only, not
@@ -1839,14 +1840,14 @@ static void demo_emit_terrain_result(
         resolved != NULL) {
         int16_t vertices[4][2];
         memcpy(vertices, command + 12U, sizeof(vertices));
-        sm64_saturn_gouraud_table_t *table = NULL;
-        uintptr_t gouraud_address = 0U;
-        if (shade_path == SM64_SATURN_SHADE_GOURAUD)
-            table = sm64_saturn_gouraud_bank_alloc(gouraud_bank,
-                                                    &gouraud_address);
+        sm64_saturn_terrain_gouraud_lowering_t gouraud_lowering;
+        (void)sm64_saturn_terrain_lower_gouraud(
+            gouraud_bank, shade_path, gouraud_colors, &gouraud_lowering);
+        sm64_saturn_gouraud_table_t *table = gouraud_lowering.table;
+        const uintptr_t gouraud_address = gouraud_lowering.address;
         if (!sm64_saturn_terrain_template_patch_resolved_record_ex(
                 cmdt, resolved, vertices, 0U, false,
-                shade_path == SM64_SATURN_SHADE_GOURAUD && table != NULL,
+                gouraud_lowering.patch,
                 gouraud_address, false, 0U)) {
             /* A poisoned/malformed template is the only supported reason to
              * reconstruct command state at frame time; the common fallback
@@ -1863,9 +1864,6 @@ static void demo_emit_terrain_result(
             profile->triangles_emitted++;
             return;
         } else if (table != NULL) {
-            for (uint8_t corner = 0U; corner < 4U; corner++)
-                table->colors[corner] =
-                    (uint16_t)(gouraud_colors[corner] | 0x8000U);
             profile->gouraud_primitives++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
@@ -1918,15 +1916,12 @@ static void demo_emit_terrain_result(
             .raw = (uint16_t)(shade | 0x8000U)});
         profile->flat_primitives++;
     } else {
-        sm64_saturn_gouraud_table_t *table = NULL;
-        uintptr_t gouraud_address = 0U;
-        if (!textured || recovery)
-            table = sm64_saturn_gouraud_bank_alloc(gouraud_bank,
-                                                    &gouraud_address);
+        sm64_saturn_terrain_gouraud_lowering_t gouraud_lowering;
+        (void)sm64_saturn_terrain_lower_gouraud(
+            gouraud_bank, shade_path, gouraud_colors, &gouraud_lowering);
+        sm64_saturn_gouraud_table_t *table = gouraud_lowering.table;
+        const uintptr_t gouraud_address = gouraud_lowering.address;
         if (table != NULL) {
-            for (uint8_t corner = 0U; corner < 4U; corner++)
-                table->colors[corner] =
-                    (uint16_t)(gouraud_colors[corner] | 0x8000U);
             vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                 .cc_mode = VDP1_CMDT_CC_GOURAUD});

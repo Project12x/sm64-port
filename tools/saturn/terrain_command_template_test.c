@@ -165,6 +165,59 @@ static bool test_compact_post_light_gradient_preserves_tags_and_pixels(void)
     return memcmp(commands[0], interpolated, sizeof(interpolated)) == 0;
 }
 
+static bool test_master_gouraud_lowering_preserves_payload_and_recovery_rule(void)
+{
+    sm64_saturn_gouraud_table_t staging[2];
+    sm64_saturn_gouraud_bank_t bank;
+    sm64_saturn_terrain_gouraud_lowering_t lowering;
+    sm64_saturn_terrain_resolved_command_t gouraud_template = {
+        .words = {0x0004U, 0U, 0x00C4U, 0x8000U, 0U, 0U,
+                  0U, 0U, 0U, 0U, 0U, 0U, 0U, 0U, 0x7FFFU, 0U},
+        .patch_mask = SM64_SATURN_TERRAIN_PATCH_END |
+            SM64_SATURN_TERRAIN_PATCH_LINK |
+            SM64_SATURN_TERRAIN_PATCH_XY |
+            SM64_SATURN_TERRAIN_PATCH_GOURAUD,
+    };
+    const int16_t vertices[4][2] = {
+        {-20, -10}, {20, -10}, {20, 10}, {-20, 10}};
+    const uint16_t post_light[4] = {
+        0x2110U, 0x3190U, 0x4210U, 0x3190U};
+    uint16_t command[16];
+
+    if (!sm64_saturn_gouraud_bank_init(&bank, staging, 2U, 0x25C00000U))
+        return false;
+    sm64_saturn_gouraud_bank_begin(&bank);
+    if (!sm64_saturn_terrain_lower_gouraud(
+            &bank, SM64_SATURN_SHADE_GOURAUD, post_light, &lowering) ||
+        lowering.table != &staging[0] ||
+        lowering.address != 0x25C00000U)
+        return false;
+    for (uint8_t corner = 0U; corner < 4U; corner++)
+        if (staging[0].colors[corner] != (uint16_t)(post_light[corner] | 0x8000U))
+            return false;
+    if (!sm64_saturn_terrain_template_patch_resolved_record_ex(
+            command, &gouraud_template, vertices, 0U, false, lowering.patch,
+            lowering.address, false, 0U) ||
+        command[14] != (uint16_t)(lowering.address >> 3))
+        return false;
+
+    /* Recovery wins over a material LOD downgrade because its resolved
+     * template is Gouraud. This keeps command PMOD and GRDA coherent. */
+    if (sm64_saturn_terrain_shade_path(
+            SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
+                SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED,
+            post_light) != SM64_SATURN_SHADE_GOURAUD)
+        return false;
+    const sm64_saturn_terrain_primitive_t recovery = primitive(
+        SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
+            SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED,
+        post_light[0], post_light[1], post_light[2], post_light[3], 0U);
+    sm64_saturn_terrain_command_template_t metadata;
+    return sm64_saturn_terrain_template_build(&metadata, &recovery) &&
+        metadata.shade_path == SM64_SATURN_SHADE_GOURAUD &&
+        (metadata.patch_mask & SM64_SATURN_TERRAIN_PATCH_GOURAUD) != 0U;
+}
+
 static void test_patch_changes_only_runtime_words(void)
 {
     const uint16_t command_template[16] = {
@@ -477,6 +530,8 @@ int main(void)
         return 1;
     if (!test_compact_shade_and_bank_accounting()) return 1;
     if (!test_compact_post_light_gradient_preserves_tags_and_pixels())
+        return 1;
+    if (!test_master_gouraud_lowering_preserves_payload_and_recovery_rule())
         return 1;
     test_patch_changes_only_runtime_words();
     test_resolved_template_poison_preserves_every_immutable_word();

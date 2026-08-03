@@ -46,6 +46,20 @@ The savings counters are appended to `sm64_saturn_fast3d_profile_t` as
 bank once per frame after emission, and are dynamically decoded by
 `fast3d_profile_decode.py`. They are never read on a policy path.
 
+The final review exposed a recovery/LOD combination mismatch: the worker
+policy had allowed texture suppression to win while the resolved-template
+selector chose recovery first. Recovery is now explicitly the override in
+both places: `RECOVERY_MATERIAL | TEXTURE_SUPPRESSED` selects Gouraud, the
+recovery template permits GRDA, and the master allocates/fills a table before
+patching that GRDA. This is deliberate conservative recovery behavior; a
+regular texture-suppressed material still selects flat REPLACE with no GRDA.
+
+`sm64_saturn_terrain_lower_gouraud()` is the common Yaul-free master lowering
+seam used by `demo_emit_terrain_result()`. The host test drives that exact
+function with four distinct post-light values, verifies all four staged table
+pixels (including RGB1555 opacity), and verifies the patched command GRDA
+points to that table rather than retaining a poisoned stale value.
+
 ## Test-first record and verification
 
 1. Added the command-template fixture before changing the policy. It covers
