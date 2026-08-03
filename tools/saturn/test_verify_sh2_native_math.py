@@ -4899,7 +4899,7 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
             FunctionOwner("_child", 0x6001020, 0x6001024, 1),
         )
         oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _root\n")
-        bounded = verifier.prepare_route_bounded_code_only(
+        bounded = bounded_verifier.prepare_route_bounded_code_only(
             dis, "", owners, (oracle,)
         )
         self.assertEqual(bounded.selected_names, frozenset({"_root", "_child"}))
