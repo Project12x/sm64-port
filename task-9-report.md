@@ -74,3 +74,6 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
 native fixture including the real delayed-callback retirement case. I did not invoke Make, MSYS, bash, sh-elf tools, a
 target build, or Ymir under the explicit safety restriction. Therefore target
 compilation/disassembly and hardware/emulator verification remain pending.
+The target enables `SM64_SATURN_DUAL_WORKER_TEST_HOOK` for both host fixture
+builds only; it is excluded from `__sh__` builds and cannot affect the Saturn
+binary.

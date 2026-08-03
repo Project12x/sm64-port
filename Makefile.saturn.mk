@@ -214,7 +214,6 @@ verify-runtime-camera-contract: verify-runtime-contracts
 verify-terrain-command-template: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-	  -DSM64_SATURN_DUAL_WORKER_TEST_HOOK=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/terrain_command_template_test.c" \
@@ -282,6 +281,7 @@ verify-dual-frame-bank:
 verify-dual-actor-worker:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_DUAL_WORKER_TEST_HOOK=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/dual_actor_worker_test.c" \
