@@ -411,6 +411,14 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_bob_terrain_descriptor_bytes_read;
     uint32_t demo_bob_terrain_legacy_fallbacks;
     uint32_t demo_bob_terrain_sequence_rejects;
+    /* Dual-SH2/dual-VDP ownership evidence. These diagnostics describe the
+     * existing pipeline only: master keeps game state, final VDP1 order, and
+     * presentation; the slave receives only its bounded terrain range. */
+    uint32_t master_worker_started;
+    uint32_t slave_worker_started;
+    uint32_t vdp1_commands;
+    uint32_t vdp2_active_layers;
+    uint32_t pipeline_faults;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

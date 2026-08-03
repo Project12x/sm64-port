@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <math.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -386,6 +387,29 @@ static void test_input_replay_feeds_only_pads_and_ends_neutral(void)
     assert(replay.complete && replay.ticks_consumed == 3U);
     sm64_saturn_input_replay_apply(&replay, &buttons, &stick_x, &stick_y);
     assert(buttons == 0U && stick_x == 0 && stick_y == 0);
+}
+
+static void test_dual_pipeline_profile_counters_append_in_order(void)
+{
+    /* Capture tools decode this ABI directly. The ownership counters must be
+     * a suffix: inserting them would silently reinterpret old probes. */
+    assert(offsetof(sm64_saturn_fast3d_profile_t, master_worker_started) ==
+           offsetof(sm64_saturn_fast3d_profile_t,
+                    demo_bob_terrain_sequence_rejects) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)
+                          ->demo_bob_terrain_sequence_rejects));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, slave_worker_started) ==
+           offsetof(sm64_saturn_fast3d_profile_t, master_worker_started) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->master_worker_started));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, vdp1_commands) ==
+           offsetof(sm64_saturn_fast3d_profile_t, slave_worker_started) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->slave_worker_started));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, vdp2_active_layers) ==
+           offsetof(sm64_saturn_fast3d_profile_t, vdp1_commands) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp1_commands));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, pipeline_faults) ==
+           offsetof(sm64_saturn_fast3d_profile_t, vdp2_active_layers) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp2_active_layers));
 }
 
 static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
@@ -3871,6 +3895,7 @@ int main(void)
 int main(void)
 {
     quad_build_lists();
+    test_dual_pipeline_profile_counters_append_in_order();
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
     test_identity_camera();
     test_rotated_frustum_aabb_radius_is_conservative();

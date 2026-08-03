@@ -1810,6 +1810,39 @@ class Fast3dProfileLayoutTests(unittest.TestCase):
 
 
 class Fast3dProfileDecodeTests(unittest.TestCase):
+    def test_dual_pipeline_counters_append_and_decode(self) -> None:
+        """The ownership evidence remains an appended, big-endian profile ABI."""
+        layout = profile_layout()
+        appended = (
+            "master_worker_started",
+            "slave_worker_started",
+            "vdp1_commands",
+            "vdp2_active_layers",
+            "pipeline_faults",
+        )
+        self.assertEqual(tuple(field.name for field in layout.fields[-5:]), appended)
+        self.assertEqual(
+            layout.field("master_worker_started").offset,
+            layout.fields[-6].end,
+        )
+
+        data = bytearray(layout.size)
+        expected = {
+            "master_worker_started": 1,
+            "slave_worker_started": 1,
+            "vdp1_commands": 0x1234,
+            # VDP2 NBG1 (bit 1) plus the dbgio HUD on NBG3 (bit 3).
+            "vdp2_active_layers": (1 << 1) | (1 << 3),
+            "pipeline_faults": 3,
+        }
+        for name, value in expected.items():
+            field = layout.field(name)
+            self.assertEqual(field.size, 4, name)
+            data[field.offset : field.end] = value.to_bytes(4, "big")
+        fields = decode_profile(bytes(data))["fields"]
+        for name, value in expected.items():
+            self.assertEqual(fields[name], value)
+
     def test_quadmerge_capture_reproduces_its_verified_counters(self) -> None:
         # Independently hand-verified figures from
         # docs/saturn/PERFORMANCE_DIAGNOSIS_2026-07-26.md. partial=True so
@@ -1918,6 +1951,11 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_lod_primitives_suppressed",
                 "demo_lod_texture_downgrades",
                 "demo_lod_resident_bytes",
+                "master_worker_started",
+                "slave_worker_started",
+                "vdp1_commands",
+                "vdp2_active_layers",
+                "pipeline_faults",
             ],
         )
         # Fields the older build did have still read correctly.

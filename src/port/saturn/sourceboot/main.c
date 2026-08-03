@@ -752,6 +752,8 @@ int main(void) {
             sourceboot_render_ticks_accum;
         sourceboot_fast3d.profile.vdp1_commands_last =
             sourceboot_vdp1_backend.list.count;
+        sourceboot_fast3d.profile.vdp1_commands =
+            sourceboot_vdp1_backend.list.count;
         sourceboot_vdp1_bank_generation++;
         sourceboot_vdp1_bank_submitted = sourceboot_vdp1_bank_generation;
         sourceboot_fast3d.profile.vdp1_bank_generation =
@@ -781,6 +783,8 @@ int main(void) {
             (SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES *
              sizeof(vdp1_gouraud_table_t));
         sourceboot_fast3d.profile.vdp2_display_mask =
+            SOURCEBOOT_VDP2_DISPLAY_MASK;
+        sourceboot_fast3d.profile.vdp2_active_layers =
             SOURCEBOOT_VDP2_DISPLAY_MASK;
         sourceboot_fast3d.profile.vdp2_vram_bytes =
             SOURCEBOOT_VDP2_VRAM_BYTES;

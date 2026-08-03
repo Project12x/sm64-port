@@ -1291,6 +1291,7 @@ static void __attribute__((unused)) demo_emit_primitive(
     vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1);
     if (cmdt == NULL) {
         profile->reject_vdp1_arena_capacity++;
+        profile->pipeline_faults++;
         return;
     }
     vdp1_cmdt_polygon_set(cmdt);
@@ -1429,6 +1430,7 @@ static void demo_emit_terrain_result(
     vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1U);
     if (cmdt == NULL) {
         profile->reject_vdp1_arena_capacity++;
+        profile->pipeline_faults++;
         return;
     }
     const bool recovery = sm64_saturn_terrain_result_recovery(result);
@@ -1906,6 +1908,7 @@ static void demo_emit_mario(
         vdp1_cmdt_t *cmdt = sm64_saturn_vdp1_backend_reserve(backend, 1);
         if (cmdt == NULL) {
             profile->reject_vdp1_arena_capacity++;
+            profile->pipeline_faults++;
             continue;
         }
         const uint8_t *rgb = sm64_mario_material_rgb[primitive[0]];
@@ -2017,6 +2020,9 @@ void sm64_saturn_demo_render_frame(
         .count = s_render_work_count,
         .slave_begin = work_split};
     s_slave_begin = terrain_worker.slave_begin;
+    profile->master_worker_started++;
+    if (terrain_worker.slave_begin < terrain_worker.count)
+        profile->slave_worker_started++;
     classify_ok = sm64_saturn_terrain_worker_run(&terrain_worker,
                                                  &classify_stats) &&
                   s_transform_phase_failed == 0U;
@@ -2025,6 +2031,7 @@ void sm64_saturn_demo_render_frame(
             &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
 #else
     classify_stats = (sm64_saturn_dual_worker_stats_t){0};
+    profile->master_worker_started++;
     demo_terrain_compact_range(&compact, 0U, s_render_work_count);
     sm64_saturn_terrain_result_arena_seal(
         &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
@@ -2063,6 +2070,7 @@ void sm64_saturn_demo_render_frame(
     profile->slave_busy_ticks += classify_stats.slave_busy_ticks;
     profile->master_wait_ticks += classify_stats.master_wait_ticks;
     profile->slave_timeouts += classify_stats.slave_timeouts;
+    profile->pipeline_faults += classify_stats.slave_timeouts;
     s_last_master_wait_ticks = classify_stats.master_wait_ticks > UINT16_MAX
         ? UINT16_MAX : (uint16_t)classify_stats.master_wait_ticks;
     profile->triangles_transformed += classify.transformed[0] +
@@ -2080,6 +2088,7 @@ void sm64_saturn_demo_render_frame(
     profile->demo_bob_clip_to_two += classify.clip_to_two[0] + classify.clip_to_two[1];
     profile->demo_bob_clip_recovery += classify.clip_recovery[0] + classify.clip_recovery[1];
     profile->demo_bob_clip_overflow += classify.clip_overflow[0] + classify.clip_overflow[1];
+    profile->pipeline_faults += classify.clip_overflow[0] + classify.clip_overflow[1];
     profile->demo_bob_results_master += s_terrain_spans_shared.master.count;
     profile->demo_bob_results_slave += s_terrain_spans_shared.slave.count;
     profile->demo_bob_terrain_descriptor_bytes_written +=
@@ -2088,6 +2097,8 @@ void sm64_saturn_demo_render_frame(
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
     profile->demo_bob_result_reserve_rejects +=
         s_terrain_spans_shared.master.reserve_rejects + s_terrain_spans_shared.slave.reserve_rejects;
+    profile->pipeline_faults += s_terrain_spans_shared.master.reserve_rejects +
+                                s_terrain_spans_shared.slave.reserve_rejects;
     for (uint16_t primitive = 0U;
          primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
         switch (s_primitive_lod_tier[primitive]) {
@@ -2200,6 +2211,7 @@ void sm64_saturn_demo_render_frame(
         s_terrain_emit_count > terrain_command_budget
         ? (uint16_t)(s_terrain_emit_count - terrain_command_budget) : 0U;
     profile->reject_vdp1_arena_capacity += terrain_first;
+    profile->pipeline_faults += terrain_first;
     /* The master owns all VDP1 lowering. Compact terrain results are merged
      * above, then consumed in the stable baked painter order here. */
     for (uint16_t ordinal = terrain_first;

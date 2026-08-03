@@ -52,6 +52,18 @@ PROFILE_HEADER = REPO_ROOT / "src" / "port" / "saturn" / "gfx" / "saturn_fast3d_
 STRUCT_TAG = "sm64_saturn_fast3d_profile"
 STRUCT_TYPEDEF = "sm64_saturn_fast3d_profile_t"
 
+# The decoder derives all fields from the profile header, including these
+# append-only dual-pipeline diagnostics.  Keeping their public spellings here
+# makes capture consumers able to identify the ownership evidence without
+# carrying any offsets of their own.
+DUAL_PIPELINE_COUNTERS = (
+    "master_worker_started",
+    "slave_worker_started",
+    "vdp1_commands",
+    "vdp2_active_layers",
+    "pipeline_faults",
+)
+
 # ctype -> (size in bytes, big-endian struct format).  Alignment equals size
 # for every one of these on sh-elf, which is what makes the layout model below
 # a two-line calculation rather than a target-description table.
