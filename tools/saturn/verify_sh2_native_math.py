@@ -776,6 +776,20 @@ def _island_for_direct_target(
     return island
 
 
+def _local_island_identity(island: LocalIsland) -> str:
+    """Return a collision-proof raw-closure node for validated local code."""
+    return f"@island:{island.name}@{island.start:08x}"
+
+
+def _island_at_code_address(
+    islands: Iterable[LocalIsland], address: int,
+) -> LocalIsland | None:
+    matches = [
+        island for island in islands if island.code_start <= address < island.end
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _symbol_from_annotation(annotation: str) -> SymbolAtom | None:
     match = re.search(r"(?:0x)?([0-9A-Fa-f]{6,8})\s+<([^>]+)>", annotation)
     if not match:
@@ -3431,46 +3445,74 @@ def _symbol_base(symbol: str) -> str:
 def scan_direct_calls(
     disassembly: str,
     owners: Iterable[FunctionOwner] | None = None,
+    local_islands: Iterable[LocalIsland] = (),
 ) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
     owner_list = None if owners is None else tuple(owners)
+    island_list = tuple(local_islands) if owner_list is not None else ()
     owner_by_symbol = {} if owner_list is None else {
         name: owner
         for owner in owner_list
         for name in (owner.name, *owner.aliases)
     }
-    active_owner: FunctionOwner | None = None
+    active_region: tuple[str, int] | None = None
     caller = "<outside-function>"
     registers: dict[str, tuple[str, int]] = {}
     stack_slots: dict[int, tuple[str, int]] = {}
     calls: list[CallSite] = []
 
-    def executable_target(symbol: str, address: int) -> str:
+    def code_region(address: int) -> tuple[str, int] | None:
         assert owner_list is not None
         address_owner = _owner_at(owner_list, address)
+        if address_owner is not None:
+            return address_owner.name, address_owner.start
+        island = _island_at_code_address(island_list, address)
+        return (
+            None
+            if island is None
+            else (_local_island_identity(island), island.start)
+        )
+
+    def executable_target(displayed: str, address: int) -> str:
+        assert owner_list is not None
+        symbol = _symbol_base(displayed)
+        address_owner = _owner_at(owner_list, address)
         named_owner = owner_by_symbol.get(symbol)
-        if address_owner is None or (
-            named_owner is not None and named_owner != address_owner
-        ):
+        if address_owner is not None:
+            if named_owner is not None and named_owner != address_owner:
+                raise ValueError(
+                    "bounded executable direct call has no linked owner: "
+                    f"{symbol} at 0x{address:08x}"
+                )
+            return address_owner.name
+        if named_owner is not None:
             raise ValueError(
                 "bounded executable direct call has no linked owner: "
                 f"{symbol} at 0x{address:08x}"
             )
-        return address_owner.name
+        island = _island_for_direct_target(
+            address, f"<{displayed}>", island_list
+        )
+        if island is not None:
+            return _local_island_identity(island)
+        raise ValueError(
+            "bounded executable direct call has no linked owner: "
+            f"{symbol} at 0x{address:08x}"
+        )
 
     for line in disassembly.splitlines():
         function = FUNCTION_RE.match(line)
         if function:
-            next_owner = (
+            next_region = (
                 None
                 if owner_list is None
-                else _owner_at(owner_list, int(function.group(1), 16))
+                else code_region(int(function.group(1), 16))
             )
             caller = function.group(2)
-            if owner_list is None or next_owner != active_owner:
+            if owner_list is None or next_region != active_region:
                 registers.clear()
                 stack_slots.clear()
-            active_owner = next_owner
+            active_region = next_region
             continue
 
         instruction = INSTRUCTION_RE.match(line)
@@ -3480,22 +3522,22 @@ def scan_direct_calls(
         text = instruction.group(2).strip()
 
         if owner_list is not None:
-            source_owner = _owner_at(owner_list, address)
-            if source_owner is None:
+            source_region = code_region(address)
+            if source_region is None:
                 registers.clear()
                 stack_slots.clear()
-                active_owner = None
+                active_region = None
                 continue
-            if source_owner != active_owner:
+            if source_region != active_region:
                 registers.clear()
                 stack_slots.clear()
-            active_owner = source_owner
-            caller = source_owner.name
+            active_region = source_region
+            caller = source_region[0]
 
         load = LITERAL_LOAD_RE.search(text)
         if load:
             registers[load.group(1)] = (
-                _symbol_base(load.group(3)), int(load.group(2), 16)
+                load.group(3), int(load.group(2), 16)
             )
             continue
 
@@ -3527,24 +3569,27 @@ def scan_direct_calls(
         if jsr:
             target = registers.get(jsr.group(1))
             if target is not None:
-                symbol, target_address = target
+                displayed, target_address = target
+                symbol = _symbol_base(displayed)
                 if owner_list is not None:
-                    symbol = executable_target(symbol, target_address)
+                    symbol = executable_target(displayed, target_address)
                 calls.append(CallSite(caller, address, symbol))
             continue
 
         bsr = BSR_RE.search(text)
         if bsr:
             target_address = int(bsr.group(1), 16)
-            symbol = _symbol_base(bsr.group(2))
+            displayed = bsr.group(2)
+            symbol = _symbol_base(displayed)
             if owner_list is not None:
-                symbol = executable_target(symbol, target_address)
+                symbol = executable_target(displayed, target_address)
             calls.append(CallSite(caller, address, symbol))
             continue
         if owner_list is not None and BSR_OPCODE_RE.search(text):
+            assert active_region is not None
             raise ValueError(
                 "bounded executable direct call has unresolved direct call target: "
-                f"{caller}+0x{address - active_owner.start:x}"
+                f"{caller}+0x{address - active_region[1]:x}"
             )
 
         destination = DESTINATION_RE.search(text)
@@ -4198,32 +4243,101 @@ def make_observation(
 
 @dataclass
 class RouteBoundedCode:
-    """Linked-ELF inputs materialized only for pinned route owners."""
+    """Linked-ELF inputs materialized only for pinned route code regions."""
 
     graph: dict[str, set[str]]
     closure: frozenset[str]
+    selected_names: frozenset[str]
+    selected_islands: tuple[LocalIsland, ...]
     disassembly: str
     instructions: dict[int, Instruction]
     decoded_lines: dict[str, set[int]]
 
 
-def _owned_disassembly_blocks(
+def _validated_bounded_local_islands(
+    islands: Iterable[LocalIsland], owners: tuple[FunctionOwner, ...],
+) -> tuple[LocalIsland, ...]:
+    """Reject externally fabricated or ambiguous bounded island ranges."""
+    result = tuple(sorted(
+        islands, key=lambda item: (item.section, item.start, item.end, item.name)
+    ))
+    identities: set[str] = set()
+    for island in result:
+        identity = _local_island_identity(island)
+        if identity in identities:
+            raise ValueError(f"duplicate bounded local island: {identity}")
+        identities.add(identity)
+        if not island.start <= island.code_start < island.end:
+            raise ValueError(f"invalid bounded local island range: {identity}")
+        if any(
+            owner.section == island.section
+            and owner.start < island.end and island.code_start < owner.end
+            for owner in owners
+        ):
+            raise ValueError(f"bounded local island overlaps function owner: {identity}")
+    for previous, current in zip(result, result[1:]):
+        if previous.section == current.section \
+                and previous.code_start < current.end \
+                and current.code_start < previous.end:
+            raise ValueError(
+                "overlapping bounded local islands: "
+                f"{_local_island_identity(previous)} and "
+                f"{_local_island_identity(current)}"
+            )
+    return result
+
+
+def _bounded_code_identity(
+    owners: tuple[FunctionOwner, ...],
+    islands: tuple[LocalIsland, ...],
+    address: int,
+) -> str | None:
+    owner = _owner_at(owners, address)
+    if owner is not None:
+        return owner.name
+    island = _island_at_code_address(islands, address)
+    return None if island is None else _local_island_identity(island)
+
+
+def _bounded_disassembly_blocks(
     disassembly: str,
     owners: tuple[FunctionOwner, ...],
+    islands: tuple[LocalIsland, ...],
 ) -> dict[str, str]:
-    """Group complete objdump symbol blocks by their linked function owner."""
+    """Group decoded rows only by validated executable code-region address."""
     rows: dict[str, list[str]] = {}
-    current_owner: str | None = None
     for line in disassembly.splitlines(keepends=True):
-        header = FUNCTION_RE.match(line.rstrip("\r\n"))
-        if header is not None:
-            owner = _owner_at(owners, int(header.group(1), 16))
-            current_owner = None if owner is None else owner.name
-            if current_owner is not None:
-                rows.setdefault(current_owner, [])
-        if current_owner is not None:
-            rows[current_owner].append(line)
+        stripped = line.rstrip("\r\n")
+        header = FUNCTION_RE.match(stripped)
+        instruction = INSTRUCTION_RE.match(stripped)
+        match = header if header is not None else instruction
+        if match is None:
+            continue
+        identity = _bounded_code_identity(
+            owners, islands, int(match.group(1), 16)
+        )
+        if identity is not None:
+            rows.setdefault(identity, []).append(line)
     return {name: "".join(block) for name, block in rows.items()}
+
+
+def _selected_island_decoded_lines(
+    text: str, islands: tuple[LocalIsland, ...],
+) -> dict[str, set[int]]:
+    result: dict[str, set[int]] = defaultdict(set)
+    for line in text.splitlines():
+        if "end_sequence" in line.lower():
+            continue
+        match = DECODED_LINE_RE.search(line)
+        if match is None:
+            continue
+        address = int(match.group(1), 16)
+        if address & 1:
+            continue
+        island = _island_at_code_address(islands, address)
+        if island is not None:
+            result[_local_island_identity(island)].add(address)
+    return result
 
 
 def prepare_route_bounded_code_only(
@@ -4232,9 +4346,11 @@ def prepare_route_bounded_code_only(
     owners: Iterable[FunctionOwner],
     oracles: Iterable[RouteOracle],
     owner_address_map: dict[int, FunctionOwner] | None = None,
+    local_islands: Iterable[LocalIsland] = (),
 ) -> RouteBoundedCode:
     """Derive pinned closure before allocating any Instruction objects."""
     owner_list = tuple(owners)
+    island_list = _validated_bounded_local_islands(local_islands, owner_list)
     oracle_list = tuple(oracles)
     if not oracle_list:
         raise ValueError("bounded route analysis requires a route oracle")
@@ -4244,20 +4360,24 @@ def prepare_route_bounded_code_only(
         for owner in owner_list
         for name in (owner.name, *owner.aliases)
     }
-    blocks = _owned_disassembly_blocks(disassembly, owner_list)
+    owner_by_identity = {owner.name: owner for owner in owner_list}
+    island_by_identity = {
+        _local_island_identity(island): island for island in island_list
+    }
+    collisions = set(owner_by_identity).intersection(island_by_identity)
+    if collisions:
+        raise ValueError(
+            "bounded island identity collides with function owner: "
+            + ", ".join(sorted(collisions))
+        )
+    blocks = _bounded_disassembly_blocks(disassembly, owner_list, island_list)
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
-    for call in scan_direct_calls(disassembly, owner_list):
+    for call in scan_direct_calls(disassembly, owner_list, island_list):
         if is_native_math_helper(call.helper):
             continue
-        # Objdump may introduce local/NOTYPE headers inside one STT_FUNC.
-        # Attribute the edge by its callsite address, not the last header.
-        caller_owner = _owner_at(owner_list, call.address)
-        caller = call.caller if caller_owner is None else caller_owner.name
-        targets = graph.setdefault(caller, set())
-        target_owner = owner_by_symbol.get(call.helper)
-        targets.add(call.helper if target_owner is None else target_owner.name)
+        graph.setdefault(call.caller, set()).add(call.helper)
 
     closure: set[str] = set()
     for oracle in oracle_list:
@@ -4288,17 +4408,22 @@ def prepare_route_bounded_code_only(
         ))
 
     for name in sorted(closure):
-        owner = owner_by_symbol.get(name)
-        if owner is None:
+        owner = owner_by_identity.get(name)
+        island = island_by_identity.get(name)
+        if owner is None and island is None:
             raise ValueError(f"bounded route closure has no linked owner: {name}")
-        if owner.name not in blocks:
+        if name not in blocks:
             raise ValueError(f"bounded route closure has no owned block: {name}")
 
     selected_names = {
-        owner_by_symbol[name].name for name in closure
+        name for name in closure if name in owner_by_identity
     }
+    selected_islands = tuple(
+        island for island in island_list
+        if _local_island_identity(island) in closure
+    )
     bounded_disassembly = "".join(
-        block for name, block in blocks.items() if name in selected_names
+        block for name, block in blocks.items() if name in closure
     )
     # This is the key memory boundary: parsing happens only after complete
     # linked-symbol blocks have been selected from the raw disassembly text.
@@ -4309,12 +4434,17 @@ def prepare_route_bounded_code_only(
         owner_address_map,
         selected_names,
     )
+    decoded_lines.update(_selected_island_decoded_lines(
+        decoded_text, selected_islands
+    ))
     return RouteBoundedCode(
-        graph,
-        frozenset(selected_names),
-        bounded_disassembly,
-        instructions,
-        decoded_lines,
+        graph=graph,
+        closure=frozenset(closure),
+        selected_names=frozenset(selected_names),
+        selected_islands=selected_islands,
+        disassembly=bounded_disassembly,
+        instructions=instructions,
+        decoded_lines=decoded_lines,
     )
 
 
@@ -4445,10 +4575,12 @@ def main(argv: list[str] | None = None) -> int:
                         if item is not None
                     ),
                     owner_address_map,
+                    local_islands,
                 )
                 decoded_seeds = bounded.decoded_lines
                 legacy_graph = bounded.graph
-                candidate_names = set(bounded.closure)
+                candidate_names = set(bounded.selected_names)
+                local_islands = bounded.selected_islands
                 parsed_instructions = bounded.instructions
             else:
                 decoded_seeds = parse_decoded_lines(

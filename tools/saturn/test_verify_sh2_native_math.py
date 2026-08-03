@@ -5304,6 +5304,88 @@ fixture.c 3 0x06003002
                         disassembly, "", self.OWNERS[:2], (self.ORACLE,)
                     )
 
+    def test_bounded_closure_traverses_validated_div0_island(self) -> None:
+        owners = (
+            FunctionOwner("___udivsi3", 0x06001120, 0x06001140, 1),
+            FunctionOwner("_route_child", 0x06001200, 0x06001208, 1),
+        )
+        island = bounded_verifier.LocalIsland(
+            "div0", 0x06001100, 0x06001104, 0x06001120, 1
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"___udivsi3"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001100 <div0>:
+ 6001106: b0 7b bsr 6001200 <_route_child>
+ 6001108: 00 09 nop
+ 600110a: 00 0b rts
+ 600110c: 00 09 nop
+06001120 <___udivsi3>:
+ 6001120: bf f1 bsr 6001106 <div0+0x6>
+ 6001122: 00 09 nop
+ 6001124: 00 0b rts
+ 6001126: 00 09 nop
+06001200 <_route_child>:
+ 6001200: 00 0b rts
+ 6001202: 00 09 nop
+"""
+        island_id = "@island:div0@06001100"
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.s 1 0x06001106\nfixture.s 2 0x06001122\n",
+            owners,
+            (oracle,),
+            local_islands=(island,),
+        )
+        self.assertEqual(prepared.closure, frozenset({
+            "___udivsi3", island_id, "_route_child",
+        }))
+        self.assertEqual(prepared.selected_names, frozenset({
+            "___udivsi3", "_route_child",
+        }))
+        self.assertEqual(prepared.selected_islands, (island,))
+        self.assertTrue({0x06001106, 0x06001120, 0x06001200} <= set(
+            prepared.instructions
+        ))
+        self.assertEqual(prepared.decoded_lines[island_id], {0x06001106})
+
+        analysis = analyze_code_only(
+            prepared.instructions,
+            owners,
+            prepared.decoded_lines,
+            set(prepared.selected_names),
+            build_instruction_memory(prepared.instructions),
+            local_islands=prepared.selected_islands,
+        )
+        self.assertIn(
+            ("___udivsi3", "island", "div0", "_route_child"),
+            {
+                (fact.caller, fact.caller_region, fact.caller_island, fact.callee)
+                for fact in analysis.direct_calls
+            },
+        )
+
+    def test_bounded_closure_rejects_unvalidated_local_code_target(self) -> None:
+        owner = FunctionOwner("___udivsi3", 0x06001120, 0x06001140, 1)
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"___udivsi3"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001100 <div0>:
+ 6001106: 00 0b rts
+ 6001108: 00 09 nop
+06001120 <___udivsi3>:
+ 6001120: bf f1 bsr 6001106 <div0+0x6>
+ 6001122: 00 09 nop
+ 6001124: 00 0b rts
+ 6001126: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no linked owner"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", (owner,), (oracle,)
+            )
+
     def test_bounded_analysis_keeps_unresolved_indirect_transfer_fail_closed(self) -> None:
         disassembly = """
 06001000 <_route_root>:
