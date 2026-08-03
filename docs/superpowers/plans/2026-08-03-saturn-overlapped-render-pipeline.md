@@ -29,10 +29,9 @@ individual task steps below, this summary, the architecture decision ledger,
 and the evidence report before starting another task.
 
 - [ ] **Task 1 / A1 — duplicate source-render removal:** active; implementation
-  commits `4a8fe1ce`, `658d5ad9`, and `9904097e` are ready for independent
-  spec and quality review. The latest correction makes the shared guard
-  compatible with the N64 `-nostdinc` path. The controller-owned serial
-  CUE/Ymir gate remains pending.
+  commits `4a8fe1ce`, `658d5ad9`, `9904097e`, and `a00cdd17` are ready for
+  independent spec and quality review. Task 1 gates are Saturn-only; the
+  controller-owned serial CUE/Ymir gate remains pending.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -49,6 +48,9 @@ and the evidence report before starting another task.
   `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge`.
 - Preserve unrelated dirty verifier, audit, route, and evidence files. Stage
   only files named by the active task.
+- The supported target is Saturn only. PC/N64 build compatibility is not a
+  task gate; reviewers consider non-Saturn behavior only when it affects
+  Saturn code or host test tooling.
 - Before each task, reconcile Git HEAD, this status summary, every checkbox in
   the task, the architecture decision ledger, and the evidence report.
 - During the same task transition, record implementation commit, spec-review
@@ -184,7 +186,7 @@ and the evidence report before starting another task.
   Replace the current display-only suppression pair in
   `sourceboot_run_source_tick()` with paired display and scene-graph policy
   changes. Restore both flags before returning, including early-return/error
-  paths. Ordinary interpreted builds retain the original source renderer.
+  paths. The Saturn interpreted renderer retains the original source renderer.
 
 - [ ] **Step 7: Run focused and aggregate host gates**
 

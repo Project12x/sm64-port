@@ -62,7 +62,7 @@ above.
   the established demo role. No target build, Ymir launch, or native-math
   census was performed here.
 
-## Spec-fix round 1 — non-Saturn guard portability
+## Historical (superseded) spec-fix round 1 — non-Saturn guard portability
 
 Spec review found that `bool`/`false` in the non-`TARGET_SATURN` branch of
 `area.c` had been supplied only indirectly by the Saturn-only runtime header.
@@ -79,11 +79,10 @@ Red command/result:
 Before the fix, GCC reported unknown type name `bool` and undeclared `false`
 at `render_game()`'s non-Saturn branch. The exact command passes after the
 fix. `tools/saturn/test_source_render_suppression.py` also passes (1 test).
-The corresponding Make target prints the same compile invocation but inherits
-the previously recorded MSYS/native executable-handoff nonzero exit; the
-direct wrapper compiler command is the green constituent evidence.
+This historical check is superseded by the Saturn-only owner scope and is not
+an active Task 1 gate.
 
-## Spec-fix round 2 — N64 `-nostdinc` compatibility
+## Historical (superseded) spec-fix round 2 — N64 `-nostdinc` compatibility
 
 The round-1 standard-header correction was not valid for the N64 build's
 `-nostdinc` compiler model. Commit `9904097e` removes `<stdbool.h>` and makes
@@ -106,6 +105,24 @@ directory` at `area.c:2`. Green command/result:
 & .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
 ```
 
-Result: PASS. The N64-shaped host compiler emitted pre-existing host-width
-warnings from the N64 ABI headers but no error; the source-policy test ran 1
-test and passed.
+Result: historical PASS. This N64-shaped check is removed and no longer makes
+any PC/N64 compatibility claim.
+
+## Owner scope correction — Saturn-only Task 1
+
+Commit `a00cdd17` removes `verify-area-non-saturn-compile` and its dependency
+from the source-policy gate. The owner clarified that this repository is
+Saturn-exclusive: PC and N64 builds are unsupported and not Task 1 gates.
+“Ordinary interpreted build” means the Saturn interpreted renderer. The
+project-native `s32`/`FALSE` local remains a clean Saturn implementation
+detail, not a PC/N64 compatibility contract.
+
+Focused Saturn-only results:
+
+- `tools/saturn/test_source_render_suppression.py`: PASS (1 test).
+- `build/saturn/host-tests/runtime-contract-test.exe`: PASS.
+- `python -m unittest tools.saturn.test_tools.Fast3dProfileDecodeTests`:
+  PASS (13 tests, 1 expected skip).
+
+No target build, Ymir launch, or non-Saturn compilation was run for this scope
+correction.

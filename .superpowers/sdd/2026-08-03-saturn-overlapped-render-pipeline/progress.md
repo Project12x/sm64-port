@@ -26,16 +26,8 @@ the runtime contract under the required wrapper but then exits nonzero from
 the MSYS/Windows executable-path handoff; the exact compiler invocation and
 resulting runtime-contract executable both pass directly.
 
-Spec-fix round 1: `658d5ad9` adds a focused host syntax gate for
-`src/game/area.c` without `TARGET_SATURN` and includes `<stdbool.h>` outside
-the Saturn-only header guard. Red compiler evidence showed unknown `bool` and
-`false`; the direct wrapper compiler command is green after the fix. The Make
-target prints the same invocation but still exits nonzero in the inherited
-MSYS/native executable handoff environment, so its direct wrapper constituent
-is recorded as the executed green evidence. No target/Ymir work was run.
-
-Spec-fix round 2: `9904097e` replaces the standard-header dependency with
-project-native `s32`/`FALSE` in the shared guard. The focused syntax gate now
-uses `-DTARGET_N64 -nostdinc` and the actual repository/build include paths.
-Its red command failed on missing `stdbool.h`; the amended gate and the
-source-policy test pass. No target/Ymir work was run.
+Owner scope correction: this is a Saturn-exclusive repository. `a00cdd17`
+removes the temporary PC/N64 `area.c` syntax gate; PC/N64 compilation is not a
+Task 1 gate. “Ordinary interpreted” now explicitly means the Saturn
+interpreted renderer. Focused Saturn source-policy, runtime-contract, and
+profile tests pass; no target/Ymir work was run.

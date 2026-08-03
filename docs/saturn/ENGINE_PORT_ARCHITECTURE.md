@@ -13,6 +13,14 @@ inherited SM64 game, level, object, camera, animation, and behavior code. The
 Saturn work supplies platform services, an asset compiler, and a rendering
 backend beneath that code.
 
+## Supported-target scope
+
+**Owner decision — 2026-08-03.** This repository is Saturn-exclusive. PC and
+N64 builds are unsupported and their compile compatibility is not a gate.
+Reviewers may flag non-Saturn behavior only when it affects Saturn code or
+host test tooling. Historical PC/N64 references remain source/provenance
+context, not supported build contracts.
+
 ## Non-negotiable ownership rule
 
 The original engine owns authoritative game state. In the production target:

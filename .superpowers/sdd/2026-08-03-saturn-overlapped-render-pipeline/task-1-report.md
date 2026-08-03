@@ -5,15 +5,16 @@
 Implementation commit: `4a8fe1ce` (`perf(saturn): bypass duplicate source
 scene construction`), corrected by `658d5ad9` (`fix(saturn): keep source
 render guard portable`) and `9904097e` (`fix(saturn): keep render guard
-N64-compatible`). Task status is **active**, pending independent review and
-the controller-owned CUE/Ymir gate.
+N64-compatible`), with scope correction `a00cdd17` (`chore(saturn): limit
+Task 1 gates to Saturn`). Task status is **active**, pending independent
+review and the controller-owned CUE/Ymir gate.
 
 ## Files changed
 
 `Makefile.saturn.mk`; `src/game/area.c`; source runtime header/source;
 sourceboot main; Fast3D profile header/decoder; runtime contract test;
 source-policy test; profile decoder fixture; Task 1 plan/spec/SDD ledger and
-evidence report.
+evidence report; `docs/saturn/ENGINE_PORT_ARCHITECTURE.md`.
 
 ## Tests
 
@@ -25,29 +26,18 @@ evidence report.
   17 unrelated preserved route-schema errors remain. The wrapper Make target
   compiles but has an MSYS/Windows executable-path handoff failure; direct
   constituent compiler and executable commands pass.
-- Spec-fix round 1 red: the wrapper-hosted non-Saturn `area.c` syntax command
-  failed with unknown `bool` and undeclared `false`. Green: the same command
-  passes after unconditional `<stdbool.h>`; source-policy test also PASS (1).
-- Spec-fix round 2 red command:
-  `with-msys-toolchain.ps1 ... gcc.exe -std=gnu90 -fsyntax-only -fsigned-char
-  -nostdinc -DTARGET_N64 -D_LANGUAGE_C -DVERSION_US=1 -DNON_MATCHING=1
-  -DAVOID_UB=1 -DF3DEX_GBI_2E=1 -Iinclude -Ibuild/us_pc
-  -Ibuild/us_pc/include -Isrc -I. -Iinclude/libc src/game/area.c`; output:
-  `fatal error: stdbool.h: No such file or directory`. Green commands:
-  `with-msys-toolchain.ps1 ... make.exe -f Makefile.saturn.mk
-  OS=Windows_NT HOST_CC=gcc SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge
-  verify-area-non-saturn-compile` and
-  `.venv-saturn-tools\\Scripts\\python.exe tools\\saturn\\test_source_render_suppression.py`;
-  both PASS (the syntax gate has expected host-width warnings only).
+- Owner scope correction: PC/N64 builds are unsupported and are not Task 1
+  gates. The N64 syntax target is removed. “Ordinary interpreted build” means
+  the Saturn interpreted renderer. Source-policy PASS (1), runtime-contract
+  executable PASS, and Fast3D profile tests PASS (13, 1 skip).
 
 ## Self-review
 
 Reviewed the committed range for policy scope and ABI stability. The guard
 evaluates once; the source-only construction is guarded; the required
 stateful calls and pointer cleanup stay live; both counter additions are
-suffixes. Spec review's non-Saturn type-definition finding is fixed by the
-project-native `s32`/`FALSE` definition and N64-shaped real-translation-unit
-syntax gate. No task-owned review finding remains.
+suffixes. The project-native `s32`/`FALSE` local remains, but non-Saturn
+compatibility is not claimed or tested. No task-owned review finding remains.
 
 ## Documentation and remaining gate
 
