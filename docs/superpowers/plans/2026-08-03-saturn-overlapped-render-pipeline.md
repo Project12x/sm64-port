@@ -32,8 +32,10 @@ and the evidence report before starting another task.
   round 1/5. Full-range review of `4a8fe1ce^..70cb3fe1` found that suppressing
   `geo_process_root()` also suppresses authoritative animation, painting/warp,
   environment-water, moving-texture, flying-carpet, camera, and matrix-derived
-  object-state mutations. No bounded state-only seam has been demonstrated;
-  the controller-owned serial CUE/Ymir gate must not start.
+  object-state mutations. Safety commit `77ee306c` removes the sourceboot
+  enable/disable calls, so accepted Saturn builds fail closed with a full geo
+  walk. No bounded state-only seam has been demonstrated; the controller-owned
+  serial CUE/Ymir gate must not start.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -118,7 +120,9 @@ and the evidence report before starting another task.
 - Produces `sm64_saturn_source_runtime_set_scene_graph_suppressed(bool)` and
   `sm64_saturn_source_runtime_scene_graph_suppressed(void)`.
 - Produces counters `scene_graph_walks` and `scene_graph_walks_suppressed`,
-  appended to `sm64_saturn_source_runtime_state_t` and the Fast3D profile.
+  appended to `sm64_saturn_source_runtime_state_t` and the Fast3D profile. The
+  policy is dormant in accepted sourceboot code: normal walks increment and
+  suppressed walks remain zero.
 - Intended to retain stateful `do_cutscene_handler()`,
   `print_displaying_credits_entry()`, `render_menus_and_dialogs()`, and warp
   transition state updates. The current implementation also suppresses
@@ -182,12 +186,13 @@ and the evidence report before starting another task.
   stateful calls and warp-transition completion/decrement logic active in both
   paths. Always clear `D_8032CE74` and `D_8032CE78` at function exit.
 
-- [x] **Step 6: Enable the policy only around Saturn demo source ticks**
+- [x] **Step 6: Keep scene-graph suppression fail closed in sourceboot**
 
-  Replace the current display-only suppression pair in
-  `sourceboot_run_source_tick()` with paired display and scene-graph policy
-  changes. Restore both flags before returning, including early-return/error
-  paths. The Saturn interpreted renderer retains the original source renderer.
+  Safety correction `77ee306c` removes both scene-graph setter calls from
+  `sourceboot_run_source_tick()`. Only final display submission remains paired
+  around the source tick. A focused source test rejects any sourceboot call to
+  the reserved scene-graph setter, so every accepted Saturn build retains
+  `geo_process_root()` until a behavior-tested state-only seam exists.
 
 - [ ] **Step 7: Run focused and aggregate host gates**
 
@@ -196,6 +201,12 @@ and the evidence report before starting another task.
   test proves the stateful whitelist and the runtime counter layout. The
   focused constituent tests pass, but the aggregate run also sees unrelated
   route-schema failures from preserved dirty state; see the evidence report.
+
+  Safety-closure focused results: source-policy PASS (2 tests), compiled host
+  runtime contract PASS when invoked directly, and profile decoder PASS
+  (13 tests, 1 expected skip). Per task scope, the broad aggregate and all
+  target/Ymir gates were not run. The wrapper still exits at the known
+  MSYS/Windows executable handoff after successful host compilation.
 
 - [x] **Step 8: Update live documentation before review**
 
@@ -218,6 +229,10 @@ and the evidence report before starting another task.
   progression, warp progression, unconditional cleanup, and paired sourceboot
   policy restoration, then implement an audited state-only seam without
   constructing source display lists.
+
+  Safety closure `77ee306c`: **implemented, review pending**. It does not claim
+  A1 completion; it removes the unsafe production activation while retaining
+  the dormant policy/counter ABI for the eventual tested seam.
 
 - [ ] **Step 10: Build and manually test the early CUE**
 
@@ -923,10 +938,12 @@ and the evidence report before starting another task.
 - Modify: architecture spec and this plan
 
 **Interfaces:**
-- Final role activates source-render suppression, immutable snapshot banks,
-  pre-transform cluster/meshlet LOD, shared job queue, localized recovery,
-  explicit source banks, CPU-DMAC command upload, SCU-DMA Gouraud upload,
-  one-frame presentation lag, and bounded cadence.
+- Final role may activate source-render suppression only after A1 supplies its
+  independently approved state-only seam and differential evidence. Until
+  then it retains the full source geo walk while integrating immutable
+  snapshot banks, pre-transform cluster/meshlet LOD, shared job queue,
+  localized recovery, explicit source banks, CPU-DMAC command upload,
+  SCU-DMA Gouraud upload, one-frame presentation lag, and bounded cadence.
 - Produces immutable ELF/CUE hashes, build flags, replay state, generation
   telemetry, worker ownership, transfer waits, command/geometry counters, and
   manual result.
@@ -1016,9 +1033,9 @@ make -C src/port/saturn/sourceboot -B -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_R
 ```
 
 `SATURN_RENDERER_PIPELINE=4` must be validated and passed into target
-preprocessor flags by Task 10. Until then, a Task 1 experimental build may use
-the existing `pipe3` role plus its explicit source-render suppression flag and
-must label the artifact accordingly.
+preprocessor flags by Task 10. The former Task 1 `pipe3` scene-graph
+suppression checkpoint is prohibited after `77ee306c`; no experimental role
+may re-enable it without the approved A1 seam and tests.
 
 ## Completion criteria
 

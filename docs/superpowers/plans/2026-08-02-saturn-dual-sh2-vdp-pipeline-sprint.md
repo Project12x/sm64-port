@@ -27,6 +27,12 @@ whole-walk suppression until a bounded state-only seam and behavioral
 differential tests are independently approved. See the active A1 plan and
 evidence report for the exact inventory and unexecuted gates.
 
+Safety commit `77ee306c` removes every scene-graph suppression setter call
+from `sourceboot_run_source_tick()`. The reserved runtime policy and counters
+remain ABI-compatible but dormant; accepted Saturn builds now record normal
+walks only. This closes the production-safety exposure without completing A1
+or authorizing the experimental CUE.
+
 ## Live execution status — update on every task transition
 
 This checklist is the operational source of truth.  A task is not complete

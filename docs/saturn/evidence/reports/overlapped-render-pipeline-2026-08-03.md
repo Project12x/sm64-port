@@ -2,16 +2,47 @@
 
 ## Current verdict
 
-**BLOCKED — quality-fix round 1/5.** Full-range review covered
+**SAFE-BLOCKED — quality-fix round 1/5.** Full-range review covered
 `4a8fe1ce^..70cb3fe1`, not only the original implementation commit. The
-current Saturn policy suppresses all of `geo_process_root()`, but that function
-is not a construction-only boundary. It owns or invokes source-state mutations
-used by later gameplay and visual-state updates. The existing source test does
-not prove otherwise.
+reviewed Saturn policy suppressed all of `geo_process_root()`, but that
+function is not a construction-only boundary. Safety commit `77ee306c` removes
+all scene-graph suppression setter calls from `sourceboot_run_source_tick()`.
+Accepted builds now retain the full geo walk; the reserved runtime policy and
+counters remain dormant for a future behavior-tested seam.
 
-No production change, target build, CUE, Ymir launch, or native-math census was
-performed in this round. The suppression path must not be promoted or used for
-the controller-owned manual checkpoint until the seam and tests below exist.
+No target build, CUE, Ymir launch, or native-math census was performed. The A1
+performance path remains blocked and must not be promoted or used for the
+controller-owned manual checkpoint until the seam and tests below exist.
+
+## Fail-closed safety closure
+
+TDD red command:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
+```
+
+Result before `77ee306c`: FAIL because the sourceboot body called the reserved
+setter. Inspection showed the paired `set_scene_graph_suppressed(true)` enable
+and `false` restore calls.
+
+Implementation `77ee306c` removes both calls, leaves paired final-display
+suppression intact, and documents the scene-graph API/counter ABI as reserved.
+The source test scans the actual `sourceboot_run_source_tick()` body and
+rejects any call to the scene-graph setter, independent of the argument used.
+
+Focused green evidence:
+
+- Source policy: PASS (2 tests).
+- Runtime contract: compiled cleanly through `verify-source-render-policy`;
+  direct execution of `build/saturn/host-tests/runtime-contract-test.exe`:
+  PASS.
+- `python -m unittest tools.saturn.test_tools.Fast3dProfileDecodeTests`:
+  PASS (13 tests, 1 expected skip).
+
+The wrapper target still exits nonzero at its known MSYS/Windows executable
+handoff after compilation; the same emitted executable passes when invoked
+directly. This is recorded as a wrapper failure, not a green aggregate target.
 
 ## Exact geo-walk mutation inventory
 
@@ -44,11 +75,12 @@ and the stateful ones are split from construction.
 
 ## Test-gap audit
 
-`tools/saturn/test_source_render_suppression.py` extracts the first
-`if (!scene_graph_suppressed)` block in `render_game()`. Production contains
+The first test in `tools/saturn/test_source_render_suppression.py` extracts the
+first `if (!scene_graph_suppressed)` block in `render_game()`. Production contains
 separate guarded blocks, so the test neither examines the full suppression
 surface nor detects a new hidden state mutation. It asserts source placement,
-not behavior. `runtime_contract_test.c` proves only policy/counter storage.
+not behavior. The second test does enforce the fail-closed sourceboot caller
+boundary. `runtime_contract_test.c` proves only policy/counter storage.
 
 The following red/green behavioral evidence is required before implementation
 can be accepted:
@@ -66,16 +98,16 @@ can be accepted:
    construction-only allowlist; it may supplement but not replace the C
    behavioral/differential tests.
 
-No new red test was committed in this round because there is not yet an
-approved production seam for a differential oracle. Committing a test that
-only describes animation would falsely imply the remaining callback classes
-are covered.
+No state-only differential test was committed because there is not yet an
+approved production seam for its oracle. The committed safety test is narrower:
+it proves accepted sourceboot code cannot activate the unsafe policy.
 
 ## Existing evidence, correctly scoped
 
 The original focused evidence remains historical only:
 
-- `tools/saturn/test_source_render_suppression.py`: PASS (1 structural test).
+- `tools/saturn/test_source_render_suppression.py`: PASS (1 structural guard
+  test plus 1 fail-closed sourceboot activation test).
 - Host runtime-contract executable: PASS for suppression flags and counters.
 - `Fast3dProfileDecodeTests`: PASS (13 tests, 1 expected skip).
 - The aggregate `test_tools.py` run had 17 unrelated dirty route-schema errors.
@@ -89,6 +121,8 @@ commit `a00cdd17`.
 ## Remaining gates
 
 - Design and test a bounded state-only seam, or retain this task as blocked.
+- Obtain independent review of safety commit `77ee306c`; until then its status
+  is implemented with focused host evidence, not source-complete.
 - Run the focused host behavioral/differential tests listed above plus the
   source-policy/runtime/profile gates. Keep any failed or unexecuted gate open.
 - Obtain independent spec review and independent quality review of the full

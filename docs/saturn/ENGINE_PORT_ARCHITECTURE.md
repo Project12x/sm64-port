@@ -79,6 +79,10 @@ state and invokes geo callbacks that mutate painting/warp, environment-water,
 moving-texture, flying-carpet, camera, and matrix-derived object state.
 Suppressing the whole walk is blocked until those mutations have an audited,
 behavior-tested state-only path that does not construct source display lists.
+Safety commit `77ee306c` enforces that boundary by removing all sourceboot
+calls to the reserved scene-graph suppression setter. Accepted Saturn builds
+therefore retain the full source geo walk while final display submission alone
+may be suppressed at the target presentation seam.
 
 This is a narrow-delta policy, not permission for a broad engine rewrite. The
 PS1 port remains useful evidence for fixed point, compact display lists, and
