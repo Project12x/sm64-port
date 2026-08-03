@@ -5244,6 +5244,66 @@ fixture.c 3 0x06003002
             {(call.caller, call.helper) for call in analysis.calls},
         )
 
+    def test_bounded_scanner_ignores_faux_rodata_bsr(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+06008000 <_route_root>:
+ 6008000: b0 02 bsr 6002000 <_route_child>
+ 6008002: 00 09 nop
+"""
+        self.assertEqual(
+            bounded_verifier.scan_direct_calls(disassembly),
+            [CallSite("_route_root", 0x06008000, "_route_child")],
+        )
+        self.assertEqual(
+            bounded_verifier.scan_direct_calls(disassembly, self.OWNERS[:2]),
+            [],
+        )
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, "", self.OWNERS[:2], (self.ORACLE,)
+        )
+        self.assertEqual(prepared.closure, frozenset({"_route_root"}))
+
+    def test_executable_targetless_bsr_fails_closed(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 02 bsr 6008000
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "unresolved direct call target"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", self.OWNERS[:1], (self.ORACLE,)
+            )
+
+    def test_executable_direct_call_to_unowned_target_fails_closed(self) -> None:
+        cases = {
+            "bsr": " 6001000: b0 02 bsr 6008000 <_orphan>\n",
+            "literal-jsr": (
+                " 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 "
+                "! 06008000 <_orphan>\n"
+                " 6001002: 41 0b jsr @r1\n"
+            ),
+            "mismatched-bsr-symbol": (
+                " 6001000: b0 02 bsr 6008000 <_route_child>\n"
+            ),
+        }
+        for label, call in cases.items():
+            with self.subTest(label=label):
+                disassembly = (
+                    "06001000 <_route_root>:\n"
+                    + call
+                    + " 6001004: 00 0b rts\n"
+                    + " 6001006: 00 09 nop\n"
+                )
+                with self.assertRaisesRegex(ValueError, "no linked owner"):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly, "", self.OWNERS[:2], (self.ORACLE,)
+                    )
+
     def test_bounded_analysis_keeps_unresolved_indirect_transfer_fail_closed(self) -> None:
         disassembly = """
 06001000 <_route_root>:

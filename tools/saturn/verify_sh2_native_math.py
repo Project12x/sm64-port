@@ -3380,9 +3380,12 @@ def analyze_code_only(
 
 FUNCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+)\s+<([^>]+)>:$")
 INSTRUCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+):\s+(?:[0-9A-Fa-f]{2}\s+){1,4}(.+)$")
-LITERAL_LOAD_RE = re.compile(r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*[0-9A-Fa-f]+\s+<([^>]+)>")
+LITERAL_LOAD_RE = re.compile(
+    r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>"
+)
 JSR_RE = re.compile(r"\bjsr\s+@r(\d+)\b")
-BSR_RE = re.compile(r"\bbsr\s+(?:0x)?[0-9A-Fa-f]+\s+<([^>]+)>")
+BSR_RE = re.compile(r"\bbsr\s+((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>")
+BSR_OPCODE_RE = re.compile(r"\bbsr\b")
 DESTINATION_RE = re.compile(r",r(\d+)\s*(?:!.*)?$")
 STACK_STORE_RE = re.compile(r"\bmov\.l\s+r(\d+),@\((\d+),r15\)")
 STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
@@ -3431,11 +3434,29 @@ def scan_direct_calls(
 ) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
     owner_list = None if owners is None else tuple(owners)
+    owner_by_symbol = {} if owner_list is None else {
+        name: owner
+        for owner in owner_list
+        for name in (owner.name, *owner.aliases)
+    }
     active_owner: FunctionOwner | None = None
     caller = "<outside-function>"
-    registers: dict[str, str] = {}
-    stack_slots: dict[int, str] = {}
+    registers: dict[str, tuple[str, int]] = {}
+    stack_slots: dict[int, tuple[str, int]] = {}
     calls: list[CallSite] = []
+
+    def executable_target(symbol: str, address: int) -> str:
+        assert owner_list is not None
+        address_owner = _owner_at(owner_list, address)
+        named_owner = owner_by_symbol.get(symbol)
+        if address_owner is None or (
+            named_owner is not None and named_owner != address_owner
+        ):
+            raise ValueError(
+                "bounded executable direct call has no linked owner: "
+                f"{symbol} at 0x{address:08x}"
+            )
+        return address_owner.name
 
     for line in disassembly.splitlines():
         function = FUNCTION_RE.match(line)
@@ -3458,9 +3479,24 @@ def scan_direct_calls(
         address = int(instruction.group(1), 16)
         text = instruction.group(2).strip()
 
+        if owner_list is not None:
+            source_owner = _owner_at(owner_list, address)
+            if source_owner is None:
+                registers.clear()
+                stack_slots.clear()
+                active_owner = None
+                continue
+            if source_owner != active_owner:
+                registers.clear()
+                stack_slots.clear()
+            active_owner = source_owner
+            caller = source_owner.name
+
         load = LITERAL_LOAD_RE.search(text)
         if load:
-            registers[load.group(1)] = _symbol_base(load.group(2))
+            registers[load.group(1)] = (
+                _symbol_base(load.group(3)), int(load.group(2), 16)
+            )
             continue
 
         # GCC spills a literal-pool target around a call in some large
@@ -3491,13 +3527,25 @@ def scan_direct_calls(
         if jsr:
             target = registers.get(jsr.group(1))
             if target is not None:
-                calls.append(CallSite(caller, address, target))
+                symbol, target_address = target
+                if owner_list is not None:
+                    symbol = executable_target(symbol, target_address)
+                calls.append(CallSite(caller, address, symbol))
             continue
 
         bsr = BSR_RE.search(text)
         if bsr:
-            calls.append(CallSite(caller, address, _symbol_base(bsr.group(1))))
+            target_address = int(bsr.group(1), 16)
+            symbol = _symbol_base(bsr.group(2))
+            if owner_list is not None:
+                symbol = executable_target(symbol, target_address)
+            calls.append(CallSite(caller, address, symbol))
             continue
+        if owner_list is not None and BSR_OPCODE_RE.search(text):
+            raise ValueError(
+                "bounded executable direct call has unresolved direct call target: "
+                f"{caller}+0x{address - active_owner.start:x}"
+            )
 
         destination = DESTINATION_RE.search(text)
         if destination:
