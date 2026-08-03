@@ -125,6 +125,7 @@ WinError 5 failure before the host runtime-contract executable.
 - Implementation: `98f26f26`.
 - Initial documentation transition: `f2b7ebf0`.
 - Review-fix round 1: `fe1074b8`.
+- Quality-fix round 2/5: `98670c48`.
 - Independent spec review: initial **NO-GO**; scoped rereview marks both prior
   Important findings **ADDRESSED** with no new Critical or Important findings.
 - Independent quality review: **NO-GO**; three Important findings addressed in

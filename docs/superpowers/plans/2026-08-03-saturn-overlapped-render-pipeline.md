@@ -40,7 +40,7 @@ and the evidence report before starting another task.
   quality-fix round 2/5. The scoped spec rereview confirms both prior Important
   findings addressed, but independent quality review is NO-GO: trailing
   whitespace could bypass demo/replay prerequisites, and two containment
-  mutants plus the live authorization records were not closed. This fix wave
+  mutants plus the live authorization records were not closed. Fix `98670c48`
   rejects hidden activation spellings, broadens the mutation coverage, and
   reconciles D1 as the sole sealed diagnostic exception. Quality rereview, the
   host-blocked runtime wrapper, target build, and Ymir remain open. A1 remains
@@ -349,8 +349,8 @@ types, ownership rules, or production fallbacks.
   normal `#else`, and adds complete Task 1D execution evidence. The scoped
   spec rereview marks both findings **ADDRESSED** with no new Critical or
   Important findings. Independent quality review is **NO-GO**; quality-fix
-  round 2/5 is active for its three Important findings. Quality rereview is
-  still unchecked.
+  round 2/5 `98670c48` addresses its three Important findings. Quality rereview
+  is still unchecked.
 
 - [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
 

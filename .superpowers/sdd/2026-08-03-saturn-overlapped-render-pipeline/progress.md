@@ -49,9 +49,10 @@ NOT AUTHORIZED. No code or tests were run in this documentation transition;
 only `git diff --check` is required before the tracked documentation commit.
 
 Task 1D: **ACTIVE in quality-fix round 2/5**, not source-complete. Runtime
-containment is implemented at `98f26f26`; review-fix round 1 is `fe1074b8`.
-The scoped spec rereview marks both prior Important findings **ADDRESSED** with
-no new Critical or Important findings. Independent quality review is **NO-GO**:
+containment is implemented at `98f26f26`; review-fix round 1 is `fe1074b8` and
+quality-fix round 2 is `98670c48`. The scoped spec rereview marks both prior
+Important findings **ADDRESSED** with no new Critical or Important findings.
+Independent quality review is **NO-GO**:
 trailing whitespace bypassed the demo/replay prerequisite check while still
 activating the compile definition/tag, the tests admitted demo-keyed tagging
 and setters outside the direct branch, and the plan contradicted the sealed D1
