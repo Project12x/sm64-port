@@ -18,5 +18,5 @@ the one-observed-generation fence, two-tick cap, whole-credit drop counter,
 and terminal VDP1/VDP2 boundary. Direct `verify-runtime-contracts` reproduced
 the known MSYS-to-Windows `\\d\\Code...` `PermissionError: [WinError 5]` before
 host-contract compilation; it remains unchecked. No target build/Ymir launch
-was run. Task files are staged only with the same-commit changelog entry;
-commit hash and reviewer verdicts are pending this transition.
+was run. Implementation commit `950ab37a` carries the same-commit changelog
+entry; reviewer verdicts remain pending.

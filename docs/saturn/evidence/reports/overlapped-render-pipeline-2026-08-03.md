@@ -24,6 +24,8 @@ rebuilding/uploading/syncing VDP1; a fresh generation builds once and ends in
 geometry-free VDP2 frame commit. The VDP1 bank/profile generation and appended
 dropped-credit counter make that ownership observable.
 
+Implementation commit: `950ab37a` (`perf(saturn): fence presentation to VBlank`).
+
 Focused RED command:
 
 ```powershell

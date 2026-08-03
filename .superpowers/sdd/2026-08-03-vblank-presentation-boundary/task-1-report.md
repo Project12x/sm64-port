@@ -10,8 +10,8 @@ run in this task.
 
 ## Commit
 
-- `perf(saturn): fence presentation to VBlank` — Task 1 changeset; final hash
-  is assigned by this task's commit transition.
+- `950ab37a` — `perf(saturn): fence presentation to VBlank` (Task 1
+  implementation and same-commit changelog entry).
 
 ## TDD evidence
 
