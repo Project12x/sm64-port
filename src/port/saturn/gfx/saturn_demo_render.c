@@ -90,10 +90,10 @@
 #ifndef SATURN_DEMO_BSP_FRAGMENTS
 #define SATURN_DEMO_BSP_FRAGMENTS 0
 #endif
-#define DEMO_LOD_MID_ENTER_DEPTH 4096
-#define DEMO_LOD_MID_EXIT_DEPTH 3584
-#define DEMO_LOD_FAR_ENTER_DEPTH 7168
-#define DEMO_LOD_FAR_EXIT_DEPTH 6144
+#if SATURN_DEMO_POLY_TIER < 0 || SATURN_DEMO_POLY_TIER > 2
+#error "SATURN_DEMO_POLY_TIER must be 0 (reference), 1 (material), or 2 (far)"
+#endif
+#define DEMO_LOD_MANDATORY_ROUTE_PREFIX 128U
 #if SATURN_DEMO_BSP_FRAGMENTS
 #define DEMO_FRAGMENT_CACHE __attribute__((section(".lwram_bss")))
 #else
@@ -701,24 +701,39 @@ static void demo_emit_mario_range(void *opaque, uint16_t begin,
  * primitive's view-space depth is known.  All tiers share the same promoted
  * positions; only the generated primitive masks and texture binding policy
  * change. */
-static uint8_t demo_lod_select(uint16_t primitive_index, int32_t depth)
+static uint16_t demo_primitive_projected_span(
+    uint8_t lane, const sm64_saturn_bob_primitive_t *primitive)
 {
-    uint8_t previous = s_primitive_lod_tier[primitive_index];
-    uint8_t next = previous;
-#if SATURN_DEMO_POLY_TIER == 0
-    next = 0U;
-#else
-    if (previous == 0U) {
-        if (depth >= DEMO_LOD_FAR_ENTER_DEPTH) next = 2U;
-        else if (depth >= DEMO_LOD_MID_ENTER_DEPTH) next = 1U;
-    } else if (previous == 1U) {
-        if (depth >= DEMO_LOD_FAR_ENTER_DEPTH) next = 2U;
-        else if (depth < DEMO_LOD_MID_EXIT_DEPTH) next = 0U;
-    } else {
-        if (depth < DEMO_LOD_FAR_EXIT_DEPTH) {
-            next = depth >= DEMO_LOD_MID_ENTER_DEPTH ? 1U : 0U;
-        }
+    int32_t min_x = demo_projected_read(lane, primitive->indices[0])->x;
+    int32_t max_x = min_x;
+    int32_t min_y = demo_projected_read(lane, primitive->indices[0])->y;
+    int32_t max_y = min_y;
+    for (uint8_t corner = 1U; corner < 4U; corner++) {
+        const sm64_saturn_projected_vertex_t *point =
+            demo_projected_read(lane, primitive->indices[corner]);
+        if (point->x < min_x) min_x = point->x;
+        if (point->x > max_x) max_x = point->x;
+        if (point->y < min_y) min_y = point->y;
+        if (point->y > max_y) max_y = point->y;
     }
+    const int32_t span = (max_x - min_x) > (max_y - min_y)
+        ? (max_x - min_x) : (max_y - min_y);
+    return span > UINT16_MAX ? UINT16_MAX : (uint16_t)span;
+}
+
+/* Tier selection runs before clipping, template resolution, texture lookup or
+ * Gouraud allocation.  The controller's depth plus projected-span windows
+ * make boundary jitter stable while retaining the renderer's source identity
+ * and route safety checks below. */
+static uint8_t demo_lod_select(uint16_t primitive_index, int32_t depth,
+                               uint16_t projected_span)
+{
+    const uint8_t previous = s_primitive_lod_tier[primitive_index];
+    uint8_t next = SATURN_LOD_NEAR;
+#if SATURN_DEMO_POLY_TIER != 0
+    const saturn_lod_thresholds_t thresholds = saturn_lod_default_thresholds();
+    next = (uint8_t)saturn_lod_select((saturn_lod_tier_t)previous, depth,
+                                      projected_span, &thresholds);
 #endif
     s_primitive_lod_tier[primitive_index] = next;
     s_primitive_lod_transition[primitive_index] = previous != next ? 1U : 0U;
@@ -789,7 +804,7 @@ static void demo_build_primitive_work_metadata(void)
 
 void sm64_saturn_demo_render_init(void)
 {
-    memset(s_primitive_lod_tier, 0, sizeof(s_primitive_lod_tier));
+    saturn_lod_reset(s_primitive_lod_tier, sizeof(s_primitive_lod_tier));
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
     memset(s_primitive_lod_suppressed, 0,
@@ -1041,21 +1056,27 @@ static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
         for (uint8_t corner = 1U; corner < 4U; corner++)
             if (demo_view_read(lane, primitive->indices[corner])->z > depth)
                 depth = demo_view_read(lane, primitive->indices[corner])->z;
-        const uint8_t lod_tier = demo_lod_select(i, depth);
+        const uint16_t projected_span =
+            demo_primitive_projected_span(lane, primitive);
+        const uint8_t lod_tier = demo_lod_select(i, depth, projected_span);
         s_primitive_lod_suppressed[i] = 0U;
         s_primitive_lod_texture_downgraded[i] = 0U;
         /* The far mask is baked from stable source identity. Preserve the
          * route-critical prefix in every build; only optional tier-2 builds
          * remove the conservative one-in-eight far subset. */
-        if (SATURN_DEMO_POLY_TIER >= 2 && lod_tier >= 2U &&
-            sm64_saturn_bob_lod_far_mask[i] == 0U &&
-            primitive->source0 >= 128U) {
+        if (saturn_lod_can_suppress((saturn_lod_tier_t)lod_tier,
+                                    SATURN_DEMO_POLY_TIER,
+                                    sm64_saturn_bob_lod_far_mask[i] == 0U,
+                                    primitive->source0,
+                                    DEMO_LOD_MANDATORY_ROUTE_PREFIX)) {
             s_primitive_lod_suppressed[i] = 1U;
             s_primitive_visible[i] = 0U;
             continue;
         }
-        if (lod_tier != 0U && primitive->textured != 0U &&
-            primitive->tile_size > 16U) {
+        if (saturn_lod_can_degrade_material((saturn_lod_tier_t)lod_tier,
+                                            SATURN_DEMO_POLY_TIER,
+                                            primitive->textured != 0U,
+                                            primitive->tile_size > 16U)) {
             s_primitive_lod_texture_downgraded[i] = 1U;
         }
         bool any_back = false;
