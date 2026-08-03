@@ -214,10 +214,14 @@ verify-runtime-camera-contract: RUNTIME_CONTRACT_TEST_CFLAGS = -DSM64_SATURN_RUN
 verify-runtime-camera-contract: verify-runtime-contracts
 
 verify-area-non-saturn-compile:
-	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -fsyntax-only \
-	  -DVERSION_US=1 -DNON_MATCHING=1 -DAVOID_UB=1 -D_LANGUAGE_C=1 \
-	  -DF3DEX_GBI_2E=1 -I"$(SATURN_REPO_ROOT)" \
-	  -I"$(SATURN_REPO_ROOT)/include" -I"$(SATURN_REPO_ROOT)/src" \
+	$(HOST_CC_ENV) $(HOST_CC) -std=gnu90 -fsyntax-only -fsigned-char \
+	  -nostdinc -DTARGET_N64 -D_LANGUAGE_C -DVERSION_US=1 \
+	  -DNON_MATCHING=1 -DAVOID_UB=1 -DF3DEX_GBI_2E=1 \
+	  -I"$(SATURN_REPO_ROOT)/include" \
+	  -I"$(SATURN_REPO_ROOT)/build/us_pc" \
+	  -I"$(SATURN_REPO_ROOT)/build/us_pc/include" \
+	  -I"$(SATURN_REPO_ROOT)/src" -I"$(SATURN_REPO_ROOT)" \
+	  -I"$(SATURN_REPO_ROOT)/include/libc" \
 	  "$(SATURN_REPO_ROOT)/src/game/area.c"
 
 verify-source-render-policy: verify-area-non-saturn-compile

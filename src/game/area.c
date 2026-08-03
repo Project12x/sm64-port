@@ -1,5 +1,4 @@
 #include <PR/ultratypes.h>
-#include <stdbool.h>
 
 #include "prevent_bss_reordering.h"
 #include "area.h"
@@ -375,10 +374,10 @@ void render_game(void) {
      * for that tick, but stateful menu/cutscene/transition work below remains
      * source-owned. */
 #if defined(TARGET_SATURN)
-    const bool scene_graph_suppressed =
+    const s32 scene_graph_suppressed =
         sm64_saturn_source_runtime_scene_graph_suppressed();
 #else
-    const bool scene_graph_suppressed = false;
+    const s32 scene_graph_suppressed = FALSE;
 #endif
 
     if (gCurrentArea != NULL && !gWarpTransition.pauseRendering) {
