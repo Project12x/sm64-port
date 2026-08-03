@@ -44,13 +44,14 @@ static inline const uint8_t *sm64_saturn_terrain_emit_ref_command(
             SM64_SATURN_TERRAIN_COMMAND_BYTES;
 }
 
-static inline bool sm64_saturn_terrain_result_write(
+static inline bool sm64_saturn_terrain_result_write_with_shades(
     sm64_saturn_terrain_result_arena_t *arena,
     sm64_saturn_terrain_result_t *record, uint8_t *command,
     uint16_t command_index,
     uint16_t primitive_id, uint16_t bsp_leaf, uint32_t painter_key,
     uint8_t corner_count, uint8_t clip_class,
     const sm64_saturn_terrain_resolved_command_t *resolved,
+    const uint16_t shades[4],
     const int16_t vertices[4][2])
 {
     if (arena == NULL || record == NULL || command == NULL ||
@@ -62,6 +63,8 @@ static inline bool sm64_saturn_terrain_result_write(
      * the cross-CPU join; no worker may reconstruct material state. */
     const bool patched = resolved != NULL;
     memset(command, 0, SM64_SATURN_TERRAIN_COMMAND_BYTES);
+    if (shades != NULL)
+        memcpy(command, shades, 4U * sizeof(shades[0]));
     memcpy(command + 12U, vertices, 8U * sizeof(int16_t));
     record->primitive_id = primitive_id;
     record->command_index = command_index;
@@ -71,6 +74,20 @@ static inline bool sm64_saturn_terrain_result_write(
         (patched ? SM64_SATURN_TERRAIN_RESULT_TEMPLATE_PATCHED : 0U));
     record->clip_class = clip_class;
     return sm64_saturn_terrain_result_commit(arena, record);
+}
+
+static inline bool sm64_saturn_terrain_result_write(
+    sm64_saturn_terrain_result_arena_t *arena,
+    sm64_saturn_terrain_result_t *record, uint8_t *command,
+    uint16_t command_index,
+    uint16_t primitive_id, uint16_t bsp_leaf, uint32_t painter_key,
+    uint8_t corner_count, uint8_t clip_class,
+    const sm64_saturn_terrain_resolved_command_t *resolved,
+    const int16_t vertices[4][2])
+{
+    return sm64_saturn_terrain_result_write_with_shades(
+        arena, record, command, command_index, primitive_id, bsp_leaf,
+        painter_key, corner_count, clip_class, resolved, NULL, vertices);
 }
 
 static inline bool sm64_saturn_terrain_result_publish(
@@ -89,6 +106,24 @@ static inline bool sm64_saturn_terrain_result_publish(
         arena, record, command, (uint16_t)(arena->count - 1U),
         primitive_id, bsp_leaf, painter_key, corner_count, clip_class,
         resolved, vertices);
+}
+
+static inline bool sm64_saturn_terrain_result_publish_with_shades(
+    sm64_saturn_terrain_result_arena_t *arena,
+    uint16_t primitive_id, uint16_t bsp_leaf, uint32_t painter_key,
+    uint8_t corner_count, uint8_t clip_class,
+    const sm64_saturn_terrain_resolved_command_t *resolved,
+    const uint16_t shades[4], const int16_t vertices[4][2])
+{
+    sm64_saturn_terrain_result_t *record = NULL;
+    uint8_t *command = NULL;
+    if (!sm64_saturn_terrain_result_reserve(
+            arena, 1U, &record, &command))
+        return false;
+    return sm64_saturn_terrain_result_write_with_shades(
+        arena, record, command, (uint16_t)(arena->count - 1U),
+        primitive_id, bsp_leaf, painter_key, corner_count, clip_class,
+        resolved, shades, vertices);
 }
 
 /* Master-only join of the two immutable worker spans.  The only ordering

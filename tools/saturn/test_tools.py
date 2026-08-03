@@ -1907,11 +1907,13 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "vdp1_commands",
             "vdp2_active_layers",
             "pipeline_faults",
+            "gouraud_tables_saved",
+            "gouraud_bytes_saved",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-5:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-7:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-6].end,
+            layout.fields[-8].end,
         )
 
         data = bytearray(layout.size)
@@ -1922,6 +1924,8 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             # VDP2 NBG1 (bit 1) plus the dbgio HUD on NBG3 (bit 3).
             "vdp2_active_layers": (1 << 1) | (1 << 3),
             "pipeline_faults": 3,
+            "gouraud_tables_saved": 21,
+            "gouraud_bytes_saved": 21 * 8,
         }
         for name, value in expected.items():
             field = layout.field(name)
@@ -2039,11 +2043,19 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_lod_primitives_suppressed",
                 "demo_lod_texture_downgrades",
                 "demo_lod_resident_bytes",
+                "flat_primitives",
+                "gouraud_primitives",
+                "demo_bob_terrain_descriptor_bytes_written",
+                "demo_bob_terrain_descriptor_bytes_read",
+                "demo_bob_terrain_legacy_fallbacks",
+                "demo_bob_terrain_sequence_rejects",
                 "master_worker_started",
                 "slave_worker_started",
                 "vdp1_commands",
                 "vdp2_active_layers",
                 "pipeline_faults",
+                "gouraud_tables_saved",
+                "gouraud_bytes_saved",
             ],
         )
         # Fields the older build did have still read correctly.

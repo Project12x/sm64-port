@@ -1542,13 +1542,19 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                 ? SM64_SATURN_TERRAIN_RESULT_TEXTURED : 0U) |
             (texture_suppressed
                 ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U);
+        /* The current compact BOB bake exposes one primitive RGB only, not
+         * four post-light corner shades. Never manufacture four identical
+         * inputs from it to select FLAT: that would flatten a future gradient.
+         * The pixels are retained as the conservative Gouraud fallback until
+         * the generated scene supplies real per-corner shade data. */
+        const bool post_light_shades_available = false;
         /* Classification happens in the owning worker before the compact
          * record crosses CPUs. Recovery deliberately remains conservative
          * because its template uses the dynamic Gouraud material; normal
          * equal post-light colors and LOD-suppressed colors select REPLACE. */
         const sm64_saturn_shade_path_t shade_path =
             sm64_saturn_terrain_shade_path(material_flags,
-                recovery ? NULL : colors);
+                recovery || !post_light_shades_available ? NULL : colors);
         const sm64_saturn_terrain_resolved_command_t *resolved =
             demo_terrain_resolved_template(
                 primitive_index, recovery, texture_suppressed);
@@ -1576,7 +1582,7 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                 shape_vertices[corner][0] = screen.x;
                 shape_vertices[corner][1] = screen.y;
             }
-            (void)sm64_saturn_terrain_result_write(
+            (void)sm64_saturn_terrain_result_write_with_shades(
                 arena, result, command,
                 (uint16_t)(first_command + fragment), primitive_index,
                 s_primitive_leaf_id[primitive_index],
@@ -1588,8 +1594,10 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                     ? SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL : 0U) |
                 (s_primitive_lod_texture_downgraded[primitive_index] != 0U
                     ? SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED : 0U) |
+                (post_light_shades_available
+                    ? SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES : 0U) |
                 sm64_saturn_terrain_shade_path_compact_flags(shade_path),
-                resolved, shape_vertices);
+                resolved, colors, shape_vertices);
         }
     }
     sm64_saturn_terrain_result_arena_seal(arena, context->sequence);
@@ -1815,6 +1823,9 @@ static void demo_emit_terrain_result(
     const uint16_t shade = (uint16_t)(
         ((uint16_t)primitive->rgb[0] << 10) |
         ((uint16_t)primitive->rgb[1] << 5) | primitive->rgb[2]);
+    uint16_t gouraud_colors[4] = {shade, shade, shade, shade};
+    if (sm64_saturn_terrain_result_has_post_light_shades(result))
+        memcpy(gouraud_colors, command, sizeof(gouraud_colors));
     /* The worker made this decision while it still owned classification.
      * The master reads only the compact tag: it remains the sole owner of
      * the finite Gouraud bank, command list, and final draw order. */
@@ -1853,7 +1864,8 @@ static void demo_emit_terrain_result(
             return;
         } else if (table != NULL) {
             for (uint8_t corner = 0U; corner < 4U; corner++)
-                table->colors[corner] = (uint16_t)(shade | 0x8000U);
+                table->colors[corner] =
+                    (uint16_t)(gouraud_colors[corner] | 0x8000U);
             profile->gouraud_primitives++;
             profile->triangles_vdp1_emitted++;
             profile->triangles_emitted++;
@@ -1913,7 +1925,8 @@ static void demo_emit_terrain_result(
                                                     &gouraud_address);
         if (table != NULL) {
             for (uint8_t corner = 0U; corner < 4U; corner++)
-                table->colors[corner] = (uint16_t)(shade | 0x8000U);
+                table->colors[corner] =
+                    (uint16_t)(gouraud_colors[corner] | 0x8000U);
             vdp1_cmdt_draw_mode_set(cmdt, (vdp1_cmdt_draw_mode_t){
                 .color_mode = VDP1_CMDT_CM_RGB_32768,
                 .cc_mode = VDP1_CMDT_CC_GOURAUD});
@@ -2585,5 +2598,9 @@ void sm64_saturn_demo_render_frame(
 #else
     sm64_saturn_vdp1_backend_upload(backend);
 #endif
+    /* Published profile diagnostics: never read to choose an allocation,
+     * scheduling, LOD, or promotion decision. */
+    profile->gouraud_tables_saved += gouraud_bank->saved_tables;
+    profile->gouraud_bytes_saved += gouraud_bank->saved_bytes;
     profile->frame_serial++;
 }

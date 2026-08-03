@@ -64,6 +64,11 @@ DUAL_PIPELINE_COUNTERS = (
     "pipeline_faults",
 )
 
+GOURAUD_SAVINGS_COUNTERS = (
+    "gouraud_tables_saved",
+    "gouraud_bytes_saved",
+)
+
 # ctype -> (size in bytes, big-endian struct format).  Alignment equals size
 # for every one of these on sh-elf, which is what makes the layout model below
 # a two-line calculation rather than a target-description table.

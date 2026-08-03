@@ -22,6 +22,30 @@
   influence scheduling or promotion. A `GOURAUD` classification remains the
   only terrain path that calls the allocator.
 
+## Review correction
+
+The original compact worker path incorrectly classified the generated BOB
+primitive-wide `rgb[3]` as four post-light corner values. The BOB generator
+does not currently export per-corner post-light colors, so that assumption
+could have flattened a future gradient. The corrected path deliberately
+passes no classification colors for those untextured primitives and therefore
+keeps them Gouraud. It still serializes the existing uniform value as the
+Gouraud fallback pixel so current BOB output is preserved.
+
+When a worker does have real post-light corner shades, its private 32-byte
+command payload begins with all four RGB1555 values and bit 7 of its separate
+`clip_class` byte marks them valid. The master reads these exact bytes only
+for Gouraud table filling; it does not recreate them from the primitive color.
+The shade tag in bits 2–3 coexists with clip bits 0–1, recovery bit 4,
+texture-suppression bit 6, and the post-light-valid bit 7. The resulting
+Gouraud table retains all four inputs; existing template tests continue to
+prove that a non-Gouraud patch does not retain or write a GRDA address.
+
+The savings counters are appended to `sm64_saturn_fast3d_profile_t` as
+`gouraud_tables_saved` and `gouraud_bytes_saved`, are accumulated from the
+bank once per frame after emission, and are dynamically decoded by
+`fast3d_profile_decode.py`. They are never read on a policy path.
+
 ## Test-first record and verification
 
 1. Added the command-template fixture before changing the policy. It covers
@@ -45,8 +69,12 @@
    ```
 
    It passes, including compact-tag round trips and bank saved-table/byte
-   accounting. The independent native `terrain_depth_bins_test.c` regression
-   also passes. `git diff --check` passes.
+   accounting. The review fixture additionally publishes a clipped,
+   interpolated four-color gradient through the compact record and verifies
+   that its shade tag coexists with clipping, recovery, and LOD flags. The
+   independent native `terrain_depth_bins_test.c` regression also passes.
+   The focused profile-decoder append/old-capture tests pass. `git diff
+   --check` passes.
 
 No MSYS, bash, `sh-elf-*`, target build, or Ymir command was run. Target
 compilation and hardware/emulator capture remain intentionally deferred to the

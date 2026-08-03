@@ -4,6 +4,8 @@
 
 #include "saturn_gouraud_bank.h"
 #include "saturn_terrain_command_template.h"
+#include "saturn_terrain_fused.h"
+#include "slavedriver_terrain_clip.h"
 
 static sm64_saturn_terrain_primitive_t primitive(
     uint16_t flags, uint16_t a, uint16_t b, uint16_t c, uint16_t d,
@@ -127,6 +129,40 @@ static bool test_compact_shade_and_bank_accounting(void)
         return false;
     return bank.used == 1U && bank.saved_tables == 1U &&
            bank.saved_bytes == sizeof(sm64_saturn_gouraud_table_t);
+}
+
+static bool test_compact_post_light_gradient_preserves_tags_and_pixels(void)
+{
+    sm64_saturn_terrain_result_t records[1];
+    uint8_t commands[1][SM64_SATURN_TERRAIN_COMMAND_BYTES];
+    sm64_saturn_terrain_result_arena_t arena;
+    const int16_t vertices[4][2] = {
+        {-20, -10}, {20, -10}, {20, 10}, {-20, 10}};
+    /* A clipped edge has interpolated post-light values. The master must see
+     * these exact four RGB1555 inputs after compact publication. */
+    const uint16_t interpolated[4] = {
+        0x2110U, 0x3190U, 0x4210U, 0x3190U};
+    const uint8_t flags = SM64_SATURN_TERRAIN_CLIP_CROSSES |
+        SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
+        SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED |
+        SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES |
+        sm64_saturn_terrain_shade_path_compact_flags(
+            SM64_SATURN_SHADE_GOURAUD);
+
+    sm64_saturn_terrain_result_arena_init(
+        &arena, records, &commands[0][0], 1U, 0U);
+    if (!sm64_saturn_terrain_result_publish_with_shades(
+            &arena, 9U, 4U, 120U, 4U, flags, NULL, interpolated, vertices))
+        return false;
+    if (sm64_saturn_terrain_result_clip_class(&records[0]) !=
+            SM64_SATURN_TERRAIN_CLIP_CROSSES ||
+        !sm64_saturn_terrain_result_recovery(&records[0]) ||
+        !sm64_saturn_terrain_result_texture_suppressed(&records[0]) ||
+        !sm64_saturn_terrain_result_has_post_light_shades(&records[0]) ||
+        sm64_saturn_terrain_shade_path_from_compact_flags(
+            records[0].clip_class) != SM64_SATURN_SHADE_GOURAUD)
+        return false;
+    return memcmp(commands[0], interpolated, sizeof(interpolated)) == 0;
 }
 
 static void test_patch_changes_only_runtime_words(void)
@@ -440,6 +476,8 @@ int main(void)
     if (!test_shade_path_classifies_post_light_inputs_before_reservation())
         return 1;
     if (!test_compact_shade_and_bank_accounting()) return 1;
+    if (!test_compact_post_light_gradient_preserves_tags_and_pixels())
+        return 1;
     test_patch_changes_only_runtime_words();
     test_resolved_template_poison_preserves_every_immutable_word();
     test_resolved_template_rejects_every_missing_patch_permission();

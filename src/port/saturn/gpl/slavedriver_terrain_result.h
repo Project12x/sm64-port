@@ -37,7 +37,11 @@ typedef enum sm64_saturn_terrain_result_flags {
      * is intentionally downgraded for a mid/far LOD.  The master emitter
      * must honor this bit rather than consulting the source primitive alone.
      */
-    SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED = 1U << 6
+    SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED = 1U << 6,
+    /* `clip_class` bit 7 states that the private command payload begins
+     * with four actual post-light RGB1555 shades. The master must use those
+     * pixels for Gouraud, rather than regenerating a primitive-wide color. */
+    SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES = 1U << 7
 } sm64_saturn_terrain_result_flags_t;
 
 /* The worker publishes identity and ordering only. Screen coordinates already
@@ -232,6 +236,14 @@ static inline bool sm64_saturn_terrain_result_texture_suppressed(
     return result != NULL &&
         (result->clip_class &
          SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED) != 0U;
+}
+
+static inline bool sm64_saturn_terrain_result_has_post_light_shades(
+    const sm64_saturn_terrain_result_t *result)
+{
+    return result != NULL &&
+        (result->clip_class &
+         SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES) != 0U;
 }
 
 static inline void sm64_saturn_terrain_result_arena_seal(

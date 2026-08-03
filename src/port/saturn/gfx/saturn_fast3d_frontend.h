@@ -419,6 +419,10 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t vdp1_commands;
     uint32_t vdp2_active_layers;
     uint32_t pipeline_faults;
+    /* Task 10 Gouraud-fast-path diagnostics. Appended so existing counters
+     * retain their offsets; evidence only, never a frame-policy input. */
+    uint32_t gouraud_tables_saved;
+    uint32_t gouraud_bytes_saved;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

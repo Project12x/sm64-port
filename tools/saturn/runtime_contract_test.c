@@ -410,6 +410,13 @@ static void test_dual_pipeline_profile_counters_append_in_order(void)
     assert(offsetof(sm64_saturn_fast3d_profile_t, pipeline_faults) ==
            offsetof(sm64_saturn_fast3d_profile_t, vdp2_active_layers) +
                sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp2_active_layers));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, gouraud_tables_saved) ==
+           offsetof(sm64_saturn_fast3d_profile_t, pipeline_faults) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->pipeline_faults));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, gouraud_bytes_saved) ==
+           offsetof(sm64_saturn_fast3d_profile_t, gouraud_tables_saved) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)
+                          ->gouraud_tables_saved));
 }
 
 static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
