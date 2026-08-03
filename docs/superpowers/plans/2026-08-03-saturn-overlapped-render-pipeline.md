@@ -29,9 +29,10 @@ individual task steps below, this summary, the architecture decision ledger,
 and the evidence report before starting another task.
 
 - [ ] **Task 1 / A1 — duplicate source-render removal:** active; implementation
-  commits `4a8fe1ce` and `658d5ad9` are ready for independent spec and quality
-  review. The latter restores ordinary non-Saturn syntax compilation. The
-  controller-owned serial CUE/Ymir gate remains pending.
+  commits `4a8fe1ce`, `658d5ad9`, and `9904097e` are ready for independent
+  spec and quality review. The latest correction makes the shared guard
+  compatible with the N64 `-nostdinc` path. The controller-owned serial
+  CUE/Ymir gate remains pending.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.

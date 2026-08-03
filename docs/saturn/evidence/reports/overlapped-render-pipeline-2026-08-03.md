@@ -82,3 +82,30 @@ fix. `tools/saturn/test_source_render_suppression.py` also passes (1 test).
 The corresponding Make target prints the same compile invocation but inherits
 the previously recorded MSYS/native executable-handoff nonzero exit; the
 direct wrapper compiler command is the green constituent evidence.
+
+## Spec-fix round 2 — N64 `-nostdinc` compatibility
+
+The round-1 standard-header correction was not valid for the N64 build's
+`-nostdinc` compiler model. Commit `9904097e` removes `<stdbool.h>` and makes
+the guard a project-native `const s32`, initialized with `FALSE` in the
+non-Saturn branch. The focused syntax gate now includes `-DTARGET_N64
+-nostdinc` plus `include`, `build/us_pc`, `build/us_pc/include`, `src`,
+repository root, and `include/libc`.
+
+Red command/output:
+
+```powershell
+& tools/saturn/with-msys-toolchain.ps1 C:\msys64\mingw64\bin\gcc.exe '-std=gnu90' '-fsyntax-only' '-fsigned-char' '-nostdinc' '-DTARGET_N64' '-D_LANGUAGE_C' '-DVERSION_US=1' '-DNON_MATCHING=1' '-DAVOID_UB=1' '-DF3DEX_GBI_2E=1' '-Iinclude' '-Ibuild/us_pc' '-Ibuild/us_pc/include' '-Isrc' '-I.' '-Iinclude/libc' 'src\game\area.c'
+```
+
+Before the fix, output was `fatal error: stdbool.h: No such file or
+directory` at `area.c:2`. Green command/result:
+
+```powershell
+& tools/saturn/with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk OS=Windows_NT HOST_CC=gcc SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge verify-area-non-saturn-compile
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
+```
+
+Result: PASS. The N64-shaped host compiler emitted pre-existing host-width
+warnings from the N64 ABI headers but no error; the source-policy test ran 1
+test and passed.

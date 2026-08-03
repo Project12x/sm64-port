@@ -4,8 +4,9 @@
 
 Implementation commit: `4a8fe1ce` (`perf(saturn): bypass duplicate source
 scene construction`), corrected by `658d5ad9` (`fix(saturn): keep source
-render guard portable`). Task status is **active**, pending independent review
-and the controller-owned CUE/Ymir gate.
+render guard portable`) and `9904097e` (`fix(saturn): keep render guard
+N64-compatible`). Task status is **active**, pending independent review and
+the controller-owned CUE/Ymir gate.
 
 ## Files changed
 
@@ -27,6 +28,17 @@ evidence report.
 - Spec-fix round 1 red: the wrapper-hosted non-Saturn `area.c` syntax command
   failed with unknown `bool` and undeclared `false`. Green: the same command
   passes after unconditional `<stdbool.h>`; source-policy test also PASS (1).
+- Spec-fix round 2 red command:
+  `with-msys-toolchain.ps1 ... gcc.exe -std=gnu90 -fsyntax-only -fsigned-char
+  -nostdinc -DTARGET_N64 -D_LANGUAGE_C -DVERSION_US=1 -DNON_MATCHING=1
+  -DAVOID_UB=1 -DF3DEX_GBI_2E=1 -Iinclude -Ibuild/us_pc
+  -Ibuild/us_pc/include -Isrc -I. -Iinclude/libc src/game/area.c`; output:
+  `fatal error: stdbool.h: No such file or directory`. Green commands:
+  `with-msys-toolchain.ps1 ... make.exe -f Makefile.saturn.mk
+  OS=Windows_NT HOST_CC=gcc SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge
+  verify-area-non-saturn-compile` and
+  `.venv-saturn-tools\\Scripts\\python.exe tools\\saturn\\test_source_render_suppression.py`;
+  both PASS (the syntax gate has expected host-width warnings only).
 
 ## Self-review
 
@@ -34,8 +46,8 @@ Reviewed the committed range for policy scope and ABI stability. The guard
 evaluates once; the source-only construction is guarded; the required
 stateful calls and pointer cleanup stay live; both counter additions are
 suffixes. Spec review's non-Saturn type-definition finding is fixed by the
-unconditional standard definition and focused real-translation-unit syntax
-gate. No task-owned review finding remains.
+project-native `s32`/`FALSE` definition and N64-shaped real-translation-unit
+syntax gate. No task-owned review finding remains.
 
 ## Documentation and remaining gate
 
