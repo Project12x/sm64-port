@@ -162,6 +162,7 @@ static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static saturn_lod_scene_t s_lod_scene;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
     __attribute__((section(".lwram_bss")));
@@ -805,6 +806,7 @@ static void demo_build_primitive_work_metadata(void)
 void sm64_saturn_demo_render_init(void)
 {
     saturn_lod_reset(s_primitive_lod_tier, sizeof(s_primitive_lod_tier));
+    saturn_lod_scene_init(&s_lod_scene);
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
     memset(s_primitive_lod_suppressed, 0,
@@ -849,6 +851,14 @@ void sm64_saturn_demo_render_init(void)
     demo_resolve_terrain_command_templates(&partitions);
     demo_build_primitive_work_metadata();
     s_bob_resident_ready = 1U;
+}
+
+void sm64_saturn_demo_render_scene_observe(bool active, int16_t level,
+                                           int16_t area)
+{
+    (void)saturn_lod_scene_observe(&s_lod_scene, active, level, area,
+                                   s_primitive_lod_tier,
+                                   sizeof(s_primitive_lod_tier));
 }
 
 static sm64_saturn_camera_transform_t demo_camera(

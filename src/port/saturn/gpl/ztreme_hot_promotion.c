@@ -115,11 +115,35 @@ void saturn_lod_reset(uint8_t *tiers, size_t count)
         memset(tiers, SATURN_LOD_NEAR, count);
 }
 
+void saturn_lod_scene_init(saturn_lod_scene_t *scene)
+{
+    if (scene != NULL)
+        *scene = (saturn_lod_scene_t){0, 0, 0U};
+}
+
+bool saturn_lod_scene_observe(saturn_lod_scene_t *scene, bool active,
+                              int16_t level, int16_t area, uint8_t *tiers,
+                              size_t tier_count)
+{
+    if (scene == NULL)
+        return false;
+    const bool changed = !active ? scene->active != 0U :
+        scene->active == 0U || scene->level != level || scene->area != area;
+    if (changed)
+        saturn_lod_reset(tiers, tier_count);
+    scene->active = active ? 1U : 0U;
+    if (active) {
+        scene->level = level;
+        scene->area = area;
+    }
+    return changed;
+}
+
 bool saturn_lod_can_suppress(saturn_lod_tier_t tier, uint8_t build_role,
                              bool bake_approved_optional, uint16_t source_id,
                              uint16_t mandatory_route_prefix)
 {
-    return build_role >= 2U && tier == SATURN_LOD_FAR &&
+    return build_role == 2U && tier == SATURN_LOD_FAR &&
            bake_approved_optional && source_id >= mandatory_route_prefix;
 }
 
@@ -127,6 +151,7 @@ bool saturn_lod_can_degrade_material(saturn_lod_tier_t tier,
                                      uint8_t build_role, bool textured,
                                      bool expensive_material)
 {
-    return build_role >= 1U && tier >= SATURN_LOD_MID && textured &&
+    return (build_role == 1U || build_role == 2U) &&
+           tier >= SATURN_LOD_MID && textured &&
            expensive_material;
 }

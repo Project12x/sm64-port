@@ -3,6 +3,7 @@
 #include <cpu/cache.h>
 
 #include "game/camera.h"
+#include "game/area.h"
 #include "game/game_init.h"
 #include "game/level_update.h"
 #include "game/memory.h"
@@ -693,6 +694,14 @@ int main(void) {
             sm64_saturn_source_runtime_wait_vblank();
 #else
         sourceboot_run_source_tick();
+#endif
+
+#if SATURN_DEMO_PATH
+        /* Sourceboot owns scene transitions. Observe the authoritative area
+         * after each source tick so an unload (NULL) and a re-entry into the
+         * same level/area clear hysteretic terrain state before next render. */
+        sm64_saturn_demo_render_scene_observe(gCurrentArea != NULL,
+                                              gCurrLevelNum, gCurrAreaIndex);
 #endif
 
         /* Renderer-facing actor state is captured after the authoritative
