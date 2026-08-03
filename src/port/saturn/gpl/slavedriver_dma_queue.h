@@ -26,7 +26,9 @@ saturn_dma_queue_sequence_t saturn_dma_queue_submit(
     void *dst, const void *src, size_t len, saturn_dma_queue_mode_t mode);
 void saturn_dma_queue_kick(void);
 void saturn_dma_queue_poll(void);
-void saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence);
+/* Returns nonzero if sequence is already retired or was retired by this call.
+ * Returns zero for an invalid or non-outstanding future sequence. */
+int saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence);
 int saturn_dma_queue_idle(void);
 
 /* Compatibility helpers for one-shot boot uploads. Frame work should submit,

@@ -8,6 +8,18 @@ starts no more than the FIFO head; `poll` retires the active entry only after
 Yaul reports SCU level 0 idle; `wait(sequence)` advances the FIFO through the
 named source-lifetime boundary; and `idle` performs a non-blocking poll.
 
+Follow-up review hardening makes `wait(sequence)` return a status: a completed
+sequence is accepted immediately with wrap-safe retired-through arithmetic,
+while an invalid or non-outstanding future sequence is rejected instead of
+spinning. The fixed FIFO is smaller than the sequence half range, so the
+modular comparison remains unambiguous across `UINT32_MAX -> 1`.
+
+Submission now rejects null pointers, zero lengths, invalid modes, overlarge
+SCU lengths, and any SCU source or destination range that intersects LWRAM
+through cached, uncached, or purge aliases. This enforces Yaul's documented
+LWRAM-SCU-DMA hardware lockup condition before a descriptor can mutate the
+queue. CPU requests and the existing HWRAM-Gouraud-to-VDP1 caller remain valid.
+
 The frame emitters enqueue the used Gouraud prefix after construction, defer
 the start until the one real VDP1 VRAM dependency boundary, and wait only
 before the final command list can be made drawable. This keeps final command
@@ -32,7 +44,10 @@ range to make concurrent overwrites safe.
   mock SCU verifies submit does not copy payload data, kick starts exactly one
   transfer, poll retires FIFO entries in order, full-ring wrap is bounded and
   reusable, and wait drains all queued work through the requested final
-  sequence.
+  sequence. The follow-up fixture seeds a near-wrap sequence, verifies repeat
+  waits on retired work return immediately, rejects a reordered/non-outstanding
+  sequence, and proves null/zero/LWRAM-alias SCU submissions leave FIFO order
+  unchanged.
 - `git diff --check` passed.
 
 The host target deliberately uses a tiny test-only Yaul declaration stub and
@@ -60,7 +75,8 @@ or live VDP1 ownership.
   inspected `libyaul/scu/scu/dma.h`, `libyaul/scu/scu_dma.c`, and `LICENSE`.
   Reuse mode: attributed API integration. `scu_dma_transfer()` is documented
   asynchronous and `scu_dma_level_busy(0)` supplies completion state; no Yaul
-  source was copied.
+  source was copied. `scu/map.h`'s LWRAM address aliases and size were also
+  inspected for the submission validation contract.
 - **In-tree prior art** — `docs/saturn/SGL_REFERENCE_NOTES.md` and
   `docs/saturn/PROVENANCE.md` were reviewed. Their stated single VDP1 VRAM and
   LWRAM-SCU-DMA prohibition explain the deferred kick boundary and the use of

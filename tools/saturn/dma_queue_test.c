@@ -148,12 +148,15 @@ test_bounded_wrap_and_wait_drain(void)
                                        SATURN_DMA_QUEUE_CPU);
         assert(last != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
     }
+    /* The host target seeds next_sequence at UINT32_MAX - 1, so this fixed
+     * bounded queue crosses the nonzero sequence wrap while it fills. */
+    assert(last == 13U);
     assert(saturn_dma_queue_submit(&destination[ACCEPTED], &source[ACCEPTED],
                                    sizeof(source[ACCEPTED]),
                                    SATURN_DMA_QUEUE_CPU) ==
            SATURN_DMA_QUEUE_SEQUENCE_INVALID);
 
-    saturn_dma_queue_wait(last);
+    assert(saturn_dma_queue_wait(last));
     assert(saturn_dma_queue_idle());
     assert(memcmp(source, destination, ACCEPTED) == 0);
 
@@ -162,7 +165,7 @@ test_bounded_wrap_and_wait_drain(void)
                                    sizeof(source[ACCEPTED]),
                                    SATURN_DMA_QUEUE_CPU);
     assert(last != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
-    saturn_dma_queue_wait(last);
+    assert(saturn_dma_queue_wait(last));
     assert(saturn_dma_queue_idle());
     assert(destination[ACCEPTED] == source[ACCEPTED]);
 
@@ -171,8 +174,67 @@ test_bounded_wrap_and_wait_drain(void)
     last = saturn_dma_queue_submit(&destination[0], &source[0],
                                    sizeof(source[0]), SATURN_DMA_QUEUE_SCU);
     s_complete_on_poll = 1;
-    saturn_dma_queue_wait(last);
+    assert(saturn_dma_queue_wait(last));
     assert(destination[0] == source[0]);
+    assert(saturn_dma_queue_idle());
+}
+
+static void
+test_wait_accepts_retired_and_rejects_non_outstanding(void)
+{
+    uint8_t source = 0x5CU;
+    uint8_t destination = 0U;
+
+    reset_mock();
+    const saturn_dma_queue_sequence_t completed = saturn_dma_queue_submit(
+        &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU);
+    assert(completed != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_wait(completed));
+    assert(destination == source);
+    /* Re-waiting an already retired descriptor must complete immediately,
+     * rather than spinning for equality against a later retire sequence. */
+    assert(saturn_dma_queue_wait(completed));
+    assert(!saturn_dma_queue_wait(completed + 1U));
+    assert(saturn_dma_queue_idle());
+}
+
+static void
+test_submit_rejects_illegal_requests_without_fifo_mutation(void)
+{
+    uint8_t source_a = 0x11U;
+    uint8_t source_b = 0x22U;
+    uint8_t destination_a = 0U;
+    uint8_t destination_b = 0U;
+    const void * const lwram_cached = (const void *)(uintptr_t)0x00200000U;
+    const void * const lwram_uncached = (const void *)(uintptr_t)0x20200000U;
+    void * const lwram_purge = (void *)(uintptr_t)0x40200000U;
+
+    reset_mock();
+    const saturn_dma_queue_sequence_t first = saturn_dma_queue_submit(
+        &destination_a, &source_a, sizeof(source_a), SATURN_DMA_QUEUE_CPU);
+    assert(first != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_submit(NULL, &source_a, sizeof(source_a),
+                                   SATURN_DMA_QUEUE_SCU) ==
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_submit(&destination_a, NULL, sizeof(source_a),
+                                   SATURN_DMA_QUEUE_SCU) ==
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_submit(&destination_a, &source_a, 0U,
+                                   SATURN_DMA_QUEUE_SCU) ==
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_submit(&destination_a, lwram_cached, 1U,
+                                   SATURN_DMA_QUEUE_SCU) ==
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(saturn_dma_queue_submit(lwram_purge, lwram_uncached, 1U,
+                                   SATURN_DMA_QUEUE_SCU) ==
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+
+    const saturn_dma_queue_sequence_t second = saturn_dma_queue_submit(
+        &destination_b, &source_b, sizeof(source_b), SATURN_DMA_QUEUE_CPU);
+    assert(second == first + 1U);
+    assert(saturn_dma_queue_wait(second));
+    assert(destination_a == source_a);
+    assert(destination_b == source_b);
     assert(saturn_dma_queue_idle());
 }
 
@@ -182,5 +244,7 @@ main(void)
     test_submit_only_copies_descriptor();
     test_kick_starts_one_and_poll_retires_fifo();
     test_bounded_wrap_and_wait_drain();
+    test_wait_accepts_retired_and_rejects_non_outstanding();
+    test_submit_rejects_illegal_requests_without_fifo_mutation();
     return 0;
 }

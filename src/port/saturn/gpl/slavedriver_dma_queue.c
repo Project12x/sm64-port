@@ -10,6 +10,19 @@
 #include <stdbool.h>
 #include <string.h>
 
+#ifndef SATURN_DMA_QUEUE_INITIAL_SEQUENCE
+#define SATURN_DMA_QUEUE_INITIAL_SEQUENCE 1U
+#endif
+
+/* Yaul's scu/map.h defines the same physical LWRAM window. Keep this local
+ * queue guard independent of a particular Yaul include layout: every cached,
+ * uncached, or purge alias must be rejected before scu_dma_transfer() can
+ * program it, because either direction locks real hardware. */
+#define SATURN_DMA_QUEUE_CPU_PHYSICAL_MASK UINT32_C(0x0FFFFFFF)
+#define SATURN_DMA_QUEUE_LWRAM_BASE UINT32_C(0x00200000)
+#define SATURN_DMA_QUEUE_LWRAM_SIZE UINT32_C(0x00100000)
+#define SATURN_DMA_QUEUE_SEQUENCE_HALF_RANGE UINT32_C(0x80000000)
+
 typedef struct saturn_dma_request {
         void *dst;
         const void *src;
@@ -30,13 +43,67 @@ _next_index(size_t index)
         return (index + 1U) & (SATURN_DMA_QUEUE_CAPACITY - 1U);
 }
 
+static bool
+_scu_range_intersects_lwram(const void *address, size_t len)
+{
+        const uint64_t start = (uintptr_t)address &
+            SATURN_DMA_QUEUE_CPU_PHYSICAL_MASK;
+        const uint64_t end = start + (uint64_t)len;
+        const uint64_t lwram_end = (uint64_t)SATURN_DMA_QUEUE_LWRAM_BASE +
+            SATURN_DMA_QUEUE_LWRAM_SIZE;
+        return start < lwram_end && end > SATURN_DMA_QUEUE_LWRAM_BASE;
+}
+
+static bool
+_request_valid(void *dst, const void *src, size_t len,
+    saturn_dma_queue_mode_t mode)
+{
+        if (dst == NULL || src == NULL || len == 0U) {
+                return false;
+        }
+        if (mode != SATURN_DMA_QUEUE_CPU && mode != SATURN_DMA_QUEUE_SCU) {
+                return false;
+        }
+        if (mode != SATURN_DMA_QUEUE_SCU) {
+                return true;
+        }
+        if (len > UINT32_MAX) {
+                return false;
+        }
+        return !_scu_range_intersects_lwram(dst, len) &&
+            !_scu_range_intersects_lwram(src, len);
+}
+
+static bool
+_sequence_retired_through(saturn_dma_queue_sequence_t sequence)
+{
+        return _retired_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID &&
+            (uint32_t)(_retired_sequence - sequence) <
+                SATURN_DMA_QUEUE_SEQUENCE_HALF_RANGE;
+}
+
+static bool
+_sequence_outstanding(saturn_dma_queue_sequence_t sequence)
+{
+        for (size_t index = _tail; index != _head;
+             index = _next_index(index)) {
+                if (_queue[index].sequence == sequence) {
+                        return true;
+                }
+        }
+        return false;
+}
+
 void
 saturn_dma_queue_init(void)
 {
         _head = 0U;
         _tail = 0U;
         _active = false;
-        _next_sequence = 1U;
+        _next_sequence = SATURN_DMA_QUEUE_INITIAL_SEQUENCE;
+        if (_next_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+                _next_sequence = 1U;
+        }
         _retired_sequence = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
 }
 
@@ -44,6 +111,9 @@ saturn_dma_queue_sequence_t
 saturn_dma_queue_submit(void *dst, const void *src, size_t len,
     saturn_dma_queue_mode_t mode)
 {
+        if (!_request_valid(dst, src, len, mode)) {
+                return SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+        }
         const size_t next = _next_index(_head);
         if (next == _tail) {
                 return SATURN_DMA_QUEUE_SEQUENCE_INVALID;
@@ -102,16 +172,26 @@ saturn_dma_queue_poll(void)
         _active = false;
 }
 
-void
+int
 saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
 {
         if (sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
-                return;
+                return 0;
         }
-        while (_retired_sequence != sequence) {
+        /* A caller may recheck a completed fence. Modular subtraction keeps
+         * this correct across UINT32_MAX -> 1 while the fixed FIFO bounds the
+         * live sequence distance to fewer than 16 descriptors. */
+        if (_sequence_retired_through(sequence)) {
+                return 1;
+        }
+        if (!_sequence_outstanding(sequence)) {
+                return 0;
+        }
+        while (!_sequence_retired_through(sequence)) {
                 saturn_dma_queue_kick();
                 saturn_dma_queue_poll();
         }
+        return 1;
 }
 
 int
@@ -125,6 +205,9 @@ void
 saturn_dma_queue_transfer_wait(void *dst, const void *src, size_t len,
     saturn_dma_queue_mode_t mode)
 {
+        if (!_request_valid(dst, src, len, mode)) {
+                return;
+        }
         saturn_dma_queue_sequence_t sequence = saturn_dma_queue_submit(
             dst, src, len, mode);
         while (sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {

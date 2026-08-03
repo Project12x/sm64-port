@@ -281,6 +281,7 @@ verify-dual-frame-bank:
 verify-dma-queue:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSATURN_DMA_QUEUE_INITIAL_SEQUENCE=4294967294U \
 	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/dma_queue_test.c" \
