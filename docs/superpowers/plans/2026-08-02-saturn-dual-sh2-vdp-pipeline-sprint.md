@@ -18,6 +18,15 @@ render preparation, and unbounded catch-up assumptions. This sprint's Task 12
 publication gates remain honestly open; they do not block an experimental
 duplicate-render-removal CUE.
 
+**A1 quality gate correction (2026-08-03):** Full-range review of
+`4a8fe1ce^..70cb3fe1` blocks that experimental CUE. `geo_process_root()` also
+owns animation progression and invokes gameplay/visual-state callbacks for
+paintings/DDD warp, environment water, moving textures, flying carpet, camera,
+and matrix-derived object positions. No target checkpoint may use the current
+whole-walk suppression until a bounded state-only seam and behavioral
+differential tests are independently approved. See the active A1 plan and
+evidence report for the exact inventory and unexecuted gates.
+
 ## Live execution status — update on every task transition
 
 This checklist is the operational source of truth.  A task is not complete

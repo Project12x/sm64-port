@@ -73,6 +73,13 @@ The production rule is now:
    scheduling. It may not silently change game rules or make a Saturn-only
    scene script the owner of progression.
 
+**A1 enforcement note — 2026-08-03.** `geo_process_root()` is not a
+construction-only boundary in this source tree. Its walk advances animation
+state and invokes geo callbacks that mutate painting/warp, environment-water,
+moving-texture, flying-carpet, camera, and matrix-derived object state.
+Suppressing the whole walk is blocked until those mutations have an audited,
+behavior-tested state-only path that does not construct source display lists.
+
 This is a narrow-delta policy, not permission for a broad engine rewrite. The
 PS1 port remains useful evidence for fixed point, compact display lists, and
 asset preparation, but its wide source fork is not the Saturn integration

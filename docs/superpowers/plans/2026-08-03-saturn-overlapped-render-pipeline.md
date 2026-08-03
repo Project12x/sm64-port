@@ -28,10 +28,12 @@ review are green. It does not mean a target/Ymir gate passed. Update the
 individual task steps below, this summary, the architecture decision ledger,
 and the evidence report before starting another task.
 
-- [ ] **Task 1 / A1 — duplicate source-render removal:** active; implementation
-  commits `4a8fe1ce`, `658d5ad9`, `9904097e`, and `a00cdd17` are ready for
-  independent spec and quality review. Task 1 gates are Saturn-only; the
-  controller-owned serial CUE/Ymir gate remains pending.
+- [ ] **Task 1 / A1 — duplicate source-render removal:** blocked in quality-fix
+  round 1/5. Full-range review of `4a8fe1ce^..70cb3fe1` found that suppressing
+  `geo_process_root()` also suppresses authoritative animation, painting/warp,
+  environment-water, moving-texture, flying-carpet, camera, and matrix-derived
+  object-state mutations. No bounded state-only seam has been demonstrated;
+  the controller-owned serial CUE/Ymir gate must not start.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -117,11 +119,10 @@ and the evidence report before starting another task.
   `sm64_saturn_source_runtime_scene_graph_suppressed(void)`.
 - Produces counters `scene_graph_walks` and `scene_graph_walks_suppressed`,
   appended to `sm64_saturn_source_runtime_state_t` and the Fast3D profile.
-- Retains stateful `do_cutscene_handler()`,
+- Intended to retain stateful `do_cutscene_handler()`,
   `print_displaying_credits_entry()`, `render_menus_and_dialogs()`, and warp
-  transition state updates. Suppresses `geo_process_root()` and source-only
-  viewport/HUD/text/scissor construction when the Saturn IR renderer owns the
-  frame.
+  transition state updates. The current implementation also suppresses
+  stateful work inside `geo_process_root()` and is therefore not accepted.
 
 - [x] **Step 1: Write the red source-policy test**
 
@@ -209,6 +210,14 @@ and the evidence report before starting another task.
   `perf(saturn): bypass duplicate source scene construction`. Obtain spec
   review first, quality review second, resolve findings in follow-up commits,
   and record both final verdicts.
+
+  Full-range quality review of `4a8fe1ce^..70cb3fe1`: **BLOCKING**. The source
+  test inspects only the first suppression block and is not behavioral. The
+  production guard skips graph-owned state mutations described in the evidence
+  report. A replacement must first add red differential tests for animation
+  progression, warp progression, unconditional cleanup, and paired sourceboot
+  policy restoration, then implement an audited state-only seam without
+  constructing source display lists.
 
 - [ ] **Step 10: Build and manually test the early CUE**
 
