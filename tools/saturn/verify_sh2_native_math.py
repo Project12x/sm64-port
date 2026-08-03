@@ -3425,8 +3425,13 @@ def _symbol_base(symbol: str) -> str:
     return symbol.split("+", 1)[0]
 
 
-def scan_direct_calls(disassembly: str) -> list[CallSite]:
+def scan_direct_calls(
+    disassembly: str,
+    owners: Iterable[FunctionOwner] | None = None,
+) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
+    owner_list = None if owners is None else tuple(owners)
+    active_owner: FunctionOwner | None = None
     caller = "<outside-function>"
     registers: dict[str, str] = {}
     stack_slots: dict[int, str] = {}
@@ -3435,9 +3440,16 @@ def scan_direct_calls(disassembly: str) -> list[CallSite]:
     for line in disassembly.splitlines():
         function = FUNCTION_RE.match(line)
         if function:
+            next_owner = (
+                None
+                if owner_list is None
+                else _owner_at(owner_list, int(function.group(1), 16))
+            )
             caller = function.group(2)
-            registers.clear()
-            stack_slots.clear()
+            if owner_list is None or next_owner != active_owner:
+                registers.clear()
+                stack_slots.clear()
+            active_owner = next_owner
             continue
 
         instruction = INSTRUCTION_RE.match(line)
@@ -4188,7 +4200,7 @@ def prepare_route_bounded_code_only(
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
-    for call in scan_direct_calls(disassembly):
+    for call in scan_direct_calls(disassembly, owner_list):
         if is_native_math_helper(call.helper):
             continue
         # Objdump may introduce local/NOTYPE headers inside one STT_FUNC.

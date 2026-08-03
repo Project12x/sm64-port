@@ -5212,13 +5212,12 @@ fixture.c 3 0x06003002
     def test_internal_local_header_call_is_owned_by_enclosing_route_function(self) -> None:
         disassembly = """
 06001000 <_route_root>:
- 6001000: 00 09 nop
+ 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06002000 <_route_child>
 06001002 <.Lroute_inner>:
- 6001002: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06002000 <_route_child>
- 6001004: 41 0b jsr @r1
- 6001006: 00 09 nop
- 6001008: 00 0b rts
- 600100a: 00 09 nop
+ 6001002: 41 0b jsr @r1
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
 06002000 <_route_child>:
  6002000: b0 02 bsr 6009000 <___addsf3>
  6002002: 00 09 nop
