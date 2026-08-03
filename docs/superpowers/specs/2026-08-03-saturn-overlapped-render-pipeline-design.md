@@ -1,9 +1,11 @@
 # Saturn Overlapped Render Pipeline Architecture
 
 **Date:** 2026-08-03
-**Status:** Approved architecture; implementation plan pending
+**Status:** Approved architecture; implementation plan ready, execution pending
 **Scope:** Full-game Saturn source port, with BOB as the deterministic proving
 ground
+**Implementation plan:**
+[`2026-08-03-saturn-overlapped-render-pipeline.md`](../plans/2026-08-03-saturn-overlapped-render-pipeline.md)
 **Living-document rule:** Update the status, decision ledger, implementation
 map, and evidence links during every implementation task transition. Do not
 reconstruct them at the end of a wave.
@@ -336,6 +338,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 | 2026-08-03 | Use a shared opportunistic terrain/actor queue, early LOD/admission, alternating RAM banks, and one terminal fence. | Approved hybrid derived from pinned SlaveDriver and Z-Treme/SGL study. |
 | 2026-08-03 | SlaveDriver's active path is not evidence of asynchronous queued DMA; only its queue/bank patterns are prior art. | Corrected after pinned-source call-site audit. |
 | 2026-08-03 | Keep the two 64 KiB command banks in LWRAM and transfer them with CPU-DMAC; reserve SCU DMA for HWRAM Gouraud staging. | File-map correction: two 2,048 × 32-byte command banks exceed the linker's `0x1B00` HWRAM margin, and SCU DMA cannot source LWRAM. |
+| 2026-08-03 | Execute the architecture as ten reviewer-sized tasks with A1 producing the earliest manual CUE. | Implementation plan linked above; every task updates this ledger, its own steps/status, and the evidence report before transition. |
 
 ## Verification and visible-progress policy
 
