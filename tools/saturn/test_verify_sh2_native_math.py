@@ -5826,6 +5826,75 @@ fixture.c 3 0x06003002
                 (oracle,),
             )
 
+    def test_cfg_stack_spill_is_invalid_when_r15_is_loaded(self) -> None:
+        """Any load into r15 changes the base of fixed-frame spill facts."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        edge = ("_route_root", "_declared_callback")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({edge}),
+            frozenset({edge}),
+        )
+        cases = (
+            (
+                "fixed_stack_load",
+                " 6001006: 6f f2 mov.l @(0,r15),r15\n",
+                "",
+            ),
+            (
+                "literal_load",
+                " 6001006: df 05 mov.l 600101c <_route_root+0x1c>,r15 ! "
+                "06003000 <_declared_callback>\n",
+                " 600101c: 06 00 .word 0x0600\n"
+                " 600101e: 30 00 .word 0x3000\n",
+            ),
+        )
+        for label, mutation, extra_pool in cases:
+            with self.subTest(label=label):
+                disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 06 bt 6001010 <_route_root+0x10>
+ 6001002: d1 04 mov.l 6001018 <_route_root+0x18>,r1 ! 06003000 <_declared_callback>
+ 6001004: 1f 12 mov.l r1,@(0,r15)
+""" + mutation + """ 6001008: 61 f2 mov.l @(0,r15),r1
+ 600100a: 41 2b jmp @r1
+ 600100c: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+ 6001018: 06 00 .word 0x0600
+ 600101a: 30 00 .word 0x3000
+""" + extra_pool + """ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+                with self.assertRaisesRegex(
+                    ValueError, "no decoded code provenance"
+                ):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly,
+                        "fixture.c 1 0x06001000\n",
+                        owners,
+                        (oracle,),
+                    )
+
     def test_cfg_literal_target_is_invalidated_by_register_mutation(self) -> None:
         """Auto-update and one-operand writers kill a literal register fact."""
         owners = (

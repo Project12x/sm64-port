@@ -5043,9 +5043,12 @@ def _bounded_control_flow_sources(
         registers, slots = dict(state[0]), dict(state[1])
         load = LITERAL_LOAD_RE.search(raw_operation)
         if load is not None:
-            registers[f"r{load.group(1)}"] = (
+            destination = f"r{load.group(1)}"
+            registers[destination] = (
                 load.group(3), int(load.group(2), 16)
             )
+            if destination == "r15":
+                slots.clear()
             return registers, slots
         stack_store = STACK_STORE_RE.search(raw_operation)
         if stack_store is not None:
@@ -5064,6 +5067,8 @@ def _bounded_control_flow_sources(
                 registers.pop(destination, None)
             else:
                 registers[destination] = target
+            if destination == "r15":
+                slots.clear()
             return registers, slots
         if re.search(r"\bmov\.[bwl]\s+[^,]+,\s*@", raw_operation):
             slots.clear()
