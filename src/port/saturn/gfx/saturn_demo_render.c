@@ -134,6 +134,12 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
 #define DEMO_CROSS_CPU_SHARED __attribute__((section(".uncached")))
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
+/* Mario's bounded second phase uses the exact same release protocol as the
+ * terrain transform bank.  The worker writes only its half-open vertex span;
+ * the master reads the slave half through the cache-through alias after this
+ * uncached record accepts its sequence. */
+static sm64_saturn_dual_frame_bank_t s_actor_frame_bank
+    DEMO_CROSS_CPU_SHARED;
 static volatile uint16_t s_transform_phase_failed
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_terrain_result_spans_t s_terrain_spans_shared
@@ -185,8 +191,14 @@ static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
     DEMO_TERRAIN_RESULT_CAPACITY];
 static uint16_t s_terrain_emit_count;
 static uint32_t s_terrain_publish_sequence;
-static sm64_saturn_projected_vertex_t s_actor_projected[SM64_MARIO_VERTEX_COUNT];
-static uint8_t s_actor_valid[SM64_MARIO_VERTEX_COUNT];
+typedef struct demo_actor_vertex_result {
+    sm64_saturn_projected_vertex_t projected;
+    uint8_t valid;
+} demo_actor_vertex_result_t;
+/* This one contiguous bank is deliberately split into master [0, split) and
+ * slave [split, vertex_count) result spans.  It contains no VDP state. */
+static demo_actor_vertex_result_t s_actor_results[SM64_MARIO_VERTEX_COUNT]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
@@ -303,6 +315,8 @@ static uint8_t s_bob_resident_ready;
 static uint16_t s_slave_begin = SM64_SATURN_BOB_PRIMITIVE_COUNT / 2U;
 static uint16_t s_last_master_wait_ticks;
 static uint32_t s_transform_publish_sequence;
+static uint32_t s_actor_publish_sequence;
+static uint16_t s_actor_slave_begin;
 
 /* Ownership is master-produced immutable frame metadata.  The slave never
  * treats a potentially stale cached copy as permission to read a peer output
@@ -337,6 +351,26 @@ static inline const uint8_t *demo_position_valid_read(uint8_t lane,
     return (const uint8_t *)sm64_saturn_dual_frame_read_range(
         lane, demo_position_owner_read(lane, position), s_position_valid) +
         position;
+}
+
+static inline const demo_actor_vertex_result_t *demo_actor_result_read(
+    uint16_t vertex)
+{
+    const uint8_t owner = vertex < s_actor_slave_begin ? 0U : 1U;
+    return (const demo_actor_vertex_result_t *)
+        sm64_saturn_dual_frame_read_range(0U, owner, s_actor_results) +
+        vertex;
+}
+
+static inline const sm64_saturn_projected_vertex_t *demo_actor_projected_read(
+    uint16_t vertex)
+{
+    return &demo_actor_result_read(vertex)->projected;
+}
+
+static inline bool demo_actor_valid_read(uint16_t vertex)
+{
+    return demo_actor_result_read(vertex)->valid != 0U;
 }
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
@@ -655,10 +689,24 @@ static void demo_primitive_screen_vertices(
 }
 
 typedef struct demo_mario_transform_context {
-    const sm64_saturn_ir_transform_job_t *job;
-    const sm64_saturn_mario_actor_snapshot_t *snapshot;
-    const sm64_saturn_mario_actor_pose_t *pose;
+    /* Values are copied by the master before dispatch.  The only pointers in
+     * this worker context name project-owned immutable/output banks; it has
+     * no SM64 live-state, graph, VDP1, texture-residency, or allocator link. */
+    sm64_saturn_ir_transform_job_t job;
+    sm64_saturn_mario_actor_snapshot_t snapshot;
+    int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];
+    uint8_t light_intensity[SM64_MARIO_VERTEX_COUNT];
+    uint16_t vertex_count;
+    uint16_t pose_frame;
+    uint16_t pose_frame_count;
+    uint8_t pose_walking_bank;
+    /* These point only at generated, read-only mesh/material banks. */
+    const uint16_t (*primitives)[5];
+    const uint8_t (*material_rgb)[3];
+    uint32_t sequence;
 } demo_mario_transform_context_t;
+static demo_mario_transform_context_t s_mario_transform_context
+    DEMO_TERRAIN_TRANSFORM_CACHE;
 
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
@@ -745,31 +793,120 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
                                        uint16_t end)
 {
     demo_mario_transform_context_t *context = opaque;
-    if (context->snapshot == NULL || context->pose == NULL ||
-        !context->snapshot->valid || context->pose->vertices == NULL ||
-        context->pose->vertex_count != SM64_MARIO_VERTEX_COUNT) {
+    const uint8_t lane = begin == 0U ? 0U : 1U;
+    if (context == NULL || !context->snapshot.valid ||
+        context->vertex_count != SM64_MARIO_VERTEX_COUNT ||
+        context->primitives == NULL || context->material_rgb == NULL ||
+        end > context->vertex_count) {
         return;
     }
-    const int32_t sine = sm64_saturn_sins_q16(context->snapshot->yaw);
-    const int32_t cosine = sm64_saturn_coss_q16(context->snapshot->yaw);
+    const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
+    const int32_t cosine = sm64_saturn_coss_q16(context->snapshot.yaw);
     for (uint16_t i = begin; i < end; i++) {
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) break;
-        const int16_t *source = context->pose->vertices[i];
+        const int16_t *source = context->vertices[i];
         const int32_t sx = (int32_t)source[0] << 16;
         const int32_t sz = (int32_t)source[2] << 16;
         const sm64_saturn_vec3i_t world = {
-            (int32_t)context->snapshot->position[0] +
+            (int32_t)context->snapshot.position[0] +
                 ((sm64_saturn_q16_mul(sx, cosine) +
                   sm64_saturn_q16_mul(sz, sine)) >> 16),
-            (int32_t)context->snapshot->position[1] + source[1],
-            (int32_t)context->snapshot->position[2] +
+            (int32_t)context->snapshot.position[1] + source[1],
+            (int32_t)context->snapshot.position[2] +
                 ((-sm64_saturn_q16_mul(sx, sine) +
                   sm64_saturn_q16_mul(sz, cosine)) >> 16)};
         sm64_saturn_vec3i_t view;
-        s_actor_valid[i] = sm64_saturn_ir_transform_one(
-            context->job, world, &view, &s_actor_projected[i]) ? 1U : 0U;
+        s_actor_results[i].valid = sm64_saturn_ir_transform_one(
+            &context->job, world, &view, &s_actor_results[i].projected) ?
+            1U : 0U;
     }
+    sm64_saturn_dual_frame_publish(&s_actor_frame_bank, lane,
+                                   context->sequence,
+                                   (uint16_t)(end - begin));
+}
+
+/* This begins only after sm64_saturn_terrain_worker_run() has returned.  The
+ * copied records let the slave transform/classify a disjoint vertex span with
+ * no game-state or VDP1 dependency; the master remains the only actor command
+ * allocator and inserter. */
+static void demo_dispatch_mario_transform(
+    const sm64_saturn_ir_transform_job_t *job,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    sm64_saturn_fast3d_profile_t *profile)
+{
+    if (job == NULL || snapshot == NULL || pose == NULL || !snapshot->valid ||
+        pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
+        return;
+    memset(&s_mario_transform_context, 0, sizeof(s_mario_transform_context));
+    s_mario_transform_context.job = *job;
+    s_mario_transform_context.snapshot = *snapshot;
+    memcpy(s_mario_transform_context.vertices, pose->vertices,
+           sizeof(s_mario_transform_context.vertices));
+    if (pose->light_intensity != NULL) {
+        memcpy(s_mario_transform_context.light_intensity, pose->light_intensity,
+               sizeof(s_mario_transform_context.light_intensity));
+    }
+    s_mario_transform_context.vertex_count = pose->vertex_count;
+    s_mario_transform_context.pose_frame = pose->frame;
+    s_mario_transform_context.pose_frame_count = pose->frame_count;
+    s_mario_transform_context.pose_walking_bank = pose->walking_bank;
+    s_mario_transform_context.primitives = sm64_mario_primitives;
+    s_mario_transform_context.material_rgb = sm64_mario_material_rgb;
+    s_actor_publish_sequence++;
+    if (s_actor_publish_sequence == 0U) s_actor_publish_sequence = 1U;
+    s_mario_transform_context.sequence = s_actor_publish_sequence;
+    sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
+    memset(s_actor_results, 0, sizeof(s_actor_results));
+    s_actor_slave_begin = (uint16_t)(SM64_MARIO_VERTEX_COUNT / 2U);
+    sm64_saturn_dual_worker_stats_t actor_stats = {0};
+    bool actor_complete = true;
+#if SATURN_SLAVE_RENDER
+    /* The terrain job is retired before this point.  Idle is an ownership
+     * assertion, not a timing threshold: a false result falls back only after
+     * the existing bounded worker has retired. */
+    if (sm64_saturn_dual_worker_is_idle()) {
+        profile->master_worker_started++;
+        profile->slave_worker_started++;
+        actor_complete = sm64_saturn_dual_worker_run(
+            demo_transform_mario_range,
+            (void *)sm64_saturn_dual_frame_cache_through(
+                &s_mario_transform_context),
+            SM64_MARIO_VERTEX_COUNT, s_actor_slave_begin, &actor_stats);
+#if defined(__sh__)
+        uint16_t slave_count = 0U;
+        actor_complete = actor_complete &&
+            sm64_saturn_dual_frame_peer_ready(
+                &s_actor_frame_bank, 0U, s_actor_publish_sequence,
+                &slave_count) &&
+            slave_count == SM64_MARIO_VERTEX_COUNT - s_actor_slave_begin;
+#endif
+    } else {
+        actor_complete = false;
+    }
+#else
+    profile->master_worker_started++;
+    s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;
+    demo_transform_mario_range(&s_mario_transform_context, 0U,
+                               SM64_MARIO_VERTEX_COUNT);
+#endif
+    if (!actor_complete) {
+        /* The generic worker does not return until a cancelled slave callback
+         * has retired, so this full-span recovery cannot overlap its writes. */
+        profile->pipeline_faults++;
+        s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;
+        sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
+        demo_transform_mario_range(&s_mario_transform_context, 0U,
+                                   SM64_MARIO_VERTEX_COUNT);
+    }
+    profile->slave_jobs_completed += actor_stats.slave_jobs_completed;
+    profile->slave_busy_ticks += actor_stats.slave_busy_ticks;
+    profile->master_wait_ticks += actor_stats.master_wait_ticks;
+    profile->slave_timeouts += actor_stats.slave_timeouts;
+    /* Timeout counters are diagnostics.  They never choose or suppress a
+     * rendering path; the completed immutable result is the only input. */
+    profile->pipeline_faults += actor_stats.slave_timeouts;
 }
 
 static void demo_resolve_terrain_command_templates(
@@ -1722,14 +1859,14 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
         const uint16_t primitive = s_actor_order[ordinal];
         const uint16_t *indices = sm64_mario_primitives[primitive];
         const int16_vec2_t vertices[4] = {
-            INT16_VEC2_INITIALIZER(s_actor_projected[indices[1]].x,
-                                   s_actor_projected[indices[1]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[indices[2]].x,
-                                   s_actor_projected[indices[2]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[indices[3]].x,
-                                   s_actor_projected[indices[3]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[indices[4]].x,
-                                   s_actor_projected[indices[4]].y)};
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[1])->x,
+                                   demo_actor_projected_read(indices[1])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[2])->x,
+                                   demo_actor_projected_read(indices[2])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[3])->x,
+                                   demo_actor_projected_read(indices[3])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[4])->x,
+                                   demo_actor_projected_read(indices[4])->y)};
         vdp1_cmdt_t *cmdt = &context->cmdts[s_actor_slots[ordinal]];
         vdp1_cmdt_polygon_set(cmdt);
         const uint8_t *rgb = sm64_mario_material_rgb[indices[0]];
@@ -1767,14 +1904,14 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
             const uint16_t *texture_indices =
                 sm64_mario_textured_source_vertices[texture_start / 4U];
             const int16_vec2_t texture_vertices[4] = {
-                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[0]].x,
-                                       s_actor_projected[texture_indices[0]].y),
-                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[1]].x,
-                                       s_actor_projected[texture_indices[1]].y),
-                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[2]].x,
-                                       s_actor_projected[texture_indices[2]].y),
-                INT16_VEC2_INITIALIZER(s_actor_projected[texture_indices[2]].x,
-                                       s_actor_projected[texture_indices[2]].y)};
+                INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[0])->x,
+                                       demo_actor_projected_read(texture_indices[0])->y),
+                INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[1])->x,
+                                       demo_actor_projected_read(texture_indices[1])->y),
+                INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[2])->x,
+                                       demo_actor_projected_read(texture_indices[2])->y),
+                INT16_VEC2_INITIALIZER(demo_actor_projected_read(texture_indices[2])->x,
+                                       demo_actor_projected_read(texture_indices[2])->y)};
             vdp1_cmdt_t *detail = &context->cmdts[s_actor_texture_slots[ordinal]];
             (void)sm64_saturn_ir_texture_bind_rgb1555(
                 detail, context->partitions,
@@ -1849,22 +1986,27 @@ static uint16_t demo_prepare_mario(
         pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return 0U;
 
-    s_actor_light_intensity = pose->light_intensity;
+    /* Lighting is copied into the immutable actor worker record before the
+     * second phase.  Master-only lowering therefore does not reach back into
+     * the bridge pose after the hand-off. */
+    s_actor_light_intensity = s_mario_transform_context.light_intensity;
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
-        if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||
-            !s_actor_valid[primitive[3]] || !s_actor_valid[primitive[4]])
+        if (!demo_actor_valid_read(primitive[1]) ||
+            !demo_actor_valid_read(primitive[2]) ||
+            !demo_actor_valid_read(primitive[3]) ||
+            !demo_actor_valid_read(primitive[4]))
             continue;
         const int16_vec2_t vertices[4] = {
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[1]].x,
-                                   s_actor_projected[primitive[1]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[2]].x,
-                                   s_actor_projected[primitive[2]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[3]].x,
-                                   s_actor_projected[primitive[3]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[4]].x,
-                                   s_actor_projected[primitive[4]].y)};
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[1])->x,
+                                   demo_actor_projected_read(primitive[1])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[2])->x,
+                                   demo_actor_projected_read(primitive[2])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[3])->x,
+                                   demo_actor_projected_read(primitive[3])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[4])->x,
+                                   demo_actor_projected_read(primitive[4])->y)};
         const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
                                   (vertices[2].y - vertices[0].y) -
                               (int32_t)(vertices[1].y - vertices[0].y) *
@@ -1882,19 +2024,19 @@ static uint16_t demo_prepare_mario(
         const uint16_t value = s_actor_order[i];
         const uint16_t *value_indices = sm64_mario_primitives[value];
         const int32_t value_depth =
-            (s_actor_projected[value_indices[1]].z +
-             s_actor_projected[value_indices[2]].z +
-             s_actor_projected[value_indices[3]].z +
-             s_actor_projected[value_indices[4]].z) / 4;
+            (demo_actor_projected_read(value_indices[1])->z +
+             demo_actor_projected_read(value_indices[2])->z +
+             demo_actor_projected_read(value_indices[3])->z +
+             demo_actor_projected_read(value_indices[4])->z) / 4;
         uint16_t j = i;
         while (j > 0U) {
             const uint16_t previous = s_actor_order[j - 1U];
             const uint16_t *previous_indices = sm64_mario_primitives[previous];
             const int32_t previous_depth =
-                (s_actor_projected[previous_indices[1]].z +
-                 s_actor_projected[previous_indices[2]].z +
-                 s_actor_projected[previous_indices[3]].z +
-                 s_actor_projected[previous_indices[4]].z) / 4;
+                (demo_actor_projected_read(previous_indices[1])->z +
+                 demo_actor_projected_read(previous_indices[2])->z +
+                 demo_actor_projected_read(previous_indices[3])->z +
+                 demo_actor_projected_read(previous_indices[4])->z) / 4;
             if (previous_depth >= value_depth) break;
             s_actor_order[j] = previous;
             j--;
@@ -1906,8 +2048,10 @@ static uint16_t demo_prepare_mario(
 #else
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
-        if (s_actor_valid[primitive[1]] && s_actor_valid[primitive[2]] &&
-            s_actor_valid[primitive[3]] && s_actor_valid[primitive[4]])
+        if (demo_actor_valid_read(primitive[1]) &&
+            demo_actor_valid_read(primitive[2]) &&
+            demo_actor_valid_read(primitive[3]) &&
+            demo_actor_valid_read(primitive[4]))
             s_actor_command_count++;
     }
 #endif
@@ -1946,7 +2090,7 @@ static void demo_emit_mario(
         pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return;
     for (uint16_t i = 0; i < SM64_MARIO_VERTEX_COUNT; i++)
-        if (s_actor_valid[i]) profile->demo_actor_vertices_valid++;
+        if (demo_actor_valid_read(i)) profile->demo_actor_vertices_valid++;
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
     if (s_actor_draw_count != 0U &&
         sm64_saturn_vdp1_backend_reserve(
@@ -1982,18 +2126,20 @@ static void demo_emit_mario(
 #endif
     for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
         const uint16_t *primitive = sm64_mario_primitives[i];
-        if (!s_actor_valid[primitive[1]] || !s_actor_valid[primitive[2]] ||
-            !s_actor_valid[primitive[3]] || !s_actor_valid[primitive[4]])
+        if (!demo_actor_valid_read(primitive[1]) ||
+            !demo_actor_valid_read(primitive[2]) ||
+            !demo_actor_valid_read(primitive[3]) ||
+            !demo_actor_valid_read(primitive[4]))
             continue;
         const int16_vec2_t vertices[4] = {
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[1]].x,
-                                   s_actor_projected[primitive[1]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[2]].x,
-                                   s_actor_projected[primitive[2]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[3]].x,
-                                   s_actor_projected[primitive[3]].y),
-            INT16_VEC2_INITIALIZER(s_actor_projected[primitive[4]].x,
-                                   s_actor_projected[primitive[4]].y)};
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[1])->x,
+                                   demo_actor_projected_read(primitive[1])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[2])->x,
+                                   demo_actor_projected_read(primitive[2])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[3])->x,
+                                   demo_actor_projected_read(primitive[3])->y),
+            INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[4])->x,
+                                   demo_actor_projected_read(primitive[4])->y)};
         const int32_t cross = (int32_t)(vertices[1].x - vertices[0].x) *
                                   (vertices[2].y - vertices[0].y) -
                               (int32_t)(vertices[1].y - vertices[0].y) *
@@ -2046,15 +2192,6 @@ void sm64_saturn_demo_render_frame(
         .coord_max = terrain_job.coord_max,
         .clip_near = false
     };
-    demo_mario_transform_context_t mario_transform = {
-        .job = &actor_job, .snapshot = snapshot, .pose = pose
-    };
-    /* Mario is small and remains a master-owned actor pass. Terrain starts
-     * its one coarse producer below; keeping this call here preserves actor
-     * determinism without granting the worker any VDP1 or game state. */
-    demo_transform_mario_range(&mario_transform, 0U, SM64_MARIO_VERTEX_COUNT);
-    const uint16_t actor_command_count =
-        demo_prepare_mario(snapshot, pose);
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
@@ -2220,6 +2357,10 @@ void sm64_saturn_demo_render_frame(
     profile->demo_bob_terrain_descriptor_bytes_read +=
         (uint32_t)s_terrain_emit_count *
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
+    /* The terrain worker has retired and its merge is complete.  Only now may
+     * the single slave be dispatched for Mario's copied transform snapshot. */
+    demo_dispatch_mario_transform(&actor_job, snapshot, pose, profile);
+    const uint16_t actor_command_count = demo_prepare_mario(snapshot, pose);
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     /* Essential actor shading is reserved before optional world shading.
      * Previously terrain consumed the Gouraud bank first, which made Mario

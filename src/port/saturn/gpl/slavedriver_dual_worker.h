@@ -26,6 +26,11 @@ typedef struct sm64_saturn_dual_worker_stats {
 
 void sm64_saturn_dual_worker_init(void);
 
+/* A second dispatch is legal only after the previous bounded job has retired.
+ * This exposes that ownership invariant without making timing a scheduling
+ * policy. */
+bool sm64_saturn_dual_worker_is_idle(void);
+
 /* Returns true when the slave completed its assigned range. A false return
  * is a counted, cancellation-safe fallback condition; the caller may rerun
  * the complete range serially after this function returns. */

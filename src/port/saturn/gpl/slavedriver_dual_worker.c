@@ -47,6 +47,11 @@ void sm64_saturn_dual_worker_init(void)
     s_initialized = true;
 }
 
+bool sm64_saturn_dual_worker_is_idle(void)
+{
+    return s_control.active == 0U;
+}
+
 bool sm64_saturn_dual_worker_cancelled(void)
 {
     return s_control.cancel != 0U;
@@ -110,14 +115,24 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
 #else
 bool sm64_saturn_dual_worker_cancelled(void) { return false; }
 void sm64_saturn_dual_worker_init(void) {}
+bool sm64_saturn_dual_worker_is_idle(void) { return true; }
 bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
                                  void *context, uint16_t count,
                                  uint16_t slave_begin,
                                  sm64_saturn_dual_worker_stats_t *stats)
 {
     if (stats != NULL) *stats = (sm64_saturn_dual_worker_stats_t){0};
+#if defined(SM64_SATURN_DUAL_WORKER_SIMULATE_TIMEOUT)
+    (void)fn;
+    (void)context;
+    (void)count;
+    (void)slave_begin;
+    if (stats != NULL) stats->slave_timeouts = 1U;
+    return false;
+#else
     if (fn != NULL) fn(context, 0U, count);
     (void)slave_begin;
     return true;
+#endif
 }
 #endif

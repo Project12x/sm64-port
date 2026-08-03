@@ -1,0 +1,132 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "slavedriver_dual_worker.h"
+#include "saturn_mario_actor_mesh.h"
+
+typedef struct actor_vertex {
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} actor_vertex_t;
+
+typedef struct actor_command {
+    uint16_t primitive;
+    uint16_t color;
+    actor_vertex_t corners[4];
+} actor_command_t;
+
+static void transform_range(actor_vertex_t *out, uint16_t begin, uint16_t end)
+{
+    for (uint16_t i = begin; i < end; i++) {
+        out[i].x = (int16_t)(sm64_mario_vertices[i][0] + 17);
+        out[i].y = (int16_t)(sm64_mario_vertices[i][1] - 23);
+        out[i].z = (int16_t)(sm64_mario_vertices[i][2] + 101);
+    }
+}
+
+static uint16_t classify(const actor_vertex_t *vertices, actor_command_t *out)
+{
+    uint16_t count = 0U;
+    for (uint16_t primitive = 0U;
+         primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++) {
+        const uint16_t *indices = sm64_mario_primitives[primitive];
+        actor_command_t *command = &out[count++];
+        command->primitive = primitive;
+        command->color = (uint16_t)((sm64_mario_material_rgb[indices[0]][0] << 10) |
+                                    (sm64_mario_material_rgb[indices[0]][1] << 5) |
+                                    sm64_mario_material_rgb[indices[0]][2]);
+        for (uint8_t corner = 0U; corner < 4U; corner++)
+            command->corners[corner] = vertices[indices[corner + 1U]];
+    }
+    return count;
+}
+
+static void count_callback(void *opaque, uint16_t begin, uint16_t end)
+{
+    uint16_t *count = opaque;
+    *count = (uint16_t)(*count + end - begin);
+}
+
+static int worker_context_has_no_live_game_pointers(void)
+{
+    FILE *source = fopen("src/port/saturn/gfx/saturn_demo_render.c", "rb");
+    if (source == NULL) return 0;
+    if (fseek(source, 0L, SEEK_END) != 0) return fclose(source), 0;
+    const long bytes = ftell(source);
+    if (bytes <= 0L || fseek(source, 0L, SEEK_SET) != 0) return fclose(source), 0;
+    char *text = malloc((size_t)bytes + 1U);
+    if (text == NULL) return fclose(source), 0;
+    const size_t read = fread(text, 1U, (size_t)bytes, source);
+    fclose(source);
+    text[read] = '\0';
+    const char *const context = strstr(text, "typedef struct demo_mario_transform_context");
+    char *const end = context == NULL ? NULL :
+        strstr(context, "} demo_mario_transform_context_t;");
+    if (end != NULL)
+        end[strlen("} demo_mario_transform_context_t;")] = '\0';
+    const int valid = end != NULL &&
+        strstr(context, "sm64_saturn_mario_actor_snapshot_t snapshot;") != NULL &&
+        strstr(context, "int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];") != NULL &&
+        strstr(context, "const uint16_t (*primitives)[5];") != NULL &&
+        strstr(context, "const uint8_t (*material_rgb)[3];") != NULL &&
+        strstr(context, "const sm64_saturn_mario_actor_snapshot_t *") == NULL &&
+        strstr(context, "MarioState") == NULL && strstr(context, "gMario") == NULL &&
+        strstr(context, "GraphNode") == NULL && strstr(context, "vdp1_") == NULL;
+    free(text);
+    return valid;
+}
+
+int main(void)
+{
+    actor_vertex_t serial_vertices[SM64_MARIO_VERTEX_COUNT];
+    actor_vertex_t split_vertices[SM64_MARIO_VERTEX_COUNT];
+    actor_command_t serial_commands[SM64_MARIO_PRIMITIVE_COUNT];
+    actor_command_t split_commands[SM64_MARIO_PRIMITIVE_COUNT];
+    sm64_saturn_dual_worker_stats_t timeout_stats;
+    uint16_t callback_count = 0U;
+
+    if (!sm64_saturn_dual_worker_is_idle()) {
+        fprintf(stderr, "fresh worker must be idle\n");
+        return 1;
+    }
+    const int worker_completed = sm64_saturn_dual_worker_run(
+        count_callback, &callback_count, 4U, 2U, &timeout_stats);
+#if defined(SM64_SATURN_DUAL_WORKER_SIMULATE_TIMEOUT)
+    if (worker_completed || timeout_stats.slave_timeouts != 1U ||
+        callback_count != 0U) {
+        fprintf(stderr, "simulated timeout must be observable without partial output\n");
+        return 1;
+    }
+#else
+    if (!worker_completed || timeout_stats.slave_timeouts != 0U ||
+        callback_count != 4U) {
+        fprintf(stderr, "host worker completion contract failed\n");
+        return 1;
+    }
+#endif
+    if (!worker_context_has_no_live_game_pointers()) {
+        fprintf(stderr, "actor worker context exposes live game or VDP state\n");
+        return 1;
+    }
+    transform_range(serial_vertices, 0U, SM64_MARIO_VERTEX_COUNT);
+    transform_range(split_vertices, 0U, SM64_MARIO_VERTEX_COUNT / 2U);
+    transform_range(split_vertices, SM64_MARIO_VERTEX_COUNT / 2U,
+                    SM64_MARIO_VERTEX_COUNT);
+    if (memcmp(serial_vertices, split_vertices, sizeof(serial_vertices)) != 0) {
+        fprintf(stderr, "Mario vertex transform differs between serial and split roles\n");
+        return 1;
+    }
+    const uint16_t serial_count = classify(serial_vertices, serial_commands);
+    const uint16_t split_count = classify(split_vertices, split_commands);
+    if (serial_count != SM64_MARIO_PRIMITIVE_COUNT ||
+        split_count != serial_count ||
+        memcmp(serial_commands, split_commands, sizeof(serial_commands)) != 0) {
+        fprintf(stderr, "Mario primitive order, colors, or coordinates differ\n");
+        return 1;
+    }
+    puts("dual actor worker fixture: PASS");
+    return 0;
+}
