@@ -3729,13 +3729,6 @@ def scan_direct_calls(
             or address in proven_source_addresses
         )
 
-    def target_is_executable(address: int) -> bool:
-        assert owner_list is not None
-        return (
-            _owner_at(owner_list, address) is not None
-            or _island_at_code_address(island_list, address) is not None
-        )
-
     def reject_or_defer(address: int, message: str) -> None:
         if deferred_errors is None:
             raise ValueError(message)
@@ -3745,13 +3738,9 @@ def scan_direct_calls(
         source_address: int, displayed: str, target_address: int,
     ) -> str | None:
         if not source_is_proven(source_address):
-            if target_is_executable(target_address):
-                assert active_region is not None
-                reject_or_defer(
-                    source_address,
-                    "bounded direct-call source has no decoded code provenance: "
-                    f"{caller_display}+0x{source_address - active_region[2]:x}",
-                )
+            # Objdump disassembles inline literal-pool halfwords.  A pool word
+            # can look exactly like a BSR/JSR sequence, so it is never a call
+            # unless bounded CFG (from an entry or DWARF root) reached it.
             return None
         try:
             return executable_target(displayed, target_address)
@@ -3918,11 +3907,9 @@ def scan_direct_calls(
             continue
         if owner_list is not None and BSR_OPCODE_RE.search(text):
             assert active_region is not None
-            raw_target = _target_from_text(text)
-            if not source_is_proven(address) \
-                    and raw_target is not None \
-                    and not target_is_executable(raw_target):
+            if not source_is_proven(address):
                 continue
+            raw_target = _target_from_text(text)
             reject_or_defer(
                 address,
                 "bounded executable direct call has unresolved direct call target: "

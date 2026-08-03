@@ -5381,6 +5381,52 @@ fixture.c 3 0x06003002
                 disassembly, "", owners, (oracle,)
             )
 
+    def test_cfg_ignores_unreachable_literal_pool_word_decoded_as_bsr(self) -> None:
+        """A literal word may decode as BSR but is not a call without CFG proof."""
+        owners = (
+            FunctionOwner(
+                "_geo_layout_cmd_node_translation_rotation",
+                0x06006900,
+                0x060069A4,
+                1,
+            ),
+            FunctionOwner("_literal_decoy", 0x060075B2, 0x060075BA, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_geo_layout_cmd_node_translation_rotation"}),
+            frozenset(),
+            frozenset(),
+        )
+        disassembly = """
+06006900 <_geo_layout_cmd_node_translation_rotation>:
+ 6006900: a0 06 bra 6006910 <_geo_layout_cmd_node_translation_rotation+0x10>
+ 6006902: 00 09 nop
+ 6006904: 00 09 nop
+ 6006906: 00 09 nop
+ 6006908: 00 09 nop
+ 600690a: 00 09 nop
+ 600690c: 00 09 nop
+ 600690e: 00 09 nop
+ 6006910: 00 0b rts
+ 6006912: 00 09 nop
+ 6006998: b6 0b bsr 60075b2 <_literal_decoy>
+ 600699a: 60 b7 not r11,r0
+060075b2 <_literal_decoy>:
+ 60075b2: 00 0b rts
+ 60075b4: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.c 1 0x06006900\n",
+            owners,
+            (oracle,),
+        )
+        root_id = self._owner_identity(owners[0])
+        self.assertEqual(prepared.graph[root_id], set())
+        self.assertEqual(prepared.closure, frozenset({root_id}))
+        self.assertNotIn(self._owner_identity(owners[1]), prepared.closure)
+
     def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (
             FunctionOwner(
@@ -5441,17 +5487,21 @@ fixture.c 3 0x06003002
             prepared.closure,
             frozenset({root_id, memset_id}),
         )
-        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
-            bounded_verifier.prepare_route_bounded_code_only(
-                disassembly.replace(
-                    "6009000 <_gDialogTextAlpha>",
-                    "6003000 <_owned_decoy>",
-                    1,
-                ),
-                "fixture.c 1 0x06001000\n",
-                owners,
-                (oracle,),
-            )
+        literal_pool_decoy = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly.replace(
+                "6009000 <_gDialogTextAlpha>",
+                "6003000 <_owned_decoy>",
+                1,
+            ),
+            "fixture.c 1 0x06001000\n",
+            owners,
+            (oracle,),
+        )
+        self.assertEqual(literal_pool_decoy.graph[root_id], {memset_id})
+        self.assertEqual(
+            literal_pool_decoy.closure,
+            frozenset({root_id, memset_id}),
+        )
 
     def test_cfg_provenance_follows_both_conditional_arms(self) -> None:
         owners = (
