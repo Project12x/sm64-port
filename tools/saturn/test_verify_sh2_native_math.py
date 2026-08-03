@@ -5476,6 +5476,41 @@ fixture.c 3 0x06003002
             for call in analysis.calls
         ))
 
+    def test_cfg_follows_gu_mtx_ident_shape_cross_owner_literal_tail(self) -> None:
+        """The candidate's entry-load tail jump retains its linked successor."""
+        owners = (
+            FunctionOwner("_guMtxIdent", 0x06004C24, 0x06004C30, 1),
+            FunctionOwner("_guMtxIdentF", 0x06004BF0, 0x06004C24, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_guMtxIdent"}),
+            frozenset(),
+            frozenset(),
+        )
+        disassembly = """
+06004bf0 <_guMtxIdentF>:
+ 6004bf0: 00 0b rts
+ 6004bf2: 00 09 nop
+06004c24 <_guMtxIdent>:
+ 6004c24: d1 01 mov.l 6004c2c <_guMtxIdent+0x8>,r1 ! 06004bf0 <_guMtxIdentF>
+ 6004c26: 41 2b jmp @r1
+ 6004c28: 00 09 nop
+ 6004c2a: 00 09 nop
+ 6004c2c: 06 00 .word 0x0600
+ 6004c2e: 4b f0 .word 0x4bf0
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.c 1 0x06004c24\n",
+            owners,
+            (oracle,),
+        )
+        source_id = self._owner_identity(owners[0])
+        target_id = self._owner_identity(owners[1])
+        self.assertEqual(prepared.graph[source_id], {target_id})
+        self.assertEqual(prepared.closure, frozenset({source_id, target_id}))
+
     def test_cfg_does_not_hide_unresolved_indirect_tail_call_suffix_as_literal_pool(self) -> None:
         """An unproven local tail is not classified as a literal pool."""
         owners = (
@@ -5581,6 +5616,163 @@ fixture.c 3 0x06003002
                 owners,
                 (oracle,),
             )
+
+    def test_cfg_literal_tail_load_must_dominate_shared_jmp(self) -> None:
+        """One loaded arm cannot resolve a shared jump reached by another arm."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        edge = ("_route_root", "_declared_callback")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({edge}),
+            frozenset({edge}),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 02 bt 6001008 <_route_root+0x8>
+ 6001002: a0 02 bra 600100a <_route_root+0xa>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: d1 03 mov.l 6001018 <_route_root+0x18>,r1 ! 06001010 <_route_root+0x10>
+ 600100a: 41 2b jmp @r1
+ 600100c: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_literal_call_load_must_dominate_shared_jsr(self) -> None:
+        """Linear preflight state cannot resolve a shared call on every path."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        edge = ("_route_root", "_declared_callback")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({edge}),
+            frozenset({edge}),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 02 bt 6001008 <_route_root+0x8>
+ 6001002: a0 02 bra 600100a <_route_root+0xa>
+ 6001004: 00 09 nop
+ 6001006: 00 09 nop
+ 6001008: d1 03 mov.l 6001018 <_route_root+0x18>,r1 ! 06003000 <_declared_callback>
+ 600100a: 41 0b jsr @r1
+ 600100c: 00 09 nop
+ 600100e: 00 0b rts
+ 6001010: 00 09 nop
+ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_direct_call_to_owner_offset_seeds_exact_entry(self) -> None:
+        """A proven BSR target inside an owner is an executable CFG root."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001008, 1),
+            FunctionOwner("_offset_target", 0x06002000, 0x06002030, 1),
+            FunctionOwner("_route_child", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset(),
+            frozenset(),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 02 bsr 6002020 <_offset_target+0x20>
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+06002000 <_offset_target>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+ 6002020: b0 02 bsr 6003000 <_route_child>
+ 6002022: 00 09 nop
+ 6002024: 00 0b rts
+ 6002026: 00 09 nop
+06003000 <_route_child>:
+ 6003000: b0 02 bsr 6009000 <___addsf3>
+ 6003002: 00 09 nop
+ 6003004: 00 0b rts
+ 6003006: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.c 1 0x06001000\n",
+            owners,
+            (oracle,),
+        )
+        target_id = self._owner_identity(owners[1])
+        child_id = self._owner_identity(owners[2])
+        self.assertIn(child_id, prepared.graph[target_id])
+        self.assertIn(child_id, prepared.closure)
+        analysis = analyze_code_only(
+            prepared.instructions,
+            owners,
+            prepared.decoded_lines,
+            selected_owner_identities=set(prepared.selected_identities),
+        )
+        self.assertTrue(any(
+            call.caller == "_route_child" and call.helper == "___addsf3"
+            for call in analysis.calls
+        ))
 
     def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (

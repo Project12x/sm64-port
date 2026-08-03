@@ -3654,6 +3654,7 @@ PC_LITERAL_DATA_RE = re.compile(
     r"r(?:1[0-5]|\d)\b"
 )
 JSR_RE = re.compile(r"\bjsr\s+@r(\d+)\b")
+JMP_RE = re.compile(r"\bjmp\s+@r(\d+)\b")
 BSR_RE = re.compile(r"\bbsr\s+((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>")
 BSR_OPCODE_RE = re.compile(r"\bbsr\b")
 DESTINATION_RE = re.compile(r",r(\d+)\s*(?:!.*)?$")
@@ -3706,6 +3707,7 @@ def scan_direct_calls(
     deferred_errors: list[tuple[str, int, str]] | None = None,
     qualify_owner_identities: bool = False,
     known_literal_pool_addresses: frozenset[int] = frozenset(),
+    proven_literal_targets: dict[int, tuple[str, int]] | None = None,
 ) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets.
 
@@ -3893,8 +3895,14 @@ def scan_direct_calls(
             continue
 
         jsr = JSR_RE.search(text)
-        if jsr:
-            target = row_registers.get(jsr.group(1))
+        jmp = JMP_RE.search(text) if proven_literal_targets is not None else None
+        indirect = jsr or jmp
+        if indirect:
+            target = (
+                proven_literal_targets.get(address)
+                if owner_list is not None and proven_literal_targets is not None
+                else row_registers.get(indirect.group(1))
+            )
             if target is not None:
                 displayed, target_address = target
                 symbol = _symbol_base(displayed)
@@ -4945,8 +4953,13 @@ def _bounded_control_flow_sources(
     owner_components: dict[str, frozenset[str]],
     decoded_text: str,
     owner_address_map: dict[int, FunctionOwner] | None = None,
-    resolved_indirect_addresses: frozenset[int] = frozenset(),
-) -> tuple[frozenset[int], frozenset[int], list[tuple[str, int, str]]]:
+    exact_entry_seeds: frozenset[int] = frozenset(),
+) -> tuple[
+    frozenset[int],
+    frozenset[int],
+    list[tuple[str, int, str]],
+    dict[int, tuple[str, int]],
+]:
     """Prove code sources and trailing literal pools from bounded SH CFGs."""
     owner_by_identity = {
         _bounded_owner_identity(owner): owner for owner in owners
@@ -4964,10 +4977,12 @@ def _bounded_control_flow_sources(
     errors: list[tuple[str, int, str]] = []
 
     rows_by_identity: dict[str, dict[int, tuple[str, str]]] = {}
+    raw_operations_by_identity: dict[str, dict[int, str]] = {}
     literal_loads_by_identity: dict[str, dict[int, tuple[str, int]]] = {}
     literal_data_refs_by_identity: dict[str, dict[int, frozenset[int]]] = {}
     for identity, block in blocks.items():
         rows: dict[int, tuple[str, str]] = {}
+        raw_operations: dict[int, str] = {}
         literal_loads: dict[int, tuple[str, int]] = {}
         literal_data_refs: dict[int, frozenset[int]] = {}
         for line in block.splitlines():
@@ -4981,6 +4996,7 @@ def _bounded_control_flow_sources(
             mnemonic = parts[0]
             operands = "" if len(parts) == 1 else parts[1]
             rows[address] = (mnemonic.lower(), operands)
+            raw_operations[address] = raw_operation
             literal = LITERAL_LOAD_RE.search(raw_operation)
             if literal is not None:
                 literal_loads[address] = (
@@ -4994,200 +5010,350 @@ def _bounded_control_flow_sources(
                     range(pool_address, pool_address + width, 2)
                 )
         rows_by_identity[identity] = rows
+        raw_operations_by_identity[identity] = raw_operations
         literal_loads_by_identity[identity] = literal_loads
         literal_data_refs_by_identity[identity] = literal_data_refs
 
-    for identity, identity_rows in rows_by_identity.items():
-        owner = owner_by_identity.get(identity)
-        if owner is None:
-            rows = identity_rows
-            literal_loads = literal_loads_by_identity[identity]
-            literal_data_refs = literal_data_refs_by_identity[identity]
-        else:
-            rows = {
-                address: row
-                for member in owner_components[identity]
-                for address, row in rows_by_identity.get(member, {}).items()
-            }
-            literal_loads = {
-                address: target
-                for member in owner_components[identity]
-                for address, target in literal_loads_by_identity.get(
-                    member, {}
-                ).items()
-            }
-            literal_data_refs = {
-                address: targets
-                for member in owner_components[identity]
-                for address, targets in literal_data_refs_by_identity.get(
-                    member, {}
-                ).items()
-            }
-        if not rows:
-            continue
+    Target = tuple[str, int]
+    FlowState = tuple[dict[str, Target], dict[int, Target]]
 
-        island = island_by_identity.get(identity)
-        if owner is not None:
-            entry = owner.start
-            region_base = owner.start
-            region_display = owner.name
-        elif island is not None:
-            candidates = [address for address in rows if address >= island.code_start]
-            if not candidates:
-                continue
-            entry = min(candidates)
-            region_base = island.start
-            region_display = island.name
-        else:
-            continue
-        component = (
-            owner_components[identity]
-            if owner is not None else frozenset({identity})
+    def merge_state(old: FlowState | None, new: FlowState) -> tuple[FlowState, bool]:
+        if old is None:
+            return (dict(new[0]), dict(new[1])), True
+        registers = {
+            name: value for name, value in old[0].items()
+            if new[0].get(name) == value
+        }
+        slots = {
+            offset: value for offset, value in old[1].items()
+            if new[1].get(offset) == value
+        }
+        merged = (registers, slots)
+        return merged, merged != old
+
+    def execute_literal_state(raw_operation: str, state: FlowState) -> FlowState:
+        registers, slots = dict(state[0]), dict(state[1])
+        load = LITERAL_LOAD_RE.search(raw_operation)
+        if load is not None:
+            registers[f"r{load.group(1)}"] = (
+                load.group(3), int(load.group(2), 16)
+            )
+            return registers, slots
+        stack_store = STACK_STORE_RE.search(raw_operation)
+        if stack_store is not None:
+            offset = int(stack_store.group(2), 10)
+            target = registers.get(f"r{stack_store.group(1)}")
+            if target is None:
+                slots.pop(offset, None)
+            else:
+                slots[offset] = target
+            return registers, slots
+        stack_load = STACK_LOAD_RE.search(raw_operation)
+        if stack_load is not None:
+            destination = f"r{stack_load.group(2)}"
+            target = slots.get(int(stack_load.group(1), 10))
+            if target is None:
+                registers.pop(destination, None)
+            else:
+                registers[destination] = target
+            return registers, slots
+        if re.search(r"\bmov\.[bwl]\s+[^,]+,\s*@", raw_operation):
+            slots.clear()
+        destination = DESTINATION_RE.search(raw_operation)
+        if destination is not None:
+            register = f"r{destination.group(1)}"
+            registers.pop(register, None)
+            if register == "r15":
+                slots.clear()
+        return registers, slots
+
+    def after_call(state: FlowState) -> FlowState:
+        # The SH C ABI preserves r8-r14. A fixed r15-relative spill therefore
+        # remains valid across a call, while all caller-saved register facts
+        # are discarded.
+        return (
+            {
+                register: target for register, target in state[0].items()
+                if register.startswith("r") and int(register[1:]) >= 8
+            },
+            dict(state[1]),
         )
 
-        delayed_mnemonics = {
-            "rts", "rte", "jmp", "braf", "bra", "bt.s", "bf.s",
-            "bt/s", "bf/s", "bsr", "jsr", "bsrf",
-        }
-        delay_slots = {
-            address + 2
-            for address, (mnemonic, _operands) in rows.items()
-            if mnemonic in delayed_mnemonics
-        }
-        pending = deque([
-            *([entry] if entry in rows else []),
-            *sorted(decoded_seeds.intersection(rows) - delay_slots),
-        ])
-        visited: set[int] = set()
+    def target_is_code(address: int) -> bool:
+        target_owner = _owner_at(owners, address)
+        if target_owner is not None:
+            return not is_native_math_helper(target_owner.name)
+        return _island_at_code_address(islands, address) is not None
 
-        def structural_error(address: int, detail: str) -> None:
-            errors.append((
-                identity,
-                address,
-                "bounded code provenance has unresolved direct control flow: "
-                f"{region_display}+0x{address - region_base:x}: {detail}",
-            ))
+    propagated_seeds = set(exact_entry_seeds)
+    while True:
+        proven = set()
+        literal_pool_candidates = defaultdict(set)
+        positive_literal_pool_addresses = set()
+        unsafe_pool_components = set()
+        errors = []
+        discovered_seeds: set[int] = set()
+        proven_literal_targets: dict[int, Target] = {}
+        ambiguous_literal_targets: set[int] = set()
 
-        def schedule(source: int, address: int, edge: str) -> None:
-            if address not in rows:
-                structural_error(
-                    source,
-                    f"{edge} successor leaves bounded block at 0x{address:08x}",
-                )
-            elif address not in visited:
-                pending.append(address)
-
-        def delay_slot(address: int) -> None:
-            slot = address + 2
-            if slot not in rows:
-                structural_error(
-                    address,
-                    f"delay slot leaves bounded block at 0x{slot:08x}",
-                )
+        for identity, identity_rows in rows_by_identity.items():
+            owner = owner_by_identity.get(identity)
+            if owner is None:
+                rows = identity_rows
+                raw_operations = raw_operations_by_identity[identity]
+                literal_data_refs = literal_data_refs_by_identity[identity]
             else:
-                proven.add(slot)
-
-        while pending:
-            address = pending.popleft()
-            if address in visited or address not in rows:
-                continue
-            visited.add(address)
-            proven.add(address)
-            mnemonic, operands = rows[address]
-            target = _target_from_text(operands)
-
-            if mnemonic in {"rts", "rte"}:
-                delay_slot(address)
-                continue
-            if mnemonic == "jmp":
-                delay_slot(address)
-                register = re.fullmatch(r"@(r(?:1[0-5]|\d))", operands)
-                literal = literal_loads.get(address - 2)
-                if address - 2 not in visited \
-                        or literal is None or register is None \
-                        or literal[0] != register.group(1):
-                    # Keep an unresolved indirect tail terminal here.  The
-                    # code-only analyzer will retain it for the indirect-edge
-                    # audit, and no trailing bytes are classified as a pool.
-                    unsafe_pool_components.add(component)
-                else:
-                    schedule(
-                        address, literal[1],
-                        "literal-resolved indirect tail",
-                    )
-                continue
-            if mnemonic == "braf":
-                delay_slot(address)
-                unsafe_pool_components.add(component)
-                continue
-            if mnemonic == "bra":
-                delay_slot(address)
-                if target is None:
-                    structural_error(address, "unknown bra target")
-                else:
-                    schedule(address, target, "bra")
-                continue
-            if mnemonic in {"bt", "bf"}:
-                if target is None:
-                    structural_error(address, "unknown conditional branch target")
-                else:
-                    schedule(address, target, "conditional branch")
-                schedule(address, address + 2, "fallthrough")
-                continue
-            if mnemonic in {"bt.s", "bf.s", "bt/s", "bf/s"}:
-                delay_slot(address)
-                if target is None:
-                    structural_error(address, "unknown conditional branch target")
-                else:
-                    schedule(address, target, "conditional branch")
-                schedule(address, address + 4, "fallthrough")
-                continue
-            if mnemonic == "bsr":
-                delay_slot(address)
-                if target in rows:
-                    schedule(address, target, "internal bsr")
-                schedule(address, address + 4, "fallthrough")
-                continue
-            if mnemonic in {"jsr", "bsrf"}:
-                delay_slot(address)
-                if address not in resolved_indirect_addresses:
-                    unsafe_pool_components.add(component)
-                schedule(address, address + 4, "fallthrough")
-                continue
-            schedule(address, address + 2, "fallthrough")
-
-        # A PC-relative load from reached code is positive ISA-level evidence
-        # that its referenced halfwords are data, even when another reachable
-        # path contains an unresolved computed transfer.
-        for source, targets in literal_data_refs.items():
-            if source in proven:
-                positive_literal_pool_addresses.update(
-                    target for target in targets if target in rows
-                )
-
-        # Inline pools are only trusted as data in an unreachable *trailing*
-        # suffix after a reached, direct no-fallthrough transfer.  Any DWARF
-        # or direct-CFG entry would have visited the row.  An unresolved
-        # indirect tail is not a qualifying terminal, so it cannot turn code
-        # into ignored data.
-        for terminal in visited:
-            mnemonic, operands = rows[terminal]
-            if mnemonic not in {"bra", "rts", "rte"}:
-                continue
-            tail_start = terminal + 4
-            target = _target_from_text(operands) if mnemonic == "bra" else None
-            if target is not None and target > tail_start:
-                # GCC may put a pool in a direct-BRA gap before the target.
-                suffix = {
-                    address for address in rows
-                    if tail_start <= address < target
+                rows = {
+                    address: row
+                    for member in owner_components[identity]
+                    for address, row in rows_by_identity.get(member, {}).items()
                 }
-            elif target is None or target <= terminal:
-                suffix = {address for address in rows if address >= tail_start}
+                raw_operations = {
+                    address: operation
+                    for member in owner_components[identity]
+                    for address, operation in raw_operations_by_identity.get(
+                        member, {}
+                    ).items()
+                }
+                literal_data_refs = {
+                    address: targets
+                    for member in owner_components[identity]
+                    for address, targets in literal_data_refs_by_identity.get(
+                        member, {}
+                    ).items()
+                }
+            if not rows:
+                continue
+
+            island = island_by_identity.get(identity)
+            if owner is not None:
+                entry = owner.start
+                region_base = owner.start
+                region_display = owner.name
+            elif island is not None:
+                candidates = [
+                    address for address in rows if address >= island.code_start
+                ]
+                if not candidates:
+                    continue
+                entry = min(candidates)
+                region_base = island.start
+                region_display = island.name
             else:
-                suffix = set()
-            if suffix and not suffix.intersection(visited):
-                literal_pool_candidates[component].update(suffix)
+                continue
+            component = (
+                owner_components[identity]
+                if owner is not None else frozenset({identity})
+            )
+            delayed_mnemonics = {
+                "rts", "rte", "jmp", "braf", "bra", "bt.s", "bf.s",
+                "bt/s", "bf/s", "bsr", "jsr", "bsrf",
+            }
+            delay_slots = {
+                address + 2
+                for address, (mnemonic, _operands) in rows.items()
+                if mnemonic in delayed_mnemonics
+            }
+            seed_addresses = {
+                *([entry] if entry in rows else []),
+                *(propagated_seeds.intersection(rows) - delay_slots),
+            }
+            fallback_decoded_seeds = (
+                decoded_seeds.intersection(rows) - delay_slots
+            )
+            states: dict[int, FlowState] = {}
+            pending: deque[int] = deque()
+            visited: set[int] = set()
+            error_keys: set[tuple[int, str]] = set()
+
+            def structural_error(address: int, detail: str) -> None:
+                key = (address, detail)
+                if key in error_keys:
+                    return
+                error_keys.add(key)
+                errors.append((
+                    identity,
+                    address,
+                    "bounded code provenance has unresolved direct control flow: "
+                    f"{region_display}+0x{address - region_base:x}: {detail}",
+                ))
+
+            def schedule(
+                source: int, address: int, edge: str, state: FlowState,
+            ) -> None:
+                if address not in rows:
+                    structural_error(
+                        source,
+                        f"{edge} successor leaves bounded block at "
+                        f"0x{address:08x}",
+                    )
+                    return
+                merged, changed = merge_state(states.get(address), state)
+                if changed:
+                    states[address] = merged
+                    pending.append(address)
+
+            for seed in sorted(seed_addresses):
+                merged, changed = merge_state(states.get(seed), ({}, {}))
+                if changed:
+                    states[seed] = merged
+                    pending.append(seed)
+
+            decoded_fallbacks_added = False
+            while True:
+                if not pending:
+                    if decoded_fallbacks_added:
+                        break
+                    decoded_fallbacks_added = True
+                    for seed in sorted(fallback_decoded_seeds - visited):
+                        merged, changed = merge_state(
+                            states.get(seed), ({}, {})
+                        )
+                        if changed:
+                            states[seed] = merged
+                            pending.append(seed)
+                    if not pending:
+                        break
+                address = pending.popleft()
+                state = states[address]
+                visited.add(address)
+                proven.add(address)
+                mnemonic, operands = rows[address]
+                target = _target_from_text(operands)
+                operation_state = execute_literal_state(
+                    raw_operations[address], state
+                )
+
+                if mnemonic in delayed_mnemonics:
+                    slot = address + 2
+                    if slot not in rows:
+                        structural_error(
+                            address,
+                            f"delay slot leaves bounded block at 0x{slot:08x}",
+                        )
+                        continue
+                    proven.add(slot)
+                    slot_state = execute_literal_state(
+                        raw_operations[slot], operation_state
+                    )
+                    states[slot] = merge_state(states.get(slot), operation_state)[0]
+                    if mnemonic in {"rts", "rte", "jmp", "braf"}:
+                        continue
+                    if mnemonic == "bra":
+                        if target is None:
+                            structural_error(address, "unknown bra target")
+                        else:
+                            schedule(address, target, "bra", slot_state)
+                        continue
+                    if mnemonic in {"bt.s", "bf.s", "bt/s", "bf/s"}:
+                        if target is None:
+                            structural_error(
+                                address, "unknown conditional branch target"
+                            )
+                        else:
+                            schedule(
+                                address, target, "conditional branch", slot_state
+                            )
+                        schedule(
+                            address, address + 4, "fallthrough", slot_state
+                        )
+                        continue
+                    if mnemonic == "bsr":
+                        if target is not None and target_is_code(target):
+                            discovered_seeds.add(target)
+                        schedule(
+                            address, address + 4, "fallthrough",
+                            after_call(slot_state),
+                        )
+                        continue
+                    if mnemonic in {"jsr", "bsrf"}:
+                        schedule(
+                            address, address + 4, "fallthrough",
+                            after_call(slot_state),
+                        )
+                        continue
+
+                if mnemonic in {"bt", "bf"}:
+                    if target is None:
+                        structural_error(
+                            address, "unknown conditional branch target"
+                        )
+                    else:
+                        schedule(
+                            address, target, "conditional branch", operation_state
+                        )
+                    schedule(
+                        address, address + 2, "fallthrough", operation_state
+                    )
+                    continue
+                schedule(address, address + 2, "fallthrough", operation_state)
+
+            region_literal_targets: dict[int, Target] = {}
+            for address in sorted(visited):
+                mnemonic, operands = rows[address]
+                if mnemonic not in {"jmp", "jsr"}:
+                    continue
+                register = re.fullmatch(r"@(r(?:1[0-5]|\d))", operands)
+                target = (
+                    None if register is None
+                    else states[address][0].get(register.group(1))
+                )
+                if target is None:
+                    unsafe_pool_components.add(component)
+                    continue
+                region_literal_targets[address] = target
+                if target_is_code(target[1]):
+                    discovered_seeds.add(target[1])
+
+            if any(
+                rows[address][0] in {"braf", "bsrf"}
+                for address in visited
+            ):
+                unsafe_pool_components.add(component)
+
+            for address, target in region_literal_targets.items():
+                previous = proven_literal_targets.get(address)
+                if previous is not None and previous != target:
+                    ambiguous_literal_targets.add(address)
+                else:
+                    proven_literal_targets[address] = target
+
+            # A PC-relative load from reached code is positive ISA-level
+            # evidence that its referenced halfwords are data.
+            for source, targets in literal_data_refs.items():
+                if source in proven:
+                    positive_literal_pool_addresses.update(
+                        target for target in targets if target in rows
+                    )
+
+            for terminal in visited:
+                mnemonic, operands = rows[terminal]
+                if mnemonic not in {"bra", "rts", "rte"}:
+                    continue
+                tail_start = terminal + 4
+                target = (
+                    _target_from_text(operands) if mnemonic == "bra" else None
+                )
+                if target is not None and target > tail_start:
+                    suffix = {
+                        address for address in rows
+                        if tail_start <= address < target
+                    }
+                elif target is None or target <= terminal:
+                    suffix = {
+                        address for address in rows if address >= tail_start
+                    }
+                else:
+                    suffix = set()
+                if suffix and not suffix.intersection(visited):
+                    literal_pool_candidates[component].update(suffix)
+
+        for address in ambiguous_literal_targets:
+            proven_literal_targets.pop(address, None)
+        new_seeds = discovered_seeds - propagated_seeds
+        if not new_seeds:
+            break
+        propagated_seeds.update(new_seeds)
 
     literal_pool_addresses = frozenset(
         positive_literal_pool_addresses.union(
@@ -5197,7 +5363,10 @@ def _bounded_control_flow_sources(
             for address in candidates
         )
     )
-    return frozenset(proven), literal_pool_addresses, errors
+    return (
+        frozenset(proven), literal_pool_addresses, errors,
+        proven_literal_targets,
+    )
 
 
 def _bounded_island_origins(
@@ -5281,36 +5450,12 @@ def prepare_route_bounded_code_only(
             continue
         for name in component:
             graph.setdefault(name, set()).update(component - {name})
-    proven_source_addresses, _unused_pool_addresses, _preflight_errors = \
-        _bounded_control_flow_sources(
-        blocks,
-        owner_list,
-        island_list,
-        owner_components,
-        decoded_text,
-        owner_address_map,
-    )
-    # Resolve proven literal-loaded calls before classifying any unvisited
-    # suffix as data.  This preflight deliberately tolerates every unproven
-    # row; the second scan below remains the fail-closed verdict scan.
-    all_instruction_addresses = frozenset(
-        int(match.group(1), 16)
-        for line in disassembly.splitlines()
-        if (match := INSTRUCTION_RE.match(line)) is not None
-    )
-    preflight_calls = scan_direct_calls(
-        disassembly,
-        owner_list,
-        island_list,
+    (
         proven_source_addresses,
-        [],
-        qualify_owner_identities=True,
-        known_literal_pool_addresses=(
-            all_instruction_addresses - proven_source_addresses
-        ),
-    )
-    resolved_indirect_addresses = frozenset(call.address for call in preflight_calls)
-    proven_source_addresses, literal_pool_addresses, deferred_errors = \
+        literal_pool_addresses,
+        deferred_errors,
+        proven_literal_targets,
+    ) = \
         _bounded_control_flow_sources(
         blocks,
         owner_list,
@@ -5318,7 +5463,6 @@ def prepare_route_bounded_code_only(
         owner_components,
         decoded_text,
         owner_address_map,
-        resolved_indirect_addresses,
     )
     # Closure is not known until after this text scan. Preserve potential
     # structural and executable-call failures by caller, then enforce them
@@ -5331,12 +5475,15 @@ def prepare_route_bounded_code_only(
         deferred_errors,
         qualify_owner_identities=True,
         known_literal_pool_addresses=literal_pool_addresses,
+        proven_literal_targets=proven_literal_targets,
     ):
         target_owner = owner_by_identity.get(call.helper)
         target_display = (
             target_owner.name if target_owner is not None else call.helper
         )
         if is_native_math_helper(target_display):
+            continue
+        if call.helper == call.caller:
             continue
         graph.setdefault(call.caller, set()).add(call.helper)
 
