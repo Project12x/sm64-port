@@ -434,6 +434,10 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t dma_wait_ticks_accum;
     uint32_t vdp1_wait_ticks_last;
     uint32_t vdp1_wait_ticks_accum;
+    /* Task 1 overlapped-render checkpoint: copied from the source runtime
+     * after each authoritative tick. Appended to preserve capture offsets. */
+    uint32_t scene_graph_walks;
+    uint32_t scene_graph_walks_suppressed;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

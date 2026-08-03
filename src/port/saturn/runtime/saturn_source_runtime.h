@@ -40,6 +40,10 @@ typedef struct sm64_saturn_source_runtime_state {
     int8_t last_applied_stick_y;
     bool input_replay_active;
     bool input_replay_complete;
+    /* Appended telemetry: a normal source walk versus an IR-owned frame
+     * where source scene construction was intentionally bypassed. */
+    uint32_t scene_graph_walks;
+    uint32_t scene_graph_walks_suppressed;
 } sm64_saturn_source_runtime_state_t;
 
 void sm64_saturn_source_runtime_configure(
@@ -59,6 +63,9 @@ void sm64_saturn_source_runtime_wait_vblank(void);
  * tick, VBlank wait, and global-timer increment still run unchanged. */
 void sm64_saturn_source_runtime_set_display_suppressed(bool suppressed);
 bool sm64_saturn_source_runtime_display_suppressed(void);
+void sm64_saturn_source_runtime_set_scene_graph_suppressed(bool suppressed);
+bool sm64_saturn_source_runtime_scene_graph_suppressed(void);
+void sm64_saturn_source_runtime_note_scene_graph_walk(bool suppressed);
 bool sm64_saturn_source_runtime_preflight_task(void);
 const sm64_saturn_source_runtime_state_t *
 sm64_saturn_source_runtime_state(void);

@@ -39,6 +39,7 @@ static void *sTaskSubmitContext;
 static sm64_saturn_source_runtime_state_t sState;
 static sm64_saturn_input_replay_t sInputReplay;
 static bool sDisplaySuppressed;
+static bool sSceneGraphSuppressed;
 
 /* Matches the original public game/main.h boundary. This target owns the
  * implementation, but the startup preflight invokes it before its definition
@@ -148,6 +149,21 @@ void sm64_saturn_source_runtime_set_display_suppressed(bool suppressed) {
 
 bool sm64_saturn_source_runtime_display_suppressed(void) {
     return sDisplaySuppressed;
+}
+
+void sm64_saturn_source_runtime_set_scene_graph_suppressed(bool suppressed) {
+    sSceneGraphSuppressed = suppressed;
+}
+
+bool sm64_saturn_source_runtime_scene_graph_suppressed(void) {
+    return sSceneGraphSuppressed;
+}
+
+void sm64_saturn_source_runtime_note_scene_graph_walk(bool suppressed) {
+    if (suppressed)
+        sState.scene_graph_walks_suppressed++;
+    else
+        sState.scene_graph_walks++;
 }
 
 bool sm64_saturn_source_runtime_preflight_task(void) {

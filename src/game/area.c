@@ -22,6 +22,9 @@
 #include "save_file.h"
 #include "level_table.h"
 #include "dialog_ids.h"
+#if defined(TARGET_SATURN)
+#include "port/saturn/runtime/saturn_source_runtime.h"
+#endif
 
 struct SpawnInfo gPlayerSpawnInfos[1];
 struct GraphNode *D_8033A160[0x100];
@@ -366,32 +369,58 @@ void play_transition_after_delay(s16 transType, s16 time, u8 red, u8 green, u8 b
 }
 
 void render_game(void) {
+    /* The Saturn demo renderer reads the authoritative source state after
+     * this function returns.  It owns geometry and display-list construction
+     * for that tick, but stateful menu/cutscene/transition work below remains
+     * source-owned. */
+#if defined(TARGET_SATURN)
+    const bool scene_graph_suppressed =
+        sm64_saturn_source_runtime_scene_graph_suppressed();
+#else
+    const bool scene_graph_suppressed = false;
+#endif
+
     if (gCurrentArea != NULL && !gWarpTransition.pauseRendering) {
-        geo_process_root(gCurrentArea->unk04, D_8032CE74, D_8032CE78, gFBSetColor);
+#if defined(TARGET_SATURN)
+        sm64_saturn_source_runtime_note_scene_graph_walk(
+            scene_graph_suppressed);
+#endif
+        if (!scene_graph_suppressed) {
+            geo_process_root(gCurrentArea->unk04, D_8032CE74, D_8032CE78,
+                             gFBSetColor);
 
-        gSPViewport(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(&D_8032CF00));
+            gSPViewport(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(&D_8032CF00));
 
-        gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0, BORDER_HEIGHT, SCREEN_WIDTH,
-                      SCREEN_HEIGHT - BORDER_HEIGHT);
-        render_hud();
+            gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0,
+                          BORDER_HEIGHT, SCREEN_WIDTH,
+                          SCREEN_HEIGHT - BORDER_HEIGHT);
+            render_hud();
 
-        gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        render_text_labels();
+            gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0, 0,
+                          SCREEN_WIDTH, SCREEN_HEIGHT);
+            render_text_labels();
+        }
         do_cutscene_handler();
         print_displaying_credits_entry();
 
-        gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0, BORDER_HEIGHT, SCREEN_WIDTH,
-                      SCREEN_HEIGHT - BORDER_HEIGHT);
+        if (!scene_graph_suppressed) {
+            gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0,
+                          BORDER_HEIGHT, SCREEN_WIDTH,
+                          SCREEN_HEIGHT - BORDER_HEIGHT);
+        }
         gMenuOptSelectIndex = render_menus_and_dialogs();
         if (gMenuOptSelectIndex != MENU_OPT_NONE) {
             gSaveOptSelectIndex = gMenuOptSelectIndex;
         }
 
-        if (D_8032CE78 != NULL) {
-            make_viewport_clip_rect(D_8032CE78);
-        } else {
-            gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0, BORDER_HEIGHT, SCREEN_WIDTH,
-                          SCREEN_HEIGHT - BORDER_HEIGHT);
+        if (!scene_graph_suppressed) {
+            if (D_8032CE78 != NULL) {
+                make_viewport_clip_rect(D_8032CE78);
+            } else {
+                gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE, 0,
+                              BORDER_HEIGHT, SCREEN_WIDTH,
+                              SCREEN_HEIGHT - BORDER_HEIGHT);
+            }
         }
 
         if (gWarpTransition.isActive) {
@@ -409,7 +438,7 @@ void render_game(void) {
                 gWarpTransDelay--;
             }
         }
-    } else {
+    } else if (!scene_graph_suppressed) {
         render_text_labels();
         if (D_8032CE78 != NULL) {
             clear_viewport(D_8032CE78, gWarpTransFBSetColor);

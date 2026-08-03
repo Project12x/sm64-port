@@ -79,7 +79,19 @@ static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
 static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
+#if SATURN_DEMO_PATH
+    /* The IR demo consumes the source-owned simulation state, so no original
+     * Fast3D scene/display construction is needed during this tick.  Keep
+     * the two policy switches paired in this helper so every return path
+     * restores the ordinary source behavior. */
+    sm64_saturn_source_runtime_set_display_suppressed(true);
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(true);
+#endif
     game_loop_one_iteration();
+#if SATURN_DEMO_PATH
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(false);
+    sm64_saturn_source_runtime_set_display_suppressed(false);
+#endif
 #if SATURN_DEMO_PATH
     /* This is deliberately inside the authoritative-tick helper, not after
      * the catch-up batch: an exit plus same-ID re-entry can otherwise be
@@ -96,6 +108,10 @@ static void sourceboot_run_source_tick(void)
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
     sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+    sourceboot_fast3d.profile.scene_graph_walks =
+        sm64_saturn_source_runtime_state()->scene_graph_walks;
+    sourceboot_fast3d.profile.scene_graph_walks_suppressed =
+        sm64_saturn_source_runtime_state()->scene_graph_walks_suppressed;
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     if (sm64_saturn_source_runtime_state()->input_replay_complete) {
         sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);
@@ -703,9 +719,7 @@ int main(void) {
              sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
              catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
             sim_vblank_credit -= SOURCEBOOT_SIM_VBLANK_DIVISOR;
-            sm64_saturn_source_runtime_set_display_suppressed(true);
             sourceboot_run_source_tick();
-            sm64_saturn_source_runtime_set_display_suppressed(false);
             simulation_ran = true;
             scheduler_now = sourceboot_vblank_out_count;
             sim_vblank_credit += scheduler_now - scheduler_vblank_clock;

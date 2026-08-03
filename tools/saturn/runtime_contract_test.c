@@ -439,6 +439,13 @@ static void test_dual_pipeline_profile_counters_append_in_order(void)
     assert(offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_accum) ==
            offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_last) +
                sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp1_wait_ticks_last));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, scene_graph_walks) ==
+           offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_accum) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp1_wait_ticks_accum));
+    assert(offsetof(sm64_saturn_fast3d_profile_t,
+                    scene_graph_walks_suppressed) ==
+           offsetof(sm64_saturn_fast3d_profile_t, scene_graph_walks) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->scene_graph_walks));
 }
 
 typedef struct runtime_contract_vdp2_backend {
@@ -637,6 +644,29 @@ static void test_source_runtime_records_the_applied_camera_replay_pad(void)
     assert(state->last_applied_stick_x == 0);
     assert(state->last_applied_stick_y == 0);
     gMarioState = NULL;
+}
+
+static void test_source_scene_graph_suppression_is_isolated_and_counted(void)
+{
+    const sm64_saturn_source_runtime_state_t *state =
+        sm64_saturn_source_runtime_state();
+    const uint32_t input_polls_before = state->input_polls;
+    const uint32_t walks_before = state->scene_graph_walks;
+    const uint32_t suppressed_before = state->scene_graph_walks_suppressed;
+
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(true);
+    assert(sm64_saturn_source_runtime_scene_graph_suppressed());
+    sm64_saturn_source_runtime_note_scene_graph_walk(true);
+    assert(state->scene_graph_walks == walks_before);
+    assert(state->scene_graph_walks_suppressed == suppressed_before + 1U);
+    assert(state->input_polls == input_polls_before);
+
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(false);
+    assert(!sm64_saturn_source_runtime_scene_graph_suppressed());
+    sm64_saturn_source_runtime_note_scene_graph_walk(false);
+    assert(state->scene_graph_walks == walks_before + 1U);
+    assert(state->scene_graph_walks_suppressed == suppressed_before + 1U);
+    assert(state->input_polls == input_polls_before);
 }
 
 static void test_bounded_terrain_result_spans(void)
@@ -4051,6 +4081,7 @@ static void test_terrain_depth_bins_key_and_failures(void)
 #if defined(SM64_SATURN_RUNTIME_CONTRACT_ONLY)
 int main(void)
 {
+    test_source_scene_graph_suppression_is_isolated_and_counted();
     test_source_runtime_records_the_applied_camera_replay_pad();
     test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud();
     return 0;
@@ -4059,6 +4090,7 @@ int main(void)
 int main(void)
 {
     quad_build_lists();
+    test_source_scene_graph_suppression_is_isolated_and_counted();
     test_dual_pipeline_profile_counters_append_in_order();
     test_vdp2_frame_coalesces_sky_hud_and_layers();
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
