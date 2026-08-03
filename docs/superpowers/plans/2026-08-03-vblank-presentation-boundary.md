@@ -87,7 +87,10 @@ References inspected before design:
 - [ ] **Step 7: Build exactly one serial experimental CUE and manually test in
   Ymir using the project profile/32-Mbit DRAM cart.** Record VDP1/VDP2 counters,
   controls, BOB visibility, and qualitative speed. Do not treat emulator timing
-  as retail-hardware proof.
+  as retail-hardware proof. Serial build PASS on 2026-08-03 (294.1 seconds);
+  Ymir was launched from a short staged CUE path with the project profile and
+  manual owner observation is active. This step remains unchecked until the
+  owner result is recorded.
 
 ## Completion criteria
 

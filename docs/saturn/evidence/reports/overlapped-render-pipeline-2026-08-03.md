@@ -70,6 +70,14 @@ duplicate-helper mutant, documents the intentional displayed-bank lag, and
 removes the unused profile grouping. Scoped quality rereview was GO with no
 new Critical or Important findings. The serial target/manual gate remains open.
 
+The serial target build for this source-complete range passed on 2026-08-03 in
+294.1 seconds through the audited wrapper. Its output is
+`e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4`.
+The CUE/ISO were staged to the short temporary `presentation-boundary` path to
+work around Ymir's long-path media-resolution failure, then Ymir was launched
+with `.ymir-profile` (32-Mbit DRAM). Manual observation is pending; no speed,
+controls, or displayed-frame claim is made yet.
+
 ## Task 1D — sealed geo-walk upper-bound diagnostic
 
 ### Current verdict and scope
