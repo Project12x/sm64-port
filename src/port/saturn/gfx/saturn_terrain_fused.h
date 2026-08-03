@@ -7,20 +7,11 @@
 #include <string.h>
 
 #include "saturn_terrain_command_template.h"
+#include "saturn_terrain_depth_bins.h"
 
 _Static_assert(SM64_SATURN_TERRAIN_COMMAND_BYTES ==
                    SM64_SATURN_VDP1_COMMAND_BYTES,
                "private terrain image must match one VDP1 command");
-
-typedef struct sm64_saturn_terrain_emit_ref {
-    const sm64_saturn_terrain_result_t *record;
-    uint32_t sort_key;
-} sm64_saturn_terrain_emit_ref_t;
-
-#if UINTPTR_MAX == UINT32_MAX
-_Static_assert(sizeof(sm64_saturn_terrain_emit_ref_t) == 8U,
-               "SH-2 terrain merge reference must remain eight bytes");
-#endif
 
 static inline const uint8_t *sm64_saturn_terrain_emit_ref_command(
     const sm64_saturn_terrain_result_spans_t *spans,
@@ -102,7 +93,10 @@ static inline bool sm64_saturn_terrain_result_publish(
         resolved, vertices);
 }
 
-static inline size_t sm64_saturn_terrain_merge_visible(
+/* Master-only join of the two immutable worker spans.  The only ordering
+ * algorithm reachable from the target is the fixed 64-bin radix stream;
+ * the historical comparison merge is compiled only by the host fixture. */
+static inline size_t sm64_saturn_terrain_depth_bins_visible(
     const sm64_saturn_terrain_result_spans_t *spans,
     uint32_t expected_sequence,
     sm64_saturn_terrain_emit_ref_t *refs,
@@ -133,7 +127,6 @@ static inline size_t sm64_saturn_terrain_merge_visible(
         sm64_saturn_terrain_result_uncached_commands(spans->slave.commands)};
     const size_t lane_counts[2] = {master_count, slave_count};
 
-    size_t count = 0U;
     for (uint8_t lane = 0U; lane < 2U; lane++) {
         if ((lane_counts[lane] != 0U) &&
             (lane_records[lane] == NULL || lane_commands[lane] == NULL))
@@ -143,40 +136,10 @@ static inline size_t sm64_saturn_terrain_merge_visible(
             if (!sm64_saturn_terrain_result_validate(record) ||
                 record->command_index >= lane_counts[lane])
                 return SIZE_MAX;
-            const uint32_t depth = record->painter_key > UINT16_MAX
-                ? UINT16_MAX : record->painter_key;
-            refs[count++] = (sm64_saturn_terrain_emit_ref_t){
-                .record = record,
-                .sort_key = (depth << 16) |
-                    (uint16_t)(UINT16_MAX - record->primitive_id)};
         }
     }
-
-    sm64_saturn_terrain_emit_ref_t *src = refs;
-    sm64_saturn_terrain_emit_ref_t *dst = scratch;
-    for (size_t width = 1U; width < count; width <<= 1U) {
-        for (size_t start = 0U; start < count; start += width << 1U) {
-            const size_t mid = start + width < count ? start + width : count;
-            const size_t end = mid + width < count ? mid + width : count;
-            size_t left = start;
-            size_t right = mid;
-            for (size_t out = start; out < end; out++) {
-                bool take_right = left >= mid;
-                if (right < end && !take_right &&
-                    src[right].sort_key > src[left].sort_key)
-                    take_right = true;
-                dst[out] = take_right ? src[right++] : src[left++];
-            }
-        }
-        sm64_saturn_terrain_emit_ref_t *swap = src;
-        src = dst;
-        dst = swap;
-        if (width > SIZE_MAX / 2U)
-            break;
-    }
-    if (src != refs)
-        memcpy(refs, src, sizeof(refs[0]) * count);
-    return count;
+    return sm64_saturn_terrain_depth_bins_build_streams(
+        lane_records, lane_counts, 2U, refs, scratch, capacity);
 }
 
 #endif

@@ -1283,11 +1283,13 @@ static bool demo_merge_terrain_results(
      * not a complete painter order. Z-Treme retains per-polygon SORT_MAX/MIN
      * depth policy, and SlaveDriver sorts visible leaves by distance and cut
      * planes before dispatch (WALLS.C:1986-2052, 2180-2232). Keep spatial
-     * admission from the bake, but restore a stable far-to-near result sort.
+     * admission from the bake, but reduce the final order to a stable
+     * far-to-near fixed-bin stream.  The master alone performs this join;
+     * both workers published only immutable, disjoint result ranges.
      *
      * The portable merger validates both lane publication sequences before it
      * exposes any record or private command image to the master. */
-    const size_t count = sm64_saturn_terrain_merge_visible(
+    const size_t count = sm64_saturn_terrain_depth_bins_visible(
         spans, s_terrain_publish_sequence, s_terrain_emit_refs,
         s_terrain_emit_scratch, DEMO_TERRAIN_RESULT_CAPACITY);
     if (count == SIZE_MAX) {
