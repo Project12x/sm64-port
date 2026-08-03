@@ -40,8 +40,34 @@ def source_failures(source: str, header: str) -> list[str]:
         failures.append("legacy cached transform ready flag remains")
     if "sm64_saturn_dual_frame_publish(" not in source:
         failures.append("transform producer does not publish an uncached frame record")
-    if source.count("sm64_saturn_dual_frame_read_range(") < 3:
-        failures.append("view/projected/valid peer reads are not all alias-selected")
+    required_consumer_helpers = (
+        r"demo_position_valid_read\(lane, index\)",
+        r"demo_view_read\(lane, primitive->indices\[corner\]\)",
+        r"demo_projected_read\(lane, primitive->indices\[corner\]\)",
+        r"demo_projected_read\(\s*lane,\s*primitive->indices\[source_corner\]\)",
+    )
+    for helper in required_consumer_helpers:
+        if re.search(helper, source) is None:
+            failures.append(f"consumer bypasses owner-sensitive alias: {helper}")
+    if source.count("sm64_saturn_dual_frame_read_range(") < 4:
+        failures.append("owner-sensitive helpers do not select all peer aliases")
+    permitted_direct_writes = {
+        "s_view": "&s_view[position]",
+        "s_projected": "&s_projected[position]",
+        "s_position_valid": "s_position_valid[position] =",
+    }
+    for line_number, line in enumerate(source.splitlines(), start=1):
+        for bank, permitted_write in permitted_direct_writes.items():
+            if f"{bank}[" not in line:
+                continue
+            # The multi-line declarations are not consumer accesses.  The
+            # only accepted indexed runtime references are transform writes;
+            # all renderer consumers must use the named helpers above.
+            if "static " in line or permitted_write in line:
+                continue
+            failures.append(
+                f"line {line_number}: direct {bank} consumer read bypasses "
+                "the owner-sensitive alias")
     if "cpu_cache_purge(" in source:
         failures.append("whole-cache purge remains in accepted frame source")
     if "LWRAM_UNCACHED(physical)" not in header:
@@ -90,6 +116,10 @@ def self_test(source_path: Path, header_path: Path) -> int:
          "cached completion"),
         (source.replace("sm64_saturn_dual_frame_read_range(", "/* absent */("),
          header, "missing peer alias"),
+        (source.replace(
+            "demo_view_read(lane, primitive->indices[corner])->z",
+            "s_view[primitive->indices[corner]].z", 1), header,
+         "direct consumer bypass"),
         (source + "\nvoid rejected_path(void) { cpu_cache_purge(); }\n",
          header, "whole-cache purge"),
         (source, header.replace("bank->lane[lane].count = count;\n"
@@ -104,7 +134,7 @@ def self_test(source_path: Path, header_path: Path) -> int:
             print(f"dual-CPU coherency mutation unexpectedly passed: {name}",
                   file=sys.stderr)
             return 1
-    print("dual-CPU coherency mutation gate OK: four invalid handoffs rejected")
+    print("dual-CPU coherency mutation gate OK: five invalid handoffs rejected")
     return 0
 
 
