@@ -3660,6 +3660,14 @@ BSR_OPCODE_RE = re.compile(r"\bbsr\b")
 DESTINATION_RE = re.compile(r",r(\d+)\s*(?:!.*)?$")
 STACK_STORE_RE = re.compile(r"\bmov\.l\s+r(\d+),@\((\d+),r15\)")
 STACK_LOAD_RE = re.compile(r"\bmov\.l\s+@\((\d+),r15\),r(\d+)")
+AUTO_UPDATE_REGISTER_RE = re.compile(
+    r"@(?:-(r(?:1[0-5]|\d))|(r(?:1[0-5]|\d))\+)"
+)
+BOUNDED_SINGLE_REGISTER_WRITERS = frozenset({
+    "dt", "movt", "rotcl", "rotcr", "rotl", "rotr", "shal", "shar",
+    "shll", "shll2", "shll8", "shll16", "shlr", "shlr2", "shlr8",
+    "shlr16",
+})
 
 # Pinned digests deliberately make the route and helper ceilings append-only
 # contracts. Updating either requires an explicit v2 implementation change,
@@ -5059,6 +5067,21 @@ def _bounded_control_flow_sources(
             return registers, slots
         if re.search(r"\bmov\.[bwl]\s+[^,]+,\s*@", raw_operation):
             slots.clear()
+        operation = raw_operation.split("!", 1)[0].strip()
+        operation_parts = operation.split(None, 1)
+        mnemonic = operation_parts[0].lower() if operation_parts else ""
+        operands = operation_parts[1].strip() if len(operation_parts) > 1 else ""
+        for update in AUTO_UPDATE_REGISTER_RE.finditer(operands):
+            register = update.group(1) or update.group(2)
+            registers.pop(register, None)
+            if register == "r15":
+                slots.clear()
+        single_operand = re.fullmatch(r"(r(?:1[0-5]|\d))", operands)
+        if mnemonic in BOUNDED_SINGLE_REGISTER_WRITERS and single_operand:
+            register = single_operand.group(1)
+            registers.pop(register, None)
+            if register == "r15":
+                slots.clear()
         destination = DESTINATION_RE.search(raw_operation)
         if destination is not None:
             register = f"r{destination.group(1)}"

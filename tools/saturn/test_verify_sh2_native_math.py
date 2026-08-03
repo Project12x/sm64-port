@@ -5774,6 +5774,114 @@ fixture.c 3 0x06003002
             for call in analysis.calls
         ))
 
+    def test_cfg_stack_spill_is_invalid_after_r15_postincrement(self) -> None:
+        """A fixed-frame target cannot survive an SH auto-update of r15."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        edge = ("_route_root", "_declared_callback")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({edge}),
+            frozenset({edge}),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 06 bt 6001010 <_route_root+0x10>
+ 6001002: d1 04 mov.l 6001018 <_route_root+0x18>,r1 ! 06003000 <_declared_callback>
+ 6001004: 1f 12 mov.l r1,@(0,r15)
+ 6001006: 62 f6 mov.l @r15+,r2
+ 6001008: 61 f2 mov.l @(0,r15),r1
+ 600100a: 41 2b jmp @r1
+ 600100c: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+ 6001018: 06 00 .word 0x0600
+ 600101a: 30 00 .word 0x3000
+ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_literal_target_is_invalidated_by_register_mutation(self) -> None:
+        """Auto-update and one-operand writers kill a literal register fact."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        edge = ("_route_root", "_declared_callback")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({edge}),
+            frozenset({edge}),
+        )
+        for label, mutation in (
+            ("postincrement", " 6001004: 62 86 mov.l @r8+,r2\n"),
+            ("single_writer", " 6001004: 48 00 shll r8\n"),
+        ):
+            with self.subTest(label=label):
+                disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 06 bt 6001010 <_route_root+0x10>
+ 6001002: d8 04 mov.l 6001018 <_route_root+0x18>,r8 ! 06003000 <_declared_callback>
+""" + mutation + """ 6001006: 48 2b jmp @r8
+ 6001008: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+ 6001018: 06 00 .word 0x0600
+ 600101a: 30 00 .word 0x3000
+ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+                with self.assertRaisesRegex(
+                    ValueError, "no decoded code provenance"
+                ):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly,
+                        "fixture.c 1 0x06001000\n",
+                        owners,
+                        (oracle,),
+                    )
+
     def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (
             FunctionOwner(
