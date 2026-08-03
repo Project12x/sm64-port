@@ -44,7 +44,7 @@ and the evidence report before starting another task.
   presentation-boundary correction; D1 remains deliberately broken,
   compile-time-only, and never a default, replay baseline, or full-game evidence.
 - [ ] **Emergency A9.0 — one VBlank, one presentation generation:**
-  implementation ready for independent review in
+  source-complete; serial target/Ymir evidence pending in
   `docs/superpowers/plans/2026-08-03-vblank-presentation-boundary.md`. Ymir's
   VDP1 ≈60 / VDP2 ≈1–2 FPS counters indicate VDP1 submission is outrunning
   displayed-field completion. The focused mutation gate is green; the existing

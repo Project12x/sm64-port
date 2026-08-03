@@ -14,7 +14,7 @@ No target build, CUE, Ymir launch, or native-math census was performed. The A1
 performance path remains blocked and must not be promoted or used for the
 controller-owned manual checkpoint until the seam and tests below exist.
 
-## Emergency A9.0 Task 1 — implementation ready for independent review
+## Emergency A9.0 Task 1 — source-complete; serial target/Ymir pending
 
 The full sourceboot path now consumes elapsed VBlank credit once before any
 ticks, permits at most one normal and one recovery tick, and counts/drops only
@@ -62,8 +62,13 @@ Result: exit 1 after the three quad-map summaries. The wrapper passed an MSYS
 `PermissionError: [WinError 5]` before the contract executable compiled. This
 is the known unpassed wrapper-path gate, not a runtime-contract green result.
 
-No target build, CUE, or Ymir run occurred. Independent specification and
-quality reviews remain required before the serial target/manual gate.
+No target build, CUE, or Ymir run occurred. Independent specification review
+was GO. Initial quality review was NO-GO for one Important mutation gap: the
+focused gate did not reject two `sourceboot_present_generation()` calls in one
+fresh generation. `2de483d9` adds an exact-one source assertion and a failing
+duplicate-helper mutant, documents the intentional displayed-bank lag, and
+removes the unused profile grouping. Scoped quality rereview was GO with no
+new Critical or Important findings. The serial target/manual gate remains open.
 
 ## Task 1D — sealed geo-walk upper-bound diagnostic
 

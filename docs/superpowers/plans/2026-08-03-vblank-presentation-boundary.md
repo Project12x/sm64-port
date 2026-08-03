@@ -78,8 +78,12 @@ References inspected before design:
   known Windows-path failure before compilation and remains unpassed.
 - [x] **Step 5: Update all live records and commit the behavior with a same-
   commit changelog entry:** `perf(saturn): fence presentation to VBlank`.
-- [ ] **Step 6: Complete independent specification and quality reviews, resolve
-  every Important finding, and record the final verdicts.**
+- [x] **Step 6: Complete independent specification and quality reviews, resolve
+  every Important finding, and record the final verdicts.** Specification review
+  was GO. Initial quality review found I1 (the duplicate terminal-helper call
+  mutant was not rejected); fix `2de483d9` added the exact-one assertion and
+  mutant, addressed M1/M2, and scoped quality rereview was GO with no new
+  Critical or Important findings.
 - [ ] **Step 7: Build exactly one serial experimental CUE and manually test in
   Ymir using the project profile/32-Mbit DRAM cart.** Record VDP1/VDP2 counters,
   controls, BOB visibility, and qualitative speed. Do not treat emulator timing
@@ -103,8 +107,8 @@ geometry-free VDP2 frame using the same observed generation. The appended
 diagnostic profile fields expose the presentation generation and dropped
 credit count.
 
+Task 1 is **source-complete**; only Step 7 target/Ymir evidence remains open.
 Implementation evidence is recorded in
 `.superpowers/sdd/2026-08-03-vblank-presentation-boundary/task-1-report.md`.
-Independent specification and quality review, then the serial target/Ymir
-gate, remain unchecked. No GPL source was copied: SlaveDriver and Z-Treme were
+The serial target/Ymir gate remains unchecked. No GPL source was copied: SlaveDriver and Z-Treme were
 pattern-only/clean-room cadence references at their pinned revisions.
