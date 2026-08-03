@@ -19,6 +19,11 @@ bool sm64_saturn_terrain_template_build(
     out->texture_slot = primitive->texture_slot;
     out->shade_path = sm64_saturn_terrain_shade_path(
         primitive->flags, primitive->colors);
+    out->patch_mask = SM64_SATURN_TERRAIN_PATCH_END |
+        SM64_SATURN_TERRAIN_PATCH_LINK |
+        SM64_SATURN_TERRAIN_PATCH_XY |
+        (out->shade_path == SM64_SATURN_SHADE_GOURAUD
+            ? SM64_SATURN_TERRAIN_PATCH_GOURAUD : 0U);
     return true;
 }
 

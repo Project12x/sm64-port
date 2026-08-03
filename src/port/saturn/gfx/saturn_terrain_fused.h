@@ -57,14 +57,12 @@ static inline bool sm64_saturn_terrain_result_write(
         vertices == NULL || command_index >= arena->count ||
         corner_count < 3U || corner_count > 4U)
         return false;
-    bool patched = false;
-    if (resolved != NULL) {
-        patched = sm64_saturn_terrain_template_patch_resolved_record(
-            command, resolved, vertices, 0U, false, false, 0U);
-    } else {
-        memset(command, 0, SM64_SATURN_TERRAIN_COMMAND_BYTES);
-        memcpy(command + 12U, vertices, 8U * sizeof(int16_t));
-    }
+    /* The worker publishes only dynamic patch data.  Immutable VDP1 words
+     * remain in the load-resolved template and are copied by the master after
+     * the cross-CPU join; no worker may reconstruct material state. */
+    const bool patched = resolved != NULL;
+    memset(command, 0, SM64_SATURN_TERRAIN_COMMAND_BYTES);
+    memcpy(command + 12U, vertices, 8U * sizeof(int16_t));
     record->primitive_id = primitive_id;
     record->command_index = command_index;
     record->painter_key = painter_key;
