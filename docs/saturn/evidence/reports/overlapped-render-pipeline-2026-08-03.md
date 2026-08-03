@@ -44,6 +44,23 @@ The wrapper target still exits nonzero at its known MSYS/Windows executable
 handoff after compilation; the same emitted executable passes when invoked
 directly. This is recorded as a wrapper failure, not a green aggregate target.
 
+## Quality safety fix round 2/5 — documentation reconciliation
+
+The ignored SDD progress ledger and Task 1 report now match the tracked source
+of truth: Task 1 is **BLOCKED**, the Critical optimization finding remains
+unresolved, and no optimization CUE build or Ymir launch is authorized. They
+separately record `77ee306c` as **GO for fail-closed runtime safety**, not as an
+A1 optimization approval.
+
+The tracked plan now leaves the unsafe whole-walk suppression Step 5 unchecked
+and explicitly BLOCKED. Its CUE/Ymir step is marked NOT AUTHORIZED until the
+state-only seam and behavioral differential evidence exist. The plan summary,
+architecture decision ledger, evidence, and SDD records all retain the same
+safe-blocked status.
+
+This round changed documentation only. No code, test, target, CUE, or Ymir
+command was run. `git diff --check` is the sole round-2 verification gate.
+
 ## Exact geo-walk mutation inventory
 
 The audit began from the real `geo_process_root()` dispatch in

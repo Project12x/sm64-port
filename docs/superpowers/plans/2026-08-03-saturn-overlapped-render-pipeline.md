@@ -178,13 +178,19 @@ and the evidence report before starting another task.
   Append both counters at the end of runtime/profile structs and extend the
   existing profile decoder fixture for their exact offsets.
 
-- [x] **Step 5: Split render construction from render-time state updates**
+- [ ] **Step 5: Split render construction from render-time state updates — BLOCKED**
 
   In `render_game()`, evaluate `scene_graph_suppressed` once. Put
   `geo_process_root()`, viewport setup, HUD/text emission, and source-only
   scissor emission under `if (!scene_graph_suppressed)`. Keep the four named
   stateful calls and warp-transition completion/decrement logic active in both
   paths. Always clear `D_8032CE74` and `D_8032CE78` at function exit.
+
+  The implementation in `4a8fe1ce` is not accepted: `geo_process_root()` also
+  advances authoritative animation and stateful geo callbacks. Step 5 remains
+  unchecked until an audited state-only seam and the required behavioral
+  differential tests exist. Safety commit `77ee306c` prevents sourceboot from
+  activating this dormant guard.
 
 - [x] **Step 6: Keep scene-graph suppression fail closed in sourceboot**
 
@@ -234,7 +240,7 @@ and the evidence report before starting another task.
   A1 completion; it removes the unsafe production activation while retaining
   the dormant policy/counter ABI for the eventual tested seam.
 
-- [ ] **Step 10: Build and manually test the early CUE**
+- [ ] **Step 10: Build and manually test the early CUE — NOT AUTHORIZED**
 
   Build serially with the established `poly2/pipe3`, live-input,
   bootstrap-600, Q16-camera-3 role through the audited wrapper. Launch the
@@ -242,6 +248,10 @@ and the evidence report before starting another task.
   commit, whether controls work, whether BOB/Mario remain visible, and the
   owner's qualitative speed result. Do not run the strict native-math census
   for this experimental checkpoint.
+
+  This gate is prohibited while Step 5 and the Critical quality finding remain
+  blocked. The fail-closed safety change is a runtime-safety GO only; it is not
+  authorization to build or launch an A1 optimization CUE.
 
 ### Task 2: Add immutable snapshot banks with explicit generations
 
