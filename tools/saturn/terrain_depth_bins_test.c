@@ -22,8 +22,8 @@ static sm64_saturn_terrain_result_t record(uint32_t depth, uint16_t leaf,
     };
 }
 
-static void assert_same_stream(const sm64_saturn_terrain_result_t *records,
-                               size_t count)
+static void assert_matches_predecessor_when_keys_agree(
+    const sm64_saturn_terrain_result_t *records, size_t count)
 {
     sm64_saturn_terrain_emit_ref_t bins[TEST_CAPACITY];
     sm64_saturn_terrain_emit_ref_t scratch[TEST_CAPACITY];
@@ -31,13 +31,12 @@ static void assert_same_stream(const sm64_saturn_terrain_result_t *records,
     sm64_saturn_terrain_emit_ref_t reference_scratch[TEST_CAPACITY];
     const size_t actual = sm64_saturn_terrain_depth_bins_build(
         records, count, bins, scratch, TEST_CAPACITY);
-    const size_t expected = sm64_saturn_terrain_depth_bins_reference_merge(
+    const size_t expected = sm64_saturn_terrain_depth_bins_predecessor_merge(
         records, count, reference, reference_scratch, TEST_CAPACITY);
     assert(actual == count);
     assert(expected == count);
     for (size_t i = 0U; i < count; i++) {
         assert(bins[i].record == reference[i].record);
-        assert(bins[i].sort_key == reference[i].sort_key);
     }
 }
 
@@ -52,7 +51,7 @@ static void test_empty_stream(void)
 static void test_one_record(void)
 {
     const sm64_saturn_terrain_result_t records[] = {record(512U, 3U, 9U)};
-    assert_same_stream(records, 1U);
+    assert_matches_predecessor_when_keys_agree(records, 1U);
 }
 
 static void test_equal_keys_preserve_producer_order(void)
@@ -67,7 +66,7 @@ static void test_equal_keys_preserve_producer_order(void)
                                                 TEST_CAPACITY) == 3U);
     for (size_t i = 0U; i < 3U; i++)
         assert(refs[i].record == &records[i]);
-    assert_same_stream(records, 3U);
+    assert_matches_predecessor_when_keys_agree(records, 3U);
 }
 
 static void test_reverse_depth_is_far_to_near(void)
@@ -83,7 +82,7 @@ static void test_reverse_depth_is_far_to_near(void)
     assert(refs[0].record == &records[2]);
     assert(refs[1].record == &records[1]);
     assert(refs[2].record == &records[0]);
-    assert_same_stream(records, 3U);
+    assert_matches_predecessor_when_keys_agree(records, 3U);
 }
 
 static void test_clipped_fan_siblings_sort_by_leaf_and_primitive(void)
@@ -100,7 +99,16 @@ static void test_clipped_fan_siblings_sort_by_leaf_and_primitive(void)
     assert(refs[1].record == &records[3]);
     assert(refs[2].record == &records[1]);
     assert(refs[3].record == &records[0]);
-    assert_same_stream(records, 4U);
+    sm64_saturn_terrain_emit_ref_t predecessor[TEST_CAPACITY];
+    sm64_saturn_terrain_emit_ref_t predecessor_scratch[TEST_CAPACITY];
+    assert(sm64_saturn_terrain_depth_bins_predecessor_merge(
+               records, 4U, predecessor, predecessor_scratch,
+               TEST_CAPACITY) == 4U);
+    assert(predecessor[0].record == &records[2]);
+    assert(predecessor[1].record == &records[3]);
+    assert(predecessor[2].record == &records[0]);
+    assert(predecessor[3].record == &records[1]);
+    assert(refs[2].record != predecessor[2].record);
 }
 
 static void test_mixed_master_slave_streams(void)
@@ -125,7 +133,15 @@ static void test_mixed_master_slave_streams(void)
     sm64_saturn_terrain_result_t combined[4];
     memcpy(combined, master, sizeof(master));
     memcpy(combined + 2U, slave, sizeof(slave));
-    assert_same_stream(combined, 4U);
+    sm64_saturn_terrain_emit_ref_t predecessor[TEST_CAPACITY];
+    sm64_saturn_terrain_emit_ref_t predecessor_scratch[TEST_CAPACITY];
+    assert(sm64_saturn_terrain_depth_bins_predecessor_merge(
+               combined, 4U, predecessor, predecessor_scratch,
+               TEST_CAPACITY) == 4U);
+    assert(predecessor[0].record == &combined[1]);
+    assert(predecessor[1].record == &combined[2]);
+    assert(predecessor[2].record == &combined[0]);
+    assert(predecessor[3].record == &combined[3]);
 }
 
 static void test_master_join_uses_only_published_streams(void)
@@ -160,6 +176,38 @@ static void test_master_join_uses_only_published_streams(void)
                &spans, 23U, refs, scratch, TEST_CAPACITY) == SIZE_MAX);
 }
 
+/* Binning intentionally replaces the predecessor's raw-depth tie-breaker.
+ * Keep those deltas explicit: the records must remain intact and the new
+ * key must be deterministic, but these two streams must not compare equal. */
+static void test_predecessor_order_deltas_are_explicit(void)
+{
+    const sm64_saturn_terrain_result_t within_bin_depth[] = {
+        record(3060U, 9U, 1U), record(3000U, 3U, 2U),
+    };
+    const sm64_saturn_terrain_result_t leaf_tie[] = {
+        record(4096U, 9U, 1U), record(4096U, 2U, 10U),
+    };
+    const sm64_saturn_terrain_result_t *cases[] = {
+        within_bin_depth, leaf_tie,
+    };
+    for (size_t test = 0U; test < 2U; test++) {
+        sm64_saturn_terrain_emit_ref_t bins[TEST_CAPACITY];
+        sm64_saturn_terrain_emit_ref_t scratch[TEST_CAPACITY];
+        sm64_saturn_terrain_emit_ref_t predecessor[TEST_CAPACITY];
+        sm64_saturn_terrain_emit_ref_t predecessor_scratch[TEST_CAPACITY];
+        assert(sm64_saturn_terrain_depth_bins_build(
+                   cases[test], 2U, bins, scratch, TEST_CAPACITY) == 2U);
+        assert(sm64_saturn_terrain_depth_bins_predecessor_merge(
+                   cases[test], 2U, predecessor, predecessor_scratch,
+                   TEST_CAPACITY) == 2U);
+        assert(bins[0].record == &cases[test][1]);
+        assert(bins[1].record == &cases[test][0]);
+        assert(predecessor[0].record == &cases[test][0]);
+        assert(predecessor[1].record == &cases[test][1]);
+        assert(bins[0].record != predecessor[0].record);
+    }
+}
+
 int main(void)
 {
     test_empty_stream();
@@ -169,5 +217,6 @@ int main(void)
     test_clipped_fan_siblings_sort_by_leaf_and_primitive();
     test_mixed_master_slave_streams();
     test_master_join_uses_only_published_streams();
+    test_predecessor_order_deltas_are_explicit();
     return 0;
 }

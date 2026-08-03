@@ -171,26 +171,26 @@ static inline size_t sm64_saturn_terrain_depth_bins_build_streams(
 }
 
 #if defined(SM64_SATURN_TERRAIN_DEPTH_BINS_COMPARE)
-/* Host-only historical stable merge comparator.  It deliberately uses a
- * comparison sort so the test can independently reject a bin/key regression;
- * it is not compiled into the target demo path. */
-static inline bool sm64_saturn_terrain_depth_bins_before(
+/* Host-only predecessor stable merge oracle.  It deliberately preserves the
+ * prior raw painter-key/primitive comparison rather than reimplementing the
+ * binned key, so tests can name the intentional within-bin and leaf-tie
+ * semantic differences.  It is not compiled into the target demo path. */
+static inline uint32_t sm64_saturn_terrain_depth_bins_predecessor_sort_key(
+    const sm64_saturn_terrain_result_t *record)
+{
+    const uint32_t depth = record->painter_key > UINT16_MAX
+        ? UINT16_MAX : record->painter_key;
+    return (depth << 16) | (uint16_t)(UINT16_MAX - record->primitive_id);
+}
+
+static inline bool sm64_saturn_terrain_depth_bins_predecessor_before(
     const sm64_saturn_terrain_emit_ref_t *left,
     const sm64_saturn_terrain_emit_ref_t *right)
 {
-    const uint8_t left_depth = sm64_saturn_terrain_depth_bin(
-        left->record->painter_key);
-    const uint8_t right_depth = sm64_saturn_terrain_depth_bin(
-        right->record->painter_key);
-    if (left_depth != right_depth) return left_depth > right_depth;
-    if (left->record->bsp_leaf != right->record->bsp_leaf)
-        return left->record->bsp_leaf < right->record->bsp_leaf;
-    if (left->record->primitive_id != right->record->primitive_id)
-        return left->record->primitive_id < right->record->primitive_id;
-    return true;
+    return left->sort_key >= right->sort_key;
 }
 
-static inline size_t sm64_saturn_terrain_depth_bins_reference_merge(
+static inline size_t sm64_saturn_terrain_depth_bins_predecessor_merge(
     const sm64_saturn_terrain_result_t *records, size_t count,
     sm64_saturn_terrain_emit_ref_t *refs,
     sm64_saturn_terrain_emit_ref_t *scratch, size_t capacity)
@@ -202,7 +202,9 @@ static inline size_t sm64_saturn_terrain_depth_bins_reference_merge(
         if (!sm64_saturn_terrain_result_validate(&records[i])) return SIZE_MAX;
         refs[i] = (sm64_saturn_terrain_emit_ref_t){
             .record = &records[i],
-            .sort_key = sm64_saturn_terrain_depth_bins_sort_key(&records[i]),
+            .sort_key =
+                sm64_saturn_terrain_depth_bins_predecessor_sort_key(
+                    &records[i]),
         };
     }
     sm64_saturn_terrain_emit_ref_t *src = refs;
@@ -215,7 +217,8 @@ static inline size_t sm64_saturn_terrain_depth_bins_reference_merge(
             size_t right = mid;
             for (size_t out = start; out < end; out++) {
                 const bool take_right = left >= mid ||
-                    (right < end && !sm64_saturn_terrain_depth_bins_before(
+                    (right < end &&
+                     !sm64_saturn_terrain_depth_bins_predecessor_before(
                         &src[left], &src[right]));
                 dst[out] = take_right ? src[right++] : src[left++];
             }

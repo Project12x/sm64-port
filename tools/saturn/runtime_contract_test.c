@@ -3847,7 +3847,7 @@ static void test_fused_terrain_publication_matches_split_path(void)
     sm64_saturn_terrain_result_arena_seal(&spans.master, 41U);
     sm64_saturn_terrain_result_arena_seal(&spans.slave, 41U);
 
-    assert(sm64_saturn_terrain_merge_visible(
+    assert(sm64_saturn_terrain_depth_bins_visible(
         &spans, 41U, refs, scratch, 6U) == 3U);
     assert(refs[0].record->primitive_id == 1U);
     assert(refs[1].record->primitive_id == 3U);
@@ -3872,16 +3872,51 @@ static void test_fused_terrain_publication_matches_split_path(void)
 
     const uint16_t saved_command_index = master_visible[0].command_index;
     master_visible[0].command_index = 3U;
-    assert(sm64_saturn_terrain_merge_visible(
+    assert(sm64_saturn_terrain_depth_bins_visible(
         &spans, 41U, refs, scratch, 6U) == SIZE_MAX);
     master_visible[0].command_index = saved_command_index;
 
     sm64_saturn_terrain_result_arena_seal(&spans.slave, 40U);
-    assert(sm64_saturn_terrain_merge_visible(
+    assert(sm64_saturn_terrain_depth_bins_visible(
         &spans, 41U, refs, scratch, 6U) == SIZE_MAX);
     sm64_saturn_terrain_result_arena_seal(&spans.master, 40U);
-    assert(sm64_saturn_terrain_merge_visible(
+    assert(sm64_saturn_terrain_depth_bins_visible(
         &spans, 40U, refs, scratch, 2U) == SIZE_MAX);
+}
+
+static void test_terrain_depth_bins_key_and_failures(void)
+{
+    const sm64_saturn_terrain_result_t records[] = {
+        {.primitive_id = 9U, .command_index = 0U, .painter_key = 4096U,
+         .bsp_leaf = 4U, .corner_count = 4U, .clip_class = 0U},
+        {.primitive_id = 1U, .command_index = 0U, .painter_key = 4096U,
+         .bsp_leaf = 4U, .corner_count = 4U, .clip_class = 0U},
+        {.primitive_id = 0U, .command_index = 0U, .painter_key = 4096U,
+         .bsp_leaf = 5U, .corner_count = 4U, .clip_class = 0U},
+        {.primitive_id = 7U, .command_index = 0U, .painter_key = 128U,
+         .bsp_leaf = 0U, .corner_count = 4U, .clip_class = 0U},
+    };
+    sm64_saturn_terrain_emit_ref_t refs[4];
+    sm64_saturn_terrain_emit_ref_t scratch[4];
+    sm64_saturn_terrain_emit_ref_t repeat[4];
+    sm64_saturn_terrain_emit_ref_t repeat_scratch[4];
+    assert(sm64_saturn_terrain_depth_bins_build(
+               records, 4U, refs, scratch, 4U) == 4U);
+    /* Far bin first, then ascending BSP leaf, then primitive ID. */
+    assert(refs[0].record == &records[1]);
+    assert(refs[1].record == &records[0]);
+    assert(refs[2].record == &records[2]);
+    assert(refs[3].record == &records[3]);
+    assert(sm64_saturn_terrain_depth_bins_build(
+               records, 4U, repeat, repeat_scratch, 4U) == 4U);
+    for (size_t i = 0U; i < 4U; i++)
+        assert(refs[i].record == repeat[i].record);
+    assert(sm64_saturn_terrain_depth_bins_build(
+               records, 4U, refs, scratch, 3U) == SIZE_MAX);
+    sm64_saturn_terrain_result_t malformed = records[0];
+    malformed.corner_count = 2U;
+    assert(sm64_saturn_terrain_depth_bins_build(
+               &malformed, 1U, refs, scratch, 4U) == SIZE_MAX);
 }
 
 #if defined(SM64_SATURN_RUNTIME_CONTRACT_ONLY)
@@ -3905,6 +3940,7 @@ int main(void)
     test_source_runtime_records_the_applied_camera_replay_pad();
     test_bounded_terrain_result_spans();
     test_fused_terrain_publication_matches_split_path();
+    test_terrain_depth_bins_key_and_failures();
     test_view_space_terrain_clip();
     test_frame_profile();
     test_bounded_memory_arena();
