@@ -3,7 +3,8 @@
 ## Result
 
 Implementation commit: `4a8fe1ce` (`perf(saturn): bypass duplicate source
-scene construction`). Task status is **active**, pending independent review
+scene construction`), corrected by `658d5ad9` (`fix(saturn): keep source
+render guard portable`). Task status is **active**, pending independent review
 and the controller-owned CUE/Ymir gate.
 
 ## Files changed
@@ -23,13 +24,18 @@ evidence report.
   17 unrelated preserved route-schema errors remain. The wrapper Make target
   compiles but has an MSYS/Windows executable-path handoff failure; direct
   constituent compiler and executable commands pass.
+- Spec-fix round 1 red: the wrapper-hosted non-Saturn `area.c` syntax command
+  failed with unknown `bool` and undeclared `false`. Green: the same command
+  passes after unconditional `<stdbool.h>`; source-policy test also PASS (1).
 
 ## Self-review
 
 Reviewed the committed range for policy scope and ABI stability. The guard
 evaluates once; the source-only construction is guarded; the required
 stateful calls and pointer cleanup stay live; both counter additions are
-suffixes. No task-owned review finding remains.
+suffixes. Spec review's non-Saturn type-definition finding is fixed by the
+unconditional standard definition and focused real-translation-unit syntax
+gate. No task-owned review finding remains.
 
 ## Documentation and remaining gate
 

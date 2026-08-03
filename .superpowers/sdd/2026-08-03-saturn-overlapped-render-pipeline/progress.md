@@ -25,3 +25,11 @@ were corrected and their focused class now passes. The Make aggregate compiles
 the runtime contract under the required wrapper but then exits nonzero from
 the MSYS/Windows executable-path handoff; the exact compiler invocation and
 resulting runtime-contract executable both pass directly.
+
+Spec-fix round 1: `658d5ad9` adds a focused host syntax gate for
+`src/game/area.c` without `TARGET_SATURN` and includes `<stdbool.h>` outside
+the Saturn-only header guard. Red compiler evidence showed unknown `bool` and
+`false`; the direct wrapper compiler command is green after the fix. The Make
+target prints the same invocation but still exits nonzero in the inherited
+MSYS/native executable handoff environment, so its direct wrapper constituent
+is recorded as the executed green evidence. No target/Ymir work was run.

@@ -61,3 +61,24 @@ above.
 - Controller-owned serial experimental CUE build and Ymir manual test with
   the established demo role. No target build, Ymir launch, or native-math
   census was performed here.
+
+## Spec-fix round 1 — non-Saturn guard portability
+
+Spec review found that `bool`/`false` in the non-`TARGET_SATURN` branch of
+`area.c` had been supplied only indirectly by the Saturn-only runtime header.
+Commit `658d5ad9` provides `<stdbool.h>` unconditionally and adds
+`verify-area-non-saturn-compile`, a host `-fsyntax-only` gate for the real
+translation unit.
+
+Red command/result:
+
+```powershell
+& tools/saturn/with-msys-toolchain.ps1 C:\msys64\mingw64\bin\gcc.exe '-std=c11' '-fsyntax-only' '-DVERSION_US=1' '-DNON_MATCHING=1' '-DAVOID_UB=1' '-D_LANGUAGE_C=1' '-DF3DEX_GBI_2E=1' '-I.' '-Iinclude' '-Isrc' 'src\game\area.c'
+```
+
+Before the fix, GCC reported unknown type name `bool` and undeclared `false`
+at `render_game()`'s non-Saturn branch. The exact command passes after the
+fix. `tools/saturn/test_source_render_suppression.py` also passes (1 test).
+The corresponding Make target prints the same compile invocation but inherits
+the previously recorded MSYS/native executable-handoff nonzero exit; the
+direct wrapper compiler command is the green constituent evidence.
