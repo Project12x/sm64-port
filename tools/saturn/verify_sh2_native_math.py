@@ -679,6 +679,7 @@ def parse_decoded_lines(
     text: str,
     owners: Iterable[FunctionOwner],
     owner_address_map: dict[int, FunctionOwner] | None = None,
+    selected_names: set[str] | None = None,
 ) -> dict[str, set[int]]:
     owner_list = tuple(owners)
     owner_by_address = (
@@ -699,7 +700,9 @@ def parse_decoded_lines(
         owner = owner_by_address.get(address)
         if owner is not None and address == owner.start:
             owner = None
-        if owner is not None:
+        if owner is not None and (
+            selected_names is None or owner.name in selected_names
+        ):
             result[owner.name].add(address)
     return result
 
@@ -4133,6 +4136,126 @@ def make_observation(
     }
 
 
+@dataclass
+class RouteBoundedCode:
+    """Linked-ELF inputs materialized only for pinned route owners."""
+
+    graph: dict[str, set[str]]
+    closure: frozenset[str]
+    disassembly: str
+    instructions: dict[int, Instruction]
+    decoded_lines: dict[str, set[int]]
+
+
+def _owned_disassembly_blocks(
+    disassembly: str,
+    owners: tuple[FunctionOwner, ...],
+) -> dict[str, str]:
+    """Group complete objdump symbol blocks by their linked function owner."""
+    rows: dict[str, list[str]] = {}
+    current_owner: str | None = None
+    for line in disassembly.splitlines(keepends=True):
+        header = FUNCTION_RE.match(line.rstrip("\r\n"))
+        if header is not None:
+            owner = _owner_at(owners, int(header.group(1), 16))
+            current_owner = None if owner is None else owner.name
+            if current_owner is not None:
+                rows.setdefault(current_owner, [])
+        if current_owner is not None:
+            rows[current_owner].append(line)
+    return {name: "".join(block) for name, block in rows.items()}
+
+
+def prepare_route_bounded_code_only(
+    disassembly: str,
+    decoded_text: str,
+    owners: Iterable[FunctionOwner],
+    oracles: Iterable[RouteOracle],
+    owner_address_map: dict[int, FunctionOwner] | None = None,
+) -> RouteBoundedCode:
+    """Derive pinned closure before allocating any Instruction objects."""
+    owner_list = tuple(owners)
+    oracle_list = tuple(oracles)
+    if not oracle_list:
+        raise ValueError("bounded route analysis requires a route oracle")
+
+    owner_by_symbol = {
+        name: owner
+        for owner in owner_list
+        for name in (owner.name, *owner.aliases)
+    }
+    blocks = _owned_disassembly_blocks(disassembly, owner_list)
+    raw_graph = scan_call_graph(disassembly)
+    graph: dict[str, set[str]] = {
+        name: set() for name in blocks
+    }
+    for raw_caller, raw_targets in raw_graph.items():
+        caller_owner = owner_by_symbol.get(raw_caller)
+        caller = raw_caller if caller_owner is None else caller_owner.name
+        targets = graph.setdefault(caller, set())
+        for raw_target in raw_targets:
+            target_owner = owner_by_symbol.get(raw_target)
+            targets.add(raw_target if target_owner is None else target_owner.name)
+
+    closure: set[str] = set()
+    for oracle in oracle_list:
+        canonical_roots: set[str] = set()
+        for root in oracle.roots:
+            owner = owner_by_symbol.get(root)
+            if owner is None:
+                raise ValueError(f"bounded analysis missing route root owner: {root}")
+            if owner.name not in blocks or owner.name not in graph:
+                raise ValueError(f"bounded analysis missing route root block: {root}")
+            canonical_roots.add(owner.name)
+
+        canonical_edges: set[tuple[str, str]] = set()
+        for dispatcher, callback in oracle.indirect_edges:
+            dispatcher_owner = owner_by_symbol.get(dispatcher)
+            callback_owner = owner_by_symbol.get(callback)
+            if dispatcher_owner is None:
+                raise ValueError(
+                    "bounded route closure has no linked owner: " + dispatcher
+                )
+            if callback_owner is None:
+                raise ValueError(
+                    "bounded route closure has no linked owner: " + callback
+                )
+            canonical_edges.add((dispatcher_owner.name, callback_owner.name))
+        closure.update(route_reachable_functions(
+            graph, canonical_roots, canonical_edges
+        ))
+
+    for name in sorted(closure):
+        owner = owner_by_symbol.get(name)
+        if owner is None:
+            raise ValueError(f"bounded route closure has no linked owner: {name}")
+        if owner.name not in blocks:
+            raise ValueError(f"bounded route closure has no owned block: {name}")
+
+    selected_names = {
+        owner_by_symbol[name].name for name in closure
+    }
+    bounded_disassembly = "".join(
+        block for name, block in blocks.items() if name in selected_names
+    )
+    # This is the key memory boundary: parsing happens only after complete
+    # linked-symbol blocks have been selected from the raw disassembly text.
+    instructions = parse_instructions(bounded_disassembly)
+    decoded_lines = parse_decoded_lines(
+        decoded_text,
+        owner_list,
+        owner_address_map,
+        selected_names,
+    )
+    return RouteBoundedCode(
+        graph,
+        frozenset(selected_names),
+        bounded_disassembly,
+        instructions,
+        decoded_lines,
+    )
+
+
 def census_rows(calls: Iterable[CallSite], route_functions: set[str]) -> list[CensusRow]:
     grouped: dict[str, Counter[str]] = defaultdict(Counter)
     for call in calls:
@@ -4177,7 +4300,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--objdump", required=True, help="target objdump executable")
     parser.add_argument("--readelf", help="target readelf executable")
     parser.add_argument("--addr2line", required=True, help="target addr2line executable")
-    parser.add_argument("--analysis-mode", choices=("legacy-linear", "code-only"),
+    parser.add_argument(
+        "--analysis-mode",
+        choices=("legacy-linear", "code-only", "code-only-route-bounded"),
                         default="code-only")
     parser.add_argument("--audit-observation-only", action="store_true")
     parser.add_argument("--json-output", type=Path)
@@ -4202,8 +4327,13 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("producer commit does not match HEAD")
         elif args.json_output is not None or args.producer_commit is not None:
             raise ValueError("--json-output/--producer-commit require observation-only")
-        if not args.audit_observation_only and args.analysis_mode != "code-only":
-            raise ValueError("normal acceptance requires analysis-mode=code-only")
+        if not args.audit_observation_only and args.analysis_mode not in {
+            "code-only", "code-only-route-bounded",
+        }:
+            raise ValueError(
+                "normal acceptance requires analysis-mode=code-only or "
+                "code-only-route-bounded"
+            )
         baseline_text = args.baseline.read_text(encoding="utf-8")
         route_text = args.route_oracle.read_text(encoding="utf-8")
         baseline = parse_baseline(baseline_text)
@@ -4243,16 +4373,36 @@ def main(argv: list[str] | None = None) -> int:
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]
             graph = scan_call_graph(disassembly)
         else:
-            decoded_seeds = parse_decoded_lines(lines_text, owners, owner_address_map)
-            legacy_graph = scan_call_graph(disassembly)
-            candidate_names = route_reachable_functions(
-                legacy_graph, oracle.roots, oracle.indirect_edges
-            )
-            if audit_oracle is not None:
-                candidate_names |= route_reachable_functions(
-                    legacy_graph, audit_oracle.roots, audit_oracle.indirect_edges
+            if args.analysis_mode == "code-only-route-bounded":
+                bounded = prepare_route_bounded_code_only(
+                    disassembly,
+                    lines_text,
+                    owners,
+                    tuple(
+                        item for item in (oracle, audit_oracle)
+                        if item is not None
+                    ),
+                    owner_address_map,
                 )
-            parsed_instructions = parse_instructions(disassembly)
+                decoded_seeds = bounded.decoded_lines
+                legacy_graph = bounded.graph
+                candidate_names = set(bounded.closure)
+                parsed_instructions = bounded.instructions
+            else:
+                decoded_seeds = parse_decoded_lines(
+                    lines_text, owners, owner_address_map
+                )
+                legacy_graph = scan_call_graph(disassembly)
+                candidate_names = route_reachable_functions(
+                    legacy_graph, oracle.roots, oracle.indirect_edges
+                )
+                if audit_oracle is not None:
+                    candidate_names |= route_reachable_functions(
+                        legacy_graph,
+                        audit_oracle.roots,
+                        audit_oracle.indirect_edges,
+                    )
+                parsed_instructions = parse_instructions(disassembly)
             instruction_memory = build_instruction_memory(parsed_instructions)
             known_null_addresses = prove_sourceboot_null_task_submit(
                 parsed_instructions, owners
@@ -4273,7 +4423,17 @@ def main(argv: list[str] | None = None) -> int:
             for call in direct_calls:
                 if not is_native_math_helper(call.helper):
                     graph[call.caller].add(call.helper)
-        route_functions = route_reachable_functions(graph, oracle.roots, oracle.indirect_edges)
+        route_edge_result = None
+        if args.analysis_mode == "code-only-route-bounded":
+            assert analysis is not None
+            route_edge_result = audit_indirect_edges(
+                graph, oracle, owners, analysis.unresolved_transfers
+            )
+            route_functions = set(route_edge_result.closure)
+        else:
+            route_functions = route_reachable_functions(
+                graph, oracle.roots, oracle.indirect_edges
+            )
         audit_edge_result = None
         if audit_oracle is None:
             audit_functions = None
@@ -4296,6 +4456,13 @@ def main(argv: list[str] | None = None) -> int:
             if audit_functions is not None:
                 print_audit(calls, audit_functions, locations)
         failures = baseline_failures(calls, route_functions, baseline)
+        if route_edge_result is not None:
+            for transfer in route_edge_result.unlisted_transfers:
+                failures.append(
+                    "route has unlisted unresolved indirect transfer: "
+                    f"{transfer.caller} at 0x{transfer.address:x} "
+                    f"{transfer.mnemonic}"
+                )
         if audit_functions is not None and audit_oracle is not None and audit_contract is not None:
             if audit_contract.expected_root not in audit_oracle.roots:
                 failures.append(f"audit root missing: expected {audit_contract.expected_root}")

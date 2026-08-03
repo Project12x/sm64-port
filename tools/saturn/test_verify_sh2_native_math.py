@@ -5102,5 +5102,187 @@ class CodeOnlyAnalysisTests(unittest.TestCase):
         self.assertEqual(result.code_addresses, {0x6001000, 0x6001002})
 
 
+import verify_sh2_native_math as bounded_verifier
+
+
+class RouteBoundedLinkedElfTests(unittest.TestCase):
+    OWNERS = (
+        FunctionOwner("_route_root", 0x06001000, 0x06001010, 1),
+        FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+        FunctionOwner("_irrelevant_large", 0x06003000, 0x06007000, 1),
+    )
+    ORACLE = bounded_verifier.RouteOracle(
+        1, frozenset({"_route_root"}), frozenset(), frozenset()
+    )
+
+    @staticmethod
+    def _route_disassembly(*, include_large: bool = True) -> str:
+        text = """
+06001000 <_route_root>:
+ 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06002000 <_route_child>
+ 6001002: 41 0b jsr @r1
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06002000 <_route_child>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+"""
+        if include_large:
+            text += "06003000 <_irrelevant_large>:\n"
+            text += "".join(
+                f" {address:x}: 00 09 nop\n"
+                for address in range(0x06003000, 0x06007000, 2)
+            )
+        return text
+
+    @staticmethod
+    def _analyze(prepared):
+        return analyze_code_only(
+            prepared.instructions,
+            RouteBoundedLinkedElfTests.OWNERS,
+            prepared.decoded_lines,
+            set(prepared.closure),
+            build_instruction_memory(prepared.instructions),
+        )
+
+    def test_bounded_preparation_matches_full_route_and_skips_huge_irrelevant_block(self) -> None:
+        disassembly = self._route_disassembly()
+        decoded = """
+fixture.c 1 0x06001002
+fixture.c 2 0x06002002
+fixture.c 3 0x06003002
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, decoded, self.OWNERS, (self.ORACLE,)
+        )
+        self.assertEqual(prepared.closure, frozenset({
+            "_route_root", "_route_child",
+        }))
+        self.assertEqual(set(prepared.decoded_lines), {
+            "_route_root", "_route_child",
+        })
+        self.assertLess(len(prepared.instructions), 10)
+        self.assertNotIn(0x06003000, prepared.instructions)
+
+        full_instructions = parse_instructions(disassembly)
+        full = analyze_code_only(
+            full_instructions,
+            self.OWNERS,
+            parse_decoded_lines(decoded, self.OWNERS),
+            set(prepared.closure),
+            build_instruction_memory(full_instructions),
+        )
+        bounded = self._analyze(prepared)
+        self.assertEqual(bounded.calls, full.calls)
+        self.assertEqual(bounded.direct_calls, full.direct_calls)
+        self.assertEqual(bounded.unresolved_transfers, full.unresolved_transfers)
+        self.assertEqual(bounded.unresolved_effects, full.unresolved_effects)
+        self.assertEqual(bounded.code_addresses, full.code_addresses)
+
+    def test_bounded_preparation_rejects_missing_route_root(self) -> None:
+        missing = bounded_verifier.RouteOracle(
+            1, frozenset({"_missing_root"}), frozenset(), frozenset()
+        )
+        with self.assertRaisesRegex(ValueError, "missing route root"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                self._route_disassembly(include_large=False),
+                "",
+                self.OWNERS[:2],
+                (missing,),
+            )
+
+    def test_bounded_preparation_rejects_reachable_block_without_owner(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06008000 <_orphan>
+ 6001002: 41 0b jsr @r1
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06008000 <_orphan>:
+ 6008000: 00 0b rts
+ 6008002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no linked owner"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", self.OWNERS[:1], (self.ORACLE,)
+            )
+
+    def test_bounded_analysis_keeps_unresolved_indirect_transfer_fail_closed(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 41 2b jmp @r1
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, "", self.OWNERS[:1], (self.ORACLE,)
+        )
+        analysis = self._analyze(prepared)
+        audited = audit_indirect_edges(
+            prepared.graph, self.ORACLE, self.OWNERS[:1],
+            analysis.unresolved_transfers,
+        )
+        self.assertEqual(
+            [(item.caller, item.address) for item in audited.unlisted_transfers],
+            [("_route_root", 0x06001000)],
+        )
+
+    def test_cli_bounded_mode_is_opt_in_and_default_still_parses_full_elf(self) -> None:
+        sections = """
+  [ 1] .text PROGBITS 06001000 001000 006000 00 AX 0 0 2
+"""
+        symbols = """
+   1: 06001000 16 FUNC GLOBAL DEFAULT 1 _route_root
+   2: 06002000 8 FUNC GLOBAL DEFAULT 1 _route_child
+   3: 06003000 16384 FUNC GLOBAL DEFAULT 1 _irrelevant_large
+"""
+        disassembly = self._route_disassembly()
+        disassembly = disassembly.replace(
+            " 6003000: 00 09 nop\n",
+            " 6003000: 00 09 bt/s 6003004 <_irrelevant_large+0x4>\n",
+            1,
+        )
+
+        def fake_command(command):
+            if command[1] == "-d":
+                return disassembly
+            if command[1] == "-SW":
+                return sections
+            if command[1] == "-sW":
+                return symbols
+            if command[1] == "--debug-dump=decodedline":
+                return ""
+            raise AssertionError(command)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            elf = root / "fixture.elf"
+            baseline = root / "baseline.txt"
+            oracle = root / "oracle.txt"
+            elf.write_bytes(b"ELF")
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8"
+            )
+            oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _route_root\n", encoding="utf-8"
+            )
+            common = [
+                str(elf), str(baseline), "--route-oracle", str(oracle),
+                "--objdump", "objdump", "--readelf", "readelf",
+                "--addr2line", "addr2line",
+            ]
+            with patch.object(bounded_verifier, "run_command", side_effect=fake_command), \
+                    patch.object(bounded_verifier, "verify_baseline_integrity"), \
+                    patch.object(bounded_verifier, "verify_route_oracle_integrity"), \
+                    patch.object(bounded_verifier, "source_locations", return_value={}):
+                self.assertEqual(bounded_verifier.main([
+                    *common, "--analysis-mode", "code-only-route-bounded",
+                ]), 0)
+                self.assertEqual(bounded_verifier.main(common), 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
