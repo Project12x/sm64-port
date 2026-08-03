@@ -36,6 +36,11 @@ and the evidence report before starting another task.
   enable/disable calls, so accepted Saturn builds fail closed with a full geo
   walk. No bounded state-only seam has been demonstrated; the controller-owned
   serial CUE/Ymir gate must not start.
+- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** source-complete at `98f26f26`; runtime wrapper blocked by host path translation, target/Ymir pending; A1 remains blocked.
+  by the owner on 2026-08-03. This is a deliberately broken, compile-time-only
+  BOB proving build that must never become the default, a replay baseline, or
+  evidence of full-game correctness. It exists solely to quantify whether the
+  blocked whole-walk removal merits a dedicated state/render separation sprint.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -252,6 +257,83 @@ and the evidence report before starting another task.
   This gate is prohibited while Step 5 and the Critical quality finding remain
   blocked. The fail-closed safety change is a runtime-safety GO only; it is not
   authorization to build or launch an A1 optimization CUE.
+
+### Task 1D: Produce one non-promotable geo-walk upper-bound diagnostic CUE
+
+**Purpose:** Distinguish a dominant duplicate-geo bottleneck from a marginal
+one without re-enabling unsafe suppression in any accepted Saturn build. BOB is
+only the deterministic demonstrator. The required destination remains a
+scene-neutral full game, and this task must not introduce BOB-specific runtime
+types, ownership rules, or production fallbacks.
+
+**Files:**
+- Modify: `src/port/saturn/sourceboot/main.c`
+- Modify: `src/port/saturn/sourceboot/Makefile`
+- Modify: `tools/saturn/test_source_render_suppression.py`
+- Modify: `Makefile.saturn.mk` only if a focused host gate needs a named target
+- Modify: `docs/saturn/evidence/reports/overlapped-render-pipeline-2026-08-03.md`
+- Modify: this plan and the architecture decision ledger
+- Modify/Create: `CHANGELOG.md`, `STATE.md`, `ARCHITECTURE.md`, `HOWTO.md` as
+  required by the portfolio documentation policy
+
+**Diagnostic contract:**
+- Default value is `SATURN_EXPERIMENTAL_SKIP_GEO_WALK=0`; production/sourceboot
+  builds cannot skip the geo walk.
+- Value `1` is legal only when all of `SATURN_DEMO_PATH=1`,
+  `SATURN_SOURCEBOOT_ROUTE_REPLAY=1`, and an explicit diagnostic output tag are
+  present. Reject every other configuration at Make parse time.
+- The sourceboot tick enables scene-graph suppression only inside the explicit
+  diagnostic build and restores false immediately after the one source tick;
+  no state can leak to a following tick or a normal build.
+- The image name and telemetry must state `diag-skip-geo`; no normal pipeline
+  role/output directory may be overwritten.
+- Host tests must mutation-check default-off, forbidden combinations, paired
+  restoration, and absence of any BOB-only semantic branch in generic runtime
+  code.
+- The test report must say that animation, warp, camera, and graph-owned state
+  are knowingly invalid; speed is an upper-bound observation only, never a
+  promotion gate.
+
+- [ ] **Step 1: Write failing diagnostic-containment tests**
+
+  Extend the focused source-policy test so the unimplemented diagnostic fails
+  for a missing default-off macro/configuration guard, missing paired setter
+  restoration, and missing diagnostic-only output tag.
+
+- [ ] **Step 2: Record the red host result**
+
+  Run the focused source-policy target through
+  `tools/saturn/with-msys-toolchain.ps1`; record the expected missing-contract
+  failure. Do not build or launch a target image in this step.
+
+- [ ] **Step 3: Implement only the sealed diagnostic seam**
+
+  Add the compile-time constraint, paired sourceboot setter, output tag, and
+  telemetry label. Do not split or emulate geo callbacks; that is A1's future
+  full-game state/render separation work.
+
+- [ ] **Step 4: Run focused containment and runtime-contract gates**
+
+  Record exact commands/results. The normal default configuration must prove
+  zero suppressed walks; the diagnostic configuration must prove the paired
+  source-level policy only. No aggregate green claim substitutes for these
+  focused gates.
+
+- [ ] **Step 5: Update records, commit, and complete two-stage review**
+
+  Record that D1 is an upper-bound diagnostic, not an A1 resolution; append all
+  tests, review verdicts, commits, and unpassed target gate to the evidence and
+  SDD ledger. Commit the behavior and its same-commit changelog entry before
+  the manual build.
+
+- [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
+
+  Use the project profile and 32-Mbit DRAM cart, with the established BOB/live
+  input/Q16 camera route. Record CUE/ELF hashes, controls, visibility, and the
+  owner’s qualitative speed result. Because the diagnostic invalidates graph
+  state, a visual/control failure is expected and does not authorize repair
+  churn. Do not repeat this CUE unless the initial launch itself fails before
+  loading.
 
 ### Task 2: Add immutable snapshot banks with explicit generations
 
