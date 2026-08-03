@@ -54,7 +54,9 @@ normal same-scene no-reset behavior, mandatory-prefix preservation, bake
 approval, and role-limited material degradation (including invalid roles).
 `git diff --check` also passed. A source-order check confirms tier selection
 precedes construction of the clipping input, and the renderer rejects invalid
-roles at compile time.
+roles at compile time. `tools/saturn/test_task8_lod_source.py` permanently
+checks that Sourceboot observes the scene after every authoritative tick and
+that no batch-level observer can mask an exit/re-entry.
 
 No MSYS, Bash, `sh-elf-*`, target build, Ymir, or target replay was invoked.
 Target replay and visual verification of the three tagged builds remain
