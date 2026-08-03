@@ -5,8 +5,11 @@
 - Resolved terrain templates now retain the complete 16-word VDP1 command
   image and an exact per-word patch mask.
 - Static texture source, draw-mode, colour, size, and reserved words resolve
-  during `sm64_saturn_demo_render_init()` after VDP1 partitions are set.
-  The frame path no longer resolves templates.
+  during `sm64_saturn_demo_render_init()` after VDP1 partitions are set and
+  before Sourceboot uploads the BOB texture payload.  This is safe because
+  resolution binds partition addresses and immutable texture metadata only;
+  it does not read texture pixels or require texture residency.  The frame
+  path no longer resolves templates.
 - Worker lanes now publish only dynamic XY patch payloads plus the compact
   result identity.  The master remains the only owner that copies a static
   template, patches link/end/XY/Gouraud fields, allocates Gouraud storage, and

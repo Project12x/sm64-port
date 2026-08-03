@@ -136,10 +136,37 @@ static void test_resolved_template_poison_preserves_every_immutable_word(void)
     assert(memcmp(&patched[6], vertices, sizeof(vertices)) == 0);
     assert(patched[14] == (uint16_t)(0x00123458U >> 3));
 
-    resolved.patch_mask &= (uint16_t)~SM64_SATURN_TERRAIN_PATCH_GOURAUD;
-    assert(!sm64_saturn_terrain_template_patch_resolved_record_ex(
-        patched, &resolved, vertices, 0U, false, true, 0x00123458U,
-        false, 0U));
+}
+
+static void test_resolved_template_rejects_every_missing_patch_permission(void)
+{
+    const int16_t vertices[4][2] = {
+        {-11, -7}, {23, -5}, {19, 31}, {-13, 29}};
+    const uint16_t required[] = {
+        SM64_SATURN_TERRAIN_PATCH_END,
+        SM64_SATURN_TERRAIN_PATCH_LINK,
+        SM64_SATURN_TERRAIN_PATCH_XY,
+        SM64_SATURN_TERRAIN_PATCH_GOURAUD,
+        SM64_SATURN_TERRAIN_PATCH_TEXTURE_SOURCE,
+    };
+    const uint16_t all = SM64_SATURN_TERRAIN_PATCH_END |
+        SM64_SATURN_TERRAIN_PATCH_LINK |
+        SM64_SATURN_TERRAIN_PATCH_XY |
+        SM64_SATURN_TERRAIN_PATCH_GOURAUD |
+        SM64_SATURN_TERRAIN_PATCH_TEXTURE_SOURCE;
+
+    for (uint8_t missing = 0U; missing < sizeof(required) / sizeof(required[0]);
+         missing++) {
+        sm64_saturn_terrain_resolved_command_t resolved = {
+            .words = {0x0002U, 0x0000U, 0x04C4U, 0x0040U, 0x0123U,
+                      0x0410U},
+            .patch_mask = (uint16_t)(all & ~required[missing]),
+        };
+        uint16_t patched[16];
+        assert(!sm64_saturn_terrain_template_patch_resolved_record_ex(
+            patched, &resolved, vertices, 0x0042U, true, true, 0x00123458U,
+            true, 0x0BEEU));
+    }
 }
 
 static void test_terrain_template_variants_patch_only_their_declared_fields(void)
@@ -147,25 +174,31 @@ static void test_terrain_template_variants_patch_only_their_declared_fields(void
     const int16_t vertices[4][2] = {
         {-3, -2}, {7, -2}, {7, 6}, {-3, 6}};
     const struct {
+        uint16_t words[16];
         uint16_t patch_mask;
         bool gouraud;
     } fixtures[] = {
-        /* Clipped source material keeps its original texture state. */
-        {SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
+        /* Clipped source keeps its resolved textured distorted-sprite image. */
+        {{0x0002U, 0U, 0x04C0U, 0x0040U, 0x0123U, 0x0410U},
+         SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
              SM64_SATURN_TERRAIN_PATCH_XY, false},
-        /* Recovery material resolves to a static polygon/Gouraud image. */
-        {SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
+        /* Recovery resolves to a static RGB polygon/Gouraud image. */
+        {{0x0004U, 0U, 0x00C4U, 0x8000U, 0U, 0U},
+         SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
              SM64_SATURN_TERRAIN_PATCH_XY |
              SM64_SATURN_TERRAIN_PATCH_GOURAUD, true},
-        /* Textured-flat material has a static texture source and no GRDA. */
-        {SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
+        /* Textured-flat keeps static source/size and excludes GRDA. */
+        {{0x0002U, 0U, 0x04C0U, 0x0040U, 0x0456U, 0x0810U},
+         SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
              SM64_SATURN_TERRAIN_PATCH_XY, false},
-        /* Textured-Gouraud retains static texture words while patching GRDA. */
-        {SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
+        /* Textured-Gouraud keeps its resolved texture state and patches GRDA. */
+        {{0x0002U, 0U, 0x04C4U, 0x0040U, 0x0456U, 0x0810U},
+         SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
              SM64_SATURN_TERRAIN_PATCH_XY |
              SM64_SATURN_TERRAIN_PATCH_GOURAUD, true},
-        /* Texture-suppressed LOD uses its pre-resolved Gouraud variant. */
-        {SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
+        /* Texture-suppressed LOD resolves to its static Gouraud variant. */
+        {{0x0004U, 0U, 0x00C4U, 0x8000U, 0U, 0U},
+         SM64_SATURN_TERRAIN_PATCH_END | SM64_SATURN_TERRAIN_PATCH_LINK |
              SM64_SATURN_TERRAIN_PATCH_XY |
              SM64_SATURN_TERRAIN_PATCH_GOURAUD, true},
     };
@@ -174,8 +207,8 @@ static void test_terrain_template_variants_patch_only_their_declared_fields(void
          fixture < sizeof(fixtures) / sizeof(fixtures[0]); fixture++) {
         sm64_saturn_terrain_resolved_command_t resolved;
         uint16_t patched[16];
-        for (uint8_t word = 0U; word < 16U; word++)
-            resolved.words[word] = (uint16_t)(0xB000U + word);
+        memcpy(resolved.words, fixtures[fixture].words,
+               sizeof(resolved.words));
         resolved.patch_mask = fixtures[fixture].patch_mask;
         assert(sm64_saturn_terrain_template_patch_resolved_record_ex(
             patched, &resolved, vertices, 0x12U, false,
@@ -184,6 +217,9 @@ static void test_terrain_template_variants_patch_only_their_declared_fields(void
             if ((resolved.patch_mask & (uint16_t)(1U << word)) == 0U)
                 assert(patched[word] == resolved.words[word]);
         }
+        assert(patched[2] == fixtures[fixture].words[2]);
+        assert(patched[3] == fixtures[fixture].words[3]);
+        assert(patched[5] == fixtures[fixture].words[5]);
     }
 }
 
@@ -328,6 +364,7 @@ int main(void)
     test_builds_each_shade_path();
     test_patch_changes_only_runtime_words();
     test_resolved_template_poison_preserves_every_immutable_word();
+    test_resolved_template_rejects_every_missing_patch_permission();
     test_terrain_template_variants_patch_only_their_declared_fields();
     test_compact_resolved_state_matches_full_templates();
     test_resolved_record_derives_bob_static_inputs_within_budget();
