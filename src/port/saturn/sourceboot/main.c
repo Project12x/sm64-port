@@ -286,9 +286,10 @@ static uint8_t sourceboot_vdp1_cmdts_bank;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
- * header comment). 1536 * 8 = 12,288 bytes. One table per resolved
- * triangle, rebuilt every frame (bank_begin) and uploaded
- * used-prefix-only after emission -- see saturn_fast3d_vdp1_emit.c.
+ * header comment). Each 1536 * 8 = 12,288-byte staging bank is rebuilt
+ * while the other VDP1 frame is being consumed. The queue retains only an
+ * address/length descriptor, so a bank is never reused before its matching
+ * DMA completion sequence has retired.
  *
  * Budget: the live margin is 149,084 bytes (145.6 KiB), measured
  * 2026-07-24 as 0x06100000 - ___end with ___end at 0x060db9a4. Earlier
@@ -298,9 +299,9 @@ static uint8_t sourceboot_vdp1_cmdts_bank;
  * the same non-decrementing number. Re-measure with sh-elf-nm after any
  * change to static HWRAM, and note that sourceboot-cart.x now enforces
  * a 4 KiB floor at link time for libyaul's TLSF control block. */
-static sm64_saturn_gouraud_table_t
-    sourceboot_gouraud_staging[SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
-static sm64_saturn_gouraud_bank_t sourceboot_gouraud_bank;
+static sm64_saturn_gouraud_table_t sourceboot_gouraud_staging[2]
+    [SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
+static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2];
 
 /* Per-frame SMPC INTBACK request, on the same VBLANK-OUT cadence the two
  * proven sibling targets use (marioturntable/main.c's vblank_out_handler;
@@ -643,9 +644,12 @@ int main(void) {
         } else {
             dbgio_puts("sourceboot: gouraud partition unusable\n");
         }
-        (void)sm64_saturn_gouraud_bank_init(&sourceboot_gouraud_bank,
-            sourceboot_gouraud_staging, capacity,
-            (uintptr_t)partitions.gouraud_base);
+        for (uint8_t bank = 0U; bank < 2U; bank++) {
+            (void)sm64_saturn_gouraud_bank_init(
+                &sourceboot_gouraud_banks[bank],
+                sourceboot_gouraud_staging[bank], capacity,
+                (uintptr_t)partitions.gouraud_base);
+        }
     }
 
     main_pool_init(sourceboot_main_pool,
@@ -715,19 +719,14 @@ int main(void) {
             sourceboot_mario_pose.vertex_count;
 
         const uint16_t render_start = cpu_frt_count_get();
-        /* SlaveDriver and Z-Treme both rebuild into a bank that VDP1 is not
-         * consuming. Wait for the previous list to retire, then alternate
-         * the LWRAM staging bank before emitting this frame. */
-        /* Ownership proof for the CPU staging banks: observe whether the
-         * previous submission was still in flight, then wait before touching
-         * either staging slot. A busy observation is a late-DMA event, never
-         * an overwrite; the write path below cannot proceed until the safe
-         * boundary is retired. */
+        /* SlaveDriver and Z-Treme both rebuild a staging bank while VDP1
+         * consumes the other frame. Command/Gouraud staging is double
+         * buffered here, while VDP1's final VRAM ranges deliberately stay
+         * master-owned and single. The renderer waits only at that VRAM
+         * overwrite/draw-dependency boundary after CPU construction. */
         const bool vdp1_was_busy = vdp1_sync_busy();
         if (vdp1_was_busy)
             sourceboot_vdp1_bank_late_dma++;
-        vdp1_sync_wait();
-        sourceboot_vdp1_bank_displayed = sourceboot_vdp1_bank_submitted;
         sourceboot_vdp1_cmdts_bank ^= 1U;
         sm64_saturn_vdp1_backend_bind_storage(
             &sourceboot_vdp1_backend,
@@ -735,15 +734,22 @@ int main(void) {
             SOURCEBOOT_VDP1_COMMAND_CAPACITY);
 #if SATURN_DEMO_PATH
         sm64_saturn_demo_render_frame(&sourceboot_vdp1_backend,
-                                      &sourceboot_gouraud_bank,
+                                      &sourceboot_gouraud_banks[
+                                          sourceboot_vdp1_cmdts_bank],
                                       &sourceboot_fast3d.profile,
                                       &sourceboot_mario_snapshot,
                                       &sourceboot_mario_pose);
 #else
         sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
                                      &sourceboot_vdp1_backend,
-                                     &sourceboot_gouraud_bank);
+                                     &sourceboot_gouraud_banks[
+                                         sourceboot_vdp1_cmdts_bank]);
 #endif
+        /* Both emit paths wait for their just-submitted Gouraud sequence and
+         * then upload the final command list. Returning here proves the old
+         * list has retired before the corresponding single VDP1 VRAM ranges
+         * were overwritten. */
+        sourceboot_vdp1_bank_displayed = sourceboot_vdp1_bank_submitted;
         sourceboot_fast3d.profile.render_frt_ticks_last =
             sourceboot_frt_delta(render_start, cpu_frt_count_get());
         sourceboot_render_ticks_accum +=
@@ -771,7 +777,8 @@ int main(void) {
             sourceboot_fast3d.profile.vdp1_command_highwater =
                 sourceboot_fast3d.profile.vdp1_commands_last;
         const uint32_t gouraud_highwater =
-            sm64_saturn_gouraud_bank_used_bytes(&sourceboot_gouraud_bank) /
+            sm64_saturn_gouraud_bank_used_bytes(
+                &sourceboot_gouraud_banks[sourceboot_vdp1_cmdts_bank]) /
             sizeof(sm64_saturn_gouraud_table_t);
         if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
             sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;

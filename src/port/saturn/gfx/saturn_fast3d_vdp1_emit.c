@@ -101,17 +101,37 @@ void sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
         }
     }
 
-    if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0) {
-        /* Used-prefix only (the E0 command-arena lesson): synchronous
-         * for bring-up, same as the backend's own upload. Tables must
-         * be resident in VDP1 VRAM before backend_upload() lets VDP1
-         * start plotting commands that reference them via CMDGRDA. */
-        saturn_dma_queue_transfer_wait(
+    saturn_dma_queue_sequence_t gouraud_sequence =
+        SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+    if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
+        /* The descriptor holds the staging address rather than copying table
+         * bytes. The bank therefore remains owned until this exact sequence
+         * retires. Do not start the transfer yet: the previous VDP1 list may
+         * still be reading the same single Gouraud VRAM partition. */
+        gouraud_sequence = saturn_dma_queue_submit(
             (void *)gouraud_bank->vram_base, gouraud_bank->staging,
             sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
             SATURN_DMA_QUEUE_SCU);
+        if (gouraud_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+            /* Bounded recovery: retire existing work and retry once. The
+             * normal frame path has one outstanding upload at most, so this
+             * never silently drops a table or writes past the ring. */
+            profile->pipeline_faults++;
+            saturn_dma_queue_drain();
+            gouraud_sequence = saturn_dma_queue_submit(
+                (void *)gouraud_bank->vram_base, gouraud_bank->staging,
+                sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
+                SATURN_DMA_QUEUE_SCU);
+        }
     }
-
     sm64_saturn_vdp1_backend_finish(backend);
+    if (gouraud_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+        /* This is the single VRAM dependency boundary. Construction above
+         * overlapped the previous plot; only now, just before the next list
+         * is made drawable, may we overwrite its Gouraud partition. */
+        vdp1_sync_wait();
+        saturn_dma_queue_kick();
+        saturn_dma_queue_wait(gouraud_sequence);
+    }
     sm64_saturn_vdp1_backend_upload(backend);
 }

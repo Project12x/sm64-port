@@ -2315,13 +2315,34 @@ void sm64_saturn_demo_render_frame(
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is
      * reserved for SCSP/audio service rather than geometry dispatch. */
     demo_emit_mario(snapshot, pose, backend, &partitions, profile);
+    saturn_dma_queue_sequence_t gouraud_sequence =
+        SATURN_DMA_QUEUE_SEQUENCE_INVALID;
     if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
-        saturn_dma_queue_transfer_wait(
+        gouraud_sequence = saturn_dma_queue_submit(
             (void *)gouraud_bank->vram_base, gouraud_bank->staging,
             sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
             SATURN_DMA_QUEUE_SCU);
+        if (gouraud_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+            /* The ring is deliberately bounded. Recover only by retiring
+             * outstanding descriptors, never by overwriting their sources. */
+            profile->pipeline_faults++;
+            saturn_dma_queue_drain();
+            gouraud_sequence = saturn_dma_queue_submit(
+                (void *)gouraud_bank->vram_base, gouraud_bank->staging,
+                sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
+                SATURN_DMA_QUEUE_SCU);
+        }
     }
     sm64_saturn_vdp1_backend_finish(backend);
+    if (gouraud_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+        /* Final VDP1 ordering and presentation remain master-owned. The
+         * VDP1/Gouraud VRAM range is shared, so the prior plot must retire
+         * before DMA starts; queueing and all CPU construction happened
+         * earlier in this frame. */
+        vdp1_sync_wait();
+        saturn_dma_queue_kick();
+        saturn_dma_queue_wait(gouraud_sequence);
+    }
 #if 0 && SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING) && \
     defined(SATURN_SLAVE_VDP1_UPLOAD) && SATURN_SLAVE_VDP1_UPLOAD
     sm64_saturn_dual_worker_stats_t upload_stats;
