@@ -8,6 +8,7 @@
 #include "saturn_gouraud.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_terrain_emit_policy.h"
+#include "saturn_vdp2_frame.h"
 #include "saturn_terrain_command_template.h"
 #include "saturn_terrain_fused.h"
 #include "saturn_command_arena.h"
@@ -417,6 +418,106 @@ static void test_dual_pipeline_profile_counters_append_in_order(void)
            offsetof(sm64_saturn_fast3d_profile_t, gouraud_tables_saved) +
                sizeof(((sm64_saturn_fast3d_profile_t *)0)
                           ->gouraud_tables_saved));
+}
+
+typedef struct runtime_contract_vdp2_backend {
+    uint32_t sky_updates;
+    uint32_t hud_updates;
+    uint32_t layer_updates;
+    uint32_t commits;
+    int32_t sky_x;
+    int32_t sky_y;
+    uint32_t display_mask;
+    uint8_t vdp1_priority;
+    char hud[SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY];
+} runtime_contract_vdp2_backend_t;
+
+static void runtime_contract_vdp2_sky(int32_t x, int32_t y, void *work)
+{
+    runtime_contract_vdp2_backend_t *backend = work;
+    backend->sky_updates++;
+    backend->sky_x = x;
+    backend->sky_y = y;
+}
+
+static void runtime_contract_vdp2_hud(const char *text, void *work)
+{
+    runtime_contract_vdp2_backend_t *backend = work;
+    backend->hud_updates++;
+    (void)strncpy(backend->hud, text, sizeof(backend->hud) - 1U);
+    backend->hud[sizeof(backend->hud) - 1U] = '\0';
+}
+
+static void runtime_contract_vdp2_layers(uint32_t display_mask,
+                                         uint8_t vdp1_priority,
+                                         void *work)
+{
+    runtime_contract_vdp2_backend_t *backend = work;
+    backend->layer_updates++;
+    backend->display_mask = display_mask;
+    backend->vdp1_priority = vdp1_priority;
+}
+
+static void runtime_contract_vdp2_commit(void *work)
+{
+    ((runtime_contract_vdp2_backend_t *)work)->commits++;
+}
+
+static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
+{
+    sm64_saturn_vdp2_frame_t frame;
+    sm64_saturn_fast3d_profile_t profile;
+    runtime_contract_vdp2_backend_t observed;
+    const sm64_saturn_vdp2_camera_snapshot_t camera = {
+        .yaw = 0x4000,
+        .pitch = 0,
+        .valid = 1U,
+    };
+    const sm64_saturn_vdp2_frame_backend_t backend = {
+        .sky_scroll_set = runtime_contract_vdp2_sky,
+        .hud_write = runtime_contract_vdp2_hud,
+        .layers_set = runtime_contract_vdp2_layers,
+        .vblank_commit = runtime_contract_vdp2_commit,
+        .work = &observed,
+    };
+
+    (void)memset(&profile, 0, sizeof(profile));
+    (void)memset(&observed, 0, sizeof(observed));
+    profile.sim_frt_ticks_last = 1000U;
+    profile.demo_bob_results_master = 11U;
+    profile.demo_bob_results_slave = 12U;
+    profile.vdp1_commands_last = 13U;
+    profile.vdp1_bank_late_dma = 14U;
+
+    sm64_saturn_vdp2_frame_init(&frame);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 30U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+
+    assert(observed.commits == 1U);
+    assert(observed.sky_updates == 1U);
+    assert(observed.hud_updates == 1U);
+    assert(observed.layer_updates == 1U);
+    assert(observed.display_mask == SM64_SATURN_VDP2_FRAME_DISPLAY_MASK);
+    assert(observed.vdp1_priority == 7U);
+    assert(observed.sky_x == 128 && observed.sky_y == 128);
+    assert(strstr(observed.hud, "FPS ") != NULL);
+    assert(strstr(observed.hud, "MT 11") != NULL);
+    assert(strstr(observed.hud, "ST 12") != NULL);
+    assert(strstr(observed.hud, "ORD 13") != NULL);
+    assert(strstr(observed.hud, "DMA 14") != NULL);
+
+    /* A changed source-only camera snapshot changes sky scroll. HUD output
+     * is rate limited: a second present at tick 31 commits layers/scroll but
+     * does not rewrite tiles. */
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 31U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+    assert(observed.commits == 2U);
+    assert(observed.sky_updates == 2U);
+    assert(observed.hud_updates == 1U);
+    assert(observed.layer_updates == 2U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 60U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+    assert(observed.hud_updates == 2U);
 }
 
 static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
@@ -3938,6 +4039,7 @@ int main(void)
 {
     quad_build_lists();
     test_dual_pipeline_profile_counters_append_in_order();
+    test_vdp2_frame_coalesces_sky_hud_and_layers();
     assert(sm64_saturn_gouraud_neutral_color() == 0xC210U);
     test_identity_camera();
     test_rotated_frustum_aabb_radius_is_conservative();

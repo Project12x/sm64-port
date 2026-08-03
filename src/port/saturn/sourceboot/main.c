@@ -17,6 +17,7 @@
 #include "saturn_source_runtime.h"
 #include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
+#include "saturn_vdp2_frame.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -58,6 +59,7 @@ static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
 static uint32_t sourceboot_vdp1_bank_late_dma;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
+static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
 sm64_saturn_camera_timing_t sm64_saturn_camera_timing;
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
@@ -340,7 +342,7 @@ static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
 #define SOURCEBOOT_SKY_BITMAP_HEIGHT 256U
 #define SOURCEBOOT_SKY_BITMAP_WORDS \
     (SOURCEBOOT_SKY_BITMAP_WIDTH * SOURCEBOOT_SKY_BITMAP_HEIGHT)
-#define SOURCEBOOT_VDP2_DISPLAY_MASK ((1U << 1) | (1U << 3)) /* NBG1 + NBG3 */
+#define SOURCEBOOT_VDP2_DISPLAY_MASK SM64_SATURN_VDP2_FRAME_DISPLAY_MASK
 #define SOURCEBOOT_VDP2_VRAM_BYTES \
     ((SOURCEBOOT_SKY_BITMAP_WORDS * sizeof(uint16_t)) + \
      (SOURCEBOOT_BACKSCREEN_LINES * sizeof(rgb1555_t)))
@@ -394,24 +396,57 @@ static void sourceboot_init_sky_bitmap(void)
     };
     vdp2_vram_cycp_set(&cycles);
     vdp2_scrn_bitmap_format_set(&format);
-    /* Keep the baked bitmap behind VDP1 sprites in both Ymir's software
-     * compositor and the hardware priority chain. The bitmap has no
-     * transparent texel key, so any higher priority would occlude terrain. */
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 0);
-    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1);
 }
 
-static void sourceboot_update_sky_scroll(
-    const sm64_saturn_mario_actor_snapshot_t *snapshot)
+static void sourceboot_vdp2_sky_scroll_set(int32_t x, int32_t y,
+                                           void *work __unused)
 {
-    if (snapshot == NULL || !snapshot->valid) return;
-    const int32_t yaw = (uint16_t)snapshot->camera_yaw;
-    int32_t x = (yaw * (int32_t)SOURCEBOOT_SKY_BITMAP_WIDTH) >> 16;
-    int32_t y = 128 + (((int32_t)snapshot->camera_pitch * 256) >> 16);
-    if (y < 0) y = 0;
-    if (y > 256) y = 256;
     vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1, FIX16(x));
     vdp2_scrn_scroll_y_set(VDP2_SCRN_NBG1, FIX16(y));
+}
+
+static void sourceboot_vdp2_hud_write(const char *text, void *work __unused)
+{
+    dbgio_puts("\x1B[6;1H");
+    dbgio_puts(text);
+    dbgio_flush();
+}
+
+static void sourceboot_vdp2_layers_set(uint32_t display_mask,
+                                       uint8_t vdp1_priority,
+                                       void *work __unused)
+{
+    /* NBG1 is an opaque baked sky and must remain behind VDP1. NBG3 hosts
+     * dbgio's text. Every sprite group stays visible above both. */
+    for (uint8_t priority = 0U; priority < 8U; priority++)
+        vdp2_sprite_priority_set(priority, vdp1_priority);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 0U);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7U);
+    vdp2_scrn_display_set((uint16_t)display_mask);
+}
+
+static void sourceboot_vdp2_vblank_commit(void *work __unused)
+{
+    /* Yaul queues shadow state here and commits it in its VBlank-IN path. */
+    vdp2_sync();
+}
+
+static const sm64_saturn_vdp2_frame_backend_t sourceboot_vdp2_backend = {
+    .sky_scroll_set = sourceboot_vdp2_sky_scroll_set,
+    .hud_write = sourceboot_vdp2_hud_write,
+    .layers_set = sourceboot_vdp2_layers_set,
+    .vblank_commit = sourceboot_vdp2_vblank_commit,
+    .work = NULL,
+};
+
+static sm64_saturn_vdp2_camera_snapshot_t
+sourceboot_vdp2_camera_snapshot(void)
+{
+    return (sm64_saturn_vdp2_camera_snapshot_t){
+        .yaw = sourceboot_mario_snapshot.camera_yaw,
+        .pitch = sourceboot_mario_snapshot.camera_pitch,
+        .valid = sourceboot_mario_snapshot.valid,
+    };
 }
 
 void user_init(void) {
@@ -432,15 +467,6 @@ void user_init(void) {
      * VBlank wait on sourceboot's stock game pacing. */
     vdp1_sync_interval_set(-1);
     sourceboot_init_sky_gradient();
-    /* VDP1's output is a VDP2-composited layer: sprite-screen priority 0
-     * means "never displayed" (the classic footgun recorded in
-     * docs/saturn/SGL_REFERENCE_NOTES.md). Without this, the whole
-     * Fast3D-to-VDP1 pipeline draws into an invisible layer -- diagnosed
-     * live when the first 18 resolved triangles produced a black frame.
-     * Mirrors castleviewer's proven setup (all 8 groups at 7). */
-    for (uint8_t priority = 0; priority < 8; priority++) {
-        vdp2_sprite_priority_set(priority, 7);
-    }
     vdp2_tvmd_display_set();
     /* Register the per-frame INTBACK cadence and prime the first
      * collection, mirroring castleviewer verbatim (its comment: a target
@@ -466,35 +492,21 @@ int main(void) {
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
      * never receives a zeroed pre-cart buffer. */
     sourceboot_init_sky_bitmap();
+    sm64_saturn_vdp2_frame_init(&sourceboot_vdp2_frame);
 
     dbgio_init();
     dbgio_dev_default_init(DBGIO_DEV_VDP2_ASYNC);
     dbgio_dev_font_load();
-    /* Layer visibility, after dbgio's own VDP2 setup so nothing below
-     * re-clobbers it -- the ordering castleviewer/marioturntable ship
-     * with. NBG3 carries dbgio's text; the sprite groups carry VDP1's
-     * composited output (priority 0 = invisible; see
-     * docs/saturn/SGL_REFERENCE_NOTES.md). Without these, both the boot
-     * banner and every rendered triangle land in invisible layers. */
-    for (uint8_t priority = 0; priority < 8; priority++) {
-        vdp2_sprite_priority_set(priority, 7);
-    }
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7);
-    vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG1 | VDP2_SCRN_DISP_NBG3);
     dbgio_puts("\x1B[H\x1B[2JSM64 SATURN SOURCEBOOT E2\n"
                "Direct original Bob script\n"
                "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
-    /* Commit everything VDP2-side queued so far -- the layer priorities
-     * above, the back color, and dbgio's text DMA. libyaul buffers VDP2
-     * state in shadow registers that reach hardware only when
-     * vdp2_sync() arms the vblank commit (the same
-     * shadow-then-commit-at-vblank model Sega's own SGL documents; see
-     * SGL_REFERENCE_NOTES.md). Without this, every VDP2 write since
-     * boot -- including this banner -- stays invisible; the proven
-     * hello/hwtest targets all pair dbgio_flush() with exactly this. */
-    vdp2_sync();
+    sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
+                                 &sourceboot_fast3d.profile,
+                                 sourceboot_sim_tick_count);
+    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
+                                  &sourceboot_vdp2_backend);
     vdp2_sync_wait();
 
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
@@ -712,13 +724,11 @@ int main(void) {
             sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
-            sourceboot_update_sky_scroll(&sourceboot_mario_snapshot);
         }
 #else
         if (sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
-            sourceboot_update_sky_scroll(&sourceboot_mario_snapshot);
         }
 #endif
         sourceboot_fast3d.profile.demo_actor_snapshot_valid =
@@ -816,17 +826,19 @@ int main(void) {
          * source-game VBlank pacing retires the sync state for free; only an
          * overlong plot makes the next render wait.
          *
-         * vdp2_sync() IS armed each frame (a flags-only call, no blocking
-         * -- the vblank-in ISR performs the actual commit, so this adds
-         * no second wait): an earlier revision omitted it on the
-         * reasoning that "nothing queues VDP2 writes after user_init",
-         * which was wrong -- dbgio's async device queues VDP2 VRAM
-         * transfers whenever game code prints, and any future VDP2 state
-         * change (fades, letterboxing) needs the commit armed. The
-         * blocking vdp2_sync_wait() stays out of the loop per the pacing
-         * analysis above. */
+         * VDP2 state is coalesced below through the frame API. That path
+         * writes NBG1 sky scroll, optional NBG3 HUD text, priorities, and
+         * display mask, then arms exactly one VBlank commit; it never sees
+         * terrain or Mario geometry. The blocking vdp2_sync_wait() stays
+         * out of the loop per the pacing analysis above. */
         vdp1_sync_render();
         vdp1_sync();
-        vdp2_sync();
+        const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
+            sourceboot_vdp2_camera_snapshot();
+        sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,
+                                     &sourceboot_fast3d.profile,
+                                     sourceboot_sim_tick_count);
+        sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
+                                      &sourceboot_vdp2_backend);
     }
 }

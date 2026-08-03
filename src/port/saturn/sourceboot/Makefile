@@ -167,6 +167,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/runtime/saturn_camera_fixed.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
   $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_vdp2_frame.c \
   $(ROOT)/src/port/saturn/gfx/saturn_terrain_command_template.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c \
