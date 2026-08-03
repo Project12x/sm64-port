@@ -11,6 +11,12 @@
 
 ### Fixed
 
+- Fenced sourceboot presentation to one observed VBlank generation: elapsed
+  credit is sampled only at outer-loop entry, recovery is capped at one extra
+  simulation tick, and excess eligible credit is counted and dropped. This
+  prevents slow rendering from refilling catch-up work and submitting multiple
+  VDP1 plots for one displayed VDP2 field; VDP1 and geometry-free VDP2 now
+  commit together at one terminal boundary.
 - The `diag-skip-geo` host policy gate now executes the real Make validation
   matrix and inspects the actual normal compile-time branch, preventing inert
   comments or the wrong source region from satisfying diagnostic containment.

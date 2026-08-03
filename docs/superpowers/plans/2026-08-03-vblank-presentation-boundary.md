@@ -64,19 +64,19 @@ References inspected before design:
 5. The behavior applies to the full sourceboot path; it neither suppresses the
    geo walk nor adds BOB branches.
 
-- [ ] **Step 1: Write the red scheduler/source mutation test.** It must reject
+- [x] **Step 1: Write the red scheduler/source mutation test.** It rejects
   `SOURCEBOOT_MAX_SIM_CATCHUP 4U`, re-adding VBlank credit inside the tick loop,
   more than one VDP1 submission path per generation, and a VDP2 commit outside
-  the terminal VDP1 boundary. It must demonstrate the current failure.
-- [ ] **Step 2: Add the named `verify-sourceboot-presentation-boundary` target
+  the terminal VDP1 boundary. The pre-change source failed the real gate.
+- [x] **Step 2: Add the named `verify-sourceboot-presentation-boundary` target
   and record the red command/result.**
-- [ ] **Step 3: Implement the smallest scene-neutral cadence state needed for
+- [x] **Step 3: Implement the smallest scene-neutral cadence state needed for
   the contract.** Keep counters observable in the existing diagnostic profile
   when a compatible location exists; do not begin A2 snapshots/banks/queues.
-- [ ] **Step 4: Run the focused gate and the directly relevant existing runtime
-  contract gate.** Record actual passes and the known wrapper path gate if it
-  still occurs.
-- [ ] **Step 5: Update all live records and commit the behavior with a same-
+- [x] **Step 4: Run the focused gate and the directly relevant existing runtime
+  contract gate.** The focused gate passes; the runtime wrapper reproduces the
+  known Windows-path failure before compilation and remains unpassed.
+- [x] **Step 5: Update all live records and commit the behavior with a same-
   commit changelog entry:** `perf(saturn): fence presentation to VBlank`.
 - [ ] **Step 6: Complete independent specification and quality reviews, resolve
   every Important finding, and record the final verdicts.**
@@ -91,3 +91,20 @@ Every acceptance-contract item has direct source/test evidence, the focused
 test was observed red before implementation and green after it, both reviews
 are clean, and one serial Ymir manual result is recorded. A visible speed gain
 is the expected outcome but is not substituted for the structural invariants.
+
+## Live Task 1 transition — implementation ready for review
+
+The sourceboot loop now observes `sourceboot_vblank_out_count` once per outer
+iteration. A stale generation waits and retains the completed VDP1 list; a new
+generation runs at most two eligible source ticks, drops only additional whole
+tick credit, constructs one list, and enters `sourceboot_present_generation()`.
+That terminal function starts/completes one VDP1 plot and commits the
+geometry-free VDP2 frame using the same observed generation. The appended
+diagnostic profile fields expose the presentation generation and dropped
+credit count.
+
+Implementation evidence is recorded in
+`.superpowers/sdd/2026-08-03-vblank-presentation-boundary/task-1-report.md`.
+Independent specification and quality review, then the serial target/Ymir
+gate, remain unchecked. No GPL source was copied: SlaveDriver and Z-Treme were
+pattern-only/clean-room cadence references at their pinned revisions.

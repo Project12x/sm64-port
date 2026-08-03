@@ -438,6 +438,11 @@ typedef struct sm64_saturn_fast3d_profile {
      * after each authoritative tick. Appended to preserve capture offsets. */
     uint32_t scene_graph_walks;
     uint32_t scene_graph_walks_suppressed;
+    /* Emergency A9.0 cadence diagnostics. These append-only counters expose
+     * the VBlank generation consumed by the terminal presentation boundary
+     * and every eligible VBlank credit deliberately dropped after recovery. */
+    uint32_t vblank_presentation_generation;
+    uint32_t sim_vblank_credit_dropped;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

@@ -217,6 +217,9 @@ verify-source-render-policy:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_source_render_suppression.py"
 	$(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" verify-runtime-contracts
 
+verify-sourceboot-presentation-boundary:
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_presentation_boundary.py"
+
 verify-vdp2-frame: check-host-tools
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \

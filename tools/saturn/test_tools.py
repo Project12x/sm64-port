@@ -1918,11 +1918,13 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "vdp1_wait_ticks_accum",
             "scene_graph_walks",
             "scene_graph_walks_suppressed",
+            "vblank_presentation_generation",
+            "sim_vblank_credit_dropped",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-16:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-18:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-17].end,
+            layout.fields[-19].end,
         )
 
         data = bytearray(layout.size)
@@ -1944,6 +1946,8 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "vdp1_wait_ticks_accum": 41,
             "scene_graph_walks": 43,
             "scene_graph_walks_suppressed": 47,
+            "vblank_presentation_generation": 53,
+            "sim_vblank_credit_dropped": 59,
         }
         for name, value in expected.items():
             field = layout.field(name)
@@ -2083,6 +2087,8 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "vdp1_wait_ticks_accum",
                 "scene_graph_walks",
                 "scene_graph_walks_suppressed",
+                "vblank_presentation_generation",
+                "sim_vblank_credit_dropped",
             ],
         )
         # Fields the older build did have still read correctly.

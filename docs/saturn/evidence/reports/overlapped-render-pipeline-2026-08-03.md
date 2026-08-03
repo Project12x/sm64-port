@@ -14,6 +14,47 @@ No target build, CUE, Ymir launch, or native-math census was performed. The A1
 performance path remains blocked and must not be promoted or used for the
 controller-owned manual checkpoint until the seam and tests below exist.
 
+## Emergency A9.0 Task 1 — implementation ready for independent review
+
+The full sourceboot path now consumes elapsed VBlank credit once before any
+ticks, permits at most one normal and one recovery tick, and counts/drops only
+the remaining whole eligible credit. A stale observed generation waits without
+rebuilding/uploading/syncing VDP1; a fresh generation builds once and ends in
+`sourceboot_present_generation()`, which contains the sole VDP1 sync pair and
+geometry-free VDP2 frame commit. The VDP1 bank/profile generation and appended
+dropped-credit counter make that ownership observable.
+
+Focused RED command:
+
+```powershell
+& .\tools\saturn\with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk verify-sourceboot-presentation-boundary
+```
+
+RED result before scheduler implementation: exit 1; `Ran 4 tests in 0.002s`;
+the real source failed the required two-tick scheduler contract because it
+defined `SOURCEBOOT_MAX_SIM_CATCHUP 4U`. A later focused RED during correction
+also exited 1 (`Ran 4 tests in 0.006s`) because the dropped-credit assertion
+correctly rejected accounting that included the retained fractional remainder.
+
+Focused GREEN command: the same command. Result: exit 0; `Ran 4 tests in
+0.009s`; `OK`. The in-memory mutations prove rejection of four-tick catch-up,
+credit refill inside the tick loop, a second VDP1 submission path, and a VDP2
+commit outside the terminal boundary.
+
+Direct runtime-contract command:
+
+```powershell
+& .\tools\saturn\with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk verify-runtime-contracts
+```
+
+Result: exit 1 after the three quad-map summaries. The wrapper passed an MSYS
+`\\d\\Code...` path to Windows Python; directory creation failed with
+`PermissionError: [WinError 5]` before the contract executable compiled. This
+is the known unpassed wrapper-path gate, not a runtime-contract green result.
+
+No target build, CUE, or Ymir run occurred. Independent specification and
+quality reviews remain required before the serial target/manual gate.
+
 ## Task 1D — sealed geo-walk upper-bound diagnostic
 
 ### Current verdict and scope

@@ -48,13 +48,14 @@
 #endif
 
 #define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
-#define SOURCEBOOT_MAX_SIM_CATCHUP 4U
+#define SOURCEBOOT_MAX_SIM_CATCHUP 2U
 
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
 static uint32_t sourceboot_render_ticks_accum;
 static volatile uint32_t sourceboot_vblank_out_count;
+static uint32_t sourceboot_sim_vblank_credit_dropped;
 static uint32_t sourceboot_vdp1_bank_generation;
 static uint32_t sourceboot_vdp1_bank_submitted;
 static uint32_t sourceboot_vdp1_bank_displayed;
@@ -475,6 +476,37 @@ sourceboot_vdp2_camera_snapshot(void)
     };
 }
 
+/* The master alone converts one observed VBlank generation into one VDP1
+ * plot and one VDP2 composition commit.  No geometry enters the VDP2 API;
+ * its frame is prepared only after VDP1's terminal completion boundary. */
+static void sourceboot_present_generation(uint32_t presentation_generation)
+{
+    const uint16_t vdp1_wait_start = cpu_frt_count_get();
+    vdp1_sync_render();
+    vdp1_sync();
+    sourceboot_fast3d.profile.vdp1_wait_ticks_last =
+        sourceboot_frt_delta(vdp1_wait_start, cpu_frt_count_get());
+    sourceboot_vdp1_wait_ticks_accum +=
+        sourceboot_fast3d.profile.vdp1_wait_ticks_last;
+    sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
+        sourceboot_vdp1_wait_ticks_accum;
+    const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
+        sourceboot_vdp2_camera_snapshot();
+    sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,
+                                 &sourceboot_fast3d.profile,
+                                 sourceboot_sim_tick_count);
+    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
+                                  &sourceboot_vdp2_backend);
+    sourceboot_vdp1_bank_generation = presentation_generation;
+    sourceboot_vdp1_bank_submitted = presentation_generation;
+    sourceboot_fast3d.profile.vdp1_bank_generation = presentation_generation;
+    sourceboot_fast3d.profile.vdp1_bank_submitted = presentation_generation;
+    sourceboot_fast3d.profile.vblank_presentation_generation =
+        presentation_generation;
+    sourceboot_fast3d.profile.sim_vblank_credit_dropped =
+        sourceboot_sim_vblank_credit_dropped;
+}
+
 void user_init(void) {
     /* First, matching both siblings' user_init order (castleviewer
      * main.c:1186, marioturntable main.c:247). */
@@ -528,13 +560,6 @@ int main(void) {
                "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
-    sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
-                                 &sourceboot_fast3d.profile,
-                                 sourceboot_sim_tick_count);
-    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
-                                  &sourceboot_vdp2_backend);
-    vdp2_sync_wait();
-
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
@@ -713,31 +738,46 @@ int main(void) {
      * suppresses only the source display-list submission while it catches up
      * after a slow IR render. */
     thread5_game_loop(NULL);
-#if SATURN_DEMO_PATH
     uint32_t scheduler_vblank_clock = sourceboot_vblank_out_count;
+    uint32_t sourceboot_presentation_generation = scheduler_vblank_clock;
     uint32_t sim_vblank_credit = SOURCEBOOT_SIM_VBLANK_DIVISOR;
-#endif
     for (;;) {
+        /* Sample the ISR-owned VBlank clock exactly once before any source
+         * tick.  A tick can take longer than a field, but it cannot refill
+         * this generation's credit or trigger a second presentation. */
 #if SATURN_DEMO_PATH
         bool simulation_ran = false;
+#endif
         uint32_t scheduler_now = sourceboot_vblank_out_count;
         sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
         scheduler_vblank_clock = scheduler_now;
+        if (scheduler_now == sourceboot_presentation_generation) {
+            /* No completed fresh field: retain the previously completed
+             * VDP1 list and wait rather than rebuilding/uploading/syncing. */
+            sm64_saturn_source_runtime_wait_vblank();
+            continue;
+        }
+        sourceboot_presentation_generation = scheduler_now;
         for (uint8_t catchup = 0U;
              sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
              catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
             sim_vblank_credit -= SOURCEBOOT_SIM_VBLANK_DIVISOR;
             sourceboot_run_source_tick();
+#if SATURN_DEMO_PATH
             simulation_ran = true;
-            scheduler_now = sourceboot_vblank_out_count;
-            sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
-            scheduler_vblank_clock = scheduler_now;
-        }
-        if (!simulation_ran)
-            sm64_saturn_source_runtime_wait_vblank();
-#else
-        sourceboot_run_source_tick();
 #endif
+        }
+        /* The first tick is normal; the second is bounded recovery. Preserve
+         * a fractional VBlank remainder but discard every additional eligible
+         * tick so a slow render cannot create a feedback backlog. */
+        if (sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR) {
+            const uint32_t dropped_vblank_credit =
+                sim_vblank_credit -
+                (sim_vblank_credit % SOURCEBOOT_SIM_VBLANK_DIVISOR);
+            sourceboot_sim_vblank_credit_dropped +=
+                dropped_vblank_credit;
+            sim_vblank_credit -= dropped_vblank_credit;
+        }
 
         /* Renderer-facing actor state is captured after the authoritative
          * source tick and before command emission. The bridge is read-only;
@@ -802,12 +842,6 @@ int main(void) {
             sourceboot_vdp1_backend.list.count;
         sourceboot_fast3d.profile.vdp1_commands =
             sourceboot_vdp1_backend.list.count;
-        sourceboot_vdp1_bank_generation++;
-        sourceboot_vdp1_bank_submitted = sourceboot_vdp1_bank_generation;
-        sourceboot_fast3d.profile.vdp1_bank_generation =
-            sourceboot_vdp1_bank_generation;
-        sourceboot_fast3d.profile.vdp1_bank_submitted =
-            sourceboot_vdp1_bank_submitted;
         sourceboot_fast3d.profile.vdp1_bank_displayed =
             sourceboot_vdp1_bank_displayed;
         sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
@@ -849,35 +883,6 @@ int main(void) {
     sourceboot_capture_route_checkpoint();
 #endif
 
-        /* Variable-sync mode was selected once in user_init(). Unlike Yaul's
-         * default auto mode, its VBLANK-IN path checks EDSR.CEF and does not
-         * request a framebuffer change until VDP1 has finished plotting.
-         * vdp1_sync_wait() at the top of the next render therefore protects
-         * command VRAM from overwrite for the actual draw lifetime, not just
-         * for one presumed VBlank pair. In the ordinary case the existing
-         * source-game VBlank pacing retires the sync state for free; only an
-         * overlong plot makes the next render wait.
-         *
-         * VDP2 state is coalesced below through the frame API. That path
-         * writes NBG1 sky scroll, optional NBG3 HUD text, priorities, and
-         * display mask, then arms exactly one VBlank commit; it never sees
-         * terrain or Mario geometry. The blocking vdp2_sync_wait() stays
-         * out of the loop per the pacing analysis above. */
-        const uint16_t vdp1_wait_start = cpu_frt_count_get();
-        vdp1_sync_render();
-        vdp1_sync();
-        sourceboot_fast3d.profile.vdp1_wait_ticks_last =
-            sourceboot_frt_delta(vdp1_wait_start, cpu_frt_count_get());
-        sourceboot_vdp1_wait_ticks_accum +=
-            sourceboot_fast3d.profile.vdp1_wait_ticks_last;
-        sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
-            sourceboot_vdp1_wait_ticks_accum;
-        const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
-            sourceboot_vdp2_camera_snapshot();
-        sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,
-                                     &sourceboot_fast3d.profile,
-                                     sourceboot_sim_tick_count);
-        sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
-                                      &sourceboot_vdp2_backend);
+        sourceboot_present_generation(scheduler_now);
     }
 }
