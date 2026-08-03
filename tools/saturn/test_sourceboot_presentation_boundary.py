@@ -50,7 +50,8 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("VBlank credit must be sampled exactly once per outer loop")
     if "if (scheduler_now == sourceboot_presentation_generation)" not in loop:
         raise AssertionError("a stale VBlank generation must reuse the completed VDP1 list")
-    if "sm64_saturn_source_runtime_wait_vblank();\n            continue;" not in loop:
+    stale_wait_and_continue = "sm64_saturn_source_runtime_wait_vblank();\n            continue;"
+    if stale_wait_and_continue not in loop:
         raise AssertionError("stale VBlank generation must wait instead of rebuilding")
     if "catchup < SOURCEBOOT_MAX_SIM_CATCHUP" not in loop:
         raise AssertionError("recovery tick cap must guard source ticks")
@@ -69,8 +70,11 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("VDP1 submission escapes the terminal boundary")
     if "sm64_saturn_vdp2_frame_commit(" in without_terminal:
         raise AssertionError("VDP2 commit escapes the terminal VDP1 boundary")
-    if "sourceboot_present_generation(scheduler_now);" not in loop:
-        raise AssertionError("presentation must use the observed VBlank generation")
+    presentation_call = "sourceboot_present_generation(scheduler_now);"
+    if loop.count(presentation_call) != 1:
+        raise AssertionError("fresh generation must make exactly one presentation attempt")
+    if loop.index(stale_wait_and_continue) >= loop.index(presentation_call):
+        raise AssertionError("stale VBlank wait/continue must precede presentation")
     if "sourceboot_vdp1_bank_generation = presentation_generation;" not in terminal:
         raise AssertionError("VDP1 ownership must be keyed to the presentation generation")
 
@@ -118,6 +122,12 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "VDP2 commit escapes"):
             assert_presentation_boundary(escaped_vdp2)
+
+    def test_rejects_duplicate_terminal_presentation_mutation(self) -> None:
+        call = "    sourceboot_present_generation(scheduler_now);"
+        mutated = self.source.replace(call, f"{call}\n{call}", 1)
+        with self.assertRaisesRegex(AssertionError, "exactly one presentation"):
+            assert_presentation_boundary(mutated)
 
 
 if __name__ == "__main__":

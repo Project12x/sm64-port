@@ -24,6 +24,14 @@ rebuilding/uploading/syncing VDP1; a fresh generation builds once and ends in
 geometry-free VDP2 frame commit. The VDP1 bank/profile generation and appended
 dropped-credit counter make that ownership observable.
 
+`vdp1_bank_displayed` intentionally lags the just-armed presentation: it is
+published from the prior `vdp1_bank_submitted` before construction overwrites
+the current source bank. `vdp1_bank_submitted` and
+`vblank_presentation_generation` instead identify the fresh generation armed
+by `sourceboot_present_generation()`. Capture analysis must treat that
+one-submission lag as the completed-list lifetime signal, not an ownership
+off-by-one fault.
+
 Implementation commit: `950ab37a` (`perf(saturn): fence presentation to VBlank`).
 
 Focused RED command:

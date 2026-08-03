@@ -20,3 +20,10 @@ the known MSYS-to-Windows `\\d\\Code...` `PermissionError: [WinError 5]` before
 host-contract compilation; it remains unchecked. No target build/Ymir launch
 was run. Implementation commit `950ab37a` carries the same-commit changelog
 entry; reviewer verdicts remain pending.
+
+Task 1: specification review GO; quality review NO-GO. Fix round 1/5 resolves
+I1: the focused mutation gate now requires exactly one
+`sourceboot_present_generation(scheduler_now)` invocation and its in-memory
+duplicate-call mutant fails with the one-presentation diagnostic. M1 documents
+the intentional displayed-bank lag; M2 removes the unused
+`PRESENTATION_BOUNDARY_COUNTERS` grouping. Focused re-review remains pending.

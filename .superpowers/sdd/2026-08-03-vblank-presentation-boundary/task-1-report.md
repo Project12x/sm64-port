@@ -111,3 +111,41 @@ as evidence for this task.
 - Exactly one serial target CUE plus a project-profile Ymir manual run with the
   32-Mbit DRAM cart, recording VDP1/VDP2 counters, controls, BOB visibility,
   and qualitative speed. Emulator timing is not retail-hardware proof.
+
+## Quality fix round 1/5 — I1 resolved, M1/M2 addressed
+
+The focused source checker now requires exactly one
+`sourceboot_present_generation(scheduler_now)` invocation in `main()` and
+verifies the stale-generation `wait_vblank()`/`continue` sequence occurs before
+that terminal call. The new duplicate-helper in-memory mutant is rejected with
+`fresh generation must make exactly one presentation attempt`; no production
+scheduler behavior changed.
+
+Mutation RED command:
+
+```powershell
+& .\tools\saturn\with-msys-toolchain.ps1 .\.venv-saturn-tools\Scripts\python.exe -c "import runpy; ns=runpy.run_path('tools/saturn/test_sourceboot_presentation_boundary.py'); source=ns['SOURCEBOOT_C'].read_text(encoding='utf-8'); call='    sourceboot_present_generation(scheduler_now);'; ns['assert_presentation_boundary'](source.replace(call, call+'\n'+call, 1))"
+```
+
+Result: exit 1, `AssertionError: fresh generation must make exactly one
+presentation attempt`. This is the expected failing duplicate-dispatch mutant,
+observed before any production change (none was needed).
+
+Focused GREEN command:
+
+```powershell
+& .\tools\saturn\with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk verify-sourceboot-presentation-boundary
+```
+
+Result: exit 0; `Ran 5 tests in 0.011s`; `OK`. The profile decoder subset also
+passed: `python -m unittest tools.saturn.test_tools.Fast3dProfileDecodeTests`,
+exit 0, `Ran 13 tests in 0.006s`, `OK (skipped=1)`.
+
+M1 is documented in the evidence report: `vdp1_bank_displayed` deliberately
+reports the previously submitted/retired list and is one submission behind the
+fresh `vdp1_bank_submitted`/`vblank_presentation_generation` arm. M2 removes
+the unused `PRESENTATION_BOUNDARY_COUNTERS` tuple; the decoder continues to
+derive and expose both appended fields directly from the real profile header.
+
+The unpassed runtime-wrapper gate, independent quality re-review, and serial
+target/Ymir gates remain unchanged.
