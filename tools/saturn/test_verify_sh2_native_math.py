@@ -5478,6 +5478,71 @@ fixture.c 3 0x06003002
                         local_islands=islands,
                     )
 
+    def test_cfg_component_keeps_nested_shift_ladder_fallthrough(self) -> None:
+        owners = (
+            FunctionOwner("___ashrsi3_r4_10", 0x06001000, 0x0600100A, 1),
+            FunctionOwner("___ashrsi3_r4_9", 0x06001002, 0x0600100A, 1),
+            FunctionOwner("___addsf3", 0x06002000, 0x06002004, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"___ashrsi3_r4_10"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001000 <___ashrsi3_r4_10>:
+ 6001000: 44 01 shlr r4
+06001002 <___ashrsi3_r4_9>:
+ 6001002: b0 7d bsr 6002000 <___addsf3>
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+06002000 <___addsf3>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, "", owners, (oracle,)
+        )
+        self.assertEqual(
+            prepared.closure,
+            frozenset({"___ashrsi3_r4_10", "___ashrsi3_r4_9"}),
+        )
+        self.assertEqual(prepared.selected_names, prepared.closure)
+        self.assertEqual(
+            set(prepared.instructions),
+            {0x06001000, 0x06001002, 0x06001004, 0x06001006, 0x06001008},
+        )
+        analysis = analyze_code_only(
+            prepared.instructions,
+            owners,
+            prepared.decoded_lines,
+            set(prepared.selected_names),
+            build_instruction_memory(prepared.instructions),
+        )
+        self.assertEqual(
+            [(call.caller, call.address, call.helper) for call in analysis.calls],
+            [("___ashrsi3_r4_9", 0x06001002, "___addsf3")],
+        )
+
+    def test_cfg_component_rejects_partial_owner_overlap(self) -> None:
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001008, 1),
+            FunctionOwner("_crossing_tail", 0x06001004, 0x0600100C, 1),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+06001004 <_crossing_tail>:
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "partial function overlap"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", owners, (self.ORACLE,)
+            )
+
     def test_cfg_provenance_requires_local_delay_slot(self) -> None:
         cases = {
             "missing": (

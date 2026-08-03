@@ -4474,6 +4474,62 @@ def _bounded_code_identity(
     return None if island is None else _local_island_identity(island)
 
 
+def _validated_bounded_owner_components(
+    owners: tuple[FunctionOwner, ...],
+) -> dict[str, frozenset[str]]:
+    """Group laminar same-section function ranges into overlap components."""
+    if len({owner.name for owner in owners}) != len(owners):
+        raise ValueError("duplicate bounded function owner identity")
+
+    parent = {owner.name: owner.name for owner in owners}
+
+    def find(name: str) -> str:
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    def union(left: str, right: str) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    by_section: defaultdict[int, list[FunctionOwner]] = defaultdict(list)
+    for owner in owners:
+        if owner.end <= owner.start:
+            raise ValueError(f"invalid bounded function range: {owner.name}")
+        by_section[owner.section].append(owner)
+
+    for members in by_section.values():
+        active: list[FunctionOwner] = []
+        for current in sorted(
+            members, key=lambda owner: (owner.start, -owner.end, owner.name)
+        ):
+            active = [owner for owner in active if owner.end > current.start]
+            for previous in active:
+                if current.start == previous.start:
+                    raise ValueError(
+                        "same-start bounded function owners must be aliases: "
+                        f"{previous.name} and {current.name}"
+                    )
+                if current.end > previous.end:
+                    raise ValueError(
+                        "partial function overlap: "
+                        f"{previous.name} and {current.name}"
+                    )
+                union(previous.name, current.name)
+            active.append(current)
+
+    members_by_root: defaultdict[str, set[str]] = defaultdict(set)
+    for owner in owners:
+        members_by_root[find(owner.name)].add(owner.name)
+    return {
+        name: frozenset(members_by_root[find(name)])
+        for name in parent
+    }
+
+
 def _bounded_disassembly_blocks(
     disassembly: str,
     owners: tuple[FunctionOwner, ...],
@@ -4547,6 +4603,7 @@ def _bounded_control_flow_sources(
     blocks: dict[str, str],
     owners: tuple[FunctionOwner, ...],
     islands: tuple[LocalIsland, ...],
+    owner_components: dict[str, frozenset[str]],
     decoded_text: str,
     owner_address_map: dict[int, FunctionOwner] | None = None,
 ) -> tuple[frozenset[int], list[tuple[str, int, str]]]:
@@ -4561,6 +4618,7 @@ def _bounded_control_flow_sources(
     proven: set[int] = set()
     errors: list[tuple[str, int, str]] = []
 
+    rows_by_identity: dict[str, dict[int, tuple[str, str]]] = {}
     for identity, block in blocks.items():
         rows: dict[int, tuple[str, str]] = {}
         for line in block.splitlines():
@@ -4573,10 +4631,21 @@ def _bounded_control_flow_sources(
             mnemonic = parts[0]
             operands = "" if len(parts) == 1 else parts[1]
             rows[address] = (mnemonic.lower(), operands)
+        rows_by_identity[identity] = rows
+
+    for identity, identity_rows in rows_by_identity.items():
+        owner = owner_by_identity.get(identity)
+        if owner is None:
+            rows = identity_rows
+        else:
+            rows = {
+                address: row
+                for member in owner_components[identity]
+                for address, row in rows_by_identity.get(member, {}).items()
+            }
         if not rows:
             continue
 
-        owner = owner_by_identity.get(identity)
         island = island_by_identity.get(identity)
         if owner is not None:
             entry = owner.start
@@ -4729,6 +4798,7 @@ def prepare_route_bounded_code_only(
 ) -> RouteBoundedCode:
     """Derive pinned closure before allocating any Instruction objects."""
     owner_list = tuple(owners)
+    owner_components = _validated_bounded_owner_components(owner_list)
     island_list = _validated_bounded_local_islands(local_islands, owner_list)
     oracle_list = tuple(oracles)
     if not oracle_list:
@@ -4753,10 +4823,16 @@ def prepare_route_bounded_code_only(
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
+    for component in set(owner_components.values()):
+        if len(component) < 2:
+            continue
+        for name in component:
+            graph.setdefault(name, set()).update(component - {name})
     proven_source_addresses, deferred_errors = _bounded_control_flow_sources(
         blocks,
         owner_list,
         island_list,
+        owner_components,
         decoded_text,
         owner_address_map,
     )
