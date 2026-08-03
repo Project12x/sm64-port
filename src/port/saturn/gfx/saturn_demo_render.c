@@ -985,6 +985,10 @@ static void demo_dispatch_mario_transform(
          * has retired, so this full-span recovery cannot overlap its writes. */
         profile->pipeline_faults++;
         s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;
+        /* Classification follows this recovery on the master.  Its copied
+         * ownership metadata must match the all-master result span so it does
+         * not read freshly rewritten vertices through a peer alias. */
+        s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
         sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
         demo_transform_mario_range(&s_mario_transform_context, 0U,
                                    SM64_MARIO_VERTEX_COUNT);
@@ -1031,6 +1035,8 @@ static void demo_dispatch_mario_transform(
     if (!classify_complete) {
         profile->pipeline_faults++;
         s_actor_primitive_slave_begin = SM64_MARIO_PRIMITIVE_COUNT;
+        s_mario_transform_context.primitive_slave_begin =
+            s_actor_primitive_slave_begin;
         sm64_saturn_dual_frame_reset(&s_actor_ref_frame_bank);
         demo_classify_mario_range(&s_mario_transform_context, 0U,
                                   SM64_MARIO_PRIMITIVE_COUNT);

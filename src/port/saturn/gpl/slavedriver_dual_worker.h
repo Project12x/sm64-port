@@ -43,4 +43,11 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
 /* Range callbacks should check this between bounded items. */
 bool sm64_saturn_dual_worker_cancelled(void);
 
+/* Host-fixture-only deterministic timeout injector.  It is never part of an
+ * SH-2 build and exists so retirement correctness is tested without wall-clock
+ * scheduling assumptions. */
+#if defined(SM64_SATURN_DUAL_WORKER_TEST_HOOK) && !defined(__sh__)
+void sm64_saturn_dual_worker_test_force_timeout(bool enabled);
+#endif
+
 #endif

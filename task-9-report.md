@@ -22,6 +22,11 @@
   the slave has positively written `done`. A serial fallback therefore begins
   only after the prior slave owns no result span. The timeout counter remains
   diagnostic; it does not select a performance policy.
+- If a target callback violates the required bounded cancellation polling
+  contract, positive retirement intentionally waits without a second arbitrary
+  deadline. This trades liveness for the non-negotiable safety property that a
+  serial fallback never races a live slave write; all Task 9 callbacks poll
+  cancellation every 16 bounded items.
 - Gouraud reservation, texture binding/slots, VDP1 command allocation, and
   final Mario actor insertion remain master-only.
 
@@ -51,13 +56,16 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
    `sm64_saturn_dual_worker_is_idle`.
 2. The cancellation regression test was written against the former serial
    host adapter and failed as expected (`host worker split completion contract
-   failed`). The real host adapter now launches a Windows worker thread. Its
-   delayed slave callback waits for one second, observes cancellation, and the
-   test proves the worker is retired/no write can occur after fallback begins.
+   failed`). The real host adapter now launches a Windows worker thread. An
+   explicit entered-worker event plus a fixture-only forced-timeout hook makes
+   cancellation deterministic; the test proves positive retirement/no write
+   can occur after fallback begins without relying on wall-clock scheduling.
 3. The fixture uses every generated Mario vertex and all 644 primitives; it
    compares serial/split vertex coordinates and primitive order, colors, and
    corner coordinates byte-for-byte. It also source-checks the worker context
-   to reject live Mario/game/graph/VDP pointers.
+   to reject live Mario/game/graph/VDP pointers, and integration-checks the
+   actual fallback ordering: copied all-master ownership metadata is installed
+   before compact-reference classification may use its cache-through helper.
 4. `verify_dual_cpu_coherency.py --self-test` passed its source gate and all
    five mutation cases. `git diff --check` passed.
 

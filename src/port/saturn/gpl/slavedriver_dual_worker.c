@@ -46,6 +46,14 @@ static inline void dual_control_write(volatile uint32_t *value, uint32_t next)
 #if defined(__sh__) || defined(_WIN32)
 static sm64_saturn_dual_worker_control_t s_control SATURN_DUAL_UNCACHED;
 static bool s_initialized;
+#if defined(SM64_SATURN_DUAL_WORKER_TEST_HOOK) && !defined(__sh__)
+static volatile uint32_t s_test_force_timeout;
+
+void sm64_saturn_dual_worker_test_force_timeout(bool enabled)
+{
+    dual_control_write(&s_test_force_timeout, enabled ? 1U : 0U);
+}
+#endif
 
 #if defined(__sh__)
 static void dual_slave_entry(void)
@@ -131,7 +139,11 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
     const uint16_t wait_start = cpu_frt_count_get();
 #endif
     uint32_t spins = 0U;
-    while (dual_control_read(&s_control.done) == 0U && spins++ < 10000000U) {
+    while (dual_control_read(&s_control.done) == 0U && spins++ < 10000000U
+#if defined(SM64_SATURN_DUAL_WORKER_TEST_HOOK) && !defined(__sh__)
+           && dual_control_read(&s_test_force_timeout) == 0U
+#endif
+    ) {
         /* polling-mode slave runs independently; this loop only observes the
          * uncached completion word. */
     }
@@ -169,6 +181,9 @@ bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
      * failed dispatch. Delayed polling notifications observe active==0 and
      * return without touching the caller's next frame. */
     dual_control_write(&s_control.cancel, 0U);
+#if defined(SM64_SATURN_DUAL_WORKER_TEST_HOOK) && !defined(__sh__)
+    dual_control_write(&s_test_force_timeout, 0U);
+#endif
     return !timed_out;
 }
 #else
