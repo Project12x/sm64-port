@@ -12,6 +12,7 @@
 #define SM64_SATURN_VDP2_FRAME_DISPLAY_MASK \
     (SM64_SATURN_VDP2_FRAME_NBG1_MASK | SM64_SATURN_VDP2_FRAME_NBG3_MASK)
 #define SM64_SATURN_VDP2_FRAME_HUD_TICK_DIVISOR 30U
+#define SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND 30U
 #define SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY 96U
 
 typedef struct sm64_saturn_vdp2_camera_snapshot {
@@ -25,6 +26,9 @@ typedef struct sm64_saturn_vdp2_frame {
     int32_t sky_scroll_y;
     uint32_t display_mask;
     uint32_t last_hud_source_tick;
+    uint32_t fps_anchor_source_tick;
+    uint32_t fps_presented_frames;
+    uint32_t total_fps;
     uint32_t commits;
     uint8_t hud_dirty;
     char hud_text[SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY];

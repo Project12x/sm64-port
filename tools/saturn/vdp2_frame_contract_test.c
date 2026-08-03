@@ -60,14 +60,14 @@ int main(void)
 
     (void)memset(&profile, 0, sizeof(profile));
     (void)memset(&observed, 0, sizeof(observed));
-    profile.demo_bob_results_master = 11U;
-    profile.demo_bob_results_slave = 12U;
-    profile.vdp1_commands_last = 13U;
-    profile.vdp1_bank_late_dma = 14U;
-    profile.render_frt_ticks_last = 20U;
+    profile.master_transform_count = 11U;
+    profile.slave_transform_count = 12U;
+    profile.ordering_count = 13U;
+    profile.dma_wait_ticks_last = 14U;
+    profile.vdp1_wait_ticks_last = 20U;
 
     sm64_saturn_vdp2_frame_init(&frame);
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 30U);
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 0U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 1U && observed.sky_updates == 1U);
     assert(observed.hud_updates == 1U && observed.layer_updates == 1U);
@@ -75,14 +75,16 @@ int main(void)
     assert(observed.vdp1_priority == 7U);
     assert(observed.sky_x == 128 && observed.sky_y == 128);
     assert(strstr(observed.hud,
-                  "FPS 50 MT 11 ST 12 ORD 13 DMA 14 VDP1 20") != NULL);
+                  "FPS 0 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
 
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 31U);
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 15U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 2U && observed.sky_updates == 2U);
     assert(observed.layer_updates == 2U && observed.hud_updates == 1U);
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 60U);
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 30U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.hud_updates == 2U);
+    assert(strstr(observed.hud,
+                  "FPS 3 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
     return 0;
 }

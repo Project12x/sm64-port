@@ -36,6 +36,7 @@ static size_t _tail;
 static bool _active;
 static saturn_dma_queue_sequence_t _next_sequence;
 static saturn_dma_queue_sequence_t _retired_sequence;
+static uint32_t _wait_ticks;
 
 static size_t
 _next_index(size_t index)
@@ -105,6 +106,7 @@ saturn_dma_queue_init(void)
                 _next_sequence = 1U;
         }
         _retired_sequence = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+        _wait_ticks = 0U;
 }
 
 saturn_dma_queue_sequence_t
@@ -187,11 +189,28 @@ saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
         if (!_sequence_outstanding(sequence)) {
                 return 0;
         }
+        /* Only measure time spent at a real outstanding fence. The host queue
+         * fixture has no FRT device, so its behavior remains deterministic while
+         * the Saturn path records the actual wait interval. */
+#if !defined(SATURN_DMA_QUEUE_HOST_TEST)
+        const uint16_t wait_start = cpu_frt_count_get();
+#endif
         while (!_sequence_retired_through(sequence)) {
                 saturn_dma_queue_kick();
                 saturn_dma_queue_poll();
         }
+#if !defined(SATURN_DMA_QUEUE_HOST_TEST)
+        _wait_ticks += (uint16_t)(cpu_frt_count_get() - wait_start);
+#endif
         return 1;
+}
+
+uint32_t
+saturn_dma_queue_wait_ticks_take(void)
+{
+        const uint32_t ticks = _wait_ticks;
+        _wait_ticks = 0U;
+        return ticks;
 }
 
 int

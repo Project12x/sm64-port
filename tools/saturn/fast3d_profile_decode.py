@@ -69,6 +69,16 @@ GOURAUD_SAVINGS_COUNTERS = (
     "gouraud_bytes_saved",
 )
 
+VDP2_FRAME_COUNTERS = (
+    "master_transform_count",
+    "slave_transform_count",
+    "ordering_count",
+    "dma_wait_ticks_last",
+    "dma_wait_ticks_accum",
+    "vdp1_wait_ticks_last",
+    "vdp1_wait_ticks_accum",
+)
+
 # ctype -> (size in bytes, big-endian struct format).  Alignment equals size
 # for every one of these on sh-elf, which is what makes the layout model below
 # a two-line calculation rather than a target-description table.

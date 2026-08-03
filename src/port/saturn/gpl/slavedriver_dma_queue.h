@@ -29,6 +29,9 @@ void saturn_dma_queue_poll(void);
 /* Returns nonzero if sequence is already retired or was retired by this call.
  * Returns zero for an invalid or non-outstanding future sequence. */
 int saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence);
+/* Return and clear actual FRT ticks spent in queue waits since the previous
+ * sample. This is diagnostic-only; it never changes queue scheduling. */
+uint32_t saturn_dma_queue_wait_ticks_take(void);
 int saturn_dma_queue_idle(void);
 
 /* Compatibility helpers for one-shot boot uploads. Frame work should submit,

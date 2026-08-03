@@ -423,6 +423,17 @@ typedef struct sm64_saturn_fast3d_profile {
      * retain their offsets; evidence only, never a frame-policy input. */
     uint32_t gouraud_tables_saved;
     uint32_t gouraud_bytes_saved;
+    /* Task 11 VDP2 HUD diagnostics. These are published measurements, not
+     * scheduling inputs: transform/order are actual renderer work counters;
+     * DMA and VDP1 values are FRT wait durations captured at their real
+     * fences. Kept as a final suffix for capture ABI compatibility. */
+    uint32_t master_transform_count;
+    uint32_t slave_transform_count;
+    uint32_t ordering_count;
+    uint32_t dma_wait_ticks_last;
+    uint32_t dma_wait_ticks_accum;
+    uint32_t vdp1_wait_ticks_last;
+    uint32_t vdp1_wait_ticks_accum;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

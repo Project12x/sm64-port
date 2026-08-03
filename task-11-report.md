@@ -18,9 +18,23 @@
 - HUD writes are dirty only at initial presentation, source-tick rewind, or
   every 30 source ticks. Each presented frame still commits sky, layers, and
   the existing async dbgio state once. HUD text is integer-only and reports
-  `FPS`, master/slave transform-result counters, final order count, late-DMA
-  counter, and VDP1 frame interval; it contains no float formatting or policy
-  gate.
+  `FPS`, master/slave transform-result counters, final order count, DMA wait,
+  and VDP1 wait; it contains no float formatting or policy gate.
+
+## Review correction — telemetry semantics
+
+- `FPS` is now a genuine presentation/source-cadence measurement: the frame
+  transaction counts presented frames and divides by elapsed 30 Hz source
+  ticks at each HUD update. It does not use render-construction time.
+- `MT` and `ST` accumulate the actual master/slave classify-transform owner
+  lanes before compact-result joining; `ORD` reads the final emitted command
+  count. `DMAW` reads `dma_wait_ticks_last`, sampled from actual time
+  spinning at an outstanding DMA queue fence; it no longer displays the
+  cumulative late-bank diagnostic. `VDP1W` reads `vdp1_wait_ticks_last`,
+  measured immediately around `vdp1_sync_render(); vdp1_sync();`.
+- The corresponding last/accumulated fields are an append-only renderer
+  profile suffix, dynamically discovered by `fast3d_profile_decode.py`. They
+  are diagnostics only and never select scheduling or promotion policy.
 
 ## Test-first record and verification
 
@@ -43,7 +57,8 @@
 
    It proves NBG1+NBG3, visible VDP1 priority 7, copied-snapshot scroll of
    `(128,128)` at yaw `0x4000`, one VBlank commit per frame, integer HUD
-   output, no HUD rewrite at tick 31, and the next HUD update at tick 60.
+   output, no HUD rewrite at tick 15, and three presented frames over 30
+   source ticks reporting exactly `FPS 3` at the next HUD update.
 4. Static ownership checks pass: sourceboot contains exactly one direct
    `vdp2_sync()` call (the frame adapter); the frame module contains no VDP2
    terrain/Mario/polygon interface and no `printf`/`sprintf`/`snprintf` or
@@ -71,3 +86,9 @@ No MSYS, bash, `sh-elf-*`, target build, or Ymir command was used.
   formatter, callback interface, and sourceboot composition policy are
   original project code; no Yaul renderer implementation was copied. Existing
   project provenance already records the pinned Yaul dependency and license.
+- The DMA timing accessor extends the existing isolated GPL-3.0-or-later
+  SlaveDriver queue close-port (`a8986591557b6e680550d3c23970284d3b38ff8f`,
+  `DMA.C`/`DMA.H`, recorded in `UPSTREAM_CODE_LEDGER.md`). It is an original
+  diagnostic measurement around the project’s existing bounded wait loop; no
+  additional upstream implementation was copied and the existing GPL notice
+  remains in the queue files.

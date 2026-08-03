@@ -5,7 +5,6 @@
 
 #define SM64_SATURN_VDP2_SKY_WIDTH 512
 #define SM64_SATURN_VDP2_SKY_HEIGHT 256
-#define SM64_SATURN_VDP2_FRT_TICKS_PER_SECOND 1000U
 
 static char *vdp2_frame_append_text(char *out, const char *end,
                                     const char *text)
@@ -33,28 +32,23 @@ static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
 {
     char *out = frame->hud_text;
     char *const end = frame->hud_text + sizeof(frame->hud_text) - 1U;
-    const uint32_t frame_ticks = profile->render_frt_ticks_last;
-    const uint32_t total_fps = frame_ticks == 0U ? 0U :
-        SM64_SATURN_VDP2_FRT_TICKS_PER_SECOND / frame_ticks;
-
     /* This intentionally has no printf/sprintf dependency: the sourceboot
      * target is freestanding and the VDP2 HUD must not pull float formatting
      * onto a frame path. The fields are counters, not a promotion threshold.
-     * M/S are bounded master/slave terrain-result counts; O is final VDP1
-     * order count; D reports late-DMA retirements; V is the frame's VDP1
-     * draw/submit interval. */
+     * MT/ST are master/slave transform counters, ORD is the final command
+     * order count, and DMAW/VDP1W are time spent at their actual fences. */
     out = vdp2_frame_append_text(out, end, "FPS ");
-    out = vdp2_frame_append_u32(out, end, total_fps);
+    out = vdp2_frame_append_u32(out, end, frame->total_fps);
     out = vdp2_frame_append_text(out, end, " MT ");
-    out = vdp2_frame_append_u32(out, end, profile->demo_bob_results_master);
+    out = vdp2_frame_append_u32(out, end, profile->master_transform_count);
     out = vdp2_frame_append_text(out, end, " ST ");
-    out = vdp2_frame_append_u32(out, end, profile->demo_bob_results_slave);
+    out = vdp2_frame_append_u32(out, end, profile->slave_transform_count);
     out = vdp2_frame_append_text(out, end, " ORD ");
-    out = vdp2_frame_append_u32(out, end, profile->vdp1_commands_last);
-    out = vdp2_frame_append_text(out, end, " DMA ");
-    out = vdp2_frame_append_u32(out, end, profile->vdp1_bank_late_dma);
-    out = vdp2_frame_append_text(out, end, " VDP1 ");
-    out = vdp2_frame_append_u32(out, end, profile->render_frt_ticks_last);
+    out = vdp2_frame_append_u32(out, end, profile->ordering_count);
+    out = vdp2_frame_append_text(out, end, " DMAW ");
+    out = vdp2_frame_append_u32(out, end, profile->dma_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, " VDP1W ");
+    out = vdp2_frame_append_u32(out, end, profile->vdp1_wait_ticks_last);
     *out = '\0';
 }
 
@@ -65,6 +59,7 @@ void sm64_saturn_vdp2_frame_init(sm64_saturn_vdp2_frame_t *frame)
     (void)memset(frame, 0, sizeof(*frame));
     frame->display_mask = SM64_SATURN_VDP2_FRAME_DISPLAY_MASK;
     frame->last_hud_source_tick = UINT32_MAX;
+    frame->fps_anchor_source_tick = UINT32_MAX;
 }
 
 void sm64_saturn_vdp2_frame_begin(
@@ -90,10 +85,28 @@ void sm64_saturn_vdp2_frame_begin(
             frame->sky_scroll_y = SM64_SATURN_VDP2_SKY_HEIGHT;
     }
 
+    if (frame->fps_anchor_source_tick == UINT32_MAX ||
+        source_tick < frame->fps_anchor_source_tick) {
+        frame->fps_anchor_source_tick = source_tick;
+        frame->fps_presented_frames = 1U;
+        frame->total_fps = 0U;
+    } else {
+        frame->fps_presented_frames++;
+    }
+
     if (frame->last_hud_source_tick == UINT32_MAX ||
         source_tick < frame->last_hud_source_tick ||
         source_tick - frame->last_hud_source_tick >=
             SM64_SATURN_VDP2_FRAME_HUD_TICK_DIVISOR) {
+        const uint32_t elapsed_source_ticks =
+            source_tick - frame->fps_anchor_source_tick;
+        if (elapsed_source_ticks != 0U) {
+            frame->total_fps = (frame->fps_presented_frames *
+                SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND) /
+                elapsed_source_ticks;
+            frame->fps_anchor_source_tick = source_tick;
+            frame->fps_presented_frames = 0U;
+        }
         vdp2_frame_hud_prepare(frame, profile);
         frame->last_hud_source_tick = source_tick;
         frame->hud_dirty = 1U;

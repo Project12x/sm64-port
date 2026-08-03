@@ -2469,6 +2469,10 @@ void sm64_saturn_demo_render_frame(
         ? UINT16_MAX : (uint16_t)classify_stats.master_wait_ticks;
     profile->triangles_transformed += classify.transformed[0] +
                                      classify.transformed[1];
+    /* Task 11 HUD diagnostics: preserve the actual owner split rather than
+     * inferring transform work from compact-result counts after the join. */
+    profile->master_transform_count += classify.transformed[0];
+    profile->slave_transform_count += classify.transformed[1];
     profile->demo_bob_primitives_visible += classify.visible[0] +
                                             classify.visible[1];
     profile->demo_bob_primitives_radius_rejected +=

@@ -57,6 +57,8 @@ static uint32_t sourceboot_vdp1_bank_submitted;
 static uint32_t sourceboot_vdp1_bank_displayed;
 static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
 static uint32_t sourceboot_vdp1_bank_late_dma;
+static uint32_t sourceboot_dma_wait_ticks_accum;
+static uint32_t sourceboot_vdp1_wait_ticks_accum;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
@@ -790,6 +792,14 @@ int main(void) {
             sourceboot_vdp1_bank_overwrite_attempts;
         sourceboot_fast3d.profile.vdp1_bank_late_dma =
             sourceboot_vdp1_bank_late_dma;
+        sourceboot_fast3d.profile.ordering_count =
+            sourceboot_fast3d.profile.vdp1_commands_last;
+        sourceboot_fast3d.profile.dma_wait_ticks_last =
+            saturn_dma_queue_wait_ticks_take();
+        sourceboot_dma_wait_ticks_accum +=
+            sourceboot_fast3d.profile.dma_wait_ticks_last;
+        sourceboot_fast3d.profile.dma_wait_ticks_accum =
+            sourceboot_dma_wait_ticks_accum;
         if (sourceboot_fast3d.profile.vdp1_commands_last >
             sourceboot_fast3d.profile.vdp1_command_highwater)
             sourceboot_fast3d.profile.vdp1_command_highwater =
@@ -831,8 +841,15 @@ int main(void) {
          * display mask, then arms exactly one VBlank commit; it never sees
          * terrain or Mario geometry. The blocking vdp2_sync_wait() stays
          * out of the loop per the pacing analysis above. */
+        const uint16_t vdp1_wait_start = cpu_frt_count_get();
         vdp1_sync_render();
         vdp1_sync();
+        sourceboot_fast3d.profile.vdp1_wait_ticks_last =
+            sourceboot_frt_delta(vdp1_wait_start, cpu_frt_count_get());
+        sourceboot_vdp1_wait_ticks_accum +=
+            sourceboot_fast3d.profile.vdp1_wait_ticks_last;
+        sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
+            sourceboot_vdp1_wait_ticks_accum;
         const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
             sourceboot_vdp2_camera_snapshot();
         sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,

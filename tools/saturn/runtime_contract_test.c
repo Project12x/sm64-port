@@ -418,6 +418,27 @@ static void test_dual_pipeline_profile_counters_append_in_order(void)
            offsetof(sm64_saturn_fast3d_profile_t, gouraud_tables_saved) +
                sizeof(((sm64_saturn_fast3d_profile_t *)0)
                           ->gouraud_tables_saved));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, master_transform_count) ==
+           offsetof(sm64_saturn_fast3d_profile_t, gouraud_bytes_saved) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->gouraud_bytes_saved));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, slave_transform_count) ==
+           offsetof(sm64_saturn_fast3d_profile_t, master_transform_count) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->master_transform_count));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, ordering_count) ==
+           offsetof(sm64_saturn_fast3d_profile_t, slave_transform_count) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->slave_transform_count));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, dma_wait_ticks_last) ==
+           offsetof(sm64_saturn_fast3d_profile_t, ordering_count) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->ordering_count));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, dma_wait_ticks_accum) ==
+           offsetof(sm64_saturn_fast3d_profile_t, dma_wait_ticks_last) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->dma_wait_ticks_last));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_last) ==
+           offsetof(sm64_saturn_fast3d_profile_t, dma_wait_ticks_accum) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->dma_wait_ticks_accum));
+    assert(offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_accum) ==
+           offsetof(sm64_saturn_fast3d_profile_t, vdp1_wait_ticks_last) +
+               sizeof(((sm64_saturn_fast3d_profile_t *)0)->vdp1_wait_ticks_last));
 }
 
 typedef struct runtime_contract_vdp2_backend {
@@ -483,14 +504,14 @@ static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
 
     (void)memset(&profile, 0, sizeof(profile));
     (void)memset(&observed, 0, sizeof(observed));
-    profile.sim_frt_ticks_last = 1000U;
-    profile.demo_bob_results_master = 11U;
-    profile.demo_bob_results_slave = 12U;
-    profile.vdp1_commands_last = 13U;
-    profile.vdp1_bank_late_dma = 14U;
+    profile.master_transform_count = 11U;
+    profile.slave_transform_count = 12U;
+    profile.ordering_count = 13U;
+    profile.dma_wait_ticks_last = 14U;
+    profile.vdp1_wait_ticks_last = 20U;
 
     sm64_saturn_vdp2_frame_init(&frame);
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 30U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 0U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
 
     assert(observed.commits == 1U);
@@ -501,23 +522,23 @@ static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
     assert(observed.vdp1_priority == 7U);
     assert(observed.sky_x == 128 && observed.sky_y == 128);
     assert(strstr(observed.hud, "FPS ") != NULL);
-    assert(strstr(observed.hud, "MT 11") != NULL);
-    assert(strstr(observed.hud, "ST 12") != NULL);
-    assert(strstr(observed.hud, "ORD 13") != NULL);
-    assert(strstr(observed.hud, "DMA 14") != NULL);
+    assert(strstr(observed.hud,
+                  "FPS 0 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
 
     /* A changed source-only camera snapshot changes sky scroll. HUD output
      * is rate limited: a second present at tick 31 commits layers/scroll but
      * does not rewrite tiles. */
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 31U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 15U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 2U);
     assert(observed.sky_updates == 2U);
     assert(observed.hud_updates == 1U);
     assert(observed.layer_updates == 2U);
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 60U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 30U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.hud_updates == 2U);
+    assert(strstr(observed.hud,
+                  "FPS 3 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
 }
 
 static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)
