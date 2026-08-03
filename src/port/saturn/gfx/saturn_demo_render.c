@@ -1475,6 +1475,7 @@ static void demo_emit_terrain_result(
             vdp1_cmdt_color_set(cmdt, RGB1555(
                 1, primitive->rgb[0], primitive->rgb[1], primitive->rgb[2]));
             profile->gouraud_bank_overflow++;
+            profile->pipeline_faults++;
         }
         profile->triangles_vdp1_emitted++;
         profile->triangles_emitted++;
@@ -1532,8 +1533,10 @@ static void demo_emit_terrain_result(
                 .cc_mode = VDP1_CMDT_CC_REPLACE});
             vdp1_cmdt_color_set(cmdt, RGB1555(1, primitive->rgb[0],
                                               primitive->rgb[1], primitive->rgb[2]));
-            if (!textured || recovery)
+            if (!textured || recovery) {
                 profile->gouraud_bank_overflow++;
+                profile->pipeline_faults++;
+            }
         }
     }
     profile->triangles_vdp1_emitted++;
@@ -2023,9 +2026,14 @@ void sm64_saturn_demo_render_frame(
     profile->master_worker_started++;
     if (terrain_worker.slave_begin < terrain_worker.count)
         profile->slave_worker_started++;
-    classify_ok = sm64_saturn_terrain_worker_run(&terrain_worker,
-                                                 &classify_stats) &&
-                  s_transform_phase_failed == 0U;
+    const bool worker_completed = sm64_saturn_terrain_worker_run(
+        &terrain_worker, &classify_stats);
+    /* The peer-transform fence is bounded. Its existing serial recovery
+     * remains authoritative; count the latched failure once before that
+     * recovery clears the latch, without altering the dispatch or wait. */
+    if (s_transform_phase_failed != 0U)
+        profile->pipeline_faults++;
+    classify_ok = worker_completed && s_transform_phase_failed == 0U;
     if (work_split >= s_render_work_count)
         sm64_saturn_terrain_result_arena_seal(
             &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
