@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 from bisect import bisect_right
 from collections import Counter, defaultdict, deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 import os
@@ -34,6 +34,8 @@ class CallSite:
     caller: str
     address: int
     helper: str
+    caller_identity: str | None = field(default=None, compare=False, repr=False)
+    helper_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ class CensusRow:
     caller: str
     count: int
     helpers: tuple[tuple[str, int], ...]
+    owner_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 class _Unknown:
@@ -241,6 +244,8 @@ class DirectCallFact:
     count: int = 1
     caller_region: str = "owner"
     caller_island: str | None = None
+    caller_identity: str | None = field(default=None, compare=False, repr=False)
+    callee_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -252,6 +257,7 @@ class ImplementationTransferFact:
     count: int = 1
     caller_region: str = "owner"
     caller_island: str | None = None
+    caller_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -272,6 +278,7 @@ class UnresolvedTransfer:
     # dispatcher declaration gate sees it. Declarations model callback
     # dispatch only; a static stack-derived target remains an audit failure.
     provenance: str = "dynamic"
+    caller_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -281,6 +288,7 @@ class UnresolvedEffect:
     mnemonic: str
     operands: str
     reason: str
+    function_identity: str | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass
@@ -295,9 +303,18 @@ class CodeAnalysis:
 
 
 def merge_code_analyses(left: CodeAnalysis, right: CodeAnalysis) -> CodeAnalysis:
-    calls = {(x.caller, x.address, x.helper): x for x in [*left.calls, *right.calls]}
+    calls = {
+        (
+            x.caller_identity or x.caller,
+            x.address,
+            x.helper_identity or x.helper,
+        ): x
+        for x in [*left.calls, *right.calls]
+    }
     facts = {
         (
+            x.caller_identity or x.caller,
+            x.callee_identity or x.callee,
             x.caller, x.caller_region, x.caller_island, x.caller_offset,
             x.callee, x.callee_offset
         ): x
@@ -305,40 +322,45 @@ def merge_code_analyses(left: CodeAnalysis, right: CodeAnalysis) -> CodeAnalysis
     }
     implementation = {
         (
+            x.caller_identity or x.caller,
             x.caller, x.caller_region, x.caller_island, x.caller_offset,
             x.target_island, x.target_offset
         ): x
         for x in [*left.implementation_transfers, *right.implementation_transfers]
     }
     left_unresolved = {
-        (x.caller, x.address) for x in left.unresolved_transfers
+        (x.caller_identity or x.caller, x.address)
+        for x in left.unresolved_transfers
     }
     right_unresolved = {
-        (x.caller, x.address) for x in right.unresolved_transfers
+        (x.caller_identity or x.caller, x.address)
+        for x in right.unresolved_transfers
     }
-    resolved = {(x.caller, x.address) for x in calls.values()}
+    resolved = {
+        (x.caller_identity or x.caller, x.address) for x in calls.values()
+    }
     # Same-owner computed jumps can resolve entirely inside the CFG and emit no
     # call fact. If the other isolated lane evaluated that transfer point
     # without an unresolved diagnostic, it is nevertheless proven resolved.
     resolved.update(
-        (x.caller, x.address)
+        (x.caller_identity or x.caller, x.address)
         for x in right.unresolved_transfers
         if x.address in left.code_addresses
-        and (x.caller, x.address) not in left_unresolved
+        and (x.caller_identity or x.caller, x.address) not in left_unresolved
     )
     resolved.update(
-        (x.caller, x.address)
+        (x.caller_identity or x.caller, x.address)
         for x in left.unresolved_transfers
         if x.address in right.code_addresses
-        and (x.caller, x.address) not in right_unresolved
+        and (x.caller_identity or x.caller, x.address) not in right_unresolved
     )
     transfers = {
-        (x.caller, x.address, x.mnemonic): x
+        (x.caller_identity or x.caller, x.address, x.mnemonic): x
         for x in [*left.unresolved_transfers, *right.unresolved_transfers]
-        if (x.caller, x.address) not in resolved
+        if (x.caller_identity or x.caller, x.address) not in resolved
     }
     effects = {
-        (x.function, x.address, x.mnemonic): x
+        (x.function_identity or x.function, x.address, x.mnemonic): x
         for x in [*left.unresolved_effects, *right.unresolved_effects]
     }
     return CodeAnalysis(
@@ -1525,7 +1547,8 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
                   effects: list[UnresolvedEffect], owner: FunctionOwner,
                   memory: dict[int, int] | None = None,
                   profile: Counter[str] | None = None,
-                  known_null_addresses: frozenset[int] = frozenset()) -> None:
+                  known_null_addresses: frozenset[int] = frozenset(),
+                  function_identity: str | None = None) -> None:
     text = instruction.operands
     mnemonic = instruction.mnemonic
     if mnemonic.startswith("cmp/") or mnemonic == "tst":
@@ -2183,8 +2206,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
             "xtrct", "div1", "dmuls.l", "dmulu.l", "mul.l", "muls.w", "mulu.w",
         }
         if mnemonic not in known_destination_effects:
-            effects.append(UnresolvedEffect(owner.name, instruction.address, mnemonic, text,
-                                            "unparseable register effect"))
+            effects.append(UnresolvedEffect(
+                owner.name, instruction.address, mnemonic, text,
+                "unparseable register effect", function_identity,
+            ))
         return
     if single_destination and mnemonic not in {"cmp/pl", "cmp/pz"}:
         state[single_destination.group(1)] = UNKNOWN
@@ -2197,7 +2222,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         if mnemonic not in known_single_register_effects:
             effects.append(UnresolvedEffect(
                 owner.name, instruction.address, mnemonic, text,
-                "unparseable register effect",
+                "unparseable register effect", function_identity,
             ))
         return
     if mnemonic in {"mov.l", "mov.w", "mov.b", "sts.l"} and ",@" in text:
@@ -2213,7 +2238,7 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         _invalidate_stack(state)
         effects.append(UnresolvedEffect(
             owner.name, instruction.address, mnemonic, text,
-            "unparseable memory effect",
+            "unparseable memory effect", function_identity,
         ))
         return
     if mnemonic == "lds.l" and text.endswith(",pr"):
@@ -2226,8 +2251,10 @@ def _write_effect(instruction: Instruction, state: dict[str, AbstractValue],
         "clrt", "sett", "clrmac", "div0u",
     }
     if mnemonic not in known_no_write:
-        effects.append(UnresolvedEffect(owner.name, instruction.address, mnemonic, text,
-                                        "unparseable register effect"))
+        effects.append(UnresolvedEffect(
+            owner.name, instruction.address, mnemonic, text,
+            "unparseable register effect", function_identity,
+        ))
 
 
 def _straight_line_leaf_gpr_clobbers(
@@ -2469,6 +2496,9 @@ def _analyze_code_only_pass(
 
     for owner in owner_list:
         owner_identity = _bounded_owner_identity(owner)
+        result_owner_identity = (
+            owner_identity if selected_owner_identities is not None else None
+        )
         owner_key = (
             owner_identity
             if selected_owner_identities is not None
@@ -2727,6 +2757,7 @@ def _analyze_code_only_pass(
                         in owner_by_address
                         else "dynamic"
                     ),
+                    result_owner_identity,
                 )
 
             def schedule(target: int, next_state: dict[str, AbstractValue]) -> None:
@@ -2789,7 +2820,7 @@ def _analyze_code_only_pass(
                 slot_effects: list[UnresolvedEffect] = []
                 _write_effect(
                     instructions[slot_address], result, slot_effects, owner, memory,
-                    profile, known_null_addresses,
+                    profile, known_null_addresses, result_owner_identity,
                 )
                 for effect in slot_effects:
                     effect_emissions[key].append(effect)
@@ -2878,6 +2909,7 @@ def _analyze_code_only_pass(
                                     1,
                                     caller_region,
                                     caller_island,
+                                    result_owner_identity,
                                 )
                             )
                             schedule_island(target[1], target[2], callee_entry)
@@ -2885,12 +2917,28 @@ def _analyze_code_only_pass(
                             callee = target[1]
                             target_address = target[2]
                             call_emissions[key].append(
-                                CallSite(owner.name, address, callee.name)
+                                CallSite(
+                                    owner.name,
+                                    address,
+                                    callee.name,
+                                    result_owner_identity,
+                                    (
+                                        _bounded_owner_identity(callee)
+                                        if result_owner_identity is not None
+                                        else None
+                                    ),
+                                )
                             )
                             fact_emissions[key].append(DirectCallFact(
                                 owner.name, caller_offset, callee.name,
                                 target_address - callee.start, 1,
-                                caller_region, caller_island
+                                caller_region, caller_island,
+                                result_owner_identity,
+                                (
+                                    _bounded_owner_identity(callee)
+                                    if result_owner_identity is not None
+                                    else None
+                                ),
                             ))
                 post = dict(callee_entry)
                 gpr_clobbers = {f"r{x}" for x in range(8)}
@@ -2974,12 +3022,28 @@ def _analyze_code_only_pass(
                             schedule(target, post)
                         elif callee:
                             call_emissions[key].append(
-                                CallSite(owner.name, address, callee.name)
+                                CallSite(
+                                    owner.name,
+                                    address,
+                                    callee.name,
+                                    result_owner_identity,
+                                    (
+                                        _bounded_owner_identity(callee)
+                                        if result_owner_identity is not None
+                                        else None
+                                    ),
+                                )
                             )
                             fact_emissions[key].append(DirectCallFact(
                                 owner.name, caller_offset, callee.name,
                                 target - callee.start, 1,
-                                caller_region, caller_island
+                                caller_region, caller_island,
+                                result_owner_identity,
+                                (
+                                    _bounded_owner_identity(callee)
+                                    if result_owner_identity is not None
+                                    else None
+                                ),
                             ))
                 continue
             if mnemonic in {"rts", "rte"}:
@@ -3006,18 +3070,35 @@ def _analyze_code_only_pass(
                             1,
                             caller_region,
                             caller_island,
+                            result_owner_identity,
                         ))
                         schedule_island(target_island, direct_target, post)
                     elif direct_owner is None:
                         unresolved_emissions[key].append(unresolved_transfer())
                     elif direct_owner != owner:
                         call_emissions[key].append(
-                            CallSite(owner.name, address, direct_owner.name)
+                            CallSite(
+                                owner.name,
+                                address,
+                                direct_owner.name,
+                                result_owner_identity,
+                                (
+                                    _bounded_owner_identity(direct_owner)
+                                    if result_owner_identity is not None
+                                    else None
+                                ),
+                            )
                         )
                         fact_emissions[key].append(DirectCallFact(
                             owner.name, caller_offset, direct_owner.name,
                             direct_target - direct_owner.start, 1,
                             caller_region, caller_island,
+                            result_owner_identity,
+                            (
+                                _bounded_owner_identity(direct_owner)
+                                if result_owner_identity is not None
+                                else None
+                            ),
                         ))
                     else:
                         schedule(direct_target, post)
@@ -3088,7 +3169,7 @@ def _analyze_code_only_pass(
             new_effects: list[UnresolvedEffect] = []
             _write_effect(
                 ins, next_state, new_effects, owner, memory, profile,
-                known_null_addresses,
+                known_null_addresses, result_owner_identity,
             )
             for effect in new_effects:
                 effect_emissions[key].append(effect)
@@ -3111,11 +3192,17 @@ def _analyze_code_only_pass(
             })
 
     calls_by_site = {
-        (item.caller, item.address, item.helper): item
+        (
+            item.caller_identity or item.caller,
+            item.address,
+            item.helper_identity or item.helper,
+        ): item
         for rows in call_emissions.values() for item in rows
     }
     facts_by_site = {
         (
+            item.caller_identity or item.caller,
+            item.callee_identity or item.callee,
             item.caller, item.caller_region, item.caller_island,
             item.caller_offset, item.callee, item.callee_offset,
         ): item
@@ -3123,17 +3210,18 @@ def _analyze_code_only_pass(
     }
     implementation_by_site = {
         (
+            item.caller_identity or item.caller,
             item.caller, item.caller_region, item.caller_island,
             item.caller_offset, item.target_island, item.target_offset,
         ): item
         for rows in implementation_emissions.values() for item in rows
     }
     unresolved = {
-        (item.caller, item.address, item.mnemonic): item
+        (item.caller_identity or item.caller, item.address, item.mnemonic): item
         for rows in unresolved_emissions.values() for item in rows
     }
     effects = {
-        (item.function, item.address, item.mnemonic): item
+        (item.function_identity or item.function, item.address, item.mnemonic): item
         for rows in effect_emissions.values() for item in rows
     }
     calls = sorted(calls_by_site.values(), key=lambda x: (x.caller, x.address, x.helper))
@@ -3868,6 +3956,29 @@ def scan_call_graph(disassembly: str) -> dict[str, set[str]]:
     return graph
 
 
+def analysis_call_graph(
+    calls: Iterable[CallSite], *, owner_identities: bool = False,
+) -> dict[str, set[str]]:
+    """Build a post-analysis graph without discarding bounded owner identity."""
+    graph: dict[str, set[str]] = defaultdict(set)
+    for call in calls:
+        if is_native_math_helper(call.helper):
+            continue
+        if owner_identities:
+            if call.caller_identity is None or call.helper_identity is None:
+                raise ValueError(
+                    "bounded analyzed call is missing stable owner identity: "
+                    f"{call.caller} -> {call.helper} at 0x{call.address:08x}"
+                )
+            caller = call.caller_identity
+            helper = call.helper_identity
+        else:
+            caller = call.caller
+            helper = call.helper
+        graph[caller].add(helper)
+    return graph
+
+
 def parse_route_oracle(text: str) -> RouteOracle:
     """Parse a versioned, checked-in replay-route root fixture."""
     version: int | None = None
@@ -4057,10 +4168,35 @@ def audit_indirect_edges(
     edges = set(oracle.indirect_edges)
     transfers = tuple(unresolved_transfers)
     closure = route_reachable_functions(graph, oracle.roots, edges)
+    identity_mode = any(
+        item.startswith("@owner:")
+        for item in [*oracle.roots, *graph.keys()]
+    )
+    display_by_identity = {
+        _bounded_owner_identity(owner): owner.name for owner in owners
+    }
+
+    def display(owner_key: str) -> str:
+        return display_by_identity.get(owner_key, owner_key)
+
+    def transfer_owner_key(transfer: UnresolvedTransfer) -> str:
+        if not identity_mode:
+            return transfer.caller
+        if transfer.caller_identity is None:
+            raise ValueError(
+                "bounded unresolved transfer is missing stable owner identity: "
+                f"{transfer.caller} at 0x{transfer.address:08x}"
+            )
+        return transfer.caller_identity
+
     owner_names = {
         name
         for owner in owners
-        for name in (owner.name, *owner.aliases)
+        for name in (
+            owner.name,
+            *owner.aliases,
+            _bounded_owner_identity(owner),
+        )
     }
     dynamic_transfers = tuple(
         item
@@ -4068,7 +4204,7 @@ def audit_indirect_edges(
         if is_structurally_dynamic_callback_transfer(item)
     )
     dispatchers_with_dynamic_transfers = {
-        item.caller for item in dynamic_transfers
+        transfer_owner_key(item) for item in dynamic_transfers
     }
 
     for dispatcher, callback in sorted(edges):
@@ -4077,21 +4213,23 @@ def audit_indirect_edges(
         ) not in oracle.static_manifest_edges:
             raise ValueError(
                 "stale INDIRECT_EDGE target is absent from the static route manifest: "
-                f"{dispatcher} -> {callback}"
+                f"{display(dispatcher)} -> {display(callback)}"
             )
         if dispatcher not in closure:
             raise ValueError(
-                f"INDIRECT_EDGE has unreachable dispatcher: {dispatcher} -> {callback}"
+                "INDIRECT_EDGE has unreachable dispatcher: "
+                f"{display(dispatcher)} -> {display(callback)}"
             )
         if callback not in owner_names:
             raise ValueError(
-                f"INDIRECT_EDGE has missing callback owner: {dispatcher} -> {callback}"
+                "INDIRECT_EDGE has missing callback owner: "
+                f"{display(dispatcher)} -> {display(callback)}"
             )
         if dispatcher not in dispatchers_with_dynamic_transfers:
             raise ValueError(
                 "unconsumed INDIRECT_EDGE has no structurally dynamic unresolved "
-                f"transfer in {dispatcher}: "
-                f"{dispatcher} -> {callback}"
+                f"transfer in {display(dispatcher)}: "
+                f"{display(dispatcher)} -> {display(callback)}"
             )
         closure_without_edge = route_reachable_functions(
             graph, oracle.roots, edges - {(dispatcher, callback)}
@@ -4113,32 +4251,52 @@ def audit_indirect_edges(
             ):
                 raise ValueError(
                     "INDIRECT_EDGE has no closure contribution: "
-                    f"{dispatcher} -> {callback}"
+                    f"{display(dispatcher)} -> {display(callback)}"
                 )
 
     declared_dispatchers = {dispatcher for dispatcher, _ in edges}
     unlisted = tuple(
         item
         for item in transfers
-        if item.caller in closure
+        if transfer_owner_key(item) in closure
         and (
-            item.caller not in declared_dispatchers
+            transfer_owner_key(item) not in declared_dispatchers
             or item not in dynamic_transfers
         )
     )
     return IndirectEdgeAudit(frozenset(closure), unlisted)
 
 
+def _call_owner_key(call: CallSite) -> str:
+    return call.caller_identity or call.caller
+
+
+def _route_call_counts(
+    calls: Iterable[CallSite], route_functions: set[str],
+) -> Counter[tuple[str, str, str]]:
+    return Counter(
+        (_call_owner_key(call), call.caller, call.helper)
+        for call in calls
+        if _call_owner_key(call) in route_functions
+    )
+
+
 def baseline_failures(calls: Iterable[CallSite], route_functions: set[str], baseline: BaselineContract) -> list[str]:
     """Enforce immutable maximums for every math call in the derived HOT route."""
-    observed = Counter((call.caller, call.helper) for call in calls if call.caller in route_functions)
+    observed = _route_call_counts(calls, route_functions)
     failures: list[str] = []
-    for key, actual in sorted(observed.items()):
-        expected = baseline.entries.get(key)
+    for (_owner_key, caller, helper), actual in sorted(observed.items()):
+        expected = baseline.entries.get((caller, helper))
         if expected is None:
-            failures.append(f"unallowlisted helper in HOT function: {key[0]} {key[1]} found {actual}")
+            failures.append(
+                "unallowlisted helper in HOT function: "
+                f"{caller} {helper} found {actual}"
+            )
         elif actual > expected:
-            failures.append(f"HOT baseline exceeded: {key[0]} {key[1]} ceiling {expected}, found {actual}")
+            failures.append(
+                f"HOT baseline exceeded: {caller} {helper} "
+                f"ceiling {expected}, found {actual}"
+            )
     actual_total = sum(observed.values())
     if actual_total > baseline.hot_ceiling:
         failures.append(f"HOT total ceiling {baseline.hot_ceiling}, found {actual_total}")
@@ -4151,14 +4309,14 @@ def audit_failures(calls: Iterable[CallSite], route_functions: set[str], oracle:
     failures: list[str] = []
     if contract.expected_root not in oracle.roots:
         failures.append(f"audit root missing: expected {contract.expected_root}")
-    observed = Counter((call.caller, call.helper) for call in calls if call.caller in route_functions)
+    observed = _route_call_counts(calls, route_functions)
     actual_total = sum(observed.values())
     if actual_total != contract.expected_total:
         failures.append(
             "audit total differs from fixed post-conversion baseline "
             f"{contract.expected_total}, found {actual_total}"
         )
-    for (caller, helper), actual in sorted(observed.items()):
+    for (_owner_key, caller, helper), actual in sorted(observed.items()):
         if caller in contract.forbidden_callers:
             failures.append(
                 f"audit forbidden caller uses native math: {caller} {helper} found {actual}"
@@ -4313,26 +4471,40 @@ def abstract_value_json(value: AbstractValue | None) -> dict[str, Any]:
 def _legacy_observation_facts(
     calls: list[CallSite], closure: set[str], owners: tuple[FunctionOwner, ...]
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    owner_by_name = {owner.name: owner for owner in owners}
+    owner_by_address = build_owner_address_map(owners)
     direct = Counter()
     helper = Counter()
     for call in calls:
-        if call.caller not in closure:
+        owner_key = _call_owner_key(call)
+        if owner_key not in closure:
             continue
-        owner = owner_by_name.get(call.caller)
+        owner = owner_by_address.get(call.address)
         caller_offset = call.address - owner.start if owner else 0
-        row = (call.caller, caller_offset, call.helper, 0)
+        row = (
+            owner_key,
+            call.helper_identity or call.helper,
+            call.caller,
+            caller_offset,
+            call.helper,
+            0,
+        )
         direct[row] += 1
         if is_native_math_helper(call.helper):
             helper[row] += 1
-    def rows(values: Counter[tuple[str, int, str, int]], callee_key: str) -> list[dict[str, Any]]:
+    def rows(
+        values: Counter[tuple[str, str, str, int, str, int]],
+        callee_key: str,
+    ) -> list[dict[str, Any]]:
         return [
             {
                 "caller": caller, "caller_region": "owner", "caller_island": None,
                 "caller_offset": caller_offset,
                 callee_key: callee, f"{callee_key}_offset": callee_offset, "count": count,
             }
-            for (caller, caller_offset, callee, callee_offset), count in sorted(values.items())
+            for (
+                _owner_key, _callee_owner_key, caller,
+                caller_offset, callee, callee_offset,
+            ), count in sorted(values.items())
         ]
     return rows(direct, "callee"), rows(helper, "helper")
 
@@ -4365,24 +4537,31 @@ def make_observation(
     else:
         direct_counter = Counter(
             (
+                x.caller_identity or x.caller,
+                x.callee_identity or x.callee,
                 x.caller, x.caller_region, x.caller_island, x.caller_offset,
                 x.callee, x.callee_offset
             )
-            for x in direct_facts if x.caller in closure
+            for x in direct_facts
+            if (x.caller_identity or x.caller) in closure
         )
         helper_counter = Counter(
             (
+                x.caller_identity or x.caller,
+                x.callee_identity or x.callee,
                 x.caller, x.caller_region, x.caller_island, x.caller_offset,
                 x.callee, x.callee_offset
             )
-            for x in direct_facts if x.caller in closure and is_native_math_helper(x.callee)
+            for x in direct_facts
+            if (x.caller_identity or x.caller) in closure
+            and is_native_math_helper(x.callee)
         )
         direct_rows = [
             {
                 "caller": a, "caller_region": b, "caller_island": c,
                 "caller_offset": d, "callee": e, "callee_offset": f, "count": n,
             }
-            for (a, b, c, d, e, f), n in sorted(
+            for (_caller_key, _callee_key, a, b, c, d, e, f), n in sorted(
                 direct_counter.items(), key=lambda item: tuple(
                     "" if value is None else value for value in item[0]
                 )
@@ -4393,7 +4572,7 @@ def make_observation(
                 "caller": a, "caller_region": b, "caller_island": c,
                 "caller_offset": d, "helper": e, "helper_offset": f, "count": n,
             }
-            for (a, b, c, d, e, f), n in sorted(
+            for (_caller_key, _helper_key, a, b, c, d, e, f), n in sorted(
                 helper_counter.items(), key=lambda item: tuple(
                     "" if value is None else value for value in item[0]
                 )
@@ -4401,38 +4580,57 @@ def make_observation(
         ]
     implementation_counter = Counter(
         (
+            x.caller_identity or x.caller,
             x.caller, x.caller_region, x.caller_island, x.caller_offset,
             x.target_island, x.target_offset
         )
-        for x in (implementation_facts or []) if x.caller in closure
+        for x in (implementation_facts or [])
+        if (x.caller_identity or x.caller) in closure
     )
     implementation_rows = [
         {
             "caller": a, "caller_region": b, "caller_island": c,
             "caller_offset": d, "target_island": e, "target_offset": f, "count": n,
         }
-        for (a, b, c, d, e, f), n in sorted(
+        for (_caller_key, a, b, c, d, e, f), n in sorted(
             implementation_counter.items(), key=lambda item: tuple(
                 "" if value is None else value for value in item[0]
             )
         )
     ]
     owner_by_name = {owner.name: owner for owner in owners}
+    owner_by_identity = {
+        _bounded_owner_identity(owner): owner for owner in owners
+    }
+    owner_by_address = build_owner_address_map(owners)
 
-    def site(caller: str, address: int) -> tuple[str, str | None, int]:
+    def site(
+        caller: str,
+        caller_identity: str | None,
+        address: int,
+    ) -> tuple[str, str | None, int]:
         island = next(
             (item for item in islands if item.start <= address < item.end), None
         )
         if island is not None:
             return "island", island.name, address - island.start
-        return "owner", None, address - owner_by_name[caller].start
+        owner = (
+            owner_by_identity.get(caller_identity)
+            if caller_identity is not None
+            else owner_by_address.get(address) or owner_by_name.get(caller)
+        )
+        if owner is None:
+            raise ValueError(
+                f"observation site has no linked owner: {caller} at 0x{address:08x}"
+            )
+        return "owner", None, address - owner.start
 
     unresolved_rows = [
         ({
             "caller": x.caller,
-            "caller_region": site(x.caller, x.address)[0],
-            "caller_island": site(x.caller, x.address)[1],
-            "caller_offset": site(x.caller, x.address)[2],
+            "caller_region": site(x.caller, x.caller_identity, x.address)[0],
+            "caller_island": site(x.caller, x.caller_identity, x.address)[1],
+            "caller_offset": site(x.caller, x.caller_identity, x.address)[2],
             "instruction_address": x.address,
             "mnemonic": x.mnemonic,
             "operand_register": x.operand_register,
@@ -4452,17 +4650,25 @@ def make_observation(
             "stack_source_offsets": list(x.stack_source_offsets),
             "stack_store_addresses": list(x.stack_store_addresses),
         } if x.stack_source_offsets or x.stack_store_addresses else {}))
-        for x in unresolved_transfers if x.caller in closure
+        for x in unresolved_transfers
+        if (x.caller_identity or x.caller) in closure
     ]
     effect_rows = [
         {
             "caller": x.function,
-            "caller_region": site(x.function, x.address)[0],
-            "caller_island": site(x.function, x.address)[1],
-            "caller_offset": site(x.function, x.address)[2],
+            "caller_region": site(
+                x.function, x.function_identity, x.address
+            )[0],
+            "caller_island": site(
+                x.function, x.function_identity, x.address
+            )[1],
+            "caller_offset": site(
+                x.function, x.function_identity, x.address
+            )[2],
             "mnemonic": x.mnemonic, "operands": x.operands, "reason": x.reason,
         }
-        for x in unresolved_effects if x.function in closure
+        for x in unresolved_effects
+        if (x.function_identity or x.function) in closure
     ]
     return {
         "schema_version": 1,
@@ -4475,7 +4681,11 @@ def make_observation(
         "contract_before_sha256": file_digest(contract_path),
         "contract_before_expected_total": contract.expected_total,
         "root": root,
-        "closure_functions": sorted(closure),
+        "closure_functions": sorted(
+            owner_by_identity.get(owner_key).name
+            if owner_key in owner_by_identity else owner_key
+            for owner_key in closure
+        ),
         "direct_call_facts": direct_rows,
         "helper_call_facts": helper_rows,
         "implementation_transfer_facts": implementation_rows,
@@ -4554,6 +4764,45 @@ def _bounded_code_identity(
 def _bounded_owner_identity(owner: FunctionOwner) -> str:
     """Return a stable bounded-mode identity for one canonical owner range."""
     return f"@owner:{owner.section}:{owner.start:08x}:{owner.name}"
+
+
+def _route_oracle_owner_identities(
+    oracle: RouteOracle,
+    owners: Iterable[FunctionOwner],
+) -> RouteOracle:
+    """Canonicalize a validated bounded oracle to address-qualified owners."""
+    identities_by_symbol: defaultdict[str, set[str]] = defaultdict(set)
+    for owner in owners:
+        identity = _bounded_owner_identity(owner)
+        for symbol in (owner.name, *owner.aliases):
+            identities_by_symbol[symbol].add(identity)
+
+    def canonical(symbol: str) -> str:
+        identities = identities_by_symbol.get(symbol, set())
+        if not identities:
+            raise ValueError(
+                f"bounded route closure has no linked owner: {symbol}"
+            )
+        if len(identities) != 1:
+            raise ValueError(
+                f"bounded route closure has ambiguous linked owner: {symbol}"
+            )
+        return next(iter(identities))
+
+    def canonical_edges(
+        edges: Iterable[tuple[str, str]],
+    ) -> frozenset[tuple[str, str]]:
+        return frozenset(
+            (canonical(dispatcher), canonical(callback))
+            for dispatcher, callback in edges
+        )
+
+    return RouteOracle(
+        oracle.version,
+        frozenset(canonical(root) for root in oracle.roots),
+        canonical_edges(oracle.static_manifest_edges),
+        canonical_edges(oracle.indirect_edges),
+    )
 
 
 def _validated_bounded_owner_components(
@@ -5057,22 +5306,32 @@ def prepare_route_bounded_code_only(
 
 
 def census_rows(calls: Iterable[CallSite], route_functions: set[str]) -> list[CensusRow]:
-    grouped: dict[str, Counter[str]] = defaultdict(Counter)
+    grouped: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     for call in calls:
-        grouped[call.caller][call.helper] += 1
+        grouped[(_call_owner_key(call), call.caller)][call.helper] += 1
     return [
-        CensusRow("HOT" if caller in route_functions else "COLD", caller, sum(helpers.values()), tuple(sorted(helpers.items())))
-        for caller, helpers in sorted(grouped.items())
+        CensusRow(
+            "HOT" if owner_key in route_functions else "COLD",
+            caller,
+            sum(helpers.values()),
+            tuple(sorted(helpers.items())),
+            owner_key if owner_key != caller else None,
+        )
+        for (owner_key, caller), helpers in sorted(grouped.items())
     ]
 
 
 def print_census(calls: Iterable[CallSite], route_functions: set[str], locations: dict[int, str]) -> None:
     call_list = list(calls)
-    location_by_caller = {call.caller: locations.get(call.address, "??:0") for call in call_list}
+    location_by_owner = {
+        _call_owner_key(call): locations.get(call.address, "??:0")
+        for call in call_list
+    }
     rows = census_rows(call_list, route_functions)
     for row in rows:
         helpers = ", ".join(f"{helper}={count}" for helper, count in row.helpers)
-        print(f"{row.heat:4} {row.count:4} {row.caller} [{helpers}] ({location_by_caller[row.caller]})")
+        location = location_by_owner[row.owner_identity or row.caller]
+        print(f"{row.heat:4} {row.count:4} {row.caller} [{helpers}] ({location})")
     hot_total = sum(row.count for row in rows if row.heat == "HOT")
     print(f"SH-2 native-math census: HOT total {hot_total}; COLD total {sum(row.count for row in rows) - hot_total}")
 
@@ -5080,11 +5339,15 @@ def print_census(calls: Iterable[CallSite], route_functions: set[str], locations
 def print_audit(calls: Iterable[CallSite], route_functions: set[str], locations: dict[int, str]) -> None:
     """Print a pinned route audit without weakening the shipped HOT ceiling."""
     call_list = list(calls)
-    location_by_caller = {call.caller: locations.get(call.address, "??:0") for call in call_list}
+    location_by_owner = {
+        _call_owner_key(call): locations.get(call.address, "??:0")
+        for call in call_list
+    }
     rows = [row for row in census_rows(call_list, route_functions) if row.heat == "HOT"]
     for row in rows:
         helpers = ", ".join(f"{helper}={count}" for helper, count in row.helpers)
-        print(f"AUDIT {row.count:4} {row.caller} [{helpers}] ({location_by_caller[row.caller]})")
+        location = location_by_owner[row.owner_identity or row.caller]
+        print(f"AUDIT {row.count:4} {row.caller} [{helpers}] ({location})")
     print(f"SH-2 native-math route audit: total {sum(row.count for row in rows)}")
 
 
@@ -5168,6 +5431,7 @@ def main(argv: list[str] | None = None) -> int:
         local_islands = resolve_local_islands(symbols, sections, owners)
         owner_address_map = build_owner_address_map(owners)
         analysis = None
+        bounded_identity_mode = args.analysis_mode == "code-only-route-bounded"
         if args.analysis_mode == "legacy-linear":
             direct_calls = scan_direct_calls(disassembly)
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]
@@ -5229,15 +5493,15 @@ def main(argv: list[str] | None = None) -> int:
             )
             direct_calls = analysis.calls
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]
-            graph = defaultdict(set)
-            for call in direct_calls:
-                if not is_native_math_helper(call.helper):
-                    graph[call.caller].add(call.helper)
+            graph = analysis_call_graph(
+                direct_calls, owner_identities=bounded_identity_mode
+            )
         route_edge_result = None
         if args.analysis_mode == "code-only-route-bounded":
             assert analysis is not None
+            route_graph_oracle = _route_oracle_owner_identities(oracle, owners)
             route_edge_result = audit_indirect_edges(
-                graph, oracle, owners, analysis.unresolved_transfers
+                graph, route_graph_oracle, owners, analysis.unresolved_transfers
             )
             route_functions = set(route_edge_result.closure)
         else:
@@ -5254,8 +5518,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             audit_functions = route_reachable_functions(graph, audit_oracle.roots)
         else:
+            audit_graph_oracle = (
+                _route_oracle_owner_identities(audit_oracle, owners)
+                if bounded_identity_mode
+                else audit_oracle
+            )
             audit_edge_result = audit_indirect_edges(
-                graph, audit_oracle, owners, analysis.unresolved_transfers
+                graph, audit_graph_oracle, owners, analysis.unresolved_transfers
             )
             audit_functions = set(audit_edge_result.closure)
         locations = {} if args.audit_observation_only else source_locations(
@@ -5276,8 +5545,8 @@ def main(argv: list[str] | None = None) -> int:
         if audit_functions is not None and audit_oracle is not None and audit_contract is not None:
             if audit_contract.expected_root not in audit_oracle.roots:
                 failures.append(f"audit root missing: expected {audit_contract.expected_root}")
-            observed = Counter((x.caller, x.helper) for x in calls if x.caller in audit_functions)
-            for (caller, helper), count in sorted(observed.items()):
+            observed = _route_call_counts(calls, audit_functions)
+            for (_owner_key, caller, helper), count in sorted(observed.items()):
                 if caller in audit_contract.forbidden_callers:
                     failures.append(
                         f"audit forbidden caller uses native math: {caller} {helper} found {count}"
@@ -5292,10 +5561,12 @@ def main(argv: list[str] | None = None) -> int:
             if analysis is not None:
                 assert audit_edge_result is not None
                 unresolved = list(audit_edge_result.unlisted_transfers)
-                effects = [x for x in analysis.unresolved_effects if x.function in audit_functions]
-                owner_by_name = {owner.name: owner for owner in owners}
+                effects = [
+                    x for x in analysis.unresolved_effects
+                    if (x.function_identity or x.function) in audit_functions
+                ]
                 for transfer in unresolved:
-                    owner = owner_by_name.get(transfer.caller)
+                    owner = owner_address_map.get(transfer.address)
                     site = (
                         f"+{transfer.address - owner.start}"
                         if owner is not None else f"at 0x{transfer.address:x}"

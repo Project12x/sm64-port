@@ -6032,6 +6032,150 @@ fixture.c 3 0x06003002
             call.helper == "___addsf3" for call in observed["result"].calls
         ))
 
+    def test_cli_bounded_duplicate_locals_keep_route_and_audit_accounting_separate(
+        self,
+    ) -> None:
+        sections = """
+  [ 1] .text PROGBITS 06001000 001000 008014 00 AX 0 0 2
+"""
+        symbols = """
+   1: 06001000 8 FUNC GLOBAL DEFAULT 1 _route_root
+   2: 06001100 8 FUNC GLOBAL DEFAULT 1 _audit_root
+   3: 06002000 8 FUNC LOCAL DEFAULT 1 local_helper
+   4: 06003000 8 FUNC LOCAL DEFAULT 1 local_helper
+   5: 06009000 4 FUNC GLOBAL DEFAULT 1 ___addsf3
+   6: 06009010 4 FUNC GLOBAL DEFAULT 1 ___mulsf3
+"""
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 02 bsr 6002000 <local_helper>
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+06001100 <_audit_root>:
+ 6001100: b0 02 bsr 6003000 <local_helper>
+ 6001102: 00 09 nop
+ 6001104: 00 0b rts
+ 6001106: 00 09 nop
+06002000 <local_helper>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <local_helper>:
+ 6003000: b0 02 bsr 6009010 <___mulsf3>
+ 6003002: 00 09 nop
+ 6003004: 00 0b rts
+ 6003006: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+06009010 <___mulsf3>:
+ 6009010: 00 0b rts
+ 6009012: 00 09 nop
+"""
+
+        def fake_command(command):
+            if command[1] == "-d":
+                return disassembly
+            if command[1] == "-SW":
+                return sections
+            if command[1] == "-sW":
+                return symbols
+            if command[1] == "--debug-dump=decodedline":
+                return ""
+            raise AssertionError(command)
+
+        observed_audits = []
+        real_audit = bounded_verifier.audit_indirect_edges
+
+        def observe_audit(graph, oracle, owners, unresolved_transfers):
+            result = real_audit(graph, oracle, owners, unresolved_transfers)
+            observed_audits.append((
+                {caller: set(callees) for caller, callees in graph.items()},
+                oracle,
+                result,
+            ))
+            return result
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            elf = root / "fixture.elf"
+            baseline = root / "baseline.txt"
+            route_oracle = root / "route-oracle.txt"
+            audit_oracle = root / "audit-oracle.txt"
+            audit_contract = root / "audit-contract.txt"
+            elf.write_bytes(b"ELF")
+            baseline.write_text(
+                "BASELINE_VERSION 1\n"
+                "HOT_CEILING 1\n"
+                "HOT local_helper ___addsf3 1\n",
+                encoding="utf-8",
+            )
+            route_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _route_root\n",
+                encoding="utf-8",
+            )
+            audit_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _audit_root\n",
+                encoding="utf-8",
+            )
+            audit_contract.write_text(
+                "AUDIT_CONTRACT_VERSION 2\n"
+                "EXPECTED_ROOT _audit_root\n"
+                "EXPECTED_TOTAL 1\n"
+                "FORBIDDEN_CALLER _forbidden\n",
+                encoding="utf-8",
+            )
+            with patch.object(
+                bounded_verifier, "run_command", side_effect=fake_command
+            ), patch.object(
+                bounded_verifier, "verify_baseline_integrity"
+            ), patch.object(
+                bounded_verifier, "verify_route_oracle_integrity"
+            ), patch.object(
+                bounded_verifier, "verify_audit_contract_integrity"
+            ), patch.object(
+                bounded_verifier, "source_locations", return_value={}
+            ), patch.object(
+                bounded_verifier,
+                "audit_indirect_edges",
+                side_effect=observe_audit,
+            ):
+                self.assertEqual(bounded_verifier.main([
+                    str(elf),
+                    str(baseline),
+                    "--route-oracle", str(route_oracle),
+                    "--audit-route-oracle", str(audit_oracle),
+                    "--audit-contract", str(audit_contract),
+                    "--objdump", "objdump",
+                    "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                    "--analysis-mode", "code-only-route-bounded",
+                ]), 0)
+
+        route_root_id = "@owner:1:06001000:_route_root"
+        audit_root_id = "@owner:1:06001100:_audit_root"
+        first_local_id = "@owner:1:06002000:local_helper"
+        second_local_id = "@owner:1:06003000:local_helper"
+        self.assertEqual(len(observed_audits), 2)
+        graph, primary_oracle, primary_result = observed_audits[0]
+        self.assertEqual(graph, {
+            route_root_id: {first_local_id},
+            audit_root_id: {second_local_id},
+        })
+        self.assertEqual(primary_oracle.roots, frozenset({route_root_id}))
+        self.assertEqual(
+            primary_result.closure,
+            frozenset({route_root_id, first_local_id}),
+        )
+        _, secondary_oracle, secondary_result = observed_audits[1]
+        self.assertEqual(secondary_oracle.roots, frozenset({audit_root_id}))
+        self.assertEqual(
+            secondary_result.closure,
+            frozenset({audit_root_id, second_local_id}),
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

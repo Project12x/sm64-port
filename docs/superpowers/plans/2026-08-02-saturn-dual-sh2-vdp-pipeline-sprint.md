@@ -81,12 +81,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces appended counters: `master_worker_started`, `slave_worker_started`, `vdp1_commands`, `vdp2_active_layers`, and `pipeline_faults`.
 - Counter fields are appended to the profile; no existing field offset moves.
 
-- [ ] Add a failing `offsetof`/decode fixture asserting the new fields append in the exact order above and that `vdp2_active_layers` records NBG1 and NBG3.
-- [ ] Run `.venv-saturn-tools/Scripts/python.exe tools/saturn/test_tools.py` and confirm the new decode assertions fail because fields are absent.
-- [ ] Append the fields to `sm64_saturn_fast3d_profile_t`; set the worker-start markers at dispatch, record VDP1 command count and VDP2 display mask at present, and increment `pipeline_faults` for timeout/overflow paths without changing scheduling.
-- [ ] Extend `fast3d_profile_decode.py` with those exact names and integer values.
-- [ ] Run `make -f Makefile.saturn.mk verify-tools verify-runtime-contracts`; require all prior offsets unchanged and all new synthetic fixture values decoded exactly.
-- [ ] Commit: `git commit -m "perf: expose dual-SH2 and dual-VDP frame stages"`.
+- [x] Add the failing `offsetof`/decode fixture; it also asserts NBG1|NBG3.
+- [x] Record the red decode evidence before implementation.
+- [x] Append the profile fields and diagnostic-only timeout/overflow accounting.
+- [x] Extend `fast3d_profile_decode.py`.
+- [ ] Run the exact aggregate Make target — deferred to Task 12 because mixed Windows/MSYS recipes are environment-blocked; focused ABI/runtime evidence passed.
+- [x] Commit `9aa0821` plus the reviewed fault-coverage follow-ups `513c8f2` and `575ca92`.
 
 ### Task 2: Transform only positions referenced by admitted leaves
 
@@ -100,13 +100,13 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces `sm64_saturn_visible_position_set_reset`, `_mark_primitive`, `_test`, and `_count` over a caller-owned bitset.
 - Consumes the bounded admitted primitive-ID work list plus generated primitive indices; output is immutable before either SH-2 begins transforming. Task 7 may replace the producer of that work list without changing this API.
 
-- [ ] Write a host test with two quads sharing one vertex; assert six unique positions are marked, an excluded primitive marks nothing, and out-of-range indices fail closed.
-- [ ] Add `verify-visible-position-set` to `Makefile.saturn.mk`, run `make -f Makefile.saturn.mk verify-visible-position-set`, and expect failure because the header does not exist.
-- [ ] Implement the bitset with `uint32_t` words and no allocation. Build it from admitted primitive IDs after BSP traversal and before `demo_prepare_position_owners()`.
-- [ ] Change `demo_transform_owned_positions()` to skip unmarked positions; keep actor positions separate.
-- [ ] Record marked count in `required_positions` and assert it never exceeds `SM64_SATURN_BOB_POSITION_COUNT`.
-- [ ] Run `make -f Makefile.saturn.mk verify-visible-position-set verify-ir-transform`; require identical projected coordinates for every position still marked.
-- [ ] Commit: `git commit -m "perf: transform only BSP-required terrain positions"`.
+- [x] Add shared-vertex, excluded-primitive, and fail-closed out-of-range host coverage.
+- [x] Add the host target and record red/green evidence.
+- [x] Implement the caller-owned `uint32_t` bitset before dual-SH2 dispatch.
+- [x] Skip unmarked terrain positions while retaining separate actor positions.
+- [x] Publish bounded `required_positions`.
+- [x] Run the focused host fixture and transform-equivalence checks (Windows-native equivalent; aggregate Make route remains a Task 12 environment gate).
+- [x] Commit `e8a38b8` and fail-closed test follow-up `fb0a7ea`.
 
 ### Task 3: Replace full-frame merge sort with stable fixed depth bins
 
@@ -121,13 +121,13 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces `sm64_saturn_terrain_depth_bins_build(records, count, refs, scratch, capacity)` returning a stable far-to-near stream.
 - Key is `(clamped_depth_bin, bsp_leaf, primitive_id)`; equal keys preserve producer order.
 
-- [ ] Write fixtures for empty, one-record, all-equal, reverse-depth, clipped-fan siblings, and mixed master/slave streams. Compare output to the existing stable merge sort.
-- [ ] Add `verify-terrain-depth-bins` to `Makefile.saturn.mk`, run `make -f Makefile.saturn.mk verify-terrain-depth-bins`, and confirm failure because the bin API is absent.
-- [ ] Implement a two-pass stable 64-bin count/prefix/scatter using fixed arrays and no comparison sort.
-- [ ] Preserve a compile-time comparison role that runs both algorithms on host and rejects any key-order mismatch.
-- [ ] Switch the target demo path to bins; retain the old merge implementation only for the comparison fixture.
-- [ ] Run `make -f Makefile.saturn.mk verify-terrain-depth-bins verify-terrain-command-template`; require identical record multiset and deterministic order.
-- [ ] Commit: `git commit -m "perf: replace terrain merge sort with stable depth bins"`.
+- [x] Add empty/equal/reverse/clipped/mixed fixtures and predecessor-order evidence.
+- [x] Add the target and record red/green evidence.
+- [x] Implement stable fixed-bin count/prefix/scatter with no comparison sort in the target path.
+- [x] Preserve host comparison with the predecessor raw-key merge and explicitly test intended ordering deltas.
+- [x] Switch the demo path; keep merge only as host oracle.
+- [x] Run focused bin/template/runtime-contract host tests; exact aggregate Make remains a Task 12 environment gate.
+- [x] Commit `62f5cde` and runtime/oracle correction `8ccb6a7`.
 
 ### Task 4: Remove whole-cache purges from the cross-SH2 transform barrier
 
@@ -142,12 +142,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces cached producer pointers, cache-through consumer pointers, uncached ready/count words, and `sm64_saturn_dual_frame_publish(lane, sequence, count)`.
 - Publication order is bulk writes, compiler barrier, sequence/count, ready flag last.
 
-- [ ] Add verifier failures for a cached completion flag, missing cache-through peer read, ready-before-count publication, and any `cpu_cache_purge()` in the accepted frame path.
-- [ ] Add `verify-dual-frame-bank` to `Makefile.saturn.mk`, run `make -f Makefile.saturn.mk verify-dual-frame-bank`, and confirm the current whole-cache purge is rejected by its source/disassembly fixture.
-- [ ] Implement physical-to-cache-through alias helpers for `s_view`, `s_projected`, and `s_position_valid`; each CPU reads its own range cached and the peer range through the cache-through alias after the uncached fence.
-- [ ] Remove the whole-cache purge only after the verifier sees all cross-owner reads use the correct alias.
-- [ ] Run `make -f Makefile.saturn.mk verify-dual-frame-bank`; at the wave build, run `tools/saturn/verify_dual_cpu_coherency.py <candidate.sym>` and inspect target disassembly to prove no accepted-frame `cpu_cache_purge` call remains.
-- [ ] Commit: `git commit -m "perf: use cache-through dual-SH2 frame handoff"`.
+- [x] Add source/mutation verifier failures for cached flags, peer aliasing, publication order, and purge.
+- [x] Add the host target and red/green source verification.
+- [x] Implement cached-owner/cache-through-peer aliases plus uncached release records.
+- [x] Remove accepted-frame whole-cache purge after verifier coverage.
+- [ ] Complete target disassembly proof of the new section/alias and no accepted-frame purge — candidate coherency symbol gate passes; final native-math route gate is active in Task 12.
+- [x] Commit `2ad40a0` and consumer-alias verifier hardening `20011a5`.
 
 ### Task 5: Make the SlaveDriver-derived DMA queue asynchronous
 
@@ -163,13 +163,13 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces `saturn_dma_queue_submit`, `saturn_dma_queue_kick`, `saturn_dma_queue_poll`, `saturn_dma_queue_wait`, and `saturn_dma_queue_idle`.
 - Queue descriptors copy addresses/lengths; source memory remains owned until the matching completion sequence retires.
 
-- [ ] Write a mock-SCU test proving submit does not copy, kick starts exactly one transfer, poll retires completed entries in order, wraparound is bounded, and wait drains all entries.
-- [ ] Add `verify-dma-queue` to `Makefile.saturn.mk`, run `make -f Makefile.saturn.mk verify-dma-queue`, and confirm the current submit-and-immediate-drain behavior fails.
-- [ ] Split queue submission from transfer start/wait. Use Yaul SCU DMA completion state; do not spin after every request.
-- [ ] Double-buffer VDP1 command and Gouraud staging so the CPU can build bank N+1 while DMA/VDP1 consumes bank N.
-- [ ] Wait only before a bank is reused or before VDP1 draw begins without its required uploads.
-- [ ] Run `make -f Makefile.saturn.mk verify-dma-queue`; at the wave build compare `sh-elf-readelf -S` and the sourceboot VDP1 partition counters against the predecessor, requiring zero queue overflow and unchanged command/texture/Gouraud VRAM ranges.
-- [ ] Commit: `git commit -m "perf: overlap SCU DMA with frame construction"`.
+- [x] Add mock-SCU descriptor/FIFO/wrap/wait tests plus later stale-sequence and unsafe-address coverage.
+- [x] Add the target and red/green host evidence.
+- [x] Split submit/kick/poll/wait/idle with validated SCU request ownership.
+- [x] Double-buffer VDP1 command and Gouraud staging.
+- [x] Wait only at actual VDP1/bank lifetime boundaries.
+- [ ] Complete target section/partition/counter comparison — hard Task 12 gate.
+- [x] Commit `54731bb` and DMA contract hardening `0d1a495`.
 
 ### Task 6: Finish compile-once VDP1 command state
 
@@ -184,13 +184,13 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Each generated/resolved template contains every immutable VDP1 word plus an exact patch mask for link, four XY pairs, Gouraud address, and dynamic texture source when required.
 - Per-frame patch code may write only fields named by that mask.
 
-- [ ] Extend the template fixture to poison all immutable words and prove coordinate/link/Gouraud patching changes only allowed offsets.
-- [ ] Add clipped, recovery-material, textured-flat, textured-Gouraud, and texture-suppressed fixtures; run and observe missing-template failures.
-- [ ] Resolve all static material/texture/draw-mode words at load time. Store only dynamic patch data in worker outputs.
-- [ ] Replace fallback command reconstruction for supported cases with template copy/patch; keep a counted fallback only for malformed or genuinely dynamic state.
-- [ ] Require `demo_bob_terrain_legacy_fallbacks == 0` on the accepted BOB route.
-- [ ] Run template, terrain, and command-arena tests.
-- [ ] Commit: `git commit -m "perf: finish compile-once terrain command templates"`.
+- [x] Poison immutable template words and enforce exact patch masks.
+- [x] Add clipped/recovery/textured/texture-suppressed resolved-image coverage.
+- [x] Resolve static state at load time; workers publish dynamic patch payloads only.
+- [x] Use master template copy/patch for supported cases; retain counted malformed fallback only.
+- [ ] Prove zero BOB legacy fallbacks on the accepted target route — Task 12/Ymir gate.
+- [x] Run focused template/depth host fixtures (command-arena target evidence remains Task 12).
+- [x] Commit `e50fc47` and mask/lifecycle follow-up `cc78d82`.
 
 ### Task 7: Generate compact BSP leaf spans and stop scanning all primitives
 
@@ -204,12 +204,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Generated data provides `leaf_first_ref[]`, `leaf_ref_count[]`, and a packed `primitive_refs[]` stream with each primitive appearing in the exact conservative leaves required by the bake.
 - Runtime traversal emits work spans directly; it does not clear or scan an 867-entry admission array.
 
-- [ ] Add generator tests for deterministic leaf spans, in-range refs, no duplicate ref within one leaf, complete conservative coverage, and identical output under repeated generation.
-- [ ] Run the tests and confirm generated span symbols are absent.
-- [ ] Emit the packed spans and update `demo_spatial_admit()` to append admitted leaf refs into the bounded work list.
-- [ ] Remove the all-primitives spatial admission scan from the accepted BSP path; preserve a host comparison against the old admission set.
-- [ ] Run `tools/saturn/test_tools.py` and `bob_bsp_header_smoke.c`; require exact set equality with fewer runtime primitive visits.
-- [ ] Commit: `git commit -m "perf: drive terrain work from compact BSP leaf spans"`.
+- [x] Add deterministic/in-range/unique/conservative generator tests for packed **node** spans (the original “leaf” wording was corrected).
+- [x] Record the absent-symbol red test.
+- [x] Emit packed node spans and append them directly to bounded work order.
+- [x] Remove the accepted-path all-primitive scan and preserve predecessor set/order oracle.
+- [x] Run focused generator regression suite and native BSP header smoke; generated content identity rejects stale same-size artifacts.
+- [x] Commit `524c48c` and audit correction `79923ce`.
 
 ### Task 8: Enable conservative Z-Treme-style LOD and early material degradation
 
@@ -224,12 +224,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Produces hysteretic tiers `NEAR`, `MID`, `FAR` from projected size/depth with separate enter/exit thresholds.
 - FAR may suppress only bake-approved optional primitives; MID may suppress expensive texture/Gouraud work while preserving silhouette and collision-independent geometry.
 
-- [ ] Add tests for threshold hysteresis, camera jitter, mandatory route-prefix preservation, and deterministic tier reset on level change.
-- [ ] Run the fixture and confirm current depth-only behavior fails the projected-size cases.
-- [ ] Compute tier before clipping/material work. Apply generated masks before texture lookup and Gouraud allocation.
-- [ ] Add build roles `SATURN_DEMO_POLY_TIER=0|1|2`, with tier 0 as visual reference and tier 2 as candidate; tag outputs distinctly.
-- [ ] Require nonzero suppression/downgrade counters in tier 2, zero mandatory-primitive drops, and no oscillation on the fixed camera replay.
-- [ ] Commit: `git commit -m "perf: apply hysteretic terrain LOD before material work"`.
+- [x] Add hysteresis/jitter/mandatory-prefix/scene reset tests, including per-tick catch-up transition coverage.
+- [x] Record projected-size red evidence.
+- [x] Compute projected-span/depth tier before clipping/material allocation.
+- [x] Add exact tier roles `0|1|2` and distinct tags; invalid roles degrade nothing.
+- [ ] Record fixed-replay suppression/no-oscillation evidence — counters are diagnostic only and target replay remains Task 12.
+- [x] Commit `5dd39e1` with scene-boundary and placement-guard follow-ups through `5a5e850`.
 
 ### Task 9: Give the slave SH-2 bounded Mario transform/classification work
 
@@ -244,12 +244,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Slave consumes a copied `sm64_saturn_mario_actor_snapshot_t`, copied pose, immutable mesh/material tables, and a disjoint result span.
 - Master retains Gouraud/texture/VDP1 slot allocation and final actor insertion relative to terrain.
 
-- [ ] Add a host fixture that compares serial and split transform/classification outputs for every Mario vertex/primitive and rejects live game-state pointers in the worker context.
-- [ ] Add `verify-dual-actor-worker` to `Makefile.saturn.mk`, run `make -f Makefile.saturn.mk verify-dual-actor-worker`, and confirm the split API is absent.
-- [ ] Add a second bounded worker phase only when terrain slave work has retired; do not overlap two slave jobs or grant the slave VDP access.
-- [ ] Publish compact actor refs through the same sequence/uncached contract as terrain.
-- [ ] Run `make -f Makefile.saturn.mk verify-dual-actor-worker`; require identical actor command order/colors/coordinates between serial and split host roles and zero simulated slave timeouts.
-- [ ] Commit: `git commit -m "perf: split Mario transform work across both SH2s"`.
+- [x] Add serial/split snapshot and live-pointer-rejection fixture, later strengthened with deterministic delayed-worker fallback coverage.
+- [x] Add Windows-native `verify-dual-actor-worker` target and red/green evidence.
+- [x] Add strictly post-terrain, non-overlapping transform and compact classification phases; positive retirement precedes fallback reuse.
+- [x] Publish compact refs through uncached/cache-through contract.
+- [x] Verify host serial/split output, timeout fallback, and cached all-master ownership mutation; target proof remains Task 12.
+- [x] Commit `edc3e78` and corrective series through `6731a4c`.
 
 ### Task 10: Expand flat/material fast paths and avoid unnecessary Gouraud work
 
@@ -263,12 +263,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - `sm64_saturn_terrain_shade_path()` decides `FLAT_REPLACE`, `TEXTURED_REPLACE`, or `GOURAUD` before any table reservation/upload.
 - Equal post-light colors and LOD-suppressed gradients never allocate Gouraud entries.
 
-- [ ] Add fixtures for equal colors, near-equal but distinct colors, clipped interpolated colors, textured flat material, and LOD-suppressed gradient.
-- [ ] Run and confirm unsupported cases currently take the Gouraud path.
-- [ ] Move shade-path classification into worker classification and encode the result in the compact record/template patch flags.
-- [ ] Reserve and upload Gouraud tables only for `GOURAUD`; record saved-table and saved-byte counters.
-- [ ] Require unchanged pixel inputs for real gradients and zero Gouraud allocation for flat fixtures.
-- [ ] Commit: `git commit -m "perf: reject flat polygons before Gouraud allocation"`.
+- [x] Add equal/near-equal/clipped/textured/LOD fixtures and red evidence.
+- [x] Record pre-change unsupported-path behavior.
+- [x] Encode worker shade path safely alongside clip/recovery/LOD flags.
+- [x] Allocate/upload only `GOURAUD`; append saved-table/byte diagnostics to profile.
+- [x] Prove real master lowering preserves four post-light gradient pixels; ordinary flat paths allocate zero tables.
+- [x] Commit `f96ada9` with payload/lowering corrections through `1d31f00`.
 
 ### Task 11: Make VDP2 an explicit performance participant
 
@@ -283,12 +283,12 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - `sm64_saturn_vdp2_frame_commit()` performs one VBlank-synchronized commit for NBG1 sky, NBG3 HUD, priorities, and display mask.
 - VDP2 never receives terrain or Mario geometry.
 
-- [ ] Add a host contract asserting NBG1 and NBG3 are enabled, VDP1 sprite priorities remain visible, sky scroll derives only from the copied camera snapshot, and HUD update rate is bounded to once per 30 source ticks.
-- [ ] Run and confirm the consolidated VDP2 frame API is absent.
-- [ ] Move sky/HUD/layer updates behind the new frame API and coalesce them into one commit per presented frame.
-- [ ] Display total FPS plus master transform, slave transform, ordering, DMA wait, and VDP1 wait counters without invoking float formatting.
-- [ ] Require `vdp2_active_layers` to show both NBG1 and NBG3 and verify no VDP2 bitmap/polygon path duplicates VDP1 scene geometry.
-- [ ] Commit: `git commit -m "perf: coalesce VDP2 sky HUD and layer commits"`.
+- [x] Add NBG1/NBG3, VDP1-priority, copied-camera, HUD-cadence host contract.
+- [x] Record red absence of the frame API.
+- [x] Coalesce sky/HUD/layers behind master-only begin/commit API.
+- [x] Display measured integer FPS/MT/ST/ORD/DMAW/VDP1W telemetry (not construction-time aliases).
+- [x] Prove both VDP2 layers and no VDP2 geometry API/path in focused contract/static checks.
+- [x] Commit `687e76b` with telemetry and decoder-fixture follow-ups through `1850d18`.
 
 ### Task 12: Integrate, balance both SH-2s, and publish the experimental CUE
 
@@ -301,20 +301,20 @@ independent review are clean; it is not a target/Ymir promotion claim.
 **Interfaces:**
 - Final build role uses Q16 camera variant 3, BSP leaf spans, required-position transform, stable bins, cache-through handoff, asynchronous DMA, template patching, tier-2 LOD, split actor transform, and coalesced VDP2 commits.
 
-- [ ] Run all host fixtures added above plus existing camera, Q16, terrain-template, memory-map, and coherency suites. Require all green before target build.
-- [ ] Build the reference role and candidate role serially with identical route/input. Candidate command:
+- [ ] Run the entire aggregate host gate — focused fixtures/profile ABI pass, but `verify-tools` and mixed-shell Make routes remain environment-blocked and broad generator/runtime checks are still pending.
+- [x] Build reference and candidate roles serially with identical route/input through the audited DLL/TMP wrapper; both artifact chains are published and hashed. Candidate command:
 
 ```powershell
 make -C src/port/saturn/sourceboot -B -j1 SATURN_DEMO_PATH=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1 SATURN_SOURCEBOOT_LIVE_INPUT=1 SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS=600 SATURN_SOURCEBOOT_CAMERA_ROUTE=0 SATURN_CAMERA_VARIANT=3 SATURN_SOURCE_CART_STAGE_SECTORS=8 SATURN_DEMO_HOT_PROMOTION=1 SATURN_DEMO_NEAR_CLIP=1 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_POLY_TIER=2 SATURN_RENDERER_PIPELINE=3
 ```
 
-- [ ] Inspect the candidate ELF: no camera/transform soft-float or generic 64-bit division calls; no accepted-frame `cpu_cache_purge`; both master and slave worker symbols present; VDP1 and VDP2 commit paths reachable.
-- [ ] Run one automated Ymir DRAM-cart comparison at the pinned BOB route. Reject black/sky-only evidence, invalid sourceboot probe addresses, gameplay-state mismatch, timeout, arena overflow, DMA overflow, or slave timeout.
-- [ ] Tune only `slave_begin`, depth-bin count, and LOD thresholds from correctness captures and any valid counters. Require both SH-2s to execute their assigned bounded jobs, no timeout/overflow/fault counter, and no source-state or visible-order regression; do not impose percentage targets before representative measurements exist.
-- [ ] Run one final manual Ymir DRAM-cart test with live input after bootstrap. Require visible terrain and Mario, responsive controls, VDP2 sky/HUD, and an obvious improvement over the predecessor by feel.
-- [ ] Write the evidence report with source commits, reference provenance, exact flags, SHA-256 identities, counter table, screenshots, known visual tradeoffs, and rollback roles.
-- [ ] Add `EXPERIMENTAL_BUILD.txt` beside the CUE stating: dual-SH2 pipeline, VDP1 geometry, VDP2 sky/HUD, tier-2 LOD, 600-tick BOB bootstrap then live input, DRAM cart required, static census intentionally not required.
-- [ ] Commit: `git commit -m "perf: publish dual-SH2 dual-VDP experimental pipeline"`.
+- [ ] Inspect the candidate ELF — coherency passes and required worker/VDP symbols are linked; reviewed bounded native-math route verification is still resolving real ELF metadata, so this gate is not complete.
+- [ ] Run automated Ymir DRAM-cart comparison — blocked until the candidate ELF gate is green.
+- [ ] Tune only from valid correctness captures — no valid candidate capture yet.
+- [ ] Run final manual Ymir live-input test — blocked until automated capture passes.
+- [ ] Finish evidence report — preflight/build hashes are recorded; counter table/screenshots/tradeoffs/rollback remain pending capture.
+- [ ] Add `EXPERIMENTAL_BUILD.txt` beside the published candidate CUE — publication remains pending acceptance.
+- [ ] Commit the experimental pipeline publication — pending all Task 12 gates.
 
 ## Promotion Gate
 
