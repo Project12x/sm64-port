@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include "slavedriver_dual_worker.h"
+#include "saturn_dual_frame_bank.h"
 #include "saturn_mario_actor_mesh.h"
 
 typedef struct actor_vertex {
@@ -118,31 +119,17 @@ static int worker_context_has_no_live_game_pointers(void)
     return valid;
 }
 
-static int fallback_compact_ref_cache_contract(void)
+static int all_master_ref_fallback_uses_cached_owner(void)
 {
-    FILE *source = fopen("src/port/saturn/gfx/saturn_demo_render.c", "rb");
-    if (source == NULL) return 0;
-    if (fseek(source, 0L, SEEK_END) != 0) return fclose(source), 0;
-    const long bytes = ftell(source);
-    if (bytes <= 0L || fseek(source, 0L, SEEK_SET) != 0)
-        return fclose(source), 0;
-    char *text = malloc((size_t)bytes + 1U);
-    if (text == NULL) return fclose(source), 0;
-    const size_t read = fread(text, 1U, (size_t)bytes, source);
-    fclose(source);
-    text[read] = '\0';
-    const char *const fallback = strstr(
-        text, "s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;");
-    const char *const copied_split = fallback == NULL ? NULL : strstr(
-        fallback, "s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;");
-    const char *const serial = copied_split == NULL ? NULL : strstr(
-        copied_split, "demo_transform_mario_range(&s_mario_transform_context");
-    const int valid = fallback != NULL && copied_split != NULL && serial != NULL &&
-        fallback < copied_split && copied_split < serial &&
-        strstr(text, "demo_actor_result_read_lane_split(\n                lane, context->vertex_slave_begin") != NULL &&
-        strstr(text, "static inline const demo_actor_primitive_ref_t *demo_actor_ref_read") != NULL;
-    free(text);
-    return valid;
+    for (uint16_t primitive = 0U;
+         primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++) {
+        if (sm64_saturn_dual_frame_owner_for_split(
+                primitive, SM64_MARIO_PRIMITIVE_COUNT) != 0U)
+            return 0;
+    }
+    return sm64_saturn_dual_frame_owner_for_split(
+               SM64_MARIO_PRIMITIVE_COUNT / 2U,
+               SM64_MARIO_PRIMITIVE_COUNT / 2U) == 1U;
 }
 
 int main(void)
@@ -192,7 +179,7 @@ int main(void)
         fprintf(stderr, "actor worker context exposes live game or VDP state\n");
         return 1;
     }
-    if (!fallback_compact_ref_cache_contract()) {
+    if (!all_master_ref_fallback_uses_cached_owner()) {
         fprintf(stderr, "fallback compact refs can still select a stale peer alias\n");
         return 1;
     }

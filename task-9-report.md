@@ -63,9 +63,10 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
 3. The fixture uses every generated Mario vertex and all 644 primitives; it
    compares serial/split vertex coordinates and primitive order, colors, and
    corner coordinates byte-for-byte. It also source-checks the worker context
-   to reject live Mario/game/graph/VDP pointers, and integration-checks the
-   actual fallback ordering: copied all-master ownership metadata is installed
-   before compact-reference classification may use its cache-through helper.
+   to reject live Mario/game/graph/VDP pointers. It executes the same pure
+   split-owner helper used by `demo_actor_ref_read()` after inducing an
+   all-master primitive fallback, requiring every reference to remain cached
+   owner 0. An always-peer mutation is compiled and must fail the fixture.
 4. `verify_dual_cpu_coherency.py --self-test` passed its source gate and all
    five mutation cases. `git diff --check` passed.
 

@@ -108,4 +108,18 @@ static inline const void *sm64_saturn_dual_frame_read_range(
         sm64_saturn_dual_frame_cache_through(cached);
 }
 
+/* Select the owner of a fixed half-open result span.  A recovered all-master
+ * span sets slave_begin == count, making every entry cached/master-owned. */
+static inline uint8_t sm64_saturn_dual_frame_owner_for_split(
+    uint16_t entry, uint16_t slave_begin)
+{
+#if defined(SM64_SATURN_TEST_MUTATE_SPLIT_OWNER)
+    (void)entry;
+    (void)slave_begin;
+    return 1U;
+#else
+    return entry < slave_begin ? 0U : 1U;
+#endif
+}
+
 #endif

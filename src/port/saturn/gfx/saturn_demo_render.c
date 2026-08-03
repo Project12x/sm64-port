@@ -367,7 +367,8 @@ static inline const uint8_t *demo_position_valid_read(uint8_t lane,
 static inline const demo_actor_vertex_result_t *demo_actor_result_read_lane_split(
     uint8_t lane, uint16_t slave_begin, uint16_t vertex)
 {
-    const uint8_t owner = vertex < slave_begin ? 0U : 1U;
+    const uint8_t owner = sm64_saturn_dual_frame_owner_for_split(
+        vertex, slave_begin);
     return (const demo_actor_vertex_result_t *)
         sm64_saturn_dual_frame_read_range(lane, owner, s_actor_results) +
         vertex;
@@ -389,8 +390,8 @@ static inline const demo_actor_vertex_result_t *demo_actor_result_read(
 static inline const demo_actor_primitive_ref_t *demo_actor_ref_read(
     uint16_t primitive)
 {
-    const uint8_t owner = primitive < s_actor_primitive_slave_begin ?
-        0U : 1U;
+    const uint8_t owner = sm64_saturn_dual_frame_owner_for_split(
+        primitive, s_actor_primitive_slave_begin);
     return (const demo_actor_primitive_ref_t *)
         sm64_saturn_dual_frame_read_range(0U, owner, s_actor_refs) +
         primitive;
