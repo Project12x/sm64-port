@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <assert.h>
 #if defined(__sh__)
 #include <cpu/cache.h>
 #endif
@@ -20,6 +21,7 @@
 #include "saturn_terrain_emit_policy.h"
 #include "saturn_terrain_fused.h"
 #include "saturn_transform.h"
+#include "saturn_visible_position_set.h"
 #include "bob_scene.h"
 #include "bob_bsp.h"
 #if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
@@ -122,6 +124,11 @@ static uint8_t s_position_use_mask[SM64_SATURN_BOB_POSITION_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint8_t s_position_owner[SM64_SATURN_BOB_POSITION_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
+#define DEMO_VISIBLE_POSITION_WORDS \
+    SM64_SATURN_VISIBLE_POSITION_SET_WORDS(SM64_SATURN_BOB_POSITION_COUNT)
+static uint32_t s_visible_position_words[DEMO_VISIBLE_POSITION_WORDS]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
+static sm64_saturn_visible_position_set_t s_visible_position_set;
 /* Cross-CPU fence flags and result-span headers MUST live in the uncached
  * partition (.uncached, addresses >= 0x20000000). The SH7604 has no
  * inter-CPU cache coherency: a cached-alias poll spins on the reader's own
@@ -490,6 +497,28 @@ static void demo_prepare_render_work_order(void)
 #endif
 }
 
+/* The master finishes this complete bitset before it publishes either SH-2
+ * transform job. The workers only read it while assigning and transforming
+ * their disjoint position ranges. */
+static uint16_t demo_build_visible_position_set(void)
+{
+    sm64_saturn_visible_position_set_reset(
+        &s_visible_position_set, s_visible_position_words,
+        DEMO_VISIBLE_POSITION_WORDS, SM64_SATURN_BOB_POSITION_COUNT);
+    for (uint16_t work = 0U; work < s_render_work_count; work++) {
+        const uint16_t primitive_index = s_render_work_order[work];
+        if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
+            continue;
+        (void)sm64_saturn_visible_position_set_mark_primitive(
+            &s_visible_position_set,
+            s_bob_primitives_active[primitive_index].indices);
+    }
+    const uint16_t required_positions =
+        sm64_saturn_visible_position_set_count(&s_visible_position_set);
+    assert(required_positions <= SM64_SATURN_BOB_POSITION_COUNT);
+    return required_positions;
+}
+
 static uint16_t demo_choose_work_split(void)
 {
     const uint16_t count = s_render_work_count;
@@ -539,7 +568,8 @@ static void demo_prepare_position_owners(uint16_t split, bool dual_phase)
          * the shared bank even when the source primitive has three corners. */
         for (uint8_t corner = 0U; corner < 4U; corner++) {
             const uint16_t position = primitive->indices[corner];
-            if (position < SM64_SATURN_BOB_POSITION_COUNT)
+            if (sm64_saturn_visible_position_set_test(
+                    &s_visible_position_set, position))
                 s_position_use_mask[position] |= lane_mask;
         }
     }
@@ -649,6 +679,7 @@ typedef struct demo_classify_context {
     uint32_t clip_to_two[2];
     uint32_t clip_recovery[2];
     uint32_t clip_overflow[2];
+    uint16_t required_positions;
     bool dual_phase;
 } demo_classify_context_t;
 
@@ -903,10 +934,15 @@ static bool demo_transform_owned_positions(
     if (context == NULL || context->job == NULL || lane > 1U ||
         s_transform_phase_failed != 0U)
         return false;
+    assert(context->required_positions ==
+           sm64_saturn_visible_position_set_count(&s_visible_position_set));
 
     for (uint16_t position = 0U;
          position < SM64_SATURN_BOB_POSITION_COUNT; position++) {
-        if (s_position_owner[position] != lane) continue;
+        if (!sm64_saturn_visible_position_set_test(
+                &s_visible_position_set, position) ||
+            s_position_owner[position] != lane)
+            continue;
         if ((position % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) {
             s_transform_phase_failed = 1U;
@@ -1974,6 +2010,7 @@ void sm64_saturn_demo_render_frame(
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
     demo_prepare_render_work_order();
+    const uint16_t required_positions = demo_build_visible_position_set();
     const uint16_t work_split = demo_choose_work_split();
 #if SATURN_SLAVE_RENDER
     const bool dual_transform_phase = work_split < s_render_work_count;
@@ -2001,6 +2038,7 @@ void sm64_saturn_demo_render_frame(
         .radius_rejected = {0U, 0U},
         .near_rejected = {0U, 0U},
         .degenerate = {0U, 0U},
+        .required_positions = required_positions,
         .dual_phase = dual_transform_phase
     };
     s_terrain_publish_sequence++;
