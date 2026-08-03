@@ -3649,6 +3649,10 @@ INSTRUCTION_RE = re.compile(r"^\s*([0-9A-Fa-f]+):\s+(?:[0-9A-Fa-f]{2}\s+){1,4}(.
 LITERAL_LOAD_RE = re.compile(
     r"\bmov\.l\s+[^\n]*,r(\d+)\s*!\s*((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>"
 )
+PC_LITERAL_DATA_RE = re.compile(
+    r"\bmov\.(l|w)\s+((?:0x)?[0-9A-Fa-f]+)\s+<[^>]+>,"
+    r"r(?:1[0-5]|\d)\b"
+)
 JSR_RE = re.compile(r"\bjsr\s+@r(\d+)\b")
 BSR_RE = re.compile(r"\bbsr\s+((?:0x)?[0-9A-Fa-f]+)\s+<([^>]+)>")
 BSR_OPCODE_RE = re.compile(r"\bbsr\b")
@@ -4941,6 +4945,7 @@ def _bounded_control_flow_sources(
     owner_components: dict[str, frozenset[str]],
     decoded_text: str,
     owner_address_map: dict[int, FunctionOwner] | None = None,
+    resolved_indirect_addresses: frozenset[int] = frozenset(),
 ) -> tuple[frozenset[int], frozenset[int], list[tuple[str, int, str]]]:
     """Prove code sources and trailing literal pools from bounded SH CFGs."""
     owner_by_identity = {
@@ -4953,14 +4958,18 @@ def _bounded_control_flow_sources(
         decoded_text, owners, islands, owner_address_map
     )
     proven: set[int] = set()
-    literal_pool_addresses: set[int] = set()
+    literal_pool_candidates: defaultdict[frozenset[str], set[int]] = defaultdict(set)
+    positive_literal_pool_addresses: set[int] = set()
+    unsafe_pool_components: set[frozenset[str]] = set()
     errors: list[tuple[str, int, str]] = []
 
     rows_by_identity: dict[str, dict[int, tuple[str, str]]] = {}
     literal_loads_by_identity: dict[str, dict[int, tuple[str, int]]] = {}
+    literal_data_refs_by_identity: dict[str, dict[int, frozenset[int]]] = {}
     for identity, block in blocks.items():
         rows: dict[int, tuple[str, str]] = {}
         literal_loads: dict[int, tuple[str, int]] = {}
+        literal_data_refs: dict[int, frozenset[int]] = {}
         for line in block.splitlines():
             match = INSTRUCTION_RE.match(line)
             if match is None:
@@ -4977,14 +4986,23 @@ def _bounded_control_flow_sources(
                 literal_loads[address] = (
                     f"r{literal.group(1)}", int(literal.group(2), 16)
                 )
+            data_ref = PC_LITERAL_DATA_RE.search(raw_operation)
+            if data_ref is not None:
+                pool_address = int(data_ref.group(2), 16)
+                width = 4 if data_ref.group(1) == "l" else 2
+                literal_data_refs[address] = frozenset(
+                    range(pool_address, pool_address + width, 2)
+                )
         rows_by_identity[identity] = rows
         literal_loads_by_identity[identity] = literal_loads
+        literal_data_refs_by_identity[identity] = literal_data_refs
 
     for identity, identity_rows in rows_by_identity.items():
         owner = owner_by_identity.get(identity)
         if owner is None:
             rows = identity_rows
             literal_loads = literal_loads_by_identity[identity]
+            literal_data_refs = literal_data_refs_by_identity[identity]
         else:
             rows = {
                 address: row
@@ -4995,6 +5013,13 @@ def _bounded_control_flow_sources(
                 address: target
                 for member in owner_components[identity]
                 for address, target in literal_loads_by_identity.get(
+                    member, {}
+                ).items()
+            }
+            literal_data_refs = {
+                address: targets
+                for member in owner_components[identity]
+                for address, targets in literal_data_refs_by_identity.get(
                     member, {}
                 ).items()
             }
@@ -5015,6 +5040,10 @@ def _bounded_control_flow_sources(
             region_display = island.name
         else:
             continue
+        component = (
+            owner_components[identity]
+            if owner is not None else frozenset({identity})
+        )
 
         delayed_mnemonics = {
             "rts", "rte", "jmp", "braf", "bra", "bt.s", "bf.s",
@@ -5080,7 +5109,7 @@ def _bounded_control_flow_sources(
                     # Keep an unresolved indirect tail terminal here.  The
                     # code-only analyzer will retain it for the indirect-edge
                     # audit, and no trailing bytes are classified as a pool.
-                    pass
+                    unsafe_pool_components.add(component)
                 else:
                     schedule(
                         address, literal[1],
@@ -5089,6 +5118,7 @@ def _bounded_control_flow_sources(
                 continue
             if mnemonic == "braf":
                 delay_slot(address)
+                unsafe_pool_components.add(component)
                 continue
             if mnemonic == "bra":
                 delay_slot(address)
@@ -5120,9 +5150,20 @@ def _bounded_control_flow_sources(
                 continue
             if mnemonic in {"jsr", "bsrf"}:
                 delay_slot(address)
+                if address not in resolved_indirect_addresses:
+                    unsafe_pool_components.add(component)
                 schedule(address, address + 4, "fallthrough")
                 continue
             schedule(address, address + 2, "fallthrough")
+
+        # A PC-relative load from reached code is positive ISA-level evidence
+        # that its referenced halfwords are data, even when another reachable
+        # path contains an unresolved computed transfer.
+        for source, targets in literal_data_refs.items():
+            if source in proven:
+                positive_literal_pool_addresses.update(
+                    target for target in targets if target in rows
+                )
 
         # Inline pools are only trusted as data in an unreachable *trailing*
         # suffix after a reached, direct no-fallthrough transfer.  Any DWARF
@@ -5146,9 +5187,17 @@ def _bounded_control_flow_sources(
             else:
                 suffix = set()
             if suffix and not suffix.intersection(visited):
-                literal_pool_addresses.update(suffix)
+                literal_pool_candidates[component].update(suffix)
 
-    return frozenset(proven), frozenset(literal_pool_addresses), errors
+    literal_pool_addresses = frozenset(
+        positive_literal_pool_addresses.union(
+            address
+            for component, candidates in literal_pool_candidates.items()
+            if component not in unsafe_pool_components
+            for address in candidates
+        )
+    )
+    return frozenset(proven), literal_pool_addresses, errors
 
 
 def _bounded_island_origins(
@@ -5232,6 +5281,35 @@ def prepare_route_bounded_code_only(
             continue
         for name in component:
             graph.setdefault(name, set()).update(component - {name})
+    proven_source_addresses, _unused_pool_addresses, _preflight_errors = \
+        _bounded_control_flow_sources(
+        blocks,
+        owner_list,
+        island_list,
+        owner_components,
+        decoded_text,
+        owner_address_map,
+    )
+    # Resolve proven literal-loaded calls before classifying any unvisited
+    # suffix as data.  This preflight deliberately tolerates every unproven
+    # row; the second scan below remains the fail-closed verdict scan.
+    all_instruction_addresses = frozenset(
+        int(match.group(1), 16)
+        for line in disassembly.splitlines()
+        if (match := INSTRUCTION_RE.match(line)) is not None
+    )
+    preflight_calls = scan_direct_calls(
+        disassembly,
+        owner_list,
+        island_list,
+        proven_source_addresses,
+        [],
+        qualify_owner_identities=True,
+        known_literal_pool_addresses=(
+            all_instruction_addresses - proven_source_addresses
+        ),
+    )
+    resolved_indirect_addresses = frozenset(call.address for call in preflight_calls)
     proven_source_addresses, literal_pool_addresses, deferred_errors = \
         _bounded_control_flow_sources(
         blocks,
@@ -5240,6 +5318,7 @@ def prepare_route_bounded_code_only(
         owner_components,
         decoded_text,
         owner_address_map,
+        resolved_indirect_addresses,
     )
     # Closure is not known until after this text scan. Preserve potential
     # structural and executable-call failures by caller, then enforce them

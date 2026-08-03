@@ -5400,8 +5400,8 @@ fixture.c 3 0x06003002
         )
         disassembly = """
 06006900 <_geo_layout_cmd_node_translation_rotation>:
- 6006900: a0 06 bra 6006910 <_geo_layout_cmd_node_translation_rotation+0x10>
- 6006902: 00 09 nop
+ 6006900: d2 25 mov.l 6006998 <_geo_layout_cmd_node_translation_rotation+0x98>,r2 ! b60b60b7
+ 6006902: 01 23 braf r1
  6006904: 00 09 nop
  6006906: 00 09 nop
  6006908: 00 09 nop
@@ -5537,6 +5537,47 @@ fixture.c 3 0x06003002
             bounded_verifier.prepare_route_bounded_code_only(
                 disassembly,
                 "fixture.c 1 0x06001000\nfixture.c 2 0x06001012\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_unresolved_branch_arm_prevents_other_arm_from_blessing_pool(self) -> None:
+        """A return on one arm cannot classify an unknown jump target as data."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001030, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("_declared_callback", 0x06003000, 0x06003008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({"_declared_callback"}),
+            frozenset({("_route_root", "_declared_callback")}),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 89 06 bt 6001010 <_route_root+0x10>
+ 6001002: 41 2b jmp @r1
+ 6001004: 00 09 nop
+ 6001010: 00 0b rts
+ 6001012: 00 09 nop
+ 6001020: b0 02 bsr 6002000 <_route_child>
+ 6001022: 00 09 nop
+ 6001024: 00 0b rts
+ 6001026: 00 09 nop
+06002000 <_route_child>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06003000 <_declared_callback>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+"""
+        with self.assertRaisesRegex(
+            ValueError, "no decoded code provenance"
+        ):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\n",
                 owners,
                 (oracle,),
             )
