@@ -10,7 +10,7 @@ int main(void)
         {0U, 1U, 2U, 3U},
         {2U, 3U, 4U, 5U},
         {6U, 7U, 8U, 9U},
-        {0U, 1U, 2U, 10U}
+        {7U, 8U, 9U, 10U}
     };
     uint32_t words[SM64_SATURN_VISIBLE_POSITION_SET_WORDS(10U)];
     sm64_saturn_visible_position_set_t set;
@@ -39,6 +39,9 @@ int main(void)
     assert(!sm64_saturn_visible_position_set_mark_primitive(
         &set, primitive_indices[3]));
     assert(sm64_saturn_visible_position_set_count(&set) == 6U);
+    assert(!sm64_saturn_visible_position_set_test(&set, 7U));
+    assert(!sm64_saturn_visible_position_set_test(&set, 8U));
+    assert(!sm64_saturn_visible_position_set_test(&set, 9U));
     assert(!sm64_saturn_visible_position_set_test(&set, 10U));
     return 0;
 }
