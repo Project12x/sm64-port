@@ -18,15 +18,15 @@ controller-owned manual checkpoint until the seam and tests below exist.
 
 ### Current verdict and scope
 
-**ACTIVE — quality-fix round 2/5; quality rereview required.** Implementation
+**SOURCE-COMPLETE — serial target/Ymir evidence pending.** Implementation
 commit `98f26f26` adds the default-off `diag-skip-geo` configuration. Review-fix
 round 1 is `fe1074b8`; its scoped independent spec rereview marks both prior
 Important findings **ADDRESSED** with no new Critical or Important findings.
 The independent quality review is **NO-GO**: trailing whitespace could activate
 the diagnostic while bypassing its demo/replay prerequisites, the tests admitted
 two containment mutants, and the live plan contradicted the sealed D1 exception.
-Quality-fix round 2 closes those findings; independent quality rereview remains
-open, so Task 1D is not `source-complete`.
+Quality-fix round 2 closes those findings; both independent rereviews are GO,
+so Task 1D is `source-complete` pending only its serial target/Ymir evidence.
 
 This configuration is non-promotable. It exists only to measure an upper bound
 on duplicate geo-walk cost. It knowingly invalidates geo-owned animation,
@@ -119,6 +119,16 @@ failure and not a green result.
 
 Quality-fix round 2 reran this exact command and reproduced the same exit 1 /
 WinError 5 failure before the host runtime-contract executable.
+
+The existing host-contract executable was then freshly run through the same
+DLL-safe wrapper:
+
+```powershell
+& tools\saturn\with-msys-toolchain.ps1 '.\build\saturn\host-tests\runtime-contract-test.exe'
+```
+
+It exited 0. This proves the produced contract executable remains runnable;
+it does not erase the wrapper's failed compilation gate above.
 
 ### Commits, review, and open gates
 

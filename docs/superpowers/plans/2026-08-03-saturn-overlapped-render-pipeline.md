@@ -36,19 +36,14 @@ and the evidence report before starting another task.
   enable/disable calls, so normal/promotable Saturn builds fail closed with a
   full geo walk. No bounded state-only seam has been demonstrated; the
   controller-owned serial CUE/Ymir gate must not start.
-- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** active in
-  quality-fix round 2/5. The scoped spec rereview confirms both prior Important
-  findings addressed, but independent quality review is NO-GO: trailing
-  whitespace could bypass demo/replay prerequisites, and two containment
-  mutants plus the live authorization records were not closed. Fix `98670c48`
-  rejects hidden activation spellings, broadens the mutation coverage, and
-  reconciles D1 as the sole sealed diagnostic exception. Quality rereview, the
-  host-blocked runtime wrapper, target build, and Ymir remain open. A1 remains
-  blocked. Authorized by the owner on 2026-08-03, this is a deliberately broken,
-  compile-time-only
-  BOB proving build that must never become the default, a replay baseline, or
-  evidence of full-game correctness. It exists solely to quantify whether the
-  blocked whole-walk removal merits a dedicated state/render separation sprint.
+- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:**
+  source-complete. Containment test PASS (4/4), direct DLL-safe runtime-contract
+  executable PASS, and independent spec/quality rereviews both GO. The Make
+  wrapper still cannot compile this worktree's host contract because it translates
+  the path to `\\d\\Code...` and hits WinError 5; that infrastructure gate stays
+  recorded separately. The sole remaining task step is the owner-authorized,
+  serial Ymir diagnostic CUE. A1 remains blocked: this is deliberately broken,
+  compile-time-only, and never a default, replay baseline, or full-game evidence.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -322,7 +317,7 @@ types, ownership rules, or production fallbacks.
   Do not split or emulate geo callbacks; that is A1's future
   full-game state/render separation work.
 
-- [ ] **Step 4: Run focused containment and runtime-contract gates**
+- [x] **Step 4: Run focused containment and runtime-contract gates**
 
   Record exact commands/results. The normal default configuration must prove
   zero suppressed walks; the diagnostic configuration must prove the paired
@@ -332,11 +327,13 @@ types, ownership rules, or production fallbacks.
   Focused containment is green after quality-fix round 2/5: 4 tests exercise
   real Make parsing, malformed/padded activation spellings, flag-keyed output
   identity, and the complete normal preprocessor path. The runtime-contract
-  wrapper remains unchecked because MSYS translates the worktree path to
+  wrapper remains an open infrastructure gate because MSYS translates the worktree path to
   `\\d\\Code...`; Windows Python fails to create that path with WinError 5
-  before the host contract executable runs.
+  before the host contract executable runs. The already compiled
+  `build/saturn/host-tests/runtime-contract-test.exe` was freshly run through
+  `with-msys-toolchain.ps1` and exited 0.
 
-- [ ] **Step 5: Update records, commit, and complete two-stage review**
+- [x] **Step 5: Update records, commit, and complete two-stage review**
 
   Record that D1 is an upper-bound diagnostic, not an A1 resolution; append all
   tests, review verdicts, commits, and unpassed target gate to the evidence and
@@ -349,8 +346,9 @@ types, ownership rules, or production fallbacks.
   normal `#else`, and adds complete Task 1D execution evidence. The scoped
   spec rereview marks both findings **ADDRESSED** with no new Critical or
   Important findings. Independent quality review is **NO-GO**; quality-fix
-  round 2/5 `98670c48` addresses its three Important findings. Quality rereview
-  is still unchecked.
+  round 2/5 `98670c48` addresses its three Important findings. Scoped quality
+  rereview is **GO**: every prior Important/Minor finding is addressed with no
+  new Critical/Important breakage. The live CUE/Ymir step remains unchecked.
 
 - [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
 
