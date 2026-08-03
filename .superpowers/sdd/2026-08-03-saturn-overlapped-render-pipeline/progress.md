@@ -53,8 +53,8 @@ containment is implemented at `98f26f26` and initially documented by
 `f2b7ebf0`. Independent spec review is **NO-GO**: the original test merely
 searched Makefile strings, inspected text before the diagnostic `#if` instead
 of its actual normal `#else`, and omitted Task 1D from the central execution
-report. Review-fix round 1 addresses both Important findings without changing
-runtime source. Its TDD red was 4 tests with 6 missing-helper errors; its green
+report. Review-fix round 1 `fe1074b8` addresses both Important findings without
+changing runtime source. Its TDD red was 4 tests with 6 missing-helper errors; its green
 was 4 tests in 8.173s, exercising six real Make parses plus structural matching
 of the direct preprocessor branches. The fresh runtime-contract wrapper again
 failed before executing the host contract because MSYS supplied

@@ -40,7 +40,7 @@ and the evidence report before starting another task.
   review-fix round 1. Implementation `98f26f26` is contained, but the initial
   spec review is NO-GO because Make validation and the real normal `#else`
   lacked required mutation coverage and the execution-evidence report omitted
-  Task 1D. Both Important findings are addressed in the current transition;
+  Task 1D. Both Important findings are addressed in review-fix `fe1074b8`;
   independent rereview, the host-blocked runtime wrapper, target build, and
   Ymir remain open. A1 remains blocked. Authorized by the owner on 2026-08-03,
   this is a deliberately broken, compile-time-only
@@ -339,7 +339,7 @@ types, ownership rules, or production fallbacks.
   the manual build.
 
   Initial spec review: **NO-GO**, two Important findings and one Minor audit
-  note. Review-fix round 1 replaces inert Makefile string checks with real
+  note. Review-fix round 1 `fe1074b8` replaces inert Makefile string checks with real
   parse-time acceptance/rejection checks, inspects the matching normal
   `#else`, and adds complete Task 1D execution evidence. Independent spec
   rereview and quality review remain unchecked.

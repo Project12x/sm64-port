@@ -74,8 +74,7 @@ set true, call `game_loop_one_iteration()`, set false. The actual normal
 
 - `98f26f26`: sealed source diagnostic implementation.
 - `f2b7ebf0`: initial Task 1D documentation transition.
-- Review-fix round 1: this commit; its exact hash is recorded by the follow-up
-  evidence commit.
+- `fe1074b8`: review-fix round 1 test hardening and execution evidence.
 - Independent specification review: **NO-GO** on the initial range, with two
   Important findings addressed by this round; independent rereview remains
   required.

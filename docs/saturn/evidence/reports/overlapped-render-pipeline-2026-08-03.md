@@ -84,8 +84,7 @@ failure and not a green result.
 
 - Implementation: `98f26f26`.
 - Initial documentation transition: `f2b7ebf0`.
-- Review-fix round 1: this transition; the exact hash is appended by the
-  follow-up evidence commit.
+- Review-fix round 1: `fe1074b8`.
 - Independent spec review: **NO-GO** on the initial range; both Important
   findings are addressed here, but rereview is pending.
 - Independent quality review: not run.
