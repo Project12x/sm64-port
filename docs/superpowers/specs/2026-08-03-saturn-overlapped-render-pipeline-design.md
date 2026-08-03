@@ -106,11 +106,11 @@ At steady state:
 1. The display presents the completed framebuffer for snapshot `N-1`; VDP1
    may plot the already-published VRAM command list for snapshot `N` into the
    other framebuffer.
-2. The slave consumes immutable jobs for the next HWRAM snapshot/command bank
+2. The slave consumes immutable jobs for the next source snapshot/command bank
    while the master advances authoritative fixed-step simulation and then
    claims any remaining render jobs instead of waiting.
 3. At the safe boundary, the completed framebuffer for snapshot `N` becomes
-   display-visible. A separately completed HWRAM command bank is transferred
+   display-visible. A separately completed source command bank is transferred
    and its VRAM list published only after its worker and transfer tickets
    retire.
 4. An incomplete command bank is never published and an incomplete
@@ -178,11 +178,19 @@ alternative if evidence requires it), preserving source order within a bin.
 
 ## Command construction, DMA, and presentation
 
-The runtime alternates at least two HWRAM command/Gouraud staging banks. Each
+The runtime alternates at least two source command/Gouraud staging banks. Each
 bank has independent worker, command, transfer, and presentation generations.
 Static command/material fields remain compile-once templates; per-frame work
 patches only dynamic coordinates, links, depth/bin metadata, and genuinely
 dynamic shade entries.
+
+The source regions are intentionally split by hardware capability and memory
+budget. Two 2,048-entry `vdp1_cmdt_t` banks require 131,072 bytes, while the
+sourceboot linker preserves only `0x1B00` bytes of HWRAM margin; command banks
+therefore remain in `.lwram_cmdts` and use SH-2 CPU-DMAC (or the measured CPU
+copy fallback) into VDP1 VRAM. Gouraud staging remains HWRAM-resident and may
+use SCU DMA. This replaces the earlier generic HWRAM wording; it is required
+by the pinned Yaul memory map and the documented SGL/SCU LWRAM restriction.
 
 The completed bank is transferred at a hardware-safe boundary using Yaul's
 supported CPU-DMAC/SCU-DMA mechanisms for the source and destination regions.
@@ -302,8 +310,9 @@ each task back here.
   with persistent opportunistic jobs and exactly-once ownership.
 - [ ] **A6 — localized recovery:** recover only unclaimed/failed jobs, reject
   stale generations, and allow previous-complete-frame presentation.
-- [ ] **A7 — alternating command banks:** patch compile-once templates in
-  HWRAM banks with explicit worker/DMA/presentation tickets.
+- [ ] **A7 — alternating source banks:** patch compile-once templates in
+  LWRAM command banks and HWRAM Gouraud banks with explicit
+  worker/DMA/presentation tickets.
 - [ ] **A8 — deferred transfer/presentation:** enable valid command/Gouraud
   DMA, remove immediate waits, use one terminal boundary, and measure the real
   wait sites.
@@ -326,6 +335,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 | 2026-08-03 | First visible checkpoint is duplicate source-render preparation removal; strict native-math census does not block this experimental CUE. | Approved architecture policy. |
 | 2026-08-03 | Use a shared opportunistic terrain/actor queue, early LOD/admission, alternating RAM banks, and one terminal fence. | Approved hybrid derived from pinned SlaveDriver and Z-Treme/SGL study. |
 | 2026-08-03 | SlaveDriver's active path is not evidence of asynchronous queued DMA; only its queue/bank patterns are prior art. | Corrected after pinned-source call-site audit. |
+| 2026-08-03 | Keep the two 64 KiB command banks in LWRAM and transfer them with CPU-DMAC; reserve SCU DMA for HWRAM Gouraud staging. | File-map correction: two 2,048 × 32-byte command banks exceed the linker's `0x1B00` HWRAM margin, and SCU DMA cannot source LWRAM. |
 
 ## Verification and visible-progress policy
 
