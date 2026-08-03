@@ -4590,9 +4590,18 @@ def _bounded_control_flow_sources(
         else:
             continue
 
+        delayed_mnemonics = {
+            "rts", "rte", "jmp", "braf", "bra", "bt.s", "bf.s",
+            "bt/s", "bf/s", "bsr", "jsr", "bsrf",
+        }
+        delay_slots = {
+            address + 2
+            for address, (mnemonic, _operands) in rows.items()
+            if mnemonic in delayed_mnemonics
+        }
         pending = deque([
             *([entry] if entry in rows else []),
-            *sorted(decoded_seeds.intersection(rows)),
+            *sorted(decoded_seeds.intersection(rows) - delay_slots),
         ])
         visited: set[int] = set()
 
@@ -4604,13 +4613,23 @@ def _bounded_control_flow_sources(
                 f"{identity}+0x{address - region_base:x}: {detail}",
             ))
 
-        def schedule(address: int) -> None:
-            if address in rows and address not in visited:
+        def schedule(source: int, address: int, edge: str) -> None:
+            if address not in rows:
+                structural_error(
+                    source,
+                    f"{edge} successor leaves bounded block at 0x{address:08x}",
+                )
+            elif address not in visited:
                 pending.append(address)
 
         def delay_slot(address: int) -> None:
             slot = address + 2
-            if slot in rows:
+            if slot not in rows:
+                structural_error(
+                    address,
+                    f"delay slot leaves bounded block at 0x{slot:08x}",
+                )
+            else:
                 proven.add(slot)
 
         while pending:
@@ -4629,41 +4648,35 @@ def _bounded_control_flow_sources(
                 delay_slot(address)
                 if target is None:
                     structural_error(address, "unknown bra target")
-                elif target in rows:
-                    schedule(target)
                 else:
-                    target_identity = _bounded_code_identity(
-                        owners, islands, target
-                    )
-                    if target_identity is None:
-                        structural_error(address, f"unowned bra target 0x{target:08x}")
+                    schedule(address, target, "bra")
                 continue
             if mnemonic in {"bt", "bf"}:
-                if target is None or target not in rows:
-                    structural_error(address, "unknown or out-of-region branch target")
+                if target is None:
+                    structural_error(address, "unknown conditional branch target")
                 else:
-                    schedule(target)
-                schedule(address + 2)
+                    schedule(address, target, "conditional branch")
+                schedule(address, address + 2, "fallthrough")
                 continue
             if mnemonic in {"bt.s", "bf.s", "bt/s", "bf/s"}:
                 delay_slot(address)
-                if target is None or target not in rows:
-                    structural_error(address, "unknown or out-of-region branch target")
+                if target is None:
+                    structural_error(address, "unknown conditional branch target")
                 else:
-                    schedule(target)
-                schedule(address + 4)
+                    schedule(address, target, "conditional branch")
+                schedule(address, address + 4, "fallthrough")
                 continue
             if mnemonic == "bsr":
                 delay_slot(address)
                 if target in rows:
-                    schedule(target)
-                schedule(address + 4)
+                    schedule(address, target, "internal bsr")
+                schedule(address, address + 4, "fallthrough")
                 continue
             if mnemonic in {"jsr", "bsrf"}:
                 delay_slot(address)
-                schedule(address + 4)
+                schedule(address, address + 4, "fallthrough")
                 continue
-            schedule(address + 2)
+            schedule(address, address + 2, "fallthrough")
 
     return frozenset(proven), errors
 

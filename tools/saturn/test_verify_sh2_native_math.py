@@ -5409,9 +5409,112 @@ fixture.c 3 0x06003002
                 disassembly, "", self.OWNERS[:1], (self.ORACLE,)
             )
 
+    def test_cfg_provenance_rejects_bra_into_owner_or_island(self) -> None:
+        root = FunctionOwner("_route_root", 0x06001000, 0x06001004, 1)
+        target_owner = FunctionOwner(
+            "_route_tail", 0x06001004, 0x0600100C, 1
+        )
+        target_island = bounded_verifier.LocalIsland(
+            "route_tail", 0x06001004, 0x06001004, 0x0600100C, 1
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: a0 00 bra 6001004 <route_tail>
+ 6001002: 00 09 nop
+06001004 <route_tail>:
+ 6001004: b0 02 bsr 6009000 <___addsf3>
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+"""
+        cases = {
+            "owner": ((root, target_owner), ()),
+            "island": ((root,), (target_island,)),
+        }
+        for label, (owners, islands) in cases.items():
+            with self.subTest(target_region=label):
+                with self.assertRaisesRegex(
+                    ValueError, "bra successor leaves bounded block"
+                ):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly,
+                        "",
+                        owners,
+                        (self.ORACLE,),
+                        local_islands=islands,
+                    )
+
+    def test_cfg_provenance_rejects_fallthrough_into_owner_or_island(self) -> None:
+        root = FunctionOwner("_route_root", 0x06001000, 0x06001002, 1)
+        target_owner = FunctionOwner(
+            "_route_tail", 0x06001002, 0x0600100A, 1
+        )
+        target_island = bounded_verifier.LocalIsland(
+            "route_tail", 0x06001002, 0x06001002, 0x0600100A, 1
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 00 09 nop
+06001002 <route_tail>:
+ 6001002: b0 02 bsr 6009000 <___addsf3>
+ 6001004: 00 09 nop
+ 6001006: 00 0b rts
+ 6001008: 00 09 nop
+"""
+        cases = {
+            "owner": ((root, target_owner), ()),
+            "island": ((root,), (target_island,)),
+        }
+        for label, (owners, islands) in cases.items():
+            with self.subTest(target_region=label):
+                with self.assertRaisesRegex(
+                    ValueError, "fallthrough successor leaves bounded block"
+                ):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly,
+                        "",
+                        owners,
+                        (self.ORACLE,),
+                        local_islands=islands,
+                    )
+
+    def test_cfg_provenance_requires_local_delay_slot(self) -> None:
+        cases = {
+            "missing": (
+                (FunctionOwner("_route_root", 0x06001000, 0x06001004, 1),),
+                """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+""",
+            ),
+            "cross-owner": (
+                (
+                    FunctionOwner("_route_root", 0x06001000, 0x06001002, 1),
+                    FunctionOwner("_route_tail", 0x06001002, 0x06001004, 1),
+                ),
+                """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+06001002 <_route_tail>:
+ 6001002: 00 09 nop
+""",
+            ),
+        }
+        for label, (owners, disassembly) in cases.items():
+            with self.subTest(delay_slot=label):
+                with self.assertRaisesRegex(
+                    ValueError, "delay slot leaves bounded block"
+                ):
+                    bounded_verifier.prepare_route_bounded_code_only(
+                        disassembly, "", owners, (self.ORACLE,)
+                    )
+
     def test_executable_direct_call_to_unowned_target_fails_closed(self) -> None:
         cases = {
-            "bsr": " 6001000: b0 02 bsr 6008000 <_orphan>\n",
+            "bsr": (
+                " 6001000: b0 02 bsr 6008000 <_orphan>\n"
+                " 6001002: 00 09 nop\n"
+            ),
             "literal-jsr": (
                 " 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 "
                 "! 06008000 <_orphan>\n"
@@ -5419,6 +5522,7 @@ fixture.c 3 0x06003002
             ),
             "mismatched-bsr-symbol": (
                 " 6001000: b0 02 bsr 6008000 <_route_child>\n"
+                " 6001002: 00 09 nop\n"
             ),
         }
         for label, call in cases.items():
