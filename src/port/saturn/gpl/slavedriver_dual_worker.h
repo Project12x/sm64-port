@@ -32,8 +32,9 @@ void sm64_saturn_dual_worker_init(void);
 bool sm64_saturn_dual_worker_is_idle(void);
 
 /* Returns true when the slave completed its assigned range. A false return
- * is a counted, cancellation-safe fallback condition; the caller may rerun
- * the complete range serially after this function returns. */
+ * means the timeout path was taken, but only after cancellation has been
+ * observed and the slave has positively retired; callers may then safely
+ * reuse the complete result range for a serial fallback. */
 bool sm64_saturn_dual_worker_run(sm64_saturn_dual_worker_fn fn,
                                  void *context, uint16_t count,
                                  uint16_t slave_begin,

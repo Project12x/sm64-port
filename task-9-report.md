@@ -12,10 +12,16 @@
   vertices, light intensities, and pose metadata. Its only pointers designate
   immutable generated mesh/material tables. It contains no game/graph state,
   VDP1 state, texture residency, or allocator pointer.
-- Master and slave write disjoint vertex-result spans `[0, 212)` and
-  `[212, 424)`. Each lane publishes its count through `s_actor_frame_bank` in
-  the existing uncached sequence contract; master reads peer results through
-  `sm64_saturn_dual_frame_read_range()` / the cache-through alias.
+- Master and slave first write disjoint vertex-result spans `[0, 212)` and
+  `[212, 424)`, then—after that job retires—classify disjoint primitive ranges
+  `[0, 322)` and `[322, 644)` into fixed four-byte compact actor references.
+  Each phase publishes its count through its own uncached frame-bank sequence;
+  master reads peer results through `sm64_saturn_dual_frame_read_range()` /
+  the cache-through alias.
+- A timeout latches cancellation but does not return or clear `active` until
+  the slave has positively written `done`. A serial fallback therefore begins
+  only after the prior slave owns no result span. The timeout counter remains
+  diagnostic; it does not select a performance policy.
 - Gouraud reservation, texture binding/slots, VDP1 command allocation, and
   final Mario actor insertion remain master-only.
 
@@ -32,8 +38,8 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
   entry; existing project close-port
   `src/port/saturn/gpl/slavedriver_dual_worker.{c,h}` and
   `slavedriver_terrain_worker.{c,h}`.
-- Adapted pattern: one bounded master/slave range hand-off, disjoint output
-  ownership, cancellation-safe retirement, then a single master join. Yaul
+- Adapted pattern: bounded master/slave range hand-offs, disjoint output
+  ownership, positive cancellation retirement, then master joins. Yaul
   polling integration, actor snapshot/pose layout, frame-bank publication,
   and all renderer code are project-specific adaptations. No upstream polygon,
   portal, sector, or VDP command source was copied.
@@ -43,9 +49,11 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
 1. Added `tools/saturn/dual_actor_worker_test.c` before its idle/serialization
    API existed. Native GCC failed as expected with an implicit declaration of
    `sm64_saturn_dual_worker_is_idle`.
-2. Added the minimal API and host timeout simulation; both fixture roles pass:
-   - normal role: `dual actor worker fixture: PASS`
-   - simulated timeout role: `dual actor worker fixture: PASS`
+2. The cancellation regression test was written against the former serial
+   host adapter and failed as expected (`host worker split completion contract
+   failed`). The real host adapter now launches a Windows worker thread. Its
+   delayed slave callback waits for one second, observes cancellation, and the
+   test proves the worker is retired/no write can occur after fallback begins.
 3. The fixture uses every generated Mario vertex and all 644 primitives; it
    compares serial/split vertex coordinates and primitive order, colors, and
    corner coordinates byte-for-byte. It also source-checks the worker context
@@ -53,7 +61,7 @@ the project’s existing bounded worker boundary, not a world-renderer copy.
 4. `verify_dual_cpu_coherency.py --self-test` passed its source gate and all
    five mutation cases. `git diff --check` passed.
 
-`verify-dual-actor-worker` was added to `Makefile.saturn.mk`; it runs both
-native fixture roles. I did not invoke Make, MSYS, bash, sh-elf tools, a
+`verify-dual-actor-worker` was added to `Makefile.saturn.mk`; it runs the
+native fixture including the real delayed-callback retirement case. I did not invoke Make, MSYS, bash, sh-elf tools, a
 target build, or Ymir under the explicit safety restriction. Therefore target
 compilation/disassembly and hardware/emulator verification remain pending.

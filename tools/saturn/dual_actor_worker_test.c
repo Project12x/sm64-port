@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <windows.h>
 
 #include "slavedriver_dual_worker.h"
 #include "saturn_mario_actor_mesh.h"
@@ -44,10 +45,37 @@ static uint16_t classify(const actor_vertex_t *vertices, actor_command_t *out)
     return count;
 }
 
+typedef struct count_context {
+    volatile LONG master_count;
+    volatile LONG slave_count;
+} count_context_t;
+
+typedef struct retirement_probe {
+    volatile LONG slave_entered;
+    volatile LONG worker_writes;
+    volatile LONG fallback_started;
+    volatile LONG writes_after_fallback;
+} retirement_probe_t;
+
 static void count_callback(void *opaque, uint16_t begin, uint16_t end)
 {
-    uint16_t *count = opaque;
-    *count = (uint16_t)(*count + end - begin);
+    count_context_t *count = opaque;
+    volatile LONG *const slot = begin == 0U ? &count->master_count :
+        &count->slave_count;
+    InterlockedExchange(slot, (LONG)(end - begin));
+}
+
+static void delayed_cancel_callback(void *opaque, uint16_t begin, uint16_t end)
+{
+    (void)end;
+    retirement_probe_t *probe = opaque;
+    if (begin == 0U) return;
+    InterlockedExchange(&probe->slave_entered, 1L);
+    Sleep(1000U);
+    if (sm64_saturn_dual_worker_cancelled()) return;
+    if (probe->fallback_started != 0L)
+        InterlockedIncrement(&probe->writes_after_fallback);
+    InterlockedIncrement(&probe->worker_writes);
 }
 
 static int worker_context_has_no_live_game_pointers(void)
@@ -62,12 +90,17 @@ static int worker_context_has_no_live_game_pointers(void)
     const size_t read = fread(text, 1U, (size_t)bytes, source);
     fclose(source);
     text[read] = '\0';
+    const int has_compact_worker_refs =
+        strstr(text, "typedef struct demo_actor_primitive_ref") != NULL &&
+        strstr(text, "static void demo_classify_mario_range") != NULL &&
+        strstr(text, "s_actor_ref_frame_bank") != NULL &&
+        strstr(text, "demo_actor_ref_read") != NULL;
     const char *const context = strstr(text, "typedef struct demo_mario_transform_context");
     char *const end = context == NULL ? NULL :
         strstr(context, "} demo_mario_transform_context_t;");
     if (end != NULL)
         end[strlen("} demo_mario_transform_context_t;")] = '\0';
-    const int valid = end != NULL &&
+    const int valid = has_compact_worker_refs && end != NULL &&
         strstr(context, "sm64_saturn_mario_actor_snapshot_t snapshot;") != NULL &&
         strstr(context, "int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];") != NULL &&
         strstr(context, "const uint16_t (*primitives)[5];") != NULL &&
@@ -85,28 +118,37 @@ int main(void)
     actor_vertex_t split_vertices[SM64_MARIO_VERTEX_COUNT];
     actor_command_t serial_commands[SM64_MARIO_PRIMITIVE_COUNT];
     actor_command_t split_commands[SM64_MARIO_PRIMITIVE_COUNT];
-    sm64_saturn_dual_worker_stats_t timeout_stats;
-    uint16_t callback_count = 0U;
+    sm64_saturn_dual_worker_stats_t worker_stats;
+    count_context_t callback_count = {0};
+    retirement_probe_t retirement_probe = {0};
 
     if (!sm64_saturn_dual_worker_is_idle()) {
         fprintf(stderr, "fresh worker must be idle\n");
         return 1;
     }
     const int worker_completed = sm64_saturn_dual_worker_run(
-        count_callback, &callback_count, 4U, 2U, &timeout_stats);
-#if defined(SM64_SATURN_DUAL_WORKER_SIMULATE_TIMEOUT)
-    if (worker_completed || timeout_stats.slave_timeouts != 1U ||
-        callback_count != 0U) {
-        fprintf(stderr, "simulated timeout must be observable without partial output\n");
+        count_callback, &callback_count, 4U, 2U, &worker_stats);
+    if (!worker_completed || worker_stats.slave_timeouts != 0U ||
+        callback_count.master_count != 2L || callback_count.slave_count != 2L) {
+        fprintf(stderr, "host worker split completion contract failed\n");
         return 1;
     }
-#else
-    if (!worker_completed || timeout_stats.slave_timeouts != 0U ||
-        callback_count != 4U) {
-        fprintf(stderr, "host worker completion contract failed\n");
+    if (sm64_saturn_dual_worker_run(delayed_cancel_callback, &retirement_probe,
+                                    2U, 1U, &worker_stats) ||
+        worker_stats.slave_timeouts != 1U ||
+        retirement_probe.slave_entered == 0L ||
+        retirement_probe.worker_writes != 0L ||
+        !sm64_saturn_dual_worker_is_idle()) {
+        fprintf(stderr, "cancel must retire the delayed slave before fallback\n");
         return 1;
     }
-#endif
+    InterlockedExchange(&retirement_probe.fallback_started, 1L);
+    Sleep(50U);
+    if (retirement_probe.worker_writes != 0L ||
+        retirement_probe.writes_after_fallback != 0L) {
+        fprintf(stderr, "worker wrote after fallback began\n");
+        return 1;
+    }
     if (!worker_context_has_no_live_game_pointers()) {
         fprintf(stderr, "actor worker context exposes live game or VDP state\n");
         return 1;
