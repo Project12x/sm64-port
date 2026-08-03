@@ -77,3 +77,8 @@ compilation/disassembly and hardware/emulator verification remain pending.
 The target enables `SM64_SATURN_DUAL_WORKER_TEST_HOOK` for both host fixture
 builds only; it is excluded from `__sh__` builds and cannot affect the Saturn
 binary.
+The exact Windows-native command
+`mingw32-make -f Makefile.saturn.mk verify-dual-actor-worker` passes. The
+host compiler environment is empty on Windows (rather than using POSIX
+`env -u`), and the expected-failure mutation is evaluated by the shell-free
+`tools/saturn/expect_failure.py` runner rather than a POSIX `if` recipe.

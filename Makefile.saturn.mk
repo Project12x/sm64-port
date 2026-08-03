@@ -10,12 +10,13 @@ VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PYTHON ?= python3
 HOST_CC ?= gcc
-HOST_CC_ENV ?= env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
 ifeq ($(OS),Windows_NT)
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/Scripts/python.exe
+HOST_CC_ENV ?=
 HOST_EXEEXT := .exe
 else
 SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
+HOST_CC_ENV ?= env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
 HOST_EXEEXT :=
 endif
 SM64_ROM ?=
@@ -296,12 +297,9 @@ verify-dual-actor-worker:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/dual_actor_worker_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/slavedriver_dual_worker.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dual-actor-worker-owner-mutation$(HOST_EXEEXT)"
-	@if "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dual-actor-worker-owner-mutation$(HOST_EXEEXT)"; then \
-	  printf '%s\\n' 'dual actor worker cached-owner mutation escaped fixture' >&2; \
-	  exit 1; \
-	else \
-	  printf '%s\\n' 'dual actor worker cached-owner mutation caught by fixture'; \
-	fi
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dual-actor-worker-owner-mutation$(HOST_EXEEXT)" \
+	  --label "dual actor worker cached-owner mutation"
 
 verify-dma-queue:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
