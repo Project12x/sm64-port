@@ -28,7 +28,9 @@ review are green. It does not mean a target/Ymir gate passed. Update the
 individual task steps below, this summary, the architecture decision ledger,
 and the evidence report before starting another task.
 
-- [ ] **Task 1 / A1 — duplicate source-render removal:** pending.
+- [ ] **Task 1 / A1 — duplicate source-render removal:** active; implementation
+  commit `4a8fe1ce` is ready for independent spec and quality review. The
+  controller-owned serial CUE/Ymir gate remains pending.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -117,7 +119,7 @@ and the evidence report before starting another task.
   viewport/HUD/text/scissor construction when the Saturn IR renderer owns the
   frame.
 
-- [ ] **Step 1: Write the red source-policy test**
+- [x] **Step 1: Write the red source-policy test**
 
   Create a Python test that extracts `render_game()` from `src/game/area.c`
   and requires the scene-graph call to be guarded while stateful calls remain
@@ -137,13 +139,13 @@ and the evidence report before starting another task.
           assert call not in guarded
   ```
 
-- [ ] **Step 2: Add the red runtime contract**
+- [x] **Step 2: Add the red runtime contract**
 
   In `runtime_contract_test.c`, set suppression true/false and assert the
   getter and appended counters do not alias existing state fields. Add
   `verify-source-render-policy` to `Makefile.saturn.mk` to run both tests.
 
-- [ ] **Step 3: Run the focused gate and record the expected failure**
+- [x] **Step 3: Run the focused gate and record the expected failure**
 
   Run:
 
@@ -154,7 +156,7 @@ and the evidence report before starting another task.
   Expected: FAIL because the scene-graph suppression API and guarded source
   path do not exist. Record the command/output in the evidence report.
 
-- [ ] **Step 4: Implement the runtime policy and counters**
+- [x] **Step 4: Implement the runtime policy and counters**
 
   Add this API shape without moving existing state fields:
 
@@ -167,7 +169,7 @@ and the evidence report before starting another task.
   Append both counters at the end of runtime/profile structs and extend the
   existing profile decoder fixture for their exact offsets.
 
-- [ ] **Step 5: Split render construction from render-time state updates**
+- [x] **Step 5: Split render construction from render-time state updates**
 
   In `render_game()`, evaluate `scene_graph_suppressed` once. Put
   `geo_process_root()`, viewport setup, HUD/text emission, and source-only
@@ -175,7 +177,7 @@ and the evidence report before starting another task.
   stateful calls and warp-transition completion/decrement logic active in both
   paths. Always clear `D_8032CE74` and `D_8032CE78` at function exit.
 
-- [ ] **Step 6: Enable the policy only around Saturn demo source ticks**
+- [x] **Step 6: Enable the policy only around Saturn demo source ticks**
 
   Replace the current display-only suppression pair in
   `sourceboot_run_source_tick()` with paired display and scene-graph policy
@@ -186,9 +188,11 @@ and the evidence report before starting another task.
 
   Run `verify-source-render-policy`, `verify-runtime-contracts`, and
   `python tools/saturn/test_tools.py`. Expected: all PASS; the source-policy
-  test proves the stateful whitelist and the runtime counter layout.
+  test proves the stateful whitelist and the runtime counter layout. The
+  focused constituent tests pass, but the aggregate run also sees unrelated
+  route-schema failures from preserved dirty state; see the evidence report.
 
-- [ ] **Step 8: Update live documentation before review**
+- [x] **Step 8: Update live documentation before review**
 
   Mark each completed step here, set Task 1 to `source-complete` only after
   review, and add the exact source audit, commit candidate, tests, and the
