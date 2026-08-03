@@ -18,15 +18,18 @@ controller-owned manual checkpoint until the seam and tests below exist.
 
 ### Current verdict and scope
 
-**SOURCE-COMPLETE — serial target/Ymir evidence pending.** Implementation
+**COMPLETE — negative upper-bound result recorded.** Implementation
 commit `98f26f26` adds the default-off `diag-skip-geo` configuration. Review-fix
 round 1 is `fe1074b8`; its scoped independent spec rereview marks both prior
 Important findings **ADDRESSED** with no new Critical or Important findings.
 The independent quality review is **NO-GO**: trailing whitespace could activate
 the diagnostic while bypassing its demo/replay prerequisites, the tests admitted
 two containment mutants, and the live plan contradicted the sealed D1 exception.
-Quality-fix round 2 closes those findings; both independent rereviews are GO,
-so Task 1D is `source-complete` pending only its serial target/Ymir evidence.
+Quality-fix round 2 closes those findings; both independent rereviews are GO.
+The serial target CUE then built and was manually tested in Ymir with the
+project 32-Mbit DRAM profile. The owner observed approximately 2 FPS and no
+obvious improvement, so the duplicate source geo walk is not the dominant
+bottleneck. This defers A1 behind the presentation-boundary correction.
 
 This configuration is non-promotable. It exists only to measure an upper bound
 on duplicate geo-walk cost. It knowingly invalidates geo-owned animation,
@@ -138,15 +141,20 @@ it does not erase the wrapper's failed compilation gate above.
 - Quality-fix round 2/5: `98670c48`.
 - Independent spec review: initial **NO-GO**; scoped rereview marks both prior
   Important findings **ADDRESSED** with no new Critical or Important findings.
-- Independent quality review: **NO-GO**; three Important findings addressed in
-  quality-fix round 2/5, with quality rereview pending.
+- Independent quality review: initial **NO-GO**; three Important findings
+  addressed in quality-fix round 2/5; scoped quality rereview **GO**.
 - Runtime-contract wrapper: blocked by the recorded MSYS/Windows path issue.
-- Target build and the one authorized Ymir run: not run; pending successful
-  review and controller-owned serial execution.
+- Target build: PASS — serial `make -B -j1` through the audited wrapper, 258.5
+  seconds. CUE SHA-256 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`;
+  ISO SHA-256 `fd44459260d8da08540a34560183c55da2a670c3dd743ba1ce6ae0e2a160cbef`.
+- One authorized Ymir run: completed with the project 32-Mbit DRAM profile.
+  Owner result: approximately 2 FPS and no obvious speed improvement. This is
+  a negative diagnostic result, not a target-performance pass.
 - A1: still blocked on a behavior-tested state/render separation seam.
 
 No target build or Ymir run occurred during Task 1D implementation or either
-review-fix round.
+review-fix round; the single serial build/run happened only after both scoped
+rereviews were GO.
 
 ## Fail-closed safety closure
 

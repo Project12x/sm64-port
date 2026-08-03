@@ -36,14 +36,18 @@ and the evidence report before starting another task.
   enable/disable calls, so normal/promotable Saturn builds fail closed with a
   full geo walk. No bounded state-only seam has been demonstrated; the
   controller-owned serial CUE/Ymir gate must not start.
-- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:**
-  source-complete. Containment test PASS (4/4), direct DLL-safe runtime-contract
-  executable PASS, and independent spec/quality rereviews both GO. The Make
-  wrapper still cannot compile this worktree's host contract because it translates
-  the path to `\\d\\Code...` and hits WinError 5; that infrastructure gate stays
-  recorded separately. The sole remaining task step is the owner-authorized,
-  serial Ymir diagnostic CUE. A1 remains blocked: this is deliberately broken,
+- [x] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** complete.
+  The serial target CUE built successfully and the owner tested it in Ymir with
+  the project DRAM profile. It remained approximately 2 FPS with no obvious
+  improvement, so duplicate source geo walking is not the dominant bottleneck.
+  A1 remains blocked for full-game correctness but is deferred behind the
+  presentation-boundary correction; D1 remains deliberately broken,
   compile-time-only, and never a default, replay baseline, or full-game evidence.
+- [ ] **Emergency A9.0 — one VBlank, one presentation generation:** active in
+  `docs/superpowers/plans/2026-08-03-vblank-presentation-boundary.md`. Ymir's
+  VDP1 ≈60 / VDP2 ≈1–2 FPS counters indicate VDP1 submission is outrunning
+  displayed-field completion. This full-game-safe scheduler correction moves
+  ahead of A2–A8 and the broader A9 overlap work.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
@@ -51,7 +55,8 @@ and the evidence report before starting another task.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
-- [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending.
+- [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
+  scoped Emergency A9.0 presentation-boundary correction.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending.
 
 ## Global Constraints
@@ -350,14 +355,17 @@ types, ownership rules, or production fallbacks.
   rereview is **GO**: every prior Important/Minor finding is addressed with no
   new Critical/Important breakage. The live CUE/Ymir step remains unchecked.
 
-- [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
+- [x] **Step 6: Build and manually run exactly one serial Ymir CUE**
 
   Use the project profile and 32-Mbit DRAM cart, with the established BOB/live
   input/Q16 camera route. Record CUE/ELF hashes, controls, visibility, and the
-  owner’s qualitative speed result. Because the diagnostic invalidates graph
-  state, a visual/control failure is expected and does not authorize repair
-  churn. Do not repeat this CUE unless the initial launch itself fails before
-  loading.
+  owner’s qualitative speed result. The 2026-08-03 serial build succeeded and
+  produced the tagged CUE recorded in the evidence report. The owner ran it in
+  Ymir with the project 32-Mbit DRAM profile and observed approximately 2 FPS,
+  with no obvious speed increase. Because the diagnostic invalidates graph
+  state, visual/control failure was expected and did not authorize repair
+  churn. This negative upper-bound result defers A1 and prioritizes Emergency
+  A9.0; do not repeat this CUE.
 
 ### Task 2: Add immutable snapshot banks with explicit generations
 
