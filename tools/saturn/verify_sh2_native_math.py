@@ -3701,6 +3701,7 @@ def scan_direct_calls(
     proven_source_addresses: frozenset[int] | None = None,
     deferred_errors: list[tuple[str, int, str]] | None = None,
     qualify_owner_identities: bool = False,
+    known_literal_pool_addresses: frozenset[int] = frozenset(),
 ) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets.
 
@@ -3738,9 +3739,13 @@ def scan_direct_calls(
         source_address: int, displayed: str, target_address: int,
     ) -> str | None:
         if not source_is_proven(source_address):
-            # Objdump disassembles inline literal-pool halfwords.  A pool word
-            # can look exactly like a BSR/JSR sequence, so it is never a call
-            # unless bounded CFG (from an entry or DWARF root) reached it.
+            if source_address not in known_literal_pool_addresses:
+                assert active_region is not None
+                reject_or_defer(
+                    source_address,
+                    "bounded direct-call source has no decoded code provenance: "
+                    f"{caller_display}+0x{source_address - active_region[2]:x}",
+                )
             return None
         try:
             return executable_target(displayed, target_address)
@@ -3908,6 +3913,12 @@ def scan_direct_calls(
         if owner_list is not None and BSR_OPCODE_RE.search(text):
             assert active_region is not None
             if not source_is_proven(address):
+                if address not in known_literal_pool_addresses:
+                    reject_or_defer(
+                        address,
+                        "bounded direct-call source has no decoded code provenance: "
+                        f"{caller_display}+0x{address - active_region[2]:x}",
+                    )
                 continue
             raw_target = _target_from_text(text)
             reject_or_defer(
@@ -4930,8 +4941,8 @@ def _bounded_control_flow_sources(
     owner_components: dict[str, frozenset[str]],
     decoded_text: str,
     owner_address_map: dict[int, FunctionOwner] | None = None,
-) -> tuple[frozenset[int], list[tuple[str, int, str]]]:
-    """Prove instruction sources from entries, DWARF roots, and SH control flow."""
+) -> tuple[frozenset[int], frozenset[int], list[tuple[str, int, str]]]:
+    """Prove code sources and trailing literal pools from bounded SH CFGs."""
     owner_by_identity = {
         _bounded_owner_identity(owner): owner for owner in owners
     }
@@ -4942,32 +4953,50 @@ def _bounded_control_flow_sources(
         decoded_text, owners, islands, owner_address_map
     )
     proven: set[int] = set()
+    literal_pool_addresses: set[int] = set()
     errors: list[tuple[str, int, str]] = []
 
     rows_by_identity: dict[str, dict[int, tuple[str, str]]] = {}
+    literal_loads_by_identity: dict[str, dict[int, tuple[str, int]]] = {}
     for identity, block in blocks.items():
         rows: dict[int, tuple[str, str]] = {}
+        literal_loads: dict[int, tuple[str, int]] = {}
         for line in block.splitlines():
             match = INSTRUCTION_RE.match(line)
             if match is None:
                 continue
             address = int(match.group(1), 16)
-            operation = match.group(2).strip().split("!", 1)[0].strip()
+            raw_operation = match.group(2).strip()
+            operation = raw_operation.split("!", 1)[0].strip()
             parts = operation.split(None, 1)
             mnemonic = parts[0]
             operands = "" if len(parts) == 1 else parts[1]
             rows[address] = (mnemonic.lower(), operands)
+            literal = LITERAL_LOAD_RE.search(raw_operation)
+            if literal is not None:
+                literal_loads[address] = (
+                    f"r{literal.group(1)}", int(literal.group(2), 16)
+                )
         rows_by_identity[identity] = rows
+        literal_loads_by_identity[identity] = literal_loads
 
     for identity, identity_rows in rows_by_identity.items():
         owner = owner_by_identity.get(identity)
         if owner is None:
             rows = identity_rows
+            literal_loads = literal_loads_by_identity[identity]
         else:
             rows = {
                 address: row
                 for member in owner_components[identity]
                 for address, row in rows_by_identity.get(member, {}).items()
+            }
+            literal_loads = {
+                address: target
+                for member in owner_components[identity]
+                for address, target in literal_loads_by_identity.get(
+                    member, {}
+                ).items()
             }
         if not rows:
             continue
@@ -5038,7 +5067,27 @@ def _bounded_control_flow_sources(
             mnemonic, operands = rows[address]
             target = _target_from_text(operands)
 
-            if mnemonic in {"rts", "rte", "jmp", "braf"}:
+            if mnemonic in {"rts", "rte"}:
+                delay_slot(address)
+                continue
+            if mnemonic == "jmp":
+                delay_slot(address)
+                register = re.fullmatch(r"@(r(?:1[0-5]|\d))", operands)
+                literal = literal_loads.get(address - 2)
+                if address - 2 not in visited \
+                        or literal is None or register is None \
+                        or literal[0] != register.group(1):
+                    # Keep an unresolved indirect tail terminal here.  The
+                    # code-only analyzer will retain it for the indirect-edge
+                    # audit, and no trailing bytes are classified as a pool.
+                    pass
+                else:
+                    schedule(
+                        address, literal[1],
+                        "literal-resolved indirect tail",
+                    )
+                continue
+            if mnemonic == "braf":
                 delay_slot(address)
                 continue
             if mnemonic == "bra":
@@ -5075,7 +5124,31 @@ def _bounded_control_flow_sources(
                 continue
             schedule(address, address + 2, "fallthrough")
 
-    return frozenset(proven), errors
+        # Inline pools are only trusted as data in an unreachable *trailing*
+        # suffix after a reached, direct no-fallthrough transfer.  Any DWARF
+        # or direct-CFG entry would have visited the row.  An unresolved
+        # indirect tail is not a qualifying terminal, so it cannot turn code
+        # into ignored data.
+        for terminal in visited:
+            mnemonic, operands = rows[terminal]
+            if mnemonic not in {"bra", "rts", "rte"}:
+                continue
+            tail_start = terminal + 4
+            target = _target_from_text(operands) if mnemonic == "bra" else None
+            if target is not None and target > tail_start:
+                # GCC may put a pool in a direct-BRA gap before the target.
+                suffix = {
+                    address for address in rows
+                    if tail_start <= address < target
+                }
+            elif target is None or target <= terminal:
+                suffix = {address for address in rows if address >= tail_start}
+            else:
+                suffix = set()
+            if suffix and not suffix.intersection(visited):
+                literal_pool_addresses.update(suffix)
+
+    return frozenset(proven), frozenset(literal_pool_addresses), errors
 
 
 def _bounded_island_origins(
@@ -5159,7 +5232,8 @@ def prepare_route_bounded_code_only(
             continue
         for name in component:
             graph.setdefault(name, set()).update(component - {name})
-    proven_source_addresses, deferred_errors = _bounded_control_flow_sources(
+    proven_source_addresses, literal_pool_addresses, deferred_errors = \
+        _bounded_control_flow_sources(
         blocks,
         owner_list,
         island_list,
@@ -5177,6 +5251,7 @@ def prepare_route_bounded_code_only(
         proven_source_addresses,
         deferred_errors,
         qualify_owner_identities=True,
+        known_literal_pool_addresses=literal_pool_addresses,
     ):
         target_owner = owner_by_identity.get(call.helper)
         target_display = (

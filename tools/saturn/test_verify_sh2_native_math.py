@@ -5427,6 +5427,120 @@ fixture.c 3 0x06003002
         self.assertEqual(prepared.closure, frozenset({root_id}))
         self.assertNotIn(self._owner_identity(owners[1]), prepared.closure)
 
+    def test_cfg_follows_literal_resolved_indirect_tail_to_helper_call(self) -> None:
+        """A bounded route retains a literal-resolved local ``jmp @rN`` tail."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001020, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+            FunctionOwner("___addsf3", 0x06009000, 0x06009008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"_route_root"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06001010 <_route_root+0x10>
+ 6001002: 41 2b jmp @r1
+ 6001004: 00 09 nop
+ 6001010: b0 02 bsr 6002000 <_route_child>
+ 6001012: 00 09 nop
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            "fixture.c 1 0x06001000\n",
+            owners,
+            (oracle,),
+        )
+        root_id = self._owner_identity(owners[0])
+        child_id = self._owner_identity(owners[1])
+        self.assertEqual(prepared.graph[root_id], {child_id})
+        self.assertEqual(prepared.closure, frozenset({root_id, child_id}))
+        analysis = analyze_code_only(
+            prepared.instructions,
+            owners,
+            prepared.decoded_lines,
+            selected_owner_identities=set(prepared.selected_identities),
+        )
+        self.assertTrue(any(
+            call.caller == "_route_child" and call.helper == "___addsf3"
+            for call in analysis.calls
+        ))
+
+    def test_cfg_does_not_hide_unresolved_indirect_tail_call_suffix_as_literal_pool(self) -> None:
+        """An unproven local tail is not classified as a literal pool."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001020, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"_route_root"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 41 2b jmp @r1
+ 6001002: 00 09 nop
+ 6001010: b0 02 bsr 6002000 <_route_child>
+ 6001012: 00 09 nop
+ 6001014: 00 0b rts
+ 6001016: 00 09 nop
+06002000 <_route_child>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+"""
+        with self.assertRaisesRegex(
+            ValueError, "no decoded code provenance"
+        ):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\n",
+                owners,
+                (oracle,),
+            )
+
+    def test_cfg_rejects_indirect_tail_when_dwarf_seed_bypasses_literal_load(self) -> None:
+        """A nearby literal load is not proof when control enters at the jump."""
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001020, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+        )
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"_route_root"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+ 6001010: d1 02 mov.l 600101c <_route_root+0x1c>,r1 ! 06001018 <_route_root+0x18>
+ 6001012: 41 2b jmp @r1
+ 6001014: 00 09 nop
+ 6001018: b0 02 bsr 6002000 <_route_child>
+ 600101a: 00 09 nop
+ 600101c: 00 0b rts
+ 600101e: 00 09 nop
+06002000 <_route_child>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+"""
+        with self.assertRaisesRegex(
+            ValueError, "no decoded code provenance"
+        ):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06001000\nfixture.c 2 0x06001012\n",
+                owners,
+                (oracle,),
+            )
+
     def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (
             FunctionOwner(
