@@ -223,6 +223,27 @@ class NativeMathCensusTests(unittest.TestCase):
                 [UnresolvedTransfer("_dispatcher", 0x6001024, "jsr", "r1")],
             )
 
+    def test_source_manifest_confirms_dynamic_edge_with_direct_fallback(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "STATIC_MANIFEST_EDGE _dispatcher _callback\n"
+            "INDIRECT_EDGE _dispatcher _callback\n"
+        )
+        result = audit_indirect_edges(
+            {"_root": {"_dispatcher", "_callback"}}, oracle,
+            (
+                self.indirect_owner("_root", 0x6001000),
+                self.indirect_owner("_dispatcher", 0x6001020),
+                self.indirect_owner("_callback", 0x6001040),
+            ),
+            [UnresolvedTransfer("_dispatcher", 0x6001024, "jsr", "r1")],
+        )
+        self.assertEqual(
+            result.closure,
+            frozenset({"_root", "_dispatcher", "_callback"}),
+        )
+        self.assertEqual(result.unlisted_transfers, ())
+
     def test_six_sites_in_one_dispatcher_inherit_the_same_callback_set(self) -> None:
         oracle = parse_route_oracle(
             "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
@@ -1395,9 +1416,85 @@ def _assert_bob_source_oracle_matches(
     test_case.assertEqual(declared_edges, expected_edges)
 
 
+def _derive_renderer_worker_edges(
+    repo_root: Path,
+) -> frozenset[tuple[str, str]]:
+    """Derive the renderer's dual-worker callback from its checked-in source."""
+    renderer = _strip_c_comments(
+        (repo_root / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
+            encoding="utf-8"
+        )
+    )
+    jobs = re.findall(
+        r"const\s+sm64_saturn_terrain_worker_job_t\s+terrain_worker\s*=\s*"
+        r"\{(.*?)\};",
+        renderer,
+        flags=re.DOTALL,
+    )
+    if len(jobs) != 1:
+        raise ValueError(
+            f"expected one terrain_worker definition, got {len(jobs)}"
+        )
+    callbacks = re.findall(
+        r"\.range\s*=\s*([A-Za-z_]\w*)\s*,", jobs[0]
+    )
+    if len(callbacks) != 1:
+        raise ValueError(
+            f"expected one terrain_worker range callback, got {callbacks}"
+        )
+    callback = callbacks[0]
+    if re.search(
+        rf"static\s+void\s+{re.escape(callback)}\s*\(", renderer
+    ) is None:
+        raise ValueError(f"terrain callback definition is missing: {callback}")
+    if len(re.findall(
+        r"\bsm64_saturn_terrain_worker_run\s*\(\s*&terrain_worker\s*,",
+        renderer,
+    )) != 1:
+        raise ValueError("terrain_worker must be submitted exactly once")
+
+    terrain_wrapper = _strip_c_comments(
+        (repo_root / "src/port/saturn/gpl/slavedriver_terrain_worker.c")
+        .read_text(encoding="utf-8")
+    )
+    if re.search(
+        r"return\s+sm64_saturn_dual_worker_run\s*\(\s*"
+        r"job->range\s*,\s*job->context\s*,\s*job->count\s*,\s*"
+        r"job->slave_begin\s*,\s*stats\s*\)\s*;",
+        terrain_wrapper,
+        flags=re.DOTALL,
+    ) is None:
+        raise ValueError("terrain worker no longer forwards its range callback")
+
+    dual_worker = _strip_c_comments(
+        (repo_root / "src/port/saturn/gpl/slavedriver_dual_worker.c")
+        .read_text(encoding="utf-8")
+    )
+    if re.search(
+        r"\bfn\s*\(\s*context\s*,\s*0U\s*,\s*slave_begin\s*\)\s*;",
+        dual_worker,
+    ) is None:
+        raise ValueError("dual worker no longer invokes its range callback")
+
+    return frozenset({(
+        "_sm64_saturn_dual_worker_run", "_" + callback,
+    )})
+
+
 # Keep the source-derivation machinery at module scope without splitting the
 # one unittest fixture that owns the shared audit helpers above and below it.
 class NativeMathCensusTests(NativeMathCensusTests):
+
+    def test_checked_in_renderer_oracle_matches_source_worker_edge(self) -> None:
+        repo_root = Path(__file__).parents[2]
+        oracle = parse_route_oracle(
+            Path(__file__).with_name(
+                "sh2_native_math_route_oracle_v1.txt"
+            ).read_text(encoding="utf-8")
+        )
+        expected = _derive_renderer_worker_edges(repo_root)
+        self.assertEqual(oracle.static_manifest_edges, expected)
+        self.assertEqual(oracle.indirect_edges, expected)
 
     def test_sourceboot_null_task_submit_rejects_dead_window_branch_targets_and_gaps(self) -> None:
         def fixture(branch_target: int, transfer_address: int) -> str:

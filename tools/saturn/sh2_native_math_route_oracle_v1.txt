@@ -5,7 +5,11 @@
 # once per emitted frame. The verifier expands every linked direct-call child
 # from this root, so a new per-frame child cannot be silently marked COLD.
 # The dual-worker dispatch invokes its function-pointer argument on both SH-2
-# CPUs; the checked edge records the terrain callback passed by this replay.
+# CPUs. The static edge is derived from saturn_demo_render.c's terrain_worker
+# initializer and the terrain-worker wrapper's job->range forwarding; the
+# checked edge records that callback even though serial recovery also makes it
+# directly reachable in the linked call graph.
 ROUTE_ORACLE_VERSION 1
 ROOT _sm64_saturn_demo_render_frame
+STATIC_MANIFEST_EDGE _sm64_saturn_dual_worker_run _demo_terrain_compact_range
 INDIRECT_EDGE _sm64_saturn_dual_worker_run _demo_terrain_compact_range

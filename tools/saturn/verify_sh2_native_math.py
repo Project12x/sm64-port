@@ -3672,7 +3672,7 @@ BOUNDED_SINGLE_REGISTER_WRITERS = frozenset({
 # Pinned digests deliberately make the route and helper ceilings append-only
 # contracts. Updating either requires an explicit v2 implementation change,
 # not a quiet edit to a text allowlist.
-ROUTE_ORACLE_V1_SHA256 = "f683fc1b507a6630d12d47d625ec59deabacd5d4d55e5b0a2113ac8c6ef92f4e"
+ROUTE_ORACLE_V1_SHA256 = "a9cfea12e749495ec13e31d9c3b732691215acde99a94abe656b82c7c8d69c72"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
 SIM_ROUTE_ORACLE_V1_SHA256 = "084313eeeb16ace7a05b252a0519bfbc86cc2f43db1260292d1db77da388af44"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
@@ -4253,20 +4253,13 @@ def audit_indirect_edges(
             graph, oracle.roots, edges - {(dispatcher, callback)}
         )
         if callback in closure_without_edge:
-            callback_edges = {
-                edge for edge in edges if edge[1] == callback
-            }
-            closure_without_callback = route_reachable_functions(
-                graph, oracle.roots, edges - callback_edges
-            )
-            source_manifest_confirms_group = bool(
-                oracle.static_manifest_edges
-                and callback_edges <= oracle.static_manifest_edges
-            )
-            if (
-                callback in closure_without_callback
-                or not source_manifest_confirms_group
-            ):
+            # A serial recovery may make a real dynamic callback redundant in
+            # the graph. Only an independently source-derived exact manifest
+            # edge distinguishes that case from a stale declaration.
+            source_manifest_confirms_edge = (
+                dispatcher, callback
+            ) in oracle.static_manifest_edges
+            if not source_manifest_confirms_edge:
                 raise ValueError(
                     "INDIRECT_EDGE has no closure contribution: "
                     f"{display(dispatcher)} -> {display(callback)}"
