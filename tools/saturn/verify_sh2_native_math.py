@@ -3550,8 +3550,15 @@ def scan_direct_calls(
     disassembly: str,
     owners: Iterable[FunctionOwner] | None = None,
     local_islands: Iterable[LocalIsland] = (),
+    proven_source_addresses: frozenset[int] | None = None,
+    deferred_errors: list[tuple[str, int, str]] | None = None,
 ) -> list[CallSite]:
-    """Return literal-pool jsr and PC-relative bsr calls with linked targets."""
+    """Return literal-pool jsr and PC-relative bsr calls with linked targets.
+
+    The optional provenance gate is used only by bounded preparsing. It keeps
+    raw data halfwords inside broad function-symbol ranges from fabricating
+    edges, while deferring selected-caller diagnostics until closure is known.
+    """
     owner_list = None if owners is None else tuple(owners)
     island_list = tuple(local_islands) if owner_list is not None else ()
     owner_by_symbol = {} if owner_list is None else {
@@ -3564,6 +3571,43 @@ def scan_direct_calls(
     registers: dict[str, tuple[str, int]] = {}
     stack_slots: dict[int, tuple[str, int]] = {}
     calls: list[CallSite] = []
+
+    def source_is_proven(address: int) -> bool:
+        return (
+            proven_source_addresses is None
+            or address in proven_source_addresses
+            or _island_at_code_address(island_list, address) is not None
+        )
+
+    def target_is_executable(address: int) -> bool:
+        assert owner_list is not None
+        return (
+            _owner_at(owner_list, address) is not None
+            or _island_at_code_address(island_list, address) is not None
+        )
+
+    def reject_or_defer(address: int, message: str) -> None:
+        if deferred_errors is None:
+            raise ValueError(message)
+        deferred_errors.append((caller, address, message))
+
+    def bounded_target(
+        source_address: int, displayed: str, target_address: int,
+    ) -> str | None:
+        if not source_is_proven(source_address):
+            if target_is_executable(target_address):
+                assert active_region is not None
+                reject_or_defer(
+                    source_address,
+                    "bounded direct-call source has no decoded code provenance: "
+                    f"{caller}+0x{source_address - active_region[1]:x}",
+                )
+            return None
+        try:
+            return executable_target(displayed, target_address)
+        except ValueError as error:
+            reject_or_defer(source_address, str(error))
+            return None
 
     def code_region(address: int) -> tuple[str, int] | None:
         assert owner_list is not None
@@ -3676,8 +3720,9 @@ def scan_direct_calls(
                 displayed, target_address = target
                 symbol = _symbol_base(displayed)
                 if owner_list is not None:
-                    symbol = executable_target(displayed, target_address)
-                calls.append(CallSite(caller, address, symbol))
+                    symbol = bounded_target(address, displayed, target_address)
+                if symbol is not None:
+                    calls.append(CallSite(caller, address, symbol))
             continue
 
         bsr = BSR_RE.search(text)
@@ -3686,15 +3731,23 @@ def scan_direct_calls(
             displayed = bsr.group(2)
             symbol = _symbol_base(displayed)
             if owner_list is not None:
-                symbol = executable_target(displayed, target_address)
-            calls.append(CallSite(caller, address, symbol))
+                symbol = bounded_target(address, displayed, target_address)
+            if symbol is not None:
+                calls.append(CallSite(caller, address, symbol))
             continue
         if owner_list is not None and BSR_OPCODE_RE.search(text):
             assert active_region is not None
-            raise ValueError(
+            raw_target = _target_from_text(text)
+            if not source_is_proven(address) \
+                    and raw_target is not None \
+                    and not target_is_executable(raw_target):
+                continue
+            reject_or_defer(
+                address,
                 "bounded executable direct call has unresolved direct call target: "
-                f"{caller}+0x{address - active_region[1]:x}"
+                f"{caller}+0x{address - active_region[1]:x}",
             )
+            continue
 
         destination = DESTINATION_RE.search(text)
         if destination:
@@ -4445,6 +4498,30 @@ def _selected_island_decoded_lines(
     return result
 
 
+def _bounded_decoded_code_sources(
+    text: str,
+    owners: tuple[FunctionOwner, ...],
+    owner_address_map: dict[int, FunctionOwner] | None = None,
+) -> frozenset[int]:
+    """Return exact normal-function instruction sources proved by DWARF rows."""
+    owner_by_address = (
+        owner_address_map
+        if owner_address_map is not None
+        else build_owner_address_map(owners)
+    )
+    result: set[int] = set()
+    for line in text.splitlines():
+        if "end_sequence" in line.lower():
+            continue
+        match = DECODED_LINE_RE.search(line)
+        if match is None:
+            continue
+        address = int(match.group(1), 16)
+        if not address & 1 and address in owner_by_address:
+            result.add(address)
+    return frozenset(result)
+
+
 def _bounded_island_origins(
     graph: dict[str, set[str]],
     selected_names: set[str],
@@ -4517,7 +4594,20 @@ def prepare_route_bounded_code_only(
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
-    for call in scan_direct_calls(disassembly, owner_list, island_list):
+    proven_source_addresses = _bounded_decoded_code_sources(
+        decoded_text, owner_list, owner_address_map
+    )
+    # Closure is not known until after this text scan. Preserve potential
+    # executable-call failures by caller, then enforce them only for the
+    # route-selected normal functions (island sources are always proven).
+    deferred_errors: list[tuple[str, int, str]] = []
+    for call in scan_direct_calls(
+        disassembly,
+        owner_list,
+        island_list,
+        proven_source_addresses,
+        deferred_errors,
+    ):
         if is_native_math_helper(call.helper):
             continue
         graph.setdefault(call.caller, set()).add(call.helper)
@@ -4549,6 +4639,10 @@ def prepare_route_bounded_code_only(
         closure.update(route_reachable_functions(
             graph, canonical_roots, canonical_edges
         ))
+
+    for caller, _address, message in sorted(deferred_errors):
+        if caller in closure:
+            raise ValueError(message)
 
     for name in sorted(closure):
         owner = owner_by_identity.get(name)

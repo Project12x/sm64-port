@@ -5206,7 +5206,10 @@ fixture.c 3 0x06003002
 """
         with self.assertRaisesRegex(ValueError, "no linked owner"):
             bounded_verifier.prepare_route_bounded_code_only(
-                disassembly, "", self.OWNERS[:1], (self.ORACLE,)
+                disassembly,
+                "fixture.c 1 0x06001002\n",
+                self.OWNERS[:1],
+                (self.ORACLE,),
             )
 
     def test_internal_local_header_call_is_owned_by_enclosing_route_function(self) -> None:
@@ -5228,7 +5231,10 @@ fixture.c 3 0x06003002
             "___addsf3", 0x06009000, 0x06009004, 1
         ))
         prepared = bounded_verifier.prepare_route_bounded_code_only(
-            disassembly, "", owners, (self.ORACLE,)
+            disassembly,
+            "fixture.c 1 0x06001002\nfixture.c 2 0x06002000\n",
+            owners,
+            (self.ORACLE,),
         )
         self.assertEqual(prepared.closure, frozenset({
             "_route_root", "_route_child",
@@ -5266,6 +5272,50 @@ fixture.c 3 0x06003002
         )
         self.assertEqual(prepared.closure, frozenset({"_route_root"}))
 
+    def test_internal_owner_literal_pool_call_to_data_is_not_a_graph_edge(self) -> None:
+        owners = (
+            FunctionOwner("_route_root", 0x06001000, 0x06001040, 1),
+            FunctionOwner("_route_child", 0x06002000, 0x06002008, 1),
+        )
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 7e bsr 6002000 <_route_child>
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+ 6001010: b0 02 bsr 6009000 <_gDialogTextAlpha>
+ 6001012: 00 09 nop
+ 6001020: d1 02 mov.l 600102c <_route_root+0x2c>,r1 ! 06009000 <_gDialogTextAlpha>
+ 6001022: 41 0b jsr @r1
+ 6001024: 00 09 nop
+06002000 <_route_child>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly,
+            (
+                "fixture.c 1 0x06001000\n"
+                "fixture.c - 0x06001010 end_sequence\n"
+                "fixture.c 2 0x06002000\n"
+            ),
+            owners,
+            (self.ORACLE,),
+        )
+        self.assertEqual(
+            prepared.graph["_route_root"], {"_route_child"}
+        )
+        self.assertEqual(
+            prepared.closure, frozenset({"_route_root", "_route_child"})
+        )
+        with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly,
+                "fixture.c 1 0x06002000\n",
+                owners,
+                (self.ORACLE,),
+            )
+
     def test_executable_targetless_bsr_fails_closed(self) -> None:
         disassembly = """
 06001000 <_route_root>:
@@ -5276,7 +5326,10 @@ fixture.c 3 0x06003002
 """
         with self.assertRaisesRegex(ValueError, "unresolved direct call target"):
             bounded_verifier.prepare_route_bounded_code_only(
-                disassembly, "", self.OWNERS[:1], (self.ORACLE,)
+                disassembly,
+                "fixture.c 1 0x06001000\n",
+                self.OWNERS[:1],
+                (self.ORACLE,),
             )
 
     def test_executable_direct_call_to_unowned_target_fails_closed(self) -> None:
@@ -5301,7 +5354,10 @@ fixture.c 3 0x06003002
                 )
                 with self.assertRaisesRegex(ValueError, "no linked owner"):
                     bounded_verifier.prepare_route_bounded_code_only(
-                        disassembly, "", self.OWNERS[:2], (self.ORACLE,)
+                        disassembly,
+                        "fixture.c 1 0x06001000\nfixture.c 2 0x06001002\n",
+                        self.OWNERS[:2],
+                        (self.ORACLE,),
                     )
 
     def test_bounded_closure_traverses_validated_div0_island(self) -> None:
@@ -5345,7 +5401,8 @@ fixture.c 3 0x06003002
             (
                 "fixture.s 1 0x06001106\n"
                 "fixture.s 2 0x06001110\n"
-                "fixture.s 3 0x06001122\n"
+                "fixture.s 3 0x06001120\n"
+                "fixture.s 4 0x06001122\n"
             ),
             owners,
             (oracle,),
@@ -5427,7 +5484,10 @@ fixture.c 3 0x06003002
 """
         with self.assertRaisesRegex(ValueError, "no linked owner"):
             bounded_verifier.prepare_route_bounded_code_only(
-                disassembly, "", (owner,), (oracle,)
+                disassembly,
+                "fixture.s 1 0x06001120\n",
+                (owner,),
+                (oracle,),
             )
 
     def test_bounded_analysis_keeps_unresolved_indirect_transfer_fail_closed(self) -> None:
@@ -5475,7 +5535,7 @@ fixture.c 3 0x06003002
             if command[1] == "-sW":
                 return symbols
             if command[1] == "--debug-dump=decodedline":
-                return ""
+                return "fixture.c 1 0x06001002\n"
             raise AssertionError(command)
 
         with tempfile.TemporaryDirectory() as directory:
