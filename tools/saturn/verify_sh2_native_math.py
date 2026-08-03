@@ -680,7 +680,10 @@ def parse_decoded_lines(
     owners: Iterable[FunctionOwner],
     owner_address_map: dict[int, FunctionOwner] | None = None,
     selected_names: set[str] | None = None,
+    selected_owner_identities: set[str] | None = None,
 ) -> dict[str, set[int]]:
+    if selected_names is not None and selected_owner_identities is not None:
+        raise ValueError("decoded-line owner selection cannot mix names and identities")
     owner_list = tuple(owners)
     owner_by_address = (
         owner_address_map
@@ -700,9 +703,13 @@ def parse_decoded_lines(
         owner = owner_by_address.get(address)
         if owner is not None and address == owner.start:
             owner = None
-        if owner is not None and (
-            selected_names is None or owner.name in selected_names
-        ):
+        if owner is None:
+            continue
+        identity = _bounded_owner_identity(owner)
+        if selected_owner_identities is not None:
+            if identity in selected_owner_identities:
+                result[identity].add(address)
+        elif selected_names is None or owner.name in selected_names:
             result[owner.name].add(address)
     return result
 
@@ -2421,7 +2428,10 @@ def _analyze_code_only_pass(
     protected_entry_nodes: frozenset[tuple[str, int]] = frozenset(),
     known_null_addresses: frozenset[int] = frozenset(),
     island_origins: dict[str, frozenset[str]] | None = None,
+    selected_owner_identities: set[str] | None = None,
 ) -> CodeAnalysis:
+    if selected_names is not None and selected_owner_identities is not None:
+        raise ValueError("code-only owner selection cannot mix names and identities")
     owner_list = tuple(owners)
     owner_by_address = (
         owner_address_map
@@ -2458,18 +2468,27 @@ def _analyze_code_only_pass(
     leaf_clobber_cache: dict[int, LeafSummary | None] = {}
 
     for owner in owner_list:
-        if selected_names is not None and owner.name not in selected_names:
+        owner_identity = _bounded_owner_identity(owner)
+        owner_key = (
+            owner_identity
+            if selected_owner_identities is not None
+            else owner.name
+        )
+        if selected_owner_identities is not None:
+            if owner_identity not in selected_owner_identities:
+                continue
+        elif selected_names is not None and owner.name not in selected_names:
             continue
         seed_rows: list[tuple[tuple[int, str], LocalIsland | None]] = [
             *((((owner.start, "entry"), None),) if include_owner_entry else ()),
             *(
                 ((address, "decodedline"), None)
-                for address in sorted(lines.get(owner.name, set()))
+                for address in sorted(lines.get(owner_key, set()))
             ),
             *(
                 ((address, "decodedline"), island)
                 for identity, island in sorted(
-                    islands_by_owner.get(owner.name, ()),
+                    islands_by_owner.get(owner_key, ()),
                     key=lambda item: item[0],
                 )
                 for address in sorted(lines.get(identity, set()))
@@ -2669,9 +2688,9 @@ def _analyze_code_only_pass(
             effect_emissions[key] = []
             code_addresses.add(address)
             if node_sink is not None:
-                node_sink.add((owner.name, address))
+                node_sink.add((owner_key, address))
             if evaluated_state_sink is not None:
-                evaluated_state_sink.add((owner.name, address))
+                evaluated_state_sink.add((owner_key, address))
             ins = instructions[address]
             mnemonic = ins.mnemonic
             caller_region = "island" if island is not None else "owner"
@@ -2713,10 +2732,10 @@ def _analyze_code_only_pass(
             def schedule(target: int, next_state: dict[str, AbstractValue]) -> None:
                 if region_start <= target < region_end and target in instructions:
                     if seed[1] == "decodedline" and (
-                        owner.name, target
+                        owner_key, target
                     ) in protected_entry_nodes:
                         return
-                    edge = (owner.name, address, target)
+                    edge = (owner_key, address, target)
                     if edge_sink is not None:
                         edge_sink.add(edge)
                     if frozen_edges is not None and edge not in frozen_edges:
@@ -2737,10 +2756,10 @@ def _analyze_code_only_pass(
             ) -> None:
                 if entry in instructions:
                     if seed[1] == "decodedline" and (
-                        owner.name, entry
+                        owner_key, entry
                     ) in protected_entry_nodes:
                         return
-                    edge = (owner.name, address, entry)
+                    edge = (owner_key, address, entry)
                     if edge_sink is not None:
                         edge_sink.add(edge)
                     if frozen_edges is not None and edge not in frozen_edges:
@@ -2766,7 +2785,7 @@ def _analyze_code_only_pass(
                 result = dict(base_state)
                 code_addresses.add(slot_address)
                 if node_sink is not None:
-                    node_sink.add((owner.name, slot_address))
+                    node_sink.add((owner_key, slot_address))
                 slot_effects: list[UnresolvedEffect] = []
                 _write_effect(
                     instructions[slot_address], result, slot_effects, owner, memory,
@@ -2822,7 +2841,8 @@ def _analyze_code_only_pass(
                         invalid_target = True
                     else:
                         canonical = (
-                            "callee", callee.name, target_address - callee.start,
+                            "callee", _bounded_owner_identity(callee),
+                            target_address - callee.start,
                         )
                         resolved_targets[canonical] = (
                             "callee", callee, target_address,
@@ -2950,7 +2970,7 @@ def _analyze_code_only_pass(
                         continue
                     for target in validated_targets:
                         callee = owner_by_address.get(target)
-                        if callee and callee.name == owner.name:
+                        if callee == owner:
                             schedule(target, post)
                         elif callee:
                             call_emissions[key].append(
@@ -2990,7 +3010,7 @@ def _analyze_code_only_pass(
                         schedule_island(target_island, direct_target, post)
                     elif direct_owner is None:
                         unresolved_emissions[key].append(unresolved_transfer())
-                    elif direct_owner.name != owner.name:
+                    elif direct_owner != owner:
                         call_emissions[key].append(
                             CallSite(owner.name, address, direct_owner.name)
                         )
@@ -3136,6 +3156,7 @@ def _analyze_code_only_pass(
 
 def _acceptance_component_seeds(
     owner: FunctionOwner,
+    owner_key: str,
     decoded_addresses: set[int],
     nodes: set[tuple[str, int]],
     edges: frozenset[tuple[str, int, int]],
@@ -3149,11 +3170,11 @@ def _acceptance_component_seeds(
     because weakly connected sibling arms can converge without either arm being
     directionally reachable from the other.
     """
-    owner_nodes = {address for name, address in nodes if name == owner.name}
+    owner_nodes = {address for name, address in nodes if name == owner_key}
     owner_edges = {
         (source, target)
         for name, source, target in edges
-        if name == owner.name
+        if name == owner_key
     }
     neighbors: defaultdict[int, set[int]] = defaultdict(set)
     for source, target in owner_edges:
@@ -3164,7 +3185,7 @@ def _acceptance_component_seeds(
     entry_evaluated = {
         address
         for name, address in entry_evaluated_nodes
-        if name == owner.name
+        if name == owner_key
     }
 
     seeds: set[int] = set()
@@ -3212,9 +3233,25 @@ def analyze_code_only(
     progress_callback: Callable[[dict[str, object]], None] | None = None,
     known_null_addresses: frozenset[int] = frozenset(),
     island_origins: dict[str, frozenset[str]] | None = None,
+    selected_owner_identities: set[str] | None = None,
 ) -> CodeAnalysis:
     """Discover a frozen CFG, then run acceptance dataflow from fresh states."""
+    if selected_names is not None and selected_owner_identities is not None:
+        raise ValueError("code-only owner selection cannot mix names and identities")
     owner_list = tuple(owners)
+
+    def owner_key(owner: FunctionOwner) -> str:
+        return (
+            _bounded_owner_identity(owner)
+            if selected_owner_identities is not None
+            else owner.name
+        )
+
+    def owner_is_selected(owner: FunctionOwner) -> bool:
+        if selected_owner_identities is not None:
+            return owner_key(owner) in selected_owner_identities
+        return selected_names is None or owner.name in selected_names
+
     island_list = tuple(local_islands)
     owner_map = (
         owner_address_map
@@ -3230,10 +3267,11 @@ def analyze_code_only(
         name: set(addresses)
         for name, addresses in (decoded_lines or {}).items()
     }
-    selected_owner_names = {
-        owner.name
-        for owner in owner_list
-        if selected_names is None or owner.name in selected_names
+    selected_owner_keys = {
+        owner_key(owner) for owner in owner_list if owner_is_selected(owner)
+    }
+    owner_display_by_key = {
+        owner_key(owner): owner.name for owner in owner_list
     }
     island_by_identity = {
         _local_island_identity(island): island for island in island_list
@@ -3242,14 +3280,19 @@ def analyze_code_only(
     for identity, origins in (island_origins or {}).items():
         if identity not in island_by_identity:
             raise ValueError(f"code-only island seed has no validated island: {identity}")
-        origin_names = frozenset(origins)
-        invalid_origins = origin_names - selected_owner_names
-        if not origin_names or invalid_origins:
-            detail = ", ".join(sorted(invalid_origins)) or "<none>"
+        origin_keys = frozenset(origins)
+        invalid_origins = origin_keys - selected_owner_keys
+        if not origin_keys or invalid_origins:
+            detail = ", ".join(
+                sorted(
+                    owner_display_by_key.get(origin, origin)
+                    for origin in invalid_origins
+                )
+            ) or "<none>"
             raise ValueError(
                 f"code-only island seed has invalid owner origin: {identity}: {detail}"
             )
-        normalized_island_origins[identity] = origin_names
+        normalized_island_origins[identity] = origin_keys
     decoded_island_identities = {
         name for name in source_lines if name.startswith("@island:")
     }
@@ -3264,9 +3307,15 @@ def analyze_code_only(
             for address in source_lines[identity]
         ):
             raise ValueError(f"code-only decoded row is outside island: {identity}")
-    known_dead_nodes = sourceboot_null_task_submit_dead_nodes(
+    display_dead_nodes = sourceboot_null_task_submit_dead_nodes(
         instructions, owner_list, known_null_addresses
     )
+    known_dead_nodes = {
+        (owner_key(owner), address)
+        for _display_name, address in display_dead_nodes
+        for owner in (owner_map.get(address),)
+        if owner is not None
+    }
     learned_edges: set[tuple[str, int, int]] = set()
     analysis_started = monotonic()
 
@@ -3281,28 +3330,30 @@ def analyze_code_only(
         discovery_lines = {
             name: set(addresses) for name, addresses in source_lines.items()
         }
-        for owner_name, _source, target in learned_edges:
+        for source_owner_key, _source, target in learned_edges:
             target_identities = [
                 identity
                 for identity, island in island_by_identity.items()
-                if owner_name in normalized_island_origins.get(identity, ())
+                if source_owner_key in normalized_island_origins.get(identity, ())
                 and island.code_start <= target < island.end
             ]
             if len(target_identities) > 1:
                 raise ValueError(
                     "code-only learned edge has ambiguous island origin: "
-                    f"{owner_name} at 0x{target:08x}"
+                    f"{owner_display_by_key.get(source_owner_key, source_owner_key)} "
+                    f"at 0x{target:08x}"
                 )
             discovery_lines.setdefault(
-                target_identities[0] if target_identities else owner_name, set()
+                target_identities[0] if target_identities else source_owner_key,
+                set(),
             ).add(target)
         discovered_edges = set(learned_edges)
         discovered_nodes: set[tuple[str, int]] = set()
         discovery_counter: Counter[str] = Counter()
         discovery_seed_count = sum(
-            int(include_owner_entry) + len(discovery_lines.get(owner.name, set()))
+            int(include_owner_entry) + len(discovery_lines.get(owner_key(owner), set()))
             for owner in owner_list
-            if selected_names is None or owner.name in selected_names
+            if owner_is_selected(owner)
         )
         discovery_seed_count += sum(
             len(discovery_lines.get(identity, set())) * len(origins)
@@ -3337,6 +3388,7 @@ def analyze_code_only(
             progress_counter=discovery_counter,
             known_null_addresses=known_null_addresses,
             island_origins=normalized_island_origins,
+            selected_owner_identities=selected_owner_identities,
         )
         frozen_edges = frozenset(discovered_edges)
         emit_progress({
@@ -3357,8 +3409,7 @@ def analyze_code_only(
             "phase": "acceptance",
             "iteration": restart_count,
             "seeds": int(include_owner_entry) * sum(
-                1 for owner in owner_list
-                if selected_names is None or owner.name in selected_names
+                1 for owner in owner_list if owner_is_selected(owner)
             ),
             "states": 0,
             "edges": len(frozen_edges),
@@ -3384,23 +3435,26 @@ def analyze_code_only(
             evaluated_state_sink=entry_evaluated_nodes,
             known_null_addresses=known_null_addresses,
             island_origins=normalized_island_origins,
+            selected_owner_identities=selected_owner_identities,
         )
         acceptance_lines: dict[str, set[int]] = {}
         component_metrics: Counter[str] = Counter()
         live_discovered_nodes = discovered_nodes - known_dead_nodes
         for owner in owner_list:
-            if selected_names is not None and owner.name not in selected_names:
+            if not owner_is_selected(owner):
                 continue
+            current_owner_key = owner_key(owner)
             dead_owner_addresses = {
                 address for name, address in known_dead_nodes
-                if name == owner.name
+                if name == current_owner_key
             }
-            decoded_addresses = set(source_lines.get(owner.name, set()))
+            decoded_addresses = set(source_lines.get(current_owner_key, set()))
             for identity, origins in normalized_island_origins.items():
-                if owner.name in origins:
+                if current_owner_key in origins:
                     decoded_addresses.update(source_lines.get(identity, set()))
             component_seeds = _acceptance_component_seeds(
                 owner,
+                current_owner_key,
                 decoded_addresses - dead_owner_addresses,
                 live_discovered_nodes,
                 frozen_edges,
@@ -3411,7 +3465,7 @@ def analyze_code_only(
                 target_identities = [
                     identity
                     for identity, island in island_by_identity.items()
-                    if owner.name in normalized_island_origins.get(identity, ())
+                    if current_owner_key in normalized_island_origins.get(identity, ())
                     and island.code_start <= address < island.end
                 ]
                 if len(target_identities) > 1:
@@ -3420,7 +3474,7 @@ def analyze_code_only(
                         f"{owner.name} at 0x{address:08x}"
                     )
                 acceptance_lines.setdefault(
-                    target_identities[0] if target_identities else owner.name,
+                    target_identities[0] if target_identities else current_owner_key,
                     set(),
                 ).add(address)
         acceptance_seed_count = sum(len(value) for value in acceptance_lines.values())
@@ -3457,6 +3511,7 @@ def analyze_code_only(
             # may-call targets; merge_code_analyses keeps the entry lane intact.
             known_null_addresses=known_null_addresses,
             island_origins=normalized_island_origins,
+            selected_owner_identities=selected_owner_identities,
         )
         accepted = merge_code_analyses(accepted_entry, accepted_components)
         missing_edges = new_edges - frozen_edges
@@ -3465,8 +3520,7 @@ def analyze_code_only(
             "phase": "acceptance",
             "iteration": restart_count,
             "seeds": acceptance_seed_count + int(include_owner_entry) * sum(
-                1 for owner in owner_list
-                if selected_names is None or owner.name in selected_names
+                1 for owner in owner_list if owner_is_selected(owner)
             ),
             "states": acceptance_counter["states"],
             "edges": len(frozen_edges),
@@ -3485,10 +3539,16 @@ def analyze_code_only(
             "seeds": len(missing_edges),
             "states": 0,
             "edges": len(learned_edges),
-            "owners": sorted({name for name, _source, _target in missing_edges}),
+            "owners": sorted({
+                owner_display_by_key.get(name, name)
+                for name, _source, _target in missing_edges
+            }),
         })
         if profile_by_owner is not None:
-            for owner_name in sorted({name for name, _source, _target in missing_edges}):
+            for owner_name in sorted({
+                owner_display_by_key.get(name, name)
+                for name, _source, _target in missing_edges
+            }):
                 profile_by_owner.setdefault(owner_name, Counter())[
                     "phase2_discovery_restarts"
                 ] += 1
@@ -4786,7 +4846,6 @@ def _bounded_island_origins(
     graph: dict[str, set[str]],
     selected_identities: set[str],
     selected_islands: tuple[LocalIsland, ...],
-    owner_by_identity: dict[str, FunctionOwner],
 ) -> dict[str, frozenset[str]]:
     """Map selected island code to each canonical function-owner origin."""
     island_identities = {
@@ -4804,7 +4863,7 @@ def _bounded_island_origins(
             if identity in visited:
                 continue
             visited.add(identity)
-            origins[identity].add(owner_by_identity[owner_identity].name)
+            origins[identity].add(owner_identity)
             pending.extend(
                 target for target in graph.get(identity, ())
                 if target in island_identities and target not in visited
@@ -4967,7 +5026,7 @@ def prepare_route_bounded_code_only(
         if _local_island_identity(island) in closure
     )
     island_origins = _bounded_island_origins(
-        graph, selected_identities, selected_islands, owner_by_identity
+        graph, selected_identities, selected_islands
     )
     bounded_disassembly = "".join(
         block for name, block in blocks.items() if name in closure
@@ -4979,7 +5038,7 @@ def prepare_route_bounded_code_only(
         decoded_text,
         owner_list,
         owner_address_map,
-        selected_names,
+        selected_owner_identities=selected_identities,
     )
     decoded_lines.update(_selected_island_decoded_lines(
         decoded_text, selected_islands
@@ -5115,6 +5174,7 @@ def main(argv: list[str] | None = None) -> int:
             graph = scan_call_graph(disassembly)
         else:
             island_seed_origins = None
+            candidate_owner_identities = None
             if args.analysis_mode == "code-only-route-bounded":
                 bounded = prepare_route_bounded_code_only(
                     disassembly,
@@ -5129,7 +5189,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 decoded_seeds = bounded.decoded_lines
                 legacy_graph = bounded.graph
-                candidate_names = set(bounded.selected_names)
+                candidate_names = None
+                candidate_owner_identities = set(
+                    bounded.selected_identities
+                )
                 local_islands = bounded.selected_islands
                 island_seed_origins = bounded.island_origins
                 parsed_instructions = bounded.instructions
@@ -5156,12 +5219,13 @@ def main(argv: list[str] | None = None) -> int:
                 parsed_instructions,
                 owners,
                 decoded_seeds,
-                candidate_names,
-                instruction_memory,
+                selected_names=candidate_names,
+                instruction_memory=instruction_memory,
                 owner_address_map=owner_address_map,
                 local_islands=local_islands,
                 known_null_addresses=known_null_addresses,
                 island_origins=island_seed_origins,
+                selected_owner_identities=candidate_owner_identities,
             )
             direct_calls = analysis.calls
             calls = [call for call in direct_calls if is_native_math_helper(call.helper)]

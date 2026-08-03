@@ -5122,13 +5122,14 @@ class RouteBoundedLinkedElfTests(unittest.TestCase):
     @staticmethod
     def _duplicate_local_owners() -> tuple[FunctionOwner, ...]:
         sections = parse_readelf_sections(
-            "  [ 1] .text PROGBITS 06001000 001000 002004 00 AX 0 0 2\n"
+            "  [ 1] .text PROGBITS 06001000 001000 008004 00 AX 0 0 2\n"
         )
         symbols = parse_readelf_symbols(
             """
    1: 06001000 8 FUNC GLOBAL DEFAULT 1 _route_root
-   2: 06002000 4 FUNC LOCAL DEFAULT 1 local_helper
+   2: 06002000 8 FUNC LOCAL DEFAULT 1 local_helper
    3: 06003000 4 FUNC LOCAL DEFAULT 1 local_helper
+   4: 06009000 4 FUNC GLOBAL DEFAULT 1 ___addsf3
 """,
             sections,
         )
@@ -5161,8 +5162,8 @@ class RouteBoundedLinkedElfTests(unittest.TestCase):
             prepared.instructions,
             RouteBoundedLinkedElfTests.OWNERS,
             prepared.decoded_lines,
-            set(prepared.selected_names),
-            build_instruction_memory(prepared.instructions),
+            instruction_memory=build_instruction_memory(prepared.instructions),
+            selected_owner_identities=set(prepared.selected_identities),
         )
 
     def test_bounded_preparation_matches_full_route_and_skips_huge_irrelevant_block(self) -> None:
@@ -5184,7 +5185,8 @@ fixture.c 3 0x06003002
             prepared.selected_names, frozenset({"_route_root", "_route_child"})
         )
         self.assertEqual(set(prepared.decoded_lines), {
-            "_route_root", "_route_child",
+            self._owner_identity(self.OWNERS[0]),
+            self._owner_identity(self.OWNERS[1]),
         })
         self.assertLess(len(prepared.instructions), 10)
         self.assertNotIn(0x06003000, prepared.instructions)
@@ -5267,8 +5269,8 @@ fixture.c 3 0x06003002
         analysis = analyze_code_only(
             prepared.instructions,
             owners,
-            selected_names=set(prepared.selected_names),
             instruction_memory=build_instruction_memory(prepared.instructions),
+            selected_owner_identities=set(prepared.selected_identities),
         )
         self.assertIn(
             ("_route_child", "___addsf3"),
@@ -5309,11 +5311,16 @@ fixture.c 3 0x06003002
  6001004: 00 0b rts
  6001006: 00 09 nop
 06002000 <local_helper>:
- 6002000: 00 0b rts
+ 6002000: b0 02 bsr 6009000 <___addsf3>
  6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
 06003000 <local_helper>:
  6003000: 00 0b rts
  6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
 """
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly, "", owners, (self.ORACLE,)
@@ -5337,9 +5344,25 @@ fixture.c 3 0x06003002
                 0x06003000, 0x06003002,
             },
         )
+        decoded = parse_decoded_lines(
+            "fixture.c 1 0x06002002\nfixture.c 2 0x06003002\n",
+            owners,
+            selected_owner_identities={second_local_id},
+        )
+        self.assertEqual(decoded, {second_local_id: {0x06003002}})
+        full_instructions = parse_instructions(disassembly)
+        analysis = analyze_code_only(
+            full_instructions,
+            owners,
+            decoded,
+            instruction_memory=build_instruction_memory(full_instructions),
+            selected_owner_identities={second_local_id},
+        )
+        self.assertEqual(analysis.calls, [])
+        self.assertEqual(analysis.code_addresses, {0x06003000, 0x06003002})
 
     def test_bounded_duplicate_local_name_route_root_is_ambiguous(self) -> None:
-        owners = self._duplicate_local_owners()[1:]
+        owners = self._duplicate_local_owners()[1:3]
         oracle = bounded_verifier.RouteOracle(
             1, frozenset({"local_helper"}), frozenset(), frozenset()
         )
@@ -5611,8 +5634,8 @@ fixture.c 3 0x06003002
             prepared.instructions,
             owners,
             prepared.decoded_lines,
-            set(prepared.selected_names),
-            build_instruction_memory(prepared.instructions),
+            instruction_memory=build_instruction_memory(prepared.instructions),
+            selected_owner_identities=set(prepared.selected_identities),
         )
         self.assertEqual(
             [(call.caller, call.address, call.helper) for call in analysis.calls],
@@ -5764,7 +5787,7 @@ fixture.c 3 0x06003002
         self.assertEqual(prepared.selected_islands, (island,))
         self.assertEqual(
             prepared.island_origins,
-            {island_id: frozenset({"___udivsi3"})},
+            {island_id: frozenset({udiv_id})},
         )
         self.assertTrue({0x06001106, 0x06001120, 0x06001200} <= set(
             prepared.instructions
@@ -5777,19 +5800,21 @@ fixture.c 3 0x06003002
                 prepared.instructions,
                 owners,
                 prepared.decoded_lines,
-                set(prepared.selected_names),
-                build_instruction_memory(prepared.instructions),
+                instruction_memory=build_instruction_memory(
+                    prepared.instructions
+                ),
                 local_islands=prepared.selected_islands,
+                selected_owner_identities=set(prepared.selected_identities),
             )
 
         analysis = analyze_code_only(
             prepared.instructions,
             owners,
             prepared.decoded_lines,
-            set(prepared.selected_names),
-            build_instruction_memory(prepared.instructions),
+            instruction_memory=build_instruction_memory(prepared.instructions),
             local_islands=prepared.selected_islands,
             island_origins=prepared.island_origins,
+            selected_owner_identities=set(prepared.selected_identities),
         )
         self.assertEqual(
             [
@@ -5910,6 +5935,102 @@ fixture.c 3 0x06003002
                     *common, "--analysis-mode", "code-only-route-bounded",
                 ]), 0)
                 self.assertEqual(bounded_verifier.main(common), 2)
+
+    def test_cli_bounded_duplicate_local_identity_excludes_sibling_helper(self) -> None:
+        sections = """
+  [ 1] .text PROGBITS 06001000 001000 008004 00 AX 0 0 2
+"""
+        symbols = """
+   1: 06001000 8 FUNC GLOBAL DEFAULT 1 _route_root
+   2: 06002000 8 FUNC LOCAL DEFAULT 1 local_helper
+   3: 06003000 4 FUNC LOCAL DEFAULT 1 local_helper
+   4: 06009000 4 FUNC GLOBAL DEFAULT 1 ___addsf3
+"""
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 02 bsr 6003000 <local_helper>
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+06002000 <local_helper>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+06003000 <local_helper>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+06009000 <___addsf3>:
+ 6009000: 00 0b rts
+ 6009002: 00 09 nop
+"""
+
+        def fake_command(command):
+            if command[1] == "-d":
+                return disassembly
+            if command[1] == "-SW":
+                return sections
+            if command[1] == "-sW":
+                return symbols
+            if command[1] == "--debug-dump=decodedline":
+                return (
+                    "fixture.c 1 0x06002002\n"
+                    "fixture.c 2 0x06003002\n"
+                )
+            raise AssertionError(command)
+
+        observed = {}
+        real_analyze = bounded_verifier.analyze_code_only
+
+        def observe_analysis(*args, **kwargs):
+            result = real_analyze(*args, **kwargs)
+            observed["selected"] = kwargs.get("selected_owner_identities")
+            observed["result"] = result
+            return result
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            elf = root / "fixture.elf"
+            baseline = root / "baseline.txt"
+            oracle = root / "oracle.txt"
+            elf.write_bytes(b"ELF")
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8"
+            )
+            oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _route_root\n", encoding="utf-8"
+            )
+            with patch.object(
+                bounded_verifier, "run_command", side_effect=fake_command
+            ), patch.object(
+                bounded_verifier, "verify_baseline_integrity"
+            ), patch.object(
+                bounded_verifier, "verify_route_oracle_integrity"
+            ), patch.object(
+                bounded_verifier, "source_locations", return_value={}
+            ), patch.object(
+                bounded_verifier,
+                "analyze_code_only",
+                side_effect=observe_analysis,
+            ):
+                self.assertEqual(bounded_verifier.main([
+                    str(elf),
+                    str(baseline),
+                    "--route-oracle", str(oracle),
+                    "--objdump", "objdump",
+                    "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                    "--analysis-mode", "code-only-route-bounded",
+                ]), 0)
+
+        self.assertEqual(observed["selected"], {
+            "@owner:1:06001000:_route_root",
+            "@owner:1:06003000:local_helper",
+        })
+        self.assertNotIn(0x06002000, observed["result"].code_addresses)
+        self.assertFalse(any(
+            call.helper == "___addsf3" for call in observed["result"].calls
+        ))
 
 
 if __name__ == "__main__":
