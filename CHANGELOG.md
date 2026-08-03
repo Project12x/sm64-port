@@ -11,6 +11,10 @@
 
 ### Fixed
 
+- Restored the sourceboot startup VDP2 begin/commit retirement barrier before
+  frontend and scheduler initialization. This drains the sky-DMA work queued
+  by `user_init()` before the first paired VDP1/VDP2 presentation, avoiding a
+  new post-BIOS hang path while retaining the one-VBlank presentation cadence.
 - Fenced sourceboot presentation to one observed VBlank generation: elapsed
   credit is sampled only at outer-loop entry, recovery is capped at one extra
   simulation tick, and excess eligible credit is counted and dropped. This

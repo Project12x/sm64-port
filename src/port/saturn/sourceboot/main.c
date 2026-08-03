@@ -560,6 +560,12 @@ int main(void) {
                "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
+    sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
+                                 &sourceboot_fast3d.profile,
+                                 sourceboot_sim_tick_count);
+    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
+                                  &sourceboot_vdp2_backend);
+    vdp2_sync_wait();
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
