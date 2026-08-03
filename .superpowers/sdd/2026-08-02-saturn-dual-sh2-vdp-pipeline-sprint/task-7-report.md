@@ -2,8 +2,8 @@
 
 ## Result
 
-The BOB BSP generator now emits deterministic packed work spans:
-`leaf_first_ref[]`, `leaf_ref_count[]`, and `primitive_refs[]`.  Each span is
+The BOB BSP generator now emits deterministic packed **node** work spans:
+`node_first_ref[]`, `node_ref_count[]`, and `primitive_refs[]`. Each span is
 the unique, source-stable local reference sequence for one BSP node. Exact BSP
 splits may conservatively retain one primitive in multiple node spans, but no
 span contains the same primitive twice.
@@ -19,9 +19,20 @@ order, and VDP1 allocation is unchanged; the slave still receives only the
 immutable resulting work range.
 
 `emit_bob_scene.py` consumes the BSP report and stamps the scene with the
-span/ref cardinalities, so stale scene/BSP generated artifacts are visible at
-review. The sourceboot dependency now produces the BSP report before the scene
-header.
+span/ref cardinalities plus the SHA-256-derived shared content ID. The BSP
+header emits the same ID; the runtime and C smoke fixture use a preprocessor
+error to reject a mismatched pair. The emitter recomputes and verifies the
+digest before stamping, so a stale same-cardinality reordered report is not
+accepted. The sourceboot dependency now produces the BSP report before the
+scene header.
+
+Correction after independent review: these are deliberately named **node
+spans**, not leaf spans. They represent every node-local coplanar reference,
+which is required to preserve the predecessor admission semantics for the
+unsplit source BSP. The terminal-leaf metadata remains separately named
+`sm64_saturn_bob_bsp_leaf_ranges` and is not conflated with this producer.
+The unused historical full primitive scan/traversal code was removed entirely;
+the host-only Python oracle is the sole retained predecessor comparison.
 
 ## TDD and verification
 
@@ -29,13 +40,14 @@ header.
   with `KeyError: 'leaf_spans'`, proving the required symbols/data were absent.
 - GREEN: `.venv-saturn-tools\Scripts\python.exe tools\saturn\test_tools.py
   BobMeshIRTests.test_bob_scene_emitter_preserves_ir_counts_and_manifest_offsets
-  BobMeshIRTests.test_bob_bsp_leaf_spans_are_deterministic_complete_and_unique
+  BobMeshIRTests.test_bob_bsp_node_spans_are_deterministic_complete_and_unique
   BobMeshIRTests.test_bob_bsp_report_is_exact_and_deterministic
   BobMeshIRTests.test_bob_bsp_header_emits_conservative_bounds_and_work_weights`
   passed (4 tests). The new test checks repeated byte-equivalent generation,
   span/range bounds, in-range IDs, no within-span duplicate, complete coverage,
-  and exact predecessor first-reference-wins set/order equality over three
-  deterministic admitted-node masks.
+  exact predecessor first-reference-wins set/order equality over three
+  deterministic admitted-node masks, and both stale and independently
+  re-digested same-cardinality reorder mismatch rejection.
 - GREEN: regenerated `bob_area1_bsp_report.json`, `bob_bsp.h`, and
   `bob_scene.h` with the local venv Python only.
 - GREEN: native Qt MinGW host compilation and execution of

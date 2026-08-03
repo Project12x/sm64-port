@@ -21,6 +21,9 @@
 #include "saturn_visible_position_set.h"
 #include "bob_scene.h"
 #include "bob_bsp.h"
+#if SM64_SATURN_BOB_SCENE_BSP_CONTENT_ID != SM64_SATURN_BOB_BSP_CONTENT_ID
+#error "bob_scene.h and bob_bsp.h were generated from different node spans"
+#endif
 #if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
 #include "bob_bsp_fragments.h"
 #undef SM64_SATURN_BOB_POSITION_COUNT
@@ -135,12 +138,6 @@ static volatile uint16_t s_transform_phase_failed
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_terrain_result_spans_t s_terrain_spans_shared
     DEMO_CROSS_CPU_SHARED;
-static uint16_t s_bucket_counts[DEMO_BUCKETS];
-static uint16_t s_bucket_offsets[DEMO_BUCKETS + 1U];
-static uint16_t s_emit_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint16_t s_emit_reordered[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint16_t s_emit_count;
-static uint8_t s_bsp_seen[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 #define DEMO_SPATIAL_REF_SEEN_WORDS \
     ((SM64_SATURN_BOB_PRIMITIVE_COUNT + 31U) / 32U)
 /* This compact first-reference-wins bitset replaces the former 867-byte
@@ -342,76 +339,12 @@ static inline const uint8_t *demo_position_valid_read(uint8_t lane,
 }
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-static void demo_bsp_append(int16_t node,
-                            const sm64_saturn_camera_transform_t *camera)
+static void demo_spatial_append_node_span(
+    uint16_t node, sm64_saturn_fast3d_profile_t *profile)
 {
-    if (node < 0) return;
-    const int64_t side =
-        (int64_t)sm64_saturn_bob_bsp_planes[node][0] * camera->position.x +
-        (int64_t)sm64_saturn_bob_bsp_planes[node][1] * camera->position.y +
-        (int64_t)sm64_saturn_bob_bsp_planes[node][2] * camera->position.z +
-        sm64_saturn_bob_bsp_distances[node];
-    const bool camera_front = side >= 0;
-    const int16_t far = sm64_saturn_bob_bsp_children[node][camera_front ? 1 : 0];
-    const int16_t near = sm64_saturn_bob_bsp_children[node][camera_front ? 0 : 1];
-    demo_bsp_append(far, camera);
-    const uint16_t start = sm64_saturn_bob_bsp_ref_ranges[node][0];
-    const uint16_t count = sm64_saturn_bob_bsp_ref_ranges[node][1];
-    for (uint16_t offset = 0U; offset < count; offset++) {
-        const uint16_t primitive = sm64_saturn_bob_bsp_refs[start + offset];
-        if (primitive >= SM64_SATURN_BOB_PRIMITIVE_COUNT ||
-            s_primitive_visible[primitive] == 0U ||
-            s_bsp_seen[primitive] != 0U || s_emit_count >=
-                SM64_SATURN_BOB_PRIMITIVE_COUNT)
-            continue;
-        s_bsp_seen[primitive] = 1U;
-        s_emit_order[s_emit_count++] = primitive;
-    }
-    demo_bsp_append(near, camera);
-}
-#endif
-
-#if SATURN_DEMO_BSP_ORDER && SATURN_DEMO_BSP_FRAGMENTS
-/* The fragment bake carries its own node/reference stream. Unlike the source
- * BSP, each reference is a lowered fragment, so split polygons retain their
- * true camera dependency instead of being grouped by source primitive. */
-static void demo_fragment_bsp_append(
-    int16_t node, const sm64_saturn_camera_transform_t *camera)
-{
-    if (node < 0) return;
-    const int64_t side =
-        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][0] * camera->position.x +
-        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][1] * camera->position.y +
-        (int64_t)sm64_saturn_bob_fragment_bsp_planes[node][2] * camera->position.z +
-        sm64_saturn_bob_fragment_bsp_distances[node];
-    const bool camera_front = side >= 0;
-    const int16_t far = sm64_saturn_bob_fragment_bsp_children[node][camera_front ? 1 : 0];
-    const int16_t near = sm64_saturn_bob_fragment_bsp_children[node][camera_front ? 0 : 1];
-    demo_fragment_bsp_append(far, camera);
-    const uint16_t start = sm64_saturn_bob_fragment_bsp_ref_ranges[node][0];
-    const uint16_t count = sm64_saturn_bob_fragment_bsp_ref_ranges[node][1];
-    for (uint16_t offset = 0U; offset < count; offset++) {
-        const uint16_t primitive =
-            sm64_saturn_bob_fragment_bsp_refs[start + offset];
-        if (primitive >= SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT ||
-            s_bsp_seen[primitive] != 0U ||
-            s_emit_count >= SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT)
-            continue;
-        if (s_primitive_visible[primitive] == 0U) continue;
-        s_bsp_seen[primitive] = 1U;
-        s_emit_order[s_emit_count++] = primitive;
-    }
-    demo_fragment_bsp_append(near, camera);
-}
-#endif
-
-#if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-static void demo_spatial_append_leaf_span(
-    uint16_t leaf, sm64_saturn_fast3d_profile_t *profile)
-{
-    if (leaf >= SM64_SATURN_BOB_LEAF_SPAN_COUNT) return;
-    const uint16_t first = sm64_saturn_bob_leaf_first_ref[leaf];
-    const uint16_t count = sm64_saturn_bob_leaf_ref_count[leaf];
+    if (node >= SM64_SATURN_BOB_NODE_SPAN_COUNT) return;
+    const uint16_t first = sm64_saturn_bob_node_first_ref[node];
+    const uint16_t count = sm64_saturn_bob_node_ref_count[node];
     if (first > SM64_SATURN_BOB_PRIMITIVE_REF_COUNT ||
         count > SM64_SATURN_BOB_PRIMITIVE_REF_COUNT - first) {
         profile->pipeline_faults++;
@@ -514,7 +447,7 @@ static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
     /* Local refs are admitted after the near child and before the far child,
      * preserving predecessor source order while avoiding a post-traversal
      * all-primitive admission scan. */
-    demo_spatial_append_leaf_span((uint16_t)node, profile);
+    demo_spatial_append_node_span((uint16_t)node, profile);
 
     demo_spatial_admit_node(ordered_far, state, frustum, profile);
     return state;
@@ -1734,7 +1667,7 @@ static void __attribute__((unused)) demo_emit_range(void *opaque, uint16_t begin
         if (((uint16_t)(ordinal - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
             break;
-        const uint16_t i = s_emit_order[ordinal];
+        const uint16_t i = s_render_work_order[ordinal];
         if (s_primitive_visible[i] == 0U) continue;
         demo_emit_primitive_at(&context->primitives[i],
                                &context->cmdts[s_primitive_slots[i]],
@@ -2251,81 +2184,6 @@ void sm64_saturn_demo_render_frame(
         profile->demo_lod_texture_downgrades +=
             s_primitive_lod_texture_downgraded[primitive];
     }
-#if 0 /* retained only as a historical diagnostic; compact results are authoritative */
-#if SATURN_DEMO_BSP_FRAGMENTS
-    memset(s_bsp_seen, 0, sizeof(s_bsp_seen));
-    s_emit_count = 0U;
-    demo_fragment_bsp_append(0, &terrain_job.camera);
-    for (uint16_t primitive = 0U;
-         primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
-        if (s_primitive_visible[primitive] != 0U &&
-            s_bsp_seen[primitive] == 0U)
-            s_emit_order[s_emit_count++] = primitive;
-    }
-#else
-    /* Z-Treme/castleviewer-style camera traversal supplies a stable
-     * far-to-near dependency stream for the static world. */
-    memset(s_bsp_seen, 0, sizeof(s_bsp_seen));
-    s_emit_count = 0U;
-    demo_bsp_append(0, &terrain_job.camera);
-    for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
-        if (s_primitive_visible[i] != 0U && s_bsp_seen[i] == 0U)
-            s_emit_order[s_emit_count++] = i;
-    }
-#endif
-#elif 0 /* legacy bucket painter; no longer part of the render path */
-    memset(s_bucket_counts, 0, sizeof(s_bucket_counts));
-    s_emit_count = 0U;
-    for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
-        if (s_primitive_visible[i] == 0U) continue;
-        const uint16_t bucket = s_primitive_buckets[i];
-        s_bucket_counts[bucket]++;
-    }
-    s_bucket_offsets[0] = 0U;
-    for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++)
-        s_bucket_offsets[bucket + 1U] =
-            s_bucket_offsets[bucket] + s_bucket_counts[bucket];
-    uint16_t bucket_write[DEMO_BUCKETS];
-    memcpy(bucket_write, s_bucket_offsets,
-           sizeof(uint16_t) * DEMO_BUCKETS);
-    for (uint16_t i = 0; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++) {
-        if (s_primitive_visible[i] == 0U) continue;
-        s_emit_order[bucket_write[s_primitive_buckets[i]]++] = i;
-    }
-    /* VDP1 has no depth buffer. Within each coarse bucket, order by the
-     * farthest-corner view depth far-to-near; equal-depth primitives retain
-     * source order for deterministic coplanar decals and seams. This matches
-     * castleviewer's proven render queue and is the conservative unsplit
-     * fallback until the baked BSP stream is wired into sourceboot. */
-    for (uint16_t bucket = 0U; bucket < DEMO_BUCKETS; bucket++) {
-        const uint16_t start = s_bucket_offsets[bucket];
-        const uint16_t end = s_bucket_offsets[bucket + 1U];
-        for (uint16_t i = start + 1U; i < end; i++) {
-            const uint16_t value = s_emit_order[i];
-            uint16_t j = i;
-            while (j > start &&
-                   s_primitive_depth[s_emit_order[j - 1U]] <
-                       s_primitive_depth[value]) {
-                s_emit_order[j] = s_emit_order[j - 1U];
-                j--;
-            }
-            s_emit_order[j] = value;
-        }
-    }
-    /* The bucket segments were built in near-to-far bucket order. Repack once
-     * into the actual VDP1 far-to-near stream, preserving each bucket's
-     * depth/source stability without a second bucket-sized matrix. */
-    uint16_t reordered_count = 0U;
-    for (int bucket = (int)DEMO_BUCKETS - 1; bucket >= 0; bucket--) {
-        for (uint16_t ordinal = s_bucket_offsets[bucket];
-             ordinal < s_bucket_offsets[bucket + 1U]; ordinal++) {
-            s_emit_reordered[reordered_count++] = s_emit_order[ordinal];
-        }
-    }
-    memcpy(s_emit_order, s_emit_reordered,
-           sizeof(uint16_t) * reordered_count);
-    s_emit_count = reordered_count;
-#endif
     if (!demo_merge_terrain_results(&s_terrain_spans_shared))
         profile->demo_bob_terrain_sequence_rejects++;
     profile->demo_bob_terrain_descriptor_bytes_read +=

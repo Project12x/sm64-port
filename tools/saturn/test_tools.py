@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -976,8 +977,28 @@ class BobMeshIRTests(unittest.TestCase):
         # no offline affine companion is retained in the runtime pool.
         self.assertIn("SM64_SATURN_BOB_POSITION_COUNT 1625U", header)
         self.assertIn("SM64_SATURN_BOB_PRIMITIVE_COUNT 867U", header)
-        self.assertIn("SM64_SATURN_BOB_SCENE_LEAF_SPAN_COUNT 1183U", header)
+        self.assertIn("SM64_SATURN_BOB_SCENE_NODE_SPAN_COUNT 1183U", header)
+        self.assertIn("SM64_SATURN_BOB_SCENE_BSP_CONTENT_ID", header)
         self.assertEqual(header, emit_bob_scene(mesh, manifest, bsp))
+        # A same-cardinality reordering must not silently stamp a stale scene
+        # header: the emitter recomputes the packed-node digest before use.
+        mismatched_bsp = json.loads(json.dumps(bsp))
+        mismatched_bsp["node_spans"]["primitive_refs"].reverse()
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            emit_bob_scene(mesh, manifest, mismatched_bsp)
+        # A separately regenerated same-cardinality reorder has a different
+        # identity; the renderer and C smoke preprocessor checks reject it if
+        # paired with the original BSP header.
+        reordered = mismatched_bsp["node_spans"]
+        reordered["sha256"] = hashlib.sha256(json.dumps(
+            [reordered["node_first_ref"], reordered["node_ref_count"],
+             reordered["primitive_refs"]],
+            separators=(",", ":")).encode()).hexdigest()
+        reordered_header = emit_bob_scene(mesh, manifest, mismatched_bsp)
+        self.assertNotEqual(
+            re.search(r"BSP_CONTENT_ID (0x[0-9a-f]+ULL)", header).group(1),
+            re.search(r"BSP_CONTENT_ID (0x[0-9a-f]+ULL)",
+                      reordered_header).group(1))
         self.assertEqual(header.count("    {{"), 867)
         self.assertIn("512U, 32U", header)
 
@@ -1015,7 +1036,7 @@ class BobMeshIRTests(unittest.TestCase):
         self.assertIn("sm64_saturn_bob_bsp_octant_child_order", header)
         self.assertEqual(header, header_bob_bsp(scene))
 
-    def test_bob_bsp_leaf_spans_are_deterministic_complete_and_unique(self) -> None:
+    def test_bob_bsp_node_spans_are_deterministic_complete_and_unique(self) -> None:
         """The runtime work producer must not need an all-primitive scan.
 
         A span is the deterministic, deduplicated local reference list for
@@ -1028,14 +1049,14 @@ class BobMeshIRTests(unittest.TestCase):
         scene = json.loads((root / "build/saturn/sourceboot/generated/bob_area1_compiled.json").read_text(encoding="utf-8"))
         first = compile_bob_bsp(scene)
         second = compile_bob_bsp(scene)
-        spans = first["leaf_spans"]
-        self.assertEqual(spans, second["leaf_spans"])
-        self.assertEqual(len(spans["leaf_first_ref"]), first["node_count"])
-        self.assertEqual(len(spans["leaf_ref_count"]), first["node_count"])
+        spans = first["node_spans"]
+        self.assertEqual(spans, second["node_spans"])
+        self.assertEqual(len(spans["node_first_ref"]), first["node_count"])
+        self.assertEqual(len(spans["node_ref_count"]), first["node_count"])
         packed = spans["primitive_refs"]
         self.assertEqual(spans["primitive_ref_count"], len(packed))
-        for start, count in zip(spans["leaf_first_ref"],
-                                spans["leaf_ref_count"]):
+        for start, count in zip(spans["node_first_ref"],
+                                spans["node_ref_count"]):
             self.assertGreaterEqual(start, 0)
             self.assertGreaterEqual(count, 0)
             self.assertLessEqual(start + count, len(packed))
@@ -1065,17 +1086,18 @@ class BobMeshIRTests(unittest.TestCase):
                     if primitive not in legacy_seen:
                         legacy_seen.add(primitive)
                         legacy_order.append(primitive)
-                start = spans["leaf_first_ref"][node]
-                count = spans["leaf_ref_count"][node]
+                start = spans["node_first_ref"][node]
+                count = spans["node_ref_count"][node]
                 for primitive in packed[start:start + count]:
                     if primitive not in compact_seen:
                         compact_seen.add(primitive)
                         compact_order.append(primitive)
             self.assertEqual(compact_order, legacy_order)
         header = header_bob_bsp(scene)
-        self.assertIn("sm64_saturn_bob_leaf_first_ref", header)
-        self.assertIn("sm64_saturn_bob_leaf_ref_count", header)
+        self.assertIn("sm64_saturn_bob_node_first_ref", header)
+        self.assertIn("sm64_saturn_bob_node_ref_count", header)
         self.assertIn("sm64_saturn_bob_primitive_refs", header)
+        self.assertIn("SM64_SATURN_BOB_BSP_CONTENT_ID", header)
 
     def test_bob_bsp_fragment_texture_cost_exposes_budget_gap(self) -> None:
         root = TOOLS.parents[1]
