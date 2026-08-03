@@ -8,6 +8,34 @@
 
 **Tech Stack:** C11, SH-2 assembly/Q16.16, Yaul `6012f79f237773378c8014e70d8998ad95a38d98`, VDP1, VDP2, SCU DMA, Python asset generators/tests, Ymir with DRAM cart.
 
+## Live execution status — update on every task transition
+
+This checklist is the operational source of truth.  A task is not complete
+until its implementation/review evidence and this status are updated in the
+same task transition.  `source-complete` means host/static evidence and
+independent review are clean; it is not a target/Ymir promotion claim.
+
+- [x] **Task 1** — ownership/profile evidence; source-complete at `575ca92`.
+- [x] **Task 2** — admitted-position transform set; source-complete at `fb0a7ea`.
+- [x] **Task 3** — stable depth bins; source-complete at `8ccb6a7`.
+- [x] **Task 4** — cache-through frame handoff; source-complete at `20011a5`; target disassembly gate pending.
+- [x] **Task 5** — asynchronous DMA queue; source-complete at `0d1a495`; target partition/ownership gate pending.
+- [x] **Task 6** — compile-once VDP1 templates; source-complete at `cc78d82`; BOB fallback/fault target gate pending.
+- [x] **Task 7** — compact BSP node spans (renamed from the plan's initially inaccurate “leaf spans”); complete at `79923ce`.
+- [x] **Task 8** — conservative hysteretic LOD; source-complete at `5a5e850`; target replay/visual gate pending.
+- [x] **Task 9** — bounded slave Mario transform plus compact classification; source-complete at `6731a4c`; target disassembly/Ymir gate pending.
+- [x] **Task 10** — pre-reservation shade classification; source-complete at `1d31f00`; target integration gate pending.
+- [x] **Task 11** — VDP2 frame API and measured HUD telemetry; source-complete at `1850d18`; full runtime contract remains a Task 12 gate.
+- [ ] **Task 12** — integration/evidence/publication is active.  Reference and candidate artifacts build; coherency passes.  The reviewed bounded linked-ELF verifier is still being finalized against real candidate metadata before Ymir/manual acceptance.
+
+### Design decisions landed during execution
+
+- Counters are diagnostic evidence only; no percentage-based promotion gate.
+- Generated BSP data is **node spans**, not leaf spans; content identity is stamped across generated artifacts and checked fail-closed.
+- VDP1 owns geometry; VDP2 owns sky/HUD/layer composition only.
+- The master owns game state, allocation, ordering, and presentation.  Slave work uses immutable snapshots, disjoint outputs, uncached publication, cache-through peer reads, and positive retirement before any fallback reuse.
+- The target native-math gate is closure-based, not a raw-symbol grep.  It must prove the actual bounded route before Ymir can support a performance claim.
+
 ## Global Constraints
 
 - Worktree: `D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge`.
