@@ -115,3 +115,51 @@ Implementation evidence is recorded in
 `.superpowers/sdd/2026-08-03-vblank-presentation-boundary/task-1-report.md`.
 The serial target/Ymir gate remains unchecked. No GPL source was copied: SlaveDriver and Z-Treme were
 pattern-only/clean-room cadence references at their pinned revisions.
+
+## Task 2: restore and prove bootstrap VDP2 retirement
+
+**Why:** The first manual A9.0 CUE exited/froze immediately after BIOS. Read-
+only investigation found no crash dump but identified one new boot sequencing
+delta with strong correlation: Task 1 removed the predecessor's initial
+`sm64_saturn_vdp2_frame_begin()`/`sm64_saturn_vdp2_frame_commit()` plus
+`vdp2_sync_wait()` barrier. `user_init()` queues VDP2 sky DMA before this
+point. The testable hypothesis is that the initial queue must retire before
+the first combined VDP1/VDP2 presentation.
+
+**Files:** `src/port/saturn/sourceboot/main.c`,
+`tools/saturn/test_sourceboot_presentation_boundary.py`, the evidence report,
+this plan, master plan, architecture ledger, and same-commit `CHANGELOG.md`
+for behavior.
+
+**Contract:**
+
+1. Before scheduler generation initialization, exactly one bootstrap VDP2
+   begin/commit with a null snapshot retires through `vdp2_sync_wait()`.
+2. Bootstrap performs no VDP1 sync, source tick, geometry work, or generation
+   publication.
+3. Every post-bootstrap displayed generation still uses only
+   `sourceboot_present_generation()` for the paired VDP1/VDP2 boundary.
+
+- [x] **Step 1: Extend the focused source-mutation test and observe RED.**
+  The real source failed only for its missing null-snapshot bootstrap begin;
+  the gate also rejects absent/late/duplicate bootstrap plus VDP1/simulation
+  work in the bootstrap interval.
+- [x] **Step 2: Restore only the bootstrap barrier and run focused GREEN.**
+  Restored the predecessor sequence verbatim in `815c4352`; the focused source
+  mutation gate is GREEN (6 tests).
+- [ ] **Step 3: Update records, commit, and complete spec/quality reviews.**
+  Records and behavior commit are complete; independent specification and
+  quality reviews remain pending.
+- [ ] **Step 4: Build one serial CUE and manually launch with `.ymir-profile`;
+  record whether post-BIOS execution remains alive before evaluating speed.**
+
+## Live Task 2 transition — source-complete; target evidence pending
+
+`815c4352` restores only the predecessor's boot-time null-snapshot VDP2
+begin/commit plus `vdp2_sync_wait()` barrier after `dbgio_flush()` and before
+frontend/scheduler initialization. The existing one-VBlank scheduler and its
+single `sourceboot_present_generation()` VDP1/VDP2 terminal boundary remain
+unchanged. The source mutation test was observed RED before the production
+edit and GREEN afterward; independent reviews and one replacement serial
+CUE/Ymir observation remain required, so the post-BIOS hypothesis is not yet
+runtime-proven.

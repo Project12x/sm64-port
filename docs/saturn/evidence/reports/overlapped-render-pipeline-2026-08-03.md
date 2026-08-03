@@ -78,6 +78,43 @@ work around Ymir's long-path media-resolution failure, then Ymir was launched
 with `.ymir-profile` (32-Mbit DRAM). Manual observation is pending; no speed,
 controls, or displayed-frame claim is made yet.
 
+## Emergency A9.0 Task 2 — bootstrap VDP2 retirement source evidence
+
+The first A9 CUE exited/froze after BIOS. Read-only investigation found no
+runtime fault record, but found that `950ab37a` removed the predecessor
+`1a48bfb4` bootstrap VDP2 begin/commit plus `vdp2_sync_wait()` sequence.
+`user_init()` queues sky DMA before this point, so Task 2 tests the narrow
+hypothesis that the queue must retire before the first combined VDP1/VDP2
+presentation.
+
+`815c4352` restores only that predecessor sequence after `dbgio_flush()` and
+before frontend/scheduler initialization. It does not modify the one-VBlank
+scheduler or add a second VDP1 submission. The focused mutation gate now
+requires exactly one null-snapshot bootstrap begin/commit/wait before frontend
+and scheduler initialization; it rejects absent, late, duplicate, VDP1-work,
+and source-tick bootstrap mutants. It continues to require every
+post-bootstrap displayed generation to use the sole
+`sourceboot_present_generation()` VDP1/VDP2 boundary.
+
+Focused RED command:
+
+```powershell
+& .\tools\saturn\with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk verify-sourceboot-presentation-boundary
+```
+
+Before the production edit: exit 1; `Ran 6 tests in 0.020s`; five tests
+passed and the real-source contract failed only because the null-snapshot
+bootstrap VDP2 begin was absent.
+
+Focused GREEN command: the same command. After `815c4352`: exit 0; `Ran 6
+tests in 0.020s`; `OK`. `git diff --check` over the behavior files also exited
+0.
+
+No target build, CUE, or Ymir launch was performed for Task 2. The bootstrap
+barrier is source-complete but not a proven root-cause fix until independent
+reviews and one replacement serial CUE/manual `.ymir-profile` observation
+record post-BIOS liveness.
+
 ## Task 1D — sealed geo-walk upper-bound diagnostic
 
 ### Current verdict and scope

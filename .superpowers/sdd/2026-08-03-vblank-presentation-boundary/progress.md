@@ -26,4 +26,36 @@ I1: the focused mutation gate now requires exactly one
 `sourceboot_present_generation(scheduler_now)` invocation and its in-memory
 duplicate-call mutant fails with the one-presentation diagnostic. M1 documents
 the intentional displayed-bank lag; M2 removes the unused
-`PRESENTATION_BOUNDARY_COUNTERS` grouping. Focused re-review remains pending.
+`PRESENTATION_BOUNDARY_COUNTERS` grouping. Scoped quality rereview is GO:
+I1/M1/M2 are addressed and no new Critical/Important finding exists. The
+duplicate-helper mutant RED, focused gate GREEN (5 tests), and profile subset
+GREEN (13, 1 skipped) are recorded in the implementation report. Task 1:
+source-complete (commits `950ab37a..2de483d9`, reviews clean); Step 7 serial
+target/Ymir evidence remains open. Runtime-contract wrapper still fails before
+compilation with the known MSYS-to-Windows path translation WinError 5.
+
+Task 1 Step 7: serial target build PASS (294.1 seconds); GUI Ymir launch used
+the project DRAM profile and short staged CUE path. Owner reported immediate
+post-BIOS exit/freeze. No crash dump or Ymir log exists. Read-only investigation
+attributes the strongest new correlation to removal of the predecessor's
+bootstrap VDP2 commit plus `vdp2_sync_wait()` retirement barrier; this is a
+testable hypothesis, not yet proven root cause.
+
+Task 2: source-complete pending independent reviews and replacement target
+evidence. `815c4352` restores only the predecessor boot-time null-snapshot
+VDP2 begin/commit plus `vdp2_sync_wait()` retirement barrier before frontend
+and scheduler initialization. The focused mutation gate was observed RED
+(exit 1; 6 tests, one expected missing-bootstrap failure) before the source
+edit and GREEN afterward (exit 0; 6 tests). It rejects absent, late, duplicate,
+VDP1-work, and simulation-work bootstrap mutants while retaining the exact-one
+post-bootstrap terminal presentation contract. No target build or Ymir launch
+was performed; the post-BIOS causal hypothesis remains unproven until the
+replacement serial CUE/manual gate. Independent spec and quality reviews are
+still pending.
+
+Task 1 Step 7: serial target build PASS (294.1 seconds), output
+`e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4`.
+CUE/ISO copied without modification to `.tmp-experimental-cue/presentation-boundary`
+for Ymir's long-path limitation. Ymir launched with `.ymir-profile`; manual
+owner observation is active, so speed/controls/VDP counter evidence remains
+unrecorded and Step 7 stays unchecked.
