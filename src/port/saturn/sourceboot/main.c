@@ -37,6 +37,9 @@
 #ifndef SATURN_DEMO_PATH
 #define SATURN_DEMO_PATH 0
 #endif
+#ifndef SATURN_EXPERIMENTAL_SKIP_GEO_WALK
+#define SATURN_EXPERIMENTAL_SKIP_GEO_WALK 0
+#endif
 #ifndef SATURN_SOURCEBOOT_CAMERA_ROUTE
 #define SATURN_SOURCEBOOT_CAMERA_ROUTE 0
 #endif
@@ -85,7 +88,15 @@ static void sourceboot_run_source_tick(void)
      * still owns source animation and stateful geo-callback updates. */
     sm64_saturn_source_runtime_set_display_suppressed(true);
 #endif
+#if SATURN_EXPERIMENTAL_SKIP_GEO_WALK
+    /* Sealed upper-bound diagnostic only: geo-owned animation, warp, camera,
+     * water, moving-texture, carpet, and matrix state are intentionally invalid. */
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(true);
     game_loop_one_iteration();
+    sm64_saturn_source_runtime_set_scene_graph_suppressed(false);
+#else
+    game_loop_one_iteration();
+#endif
 #if SATURN_DEMO_PATH
     sm64_saturn_source_runtime_set_display_suppressed(false);
 #endif

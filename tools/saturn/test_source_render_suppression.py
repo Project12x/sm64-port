@@ -11,6 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AREA_C = REPO_ROOT / "src" / "game" / "area.c"
 SOURCEBOOT_C = REPO_ROOT / "src" / "port" / "saturn" / "sourceboot" / "main.c"
+SOURCEBOOT_MAKEFILE = REPO_ROOT / "src" / "port" / "saturn" / "sourceboot" / "Makefile"
 
 
 def extract_c_function(path: Path, name: str) -> str:
@@ -60,12 +61,22 @@ class SourceRenderSuppressionTests(unittest.TestCase):
             self.assertIn(call, body)
             self.assertNotIn(call, guarded)
 
-    def test_sourceboot_cannot_enable_scene_graph_suppression(self) -> None:
-        """Fail closed until a behavior-tested state-only geo seam exists."""
+    def test_skip_geo_diagnostic_is_sealed_and_default_off(self) -> None:
+        """The upper-bound diagnostic is opt-in and scopes only one source tick."""
         body = extract_c_function(SOURCEBOOT_C, "sourceboot_run_source_tick")
-        self.assertNotIn(
-            "sm64_saturn_source_runtime_set_scene_graph_suppressed(", body
-        )
+        makefile = SOURCEBOOT_MAKEFILE.read_text(encoding="utf-8")
+        self.assertIn("SATURN_EXPERIMENTAL_SKIP_GEO_WALK ?= 0", makefile)
+        self.assertIn("SATURN_EXPERIMENTAL_SKIP_GEO_WALK must be 0 or 1", makefile)
+        self.assertIn("SATURN_EXPERIMENTAL_SKIP_GEO_WALK=1 requires SATURN_DEMO_PATH=1 and SATURN_SOURCEBOOT_ROUTE_REPLAY=1", makefile)
+        self.assertIn("-DSATURN_EXPERIMENTAL_SKIP_GEO_WALK=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK)", makefile)
+        self.assertIn("diag-skip-geo", makefile)
+        self.assertIn("#if SATURN_EXPERIMENTAL_SKIP_GEO_WALK", body)
+        branch = body.split("#if SATURN_EXPERIMENTAL_SKIP_GEO_WALK", 1)[1].split("#endif", 1)[0]
+        setter = "sm64_saturn_source_runtime_set_scene_graph_suppressed("
+        self.assertEqual(branch.count(setter), 2)
+        self.assertRegex(branch, re.compile(r"set_scene_graph_suppressed\(true\);\s*game_loop_one_iteration\(\);\s*sm64_saturn_source_runtime_set_scene_graph_suppressed\(false\);", re.S))
+        normal = body.split("#if SATURN_EXPERIMENTAL_SKIP_GEO_WALK", 1)[0]
+        self.assertNotIn(setter, normal)
 
 
 if __name__ == "__main__":
