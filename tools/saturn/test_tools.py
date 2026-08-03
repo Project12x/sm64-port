@@ -1909,11 +1909,18 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "pipeline_faults",
             "gouraud_tables_saved",
             "gouraud_bytes_saved",
+            "master_transform_count",
+            "slave_transform_count",
+            "ordering_count",
+            "dma_wait_ticks_last",
+            "dma_wait_ticks_accum",
+            "vdp1_wait_ticks_last",
+            "vdp1_wait_ticks_accum",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-7:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-14:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-8].end,
+            layout.fields[-15].end,
         )
 
         data = bytearray(layout.size)
@@ -1926,6 +1933,13 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "pipeline_faults": 3,
             "gouraud_tables_saved": 21,
             "gouraud_bytes_saved": 21 * 8,
+            "master_transform_count": 22,
+            "slave_transform_count": 23,
+            "ordering_count": 0x4567,
+            "dma_wait_ticks_last": 29,
+            "dma_wait_ticks_accum": 31,
+            "vdp1_wait_ticks_last": 37,
+            "vdp1_wait_ticks_accum": 41,
         }
         for name, value in expected.items():
             field = layout.field(name)
@@ -2056,6 +2070,13 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "pipeline_faults",
                 "gouraud_tables_saved",
                 "gouraud_bytes_saved",
+                "master_transform_count",
+                "slave_transform_count",
+                "ordering_count",
+                "dma_wait_ticks_last",
+                "dma_wait_ticks_accum",
+                "vdp1_wait_ticks_last",
+                "vdp1_wait_ticks_accum",
             ],
         )
         # Fields the older build did have still read correctly.

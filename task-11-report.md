@@ -35,6 +35,10 @@
 - The corresponding last/accumulated fields are an append-only renderer
   profile suffix, dynamically discovered by `fast3d_profile_decode.py`. They
   are diagnostics only and never select scheduling or promotion policy.
+- The profile decoder's explicit append/partial-capture fixtures list all
+  seven telemetry fields in the same suffix order. This keeps old captures
+  honest: a partial decode names every absent Task 11 field instead of
+  silently treating it as present.
 
 ## Test-first record and verification
 
@@ -63,6 +67,14 @@
    `vdp2_sync()` call (the frame adapter); the frame module contains no VDP2
    terrain/Mario/polygon interface and no `printf`/`sprintf`/`snprintf` or
    float conversion. `git diff --check` passes.
+5. The focused profile layout/decode reviewer selection passes with 20 tests
+   and one expected host-compiler-dependent skip:
+
+   ```powershell
+   .\.venv-saturn-tools\Scripts\python.exe -m unittest \
+     tools.saturn.test_tools.Fast3dProfileLayoutTests \
+     tools.saturn.test_tools.Fast3dProfileDecodeTests
+   ```
 
 The complete pre-existing `runtime_contract_test` native build was started
 with its full source closure but made no progress/output within the bounded
