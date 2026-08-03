@@ -5308,6 +5308,7 @@ fixture.c 3 0x06003002
         owners = (
             FunctionOwner("___udivsi3", 0x06001120, 0x06001140, 1),
             FunctionOwner("_route_child", 0x06001200, 0x06001208, 1),
+            FunctionOwner("___addsf3", 0x06001300, 0x06001308, 1),
         )
         island = bounded_verifier.LocalIsland(
             "div0", 0x06001100, 0x06001104, 0x06001120, 1
@@ -5321,6 +5322,11 @@ fixture.c 3 0x06003002
  6001108: 00 09 nop
  600110a: 00 0b rts
  600110c: 00 09 nop
+ 6001110: d8 03 mov.l 6001120 <div0+0x20>,r8 ! 06001300 <___addsf3>
+ 6001112: 48 0b jsr @r8
+ 6001114: 00 09 nop
+ 6001116: 00 0b rts
+ 6001118: 00 09 nop
 06001120 <___udivsi3>:
  6001120: bf f1 bsr 6001106 <div0+0x6>
  6001122: 00 09 nop
@@ -5329,11 +5335,18 @@ fixture.c 3 0x06003002
 06001200 <_route_child>:
  6001200: 00 0b rts
  6001202: 00 09 nop
+06001300 <___addsf3>:
+ 6001300: 00 0b rts
+ 6001302: 00 09 nop
 """
         island_id = "@island:div0@06001100"
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly,
-            "fixture.s 1 0x06001106\nfixture.s 2 0x06001122\n",
+            (
+                "fixture.s 1 0x06001106\n"
+                "fixture.s 2 0x06001110\n"
+                "fixture.s 3 0x06001122\n"
+            ),
             owners,
             (oracle,),
             local_islands=(island,),
@@ -5345,10 +5358,25 @@ fixture.c 3 0x06003002
             "___udivsi3", "_route_child",
         }))
         self.assertEqual(prepared.selected_islands, (island,))
+        self.assertEqual(
+            prepared.island_origins,
+            {island_id: frozenset({"___udivsi3"})},
+        )
         self.assertTrue({0x06001106, 0x06001120, 0x06001200} <= set(
             prepared.instructions
         ))
-        self.assertEqual(prepared.decoded_lines[island_id], {0x06001106})
+        self.assertEqual(
+            prepared.decoded_lines[island_id], {0x06001106, 0x06001110}
+        )
+        with self.assertRaisesRegex(ValueError, "island has no owner origin"):
+            analyze_code_only(
+                prepared.instructions,
+                owners,
+                prepared.decoded_lines,
+                set(prepared.selected_names),
+                build_instruction_memory(prepared.instructions),
+                local_islands=prepared.selected_islands,
+            )
 
         analysis = analyze_code_only(
             prepared.instructions,
@@ -5357,13 +5385,29 @@ fixture.c 3 0x06003002
             set(prepared.selected_names),
             build_instruction_memory(prepared.instructions),
             local_islands=prepared.selected_islands,
+            island_origins=prepared.island_origins,
         )
-        self.assertIn(
-            ("___udivsi3", "island", "div0", "_route_child"),
-            {
-                (fact.caller, fact.caller_region, fact.caller_island, fact.callee)
+        self.assertEqual(
+            [
+                (
+                    fact.caller, fact.caller_region, fact.caller_island,
+                    fact.caller_offset, fact.callee,
+                )
                 for fact in analysis.direct_calls
-            },
+                if fact.caller_region == "island"
+            ],
+            [
+                ("___udivsi3", "island", "div0", 0x6, "_route_child"),
+                ("___udivsi3", "island", "div0", 0x12, "___addsf3"),
+            ],
+        )
+        self.assertEqual(
+            [
+                (call.caller, call.address, call.helper)
+                for call in analysis.calls
+                if call.helper == "___addsf3"
+            ],
+            [("___udivsi3", 0x06001112, "___addsf3")],
         )
 
     def test_bounded_closure_rejects_unvalidated_local_code_target(self) -> None:
