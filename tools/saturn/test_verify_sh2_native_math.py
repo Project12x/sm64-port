@@ -5209,6 +5209,42 @@ fixture.c 3 0x06003002
                 disassembly, "", self.OWNERS[:1], (self.ORACLE,)
             )
 
+    def test_internal_local_header_call_is_owned_by_enclosing_route_function(self) -> None:
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: 00 09 nop
+06001002 <.Lroute_inner>:
+ 6001002: d1 02 mov.l 600100c <_route_root+0xc>,r1 ! 06002000 <_route_child>
+ 6001004: 41 0b jsr @r1
+ 6001006: 00 09 nop
+ 6001008: 00 0b rts
+ 600100a: 00 09 nop
+06002000 <_route_child>:
+ 6002000: b0 02 bsr 6009000 <___addsf3>
+ 6002002: 00 09 nop
+ 6002004: 00 0b rts
+ 6002006: 00 09 nop
+"""
+        owners = (*self.OWNERS[:2], FunctionOwner(
+            "___addsf3", 0x06009000, 0x06009004, 1
+        ))
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, "", owners, (self.ORACLE,)
+        )
+        self.assertEqual(prepared.closure, frozenset({
+            "_route_root", "_route_child",
+        }))
+        analysis = analyze_code_only(
+            prepared.instructions,
+            owners,
+            selected_names=set(prepared.closure),
+            instruction_memory=build_instruction_memory(prepared.instructions),
+        )
+        self.assertIn(
+            ("_route_child", "___addsf3"),
+            {(call.caller, call.helper) for call in analysis.calls},
+        )
+
     def test_bounded_analysis_keeps_unresolved_indirect_transfer_fail_closed(self) -> None:
         disassembly = """
 06001000 <_route_root>:

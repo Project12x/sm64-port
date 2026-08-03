@@ -4185,17 +4185,19 @@ def prepare_route_bounded_code_only(
         for name in (owner.name, *owner.aliases)
     }
     blocks = _owned_disassembly_blocks(disassembly, owner_list)
-    raw_graph = scan_call_graph(disassembly)
     graph: dict[str, set[str]] = {
         name: set() for name in blocks
     }
-    for raw_caller, raw_targets in raw_graph.items():
-        caller_owner = owner_by_symbol.get(raw_caller)
-        caller = raw_caller if caller_owner is None else caller_owner.name
+    for call in scan_direct_calls(disassembly):
+        if is_native_math_helper(call.helper):
+            continue
+        # Objdump may introduce local/NOTYPE headers inside one STT_FUNC.
+        # Attribute the edge by its callsite address, not the last header.
+        caller_owner = _owner_at(owner_list, call.address)
+        caller = call.caller if caller_owner is None else caller_owner.name
         targets = graph.setdefault(caller, set())
-        for raw_target in raw_targets:
-            target_owner = owner_by_symbol.get(raw_target)
-            targets.add(raw_target if target_owner is None else target_owner.name)
+        target_owner = owner_by_symbol.get(call.helper)
+        targets.add(call.helper if target_owner is None else target_owner.name)
 
     closure: set[str] = set()
     for oracle in oracle_list:
