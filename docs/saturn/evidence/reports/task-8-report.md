@@ -33,7 +33,8 @@
   condition.
 - `saturn_lod_reset()` clears all tier state deterministically. Sourceboot
   now observes the authoritative `gCurrentArea`, `gCurrLevelNum`, and
-  `gCurrAreaIndex` after each source tick. An area unload and a subsequent
+  `gCurrAreaIndex` inside every `game_loop_one_iteration()` wrapper, before a
+  catch-up batch advances to its next tick. An area unload and a subsequent
   same-ID re-entry both reset tier history before the next render.
 
 ## Host validation
@@ -48,7 +49,8 @@ hot promotion contract: PASS
 
 It proves threshold hysteresis, camera-jitter stability, projected-size
 rejection of a depth-only downgrade, FAR→MID→NEAR transition behavior,
-deterministic scene exit/re-entry reset, mandatory-prefix preservation, bake
+deterministic multi-tick scene exit/re-entry and active-scene-change resets,
+normal same-scene no-reset behavior, mandatory-prefix preservation, bake
 approval, and role-limited material degradation (including invalid roles).
 `git diff --check` also passed. A source-order check confirms tier selection
 precedes construction of the clipping input, and the renderer rejects invalid

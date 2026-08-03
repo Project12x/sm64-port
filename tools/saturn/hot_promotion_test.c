@@ -50,8 +50,8 @@ int main(void)
     if (tiers[0] != SATURN_LOD_NEAR || tiers[1] != SATURN_LOD_NEAR ||
         tiers[2] != SATURN_LOD_NEAR) return 12;
 
-    /* The Sourceboot scene observer clears tier history both on an actual
-     * exit and when the same level/area re-enters. */
+    /* Simulate Sourceboot's catch-up loop: each authoritative tick observes
+     * scene state before the next tick can hide an exit/re-entry. */
     saturn_lod_scene_t scene;
     saturn_lod_scene_init(&scene);
     tiers[0] = saturn_lod_select(SATURN_LOD_NEAR, 7200, 32, &thresholds);
@@ -64,12 +64,21 @@ int main(void)
     if (tiers[0] != SATURN_LOD_MID) return 14;
     tiers[0] = saturn_lod_select((saturn_lod_tier_t)tiers[0], 3500, 113,
                                  &thresholds);
-    if (tiers[0] != SATURN_LOD_NEAR ||
-        !saturn_lod_scene_observe(&scene, false, 9, 1, tiers, sizeof(tiers)))
-        return 15;
+    if (tiers[0] != SATURN_LOD_NEAR) return 15;
+    tiers[0] = SATURN_LOD_FAR;
+    if (!saturn_lod_scene_observe(&scene, false, 9, 1, tiers, sizeof(tiers)) ||
+        tiers[0] != SATURN_LOD_NEAR)
+        return 16;
     tiers[0] = SATURN_LOD_FAR;
     if (!saturn_lod_scene_observe(&scene, true, 9, 1, tiers, sizeof(tiers)) ||
-        tiers[0] != SATURN_LOD_NEAR) return 16;
+        tiers[0] != SATURN_LOD_NEAR) return 17;
+    tiers[0] = SATURN_LOD_FAR;
+    if (!saturn_lod_scene_observe(&scene, true, 10, 1, tiers, sizeof(tiers)) ||
+        tiers[0] != SATURN_LOD_NEAR) return 18;
+    tiers[0] = SATURN_LOD_MID;
+    if (saturn_lod_scene_observe(&scene, true, 10, 1, tiers, sizeof(tiers)) ||
+        tiers[0] != SATURN_LOD_MID)
+        return 19;
     /* Route-prefix and bake approval are correctness invariants, not
      * performance gates: the candidate may only suppress approved optional
      * primitives outside the protected prefix. */
@@ -80,14 +89,14 @@ int main(void)
         saturn_lod_can_suppress(SATURN_LOD_FAR, 1U, true, 1024U, 128U) != false ||
         saturn_lod_can_suppress(SATURN_LOD_FAR, 3U, true, 1024U, 128U) != false ||
         saturn_lod_can_suppress(SATURN_LOD_FAR, UINT8_MAX, true, 1024U, 128U) != false)
-        return 17;
+        return 20;
     if (!saturn_lod_can_degrade_material(SATURN_LOD_MID, 1U, true, true) ||
         saturn_lod_can_degrade_material(SATURN_LOD_NEAR, 2U, true, true) ||
         saturn_lod_can_degrade_material(SATURN_LOD_MID, 1U, false, true) ||
         saturn_lod_can_degrade_material(SATURN_LOD_MID, 0U, true, true) ||
         saturn_lod_can_degrade_material(SATURN_LOD_MID, 3U, true, true) ||
         saturn_lod_can_degrade_material(SATURN_LOD_MID, UINT8_MAX, true, true))
-        return 18;
+        return 21;
     puts("hot promotion contract: PASS");
     return 0;
 }

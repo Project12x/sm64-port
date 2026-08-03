@@ -76,6 +76,13 @@ static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
     game_loop_one_iteration();
+#if SATURN_DEMO_PATH
+    /* This is deliberately inside the authoritative-tick helper, not after
+     * the catch-up batch: an exit plus same-ID re-entry can otherwise be
+     * invisible if multiple source ticks complete before one render. */
+    sm64_saturn_demo_render_scene_observe(gCurrentArea != NULL,
+                                          gCurrLevelNum, gCurrAreaIndex);
+#endif
     const uint16_t sim_end = cpu_frt_count_get();
     sourceboot_fast3d.profile.sim_frt_ticks_last =
         sourceboot_frt_delta(sim_start, sim_end);
@@ -694,14 +701,6 @@ int main(void) {
             sm64_saturn_source_runtime_wait_vblank();
 #else
         sourceboot_run_source_tick();
-#endif
-
-#if SATURN_DEMO_PATH
-        /* Sourceboot owns scene transitions. Observe the authoritative area
-         * after each source tick so an unload (NULL) and a re-entry into the
-         * same level/area clear hysteretic terrain state before next render. */
-        sm64_saturn_demo_render_scene_observe(gCurrentArea != NULL,
-                                              gCurrLevelNum, gCurrAreaIndex);
 #endif
 
         /* Renderer-facing actor state is captured after the authoritative
