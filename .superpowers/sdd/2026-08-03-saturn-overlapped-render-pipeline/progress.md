@@ -48,12 +48,19 @@ the unsafe suppression Step 5 unchecked/BLOCKED and marks the CUE/Ymir step
 NOT AUTHORIZED. No code or tests were run in this documentation transition;
 only `git diff --check` is required before the tracked documentation commit.
 
-Task 1D: source-complete at `98f26f26`; focused source policy passed after its
-recorded red result. Runtime-contract wrapper was attempted and is blocked by
-MSYS path translation creating `\\d\\Code...` (WinError 5), not a contract
-failure. Target build/Ymir and independent review remain open. A1 remains
-**BLOCKED**. Owner authorized one sealed `diag-skip-geo` upper-bound CUE
-on 2026-08-03. It must be compile-time default-off, replay/demo constrained,
-paired within a source tick, separately tagged, and documented as an invalid
-graph-state experiment. BOB is the demonstrator only; the intended destination
-remains scene-neutral full-game loading.
+Task 1D: **ACTIVE in review-fix round 1**, not source-complete. Runtime
+containment is implemented at `98f26f26` and initially documented by
+`f2b7ebf0`. Independent spec review is **NO-GO**: the original test merely
+searched Makefile strings, inspected text before the diagnostic `#if` instead
+of its actual normal `#else`, and omitted Task 1D from the central execution
+report. Review-fix round 1 addresses both Important findings without changing
+runtime source. Its TDD red was 4 tests with 6 missing-helper errors; its green
+was 4 tests in 8.173s, exercising six real Make parses plus structural matching
+of the direct preprocessor branches. The fresh runtime-contract wrapper again
+failed before executing the host contract because MSYS supplied
+`\\d\\Code...` to Windows Python (WinError 5). This remains an open
+infrastructure gate, not a contract failure or pass. Independent spec rereview,
+quality review, target build, and Ymir remain open. A1 remains **BLOCKED**.
+Owner authorized one sealed `diag-skip-geo` upper-bound CUE on 2026-08-03; it
+is non-promotable and knowingly invalidates graph-owned state. No target build
+or Ymir run occurred.

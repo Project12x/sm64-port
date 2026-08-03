@@ -36,8 +36,14 @@ and the evidence report before starting another task.
   enable/disable calls, so accepted Saturn builds fail closed with a full geo
   walk. No bounded state-only seam has been demonstrated; the controller-owned
   serial CUE/Ymir gate must not start.
-- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** source-complete at `98f26f26`; runtime wrapper blocked by host path translation, target/Ymir pending; A1 remains blocked.
-  by the owner on 2026-08-03. This is a deliberately broken, compile-time-only
+- [ ] **Task 1D / D1 — diagnostic-only geo-walk upper-bound CUE:** active in
+  review-fix round 1. Implementation `98f26f26` is contained, but the initial
+  spec review is NO-GO because Make validation and the real normal `#else`
+  lacked required mutation coverage and the execution-evidence report omitted
+  Task 1D. Both Important findings are addressed in the current transition;
+  independent rereview, the host-blocked runtime wrapper, target build, and
+  Ymir remain open. A1 remains blocked. Authorized by the owner on 2026-08-03,
+  this is a deliberately broken, compile-time-only
   BOB proving build that must never become the default, a replay baseline, or
   evidence of full-game correctness. It exists solely to quantify whether the
   blocked whole-walk removal merits a dedicated state/render separation sprint.
@@ -294,19 +300,19 @@ types, ownership rules, or production fallbacks.
   are knowingly invalid; speed is an upper-bound observation only, never a
   promotion gate.
 
-- [ ] **Step 1: Write failing diagnostic-containment tests**
+- [x] **Step 1: Write failing diagnostic-containment tests**
 
   Extend the focused source-policy test so the unimplemented diagnostic fails
   for a missing default-off macro/configuration guard, missing paired setter
   restoration, and missing diagnostic-only output tag.
 
-- [ ] **Step 2: Record the red host result**
+- [x] **Step 2: Record the red host result**
 
   Run the focused source-policy target through
   `tools/saturn/with-msys-toolchain.ps1`; record the expected missing-contract
   failure. Do not build or launch a target image in this step.
 
-- [ ] **Step 3: Implement only the sealed diagnostic seam**
+- [x] **Step 3: Implement only the sealed diagnostic seam**
 
   Add the compile-time constraint, paired sourceboot setter, output tag, and
   telemetry label. Do not split or emulate geo callbacks; that is A1's future
@@ -319,12 +325,24 @@ types, ownership rules, or production fallbacks.
   source-level policy only. No aggregate green claim substitutes for these
   focused gates.
 
+  Focused containment is green after review-fix round 1: 4 tests exercise real
+  Make parsing and the actual preprocessor branches. The runtime-contract
+  wrapper remains unchecked because MSYS translates the worktree path to
+  `\\d\\Code...`; Windows Python fails to create that path with WinError 5
+  before the host contract executable runs.
+
 - [ ] **Step 5: Update records, commit, and complete two-stage review**
 
   Record that D1 is an upper-bound diagnostic, not an A1 resolution; append all
   tests, review verdicts, commits, and unpassed target gate to the evidence and
   SDD ledger. Commit the behavior and its same-commit changelog entry before
   the manual build.
+
+  Initial spec review: **NO-GO**, two Important findings and one Minor audit
+  note. Review-fix round 1 replaces inert Makefile string checks with real
+  parse-time acceptance/rejection checks, inspects the matching normal
+  `#else`, and adds complete Task 1D execution evidence. Independent spec
+  rereview and quality review remain unchecked.
 
 - [ ] **Step 6: Build and manually run exactly one serial Ymir CUE**
 

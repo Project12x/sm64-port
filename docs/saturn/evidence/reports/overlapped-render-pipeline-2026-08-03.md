@@ -14,6 +14,89 @@ No target build, CUE, Ymir launch, or native-math census was performed. The A1
 performance path remains blocked and must not be promoted or used for the
 controller-owned manual checkpoint until the seam and tests below exist.
 
+## Task 1D — sealed geo-walk upper-bound diagnostic
+
+### Current verdict and scope
+
+**ACTIVE — review-fix round 1; rereview required.** Implementation commit
+`98f26f26` adds the default-off `diag-skip-geo` configuration, and documentation
+commit `f2b7ebf0` records its initial gates. The first independent specification
+review is **NO-GO**: production containment is correct, but the initial host test
+did not execute Make validation, inspected text before the experimental `#if`
+rather than the actual normal `#else`, and this execution report had no Task 1D
+entry. Review-fix round 1 addresses both Important findings without changing
+the sealed runtime source. Independent spec rereview and quality review remain
+open, so Task 1D is not `source-complete`.
+
+This configuration is non-promotable. It exists only to measure an upper bound
+on duplicate geo-walk cost. It knowingly invalidates geo-owned animation,
+painting/warp, camera, water, moving-texture, flying-carpet, matrix-derived
+object positions, and related graph state. BOB is only the deterministic
+demonstrator; this is neither an A1 solution nor a full-game mode.
+
+### Review-fix TDD evidence
+
+RED command:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
+```
+
+RED result: exit 1; `Ran 4 tests in 0.016s`; `FAILED (errors=6)`. The new
+behavioral Make and preprocessor-branch tests failed because their
+`sourceboot_make`, `make_value`, and `extract_preprocessor_branches` helpers
+did not yet exist. No production source was changed before this failure.
+
+GREEN command:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_render_suppression.py
+```
+
+GREEN result: exit 0; `Ran 4 tests in 8.173s`; `OK`. The gate now performs six
+real GNU Make parses: default-off, the accepted demo+replay diagnostic, a
+non-binary value, and each incomplete prerequisite combination. It verifies
+the evaluated macro value, compile definition, and output path, including
+exactly one `diag-skip-geo` component in only the diagnostic output. The source
+test structurally matches the experimental directive and its direct `#else`:
+the diagnostic side is exactly setter-true, one
+`game_loop_one_iteration()`, setter-false; the normal side contains one loop
+call and no scene-graph setter.
+
+Final post-refactor verification used the same focused command: exit 0;
+`Ran 4 tests in 4.499s`; `OK`. `git diff --check` over the seven Task 1D files
+also exited 0; only LF-to-CRLF checkout warnings were emitted.
+
+Runtime-contract command:
+
+```powershell
+& 'C:\Program Files\PowerShell\7\pwsh.exe' -File tools\saturn\with-msys-toolchain.ps1 make -f Makefile.saturn.mk verify-runtime-contracts
+```
+
+Result: exit 1 after the three quad-map summaries. Windows Python received
+`\\d\\Code...\\build\\saturn\\host-tests` from the MSYS wrapper and failed to
+create it with `PermissionError: [WinError 5]`; Make stopped at
+`Makefile.saturn.mk:192`. This is the previously observed host path-translation
+failure. It remains an unpassed infrastructure gate, not a runtime-contract
+failure and not a green result.
+
+### Commits, review, and open gates
+
+- Implementation: `98f26f26`.
+- Initial documentation transition: `f2b7ebf0`.
+- Review-fix round 1: this transition; the exact hash is appended by the
+  follow-up evidence commit.
+- Independent spec review: **NO-GO** on the initial range; both Important
+  findings are addressed here, but rereview is pending.
+- Independent quality review: not run.
+- Runtime-contract wrapper: blocked by the recorded MSYS/Windows path issue.
+- Target build and the one authorized Ymir run: not run; pending successful
+  review and controller-owned serial execution.
+- A1: still blocked on a behavior-tested state/render separation seam.
+
+No target build or Ymir run occurred during Task 1D implementation or this
+review-fix round.
+
 ## Fail-closed safety closure
 
 TDD red command:
