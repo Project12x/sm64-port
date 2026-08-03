@@ -3552,6 +3552,7 @@ def scan_direct_calls(
     local_islands: Iterable[LocalIsland] = (),
     proven_source_addresses: frozenset[int] | None = None,
     deferred_errors: list[tuple[str, int, str]] | None = None,
+    qualify_owner_identities: bool = False,
 ) -> list[CallSite]:
     """Return literal-pool jsr and PC-relative bsr calls with linked targets.
 
@@ -3561,13 +3562,13 @@ def scan_direct_calls(
     """
     owner_list = None if owners is None else tuple(owners)
     island_list = tuple(local_islands) if owner_list is not None else ()
-    owner_by_symbol = {} if owner_list is None else {
-        name: owner
-        for owner in owner_list
-        for name in (owner.name, *owner.aliases)
-    }
-    active_region: tuple[str, int] | None = None
+    owner_by_symbol: defaultdict[str, set[FunctionOwner]] = defaultdict(set)
+    for owner in owner_list or ():
+        for name in (owner.name, *owner.aliases):
+            owner_by_symbol[name].add(owner)
+    active_region: tuple[str, str, int] | None = None
     caller = "<outside-function>"
+    caller_display = caller
     registers: dict[str, tuple[str, int]] = {}
     stack_slots: dict[int, tuple[str, int]] = {}
     unproven_registers: dict[str, tuple[str, int]] = {}
@@ -3601,7 +3602,7 @@ def scan_direct_calls(
                 reject_or_defer(
                     source_address,
                     "bounded direct-call source has no decoded code provenance: "
-                    f"{caller}+0x{source_address - active_region[1]:x}",
+                    f"{caller_display}+0x{source_address - active_region[2]:x}",
                 )
             return None
         try:
@@ -3610,31 +3611,44 @@ def scan_direct_calls(
             reject_or_defer(source_address, str(error))
             return None
 
-    def code_region(address: int) -> tuple[str, int] | None:
+    def code_region(address: int) -> tuple[str, str, int] | None:
         assert owner_list is not None
         address_owner = _owner_at(owner_list, address)
         if address_owner is not None:
-            return address_owner.name, address_owner.start
+            identity = (
+                _bounded_owner_identity(address_owner)
+                if qualify_owner_identities
+                else address_owner.name
+            )
+            return identity, address_owner.name, address_owner.start
         island = _island_at_code_address(island_list, address)
         return (
             None
             if island is None
-            else (_local_island_identity(island), island.start)
+            else (
+                _local_island_identity(island),
+                island.name,
+                island.start,
+            )
         )
 
     def executable_target(displayed: str, address: int) -> str:
         assert owner_list is not None
         symbol = _symbol_base(displayed)
         address_owner = _owner_at(owner_list, address)
-        named_owner = owner_by_symbol.get(symbol)
+        named_owners = owner_by_symbol.get(symbol, set())
         if address_owner is not None:
-            if named_owner is not None and named_owner != address_owner:
+            if named_owners and address_owner not in named_owners:
                 raise ValueError(
                     "bounded executable direct call has no linked owner: "
                     f"{symbol} at 0x{address:08x}"
                 )
-            return address_owner.name
-        if named_owner is not None:
+            return (
+                _bounded_owner_identity(address_owner)
+                if qualify_owner_identities
+                else address_owner.name
+            )
+        if named_owners:
             raise ValueError(
                 "bounded executable direct call has no linked owner: "
                 f"{symbol} at 0x{address:08x}"
@@ -3658,6 +3672,7 @@ def scan_direct_calls(
                 else code_region(int(function.group(1), 16))
             )
             caller = function.group(2)
+            caller_display = caller
             if owner_list is None or next_region != active_region:
                 registers.clear()
                 stack_slots.clear()
@@ -3688,6 +3703,7 @@ def scan_direct_calls(
                 unproven_stack_slots.clear()
             active_region = source_region
             caller = source_region[0]
+            caller_display = source_region[1]
 
         row_is_proven = source_is_proven(address)
         if proven_source_addresses is not None and not row_is_proven:
@@ -3762,7 +3778,7 @@ def scan_direct_calls(
             reject_or_defer(
                 address,
                 "bounded executable direct call has unresolved direct call target: "
-                f"{caller}+0x{address - active_region[1]:x}",
+                f"{caller_display}+0x{address - active_region[2]:x}",
             )
             continue
 
@@ -4421,6 +4437,7 @@ class RouteBoundedCode:
 
     graph: dict[str, set[str]]
     closure: frozenset[str]
+    selected_identities: frozenset[str]
     selected_names: frozenset[str]
     selected_islands: tuple[LocalIsland, ...]
     island_origins: dict[str, frozenset[str]]
@@ -4469,19 +4486,26 @@ def _bounded_code_identity(
 ) -> str | None:
     owner = _owner_at(owners, address)
     if owner is not None:
-        return owner.name
+        return _bounded_owner_identity(owner)
     island = _island_at_code_address(islands, address)
     return None if island is None else _local_island_identity(island)
+
+
+def _bounded_owner_identity(owner: FunctionOwner) -> str:
+    """Return a stable bounded-mode identity for one canonical owner range."""
+    return f"@owner:{owner.section}:{owner.start:08x}:{owner.name}"
 
 
 def _validated_bounded_owner_components(
     owners: tuple[FunctionOwner, ...],
 ) -> dict[str, frozenset[str]]:
     """Group laminar same-section function ranges into overlap components."""
-    if len({owner.name for owner in owners}) != len(owners):
+    parent = {
+        _bounded_owner_identity(owner): _bounded_owner_identity(owner)
+        for owner in owners
+    }
+    if len(parent) != len(owners):
         raise ValueError("duplicate bounded function owner identity")
-
-    parent = {owner.name: owner.name for owner in owners}
 
     def find(name: str) -> str:
         while parent[name] != name:
@@ -4518,12 +4542,16 @@ def _validated_bounded_owner_components(
                         "partial function overlap: "
                         f"{previous.name} and {current.name}"
                     )
-                union(previous.name, current.name)
+                union(
+                    _bounded_owner_identity(previous),
+                    _bounded_owner_identity(current),
+                )
             active.append(current)
 
     members_by_root: defaultdict[str, set[str]] = defaultdict(set)
     for owner in owners:
-        members_by_root[find(owner.name)].add(owner.name)
+        identity = _bounded_owner_identity(owner)
+        members_by_root[find(identity)].add(identity)
     return {
         name: frozenset(members_by_root[find(name)])
         for name in parent
@@ -4608,7 +4636,9 @@ def _bounded_control_flow_sources(
     owner_address_map: dict[int, FunctionOwner] | None = None,
 ) -> tuple[frozenset[int], list[tuple[str, int, str]]]:
     """Prove instruction sources from entries, DWARF roots, and SH control flow."""
-    owner_by_identity = {owner.name: owner for owner in owners}
+    owner_by_identity = {
+        _bounded_owner_identity(owner): owner for owner in owners
+    }
     island_by_identity = {
         _local_island_identity(island): island for island in islands
     }
@@ -4650,12 +4680,14 @@ def _bounded_control_flow_sources(
         if owner is not None:
             entry = owner.start
             region_base = owner.start
+            region_display = owner.name
         elif island is not None:
             candidates = [address for address in rows if address >= island.code_start]
             if not candidates:
                 continue
             entry = min(candidates)
             region_base = island.start
+            region_display = island.name
         else:
             continue
 
@@ -4679,7 +4711,7 @@ def _bounded_control_flow_sources(
                 identity,
                 address,
                 "bounded code provenance has unresolved direct control flow: "
-                f"{identity}+0x{address - region_base:x}: {detail}",
+                f"{region_display}+0x{address - region_base:x}: {detail}",
             ))
 
         def schedule(source: int, address: int, edge: str) -> None:
@@ -4752,17 +4784,18 @@ def _bounded_control_flow_sources(
 
 def _bounded_island_origins(
     graph: dict[str, set[str]],
-    selected_names: set[str],
+    selected_identities: set[str],
     selected_islands: tuple[LocalIsland, ...],
+    owner_by_identity: dict[str, FunctionOwner],
 ) -> dict[str, frozenset[str]]:
     """Map selected island code to each canonical function-owner origin."""
     island_identities = {
         _local_island_identity(island) for island in selected_islands
     }
     origins: defaultdict[str, set[str]] = defaultdict(set)
-    for owner_name in sorted(selected_names):
+    for owner_identity in sorted(selected_identities):
         pending = [
-            target for target in graph.get(owner_name, ())
+            target for target in graph.get(owner_identity, ())
             if target in island_identities
         ]
         visited: set[str] = set()
@@ -4771,7 +4804,7 @@ def _bounded_island_origins(
             if identity in visited:
                 continue
             visited.add(identity)
-            origins[identity].add(owner_name)
+            origins[identity].add(owner_by_identity[owner_identity].name)
             pending.extend(
                 target for target in graph.get(identity, ())
                 if target in island_identities and target not in visited
@@ -4804,12 +4837,15 @@ def prepare_route_bounded_code_only(
     if not oracle_list:
         raise ValueError("bounded route analysis requires a route oracle")
 
-    owner_by_symbol = {
-        name: owner
+    owner_identities_by_symbol: defaultdict[str, set[str]] = defaultdict(set)
+    for owner in owner_list:
+        identity = _bounded_owner_identity(owner)
+        for name in (owner.name, *owner.aliases):
+            owner_identities_by_symbol[name].add(identity)
+    owner_by_identity = {
+        _bounded_owner_identity(owner): owner
         for owner in owner_list
-        for name in (owner.name, *owner.aliases)
     }
-    owner_by_identity = {owner.name: owner for owner in owner_list}
     island_by_identity = {
         _local_island_identity(island): island for island in island_list
     }
@@ -4845,8 +4881,13 @@ def prepare_route_bounded_code_only(
         island_list,
         proven_source_addresses,
         deferred_errors,
+        qualify_owner_identities=True,
     ):
-        if is_native_math_helper(call.helper):
+        target_owner = owner_by_identity.get(call.helper)
+        target_display = (
+            target_owner.name if target_owner is not None else call.helper
+        )
+        if is_native_math_helper(target_display):
             continue
         graph.setdefault(call.caller, set()).add(call.helper)
 
@@ -4854,26 +4895,46 @@ def prepare_route_bounded_code_only(
     for oracle in oracle_list:
         canonical_roots: set[str] = set()
         for root in oracle.roots:
-            owner = owner_by_symbol.get(root)
-            if owner is None:
+            identities = owner_identities_by_symbol.get(root, set())
+            if not identities:
                 raise ValueError(f"bounded analysis missing route root owner: {root}")
-            if owner.name not in blocks or owner.name not in graph:
+            if len(identities) != 1:
+                raise ValueError(
+                    f"bounded analysis ambiguous route root owner: {root}"
+                )
+            identity = next(iter(identities))
+            if identity not in blocks or identity not in graph:
                 raise ValueError(f"bounded analysis missing route root block: {root}")
-            canonical_roots.add(owner.name)
+            canonical_roots.add(identity)
 
         canonical_edges: set[tuple[str, str]] = set()
         for dispatcher, callback in oracle.indirect_edges:
-            dispatcher_owner = owner_by_symbol.get(dispatcher)
-            callback_owner = owner_by_symbol.get(callback)
-            if dispatcher_owner is None:
+            dispatcher_identities = owner_identities_by_symbol.get(
+                dispatcher, set()
+            )
+            callback_identities = owner_identities_by_symbol.get(callback, set())
+            if not dispatcher_identities:
                 raise ValueError(
                     "bounded route closure has no linked owner: " + dispatcher
                 )
-            if callback_owner is None:
+            if len(dispatcher_identities) != 1:
+                raise ValueError(
+                    "bounded route closure has ambiguous dispatcher owner: "
+                    + dispatcher
+                )
+            if not callback_identities:
                 raise ValueError(
                     "bounded route closure has no linked owner: " + callback
                 )
-            canonical_edges.add((dispatcher_owner.name, callback_owner.name))
+            if len(callback_identities) != 1:
+                raise ValueError(
+                    "bounded route closure has ambiguous callback owner: "
+                    + callback
+                )
+            canonical_edges.add((
+                next(iter(dispatcher_identities)),
+                next(iter(callback_identities)),
+            ))
         closure.update(route_reachable_functions(
             graph, canonical_roots, canonical_edges
         ))
@@ -4882,23 +4943,31 @@ def prepare_route_bounded_code_only(
         if caller in closure:
             raise ValueError(message)
 
-    for name in sorted(closure):
-        owner = owner_by_identity.get(name)
-        island = island_by_identity.get(name)
+    for identity in sorted(closure):
+        owner = owner_by_identity.get(identity)
+        island = island_by_identity.get(identity)
+        display = (
+            owner.name
+            if owner is not None
+            else island.name if island is not None else identity
+        )
         if owner is None and island is None:
-            raise ValueError(f"bounded route closure has no linked owner: {name}")
-        if name not in blocks:
-            raise ValueError(f"bounded route closure has no owned block: {name}")
+            raise ValueError(f"bounded route closure has no linked owner: {display}")
+        if identity not in blocks:
+            raise ValueError(f"bounded route closure has no owned block: {display}")
 
+    selected_identities = {
+        identity for identity in closure if identity in owner_by_identity
+    }
     selected_names = {
-        name for name in closure if name in owner_by_identity
+        owner_by_identity[identity].name for identity in selected_identities
     }
     selected_islands = tuple(
         island for island in island_list
         if _local_island_identity(island) in closure
     )
     island_origins = _bounded_island_origins(
-        graph, selected_names, selected_islands
+        graph, selected_identities, selected_islands, owner_by_identity
     )
     bounded_disassembly = "".join(
         block for name, block in blocks.items() if name in closure
@@ -4918,6 +4987,7 @@ def prepare_route_bounded_code_only(
     return RouteBoundedCode(
         graph=graph,
         closure=frozenset(closure),
+        selected_identities=frozenset(selected_identities),
         selected_names=frozenset(selected_names),
         selected_islands=selected_islands,
         island_origins=island_origins,

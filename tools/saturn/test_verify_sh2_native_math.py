@@ -5116,6 +5116,25 @@ class RouteBoundedLinkedElfTests(unittest.TestCase):
     )
 
     @staticmethod
+    def _owner_identity(owner: FunctionOwner) -> str:
+        return bounded_verifier._bounded_owner_identity(owner)
+
+    @staticmethod
+    def _duplicate_local_owners() -> tuple[FunctionOwner, ...]:
+        sections = parse_readelf_sections(
+            "  [ 1] .text PROGBITS 06001000 001000 002004 00 AX 0 0 2\n"
+        )
+        symbols = parse_readelf_symbols(
+            """
+   1: 06001000 8 FUNC GLOBAL DEFAULT 1 _route_root
+   2: 06002000 4 FUNC LOCAL DEFAULT 1 local_helper
+   3: 06003000 4 FUNC LOCAL DEFAULT 1 local_helper
+""",
+            sections,
+        )
+        return resolve_function_owners(symbols, sections)
+
+    @staticmethod
     def _route_disassembly(*, include_large: bool = True) -> str:
         text = """
 06001000 <_route_root>:
@@ -5142,7 +5161,7 @@ class RouteBoundedLinkedElfTests(unittest.TestCase):
             prepared.instructions,
             RouteBoundedLinkedElfTests.OWNERS,
             prepared.decoded_lines,
-            set(prepared.closure),
+            set(prepared.selected_names),
             build_instruction_memory(prepared.instructions),
         )
 
@@ -5157,8 +5176,13 @@ fixture.c 3 0x06003002
             disassembly, decoded, self.OWNERS, (self.ORACLE,)
         )
         self.assertEqual(prepared.closure, frozenset({
-            "_route_root", "_route_child",
+            self._owner_identity(self.OWNERS[0]),
+            self._owner_identity(self.OWNERS[1]),
         }))
+        self.assertEqual(prepared.selected_identities, prepared.closure)
+        self.assertEqual(
+            prepared.selected_names, frozenset({"_route_root", "_route_child"})
+        )
         self.assertEqual(set(prepared.decoded_lines), {
             "_route_root", "_route_child",
         })
@@ -5170,7 +5194,7 @@ fixture.c 3 0x06003002
             full_instructions,
             self.OWNERS,
             parse_decoded_lines(decoded, self.OWNERS),
-            set(prepared.closure),
+            set(prepared.selected_names),
             build_instruction_memory(full_instructions),
         )
         bounded = self._analyze(prepared)
@@ -5237,12 +5261,13 @@ fixture.c 3 0x06003002
             (self.ORACLE,),
         )
         self.assertEqual(prepared.closure, frozenset({
-            "_route_root", "_route_child",
+            self._owner_identity(owners[0]),
+            self._owner_identity(owners[1]),
         }))
         analysis = analyze_code_only(
             prepared.instructions,
             owners,
-            selected_names=set(prepared.closure),
+            selected_names=set(prepared.selected_names),
             instruction_memory=build_instruction_memory(prepared.instructions),
         )
         self.assertIn(
@@ -5270,7 +5295,68 @@ fixture.c 3 0x06003002
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly, "", self.OWNERS[:2], (self.ORACLE,)
         )
-        self.assertEqual(prepared.closure, frozenset({"_route_root"}))
+        self.assertEqual(
+            prepared.closure,
+            frozenset({self._owner_identity(self.OWNERS[0])}),
+        )
+
+    def test_bounded_duplicate_local_name_call_uses_target_address_identity(self) -> None:
+        owners = self._duplicate_local_owners()
+        disassembly = """
+06001000 <_route_root>:
+ 6001000: b0 02 bsr 6003000 <local_helper>
+ 6001002: 00 09 nop
+ 6001004: 00 0b rts
+ 6001006: 00 09 nop
+06002000 <local_helper>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06003000 <local_helper>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+"""
+        prepared = bounded_verifier.prepare_route_bounded_code_only(
+            disassembly, "", owners, (self.ORACLE,)
+        )
+        root_id = "@owner:1:06001000:_route_root"
+        first_local_id = "@owner:1:06002000:local_helper"
+        second_local_id = "@owner:1:06003000:local_helper"
+        self.assertEqual(prepared.graph[root_id], {second_local_id})
+        self.assertEqual(
+            prepared.closure, frozenset({root_id, second_local_id})
+        )
+        self.assertEqual(prepared.selected_identities, prepared.closure)
+        self.assertEqual(
+            prepared.selected_names, frozenset({"_route_root", "local_helper"})
+        )
+        self.assertNotIn(first_local_id, prepared.closure)
+        self.assertEqual(
+            set(prepared.instructions),
+            {
+                0x06001000, 0x06001002, 0x06001004, 0x06001006,
+                0x06003000, 0x06003002,
+            },
+        )
+
+    def test_bounded_duplicate_local_name_route_root_is_ambiguous(self) -> None:
+        owners = self._duplicate_local_owners()[1:]
+        oracle = bounded_verifier.RouteOracle(
+            1, frozenset({"local_helper"}), frozenset(), frozenset()
+        )
+        disassembly = """
+06002000 <local_helper>:
+ 6002000: 00 0b rts
+ 6002002: 00 09 nop
+06003000 <local_helper>:
+ 6003000: 00 0b rts
+ 6003002: 00 09 nop
+"""
+        with self.assertRaisesRegex(
+            ValueError, "ambiguous route root owner: local_helper"
+        ):
+            bounded_verifier.prepare_route_bounded_code_only(
+                disassembly, "", owners, (oracle,)
+            )
 
     def test_cfg_reaches_plus_1e_call_and_skips_branched_over_literal_pool(self) -> None:
         owners = (
@@ -5323,12 +5409,14 @@ fixture.c 3 0x06003002
             owners,
             (oracle,),
         )
+        root_id = self._owner_identity(owners[0])
+        memset_id = self._owner_identity(owners[1])
         self.assertEqual(
-            prepared.graph["_demo_prepare_position_owners"], {"_memset"}
+            prepared.graph[root_id], {memset_id}
         )
         self.assertEqual(
             prepared.closure,
-            frozenset({"_demo_prepare_position_owners", "_memset"}),
+            frozenset({root_id, memset_id}),
         )
         with self.assertRaisesRegex(ValueError, "no decoded code provenance"):
             bounded_verifier.prepare_route_bounded_code_only(
@@ -5374,12 +5462,13 @@ fixture.c 3 0x06003002
             owners,
             (self.ORACLE,),
         )
+        identities = [self._owner_identity(owner) for owner in owners]
         self.assertEqual(
-            prepared.graph["_route_root"], {"_route_left", "_route_right"}
+            prepared.graph[identities[0]], {identities[1], identities[2]}
         )
         self.assertEqual(
             prepared.closure,
-            frozenset({"_route_root", "_route_left", "_route_right"}),
+            frozenset(identities),
         )
 
     def test_executable_targetless_bsr_fails_closed(self) -> None:
@@ -5502,11 +5591,18 @@ fixture.c 3 0x06003002
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly, "", owners, (oracle,)
         )
+        component_identities = frozenset(
+            self._owner_identity(owner) for owner in owners[:2]
+        )
         self.assertEqual(
             prepared.closure,
+            component_identities,
+        )
+        self.assertEqual(prepared.selected_identities, component_identities)
+        self.assertEqual(
+            prepared.selected_names,
             frozenset({"___ashrsi3_r4_10", "___ashrsi3_r4_9"}),
         )
-        self.assertEqual(prepared.selected_names, prepared.closure)
         self.assertEqual(
             set(prepared.instructions),
             {0x06001000, 0x06001002, 0x06001004, 0x06001006, 0x06001008},
@@ -5642,6 +5738,8 @@ fixture.c 3 0x06003002
  6001302: 00 09 nop
 """
         island_id = "@island:div0@06001100"
+        udiv_id = self._owner_identity(owners[0])
+        child_id = self._owner_identity(owners[1])
         prepared = bounded_verifier.prepare_route_bounded_code_only(
             disassembly,
             (
@@ -5655,8 +5753,11 @@ fixture.c 3 0x06003002
             local_islands=(island,),
         )
         self.assertEqual(prepared.closure, frozenset({
-            "___udivsi3", island_id, "_route_child",
+            udiv_id, island_id, child_id,
         }))
+        self.assertEqual(
+            prepared.selected_identities, frozenset({udiv_id, child_id})
+        )
         self.assertEqual(prepared.selected_names, frozenset({
             "___udivsi3", "_route_child",
         }))
@@ -5749,7 +5850,7 @@ fixture.c 3 0x06003002
         )
         analysis = self._analyze(prepared)
         audited = audit_indirect_edges(
-            prepared.graph, self.ORACLE, self.OWNERS[:1],
+            {}, self.ORACLE, self.OWNERS[:1],
             analysis.unresolved_transfers,
         )
         self.assertEqual(
