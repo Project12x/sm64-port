@@ -8,6 +8,16 @@
 
 **Tech Stack:** C11, SH-2 assembly/Q16.16, Yaul `6012f79f237773378c8014e70d8998ad95a38d98`, VDP1, VDP2, SCU DMA, Python asset generators/tests, Ymir with DRAM cart.
 
+**Approved architecture correction (2026-08-03):** The manual BOB candidate
+showed that the source-complete components below remain connected as a mostly
+same-frame serial pipeline. The approved follow-on architecture is
+[`2026-08-03-saturn-overlapped-render-pipeline-design.md`](../specs/2026-08-03-saturn-overlapped-render-pipeline-design.md).
+It preserves the completed components while superseding immediate waits,
+fixed-range joins, full-span fallback, post-transform LOD, duplicate source
+render preparation, and unbounded catch-up assumptions. This sprint's Task 12
+publication gates remain honestly open; they do not block an experimental
+duplicate-render-removal CUE.
+
 ## Live execution status — update on every task transition
 
 This checklist is the operational source of truth.  A task is not complete
@@ -26,11 +36,15 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - [x] **Task 9** — bounded slave Mario transform plus compact classification; source-complete at `6731a4c`; target disassembly/Ymir gate pending.
 - [x] **Task 10** — pre-reservation shade classification; source-complete at `1d31f00`; target integration gate pending.
 - [x] **Task 11** — VDP2 frame API and measured HUD telemetry; source-complete at `1850d18`; full runtime contract remains a Task 12 gate.
-- [ ] **Task 12** — integration/evidence/publication is active.  Reference and candidate artifacts build; coherency passes.  The reviewed bounded linked-ELF verifier is still being finalized against real candidate metadata before Ymir/manual acceptance.
+- [ ] **Task 12** — integration/evidence/publication is active.  Reference and candidate artifacts build; coherency passes.  All-path/stack-state repairs through `14567bbf`, worker callback repair `bf1e7c13`, and BOB camera parser repair `b29d9397` + `6cfefc74` are independently approved (shared verifier 219/219; exact-tip verifier 214/214).  The exact candidate gate advances past the camera edge to `_geo_process_held_object -> _geo_switch_mario_hand_grab_pos`.  Per the sprint's experimental-CUE exception, the existing `poly2/pipe3` candidate was launched manually in Ymir with the 32-Mbit DRAM-cart profile on 2026-08-03.  This is an experimental visible-performance check, not final acceptance; held-object-edge diagnosis remains active.
 
 ### Design decisions landed during execution
 
 - Counters are diagnostic evidence only; no percentage-based promotion gate.
+- The 2026-08-03 manual BOB test showed no sufficient visible recovery. Tasks
+  1–11 are preserved as components, but their same-frame serial integration is
+  not the production architecture. The approved living architecture spec is
+  linked above and must be updated during each follow-on task transition.
 - Generated BSP data is **node spans**, not leaf spans; content identity is stamped across generated artifacts and checked fail-closed.
 - VDP1 owns geometry; VDP2 owns sky/HUD/layer composition only.
 - The master owns game state, allocation, ordering, and presentation.  Slave work uses immutable snapshots, disjoint outputs, uncached publication, cache-through peer reads, and positive retirement before any fallback reuse.
@@ -299,7 +313,7 @@ independent review are clean; it is not a target/Ymir promotion claim.
 - Create: `docs/saturn/evidence/reports/dual-sh2-vdp-pipeline-sprint-2026-08-02.md`
 
 **Interfaces:**
-- Final build role uses Q16 camera variant 3, BSP leaf spans, required-position transform, stable bins, cache-through handoff, asynchronous DMA, template patching, tier-2 LOD, split actor transform, and coalesced VDP2 commits.
+- Final build role uses Q16 camera variant 3, BSP node spans, required-position transform, stable bins, cache-through handoff, asynchronous DMA, template patching, tier-2 LOD, split actor transform, and coalesced VDP2 commits.
 
 - [ ] Run the entire aggregate host gate — focused fixtures/profile ABI pass, but `verify-tools` and mixed-shell Make routes remain environment-blocked and broad generator/runtime checks are still pending.
 - [x] Build reference and candidate roles serially with identical route/input through the audited DLL/TMP wrapper; both artifact chains are published and hashed. Candidate command:

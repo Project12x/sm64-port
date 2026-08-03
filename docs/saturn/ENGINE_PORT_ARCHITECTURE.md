@@ -1,5 +1,12 @@
 # Saturn engine-port architecture contract
 
+> **Current render-pipeline architecture:** The approved one-frame-overlapped
+> dual-SH2/VDP design and its live decision/status ledger are maintained in
+> [`../superpowers/specs/2026-08-03-saturn-overlapped-render-pipeline-design.md`](../superpowers/specs/2026-08-03-saturn-overlapped-render-pipeline-design.md).
+> This engine-port contract remains authoritative for source-game ownership;
+> the linked document defines how the Saturn renderer consumes snapshots
+> without duplicating the original Fast3D construction path.
+
 This document prevents the Castle-lobby visual slice from becoming a second,
 disposable game engine. The finished Saturn target must continue to run the
 inherited SM64 game, level, object, camera, animation, and behavior code. The
