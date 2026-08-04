@@ -42,5 +42,12 @@ project code that publish protocol magic/version/state/heartbeat only.
 
 No SCSP slot is touched in this increment. PoneSound's driver logic, mutable C
 control structs, ADX/CDDA code, high sound-RAM stack, and `sdrv.bin` remain
-excluded. The cross-image build is also intentionally uncredited until the
-documented `m68keb-elf` tools are available through the guarded build path.
+excluded.
+
+The heartbeat image was compiled with the exact-path GCC 11.1.0
+`m68k-elf` bundle stored in the pinned upstream checkout. Its compiler,
+assembler, linker, objcopy, nm, readelf, child executables, and colocated DLLs
+were validated before use. GCC needed `-B<bundle>/` to locate `cc1`; the bundle
+has no target C library headers, so `audio68k/stdint.h` privately derives fixed
+integer types from GCC target-width built-ins. No tool executable, DLL, or
+generated heartbeat binary is committed or distributed by this increment.

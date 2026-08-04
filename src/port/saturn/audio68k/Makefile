@@ -1,7 +1,15 @@
-M68K_PREFIX ?= m68keb-elf
-CC := $(M68K_PREFIX)-gcc
-OBJCOPY := $(M68K_PREFIX)-objcopy
-NM := $(M68K_PREFIX)-nm
+M68K_PREFIX ?= m68k-elf
+M68K_BINDIR ?=
+ifneq ($(strip $(M68K_BINDIR)),)
+M68K_TOOL_PREFIX := $(M68K_BINDIR)/$(M68K_PREFIX)
+M68K_EXEC_PREFIX_FLAG := -B$(M68K_BINDIR)/
+else
+M68K_TOOL_PREFIX := $(M68K_PREFIX)
+M68K_EXEC_PREFIX_FLAG :=
+endif
+CC := $(M68K_TOOL_PREFIX)-gcc
+OBJCOPY := $(M68K_TOOL_PREFIX)-objcopy
+NM := $(M68K_TOOL_PREFIX)-nm
 PYTHON ?= python3
 
 ROOT := ../../../..
@@ -11,7 +19,7 @@ BIN := $(BUILD)/pcm68k-heartbeat.bin
 MAP := $(BUILD)/pcm68k-heartbeat.map
 OBJECTS := $(BUILD)/start.o $(BUILD)/main.o
 
-CPPFLAGS := -I../audio
+CPPFLAGS := -I. -I../audio
 CFLAGS := -mc68000 -Os -std=c11 -ffreestanding -fno-builtin -fno-common \
 	-mno-align-int -mno-strict-align -Wall -Wextra -Werror
 ASFLAGS := -mc68000
@@ -25,13 +33,13 @@ $(BUILD):
 	mkdir -p $@
 
 $(BUILD)/start.o: start.S | $(BUILD)
-	$(CC) $(ASFLAGS) -c $< -o $@
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(ASFLAGS) -c $< -o $@
 
 $(BUILD)/main.o: main.c pcm68k_heartbeat.h ../audio/saturn_pcm_protocol.h | $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(ELF): $(OBJECTS) linker.ld
-	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(LDFLAGS) $(OBJECTS) -o $@
 
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@

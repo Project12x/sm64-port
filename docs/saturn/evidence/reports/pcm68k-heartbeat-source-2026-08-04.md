@@ -50,16 +50,39 @@ independent review initially found that stack-top-only validation allowed the
 first `jsr` to overwrite an accepted image ending at `0x3FFC`; the explicit
 `0x3C00` stack bottom and mutation close that defect.
 
+## Cross-image evidence
+
+The owner-approved exact-path toolchain is GCC 11.1.0 targeting `m68k-elf`,
+located under the pinned PoneSound checkout. The driver was passed the bundle
+with `-B` so every child tool resolved there. The real image verifier reports:
+
+```json
+{"driver_end":1192,"image_base":0,"loaded_end":1190,
+ "stack_bottom":15360,"stack_top":16380}
+```
+
+`readelf` independently reports ELF32, big-endian, MC68000, executable, entry
+`0x400`, `.vectors` at `0x0000` with size `0x400`, and `.text` at `0x0400`.
+The first eight BIN bytes are `00 00 3F FC 00 00 04 00`, encoding the fixed
+initial SP and reset PC. Artifact identities are:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `pcm68k-heartbeat.elf` | 10,164 | `d2d770a3f85984a0d5d1065642dd2519ea873a5d1d6cb36a6cd60c46133b1f76` |
+| `pcm68k-heartbeat.bin` | 1,190 | `672290dea99debdd92ba843340f9b6985098934eb4a5a3a5bdcec839b6a18f36` |
+| `pcm68k-heartbeat.map` | 2,729 | `d6a20dc06fe772b0f106979702c28faf5d4092b48e1b913bb064c520f23e809c` |
+
+The generated files remain under `build/saturn/audio68k` and are not committed.
+A second clean compile/link/objcopy sequence reproduced all three hashes
+exactly. The image verifier, 11 fixture tests, heartbeat C gate, and protocol C
+gate were then rerun and passed.
+
 ## Unexecuted gates
 
-No cross image, target CUE, or Ymir run is credited. The guarded dependency
-check found no `m68keb-elf-gcc` on the configured PATH. An unrelated
-`m68k-elf` bundle exists inside the upstream checkout, but it was not silently
-substituted for the approved toolchain. The remaining audible path is:
+No target CUE or Ymir run is credited. The remaining audible path is:
 
-1. provide the guarded `m68keb-elf` tools and build/verify ELF, BIN, and MAP;
-2. add the bounded SH-2 ring writer and four-voice 68K consumer;
-3. generate the public-domain proof bank;
-4. build the standalone `soundtest` CUE; and
-5. capture heartbeat/command telemetry and obtain a separate manual audible
+1. add the bounded SH-2 ring writer and four-voice 68K consumer;
+2. generate the public-domain proof bank;
+3. build the standalone `soundtest` CUE; and
+4. capture heartbeat/command telemetry and obtain a separate manual audible
    confirmation.

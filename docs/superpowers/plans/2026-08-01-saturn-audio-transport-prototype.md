@@ -6,7 +6,7 @@
 
 **Architecture:** A freestanding 68K image owns four SCSP PCM slots and polls a fixed 16-bit mailbox/ring in sound RAM. The master SH-2 performs bounded enqueue only. A standalone `soundtest` boots the driver, copies a generated PCM bank, checks a heartbeat, and sends `PLAY`, `STOP_ALL`, and `SET_MASTER`; sourceboot integration is explicitly deferred until the owner approves promotion after the standalone gates pass.
 
-**Tech Stack:** C11, GNU `m68keb-elf` freestanding toolchain, SH-2/Yaul, SCSP sound RAM/registers, Python 3 asset generation, host C contract tests, Ymir for emulator evidence.
+**Tech Stack:** C11, GNU `m68k-elf` GCC 11.1.0 freestanding toolchain, SH-2/Yaul, SCSP sound RAM/registers, Python 3 asset generation, host C contract tests, Ymir for emulator evidence.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - SH-2 and 68K exchange only aligned big-endian 16-bit fields and sound-RAM offsets. They never exchange C pointers or compiler-dependent structs.
 - Sound RAM map is fixed: `0x00000-0x03FFF` driver/vector/stack/BSS, `0x04000-0x04FFF` mailbox/ring/status/metadata, `0x05000-0x07FFF` reserve, `0x08000-0x7FFFF` PCM bank. Driver cap is 16 KiB; first bank cap is 32 KiB.
 - The ring is 32 entries × 16 bytes. SH-2 writes payload then producer index; 68K consumes payload then writes consumer index.
-- Never invoke cross tools bare from PowerShell. Run the complete build and inspection inside `C:/msys64/usr/bin/bash.exe -lc` with `PATH=/usr/bin:$PATH` and `TMPDIR=/tmp/sm64-saturn-$MSYSTEM` so every MSYS/GCC DLL remains discoverable.
+- Never invoke cross tools by a bare name from PowerShell. The approved audio-only path uses absolute executables under `sm64-port/work/upstream/SCSP_poneSound/m68k-elf`, whose colocated DLLs and binutils were checked before use, and passes that directory to GCC with `-B` so `cc1`, assembler, linker, and collect2 resolve deterministically. Do not substitute the system SH-2 tools or copy these executables into a release.
 - Pinned close-port reference: `ponut64/SCSP_poneSound@31782e4c61337327f23eb9aa45ecd37fe0944ea0`, MIT. Files inspected: `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, and `jo_demo/pcmsys.h`. Permitted direct adaptations: vector/linker shape, SNDOFF/SNDON lifecycle, SCSP slot words, pitch calculation, and PCM metadata. Preserve the MIT text, copyright, upstream paths, pinned SHA, and change notes. Do not copy `sdrv.bin`.
 - Existing libyaul `6012f79f237773378c8014e70d8998ad95a38d98` is MIT but has no complete SCSP driver; use it as the Saturn platform dependency. Jo Engine, Sonic Z-Treme, and SlaveDriver audio remain pattern-only for the reasons recorded in the approved design.
 
@@ -68,11 +68,11 @@ uint16_t sm64_saturn_pcm_get_be16(const volatile uint8_t *base,
 
 ## Task 2: Build a Freestanding 68K Heartbeat Image
 
-**Status (2026-08-04): source-complete, cross-image gate open.** Fixed-address
-source, executable heartbeat publication, an explicit 1 KiB stack reservation,
-and adversarial ELF/map verification fixtures are green. No ELF/BIN/MAP is credited because the guarded PATH does
-not currently provide `m68keb-elf-gcc`; the unrelated upstream-local
-`m68k-elf` bundle was not substituted. Evidence:
+**Status (2026-08-04): complete.** Fixed-address source, executable heartbeat
+publication, an explicit 1 KiB stack reservation, adversarial ELF/map fixtures,
+and a deterministic real `m68k-elf` ELF/BIN/MAP are green. The owner-approved
+upstream-local bundle was used by exact path after its tools and colocated DLLs
+were validated; it is build tooling, not a shipped dependency. Evidence:
 `docs/saturn/evidence/reports/pcm68k-heartbeat-source-2026-08-04.md`.
 
 **Files:**
@@ -100,11 +100,11 @@ for (;;) {
 }
 ```
 
-- [ ] Build with `m68keb-elf-gcc -mc68000 -ffreestanding -fno-builtin -nostdlib` and emit ELF/BIN/MAP. The Makefile and verifier are source-complete; actual artifacts remain blocked on the missing guarded compiler.
+- [x] Build with the approved exact-path `m68k-elf-gcc` GCC 11.1.0 using `-mc68000 -ffreestanding -fno-builtin -nostdlib`; emit deterministic ELF/BIN/MAP under `build/saturn/audio68k`.
 - [x] Make `verify_pcm68k_image.py` enforce zero base, entry/reset-vector agreement, the reserved-stack/16 KiB/mailbox/bank boundaries, fixed stack/bank symbols, and zero unresolved symbols against ELF/map/nm inputs.
-- [ ] In the guarded MSYS2 shell run `make -C src/port/saturn/audio68k clean all verify`; blocked because `m68keb-elf-gcc` is not discoverable through the DLL-safe wrapper.
-- [x] Re-run the eleven focused Python image-contract tests plus protocol and heartbeat host C gates; all pass. The broader `test_tools.py` suite and cross-image checks remain uncredited.
-- [ ] Commit: `audio: add freestanding 68K heartbeat image`.
+- [x] Run the equivalent exact-path native bundle compile/link/objcopy/verify sequence. The driver requires `-B<bundle>/` to resolve its colocated child tools; no MSYS DLL process is involved.
+- [x] Re-run the eleven focused Python image-contract tests plus protocol and heartbeat host C gates; all pass. The actual ELF also passes the verifier and `readelf` inspection.
+- [x] Commit source foundation: `audio: add freestanding 68K heartbeat image` (`df790ec6`). Deterministic build evidence follows in the next audio-only commit.
 
 ## Task 3: Implement and Host-Test the SH-2 Ring Writer
 

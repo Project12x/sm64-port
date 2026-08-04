@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added the source-only fixed-address MC68000 heartbeat image for the isolated
+- Added the isolated, source-built fixed-address MC68000 heartbeat image for the
   Saturn audio prototype. Its byte-addressed mailbox now publishes protocol
   identity, BOOTING/READY state, and a wrapping heartbeat; host tests execute
   those transitions and an ELF/map verifier rejects bad entry/reset vectors,
@@ -12,7 +12,10 @@
   symbols. The minimal vector/linker
   shape is an attributed MIT close-port from pinned PoneSound. No SCSP slot,
   sourceboot, renderer, target build, or Ymir image changes in this increment;
-  the guarded `m68keb-elf` compiler remains the explicit build gate.
+  the approved exact-path `m68k-elf` GCC 11.1.0 bundle now produces a verified
+  deterministic 1,190-byte BIN. Its stripped target headers are replaced only
+  inside the freestanding audio68K build by GCC target-width typedefs; generated
+  ELF/BIN/MAP files and tool binaries remain uncommitted.
 
 - Added a dormant descriptor-indexed terrain merge assembler. It accepts only
   completed WORLD_LOWER outputs whose P2 metadata, claimant lane, generation,
