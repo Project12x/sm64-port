@@ -25,8 +25,8 @@ lowering or stable painter order.
 | Gate | Result | What it proves |
 | --- | --- | --- |
 | Watched RED host compile | PASS (expected failure) | The test failed because the output-bank header/source did not exist. |
-| `render_output_bank_test.c` | PASS | Descriptor-kind bank choice; claimed-CPU lane; master steal; peer cache-through; mismatch/overwrite failure; two-thread exact-one publisher. |
-| `verify_dual_cpu_coherency.py --output-bank-source ... --self-test` | PASS | Five structural mutations cannot weaken P2, `tas.b`, release order, reader aliasing, or eliminate logical-range lane inference. |
+| `render_output_bank_test.c` | PASS | Forged pre-claim publication fails; an actual claimed queue job binds the lane; descriptor-kind bank choice, master steal, peer cache-through, mismatch/overwrite failure, and two-thread exact-one publisher pass. |
+| `verify_dual_cpu_coherency.py --output-bank-source ... --self-test` | PASS | Six structural mutations cannot weaken queue-claim binding, P2, `tas.b`, release order, reader aliasing, or eliminate logical-range lane inference. |
 
 ## Remaining gates
 
@@ -37,4 +37,5 @@ lowering or stable painter order.
   queue integration.
 - Target SH-2 cache/coherency, visual, counter, and FPS evidence.
 
-Commit: `0026a3a1` (`feat(saturn): publish descriptor-owned output lanes`).
+Commits: `0026a3a1` (`feat(saturn): publish descriptor-owned output lanes`)
+and `d0230820` (`fix(saturn): bind output lanes to queue claims`).

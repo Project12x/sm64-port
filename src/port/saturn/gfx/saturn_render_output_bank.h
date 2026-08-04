@@ -55,19 +55,18 @@ sm64_saturn_render_output_bank_kind_for_job(
     const sm64_saturn_render_job_t *job);
 bool sm64_saturn_render_output_bank_publish(
     sm64_saturn_render_output_bank_t *bank,
-    const sm64_saturn_render_job_t *job, uint16_t job_index,
-    sm64_saturn_render_job_state_t claimed_state);
+    sm64_saturn_render_job_queue_t *queue, uint16_t job_index);
 bool sm64_saturn_render_output_bank_owner_lane(
     const sm64_saturn_render_output_bank_t *bank,
-    const sm64_saturn_render_job_t *job, uint16_t job_index,
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index,
     uint8_t *owner_lane);
 bool sm64_saturn_render_output_bank_reader_needs_cache_through(
     const sm64_saturn_render_output_bank_t *bank,
-    const sm64_saturn_render_job_t *job, uint16_t job_index,
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index,
     uint8_t reader_lane);
 const void *sm64_saturn_render_output_bank_read_range(
     const sm64_saturn_render_output_bank_t *bank,
-    const sm64_saturn_render_job_t *job, uint16_t job_index,
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index,
     uint8_t reader_lane, const void *cached);
 
 #endif

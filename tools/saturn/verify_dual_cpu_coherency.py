@@ -221,6 +221,9 @@ def output_bank_source_failures(source: str, header: str) -> list[str]:
         failures.append("descriptor kind does not select terrain/actor bank")
     if "sm64_saturn_dual_frame_cache_through(bank)" not in source:
         failures.append("output-bank metadata does not use cache-through P2")
+    if "sm64_saturn_render_job_queue_t *queue" not in header or \
+       "output_queue_cache_through(queue)" not in source:
+        failures.append("output publication is not bound to the queue release")
     if "tas.b" not in source or "output_claim_try" not in source:
         failures.append("output-lane publication is not SH-2 atomic")
     publish = re.search(
@@ -230,6 +233,9 @@ def output_bank_source_failures(source: str, header: str) -> list[str]:
         failures.append("output-bank publication implementation is missing")
     else:
         text = publish.group(0)
+        if "output_claim_try(&queue_release->claim)" not in text or \
+           "!output_claimed_state_valid(claimed_state)" not in text:
+            failures.append("output publication trusts an unverified claimed lane")
         generation = text.find("release->generation = job->snapshot_generation;")
         job_index = text.find("release->job_index = job_index;")
         claimed = text.find("release->claimed_state = (uint32_t)claimed_state;")
@@ -254,6 +260,8 @@ def output_bank_self_test(source_path: Path, header_path: Path) -> int:
          "cached output metadata"),
         (source.replace("tas.b", "rejected_atomic", 1), header,
          "missing output atomic claim"),
+        (source.replace("!output_claimed_state_valid(claimed_state)", "false", 1),
+         header, "forged queue claim accepted"),
         (source.replace("release->claimed_state = (uint32_t)claimed_state;\n"
                         "    output_bank_fence();\n"
                         "    release->ready = 1U;",
@@ -272,7 +280,7 @@ def output_bank_self_test(source_path: Path, header_path: Path) -> int:
             print(f"render output-bank mutation unexpectedly passed: {name}",
                   file=sys.stderr)
             return 1
-    print("render output-bank mutation gate OK: five unsafe ownership variants rejected")
+    print("render output-bank mutation gate OK: six unsafe ownership variants rejected")
     return 0
 
 

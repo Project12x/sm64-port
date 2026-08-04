@@ -844,14 +844,16 @@ types, ownership rules, or production fallbacks.
   prerequisite complete (2026-08-04):**
   `saturn_render_output_bank.{h,c}` derives bank identity only from the
   immutable descriptor kind (world = terrain, actor = actor). The successful
-  queue claim publishes `MASTER` or `SLAVE` as the output owner through an
-  atomic, P2-visible release record; consumers select their cached/P2 range
-  only from that publication. The focused fixture races both CPUs, verifies a
+  queue release record—not a callback argument—publishes `MASTER` or `SLAVE`
+  as the output owner through an atomic, P2-visible release record; consumers
+  select their cached/P2 range only from that publication. The focused fixture
+  rejects a forged pre-claim publication, races both CPUs, verifies a
   master steal of a nominally slave-offset world job remains master-cached, and
-  verifies the peer P2 selection. Five source mutations are rejected. This is
+  verifies the peer P2 selection. Six source mutations are rejected. This is
   not live renderer integration and does not move master VDP1 lowering or its
-  stable painter order. Behavior/docs commit: `0026a3a1`
-  (`feat(saturn): publish descriptor-owned output lanes`). Independent reviews
+  stable painter order. Behavior/docs commits: `0026a3a1`
+  (`feat(saturn): publish descriptor-owned output lanes`) and `d0230820`
+  (`fix(saturn): bind output lanes to queue claims`). Independent reviews
   remain open.
 
 - [ ] **Step 5: Integrate terrain and actor jobs into one frame queue**

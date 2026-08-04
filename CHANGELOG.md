@@ -41,6 +41,12 @@
 
 ### Fixed
 
+- Hardened A5 output-bank publication to bind each published cache lane to the
+  actual queue release record, rather than trusting a callback-supplied claim
+  value. Forged publication before a queue claim now fails closed, while an
+  actual master or slave claim remains the sole source of output ownership;
+  this preserves P2 peer reads before live queue wiring reaches the renderer.
+
 - Corrected Mario meshlet admission to project each meshlet's live animation
   pose after Mario yaw, rather than using its neutral-pose AABB centre. Whole
   meshlets now cull only when their furthest live extent is behind the view

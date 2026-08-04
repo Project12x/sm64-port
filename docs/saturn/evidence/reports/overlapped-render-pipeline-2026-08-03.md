@@ -786,7 +786,8 @@ open.
 - Focused source-only host command:
   `C:\\Qt\\Tools\\mingw1310_64\\bin\\gcc.exe -std=c11 -Wall -Wextra -Werror
   -I src/port/saturn/gfx tools/saturn/render_output_bank_test.c
-  src/port/saturn/gfx/saturn_render_output_bank.c` then
+  src/port/saturn/gfx/saturn_render_output_bank.c
+  src/port/saturn/gfx/saturn_render_job_queue.c` then
   `.tmp-task5/render-output-bank-test.exe` passed. It covers descriptor bank
   selection, a master-steal whose input offset lies in the former slave range,
   cache-through selection for the peer, mismatched-bank rejection, overwrite
@@ -802,3 +803,24 @@ open.
   counter, or FPS claim occurred. Independent specification and quality review,
   live queue wiring, and target cache/ordering evidence remain open.
 - Commit: `0026a3a1` (`feat(saturn): publish descriptor-owned output lanes`).
+
+### A5 critical-review claimant binding (2026-08-04)
+
+- Review finding: the initial output-bank API accepted a caller-provided
+  `claimed_state`, so a callback could forge `MASTER` or `SLAVE` without an
+  actual queue claim. That breaks the output-owner invariant even though the
+  queue itself has exact-once claims.
+- RED: the expanded host fixture invoked output publication before any queue
+  claim. Its desired result is failure; the prior unbound API could not express
+  that authority boundary.
+- GREEN: publication now accepts the queue plus job index only. It takes the
+  queue release claim lock, revalidates matching generation/descriptor and an
+  actual `CLAIMED_MASTER` or `CLAIMED_SLAVE` state, then publishes the derived
+  output lane while the queue release remains locked. The caller can no longer
+  choose a lane. The fixture proves pre-claim publication fails and an actual
+  master claim succeeds; the concurrent race still yields one recorded owner.
+- The coherency mutation gate now rejects six variants, adding a removed
+  claimed-state validation to the original five. No target build, CUE, Ymir,
+  visual, counter, or FPS claim occurred. Independent review and live renderer
+  queue wiring remain open.
+- Commit: `d0230820` (`fix(saturn): bind output lanes to queue claims`).
