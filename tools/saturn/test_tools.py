@@ -312,6 +312,11 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertEqual(metadata["primitive_indices"], [1, 0, 2])
         self.assertEqual(metadata["unique_vertex_offsets"], [0, 3, 8])
         self.assertEqual(metadata["unique_vertex_indices"], [1, 3, 4, 0, 1, 2, 4, 5])
+        self.assertEqual(metadata["lod_unique_vertex_offsets"], [0, 6, 12, 17])
+        self.assertEqual(metadata["lod_unique_vertex_indices"],
+                         [1, 3, 4, 0, 2, 5,
+                          1, 3, 4, 0, 2, 5,
+                          1, 3, 4, 2, 5])
         self.assertEqual(
             metadata["clusters"][1]["bounds"],
             {"min": [0, 0, 0], "max": [10, 2, 0]},
@@ -321,6 +326,8 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertIn("sm64_mario_render_cluster_primitive_offsets", emitted)
         self.assertIn("sm64_mario_render_cluster_primitive_list", emitted)
         self.assertIn("sm64_mario_render_cluster_vertex_list", emitted)
+        self.assertIn("sm64_mario_render_cluster_lod_vertex_offsets", emitted)
+        self.assertIn("sm64_mario_render_cluster_lod_vertex_list", emitted)
         self.assertIn("sm64_mario_render_cluster_bounds", emitted)
 
     def test_paired_primitive_cannot_cross_leaf_render_clusters(self) -> None:
@@ -1920,11 +1927,15 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "scene_graph_walks_suppressed",
             "vblank_presentation_generation",
             "sim_vblank_credit_dropped",
+            "demo_render_clusters_tested",
+            "demo_render_clusters_admitted",
+            "demo_positions_admitted",
+            "demo_positions_transformed",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-18:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-22:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-19].end,
+            layout.fields[-23].end,
         )
 
         data = bytearray(layout.size)
@@ -1948,6 +1959,10 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "scene_graph_walks_suppressed": 47,
             "vblank_presentation_generation": 53,
             "sim_vblank_credit_dropped": 59,
+            "demo_render_clusters_tested": 61,
+            "demo_render_clusters_admitted": 67,
+            "demo_positions_admitted": 71,
+            "demo_positions_transformed": 73,
         }
         for name, value in expected.items():
             field = layout.field(name)

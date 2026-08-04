@@ -37,6 +37,14 @@
 #define sm64_saturn_bob_primitive_t sm64_saturn_bob_fragment_primitive_t
 #define sm64_saturn_bob_lod_mid_mask sm64_saturn_bob_fragment_lod_mid_mask
 #define sm64_saturn_bob_lod_far_mask sm64_saturn_bob_fragment_lod_far_mask
+#undef SM64_SATURN_BOB_LOD_TIER_COUNT
+#undef SM64_SATURN_BOB_LOD_POSITION_REF_COUNT
+#undef sm64_saturn_bob_lod_position_ref_offsets
+#undef sm64_saturn_bob_lod_position_refs
+#define SM64_SATURN_BOB_LOD_TIER_COUNT SM64_SATURN_BOB_FRAGMENT_LOD_TIER_COUNT
+#define SM64_SATURN_BOB_LOD_POSITION_REF_COUNT SM64_SATURN_BOB_FRAGMENT_LOD_POSITION_REF_COUNT
+#define sm64_saturn_bob_lod_position_ref_offsets sm64_saturn_bob_fragment_lod_position_ref_offsets
+#define sm64_saturn_bob_lod_position_refs sm64_saturn_bob_fragment_lod_position_refs
 #endif
 #include "saturn_mario_actor_mesh.h"
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
@@ -170,6 +178,7 @@ static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_pretransform_lod_tier;
 static saturn_lod_scene_t s_lod_scene;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
@@ -545,6 +554,17 @@ static void demo_spatial_admit(
 }
 #endif
 
+static bool demo_pretransform_primitive_admitted(uint16_t primitive_index)
+{
+    if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
+        return false;
+    const sm64_saturn_bob_primitive_t *const primitive =
+        &s_bob_primitives_active[primitive_index];
+    return s_pretransform_lod_tier != SATURN_LOD_FAR ||
+        primitive->source0 < DEMO_LOD_MANDATORY_ROUTE_PREFIX ||
+        sm64_saturn_bob_lod_far_mask[primitive_index] != 0U;
+}
+
 static void demo_prepare_render_work_order(void)
 {
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
@@ -554,27 +574,43 @@ static void demo_prepare_render_work_order(void)
     for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++)
         s_render_work_order[s_render_work_count++] = i;
 #endif
+    uint16_t admitted = 0U;
+    for (uint16_t work = 0U; work < s_render_work_count; work++) {
+        const uint16_t primitive = s_render_work_order[work];
+        if (demo_pretransform_primitive_admitted(primitive))
+            s_render_work_order[admitted++] = primitive;
+    }
+    s_render_work_count = admitted;
 }
 
 /* The master finishes this complete bitset before it publishes either SH-2
  * transform job. The workers only read it while assigning and transforming
  * their disjoint position ranges. */
-static uint16_t demo_build_visible_position_set(void)
+static uint16_t demo_build_visible_position_set(
+    sm64_saturn_fast3d_profile_t *profile)
 {
     sm64_saturn_visible_position_set_reset(
         &s_visible_position_set, s_visible_position_words,
         DEMO_VISIBLE_POSITION_WORDS, SM64_SATURN_BOB_POSITION_COUNT);
-    for (uint16_t work = 0U; work < s_render_work_count; work++) {
-        const uint16_t primitive_index = s_render_work_order[work];
-        if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
-            continue;
-        (void)sm64_saturn_visible_position_set_mark_primitive(
-            &s_visible_position_set,
-            s_bob_primitives_active[primitive_index].indices);
+    const uint8_t tier = s_pretransform_lod_tier;
+    if (tier >= SM64_SATURN_BOB_LOD_TIER_COUNT) {
+        profile->pipeline_faults++;
+        return 0U;
+    }
+    const uint16_t first = sm64_saturn_bob_lod_position_ref_offsets[tier];
+    const uint16_t end = sm64_saturn_bob_lod_position_ref_offsets[tier + 1U];
+    if (first > SM64_SATURN_BOB_LOD_POSITION_REF_COUNT ||
+        end < first || end > SM64_SATURN_BOB_LOD_POSITION_REF_COUNT ||
+        !sm64_saturn_visible_position_set_mark_refs(
+            &s_visible_position_set, &sm64_saturn_bob_lod_position_refs[first],
+            (uint16_t)(end - first))) {
+        profile->pipeline_faults++;
+        return 0U;
     }
     const uint16_t required_positions =
         sm64_saturn_visible_position_set_count(&s_visible_position_set);
     assert(required_positions <= SM64_SATURN_BOB_POSITION_COUNT);
+    profile->demo_positions_admitted += required_positions;
     return required_positions;
 }
 
@@ -2347,13 +2383,19 @@ void sm64_saturn_demo_render_frame(
         .coord_max = terrain_job.coord_max,
         .clip_near = false
     };
+    /* The compiled demo configuration selects the admission tier before any
+     * position transform. The generated span is exact for that tier; later
+     * projected-area/near rejection remains authoritative per primitive. */
+    s_pretransform_lod_tier = (uint8_t)SATURN_DEMO_POLY_TIER;
+    profile->demo_render_clusters_tested++;
+    profile->demo_render_clusters_admitted++;
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
     demo_prepare_render_work_order();
-    const uint16_t required_positions = demo_build_visible_position_set();
+    const uint16_t required_positions = demo_build_visible_position_set(profile);
     const uint16_t work_split = demo_choose_work_split();
 #if SATURN_SLAVE_RENDER
     const bool dual_transform_phase = work_split < s_render_work_count;
@@ -2469,6 +2511,8 @@ void sm64_saturn_demo_render_frame(
         ? UINT16_MAX : (uint16_t)classify_stats.master_wait_ticks;
     profile->triangles_transformed += classify.transformed[0] +
                                      classify.transformed[1];
+    profile->demo_positions_transformed += classify.transformed[0] +
+                                           classify.transformed[1];
     /* Task 11 HUD diagnostics: preserve the actual owner split rather than
      * inferring transform work from compact-result counts after the join. */
     profile->master_transform_count += classify.transformed[0];

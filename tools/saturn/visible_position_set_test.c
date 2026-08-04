@@ -43,5 +43,17 @@ int main(void)
     assert(!sm64_saturn_visible_position_set_test(&set, 8U));
     assert(!sm64_saturn_visible_position_set_test(&set, 9U));
     assert(!sm64_saturn_visible_position_set_test(&set, 10U));
+
+    /* Admission supplies exact compact references, not whole primitives. */
+    static const uint16_t far_refs[] = {1U, 4U, 6U};
+    assert(sm64_saturn_visible_position_set_mark_refs(
+        &set, far_refs, sizeof(far_refs) / sizeof(far_refs[0])));
+    assert(sm64_saturn_visible_position_set_count(&set) == 7U);
+    assert(sm64_saturn_visible_position_set_test(&set, 6U));
+
+    static const uint16_t invalid_refs[] = {0U, 10U};
+    assert(!sm64_saturn_visible_position_set_mark_refs(
+        &set, invalid_refs, sizeof(invalid_refs) / sizeof(invalid_refs[0])));
+    assert(sm64_saturn_visible_position_set_count(&set) == 7U);
     return 0;
 }

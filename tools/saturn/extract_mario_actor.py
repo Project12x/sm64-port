@@ -543,6 +543,24 @@ def mario_render_clusters(
         raise ValueError("Mario render clusters do not cover every compiled primitive")
     if len(primitive_indices) > 0xFFFF or len(vertex_indices) > 0xFFFF:
         raise ValueError("Mario render-cluster index stream exceeds uint16_t")
+    # The actor currently has no authored proxy mesh. Near and mid preserve
+    # every cluster reference; far deterministically keeps terrain's source
+    # primitive subset. This is a compact pre-transform stream, not another
+    # pose bank, so the target retains one canonical actor position set.
+    lod_vertex_indices: list[int] = []
+    lod_vertex_offsets = [0]
+    for tier in range(3):
+        seen_vertices: set[int] = set()
+        for primitive_index in primitive_indices:
+            if tier == 2 and primitive_index % 8 == 0:
+                continue
+            for vertex in compiled_primitives[primitive_index]["indices"]:
+                if vertex not in seen_vertices:
+                    seen_vertices.add(vertex)
+                    lod_vertex_indices.append(vertex)
+        lod_vertex_offsets.append(len(lod_vertex_indices))
+    if len(lod_vertex_indices) > 0xFFFF:
+        raise ValueError("Mario render-cluster LOD vertex stream exceeds uint16_t")
     return {
         "policy": "originating leaf Fast3D display list",
         "bounds_space": (
@@ -556,6 +574,8 @@ def mario_render_clusters(
         "primitive_indices": primitive_indices,
         "unique_vertex_offsets": vertex_offsets,
         "unique_vertex_indices": vertex_indices,
+        "lod_unique_vertex_offsets": lod_vertex_offsets,
+        "lod_unique_vertex_indices": lod_vertex_indices,
         "clusters": clusters,
     }
 
@@ -567,6 +587,8 @@ def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
     vertex_indices = list(metadata["unique_vertex_indices"])
     primitive_offsets = list(metadata["primitive_offsets"])
     vertex_offsets = list(metadata["unique_vertex_offsets"])
+    lod_vertex_offsets = list(metadata["lod_unique_vertex_offsets"])
+    lod_vertex_indices = list(metadata["lod_unique_vertex_indices"])
     clusters = list(metadata["clusters"])
     if len(primitive_offsets) != count + 1 or len(vertex_offsets) != count + 1:
         raise ValueError("Mario render-cluster offsets must contain count + 1 entries")
@@ -582,6 +604,8 @@ def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
         f"#define SM64_MARIO_RENDER_CLUSTER_COUNT {count}U",
         f"#define SM64_MARIO_RENDER_CLUSTER_PRIMITIVE_LIST_COUNT {len(primitive_indices)}U",
         f"#define SM64_MARIO_RENDER_CLUSTER_VERTEX_LIST_COUNT {len(vertex_indices)}U",
+        "#define SM64_MARIO_RENDER_CLUSTER_LOD_TIER_COUNT 3U",
+        f"#define SM64_MARIO_RENDER_CLUSTER_LOD_VERTEX_LIST_COUNT {len(lod_vertex_indices)}U",
         "static const uint16_t sm64_mario_render_cluster_primitive_offsets[SM64_MARIO_RENDER_CLUSTER_COUNT + 1U] = {",
     ]
     lines += rows(primitive_offsets)
@@ -600,6 +624,17 @@ def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
         "static const uint16_t sm64_mario_render_cluster_vertex_list[SM64_MARIO_RENDER_CLUSTER_VERTEX_LIST_COUNT] = {",
     ]
     lines += rows(vertex_indices)
+    lines += [
+        "};",
+        "/* Exact per-tier actor position references; near/mid retain full detail. */",
+        "static const uint16_t sm64_mario_render_cluster_lod_vertex_offsets[SM64_MARIO_RENDER_CLUSTER_LOD_TIER_COUNT + 1U] = {",
+    ]
+    lines += rows(lod_vertex_offsets)
+    lines += [
+        "};",
+        "static const uint16_t sm64_mario_render_cluster_lod_vertex_list[SM64_MARIO_RENDER_CLUSTER_LOD_VERTEX_LIST_COUNT] = {",
+    ]
+    lines += rows(lod_vertex_indices)
     lines += [
         "};",
         "/* Neutral-pose AABBs. Rebuild animated bounds from each cluster vertex list. */",

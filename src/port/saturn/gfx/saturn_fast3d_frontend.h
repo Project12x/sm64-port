@@ -443,6 +443,13 @@ typedef struct sm64_saturn_fast3d_profile {
      * and every eligible VBlank credit deliberately dropped after recovery. */
     uint32_t vblank_presentation_generation;
     uint32_t sim_vblank_credit_dropped;
+    /* Task 3 pre-transform admission evidence. The active demo currently
+     * treats its generated BOB span as one coarse cluster before preserving
+     * the existing per-primitive projected rejection after transform. */
+    uint32_t demo_render_clusters_tested;
+    uint32_t demo_render_clusters_admitted;
+    uint32_t demo_positions_admitted;
+    uint32_t demo_positions_transformed;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

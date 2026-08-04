@@ -66,6 +66,31 @@ static inline bool sm64_saturn_visible_position_set_mark_primitive(
     return true;
 }
 
+/* Compact admission spans name exactly the positions the selected tier uses.
+ * Validate the entire immutable span first so malformed generated metadata
+ * cannot partially alter the frame's transform workload. */
+static inline bool sm64_saturn_visible_position_set_mark_refs(
+    sm64_saturn_visible_position_set_t *set, const uint16_t *refs,
+    uint16_t ref_count)
+{
+    if (set == NULL || set->words == NULL || (refs == NULL && ref_count != 0U))
+        return false;
+    for (uint16_t offset = 0U; offset < ref_count; offset++) {
+        if (refs[offset] >= set->position_count)
+            return false;
+    }
+    for (uint16_t offset = 0U; offset < ref_count; offset++) {
+        const uint16_t position = refs[offset];
+        uint32_t *const word = &set->words[position >> 5U];
+        const uint32_t mask = (uint32_t)1U << (position & 31U);
+        if ((*word & mask) == 0U) {
+            *word |= mask;
+            set->marked_count++;
+        }
+    }
+    return true;
+}
+
 static inline uint16_t sm64_saturn_visible_position_set_count(
     const sm64_saturn_visible_position_set_t *set)
 {

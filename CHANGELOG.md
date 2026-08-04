@@ -12,6 +12,15 @@
   each LOD tier, so the remaining fragment-bank integration can replace its
   full-position marking without changing ownership or presentation logic.
 
+- Extended A3's generated compact position streams to the active BSP-fragment
+  bank and the Mario actor bank. The terrain renderer now admits its selected
+  build tier before transform, filters the matching far primitives while
+  retaining the mandatory route prefix, and marks only that immutable tier
+  span instead of expanding every accepted primitive's four corners. This
+  preserves the existing post-transform projected/near tests while exposing
+  cluster and position admission/transform counters; target performance and
+  visual evidence are still outstanding.
+
 - Added Saturn-only immutable two-slot render snapshot banks with fixed-width
   camera, scene, Mario, pose-selector, and generated-bank-ID records. The
   master publishes a generation only after camera and actor records agree;

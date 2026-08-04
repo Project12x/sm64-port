@@ -45,7 +45,8 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
     # every source primitive; the far tier drops one of every eight non-
     # route-critical source primitives. source0 remains the stable identity.
     lod_mid = [1] * len(primitives)
-    lod_far = [0 if int(primitive["source0"]) % 8 == 0 else 1
+    lod_far = [0 if int(primitive["source0"]) >= 128 and
+               int(primitive["source0"]) % 8 == 0 else 1
                for primitive in primitives]
     lod_masks = [[1] * len(primitives), lod_mid, lod_far]
     lod_position_refs: list[list[int]] = []

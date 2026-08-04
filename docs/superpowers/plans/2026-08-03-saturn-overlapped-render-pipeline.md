@@ -56,10 +56,13 @@ and the evidence report before starting another task.
   prerequisite for A3's pre-transform VDP1 workload reduction; it is not
   itself claimed as an FPS improvement.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** active. The
-  scene-neutral host contract, deterministic BOB compact position streams, and
-  focused `verify-render-clusters` gate are in place. Runtime substitution of
-  full-position marking remains blocked on equivalent per-tier fragment-bank
-  streams and target visual/counter evidence; no performance claim is made.
+  scene-neutral host contract and deterministic BOB, active fragment-bank,
+  and Mario compact tier streams are in place. The accepted terrain path now
+  marks only the selected pre-transform span (with mandatory far-route work
+  retained) and preserves post-transform projected rejection. It is not
+  source-complete: generated per-cluster bounds/material property checks,
+  independent review, and target visual/counter evidence remain; no
+  performance claim is made.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
