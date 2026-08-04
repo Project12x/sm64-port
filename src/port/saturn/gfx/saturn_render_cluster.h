@@ -42,6 +42,15 @@ typedef struct sm64_saturn_render_lod_state {
     saturn_lod_tier_t previous;
 } sm64_saturn_render_lod_state_t;
 
+/* Generation zero is reserved as the invalid/unpublished value throughout
+ * the render handoff contracts. Keep the wrap rule at the shared admission
+ * boundary so the caller derives one value for admission and publication. */
+static inline uint32_t sm64_saturn_render_generation_next(uint32_t current)
+{
+    const uint32_t next = current + 1U;
+    return next == 0U ? 1U : next;
+}
+
 /* Project an AABB's eight corners onto the immutable Q16.16 view-forward
  * axis without materializing those corners. Each axis independently selects
  * its min/max contribution, producing conservative view-space depth bounds. */

@@ -52,6 +52,13 @@
 
 ### Fixed
 
+- Corrected A3 admission/transform generation agreement at 32-bit wrap. The
+  renderer now derives one nonzero frame generation before either consumer,
+  reuses it for admission and publication, and fails closed on a mismatched
+  admission result. Focused host coverage includes the exact
+  `UINT32_MAX -> 1` transition and hysteresis reset; target visual/counter
+  evidence remains pending.
+
 - Corrected A3 generic compact-cluster admission to derive conservative depth
   from the immutable Q16 camera-forward vector instead of world Z. This keeps
   yawed and pitched optional terrain from being rejected or assigned the wrong

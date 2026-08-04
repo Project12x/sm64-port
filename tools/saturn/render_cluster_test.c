@@ -141,5 +141,31 @@ int main(void)
     subject.bounds_max_q16[2] = 80 * 65536;
     assert(!sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
     assert(result.admitted == 0U);
+
+    /* A transform sequence never publishes zero. Admission must use the same
+     * normalized value, including the UINT32_MAX wrap, and a scene reset must
+     * discard the previous MID hysteresis tier. */
+    subject = cluster();
+    subject.bounds_min_q16[0] = 104 * 65536;
+    subject.bounds_max_q16[0] = 120 * 65536;
+    subject.bounds_min_q16[2] = -64 * 65536;
+    subject.bounds_max_q16[2] = -48 * 65536;
+    lod.previous = SATURN_LOD_MID;
+    assert(sm64_saturn_render_generation_next(0U) == 1U);
+    assert(sm64_saturn_render_generation_next(UINT32_MAX - 1U) == UINT32_MAX);
+    view = view_with_forward(
+        0, 0, 0, 46341, 0, 46341,
+        sm64_saturn_render_generation_next(UINT32_MAX - 1U));
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.generation == UINT32_MAX);
+    assert(result.lod_tier == SATURN_LOD_MID);
+
+    lod.previous = SATURN_LOD_NEAR;
+    view.generation = sm64_saturn_render_generation_next(result.generation);
+    assert(view.generation == 1U);
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.generation == 1U);
+    assert(result.lod_tier == SATURN_LOD_NEAR);
+    assert(result.position_ref_first == 0U && result.position_ref_count == 8U);
     return 0;
 }

@@ -55,6 +55,20 @@ class RenderClusterGenerationTest(unittest.TestCase):
         self.assertIn("sm64_saturn_render_cluster_admit", source)
         self.assertIn("sm64_saturn_bob_cluster_position_refs", source)
 
+    def test_renderer_normalizes_one_generation_before_admission(self) -> None:
+        """A3 must not tag admission zero when transform wrap publishes one."""
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "src/port/saturn/gfx/saturn_demo_render.c").read_text()
+        frame_begin = source.index("void sm64_saturn_demo_render_frame")
+        frame_end = source.index("demo_prepare_position_owners", frame_begin)
+        frame = source[frame_begin:frame_end]
+
+        self.assertIn("sm64_saturn_render_generation_next(", frame)
+        self.assertIn("s_transform_publish_sequence", frame)
+        self.assertIn("demo_prepare_render_work_order(", frame)
+        self.assertIn("s_transform_publish_sequence = transform_generation", frame)
+        self.assertNotIn("s_transform_publish_sequence + 1U", source)
+
     def test_renderer_uses_mario_selected_tier_reference_stream(self) -> None:
         root = Path(__file__).resolve().parents[2]
         source = (root / "src/port/saturn/gfx/saturn_demo_render.c").read_text()

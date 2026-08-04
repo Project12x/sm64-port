@@ -50,8 +50,12 @@ clusters with negative world Z, behind optional clusters with positive world
 Z, mandatory behind work, exact selected compact spans, and yawed MID
 hysteresis. `verify-render-clusters` passed after the repair through the MSYS
 host shell on 2026-08-04. No target build, CUE, Ymir launch, target visual, or
-counter capture was run. The prior review's unrelated generation-wrap Minor,
-fresh independent A3 rereview, and all target evidence gates remain open.
+  counter capture was run. The prior review's generation-wrap Minor is now
+  repaired: one nonzero transform generation is derived before both admission
+  and transform publication, and a result mismatch fails closed before compact
+  spans are marked. The exact `UINT32_MAX -> 1` transition and reset hysteresis
+  fixture pass in the focused host gate. Fresh independent A3 rereview and all
+  target evidence gates remain open.
 
 TDD evidence: the C fixture first failed because
 `saturn_render_cluster.h` did not exist; the generator fixture then failed
@@ -68,8 +72,7 @@ source checks, plus the C outside/inside, yaw/pitch view-space, mandatory,
 hysteresis, empty-span, and invalid-argument fixture). The visible-position
 host fixture additionally passes its direct compact-reference fail-closed
 check. No target build, CUE, Ymir launch, or performance capture was run.
-Remaining A3 gates: independent rereview, generation-wrap remediation, and
-target visual/counter evidence.
+Remaining A3 gates: independent rereview and target visual/counter evidence.
 
 Source sub-slice commit: `feat(saturn): admit compact terrain position spans
 before transform`. Independent review verdict: not yet requested; this remains

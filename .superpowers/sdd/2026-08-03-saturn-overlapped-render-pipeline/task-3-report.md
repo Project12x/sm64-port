@@ -39,6 +39,10 @@ unrun.
   entire cluster AABB onto that view-space axis. Optional behind rejection and
   hysteretic LOD can no longer use world Z; terrain still marks only the exact
   compact reference span returned by the helper.
+- Final-review generation remediation: the render frame derives one normalized
+  nonzero transform generation before admission, uses it for the immutable
+  view and later publication, and rejects any admitted result whose generation
+  disagrees before marking its compact references.
 - Added `tools/saturn/render_cluster_test.c`,
   `tools/saturn/test_render_cluster_generation.py`, and
   `verify-render-clusters`.
@@ -71,13 +75,16 @@ recorded in `docs/saturn/UPSTREAM_CODE_LEDGER.md` and the active plan.
 6. GREEN: `verify-render-clusters` passes front/behind non-axis-aligned yaw
    and pitch cases, mandatory behind work, exact spans, and yawed MID
    hysteresis through the immutable Q16 forward vector.
+7. RED: the A3 source gate required a normalized render-frame generation, and
+   the C fixture could not compile before the shared nonzero increment helper
+   existed. GREEN: the focused gate proves `0 -> 1`, `UINT32_MAX - 1 ->
+   UINT32_MAX`, and `UINT32_MAX -> 1`; it also proves the wrapped admission
+   result is exactly `1` after reset drops a prior MID hysteresis tier to NEAR.
 
 ## Remaining gates
 
 - Obtain independent specification and quality rereview, then target visual
   and counter evidence.
-- Obtain independent specification and quality reviews, then target
-  visual/counter evidence.
 
 ## Execution ledger (2026-08-04)
 
@@ -98,3 +105,12 @@ recorded in `docs/saturn/UPSTREAM_CODE_LEDGER.md` and the active plan.
   compact cluster admission` (this task commit). Focused host gate passed; the
   generation-wrap Minor, fresh independent rereview, and target evidence are
   explicitly unclosed.
+- Final-review generation repair: derives `transform_generation` once with
+  `sm64_saturn_render_generation_next()` before both admission and transform
+  publication; results are generation-checked before compact spans are used.
+  `verify-render-clusters` is green (six Python checks plus the C fixture) and
+  `git diff --check` passed. No target build,
+  CUE, Ymir, visual, or counter gate was run; fresh independent rereview and
+  target evidence remain open. In-tree reference inspected:
+  `saturn_fast3d_frontend.c`'s nonzero wrap discipline; reuse mode:
+  pattern-only, no source copied.

@@ -67,10 +67,11 @@ and the evidence report before starting another task.
   frame camera and builds the exact admitted position union before workers;
   tier state resets at scene transitions. Cluster depth is the conservative
   projection of the Q16 AABB onto the immutable Q16 camera-forward vector,
-  rather than world Z; yaw/pitch admission coverage is host-tested. It is not
-  source-complete: the prior final review's critical finding needs an
-  independent rereview, and target visual/counter evidence remain; no
-  performance claim is made.
+  rather than world Z; yaw/pitch admission coverage is host-tested. A3 also
+  derives one nonzero generation before admission and transform publication,
+  including `UINT32_MAX -> 1`, and rejects a mismatched result before its
+  compact references are marked. It remains active for independent rereview
+  and target visual/counter evidence; no performance claim is made.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
@@ -596,7 +597,9 @@ types, ownership rules, or production fallbacks.
   than NEAR for a synthetic cluster. The focused fixture also covers
   non-axis-aligned yaw and pitch: front clusters with negative world Z,
   behind clusters with positive world Z, mandatory behind work, exact returned
-  compact spans, and a yawed MID hysteresis boundary.
+  compact spans, a yawed MID hysteresis boundary, and the exact
+  `UINT32_MAX -> 1` admission-generation transition after resetting a prior
+  MID tier to the scene-default NEAR state.
 
 - [ ] **Step 3: Add `verify-render-clusters` and record both red commands**
 

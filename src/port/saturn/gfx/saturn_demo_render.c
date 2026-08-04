@@ -581,7 +581,7 @@ static int32_t demo_q16_from_world(int32_t value)
 
 static void demo_prepare_render_work_order(
     const sm64_saturn_camera_transform_t *camera,
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile, uint32_t transform_generation)
 {
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     /* BSP traversal has already appended the bounded work list. */
@@ -597,7 +597,7 @@ static void demo_prepare_render_work_order(
             demo_q16_from_world(camera->position.z)},
         .view_forward_q16 = {
             camera->forward.x, camera->forward.y, camera->forward.z},
-        .generation = s_transform_publish_sequence + 1U,
+        .generation = transform_generation,
     };
     const uint16_t candidate_count = s_render_work_count;
     s_render_work_count = 0U;
@@ -637,7 +637,7 @@ static void demo_prepare_render_work_order(
  * transform job. The workers only read it while assigning and transforming
  * their disjoint position ranges. */
 static uint16_t demo_build_visible_position_set(
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile, uint32_t transform_generation)
 {
     sm64_saturn_visible_position_set_reset(
         &s_visible_position_set, s_visible_position_words,
@@ -646,7 +646,8 @@ static uint16_t demo_build_visible_position_set(
          admitted++) {
         const sm64_saturn_render_cluster_result_t *const result =
             &s_admitted_cluster_results[admitted];
-        if (result->position_ref_first >
+        if (result->generation != transform_generation ||
+            result->position_ref_first >
                 SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT ||
             result->position_ref_count >
                 SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT -
@@ -2490,8 +2491,12 @@ void sm64_saturn_demo_render_frame(
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
-    demo_prepare_render_work_order(&terrain_job.camera, profile);
-    const uint16_t required_positions = demo_build_visible_position_set(profile);
+    const uint32_t transform_generation = sm64_saturn_render_generation_next(
+        s_transform_publish_sequence);
+    demo_prepare_render_work_order(
+        &terrain_job.camera, profile, transform_generation);
+    const uint16_t required_positions = demo_build_visible_position_set(
+        profile, transform_generation);
     const uint16_t work_split = demo_choose_work_split();
 #if SATURN_SLAVE_RENDER
     const bool dual_transform_phase = work_split < s_render_work_count;
@@ -2501,9 +2506,7 @@ void sm64_saturn_demo_render_frame(
     memset(s_position_valid, 0, sizeof(s_position_valid));
     sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
     s_transform_phase_failed = 0U;
-    s_transform_publish_sequence++;
-    if (s_transform_publish_sequence == 0U)
-        s_transform_publish_sequence = 1U;
+    s_transform_publish_sequence = transform_generation;
     demo_prepare_position_owners(work_split, dual_transform_phase);
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
