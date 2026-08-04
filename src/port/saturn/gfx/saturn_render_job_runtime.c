@@ -89,7 +89,18 @@ uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
     while (sm64_saturn_render_job_graph_claim_slave(
         s_runtime.graph, generation, &index)) {
         const sm64_saturn_render_job_t *const job =
-            &s_runtime.queue->jobs[index];
+            sm64_saturn_render_job_queue_claimed_job(
+                s_runtime.queue, generation, index,
+                SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE);
+        if (job == NULL) {
+            (void)sm64_saturn_render_job_queue_fail(
+                s_runtime.queue, generation, index,
+                SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE);
+            (void)sm64_saturn_render_job_graph_propagate_failures(
+                s_runtime.graph, generation);
+            completed++;
+            continue;
+        }
         const uint16_t callback_index = job->callback_id -
             SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT;
         const sm64_saturn_render_job_callback_fn callback =
@@ -124,7 +135,18 @@ uint16_t sm64_saturn_render_job_runtime_drain_master(void)
     while (sm64_saturn_render_job_graph_claim_master(
         s_runtime.graph, generation, &index)) {
         const sm64_saturn_render_job_t *const job =
-            &s_runtime.queue->jobs[index];
+            sm64_saturn_render_job_queue_claimed_job(
+                s_runtime.queue, generation, index,
+                SM64_SATURN_RENDER_JOB_CLAIMED_MASTER);
+        if (job == NULL) {
+            (void)sm64_saturn_render_job_queue_fail(
+                s_runtime.queue, generation, index,
+                SM64_SATURN_RENDER_JOB_CLAIMED_MASTER);
+            (void)sm64_saturn_render_job_graph_propagate_failures(
+                s_runtime.graph, generation);
+            completed++;
+            continue;
+        }
         const uint16_t callback_index = job->callback_id -
             SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT;
         const sm64_saturn_render_job_callback_fn callback =

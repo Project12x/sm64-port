@@ -78,6 +78,12 @@
 
 ### Fixed
 
+- Hardened A5.8.1 graph-runtime descriptor access after review. A claimed job
+  is now fetched through a P2/cache-through accessor that revalidates the
+  exact claimant state; the runtime no longer raw-dereferences its cached
+  queue owner after a graph claim. A static mutation guard protects this
+  boundary. This remains source-only and does not activate the renderer.
+
 - Hardened the A5.7 job graph after review: independent READY work is no
   longer mistaken for a blocked dependent, cyclic/self dependency masks fail
   before queue publication, and failed-producer quarantine reaches every

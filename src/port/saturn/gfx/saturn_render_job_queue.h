@@ -136,6 +136,11 @@ bool sm64_saturn_render_job_queue_reset_retired(
 const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
     const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index);
+/* A callback may read only the exact descriptor it currently owns. This
+ * accessor selects the queue's P2 alias before checking the claimed state. */
+const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_claimed_job(
+    const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index, sm64_saturn_render_job_state_t claimed_state);
 const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_done_job(
     const sm64_saturn_render_job_queue_t *queue, uint16_t job_index);
 

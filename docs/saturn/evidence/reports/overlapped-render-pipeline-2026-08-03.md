@@ -968,3 +968,17 @@ open.
 - This does not activate CPU-DUAL in the renderer, migrate production payload
   arrays, build a CUE, run Ymir, or make an FPS claim. The prior A3+A4 desktop
   observation of roughly 3–4 FPS remains the rollback baseline.
+
+### A5.8.1 descriptor cache-through review repair (2026-08-04)
+
+- NO-GO review found that a graph claim was followed by a raw
+  `s_runtime.queue->jobs[index]` read, which could observe P1-stale descriptor
+  data on SH-2.
+- RED: the new source mutation test rejected that raw descriptor read.
+  GREEN adds `sm64_saturn_render_job_queue_claimed_job()`, which selects the
+  queue cache-through alias and verifies generation plus the exact claimed
+  state before returning a descriptor. Both master and slave drain paths use
+  it and fail/quarantine the exact claim if it cannot be reread.
+- `test_render_job_runtime_source.py`, direct Qt MinGW runtime and graph C11
+  `-Wall -Wextra -Werror` fixtures, and `git diff --check` pass. No target
+  build, Ymir run, renderer binding, or FPS claim occurred.

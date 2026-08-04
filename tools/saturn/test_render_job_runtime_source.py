@@ -15,6 +15,11 @@ class RenderJobRuntimeSourceTests(unittest.TestCase):
         self.assertIn("sm64_saturn_render_job_queue_generation", source)
         self.assertNotIn("s_runtime.queue->generation", source)
 
+    def test_runtime_never_reads_job_descriptors_through_cached_owner(self):
+        source = RUNTIME.read_text(encoding="utf-8")
+        self.assertNotIn("s_runtime.queue->jobs", source)
+        self.assertIn("sm64_saturn_render_job_queue_claimed_job", source)
+
     def test_generation_accessor_selects_cache_through_queue(self):
         source = QUEUE.read_text(encoding="utf-8")
         self.assertIn("sm64_saturn_render_job_queue_generation(", source)

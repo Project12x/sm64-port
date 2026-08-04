@@ -143,7 +143,10 @@ and the evidence report before starting another task.
   terrain/Mario phases. The graph activation/drains now claim through the
   graph for both CPUs and propagate failed-predecessor quarantine. Its focused
   host test publishes `WORLD_LOWER` before its required `WORLD_ADMIT` and
-  proves the producer runs first. This is a scheduler prerequisite only:
+  proves the producer runs first. Review repair: after a graph claim every
+  descriptor fetch uses the queue's P2/cache-through claimed-job accessor and
+  revalidates the exact claimant state; raw cached queue descriptor reads are
+  mutation-tested forbidden. This is a scheduler prerequisite only:
   physical terrain/actor payload arrays, renderer readers, and the sole
   CPU-DUAL live cutover remain unbound; the A3+A4 3–4 FPS candidate remains
   rollback baseline.
