@@ -113,6 +113,14 @@ reached game PCs, but `0x0608B43C` read `0x045E02AA` instead of trace magic.
 This is an unresolved observation-address/mapping/overwrite fault, not a
 scheduler regression and not permission to claim target trace success.
 
+Task 7 target result: the paired bounded checkpoint capture is complete. The
+trace slot was all zero at protocol-ready and every pre-release BIOS checkpoint
+through frame 1500; it became `0x045E02AA` at frame 1680 while the master PC
+resolved to live code in the same paired ELF. This proves an early
+load/runtime memory-layout fault, not a stale artifact, byte-order error, or
+supported VBlank regression. Post-release frame bisection is active; no
+scheduler/VDP/camera repair is authorized until it locates the first change.
+
 Task 4: source-complete; independent review and target evidence pending. The
 first bounded capture read eight zero words at the resolved trace address, so
 main entry remains unproven. The same eight-word cache-through ABI now writes

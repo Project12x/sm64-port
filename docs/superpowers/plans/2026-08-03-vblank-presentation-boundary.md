@@ -288,3 +288,16 @@ provenance evidence but **not** target evidence that the trace record was
 read; it must not authorize another scheduler/VDP repair. The remaining gate
 is an ELF/RAM mapping or overwrite diagnosis that explains this contradiction,
 then one repeat bounded capture with the corrected observation point.
+
+**Checkpoint result (target evidence):** `d614a7c3` added raw checkpoints to
+the existing BIOS handoff; 10 focused tests, compilation, and diff check are
+green. The one paired, bounded capture established a narrow transition: the
+trace slot is all zero at protocol-ready and remains all zero through BIOS
+input release at emulated frame 1500, then reads `0x045E02AA` at frame 1680
+while the master PC resolves to live game code in the paired ELF. The disc
+loader therefore did not make this `.data` initializer visible at the observed
+slot, and the slot is subsequently populated/overwritten during early runtime.
+This is target evidence for an early loading/memory-layout investigation, not
+evidence that a VBlank scheduler change regressed the build. The next active
+task is a one-capture post-release frame bisection; no scheduler, VDP, or
+camera change is permitted from this result alone.
