@@ -22,7 +22,8 @@ GO. Mario's route
 copies the existing live pose, lighting, frame/bank, position, and yaw state;
 it does not replace the animation system already proven by the Castle demo.
 
-The output-offset namespace gate is source-complete pending independent review.
+The output-offset namespace gate is source-review GO at `db28fd87`, with audit
+`c5da1516` finding no critical, important, or minor source-scope defects.
 Queue publication now derives one of four physical payload kinds from the
 immutable type/callback pair and checks overlap only within that kind. Separate
 terrain-admit, terrain-lower, actor-admit, and actor-lower banks may reuse local
