@@ -7,6 +7,10 @@ source-built 68K PCM8 service and three generated public-domain proof sounds.
 This is a build and source-contract result, not an audibility claim. The target
 has not been launched in Ymir, and sourceboot remains unchanged.
 
+Implementation commit: `be9b435d` (`audio: add standalone SCSP PCM8
+soundtest`). Independent rereview verdict: GO for source and standalone-build
+scope; manual Ymir audibility remains open.
+
 ## Implemented contract
 
 - Four fixed SCSP slots are programmed by the 68K with big-endian 16-bit

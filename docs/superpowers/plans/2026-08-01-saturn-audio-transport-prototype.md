@@ -205,7 +205,9 @@ bank is 4,408 bytes with SHA-256
 
 **Status (2026-08-04): source-complete candidate independently reviewed GO;
 Ymir gate open.** A serial guarded build produced a 471,040-byte ISO and
-standalone CUE. No emulator or sourceboot run is credited.
+standalone CUE. Implementation commit: `be9b435d`. Independent rereview: GO
+for source and standalone-build scope. No emulator or sourceboot run is
+credited.
 
 **Files:**
 
@@ -221,7 +223,7 @@ standalone CUE. No emulator or sourceboot run is credited.
 - [x] Add top-level `soundtest` and `verify-soundtest` plumbing with protocol, transport, model, generator, image, boot, ELF, CUE, and size seams.
 - [x] Run all focused host gates; protocol, transport, PCM model, SCSP writer, heartbeat, proof-bank generator, mapped-zero mutation verifier, and soundtest boot tests pass. The aggregate wrapper still has a known MSYS/native-Python path-conversion failure and is not credited.
 - [x] In the guarded MSYS2 shell run the serialized soundtest build and target-local verification; a valid standalone CUE was produced. Full aggregate `verify-soundtest` remains to be rerun after review. Sourceboot was not run.
-- [ ] Commit: `audio: add standalone PCM68K soundtest`.
+- [x] Commit `be9b435d`: `audio: add standalone SCSP PCM8 soundtest`.
 
 ## Task 7: Prove the Standalone Transport in Ymir
 
