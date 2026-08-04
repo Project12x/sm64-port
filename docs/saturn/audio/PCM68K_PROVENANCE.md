@@ -51,3 +51,19 @@ were validated before use. GCC needed `-B<bundle>/` to locate `cc1`; the bundle
 has no target C library headers, so `audio68k/stdint.h` privately derives fixed
 integer types from GCC target-width built-ins. No tool executable, DLL, or
 generated heartbeat binary is committed or distributed by this increment.
+
+## Bounded command/voice-state increment
+
+`saturn_pcm_transport.c` and `audio68k/pcm_voice.c` remain original project
+code. They implement the approved pointer-free ring and a hardware-independent
+four-voice state model; they do not copy PoneSound's mutable control arrays,
+driver loop, register words, pitch calculation, or PCM bytes. The three proof
+metadata records reserve aligned regions for later deterministic generated
+samples and carry no copyrighted sample content.
+
+The SH-2 producer performs one occupancy check, writes at most eight aligned
+16-bit words, then publishes its producer index. The 68K takes a producer
+snapshot, consumes at most eight records, publishes telemetry, then publishes
+each consumer index. Corrupt indices, invalid sample IDs, unknown opcodes, and
+full rings fail closed or increment visible counters. SCSP programming remains
+an explicit later gate.

@@ -108,6 +108,12 @@ for (;;) {
 
 ## Task 3: Implement and Host-Test the SH-2 Ring Writer
 
+**Status (2026-08-04): source-complete, integration gate open.** The bounded
+producer and direct host contract are green. It is not linked into sourceboot
+or a standalone target. Evidence:
+`docs/saturn/evidence/reports/pcm68k-ring-voice-source-2026-08-04.md`. Fresh
+independent rereview is GO after publication-order and active-slot repairs.
+
 **Files:**
 
 - Create: `src/port/saturn/audio/saturn_pcm_transport.h`
@@ -115,7 +121,7 @@ for (;;) {
 - Create: `tools/saturn/pcm_transport_test.c`
 - Modify: `Makefile.saturn.mk`
 
-- [ ] Add fake-sound-RAM tests for empty/full rings, index wrap, payload-before-publication ordering, invalid opcodes, null base, drop count, and high-water count.
+- [x] Add fake-sound-RAM tests for empty/full rings, index wrap, invalid opcodes, null base, drop count, high-water count, and corrupt-index rejection. Publication order is enforced by the minimal producer implementation and compiler barrier; target observation remains a later soundtest gate.
 
 ```c
 typedef struct sm64_saturn_pcm_transport {
@@ -130,12 +136,18 @@ bool sm64_saturn_pcm_enqueue(sm64_saturn_pcm_transport_t *transport,
                             const uint16_t words[7]);
 ```
 
-- [ ] Add `verify-pcm-transport` and run it; expect compile failure before the module exists.
-- [ ] Implement one bounded occupancy check and at most seven payload-word stores. Use a compiler barrier before publishing the producer index. Do not spin, mix, convert samples, or copy banks.
-- [ ] Run `verify-pcm-transport`; expect pass, including the mutation that publishes the producer index first.
+- [x] Add `verify-pcm-transport` and observe the expected missing-header compile failure before the module exists.
+- [x] Implement one bounded occupancy check and at most seven payload-word stores. Use a compiler barrier before publishing the producer index. Do not spin, mix, convert samples, or copy banks.
+- [x] Run the equivalent direct `verify-pcm-transport` compile/execute gate; expect pass. The repository Make wrapper remains uncredited because its MSYS `/d/...` path is passed to native Python as an invalid UNC path.
 - [ ] Commit: `audio: add bounded SH2 PCM command ring`.
 
 ## Task 4: Implement the 68K Ring Consumer and Four-Voice Allocator
+
+**Status (2026-08-04): voice-state source seam complete; SCSP programming and
+audibility gates open.** The command decoder, bounded poll, four-slot allocator,
+metadata validation, and telemetry are linked into a verified 68K image. No
+SCSP register is touched yet, by design. Fresh independent rereview is GO for
+this source-only boundary.
 
 **Files:**
 
@@ -145,9 +157,9 @@ bool sm64_saturn_pcm_enqueue(sm64_saturn_pcm_transport_t *transport,
 - Create: `tools/saturn/pcm68k_model_test.c`
 - Modify: `Makefile.saturn.mk`
 
-- [ ] Add a portable model test for command decoding, consumer publication last, round-robin slots `0-3`, reuse key-off before reprogramming, master-volume clamp, stop-all, invalid sample metadata, and unknown opcode counts.
-- [ ] Add `verify-pcm68k-model` and run it; expect compile failure.
-- [ ] Closely adapt only the attributed PoneSound SCSP slot-word and pitch calculations. Keep register writes behind a tiny interface so the host model supplies fake registers.
+- [x] Add a portable model test for command decoding, consumer publication last, round-robin slots `0-3`, reuse key-off state before reprogramming, master-volume clamp, stop-all, invalid sample metadata, unknown opcode counts, corrupt indices, and the eight-command cap.
+- [x] Add `verify-pcm68k-model` and observe the expected missing-header compile failure.
+- [ ] Closely adapt only the attributed PoneSound SCSP slot-word and pitch calculations. Keep register writes behind a tiny interface so the host model supplies fake registers. Deferred deliberately: the current increment proves state transitions without hardware writes.
 
 ```c
 typedef struct sm64_saturn_pcm_sample {
@@ -163,10 +175,10 @@ bool sm64_saturn_pcm_voice_play(uint16_t slot,
                                uint16_t volume, int16_t pan);
 ```
 
-- [ ] Support only `PLAY`, `STOP_ALL`, and `SET_MASTER`. A `PLAY` command validates the metadata table, keys off the selected slot, programs PCM8 start/loop/end/pitch/volume/pan, and keys on. SCSP hardware owns completion.
-- [ ] Consume at most eight commands per poll iteration so a malformed producer cannot starve heartbeat publication.
-- [ ] Publish telemetry fields: commands consumed, voices started, unknown opcodes, last opcode, active/reused slot, and heartbeat.
-- [ ] Run `verify-pcm68k-model`, rebuild/verify the 68K image, and run `verify-pcm-protocol`; expect pass.
+- [x] Support only `PLAY`, `STOP_ALL`, and `SET_MASTER` in the portable state model. `PLAY` validates bounded deterministic proof metadata and models key-off-before-reuse; actual PCM8 register programming remains unchecked.
+- [x] Consume at most eight commands per poll iteration so a malformed producer cannot starve heartbeat publication.
+- [x] Publish telemetry fields: commands consumed, voices started, unknown opcodes, last opcode, active/reused slot, invalid samples, protocol faults, and heartbeat.
+- [x] Run direct protocol, transport, model, and heartbeat host gates; rebuild and verify the real 68K image. The wrapper failure is recorded separately and is not credited.
 - [ ] Commit: `audio: consume PCM commands on four SCSP voices`.
 
 ## Task 5: Generate the Three-Sample Proof Bank

@@ -17,7 +17,7 @@ BUILD := $(ROOT)/build/saturn/audio68k
 ELF := $(BUILD)/pcm68k-heartbeat.elf
 BIN := $(BUILD)/pcm68k-heartbeat.bin
 MAP := $(BUILD)/pcm68k-heartbeat.map
-OBJECTS := $(BUILD)/start.o $(BUILD)/main.o
+OBJECTS := $(BUILD)/start.o $(BUILD)/main.o $(BUILD)/pcm_voice.o
 
 CPPFLAGS := -I. -I../audio
 CFLAGS := -mc68000 -Os -std=c11 -ffreestanding -fno-builtin -fno-common \
@@ -35,7 +35,10 @@ $(BUILD):
 $(BUILD)/start.o: start.S | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(ASFLAGS) -c $< -o $@
 
-$(BUILD)/main.o: main.c pcm68k_heartbeat.h ../audio/saturn_pcm_protocol.h | $(BUILD)
+$(BUILD)/main.o: main.c pcm68k_heartbeat.h pcm_voice.h ../audio/saturn_pcm_protocol.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/pcm_voice.o: pcm_voice.c pcm_voice.h ../audio/saturn_pcm_protocol.h | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(ELF): $(OBJECTS) linker.ld

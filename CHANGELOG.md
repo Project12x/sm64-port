@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added an isolated bounded SH-2-to-68K PCM command path. The pointer-free,
+  big-endian ring rejects corrupt indices, invalid commands, and full queues
+  without spinning; the 68K consumes at most eight commands per heartbeat,
+  maintains four deterministic round-robin voice states, and publishes command
+  telemetry. Three generated-proof sample records are fixed and bounded, but
+  no PCM bytes or SCSP register writes exist yet, so this is not an audibility
+  claim and does not alter sourceboot or renderer scheduling.
+
 - Added the isolated, source-built fixed-address MC68000 heartbeat image for the
   Saturn audio prototype. Its byte-addressed mailbox now publishes protocol
   identity, BOOTING/READY state, and a wrapping heartbeat; host tests execute

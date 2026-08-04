@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "pcm68k_heartbeat.h"
+#include "pcm_voice.h"
 #include "saturn_pcm_protocol.h"
 
 void sm64_saturn_pcm68k_publish_boot(volatile uint8_t *sound_ram)
@@ -19,6 +20,22 @@ void sm64_saturn_pcm68k_publish_boot(volatile uint8_t *sound_ram)
     sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_STATUS_OFFSET,
                             SM64_SATURN_PCM_STATUS_BOOTING);
     sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_HEARTBEAT_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_PRODUCER_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_CONSUMER_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_COMMANDS_CONSUMED_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_VOICES_STARTED_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_UNKNOWN_OPCODES_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_LAST_OPCODE_OFFSET,
+                            SM64_SATURN_PCM_OPCODE_NOP);
+    sm64_saturn_pcm_put_be16(sound_ram, SM64_SATURN_PCM_ACTIVE_SLOT_OFFSET,
+                            0xFFFFU);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_INVALID_SAMPLES_OFFSET, 0);
+    sm64_saturn_pcm_put_be16(sound_ram,
+                            SM64_SATURN_PCM_PROTOCOL_FAULTS_OFFSET, 0);
 }
 
 void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,
@@ -34,11 +51,14 @@ void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,
 void pcm68k_main(void)
 {
     volatile uint8_t *const sound_ram = (volatile uint8_t *)(uintptr_t)0;
+    sm64_saturn_pcm_voice_state_t voice_state;
     uint16_t heartbeat = 0;
 
     sm64_saturn_pcm68k_publish_boot(sound_ram);
+    sm64_saturn_pcm_voice_state_init(&voice_state);
 
     for (;;) {
+        (void)sm64_saturn_pcm68k_consume(sound_ram, &voice_state);
         sm64_saturn_pcm68k_publish_tick(sound_ram, &heartbeat);
     }
 }
