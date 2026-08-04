@@ -1457,4 +1457,6 @@ open.
   Watched RED/GREEN adds a source-order mutation test and publishes telemetry
   first, then the positive retirement release marker, in both SH-2 and host
   paths. Strict runtime fixture and five runtime source tests pass; fresh
-  rereview remains required.
+  rereview is GO at `e98210ba`. The reviewer independently passed diff-check,
+  strict runtime and VDP2 fixtures, and 20 focused Python cases (one historical
+  capture skip). One serialized target build is the next gate.

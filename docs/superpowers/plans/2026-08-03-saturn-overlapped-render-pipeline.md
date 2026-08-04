@@ -1197,9 +1197,9 @@ slave idle or merely move the same serial critical path between CPUs.
 
 ### Task 5.9: Observe coarse-graph claim ownership before rescheduling
 
-**Status:** source-complete and host-green after first-review retirement-order
-repair; fresh rereview required. No scheduling policy, target build, CUE,
-Ymir run, or FPS claim is included.
+**Status:** source-complete, host-green, and repair rereview GO at `e98210ba`.
+One serialized target build is authorized next. No scheduling policy, target
+build, CUE, Ymir run, or FPS claim is included yet.
 
 - [x] **Step 1: Write the delayed-slave schedule RED.** The host fixture now
   models the live four-job graph and its exact notify → immediate master drain
@@ -1220,12 +1220,14 @@ Ymir run, or FPS claim is included.
   `QS 0/0/0/0`). A second generation fails WORLD_ADMIT, counts the one failed
   slave callback, quarantines dependent WORLD_LOWER, and still completes the
   independent actor chain.
-- [ ] **Step 5: Independent source review.** Review P2 ownership, counter
+- [x] **Step 5: Independent source review.** Review P2 ownership, counter
   races, profile ABI append-only placement, and bounded HUD cost. Keep this
   unchecked until a fresh reviewer records a verdict. First review found a
   release race: `retired_sequence` became visible before retired telemetry.
   Watched RED/GREEN now requires telemetry publication before the final
-  positive retirement marker in both SH-2 and host paths; rereview is open.
+  positive retirement marker in both SH-2 and host paths. Fresh rereview is
+  GO at audit `e98210ba`; strict runtime/VDP2 C11 and focused Python gates
+  independently pass.
 - [ ] **Step 6: Serialized target build and desktop-Ymir observation.** Only
   after review, build once and read the visible `QM/QS/QN/QR/QW/QF/QQ` values.
   Those values choose the next scheduler repair; no optimization is guessed
