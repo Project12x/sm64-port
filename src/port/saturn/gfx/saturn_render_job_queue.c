@@ -84,6 +84,14 @@ void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue)
     sm64_saturn_render_job_queue_fence();
 }
 
+uint32_t sm64_saturn_render_job_queue_generation(
+    const sm64_saturn_render_job_queue_t *queue)
+{
+    queue = sm64_saturn_render_job_queue_cache_through(
+        (sm64_saturn_render_job_queue_t *)queue);
+    return queue == NULL ? 0U : queue->generation;
+}
+
 bool sm64_saturn_render_job_queue_source_arm(
     sm64_saturn_render_job_queue_t *queue,
     const sm64_saturn_render_job_callback_table_t *callbacks, void *context)

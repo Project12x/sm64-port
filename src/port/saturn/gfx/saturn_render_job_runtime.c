@@ -66,7 +66,8 @@ uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
     if (s_runtime.active == 0U || s_runtime.queue == NULL ||
         s_runtime.callbacks == NULL)
         return 0U;
-    const uint32_t generation = s_runtime.queue->generation;
+    const uint32_t generation =
+        sm64_saturn_render_job_queue_generation(s_runtime.queue);
     if (generation == 0U) return 0U;
     return sm64_saturn_render_job_queue_drain_slave(
         s_runtime.queue, generation, s_runtime.callbacks, s_runtime.context);

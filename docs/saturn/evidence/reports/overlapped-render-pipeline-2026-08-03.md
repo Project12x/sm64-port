@@ -898,6 +898,18 @@ open.
   -Wextra -Werror. This does not bind the renderer or replace the linked legacy
   worker yet, so no target build/Ymir/FPS evidence is claimed.
 
+### A5.6 runtime cache-through repair (2026-08-04)
+
+- NO-GO review found the runtime slave poll read queue->generation through its
+  stored cached pointer, which could stale-spin on SH-2.
+- RED: the new runtime source gate failed because no public queue generation
+  accessor existed and the runtime directly dereferenced its queue pointer.
+- GREEN: a public generation accessor first selects the queue's P2
+  cache-through alias; the runtime uses it exclusively. The gate mutation
+  rejects a direct runtime generation read. Direct C11/Werror runtime and
+  bridge fixtures plus bridge/runtime source guards PASS. No target build,
+  Ymir, or FPS result is claimed.
+
 ### A5.6 payload-bank foundation (2026-08-04)
 
 - RED: direct Qt-host compile of render_job_payload_bank_test.c failed for the

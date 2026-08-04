@@ -63,6 +63,11 @@
 
 ### Fixed
 
+- Corrected the A5.6 queue runtime to read its shared generation through the
+  queue's SH-2 cache-through accessor. The slave poll can no longer observe a
+  stale P1 queue header before deciding whether to drain work; a source gate
+  rejects direct runtime generation dereferences while preserving host tests.
+
 - Removed A5.5's premature Yaul CPU-DUAL callback registration and notify.
   The source-only ownership bridge now reserves and validates its one-owner
   lifecycle without compiling a second callback beside the legacy fixed-split

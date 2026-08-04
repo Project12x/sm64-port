@@ -98,6 +98,8 @@ _Static_assert(sizeof(sm64_saturn_render_job_release_t) == 12U,
                "job release ABI must use fixed-width words");
 
 void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue);
+uint32_t sm64_saturn_render_job_queue_generation(
+    const sm64_saturn_render_job_queue_t *queue);
 bool sm64_saturn_render_job_queue_publish(
     sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     const sm64_saturn_render_job_t *jobs, uint16_t count);
