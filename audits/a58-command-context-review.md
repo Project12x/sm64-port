@@ -96,3 +96,28 @@ Move the entire matrix into one parameterized helper and invoke it for every pha
 - Target compile/link and section placement.
 - Live sole-owner CPU-DUAL cutover.
 - Target cache behavior, CUE/Ymir, and manual FPS evidence.
+
+## Final re-review — matrix repair `854e7f3d` (2026-08-04)
+
+### Verdict
+
+**GO for dormant source scope.**
+
+The complete identity/failure matrix is now parameterized in
+`run_identity_mutations()` and invoked for WORLD_ADMIT, WORLD_LOWER,
+ACTOR_ADMIT, and ACTOR_LOWER. Every phase uses its phase-specific opener and
+rejects corrupt generation, sequence, stored index, phase, payload byte bound,
+producer lane, incomplete publication, wrong claimant, out-of-range identity,
+and an explicitly mismatched phase-specific opener. Normal master and slave
+claims also succeed for every phase and prove the expected local/cache-through
+selection.
+
+Independent strict C11/Werror reruns PASS for callback context, terrain route,
+actor route, ordered terrain command stream, and the pre-existing terrain
+depth-bin fixture. The earlier self-contained snapshot and preclaim publication
+repairs remain intact, no cached nested or stack pointer was reintroduced, and
+the default CPU-DUAL/VDP1 path remains unchanged.
+
+This is source approval only. Target compile/link and section placement,
+hardware/emulator cache behavior, sole-owner live cutover, CUE/Ymir validation,
+and any FPS claim remain open.

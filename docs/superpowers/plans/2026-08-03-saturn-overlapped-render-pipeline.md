@@ -255,7 +255,9 @@ and the evidence report before starting another task.
   First re-review retained one test-coverage NO-GO: several mutations still
   named only lower callbacks. The final source repair parameterizes the entire
   matrix across all four phases and explicitly invokes a mismatched
-  phase-specific opener. Final re-review is pending.
+  phase-specific opener. Final independent source re-review is GO. Target
+  compile/link and section placement, the atomic sole-owner cutover, target
+  cache behavior, CUE/Ymir, and FPS evidence remain unchecked.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

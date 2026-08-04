@@ -40,8 +40,10 @@ owner replacement remain open.
 
 The first repair re-review found no remaining context/coherency defect but
 kept source acceptance NO-GO because part of the mutation matrix covered only
-lower phases. All mutations now run against all four phase-specific APIs;
-final independent re-review is pending.
+lower phases. All mutations now run against all four phase-specific APIs and
+final independent source re-review is GO. Target compile/link and section
+placement, live sole-owner cutover, cache behavior, CUE/Ymir, and FPS evidence
+remain open.
 
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset

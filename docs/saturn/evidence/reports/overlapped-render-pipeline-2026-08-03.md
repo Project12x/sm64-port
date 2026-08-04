@@ -1241,5 +1241,9 @@ open.
 - First re-review remained NO-GO because the phase/ready/sequence/claim/range
   cases still exercised only the two lower phases. The repair now runs one
   common complete mutation matrix, including the wrong phase-specific opener,
-  for WORLD_ADMIT, WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER. Fresh final
-  re-review remains required.
+  for WORLD_ADMIT, WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER.
+- Final independent source re-review is GO. Strict callback-context,
+  terrain-route, actor-route, ordered-command-stream, and existing terrain-depth
+  fixtures independently PASS. This does not close target compile/link,
+  section-placement, live CPU-DUAL ownership, target cache, CUE/Ymir, or FPS
+  gates.
