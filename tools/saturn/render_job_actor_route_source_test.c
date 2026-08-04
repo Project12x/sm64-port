@@ -64,6 +64,8 @@ int main(void)
         function_contains(source, "demo_actor_queue_transform(",
                           "demo_actor_queue_bind_output") &&
         function_contains(source, "demo_actor_queue_transform(",
+                          "demo_render_queue_context_open") &&
+        function_contains(source, "demo_actor_queue_transform(",
                           "demo_actor_queue_publish_metadata") &&
         function_contains(source, "demo_actor_queue_transform(",
                           "job->input_offset") &&
@@ -73,6 +75,8 @@ int main(void)
                            "s_actor_slave_begin") &&
         function_contains(source, "demo_actor_queue_classify(",
                           "sm64_saturn_render_job_graph_actor_lower_admit_done") &&
+        function_contains(source, "demo_actor_queue_classify(",
+                          "demo_render_queue_context_open") &&
         function_contains(source, "demo_actor_queue_classify(",
                           "demo_actor_queue_read_vertices_done") &&
         function_contains(source, "demo_actor_queue_classify(",

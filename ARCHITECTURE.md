@@ -45,3 +45,13 @@ write the same kind. This matches the bounded physical arrays without wasting
 memory on a synthetic global arena and preserves the pointer-free 16-byte
 descriptor ABI. This source contract remains dormant until the single atomic
 CPU-DUAL cutover and target/cache validation.
+
+Callback contexts use a separate pointer-free P2 release record. The record
+binds one immutable queue descriptor generation/index/phase to a nonzero
+sequence, a bounded byte count, and the producing CPU lane; it never carries a
+source-state or function pointer. A callback must prove the exact current
+claim before opening its statically allocated terrain or Mario snapshot, and a
+peer claimant receives only the cache-through alias. Likewise, the master-only
+terrain order stream retains the exact descriptor-local command image beside
+each result during sorting, so final VDP1 lowering never guesses a command
+bank from a logical work range. Both contracts remain dormant until cutover.

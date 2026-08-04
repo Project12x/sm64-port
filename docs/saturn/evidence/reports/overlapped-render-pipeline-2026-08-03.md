@@ -1198,3 +1198,25 @@ open.
   CUE/Ymir run, cache proof, or FPS claim occurred. Ordered terrain command
   lookup, callback-context P2 publication, direct
   callback corruption/cross-lane tests, and the atomic cutover remain open.
+
+### A5.8 ordered terrain commands and callback-context publication (2026-08-04)
+
+- Watched RED: the terrain command-stream fixture failed to compile because
+  sorted refs had no command identity; terrain and actor route fixtures then
+  failed because dormant callbacks did not open a published context.
+- GREEN: command-stream sorting moves each result and descriptor-local command
+  image as one pair. The union retains the existing eight-byte SH-2 ref size;
+  legacy refs use the old arena resolver and queue refs use the paired command.
+- GREEN: a pointer-free 16-byte P2 release record binds generation, sequence,
+  descriptor index, payload byte bound, callback phase, and producer lane.
+  Open requires the exact current claimant and returns a cache-through alias
+  only to the peer lane. Both terrain and Mario cases reject corrupt phases,
+  stale generations/sequences, incomplete publication, wrong claims, and
+  out-of-range identities in an executable C11 fixture.
+- Strict Qt MinGW C11/Werror command-stream, callback-context, terrain-route,
+  actor-route, and existing terrain-depth fixtures PASS. The new callback
+  source is not yet added to the target source list because the concurrent
+  audio lane owns the dirty Makefile; that integration must occur after its
+  commit and before review.
+- Scope is dormant source only. The sole CPU-DUAL callback remains the legacy
+  worker; there was no target build, CUE/Ymir run, cache proof, or FPS claim.

@@ -226,6 +226,21 @@ and the evidence report before starting another task.
   ordered terrain command lookup, callback-context P2 publication and
   corruption/cross-lane callback tests, atomic cutover, then
   target/cache/manual evidence.
+  **A5.8 ordered-command/context increment (2026-08-04):** source-complete,
+  pending independent review. The final terrain radix stream now keeps each
+  validated result paired with its exact descriptor-local 32-byte command
+  image without increasing the SH-2 emit-reference ABI beyond eight bytes;
+  legacy refs remain on the accepted arena lookup until cutover. A new
+  pointer-free 16-byte release record publishes callback generation,
+  sequence, descriptor index, byte bound, phase, and producer lane through
+  P2. Terrain and Mario dormant callbacks open their statically bounded
+  contexts only after exact claimed-descriptor validation and select the
+  cache-through alias for a peer claimant. Executable host cases cover both
+  phases plus corrupt phase, stale generation/sequence, incomplete release,
+  wrong claim, out-of-range identity, and cross-lane selection. No CPU-DUAL
+  activation/default-path change, target build, CUE, Ymir run, or FPS claim
+  occurred. Remaining: independent review, atomic sole-owner cutover, then
+  target/cache/manual evidence.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

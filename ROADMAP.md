@@ -8,6 +8,10 @@ CPU-DUAL callback only in one atomic default-path cutover. Gate: a reviewed
 target CUE with a manual desktop-Ymir comparison against the accepted 3–4 FPS
 baseline.
 
+The ordered terrain-command lookup and pointer-free P2 callback-context gate
+are source-complete pending review; the next implementation transition is the
+single-owner live cutover, not another parallel callback registration.
+
 ## Next — frame lifetime and transfer overlap
 
 Complete A6 localized recovery, A7 alternating source-bank ownership, A8

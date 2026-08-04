@@ -28,11 +28,12 @@ Queue publication now derives one of four physical payload kinds from the
 immutable type/callback pair and checks overlap only within that kind. Separate
 terrain-admit, terrain-lower, actor-admit, and actor-lower banks may reuse local
 offsets; same-kind overlap and malformed type/callback pairs fail closed. The
-descriptor remains pointer-free and 16 bytes. Terrain command lookup from the
-ordered descriptor stream, target link/cache evidence, an explicit
-P2/cache-through callback-context publication contract, direct callback
-corruption/cross-lane tests, and one atomic CPU-DUAL owner replacement remain
-open.
+descriptor remains pointer-free and 16 bytes. Ordered terrain commands and
+the pointer-free P2 callback-context publication contract are now host-green:
+both terrain and Mario require exact generation/phase/claim identity, bounded
+payload size, and cache-through peer selection. This increment is pending
+independent source review. Target link/cache evidence and one atomic CPU-DUAL
+owner replacement remain open.
 
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset

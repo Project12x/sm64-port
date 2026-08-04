@@ -21,7 +21,10 @@
 
 typedef struct sm64_saturn_terrain_emit_ref {
     const sm64_saturn_terrain_result_t *record;
-    uint32_t sort_key;
+    union {
+        uint32_t sort_key;
+        const uint8_t *command;
+    };
 } sm64_saturn_terrain_emit_ref_t;
 
 #if UINTPTR_MAX == UINT32_MAX
@@ -169,6 +172,42 @@ static inline size_t sm64_saturn_terrain_depth_bins_build_streams(
     return sm64_saturn_terrain_depth_bins_sort_refs(
         refs, scratch, total, capacity);
 }
+
+/* Build one final-order stream while retaining the exact descriptor-local
+ * command image paired with every result. Sorting moves the pair together;
+ * the master can lower VDP1 commands without reverse-inferencing a legacy
+ * master/slave arena from the result pointer. */
+static inline size_t sm64_saturn_terrain_depth_bins_build_command_streams(
+    const sm64_saturn_terrain_result_t *const records[],
+    const uint8_t *const commands[], const size_t counts[],
+    size_t stream_count, sm64_saturn_terrain_emit_ref_t *refs,
+    sm64_saturn_terrain_emit_ref_t *scratch, size_t capacity)
+{
+    if (stream_count == 0U) return 0U;
+    if (records == NULL || commands == NULL || counts == NULL || refs == NULL ||
+        scratch == NULL)
+        return SIZE_MAX;
+    size_t total = 0U;
+    for (size_t stream = 0U; stream < stream_count; stream++) {
+        if (counts[stream] > capacity - total ||
+            (counts[stream] != 0U &&
+             (records[stream] == NULL || commands[stream] == NULL)))
+            return SIZE_MAX;
+        for (size_t local = 0U; local < counts[stream]; local++) {
+            const sm64_saturn_terrain_result_t *const record =
+                &records[stream][local];
+            if (!sm64_saturn_terrain_result_validate(record)) return SIZE_MAX;
+            refs[total++] = (sm64_saturn_terrain_emit_ref_t){
+                .record = record,
+                .command = commands[stream] +
+                    local * SM64_SATURN_TERRAIN_COMMAND_BYTES,
+            };
+        }
+    }
+    return sm64_saturn_terrain_depth_bins_sort_refs(
+        refs, scratch, total, capacity);
+}
+
 
 #if defined(SM64_SATURN_TERRAIN_DEPTH_BINS_COMPARE)
 /* Host-only predecessor stable merge oracle.  It deliberately preserves the

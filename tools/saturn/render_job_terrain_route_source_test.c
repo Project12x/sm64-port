@@ -88,11 +88,15 @@ int main(void)
         function_contains(source, "demo_terrain_queue_world_admit(",
                           "SM64_SATURN_RENDER_JOB_WORLD_ADMIT") &&
         function_contains(source, "demo_terrain_queue_world_admit(",
+                          "demo_render_queue_context_open") &&
+        function_contains(source, "demo_terrain_queue_world_admit(",
                           "demo_terrain_queue_bind_output") &&
         function_contains(source, "demo_terrain_queue_world_admit(",
                           "demo_terrain_queue_publish_admit") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "demo_terrain_queue_publish_result") &&
+        function_contains(source, "demo_terrain_queue_world_lower(",
+                          "demo_render_queue_context_open") &&
         function_contains(source, "demo_terrain_queue_read_done(",
                           "demo_terrain_queue_result_metadata") &&
         !function_contains(source, "demo_terrain_queue_read_done(",
@@ -106,7 +110,11 @@ int main(void)
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "sm64_saturn_render_job_graph_validate_terrain_merge") &&
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
-                          "sm64_saturn_terrain_depth_bins_build_streams") &&
+                          "sm64_saturn_terrain_depth_bins_build_command_streams") &&
+        function_contains(source, "demo_terrain_final_command(",
+                          "ref->command") &&
+        function_contains(source, "sm64_saturn_demo_render_frame(",
+                          "demo_terrain_final_command") &&
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "metadata->claimed_state") &&
         !function_contains(source, "demo_terrain_queue_assemble_merge_spans(",

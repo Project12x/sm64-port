@@ -16,6 +16,7 @@
 #include "saturn_ir_transform.h"
 #include "saturn_matrix_kernels.h"
 #include "saturn_render_job_bridge.h"
+#include "saturn_render_callback_context.h"
 #include "saturn_render_job_graph.h"
 #include "saturn_render_job_queue.h"
 #include "saturn_render_output_bank.h"
@@ -222,6 +223,8 @@ static sm64_saturn_render_job_queue_t s_render_job_queue
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_job_graph_t s_render_job_graph
     DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_callback_context_bank_t s_render_callback_contexts
+    DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_output_bank_t s_terrain_output_bank
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_output_bank_t s_actor_output_bank
@@ -251,6 +254,7 @@ static sm64_saturn_terrain_emit_ref_t s_terrain_emit_refs[
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
     DEMO_TERRAIN_RESULT_CAPACITY];
 static uint16_t s_terrain_emit_count;
+static uint8_t s_terrain_emit_commands_bound;
 static uint32_t s_terrain_publish_sequence;
 /* The dormant queue merge keeps one stream for every exact WORLD_LOWER
  * descriptor.  It deliberately does not coerce those streams back into the
@@ -934,6 +938,8 @@ typedef struct demo_mario_transform_context {
 } demo_mario_transform_context_t;
 static demo_mario_transform_context_t s_mario_transform_context
     DEMO_TERRAIN_TRANSFORM_CACHE;
+_Static_assert(sizeof(demo_mario_transform_context_t) <= UINT16_MAX,
+               "Mario callback context must retain a bounded byte count");
 
 typedef struct demo_classify_context {
     const sm64_saturn_bob_primitive_t *primitives;
@@ -1334,6 +1340,8 @@ static void demo_build_primitive_work_metadata(void)
 void sm64_saturn_demo_render_init(void)
 {
     sm64_saturn_render_job_queue_init(&s_render_job_queue);
+    sm64_saturn_render_callback_context_bank_init(
+        &s_render_callback_contexts);
     sm64_saturn_render_job_graph_init(&s_render_job_graph,
                                       &s_render_job_queue);
     sm64_saturn_render_output_bank_init(
@@ -1770,6 +1778,10 @@ typedef struct demo_terrain_compact_context {
     sm64_saturn_terrain_result_spans_t *spans;
     uint32_t sequence;
 } demo_terrain_compact_context_t;
+static demo_terrain_compact_context_t s_terrain_queue_compact_context
+    DEMO_TERRAIN_TRANSFORM_CACHE;
+_Static_assert(sizeof(demo_terrain_compact_context_t) <= UINT16_MAX,
+               "terrain callback context must retain a bounded byte count");
 
 typedef struct demo_terrain_queue_output {
     sm64_saturn_terrain_result_t *records;
@@ -1799,6 +1811,40 @@ static bool demo_terrain_queue_claim_index(
             claimed_state) != job)
         return false;
     *job_index = index;
+    return true;
+}
+
+/* The queue publishes no context pointer. Each callback resolves its own
+ * statically bounded payload only after the exact generation/phase/claim
+ * record has become visible through P2. */
+static bool __attribute__((unused)) demo_render_queue_context_publish(
+    uint16_t job_index, uint16_t payload_bytes)
+{
+    const sm64_saturn_render_job_t *const job =
+        sm64_saturn_render_job_queue_published_job(
+            &s_render_job_queue, s_render_job_graph.generation, job_index);
+    return job != NULL && sm64_saturn_render_callback_context_publish(
+        &s_render_callback_contexts, &s_render_job_queue,
+        job->snapshot_generation, job_index, job->snapshot_generation,
+        payload_bytes, SM64_SATURN_RENDER_OUTPUT_LANE_MASTER);
+}
+
+static bool demo_render_queue_context_open(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, const void *cached_payload,
+    uint16_t payload_bytes, const void **payload)
+{
+    if (payload != NULL) *payload = NULL;
+    uint16_t job_index;
+    sm64_saturn_render_callback_context_access_t access;
+    if (job == NULL || payload == NULL ||
+        !demo_terrain_queue_claim_index(job, claimed_state, &job_index) ||
+        !sm64_saturn_render_callback_context_open(
+            &s_render_callback_contexts, &s_render_job_queue, job_index,
+            claimed_state, job->snapshot_generation, payload_bytes,
+            cached_payload, &access) || access.phase != job->callback_id)
+        return false;
+    *payload = access.payload;
     return true;
 }
 
@@ -2099,7 +2145,13 @@ static bool __attribute__((unused)) demo_actor_queue_transform(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *opaque)
 {
-    demo_mario_transform_context_t *const context = opaque;
+    (void)opaque;
+    const void *published_context;
+    if (!demo_render_queue_context_open(
+            job, claimed_state, &s_mario_transform_context,
+            (uint16_t)sizeof(s_mario_transform_context), &published_context))
+        return false;
+    const demo_mario_transform_context_t *const context = published_context;
     demo_actor_queue_output_t output;
     if (job == NULL || context == NULL || !context->snapshot.valid ||
         context->vertex_refs == NULL ||
@@ -2144,7 +2196,13 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *opaque)
 {
-    demo_mario_transform_context_t *const context = opaque;
+    (void)opaque;
+    const void *published_context;
+    if (!demo_render_queue_context_open(
+            job, claimed_state, &s_mario_transform_context,
+            (uint16_t)sizeof(s_mario_transform_context), &published_context))
+        return false;
+    const demo_mario_transform_context_t *const context = published_context;
     demo_actor_queue_output_t output;
     uint16_t lower_job_index;
     uint16_t admit_job_index;
@@ -2477,7 +2535,15 @@ static bool __attribute__((unused)) demo_terrain_queue_world_admit(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *opaque)
 {
-    demo_terrain_compact_context_t *const context = opaque;
+    (void)opaque;
+    const void *published_context;
+    if (!demo_render_queue_context_open(
+            job, claimed_state, &s_terrain_queue_compact_context,
+            (uint16_t)sizeof(s_terrain_queue_compact_context),
+            &published_context))
+        return false;
+    demo_terrain_compact_context_t *const context =
+        (demo_terrain_compact_context_t *)published_context;
     demo_terrain_queue_output_t output;
     if (job == NULL || context == NULL || context->classify == NULL ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
@@ -2499,7 +2565,15 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *opaque)
 {
-    demo_terrain_compact_context_t *const context = opaque;
+    (void)opaque;
+    const void *published_context;
+    if (!demo_render_queue_context_open(
+            job, claimed_state, &s_terrain_queue_compact_context,
+            (uint16_t)sizeof(s_terrain_queue_compact_context),
+            &published_context))
+        return false;
+    demo_terrain_compact_context_t *const context =
+        (demo_terrain_compact_context_t *)published_context;
     demo_terrain_queue_output_t output;
     uint16_t lower_job_index;
     uint16_t admit_job_index;
@@ -2576,6 +2650,7 @@ static bool __attribute__((unused)) demo_terrain_queue_read_done(
 static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
     uint8_t reader_lane, demo_terrain_queue_merge_spans_t *spans)
 {
+    s_terrain_emit_commands_bound = 0U;
     if (spans == NULL || reader_lane != SM64_SATURN_RENDER_OUTPUT_LANE_MASTER)
         return false;
     *spans = (demo_terrain_queue_merge_spans_t){0};
@@ -2634,17 +2709,20 @@ static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
             &s_render_job_graph, spans->generation, s_terrain_queue_merge_ids,
             identity_count))
         return false;
-    const size_t count = sm64_saturn_terrain_depth_bins_build_streams(
-        spans->records, spans->counts, spans->stream_count, s_terrain_emit_refs,
-        s_terrain_emit_scratch, DEMO_TERRAIN_RESULT_CAPACITY);
+    const size_t count = sm64_saturn_terrain_depth_bins_build_command_streams(
+        spans->records, spans->commands, spans->counts, spans->stream_count,
+        s_terrain_emit_refs, s_terrain_emit_scratch,
+        DEMO_TERRAIN_RESULT_CAPACITY);
     if (count == SIZE_MAX) return false;
     s_terrain_emit_count = (uint16_t)count;
+    s_terrain_emit_commands_bound = 1U;
     return true;
 }
 
 static bool demo_merge_terrain_results(
     const sm64_saturn_terrain_result_spans_t *spans)
 {
+    s_terrain_emit_commands_bound = 0U;
     /* BOB's source BSP does not split crossing polygons, so tree traversal is
      * not a complete painter order. Z-Treme retains per-polygon SORT_MAX/MIN
      * depth policy, and SlaveDriver sorts visible leaves by distance and cut
@@ -2664,6 +2742,18 @@ static bool demo_merge_terrain_results(
     }
     s_terrain_emit_count = (uint16_t)count;
     return true;
+}
+
+/* Queue refs retain their exact descriptor-local command image through the
+ * master-owned sort. Legacy refs predate that paired stream and continue to
+ * resolve through the accepted two-arena helper until the atomic cutover. */
+static const uint8_t *demo_terrain_final_command(
+    const sm64_saturn_terrain_result_spans_t *legacy_spans,
+    const sm64_saturn_terrain_emit_ref_t *ref)
+{
+    if (ref == NULL) return NULL;
+    return s_terrain_emit_commands_bound != 0U ? ref->command :
+        sm64_saturn_terrain_emit_ref_command(legacy_spans, ref);
 }
 
 static void __attribute__((unused)) demo_emit_primitive(
@@ -3608,9 +3698,8 @@ void sm64_saturn_demo_render_frame(
             s_terrain_emit_refs[ordinal].record;
         if (result->primitive_id >= SM64_SATURN_BOB_PRIMITIVE_COUNT) continue;
         demo_emit_terrain_result(
-            result, sm64_saturn_terrain_emit_ref_command(
-                        &s_terrain_spans_shared,
-                        &s_terrain_emit_refs[ordinal]),
+            result, demo_terrain_final_command(
+                        &s_terrain_spans_shared, &s_terrain_emit_refs[ordinal]),
             &s_bob_primitives_active[result->primitive_id], backend,
             gouraud_bank, profile, &partitions);
     }
