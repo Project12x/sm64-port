@@ -7,6 +7,7 @@ import sys
 import os
 import tempfile
 import unittest
+import hashlib
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -40,6 +41,60 @@ def words_to_bytes(words: list[int]) -> list[int]:
 
 
 class SourcebootBootTraceReaderTests(unittest.TestCase):
+    def test_text_probe_resolves_global_code_and_reads_exact_elf_bytes(self) -> None:
+        resolve = getattr(boot_trace, "resolve_probe_symbol", None)
+        reader = getattr(boot_trace, "read_elf_virtual_bytes", None)
+        self.assertTrue(callable(resolve), "reader must resolve a caller-selected text symbol")
+        self.assertTrue(callable(reader), "reader must derive expected probe bytes from the ELF")
+        self.assertEqual(
+            resolve("06074228 T _main\n0607411c T _user_init\n", "main"),
+            0x06074228,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            elf = Path(directory) / "probe.elf"
+            payload = bytes.fromhex("d002 0009 000b 0009 8bfe 0009 0009 0009")
+            image = bytearray(0x120)
+            image[0:4] = b"\x7fELF"
+            image[4] = 1  # ELF32
+            image[5] = 2  # big endian SH-2
+            image[32:36] = (52).to_bytes(4, "big")
+            image[46:48] = (40).to_bytes(2, "big")
+            image[48:50] = (1).to_bytes(2, "big")
+            section = memoryview(image)[52:92]
+            section[4:8] = (1).to_bytes(4, "big")
+            section[8:12] = (0x6).to_bytes(4, "big")
+            section[12:16] = (0x06074228).to_bytes(4, "big")
+            section[16:20] = (0x100).to_bytes(4, "big")
+            section[20:24] = len(payload).to_bytes(4, "big")
+            image[0x100 : 0x100 + len(payload)] = payload
+            elf.write_bytes(image)
+            self.assertEqual(reader(elf, 0x06074228, 8), payload[:8])
+            self.assertEqual(hashlib.sha256(reader(elf, 0x06074228, 8)).hexdigest(), hashlib.sha256(payload[:8]).hexdigest())
+
+    def test_checkpoint_reports_paired_text_probe_and_master_pc_sp(self) -> None:
+        probe_builder = getattr(boot_trace, "build_text_probe", None)
+        self.assertTrue(callable(probe_builder), "reader must construct expected text-probe evidence")
+
+        class Client:
+            notifications: list[dict[str, object]] = []
+
+            def call(self, method: str, params: dict[str, int | str]) -> dict[str, object]:
+                if method == "regs.read":
+                    return {"registers": {"pc": 0x06074228, "sp": 0x0608A000}}
+                if params["address"] in (0x06074228, 0x26074228):
+                    return {"data": [0x00, 0x09, 0x8B, 0xFE]}
+                return {"data": words_to_bytes([0x53394254, 1, 8, 8, 4, 1, 3, 4])}
+
+        probe = probe_builder("main", 0x06074228, bytes([0x00, 0x09, 0x8B, 0xFE]))
+        checkpoint = capture_trace_checkpoint(
+            Client(), 0x0608B43C, "protocol-ready", 0, text_probe=probe
+        )
+        self.assertEqual(checkpoint["text_probe"]["p1"]["match"], True)
+        self.assertEqual(checkpoint["text_probe"]["p2"]["match"], True)
+        self.assertEqual(checkpoint["text_probe"]["expected_sha256"], hashlib.sha256(bytes([0x00, 0x09, 0x8B, 0xFE])).hexdigest())
+        self.assertEqual(checkpoint["master_registers"]["pc"], 0x06074228)
+        self.assertEqual(checkpoint["master_registers"]["sp"], 0x0608A000)
+
     def test_post_bios_window_preserves_single_legacy_checkpoint_without_interval(self) -> None:
         runs: list[int] = []
         checkpoints: list[str] = []

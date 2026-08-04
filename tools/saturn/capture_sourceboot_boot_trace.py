@@ -9,6 +9,7 @@ ELF and emits both its decoded last boundary and the raw 32-bit words.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -30,6 +31,8 @@ SOURCEBOOT_BOOT_TRACE_MAGIC = 0x53394254
 SOURCEBOOT_BOOT_TRACE_VERSION = 1
 SOURCEBOOT_BOOT_TRACE_WORD_COUNT = 8
 SOURCEBOOT_BOOT_TRACE_BYTES = SOURCEBOOT_BOOT_TRACE_WORD_COUNT * 4
+DEFAULT_TEXT_PROBE_SYMBOL = "main"
+TEXT_PROBE_BYTES = 16
 YMIR_MAX_RUN_FOR_FRAMES = 3600
 CPU_CACHE_THROUGH_ALIAS_BIT = 0x20000000
 _CUE_FILE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))\s+\S+\s*$', re.IGNORECASE)
@@ -107,6 +110,60 @@ def parse_symbol_address(nm_output: str) -> int:
     raise ValueError(f"ELF does not export {SOURCEBOOT_BOOT_TRACE_SYMBOL}")
 
 
+def resolve_probe_symbol(nm_output: str, symbol: str) -> int:
+    """Resolve one exported text symbol, accepting the SH-2 ABI underscore."""
+    names = (symbol, f"_{symbol}" if not symbol.startswith("_") else symbol[1:])
+    for line in nm_output.splitlines():
+        fields = line.split()
+        if len(fields) == 3 and fields[2] in names:
+            return int(fields[0], 16)
+    raise ValueError(f"ELF does not export text probe symbol {symbol}")
+
+
+def read_elf_virtual_bytes(elf: Path, address: int, count: int) -> bytes:
+    """Read immutable expected bytes at a linked ELF virtual address."""
+    if count <= 0:
+        raise ValueError("text probe byte count must be positive")
+    data = elf.read_bytes()
+    if data[:4] != b"\x7fELF" or len(data) < 52 or data[4] != 1:
+        raise ValueError(f"expected ELF32 file: {elf}")
+    endian = "big" if data[5] == 2 else "little" if data[5] == 1 else None
+    if endian is None:
+        raise ValueError(f"ELF has unknown byte order: {elf}")
+    section_offset = int.from_bytes(data[32:36], endian)
+    section_size = int.from_bytes(data[46:48], endian)
+    section_count = int.from_bytes(data[48:50], endian)
+    if section_size < 40:
+        raise ValueError(f"ELF section headers are malformed: {elf}")
+    for index in range(section_count):
+        base = section_offset + index * section_size
+        if base + 40 > len(data):
+            raise ValueError(f"ELF section header is outside file: {elf}")
+        flags = int.from_bytes(data[base + 8 : base + 12], endian)
+        virtual = int.from_bytes(data[base + 12 : base + 16], endian)
+        file_offset = int.from_bytes(data[base + 16 : base + 20], endian)
+        size = int.from_bytes(data[base + 20 : base + 24], endian)
+        relative = address - virtual
+        if flags & 0x4 and 0 <= relative and relative + count <= size:
+            start = file_offset + relative
+            end = start + count
+            if end > len(data):
+                raise ValueError(f"ELF text probe bytes are outside file: {elf}")
+            return data[start:end]
+    raise ValueError(f"ELF has no executable section containing 0x{address:08x}")
+
+
+def build_text_probe(symbol: str, address: int, expected_bytes: bytes) -> dict[str, Any]:
+    """Describe one linked code probe and its expected immutable bytes."""
+    return {
+        "symbol": symbol,
+        "address": address,
+        "cache_through_address": cpu_cache_through_alias(address),
+        "expected_bytes": list(expected_bytes),
+        "expected_sha256": hashlib.sha256(expected_bytes).hexdigest(),
+    }
+
+
 def validate_post_bios_frames(frames: int) -> int:
     if not 1 <= frames <= YMIR_MAX_RUN_FOR_FRAMES:
         raise ValueError(
@@ -173,6 +230,19 @@ def resolve_trace_symbol(elf: Path, *, nm: Path = NM, run: Any = subprocess.run)
             f"DLL-safe sh-elf-nm wrapper failed for {elf}: {completed.stderr.strip()}"
         )
     return parse_symbol_address(completed.stdout)
+
+
+def resolve_text_probe(elf: Path, symbol: str, *, nm: Path = NM, run: Any = subprocess.run) -> dict[str, Any]:
+    """Resolve a caller-selected text symbol and bind its first linked bytes."""
+    completed = run(
+        wrapped_nm_command(elf, nm=nm), check=False, capture_output=True, text=True
+    )
+    if completed.returncode != 0:
+        raise ValueError(
+            f"DLL-safe sh-elf-nm wrapper failed for {elf}: {completed.stderr.strip()}"
+        )
+    address = resolve_probe_symbol(completed.stdout, symbol)
+    return build_text_probe(symbol, address, read_elf_virtual_bytes(elf, address, TEXT_PROBE_BYTES))
 
 
 def decode_boot_trace(data: list[int]) -> dict[str, Any]:
@@ -298,13 +368,47 @@ def capture_trace_sample(client: YmirClient, address: int) -> dict[str, dict[str
     return samples
 
 
+def capture_text_probe_sample(client: YmirClient, probe: dict[str, Any]) -> dict[str, Any]:
+    """Read expected code through P1 and P2 and report both exact matches."""
+    expected = probe["expected_bytes"]
+    samples: dict[str, Any] = {}
+    for alias, address in (("p1", probe["address"]), ("p2", probe["cache_through_address"])):
+        result = client.call("mem.peek", {"address": address, "count": len(expected)})
+        data = result.get("data")
+        if not isinstance(data, list):
+            raise ValueError(f"Ymir text probe {alias} sample has no byte data")
+        samples[alias] = {"address": address, "raw_bytes": data, "match": data == expected}
+    return {
+        "symbol": probe["symbol"],
+        "expected_bytes": expected,
+        "expected_sha256": probe["expected_sha256"],
+        **samples,
+    }
+
+
+def extract_master_pc_sp(registers: Any) -> dict[str, int | None]:
+    """Normalize the documented register response shapes without hiding raw data."""
+    values: dict[str, Any] = {}
+    if isinstance(registers, dict):
+        candidate = registers.get("registers", registers)
+        if isinstance(candidate, dict):
+            values = {str(key).lower(): value for key, value in candidate.items()}
+        elif isinstance(candidate, list):
+            values = {
+                str(item.get("name", "")).lower(): item.get("value")
+                for item in candidate
+                if isinstance(item, dict)
+            }
+    return {key: values.get(key) if isinstance(values.get(key), int) else None for key in ("pc", "sp")}
+
+
 def capture_trace_checkpoint(
-    client: YmirClient, address: int, label: str, emulated_frames: int
+    client: YmirClient, address: int, label: str, emulated_frames: int, *, text_probe: dict[str, Any] | None = None
 ) -> dict[str, Any]:
     """Preserve a raw trace sample at one deterministic BIOS boundary."""
     samples = capture_trace_sample(client, address)
     data = samples["p1"]["raw_bytes"]
-    return {
+    result = {
         "label": label,
         "emulated_frames": emulated_frames,
         "raw_bytes": data,
@@ -314,6 +418,12 @@ def capture_trace_checkpoint(
         "stopped_pcs": stopped_pcs(client),
         "notification_count": len(client.notifications),
     }
+    if text_probe is not None:
+        registers = client.call("regs.read", {"target": "sh2.master"})
+        result["text_probe"] = capture_text_probe_sample(client, text_probe)
+        result["master_registers"] = extract_master_pc_sp(registers)
+        result["master_registers_raw"] = registers
+    return result
 
 
 def run_bios_handoff(client: YmirClient, run_for: Any, checkpoint: Any) -> None:
@@ -354,6 +464,10 @@ def main() -> int:
         help="optional positive frame interval for post-BIOS trace checkpoints",
     )
     parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument(
+        "--text-probe-symbol", default=DEFAULT_TEXT_PROBE_SYMBOL,
+        help="exported linked code symbol to verify at every checkpoint (default: main)",
+    )
     args = parser.parse_args()
 
     for label, path in (("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
@@ -379,12 +493,15 @@ def main() -> int:
     except (OSError, ValueError) as error:
         parser.error(str(error))
     trace_address = resolve_trace_symbol(args.elf)
+    text_probe = resolve_text_probe(args.elf, args.text_probe_symbol)
 
     wall_start = time.perf_counter()
     emulated_frames = 0
     client: YmirClient | None = None
     raw_data: list[int] | None = None
     final_trace_sample: dict[str, dict[str, Any]] | None = None
+    final_text_probe: dict[str, Any] | None = None
+    final_master_registers: dict[str, Any] | None = None
     trace_checkpoints: list[dict[str, Any]] = []
     trace: dict[str, Any] | None = None
     failure: BaseException | None = None
@@ -398,7 +515,7 @@ def main() -> int:
 
         def checkpoint(label: str) -> None:
             trace_checkpoints.append(
-                capture_trace_checkpoint(client, trace_address, label, emulated_frames)
+                capture_trace_checkpoint(client, trace_address, label, emulated_frames, text_probe=text_probe)
             )
 
         checkpoint("protocol-ready")
@@ -410,10 +527,15 @@ def main() -> int:
             checkpoint_interval=args.post_bios_checkpoint_interval,
         )
         final_trace_sample = capture_trace_sample(client, trace_address)
+        final_text_probe = capture_text_probe_sample(client, text_probe)
+        final_master_registers = client.call("regs.read", {"target": "sh2.master"})
         raw_data = final_trace_sample["p1"]["raw_bytes"]
         trace = decode_boot_trace(raw_data)
         trace["p1"] = final_trace_sample["p1"]
         trace["p2"] = final_trace_sample["p2"]
+        trace["text_probe"] = final_text_probe
+        trace["master_registers"] = extract_master_pc_sp(final_master_registers)
+        trace["master_registers_raw"] = final_master_registers
         client.shutdown()
     except BaseException as error:
         failure = error
@@ -434,6 +556,7 @@ def main() -> int:
         "trace_symbol": SOURCEBOOT_BOOT_TRACE_SYMBOL,
         "trace_address": trace_address,
         "trace_cache_through_address": cpu_cache_through_alias(trace_address),
+        "text_probe": text_probe,
         "emulated_frames": emulated_frames,
         "post_bios_checkpoint_interval": args.post_bios_checkpoint_interval,
         "trace_checkpoints": trace_checkpoints,
@@ -447,6 +570,11 @@ def main() -> int:
         if final_trace_sample is not None:
             report["trace"]["p1"] = final_trace_sample["p1"]
             report["trace"]["p2"] = final_trace_sample["p2"]
+        if final_text_probe is not None:
+            report["trace"]["text_probe"] = final_text_probe
+        if final_master_registers is not None:
+            report["trace"]["master_registers"] = extract_master_pc_sp(final_master_registers)
+            report["trace"]["master_registers_raw"] = final_master_registers
         report["failure"] = {"message": str(failure), "type": type(failure).__name__}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

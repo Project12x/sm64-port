@@ -4,6 +4,12 @@
 
 ### Added
 
+- The bounded sourceboot boot-trace reader now verifies a caller-selectable
+  linked text probe (default `main`) at every BIOS/checkpoint and final
+  sample through both P1 and P2, alongside raw master-SH-2 register evidence.
+  It records the ELF-derived expected bytes and SHA-256 plus observed PC/SP,
+  so a bad trace word cannot be interpreted before the loaded code identity is
+  established.
 - The sourceboot boot-trace reader now samples every checkpoint and final
   record through both the resolved P1 address and its SH-2 P2 cache-through
   alias, retaining each address, raw byte vector, and decoded words

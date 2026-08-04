@@ -311,3 +311,16 @@ diagnostic contract: its focused test is green, but no build or Ymir capture
 has yet established whether the aliases disagree on the target. The next gate
 is exactly one bounded headless capture of the already staged artifact pair;
 no scheduler, VDP, or camera source change is authorized by this host result.
+
+**Task 9 source-complete — paired text-image integrity probe:** The bounded
+reader now resolves a caller-selectable exported text symbol (default `main`)
+from the same DLL-safe ELF lookup, reads its first 16 bytes from the ELF's
+executable section, and records their SHA-256. Every existing checkpoint and
+the final sample read those bytes through P1 and P2, report exact-match flags,
+and retain raw `regs.read` evidence plus normalized master PC/SP. This closes
+the otherwise untested assumption that the ELF-derived trace address belongs
+to the code image executing in Ymir. Focused host tests were RED for the
+missing text-probe functions, then GREEN (16 tests); Python compilation and
+`git diff --check` pass. No target build or Ymir run occurred. The target gate
+remains one bounded artifact-paired capture; mismatch is diagnostic evidence,
+not an authorization to change scheduler, VDP, camera, or gameplay code.
