@@ -1150,6 +1150,14 @@ application CPU-DUAL registration targets `render_job_slave_entry`. Target
 compile/link/section evidence is complete; desktop Ymir, observed target
 cache behavior, and FPS remain unchecked.
 
+**Manual cutover result (2026-08-04):** the owner launched the fresh reviewed
+atomic-cutover CUE in desktop Ymir and still observed roughly 3–4 FPS, with no
+visible uplift over the A3+A4 candidate. The source/link cutover is therefore
+not performance-complete. Before adding recovery or transfer overlap, record
+per-CPU claim counts, phase ownership, slave-retirement timing, and terminal
+waits to determine whether four coarse dependency-chained jobs leave the
+slave idle or merely move the same serial critical path between CPUs.
+
 - [x] **Step 1: Record the live seam and red gate.** The current frame still
   calls the fixed terrain dispatcher and chained Mario dispatcher. The new
   test_render_job_live_cutover_source.py fails before production changes:

@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Recorded the first desktop-Ymir result for the atomic shared-SH-2 renderer:
+  it remains roughly 3–4 FPS, matching the prior A3+A4 candidate. The cutover
+  is retained as a correctness/ownership foundation, but no performance gain
+  is claimed; per-CPU phase claims and terminal waits are now the required
+  evidence before further scheduler conclusions.
+
 - Cut the accepted Saturn frame atomically from three fixed terrain/Mario
   joins to one four-phase dependency graph shared by both SH-2s. The renderer
   publishes self-contained terrain and live-pose Mario contexts before the

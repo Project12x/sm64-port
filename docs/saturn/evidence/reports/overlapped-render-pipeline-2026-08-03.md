@@ -1414,3 +1414,15 @@ open.
 - Exact desktop-test CUE:
   `build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue`.
   No Ymir launch or FPS claim occurred in this build gate.
+
+### A5.8 atomic-cutover desktop-Ymir result (2026-08-04)
+
+- The owner manually launched the exact fresh CUE recorded above with the
+  project profile and observed roughly 3–4 FPS.
+- This matches the prior A3+A4 candidate and is not a visible performance
+  improvement. It confirms only that the cutover boots/renders in desktop
+  Ymir; it does not prove useful slave work, balanced claims, reduced terminal
+  waits, or target cache efficiency.
+- Next evidence must expose master/slave claim counts by phase, positive slave
+  retirement timing, and the master terminal-wait interval. A5.8 is not a
+  performance win until those counters lead to a visibly faster candidate.

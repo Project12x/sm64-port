@@ -68,10 +68,12 @@ queue-reachable projected read; its single coarse admit descriptor rebuilds
 complete position ownership from the actual claimant, so a slave descriptor
 at input offset zero cannot retain half of the removed logical split.
 
-The accepted desktop-Ymir A3+A4 candidate remains the manual rollback baseline
-at roughly 3–4 FPS (up from 1–2 FPS). It is qualitative evidence only; no new
-target CUE or FPS claim is authorized until the live A5 cutover is reviewed,
-built, and manually tested.
+The owner manually tested the fresh A5.8 atomic-cutover CUE in desktop Ymir on
+2026-08-04 and still observed roughly 3–4 FPS, matching the accepted A3+A4
+candidate rather than improving it. This proves the cutover boots and renders,
+but not that useful work is balanced across the two SH-2s. The next active
+diagnostic is per-CPU claim/phase/retirement telemetry; A5.8 must not be called
+a performance win from source/link evidence alone.
 
 The isolated audio lane now has a standalone soundtest CUE candidate. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated
