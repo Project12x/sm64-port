@@ -51,8 +51,8 @@ and the evidence report before starting another task.
   observation is VDP1 ≈2 FPS and VDP2 ≈60 FPS, reversing the prior counter
   reading: VDP2 is not the current bottleneck. A9.0 remains retained as a
   bounded-cadence correctness repair, not evidence of an FPS gain.
-- [ ] **Task 2 / A2 — immutable snapshot banks:** source-complete; runtime
-  contract and two independent reviews remain open. This is the full-game-safe
+- [ ] **Task 2 / A2 — immutable snapshot banks:** source-complete; two
+  independent reviews and target coherency evidence remain open. This is the full-game-safe
   prerequisite for A3's pre-transform VDP1 workload reduction; it is not
   itself claimed as an FPS improvement.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
@@ -460,9 +460,17 @@ types, ownership rules, or production fallbacks.
   Add `_Static_assert`/source checks forbidding `MarioState *`, graph-node
   pointers, VDP1 backend pointers, and VRAM pointers in snapshot types.
 
-- [ ] **Step 6: Run `verify-render-snapshot-bank`, runtime contracts, and the dual-frame-bank fixture — ACTIVE**
+- [x] **Step 6: Run `verify-render-snapshot-bank`, runtime contracts, and the dual-frame-bank fixture**
 
-  Expected: all PASS, including stale/mixed generation failures.
+  The snapshot-bank lifecycle/source fixture and dual-frame-bank fixture are
+  green at the final terminal-state repair. The fresh runtime-contract run is
+  green at `533471e5`: its former line-4018 assertion expected a complete
+  VDP1 command from the worker even though `e50fc478` intentionally changed
+  the worker to publish private zero-material/coordinate payloads and leaves
+  template copying to the master. The repaired contract verifies both the
+  private payload boundary and the resolved-template reconstruction; it does
+  not change snapshot or target-renderer behavior. No target build or Ymir
+  gate was run here.
 
 - [ ] **Step 7: Update documents, commit, and complete two-stage review — ACTIVE**
 
@@ -470,10 +478,10 @@ types, ownership rules, or production fallbacks.
   `feat(saturn): add immutable render snapshot banks`.
 
   A2 implementation has a watched missing-header/API red compile, then green
-  lifecycle/source-boundary test and green dual-frame-bank fixture. The wider
-  runtime contract remains red at its existing terrain-command byte comparison
-  (`runtime_contract_test.c:4018`), so it is not credited as green. Target
-  build/Ymir and both independent reviews remain unexecuted; A2 is
+  lifecycle/source-boundary test, green dual-frame-bank fixture, and green
+  runtime contract. The line-4018 terrain mismatch was a stale host assertion,
+  diagnosed in `runtime-contract-4018-report.md`, not a snapshot defect.
+  Target build/Ymir and both independent reviews remain unexecuted; A2 is
   source-complete only, never a performance claim.
 
   Fix round 1 corrects the specification review’s two Important findings and
@@ -505,8 +513,7 @@ types, ownership rules, or production fallbacks.
   quarantined generation cannot be overwritten by an already-validating
   claimant. The new deterministic race fixture is red against the prior
   lock-bypassing quarantine path and green after the repair; focused host
-  evidence only, with runtime-contract closure, target coherency evidence,
-  and fresh reviews still open.
+  evidence only, with target coherency evidence and fresh reviews still open.
 
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 

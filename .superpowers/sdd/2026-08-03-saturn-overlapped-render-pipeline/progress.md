@@ -161,3 +161,19 @@ required.
 
 Fix-round behavior/docs commit: `c95feda8`
 (`fix(saturn): serialize snapshot terminal states`).
+
+2026-08-04 runtime-contract classification/repair: the fresh explicit-host
+`verify-runtime-contracts` red reproduced at
+`runtime_contract_test.c:4018`. Git history showed `d80020cab` originally
+published fully patched worker command images, while `e50fc478` intentionally
+made worker command images private dynamic payloads (zero material words plus
+coordinates) and moved immutable template copying to master-owned
+`demo_emit_terrain_result()`. The retained full-command comparison was
+therefore obsolete, not an A2 or target-renderer defect. `533471e5`
+(`test(saturn): align terrain worker command contract`) replaces it with
+stronger checks for zero private material words, preserved coordinates, and
+complete resolved-template construction. The same fresh Make target passes
+under the explicit forward-slash repository/compiler override; `git diff
+--check` passes. No snapshot logic, production renderer code, target build, or
+Ymir run was changed/performed. Independent review is not yet obtained; fresh
+A2 reviews and target cache/coherency evidence remain required.

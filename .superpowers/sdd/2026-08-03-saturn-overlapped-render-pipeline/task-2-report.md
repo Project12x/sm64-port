@@ -145,3 +145,20 @@ independent rereview and target cache/multicore evidence are still required.
 
 Fix-round behavior/docs commit: `c95feda8`
 (`fix(saturn): serialize snapshot terminal states`).
+
+## Runtime-contract classification (2026-08-04)
+
+`533471e5` (`test(saturn): align terrain worker command contract`) resolves
+the remaining host runtime-contract failure without changing A2 or production
+renderer behavior. A fresh explicit-host `verify-runtime-contracts` run first
+reproduced the line-4018 `memcmp` failure. History showed that `d80020cab`
+initially wrote a fully patched VDP1 command per worker result, but
+`e50fc478` intentionally changed that payload to zero material words plus
+dynamic coordinates; `demo_emit_terrain_result()` applies the immutable
+resolved template after the master-only join. The old assertion compared the
+private worker payload to the final master command and was stale. The repaired
+contract now proves private material remains zero, coordinates survive sorting,
+and the template helper still creates the complete final image. The same Make
+target is green, as is `git diff --check`. No target build/Ymir run or new
+independent review occurred. A2 remains source-complete pending the required
+fresh reviews and target cache/coherency evidence.
