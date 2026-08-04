@@ -32,21 +32,23 @@ SOURCEBOOT_BOOT_TRACE_BYTES = SOURCEBOOT_BOOT_TRACE_WORD_COUNT * 4
 YMIR_MAX_RUN_FOR_FRAMES = 3600
 
 STAGE_NAMES = {
-    1: "main-entry",
-    2: "bootstrap-before",
-    3: "bootstrap-retired",
-    4: "thread5-before",
-    5: "thread5-after",
-    6: "stale-wait-before",
-    7: "stale-wait-after",
-    8: "source-tick-before",
-    9: "source-tick-after",
-    10: "vdp1-render-before",
-    11: "vdp1-render-after",
-    12: "vdp1-sync-before",
-    13: "vdp1-sync-after",
-    14: "vdp2-commit-before",
-    15: "vdp2-commit-after",
+    1: "user-init-entry",
+    2: "user-init-callbacks-registered",
+    3: "main-entry",
+    4: "bootstrap-before",
+    5: "bootstrap-retired",
+    6: "thread5-before",
+    7: "thread5-after",
+    8: "stale-wait-before",
+    9: "stale-wait-after",
+    10: "source-tick-before",
+    11: "source-tick-after",
+    12: "vdp1-render-before",
+    13: "vdp1-render-after",
+    14: "vdp1-sync-before",
+    15: "vdp1-sync-after",
+    16: "vdp2-commit-before",
+    17: "vdp2-commit-after",
 }
 
 

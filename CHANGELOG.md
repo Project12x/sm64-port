@@ -4,6 +4,9 @@
 
 ### Added
 
+- Sourceboot's cache-through boot trace now publishes at `user_init()` entry
+  and after VBlank callback registration, making an all-zero post-BIOS record
+  distinguish a pre-main handoff failure from later scheduler or VDP work.
 - Sourceboot debug builds now publish a low-cost, symbol-resolvable RAM trace
   across bootstrap, scheduler, VDP1, and VDP2 boundaries. The bounded headless
   Ymir reader reports its last stage and raw words after BIOS handoff, so the

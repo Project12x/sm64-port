@@ -53,6 +53,41 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         self.assertEqual(decoded["vdp2_presentation_generation"], 42)
         self.assertEqual(decoded["raw_words"], words)
 
+    def test_decodes_pre_main_user_init_stages(self) -> None:
+        entry = decode_boot_trace(
+            words_to_bytes(
+                [
+                    SOURCEBOOT_BOOT_TRACE_MAGIC,
+                    SOURCEBOOT_BOOT_TRACE_VERSION,
+                    1,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                ]
+            )
+        )
+        self.assertEqual(entry["last_stage"], "user-init-entry")
+
+        callbacks_registered = decode_boot_trace(
+            words_to_bytes(
+                [
+                    SOURCEBOOT_BOOT_TRACE_MAGIC,
+                    SOURCEBOOT_BOOT_TRACE_VERSION,
+                    2,
+                    2,
+                    0,
+                    0,
+                    0,
+                    0,
+                ]
+            )
+        )
+        self.assertEqual(
+            callbacks_registered["last_stage"], "user-init-callbacks-registered"
+        )
+
     def test_rejects_invalid_record_and_resolves_exact_symbol(self) -> None:
         invalid = words_to_bytes([0, SOURCEBOOT_BOOT_TRACE_VERSION, 0, 0, 0, 0, 0, 0])
         with self.assertRaisesRegex(ValueError, "magic"):

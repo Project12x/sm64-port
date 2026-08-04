@@ -34,6 +34,8 @@ def extract_c_function(text: str, name: str) -> str:
 
 
 TRACE_STAGES = (
+    "SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY",
+    "SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_CALLBACKS_REGISTERED",
     "SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE",
     "SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED",
     "SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE",
@@ -110,6 +112,27 @@ def assert_boot_trace_contract(text: str) -> None:
     for stage in TRACE_STAGES:
         if stage not in text:
             raise AssertionError(f"boot trace stage {stage} is missing")
+
+    user_init = extract_c_function(text, "user_init")
+    entry_trace_call = (
+        "sourceboot_boot_trace_write("
+        "SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,"
+    )
+    if entry_trace_call not in user_init:
+        raise AssertionError("user_init entry trace must use the cache-through writer")
+    user_init_entry = user_init.index(entry_trace_call)
+    vdp_configuration = user_init.index("vdp2_tvmd_display_res_set(")
+    if not user_init_entry < vdp_configuration:
+        raise AssertionError("user_init entry trace must precede VDP configuration")
+    user_init_callbacks = user_init.index(
+        "SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_CALLBACKS_REGISTERED"
+    )
+    vblank_callback = user_init.index("vdp_sync_vblank_out_set(")
+    first_intback = user_init.index("smpc_peripheral_intback_issue();")
+    if not vblank_callback < user_init_callbacks < first_intback:
+        raise AssertionError(
+            "user_init callback trace must follow registration before the first INTBACK"
+        )
 
     main = extract_c_function(text, "main")
     bootstrap_before = main.index("SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE")
@@ -218,6 +241,32 @@ class SourcebootBootTraceTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "cache-through record"):
             assert_boot_trace_contract(cached_writer)
+
+        late_user_init_trace = self.source.replace(
+            "sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,\n"
+            "                                0U);\n    smpc_peripheral_init();\n"
+            "    vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,\n"
+            "                              VDP2_TVMD_HORZ_NORMAL_A,\n"
+            "                              VDP2_TVMD_VERT_224);",
+            "smpc_peripheral_init();\n"
+            "    vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,\n"
+            "                              VDP2_TVMD_HORZ_NORMAL_A,\n"
+            "                              VDP2_TVMD_VERT_224);\n"
+            "    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,\n"
+            "                                0U);",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "precede VDP configuration"):
+            assert_boot_trace_contract(late_user_init_trace)
+
+        cached_user_init_trace = self.source.replace(
+            "sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,",
+            "sourceboot_boot_trace_cached_write("
+            "SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "cache-through writer"):
+            assert_boot_trace_contract(cached_user_init_trace)
 
         resized_record = self.source.replace(
             "_Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 32U,",

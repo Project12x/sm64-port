@@ -67,7 +67,9 @@ _Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 32U,
                "sourceboot boot trace ABI must remain eight words");
 
 enum {
-    SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY = 1U,
+    SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY = 1U,
+    SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_CALLBACKS_REGISTERED,
+    SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY,
     SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE,
     SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED,
     SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE,
@@ -600,6 +602,8 @@ static void sourceboot_present_generation(uint32_t presentation_generation)
 void user_init(void) {
     /* First, matching both siblings' user_init order (castleviewer
      * main.c:1186, marioturntable main.c:247). */
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY,
+                                0U);
     smpc_peripheral_init();
     vdp2_tvmd_display_res_set(VDP2_TVMD_INTERLACE_NONE,
                               VDP2_TVMD_HORZ_NORMAL_A,
@@ -621,6 +625,8 @@ void user_init(void) {
      * that starts polling before the first VBLANK can otherwise retain an
      * all-zero, disconnected OSContPad sample). */
     vdp_sync_vblank_out_set(sourceboot_vblank_out_handler, NULL);
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_CALLBACKS_REGISTERED, 0U);
     smpc_peripheral_intback_issue();
 }
 
