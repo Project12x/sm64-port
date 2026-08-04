@@ -136,5 +136,8 @@ snapshot gate is green. This does not claim target coherency proof; target
 evidence, fresh reviews, and the preserved unrelated runtime-contract failure
 remain open.
 
+Fix-round behavior/docs commit: `a358927e`
+(`fix(saturn): publish snapshot payload uncached`).
+
 Fix-round behavior/docs commit: `52aec1e1`
 (`fix(saturn): serialize render snapshot claims`).

@@ -111,3 +111,6 @@ it for all producer clears. Sourceboot therefore fills the snapshot through P2
 before publication. The focused gate is green, but no host test can establish
 real SH-2 cache behavior; target coherency evidence, fresh review, and the
 unrelated runtime-contract gate remain open.
+
+Fix-round behavior/docs commit: `a358927e`
+(`fix(saturn): publish snapshot payload uncached`).
