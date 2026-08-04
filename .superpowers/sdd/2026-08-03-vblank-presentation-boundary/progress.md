@@ -121,6 +121,14 @@ load/runtime memory-layout fault, not a stale artifact, byte-order error, or
 supported VBlank regression. Post-release frame bisection is active; no
 scheduler/VDP/camera repair is authorized until it locates the first change.
 
+Task 9 harness correction: embedded ISO `A.BIN` equals the staged build binary,
+but the headless BIOS macro never makes the paired ELF's `main` text visible at
+its linked address, at any sampled phase. That macro is therefore invalid as a
+target-launch/trace harness. Earlier zero/random trace samples are withdrawn as
+target evidence; no scheduler, CRT, camera, or HWRAM-corruption claim may be
+made from them. The active target gate is a logged desktop-Ymir profile launch
+or a direct loader path, not another headless input-pulse capture.
+
 Task 8: active — add a paired P1/P2 trace observation to distinguish the
 ELF-resolved cacheable address from the trace writer's cache-through alias.
 Host test was RED for missing paired samples and GREEN after the reader

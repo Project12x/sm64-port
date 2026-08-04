@@ -302,6 +302,19 @@ evidence that a VBlank scheduler change regressed the build. The next active
 task is a one-capture post-release frame bisection; no scheduler, VDP, or
 camera change is permitted from this result alone.
 
+**Harness correction:** Task 9's linked-text probe (`89ed435e`, 16 focused
+tests green) established that the headless BIOS input macro is not a valid
+target-launch oracle. The staged ISO's embedded `A.BIN` exactly matches the
+staged build binary, and the ELF's `main` bytes are known, but headless
+`mem.peek` reports those bytes absent from protocol-ready through every
+post-release checkpoint. Its PC/SP sequence also crosses low/unrelated
+regions before landing in code-like addresses. This invalidates every prior
+headless post-BIOS trace as target-runtime evidence; it does **not** implicate
+the scheduler, camera, CRT, linker, or HWRAM heap. Do not run further
+headless-BIOS trace bisections. The active gate is now a logged desktop-Ymir
+launch using the established `.ymir-profile` + staged CUE/RAM-cart path, or a
+direct target loader that bypasses the BIOS macro.
+
 **Task 8 active — P1/P2 observation-alias comparison:** The target trace is
 published through the SH-2 cache-through alias, but the existing reader only
 observes the ELF-resolved P1 address. The reader now takes both reads at every
