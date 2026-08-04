@@ -4,6 +4,14 @@
 
 ### Added
 
+- Clarified the full-game renderer roadmap: the legacy Castle demo already
+  proved source-driven full Mario animation, so the Saturn path preserves and
+  optimizes that bridge rather than rebuilding animation. Future enemies use
+  the same animated-actor renderer contract, with additional per-family asset
+  and feature coverage. The plan now distinguishes its committed coarse
+  BSP/frustum/portal-window admission from a future, evidence-driven general
+  occlusion/PVS extension.
+
 - Added the first A5.8 terrain descriptor-binding seam and an executable C
   live-cutover contract. A future WORLD callback now proves its exact claimed
   queue descriptor before deriving terrain record/command addresses from the

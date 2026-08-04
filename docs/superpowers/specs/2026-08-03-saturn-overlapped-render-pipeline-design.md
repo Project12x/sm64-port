@@ -178,6 +178,21 @@ LOD. Opaque meshlets do not enter a global comparison sort. Translucent
 primitives use stable fixed depth bins (or the already-proven bounded radix
 alternative if evidence requires it), preserving source order within a bin.
 
+### Dynamic actor and visibility scope correction (2026-08-04)
+
+Mario is the proven reference actor, not a one-off exception: the legacy
+Castle demonstration already exercised source-driven full Mario animation.
+The Saturn work preserves that animation/pose bridge and reduces its render
+cost through meshlets, rather than recreating an animation system. Enemies
+follow the same renderer contract—live source pose plus generated bounds,
+material partitions, and draw data—but require per-family extraction and
+feature coverage before they are admitted to the target path.
+
+Coarse BSP/frustum admission and generated portal/window metadata are planned
+for scene-neutral levels. A general portal/PVS or occlusion system is not
+currently an acceptance promise: it must be added only after measured
+per-level VDP1 evidence shows that the coarse path is insufficient.
+
 ## Command construction, DMA, and presentation
 
 The runtime alternates at least two source command/Gouraud staging banks. Each

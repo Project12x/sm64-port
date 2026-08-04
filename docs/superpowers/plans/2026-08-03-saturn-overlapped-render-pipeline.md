@@ -93,6 +93,15 @@ and the evidence report before starting another task.
   sorting. Focused host tests and mutation checks are green. Independent
   reviews and source-only-authorized target visual/counter evidence remain
   open; no performance claim is made.
+  **Full-animation preservation correction (2026-08-04):** the legacy Castle
+  demo already proved Mario's source-driven full animation in the Saturn
+  renderer. A4 preserves that animation/pose path while making its rendering
+  cheaper; it is not a plan to recreate Mario animation. Future enemies are
+  the same renderer category as Mario—an animated actor with a pose, bounds,
+  material partitions, and draw data—not a separate gameplay rewrite. Their
+  additional work is coverage: extracting arbitrary object-family
+  model/animation banks, bridging their live source pose and visibility state,
+  and preserving each family's special rendering features.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** active. The
   immutable, cache-through queue contract, host exact-once fixture, and
   coherency mutation gate are source-complete. Descriptor kind now selects a
@@ -165,7 +174,13 @@ and the evidence report before starting another task.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
-- [ ] **Task 10 / A10 — full-game hardening and publication:** pending.
+- [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
+  includes scene-neutral level extraction and validation, generalized dynamic
+  actor/enemy banks using the same actor pipeline proven by Mario, and
+  per-level coarse BSP/frustum/portal-window admission. It does **not** yet
+  promise a full arbitrary occlusion/PVS system: that remains a separately
+  measured extension only if coarse admission leaves VDP1-bound levels too
+  expensive.
 
 ## Global Constraints
 
