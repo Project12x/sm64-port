@@ -100,8 +100,19 @@ and the evidence report before starting another task.
   publishes its cache lane atomically; this removes the unsafe `begin == 0`
   inference that prevented work stealing. Wiring that source-only contract into
   the currently active A3/A4 renderer candidate remains deliberately deferred
-  so this task does not silently alter either candidate's accepted path. Live
-  queue integration, target evidence, and independent reviews remain open.
+  so this task does not silently alter either candidate's accepted path. The
+  A5.5 bridge final review is GO for source-only scope at 87824a5a; it
+  explicitly does not authorize activation. **Design correction (2026-08-04,
+  A5.6):** inspection of the live renderer proved the bridge's descriptor
+  release metadata is not a payload migration: terrain results are physically
+  split between master/slave arrays, actor vertices use fixed owner metadata,
+  and the linked generic worker owns the sole CPU-DUAL callback. A safe
+  activation therefore requires a distinct atomic migration of payload banks,
+  readers, and CPU-DUAL lifecycle. The watched
+  test_render_job_live_cutover_source.py is RED against the current fixed
+  dispatch; no partial queue bind is permitted. The accepted 3–4 FPS A3+A4
+  CUE remains the rollback baseline. Live queue integration, target evidence,
+  and independent reviews remain open.
 - [ ] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete pending independent review. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the
@@ -924,6 +935,34 @@ types, ownership rules, or production fallbacks.
   callback, publish terrain/actor jobs, and remove accepted fixed joins only
   after `all_terminal()`. This remains a separate source/target gate; no
   target build or Ymir run is authorized by Steps 1–3 alone.
+
+### Task 5.6: Descriptor-owned payload banks and atomic CPU-DUAL cutover
+
+**Status:** active, red integration gate recorded; this is the required
+prerequisite for Task 5 Step 5, not target-performance evidence.
+
+- [x] **Step 1: Record the live seam and red gate.** The current frame still
+  calls the fixed terrain dispatcher and chained Mario dispatcher. The new
+  test_render_job_live_cutover_source.py fails before production changes:
+  the renderer has no bridge include, queue publish/drain/terminal boundary,
+  or queue runtime lifecycle.
+- [ ] **Step 2: Make terrain and actor payload ownership descriptor-indexed.**
+  Replace physical master/slave result arrays and fixed actor owner reads with
+  output-bank slots selected by exact queue descriptor identity; readers must
+  reject non-DONE output and choose cached/P2 only from the recorded claimant.
+- [ ] **Step 3: Add the one-owner queue CPU-DUAL runtime.** Bind exactly one
+  polling callback only after default legacy dispatch is gone; persistent slave
+  drain and master drain share the same local callback table and immutable
+  renderer context.
+- [ ] **Step 4: Atomically switch the accepted frame path.** Publish terrain
+  and actor descriptors, drain opportunistically, and merge only after
+  all_terminal(generation). Preserve master-only final VDP1 lowering and
+  painter order. The fixed worker may remain only behind an isolated explicit
+  diagnostic configuration.
+- [ ] **Step 5: Green source gates and two independent reviews.** Run bridge,
+  queue, coherency, actor/cluster/runtime gates plus the live-cutover static
+  guard. A target build/Ymir run remains prohibited until this source scope
+  receives both reviews.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

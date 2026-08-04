@@ -868,3 +868,32 @@ open.
   explicitly cannot activate the slave. The static source test scans both the
   queue and bridge sources for CPU-DUAL registration/notify tokens; it and the
   bridge/queue host fixtures pass. No target build/Ymir/FPS evidence ran.
+
+### A5.6 live-cutover prerequisite (2026-08-04)
+
+- **ACTIVE — watched RED, no source activation.** The A5.5 final review is GO
+  for source-only bridge scope at 87824a5a, but direct inspection of the
+  accepted A3/A4 renderer found the missing architectural seam: terrain writes
+  live in fixed physical master/slave arrays, actor readers use fixed owner
+  metadata, and the linked generic worker owns CPU-DUAL.
+- RED: test_render_job_live_cutover_source.py correctly fails because the
+  frame does not publish/drain/terminally join descriptor work and still calls
+  the legacy terrain/Mario dispatch.
+- verify-render-job-bridge now also invokes its source coexistence guard so
+  bridge activation constraints cannot be skipped. No target build, CUE, Ymir
+  run, or FPS claim occurred; the previously accepted 3–4 FPS A3+A4 CUE is
+  retained as rollback baseline.
+- Required next source scope: descriptor-indexed payload storage/readers,
+  followed by one atomic queue CPU-DUAL lifecycle cutover. A callback-name
+  substitution is explicitly unsafe and prohibited.
+
+### A5.6 queue runtime foundation (2026-08-04)
+
+- RED: direct Qt-host compile of render_job_runtime_test.c failed because the
+  runtime header/source did not exist.
+- GREEN: saturn_render_job_runtime now retains one queue/callback/context
+  owner and installs the one Yaul polling entry only on SH-2. The host fixture
+  activates once, rejects a second activation, drains one slave-claimed
+  descriptor, and observes its terminal state: PASS with -std=c11 -Wall
+  -Wextra -Werror. This does not bind the renderer or replace the linked legacy
+  worker yet, so no target build/Ymir/FPS evidence is claimed.

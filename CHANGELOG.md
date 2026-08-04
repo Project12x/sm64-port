@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added the source-only A5.6 render-job runtime lifecycle. It holds one
+  queue/callback-table/context owner and, on SH-2 only, installs the sole
+  polling CPU-DUAL entry; publication remains separate and host coverage
+  proves the slave drains an exact claimed descriptor to terminal state. The
+  live renderer is intentionally not bound yet because its fixed physical
+  payload partitions still need descriptor-owned migration, preserving the
+  accepted A3/A4 candidate as rollback baseline.
+
 - Added the A5.5 descriptor-to-result bridge for the future opportunistic
   renderer. It routes result reads and writes using the exact queue descriptor
   index and actual master/slave claim, and rejects readers before that job is

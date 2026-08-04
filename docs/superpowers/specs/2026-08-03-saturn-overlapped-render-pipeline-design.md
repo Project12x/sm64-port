@@ -311,6 +311,11 @@ each task back here.
   insertion sort; batch opaque meshlets and bin only order-dependent work.
 - [ ] **A5 — shared work queue:** replace terrain/Mario fixed splits and joins
   with persistent opportunistic jobs and exactly-once ownership.
+- [ ] **A5.6 — live payload/callback cutover:** migrate the physical
+  master/slave terrain and actor payload partitions to exact descriptor-owned
+  output slots, then install the queue as the one CPU-DUAL polling owner. A
+  queue release record alone is insufficient: it cannot make an existing
+  fixed-split payload cache-safe.
 - [ ] **A6 — localized recovery:** recover only unclaimed/failed jobs, reject
   stale generations, and allow previous-complete-frame presentation.
 - [ ] **A7 — alternating source banks:** patch compile-once templates in
@@ -337,6 +342,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 | 2026-08-03 | Preserve completed sprint components but supersede same-frame serial scheduling. | Approved by owner after manual BOB test remained extremely slow. |
 | 2026-08-03 | First visible checkpoint is duplicate source-render preparation removal; strict native-math census does not block this experimental CUE. | Approved architecture policy. |
 | 2026-08-03 | A1 may suppress source display-list construction only after every authoritative mutation in the geo walk is preserved through a behavior-tested state-only seam. | Quality-fix round 1/5 blocks `4a8fe1ce^..70cb3fe1`: the current `geo_process_root()` guard skips animation timers/frames, painting and DDD-warp state, WDW water-region writes, moving-texture/flying-carpet counters, camera FOV evolution, and matrix-derived object-position writes. No target/CUE gate may start from this range. |
+| 2026-08-04 | A5.5's descriptor-to-result bridge is a source-only metadata prerequisite, not an activation seam. The live renderer's fixed physical payload arrays and generic CPU-DUAL owner require A5.6: descriptor-owned payload migration plus one atomic callback cutover. | A watched static integration gate is RED before implementation; no partial queue callback registration is allowed. The accepted A3+A4 3–4 FPS CUE remains rollback evidence. |
 | 2026-08-03 | Normal/promotable sourceboot must fail closed by never enabling the reserved scene-graph suppression policy. Final display submission may remain suppressed while the Saturn IR renderer owns presentation; only the separately authorized sealed D1 diagnostic may activate graph suppression. | Implemented in `77ee306c`; `geo_process_root()` runs on every normal source tick, normal-walk telemetry increments, and suppressed-walk telemetry remains zero. The D1 exception is non-promotable and cannot supply A1 correctness evidence. |
 | 2026-08-03 | Permit one sealed, compile-time-only `diag-skip-geo` CUE to measure the upper bound of removing the source geo walk. | Owner authorized. It is default-off, requires demo + replay configuration, must restore the setter within the source tick, receives a distinct output tag, and knowingly invalidates graph-owned state. It is neither an A1 resolution nor a full-game/replay candidate; BOB is only the demonstrator. |
 | 2026-08-03 | The project is Saturn-exclusive; PC/N64 build compatibility is unsupported and not an A1 gate. “Ordinary interpreted” means the Saturn interpreted renderer. | Owner clarification; `a00cdd17` removes the N64 syntax gate. Non-Saturn behavior matters only when it affects Saturn code or host test tooling. |
