@@ -32,7 +32,10 @@ descriptor remains pointer-free and 16 bytes. Ordered terrain commands and
 the pointer-free P2 callback-context publication contract are now host-green:
 both terrain and Mario require exact generation/phase/claim identity, bounded
 payload size, and cache-through peer selection. This increment is pending
-independent source review. Target link/cache evidence and one atomic CPU-DUAL
+fresh re-review after `891f64b2` rejected the first version's unreachable
+publisher and nested cached pointers. The repair makes Mario's dynamic refs
+inline, terrain's queue snapshot self-contained, and publication an explicit
+preclaim preparation step. Target link/cache evidence and one atomic CPU-DUAL
 owner replacement remain open.
 
 The terrain route's claimant lane now reaches classification and every

@@ -1214,9 +1214,27 @@ open.
   stale generations/sequences, incomplete publication, wrong claims, and
   out-of-range identities in an executable C11 fixture.
 - Strict Qt MinGW C11/Werror command-stream, callback-context, terrain-route,
-  actor-route, and existing terrain-depth fixtures PASS. The new callback
-  source is not yet added to the target source list because the concurrent
-  audio lane owns the dirty Makefile; that integration must occur after its
-  commit and before review.
+  actor-route, and existing terrain-depth fixtures PASS. The callback source
+  is present in the sourceboot target list; target compilation remains an open
+  post-review gate.
 - Scope is dormant source only. The sole CPU-DUAL callback remains the legacy
   worker; there was no target build, CUE/Ymir run, cache proof, or FPS claim.
+
+### A5.8 callback-context review repair (2026-08-04)
+
+- NO-GO audit `891f64b2` found the renderer publisher unreachable and the
+  outer P2 alias insufficient: terrain followed stack-local classify/spans
+  pointers and Mario followed the master-cached dynamic vertex-ref list.
+- Repair: Mario copies dynamic compact vertex references inline and resolves
+  immutable generated primitive/material banks locally. Terrain copies its
+  transform job and complete work-order stream into a self-contained bounded
+  snapshot; each callback reconstructs only a caller-local classify view and
+  never follows the legacy stack compact/spans object.
+- The preclaim preparation now snapshots exact renderer-owned terrain state,
+  then publishes every descriptor context before a future drain may claim it.
+  Four phase-specific open APIs are used by the dormant callbacks and directly
+  executed for master and slave claims. The mutation matrix now covers all
+  four phases and generation, sequence, stored index, phase, payload bytes,
+  producer lane, ready state, claimant, and out-of-range identity.
+- Repair is source-complete pending fresh re-review. No callback activation,
+  target build, CUE/Ymir run, cache proof, or FPS claim occurred.

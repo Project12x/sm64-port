@@ -926,10 +926,10 @@ typedef struct demo_mario_transform_context {
     uint16_t pose_frame;
     uint16_t pose_frame_count;
     uint8_t pose_walking_bank;
-    /* These point only at generated, read-only mesh/material banks. */
-    const uint16_t (*primitives)[5];
-    const uint8_t (*material_rgb)[3];
-    const uint16_t *vertex_refs;
+    /* Dynamic compact references are copied inline so a peer never follows a
+     * cached master pointer from an otherwise cache-through snapshot. The
+     * generated primitive/material banks are addressed by local symbols. */
+    uint16_t vertex_refs[SM64_MARIO_VERTEX_COUNT];
     uint16_t vertex_ref_slot[SM64_MARIO_VERTEX_COUNT];
     uint16_t vertex_slave_begin;
     uint16_t transform_ref_count;
@@ -956,6 +956,7 @@ typedef struct demo_classify_context {
     uint32_t clip_to_two[2];
     uint32_t clip_recovery[2];
     uint32_t clip_overflow[2];
+    uint16_t work_count;
     uint16_t required_positions;
     uint32_t transform_sequence;
     bool dual_phase;
@@ -1052,8 +1053,7 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
     const uint8_t lane = begin == 0U ? 0U : 1U;
     if (context == NULL || !context->snapshot.valid ||
         context->vertex_count != SM64_MARIO_VERTEX_COUNT ||
-        context->primitives == NULL || context->material_rgb == NULL ||
-        context->vertex_refs == NULL || end > context->transform_ref_count) {
+        end > context->transform_ref_count) {
         return;
     }
     const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
@@ -1080,9 +1080,7 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
 {
     demo_mario_transform_context_t *context = opaque;
     const uint8_t lane = begin == 0U ? 0U : 1U;
-    if (context == NULL || context->primitives == NULL ||
-        context->material_rgb == NULL ||
-        end > SM64_MARIO_PRIMITIVE_COUNT)
+    if (context == NULL || end > SM64_MARIO_PRIMITIVE_COUNT)
         return;
     for (uint16_t primitive_id = begin; primitive_id < end; primitive_id++) {
         if (((uint16_t)(primitive_id - begin) % DEMO_CANCEL_POLL_INTERVAL) ==
@@ -1090,10 +1088,10 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
             break;
         demo_actor_primitive_ref_t *const result =
             &s_actor_refs[primitive_id];
-        const uint16_t *const primitive = context->primitives[primitive_id];
+        const uint16_t *const primitive = sm64_mario_primitives[primitive_id];
         result->primitive_id = DEMO_ACTOR_PRIMITIVE_REJECTED;
         result->material_vertex = 0U;
-        if (context->material_rgb[primitive[0]][0] > 31U) continue;
+        if (sm64_mario_material_rgb[primitive[0]][0] > 31U) continue;
         const demo_actor_vertex_result_t *const a =
             demo_actor_result_read_lane_split(
                 lane, context->vertex_slave_begin, primitive[1]);
@@ -1149,10 +1147,9 @@ static bool demo_snapshot_mario_transform_context(
     context->pose_frame = pose->frame;
     context->pose_frame_count = pose->frame_count;
     context->pose_walking_bank = pose->walking_bank;
-    context->primitives = sm64_mario_primitives;
-    context->material_rgb = sm64_mario_material_rgb;
-    context->vertex_refs = s_actor_transform_refs;
     context->transform_ref_count = s_actor_transform_ref_count;
+    memcpy(context->vertex_refs, s_actor_transform_refs,
+           context->transform_ref_count * sizeof(context->vertex_refs[0]));
     memset(context->vertex_ref_slot, 0xFF, sizeof(context->vertex_ref_slot));
     for (uint16_t ref = 0U; ref < context->transform_ref_count; ref++) {
         const uint16_t vertex = context->vertex_refs[ref];
@@ -1778,10 +1775,59 @@ typedef struct demo_terrain_compact_context {
     sm64_saturn_terrain_result_spans_t *spans;
     uint32_t sequence;
 } demo_terrain_compact_context_t;
-static demo_terrain_compact_context_t s_terrain_queue_compact_context
+typedef struct demo_terrain_queue_context {
+    sm64_saturn_ir_transform_job_t job;
+    uint16_t work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+    uint16_t work_count;
+    uint16_t required_positions;
+    uint32_t transform_sequence;
+    uint32_t sequence;
+    uint8_t dual_phase;
+} demo_terrain_queue_context_t;
+static demo_terrain_queue_context_t s_terrain_queue_context
     DEMO_TERRAIN_TRANSFORM_CACHE;
-_Static_assert(sizeof(demo_terrain_compact_context_t) <= UINT16_MAX,
+_Static_assert(sizeof(demo_terrain_queue_context_t) <= UINT16_MAX,
                "terrain callback context must retain a bounded byte count");
+
+static bool demo_snapshot_terrain_queue_context(
+    demo_terrain_queue_context_t *context,
+    const demo_classify_context_t *classify, uint32_t sequence)
+{
+    if (context == NULL || classify == NULL || classify->job == NULL ||
+        classify->work_order == NULL || sequence == 0U ||
+        s_render_work_count > SM64_SATURN_BOB_PRIMITIVE_COUNT)
+        return false;
+    *context = (demo_terrain_queue_context_t){0};
+    context->job = *classify->job;
+    memcpy(context->work_order, classify->work_order,
+           s_render_work_count * sizeof(context->work_order[0]));
+    context->work_count = s_render_work_count;
+    context->required_positions = classify->required_positions;
+    context->transform_sequence = classify->transform_sequence;
+    context->sequence = sequence;
+    context->dual_phase = classify->dual_phase ? 1U : 0U;
+    return true;
+}
+
+static bool demo_terrain_queue_classify_context(
+    const demo_terrain_queue_context_t *snapshot,
+    demo_classify_context_t *classify)
+{
+    if (snapshot == NULL || classify == NULL || snapshot->sequence == 0U ||
+        snapshot->work_count > SM64_SATURN_BOB_PRIMITIVE_COUNT)
+        return false;
+    *classify = (demo_classify_context_t){
+        .primitives = s_bob_primitives_active,
+        .work_order = snapshot->work_order,
+        .camera = &snapshot->job.camera,
+        .job = &snapshot->job,
+        .work_count = snapshot->work_count,
+        .required_positions = snapshot->required_positions,
+        .transform_sequence = snapshot->transform_sequence,
+        .dual_phase = snapshot->dual_phase != 0U,
+    };
+    return true;
+}
 
 typedef struct demo_terrain_queue_output {
     sm64_saturn_terrain_result_t *records;
@@ -1829,6 +1875,43 @@ static bool __attribute__((unused)) demo_render_queue_context_publish(
         payload_bytes, SM64_SATURN_RENDER_OUTPUT_LANE_MASTER);
 }
 
+static bool __attribute__((unused)) demo_render_queue_contexts_publish(void)
+{
+    const uint32_t generation = s_render_job_graph.generation;
+    if (generation == 0U ||
+        s_terrain_queue_context.sequence == 0U ||
+        s_mario_transform_context.sequence == 0U)
+        return false;
+    const sm64_saturn_render_job_queue_t *const queue =
+        (const sm64_saturn_render_job_queue_t *)
+            sm64_saturn_dual_frame_cache_through(&s_render_job_queue);
+    for (uint16_t job_index = 0U; job_index < queue->count; job_index++) {
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_published_job(
+                &s_render_job_queue, generation, job_index);
+        if (job == NULL) return false;
+        const uint16_t bytes =
+            (job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
+             job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER)
+                ? (uint16_t)sizeof(s_terrain_queue_context)
+                : (uint16_t)sizeof(s_mario_transform_context);
+        if (!demo_render_queue_context_publish(job_index, bytes)) return false;
+    }
+    return true;
+}
+
+/* Called by the future atomic scheduler cutover after it has published the
+ * complete graph and snapshotted Mario, but before either SH-2 may claim a
+ * descriptor. Keeping this preparation separate makes source staging
+ * executable without installing a second CPU-DUAL owner. */
+static bool __attribute__((unused)) demo_render_queue_prepare_contexts(
+    const demo_classify_context_t *classify, uint32_t sequence)
+{
+    return demo_snapshot_terrain_queue_context(
+               &s_terrain_queue_context, classify, sequence) &&
+        demo_render_queue_contexts_publish();
+}
+
 static bool demo_render_queue_context_open(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, const void *cached_payload,
@@ -1838,12 +1921,37 @@ static bool demo_render_queue_context_open(
     uint16_t job_index;
     sm64_saturn_render_callback_context_access_t access;
     if (job == NULL || payload == NULL ||
-        !demo_terrain_queue_claim_index(job, claimed_state, &job_index) ||
-        !sm64_saturn_render_callback_context_open(
+        !demo_terrain_queue_claim_index(job, claimed_state, &job_index))
+        return false;
+    bool opened = false;
+    switch (job->callback_id) {
+    case SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT:
+        opened = sm64_saturn_render_callback_context_open_world_admit(
             &s_render_callback_contexts, &s_render_job_queue, job_index,
             claimed_state, job->snapshot_generation, payload_bytes,
-            cached_payload, &access) || access.phase != job->callback_id)
-        return false;
+            cached_payload, &access);
+        break;
+    case SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER:
+        opened = sm64_saturn_render_callback_context_open_world_lower(
+            &s_render_callback_contexts, &s_render_job_queue, job_index,
+            claimed_state, job->snapshot_generation, payload_bytes,
+            cached_payload, &access);
+        break;
+    case SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT:
+        opened = sm64_saturn_render_callback_context_open_actor_admit(
+            &s_render_callback_contexts, &s_render_job_queue, job_index,
+            claimed_state, job->snapshot_generation, payload_bytes,
+            cached_payload, &access);
+        break;
+    case SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER:
+        opened = sm64_saturn_render_callback_context_open_actor_lower(
+            &s_render_callback_contexts, &s_render_job_queue, job_index,
+            claimed_state, job->snapshot_generation, payload_bytes,
+            cached_payload, &access);
+        break;
+    default: break;
+    }
+    if (!opened) return false;
     *payload = access.payload;
     return true;
 }
@@ -2154,7 +2262,6 @@ static bool __attribute__((unused)) demo_actor_queue_transform(
     const demo_mario_transform_context_t *const context = published_context;
     demo_actor_queue_output_t output;
     if (job == NULL || context == NULL || !context->snapshot.valid ||
-        context->vertex_refs == NULL ||
         job->type != SM64_SATURN_RENDER_JOB_ACTOR_ADMIT ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT ||
         job->input_offset != 0U ||
@@ -2206,8 +2313,7 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
     demo_actor_queue_output_t output;
     uint16_t lower_job_index;
     uint16_t admit_job_index;
-    if (job == NULL || context == NULL || context->primitives == NULL ||
-        context->material_rgb == NULL ||
+    if (job == NULL || context == NULL ||
         job->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER ||
         job->input_offset > SM64_MARIO_PRIMITIVE_COUNT ||
@@ -2231,11 +2337,11 @@ static bool __attribute__((unused)) demo_actor_queue_classify(
     demo_actor_primitive_ref_t *const records = output.records;
     for (uint16_t local = 0U; local < job->input_count; local++) {
         const uint16_t primitive_id = (uint16_t)(job->input_offset + local);
-        const uint16_t *const primitive = context->primitives[primitive_id];
+        const uint16_t *const primitive = sm64_mario_primitives[primitive_id];
         demo_actor_primitive_ref_t *const result = &records[local];
         result->primitive_id = DEMO_ACTOR_PRIMITIVE_REJECTED;
         result->material_vertex = 0U;
-        if (context->material_rgb[primitive[0]][0] > 31U) continue;
+        if (sm64_mario_material_rgb[primitive[0]][0] > 31U) continue;
         const demo_actor_vertex_result_t *const a =
             demo_actor_queue_vertex_lookup(context, vertices, vertex_count,
                                            primitive[1]);
@@ -2402,8 +2508,8 @@ static bool demo_terrain_compact_transformed(
     demo_terrain_compact_context_t *context, uint16_t begin, uint16_t end,
     uint8_t lane, sm64_saturn_terrain_result_arena_t *arena)
 {
-    if (context == NULL || arena == NULL || lane > 1U || begin > end ||
-        end > s_render_work_count)
+    if (context == NULL || context->classify == NULL || arena == NULL ||
+        lane > 1U || begin > end || end > context->classify->work_count)
         return false;
     demo_classify_exact(context->classify, begin, end, lane);
     for (uint16_t work = begin; work < end; work++) {
@@ -2538,22 +2644,23 @@ static bool __attribute__((unused)) demo_terrain_queue_world_admit(
     (void)opaque;
     const void *published_context;
     if (!demo_render_queue_context_open(
-            job, claimed_state, &s_terrain_queue_compact_context,
-            (uint16_t)sizeof(s_terrain_queue_compact_context),
+            job, claimed_state, &s_terrain_queue_context,
+            (uint16_t)sizeof(s_terrain_queue_context),
             &published_context))
         return false;
-    demo_terrain_compact_context_t *const context =
-        (demo_terrain_compact_context_t *)published_context;
+    const demo_terrain_queue_context_t *const context = published_context;
+    demo_classify_context_t classify;
     demo_terrain_queue_output_t output;
-    if (job == NULL || context == NULL || context->classify == NULL ||
+    if (job == NULL || context == NULL ||
+        !demo_terrain_queue_classify_context(context, &classify) ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
         !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
-        !demo_transform_owned_positions(context->classify, output.writer_lane))
+        !demo_transform_owned_positions(&classify, output.writer_lane))
         return false;
     return demo_terrain_queue_publish_admit(
         job, claimed_state, output.writer_lane,
-        (uint16_t)context->classify->transformed[output.writer_lane],
+        (uint16_t)classify.transformed[output.writer_lane],
         context->sequence);
 }
 
@@ -2568,20 +2675,27 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
     (void)opaque;
     const void *published_context;
     if (!demo_render_queue_context_open(
-            job, claimed_state, &s_terrain_queue_compact_context,
-            (uint16_t)sizeof(s_terrain_queue_compact_context),
+            job, claimed_state, &s_terrain_queue_context,
+            (uint16_t)sizeof(s_terrain_queue_context),
             &published_context))
         return false;
-    demo_terrain_compact_context_t *const context =
-        (demo_terrain_compact_context_t *)published_context;
+    const demo_terrain_queue_context_t *const context = published_context;
+    demo_classify_context_t classify;
+    demo_terrain_compact_context_t compact = {
+        .classify = &classify,
+        .spans = NULL,
+        .sequence = context->sequence,
+    };
     demo_terrain_queue_output_t output;
     uint16_t lower_job_index;
     uint16_t admit_job_index;
     if (job == NULL || context == NULL ||
+        !demo_terrain_queue_classify_context(context, &classify) ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER ||
-        job->input_offset > s_render_work_count ||
-        job->input_count > (uint16_t)(s_render_work_count - job->input_offset) ||
+        job->input_offset > context->work_count ||
+        job->input_count >
+            (uint16_t)(context->work_count - job->input_offset) ||
         !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
         output.capacity == 0U)
         return false;
@@ -2600,12 +2714,12 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
     sm64_saturn_terrain_result_arena_init(
         &arena, output.records, output.commands, output.capacity, 8U);
     if (!demo_terrain_compact_transformed(
-        context, job->input_offset,
+        &compact, job->input_offset,
         (uint16_t)(job->input_offset + job->input_count),
         output.writer_lane, &arena))
         return false;
     return demo_terrain_queue_publish_result(
-        job, claimed_state, output.writer_lane, arena.count, context->sequence);
+        job, claimed_state, output.writer_lane, arena.count, compact.sequence);
 }
 
 /* The master-side merge route likewise has no fixed peer range: DONE plus the
@@ -3531,6 +3645,7 @@ void sm64_saturn_demo_render_frame(
         .radius_rejected = {0U, 0U},
         .near_rejected = {0U, 0U},
         .degenerate = {0U, 0U},
+        .work_count = s_render_work_count,
         .required_positions = required_positions,
         .transform_sequence = s_transform_publish_sequence,
         .dual_phase = dual_transform_phase

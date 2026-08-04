@@ -52,6 +52,14 @@ int main(void)
         function_contains(source, "demo_snapshot_mario_transform_context(",
                           "memcpy(context->vertices, pose->vertices") &&
         function_contains(source, "demo_snapshot_mario_transform_context(",
+                          "memcpy(context->vertex_refs, s_actor_transform_refs") &&
+        !function_contains(source, "demo_snapshot_mario_transform_context(",
+                           "context->primitives =") &&
+        !function_contains(source, "demo_snapshot_mario_transform_context(",
+                           "context->material_rgb =") &&
+        !function_contains(source, "demo_snapshot_mario_transform_context(",
+                           "context->vertex_refs =") &&
+        function_contains(source, "demo_snapshot_mario_transform_context(",
                           "context->snapshot = *snapshot") &&
         function_contains(source, "demo_dispatch_mario_transform(",
                           "demo_snapshot_mario_transform_context") &&

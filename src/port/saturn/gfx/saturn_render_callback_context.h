@@ -53,4 +53,18 @@ bool sm64_saturn_render_callback_context_open(
     uint16_t expected_payload_bytes, const void *cached_payload,
     sm64_saturn_render_callback_context_access_t *access);
 
+#define SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN(name) \
+bool sm64_saturn_render_callback_context_open_##name( \
+    const sm64_saturn_render_callback_context_bank_t *bank, \
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index, \
+    sm64_saturn_render_job_state_t claimed_state, uint32_t expected_sequence, \
+    uint16_t expected_payload_bytes, const void *cached_payload, \
+    sm64_saturn_render_callback_context_access_t *access)
+
+SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN(world_admit);
+SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN(world_lower);
+SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN(actor_admit);
+SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN(actor_lower);
+#undef SM64_SATURN_DECLARE_CONTEXT_PHASE_OPEN
+
 #endif

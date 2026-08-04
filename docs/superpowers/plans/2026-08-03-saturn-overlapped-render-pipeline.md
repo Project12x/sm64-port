@@ -241,6 +241,17 @@ and the evidence report before starting another task.
   activation/default-path change, target build, CUE, Ymir run, or FPS claim
   occurred. Remaining: independent review, atomic sole-owner cutover, then
   target/cache/manual evidence.
+  **A5.8 command/context review repair (2026-08-04):** initial review NO-GO at
+  `891f64b2`. Although the 16-byte release ABI was correct, the renderer
+  publisher had no preparation caller and slave callbacks could follow nested
+  master-cached pointers. The repair copies Mario's dynamic vertex-reference
+  list inline, replaces terrain's stack classify/spans dependency with a
+  self-contained job/work-order snapshot, and gives the future atomic cutover
+  one preclaim prepare/publish boundary. Four phase-specific opens execute for
+  both claimant lanes; mutations now cover generation, sequence, stored index,
+  phase, byte bound, producer lane, ready, claim, and range for WORLD_ADMIT,
+  WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER. Fresh re-review is required; live
+  activation and all target/manual gates remain unchecked.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

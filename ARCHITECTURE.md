@@ -55,3 +55,11 @@ peer claimant receives only the cache-through alias. Likewise, the master-only
 terrain order stream retains the exact descriptor-local command image beside
 each result during sorting, so final VDP1 lowering never guesses a command
 bank from a logical work range. Both contracts remain dormant until cutover.
+
+The payload behind that release must also be self-contained. Mario therefore
+copies the frame-varying compact vertex-reference list into its snapshot and
+resolves generated immutable banks by local symbols. Terrain copies the exact
+transform job and bounded work-order stream; queue callbacks reconstruct a
+caller-local classify view and do not retain the legacy stack classify/spans
+pointers. One preparation boundary snapshots and publishes all four phases
+before the future scheduler permits either SH-2 to claim work.

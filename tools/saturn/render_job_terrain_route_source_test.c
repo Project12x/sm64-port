@@ -55,6 +55,18 @@ int main(void)
     char *source = read_file("src/port/saturn/gfx/saturn_demo_render.c");
     if (source == NULL) return 2;
     const int ok =
+        function_contains(source, "demo_snapshot_terrain_queue_context(",
+                          "memcpy(context->work_order") &&
+        function_contains(source, "demo_snapshot_terrain_queue_context(",
+                          "context->job = *classify->job") &&
+        function_contains(source, "demo_render_queue_prepare_contexts(",
+                          "demo_snapshot_terrain_queue_context") &&
+        function_contains(source, "demo_render_queue_prepare_contexts(",
+                          "demo_render_queue_contexts_publish") &&
+        function_contains(source, "demo_terrain_queue_classify_context(",
+                          ".work_order = snapshot->work_order") &&
+        function_contains(source, "demo_terrain_queue_classify_context(",
+                          ".job = &snapshot->job") &&
         function_contains(source, "demo_terrain_compact_transformed(",
                           "sm64_saturn_terrain_result_arena_seal") &&
         function_contains(source, "demo_terrain_compact_transformed(",
