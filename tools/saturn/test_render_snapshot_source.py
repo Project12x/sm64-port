@@ -20,6 +20,20 @@ def typedef_body(path: Path, name: str) -> str:
     return match.group("body")
 
 
+def function_body(text: str, name: str) -> str:
+    start = text.index(f"{name}(")
+    opening = text.index("{", start)
+    depth = 0
+    for index in range(opening, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[opening + 1:index]
+    raise AssertionError(f"unterminated {name}")
+
+
 def test_snapshot_types_have_no_pointer_fields() -> None:
     names = (
         (SNAPSHOT, "sm64_saturn_render_view"),
@@ -62,7 +76,23 @@ def test_ready_claim_uses_sh2_atomic_test_and_set() -> None:
     assert "sm64_saturn_render_snapshot_release_claim_release" in implementation
 
 
+def test_producer_writes_payload_through_cache_through_alias() -> None:
+    header = SNAPSHOT.read_text(encoding="utf-8")
+    implementation = IMPLEMENTATION.read_text(encoding="utf-8")
+    assert "sm64_saturn_render_snapshot_owner_payload" in header
+    for name in (
+        "sm64_saturn_render_snapshot_reset",
+        "sm64_saturn_render_snapshot_begin_write",
+        "sm64_saturn_render_snapshot_retire",
+    ):
+        body = function_body(implementation, name)
+        assert "sm64_saturn_render_snapshot_owner_payload" in body
+        assert "memset(&slot->snapshot" not in body
+    assert "*out = sm64_saturn_render_snapshot_owner_payload(slot);" in implementation
+
+
 if __name__ == "__main__":
     test_snapshot_types_have_no_pointer_fields()
     test_release_and_peer_payload_use_cache_through_accessors()
     test_ready_claim_uses_sh2_atomic_test_and_set()
+    test_producer_writes_payload_through_cache_through_alias()

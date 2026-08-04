@@ -98,3 +98,16 @@ contracts, target/Ymir, and fresh independent reviews remain open.
 
 Fix-round behavior/docs commit: `52aec1e1`
 (`fix(saturn): serialize render snapshot claims`).
+
+## Payload-publication fix round 3
+
+The quality review found that prior producer writes used P1 while acquisition
+used P2: compiler fences alone cannot make dirty P1 payload lines visible
+before uncached `READY`. The red source gate required a distinct owner-payload
+cache-through accessor and verified reset, begin-write, and retire use it
+without direct P1 bulk writes. The repair makes that accessor P2 on SH-2 (host
+identity only for lifecycle testing), returns it from `begin_write`, and uses
+it for all producer clears. Sourceboot therefore fills the snapshot through P2
+before publication. The focused gate is green, but no host test can establish
+real SH-2 cache behavior; target coherency evidence, fresh review, and the
+unrelated runtime-contract gate remain open.

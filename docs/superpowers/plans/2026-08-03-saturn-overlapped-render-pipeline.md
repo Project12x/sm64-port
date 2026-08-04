@@ -491,6 +491,14 @@ types, ownership rules, or production fallbacks.
   claim/release use in the implementation. Runtime-contract closure and fresh
   independent reviews remain open.
 
+  Fix round 3 resolves the quality review’s Critical P1/P2 publication gap.
+  The producer payload accessor now uses the same P2 cache-through address as
+  the peer, and `begin_write`, reset, and retire never bulk-write through P1.
+  A structural producer-visibility gate rejects a P1-only write path before
+  `READY`; the host fixture remains lifecycle evidence, not target cache proof.
+  Runtime-contract closure, target cache evidence, and fresh reviews remain
+  open.
+
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 
 **Files:**

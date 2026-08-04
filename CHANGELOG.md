@@ -25,6 +25,12 @@
   equivalent), so only one renderer can claim a snapshot generation; the
   losing contender must observe no acquired payload.
 
+- Corrected snapshot publication so producers clear, initialize, and return
+  the bulk payload through its SH-2 P2 cache-through address before releasing
+  `READY`. This prevents a clean release word from racing ahead of dirty P1
+  cache lines; host identity aliases cover lifecycle behavior, while target
+  cache visibility remains a separate evidence gate.
+
 - Added an opt-in desktop Ymir launch helper that records the exact SDL3
   command, working directory, project profile, staged CUE, and CUE-referenced
   ISO identities before manual testing. It keeps the 32-Mbit DRAM cart

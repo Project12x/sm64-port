@@ -507,3 +507,20 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
 - Green: `verify-render-snapshot-bank` passes the deterministic contention
   test and source structural gate. No target build/Ymir was run; the unrelated
   runtime-contract failure remains open and uncredited.
+
+### A2 payload-publication fix round 3 (2026-08-04)
+
+- Critical review finding: the earlier code wrote the bulk snapshot through
+  cached P1 and then released `READY` through P2. Compiler fences cannot
+  writeback dirty P1 cache lines, so the slave could observe a fresh release
+  record with stale P2 payload data. The focused lifecycle fixture was never
+  credited as target cache evidence.
+- Red: the new producer-visibility source gate failed before an owner-payload
+  P2 accessor existed and before reset/begin/retire used it rather than direct
+  `slot->snapshot` writes.
+- Green: producer and peer now share the P2 cache-through payload accessor;
+  `begin_write` returns it to sourceboot for authoritative post-tick filling,
+  and lifecycle clears use it before the existing fenced uncached release
+  writes. `verify-render-snapshot-bank` passes the structural and lifecycle
+  checks. This is source correction only: target cache-coherency evidence and
+  the preserved unrelated runtime-contract failure remain open.

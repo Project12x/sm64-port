@@ -127,5 +127,14 @@ bank gate is green; no target/Ymir and no runtime-contract rerun occurred.
 Fresh review and the existing terrain-command runtime-contract gate remain
 open.
 
+Task 2/A2 fix round 3: quality review found the Critical P1-producer/P2-peer
+coherency gap. The new source gate was RED before the owner cache-through
+payload accessor and producer use sites existed. `begin_write` now returns P2
+payload memory, and reset/retire clears also use P2, so sourceboot cannot dirty
+P1 payload lines before it publishes the uncached release word. The focused
+snapshot gate is green. This does not claim target coherency proof; target
+evidence, fresh reviews, and the preserved unrelated runtime-contract failure
+remain open.
+
 Fix-round behavior/docs commit: `52aec1e1`
 (`fix(saturn): serialize render snapshot claims`).

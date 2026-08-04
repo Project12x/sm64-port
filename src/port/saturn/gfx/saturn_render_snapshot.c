@@ -17,8 +17,7 @@ static sm64_saturn_render_snapshot_slot_t *snapshot_slot(
 
     if (bank == NULL || snapshot == NULL) return NULL;
     for (index = 0U; index < 2U; index++) {
-        if (snapshot == &bank->slot[index].snapshot ||
-            snapshot == sm64_saturn_render_snapshot_peer_payload(
+        if (snapshot == sm64_saturn_render_snapshot_owner_payload(
                 &bank->slot[index])) return &bank->slot[index];
     }
     return NULL;
@@ -32,8 +31,10 @@ void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank)
     for (index = 0U; index < 2U; index++) {
         volatile sm64_saturn_render_snapshot_release_t *const release =
             sm64_saturn_render_snapshot_release_uncached(&bank->slot[index]);
+        sm64_saturn_render_snapshot_t *const payload =
+            sm64_saturn_render_snapshot_owner_payload(&bank->slot[index]);
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
-        memset(&bank->slot[index].snapshot, 0, sizeof(bank->slot[index].snapshot));
+        memset(payload, 0, sizeof(*payload));
         release->generation = 0U;
         release->claim_lock = 0U;
         release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
@@ -62,14 +63,16 @@ bool sm64_saturn_render_snapshot_begin_write(
         sm64_saturn_render_snapshot_slot_t *const slot = &bank->slot[index];
         volatile sm64_saturn_render_snapshot_release_t *const release =
             sm64_saturn_render_snapshot_release_uncached(slot);
+        sm64_saturn_render_snapshot_t *const payload =
+            sm64_saturn_render_snapshot_owner_payload(slot);
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
-        memset(&slot->snapshot, 0, sizeof(slot->snapshot));
-        slot->snapshot.generation = generation;
+        memset(payload, 0, sizeof(*payload));
+        payload->generation = generation;
         release->generation = generation;
         release->claim_lock = 0U;
         sm64_saturn_render_snapshot_fence();
         release->state = SM64_SATURN_RENDER_SNAPSHOT_WRITING;
-        *out = &slot->snapshot;
+        *out = sm64_saturn_render_snapshot_owner_payload(slot);
         return true;
     }
     return false;
@@ -155,7 +158,8 @@ bool sm64_saturn_render_snapshot_retire(
         release->state != SM64_SATURN_RENDER_SNAPSHOT_COMPLETE) {
         return false;
     }
-    memset(&slot->snapshot, 0, sizeof(slot->snapshot));
+    memset(sm64_saturn_render_snapshot_owner_payload(slot), 0,
+           sizeof(slot->snapshot));
     release->generation = 0U;
     release->claim_lock = 0U;
     sm64_saturn_render_snapshot_fence();

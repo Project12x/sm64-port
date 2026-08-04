@@ -122,13 +122,24 @@ static inline void sm64_saturn_render_snapshot_release_claim_release(
 #endif
 }
 
+/* Producers and peer consumers both use P2 for bulk payload access. The
+ * producer never dirties a P1 cache line that the release store could outrun. */
+static inline sm64_saturn_render_snapshot_t *
+sm64_saturn_render_snapshot_owner_payload(
+    sm64_saturn_render_snapshot_slot_t *slot)
+{
+    if (slot == NULL) return NULL;
+    return (sm64_saturn_render_snapshot_t *)
+        sm64_saturn_render_snapshot_cache_through(&slot->snapshot);
+}
+
 static inline const sm64_saturn_render_snapshot_t *
 sm64_saturn_render_snapshot_peer_payload(
     const sm64_saturn_render_snapshot_slot_t *slot)
 {
-    if (slot == NULL) return NULL;
     return (const sm64_saturn_render_snapshot_t *)
-        sm64_saturn_render_snapshot_cache_through(&slot->snapshot);
+        sm64_saturn_render_snapshot_owner_payload(
+            (sm64_saturn_render_snapshot_slot_t *)slot);
 }
 
 _Static_assert(sizeof(sm64_saturn_render_view_t) == 92U,
