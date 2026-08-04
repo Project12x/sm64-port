@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -23,6 +22,8 @@ from capture_route_views import YmirClient
 NM = Path(
     "D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin/sh-elf-nm.exe"
 )
+MSYS_TOOLCHAIN_WRAPPER = Path(__file__).with_name("with-msys-toolchain.ps1")
+POWERSHELL = "powershell.exe"
 SOURCEBOOT_BOOT_TRACE_SYMBOL = "sourceboot_boot_trace"
 SOURCEBOOT_BOOT_TRACE_MAGIC = 0x53394254
 SOURCEBOOT_BOOT_TRACE_VERSION = 1
@@ -49,17 +50,14 @@ STAGE_NAMES = {
 }
 
 
-def _tool_environment() -> dict[str, str]:
-    environment = os.environ.copy()
-    environment["PATH"] = r"C:\msys64\usr\bin" + os.pathsep + environment.get("PATH", "")
-    return environment
-
-
 def parse_symbol_address(nm_output: str) -> int:
     """Return the exact globally exported address for the trace record."""
     for line in nm_output.splitlines():
         fields = line.split()
-        if len(fields) == 3 and fields[2] == SOURCEBOOT_BOOT_TRACE_SYMBOL:
+        if len(fields) == 3 and fields[2] in (
+            SOURCEBOOT_BOOT_TRACE_SYMBOL,
+            f"_{SOURCEBOOT_BOOT_TRACE_SYMBOL}",
+        ):
             return int(fields[0], 16)
     raise ValueError(f"ELF does not export {SOURCEBOOT_BOOT_TRACE_SYMBOL}")
 
@@ -72,16 +70,33 @@ def validate_post_bios_frames(frames: int) -> int:
     return frames
 
 
-def resolve_trace_symbol(elf: Path, *, nm: Path = NM) -> int:
-    completed = subprocess.run(
-        [str(nm), "-g", "--defined-only", str(elf)],
+def wrapped_nm_command(elf: Path, *, nm: Path = NM) -> list[str]:
+    """Run nm only through the DLL-safe project MSYS environment."""
+    return [
+        POWERSHELL,
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(MSYS_TOOLCHAIN_WRAPPER),
+        str(nm),
+        "-g",
+        "--defined-only",
+        str(elf),
+    ]
+
+
+def resolve_trace_symbol(elf: Path, *, nm: Path = NM, run: Any = subprocess.run) -> int:
+    completed = run(
+        wrapped_nm_command(elf, nm=nm),
         check=False,
         capture_output=True,
         text=True,
-        env=_tool_environment(),
     )
     if completed.returncode != 0:
-        raise ValueError(f"sh-elf-nm failed for {elf}: {completed.stderr.strip()}")
+        raise ValueError(
+            f"DLL-safe sh-elf-nm wrapper failed for {elf}: {completed.stderr.strip()}"
+        )
     return parse_symbol_address(completed.stdout)
 
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from subprocess import CompletedProcess
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -59,6 +60,13 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
 
         nm_output = "0601a2b0 B sourceboot_boot_trace\n0601a2d0 B another_symbol\n"
         self.assertEqual(parse_symbol_address(nm_output), 0x0601A2B0)
+        try:
+            underscored_address = parse_symbol_address(
+                "0601a2b0 B _sourceboot_boot_trace\n"
+            )
+        except ValueError as error:
+            self.fail(f"reader must accept the target ABI's leading underscore: {error}")
+        self.assertEqual(underscored_address, 0x0601A2B0)
         with self.assertRaisesRegex(ValueError, "sourceboot_boot_trace"):
             parse_symbol_address("0601a2d0 B another_symbol\n")
 
@@ -68,6 +76,31 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "between 1 and"):
             validate(0)
         self.assertEqual(validate(1), 1)
+
+    def test_resolves_symbol_from_dll_safe_wrapper_when_direct_nm_is_empty(self) -> None:
+        command_builder = getattr(boot_trace, "wrapped_nm_command", None)
+        self.assertTrue(callable(command_builder), "reader must use the MSYS toolchain wrapper")
+
+        with self.assertRaisesRegex(ValueError, "sourceboot_boot_trace"):
+            parse_symbol_address("")
+
+        commands: list[list[str]] = []
+
+        def wrapper_runner(command: list[str], **_: object) -> CompletedProcess[str]:
+            commands.append(command)
+            return CompletedProcess(
+                command,
+                0,
+                stdout="0601a2b0 B sourceboot_boot_trace\n",
+                stderr="",
+            )
+
+        self.assertEqual(
+            boot_trace.resolve_trace_symbol(Path("trace.elf"), run=wrapper_runner),
+            0x0601A2B0,
+        )
+        self.assertEqual(commands[0], command_builder(Path("trace.elf")))
+        self.assertIn(str(boot_trace.MSYS_TOOLCHAIN_WRAPPER), commands[0])
 
 
 if __name__ == "__main__":

@@ -16,6 +16,9 @@
 
 ### Fixed
 
+- The post-BIOS trace reader now resolves the target ELF through the audited
+  DLL-safe MSYS wrapper and accepts the SH-ELF leading-underscore symbol ABI,
+  preventing an otherwise valid trace capture from stopping before emulation.
 - Post-BIOS trace writes now use the SH-2 cache-through alias and pin their
   eight-word ABI at 32 bytes, so Ymir and hardware debuggers read current
   backing-WRAM telemetry instead of dirty cached data.
