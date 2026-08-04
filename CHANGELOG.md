@@ -22,7 +22,9 @@
   and Yaul soundtest exercise SNDOFF/copy/SNDON, heartbeat validation, bounded
   enqueue, controller-triggered play/stop/volume, and visible telemetry. This
   remains outside sourceboot and does not change renderer scheduling or the
-  accepted FPS comparison image; Ymir audibility is still an open manual gate.
+  accepted FPS comparison image. The owner manually confirmed audible A/B/C
+  playback and X stop behavior in desktop Ymir; automated telemetry/cost
+  evidence and sourceboot promotion remain separate open gates.
 
 - Added payload-kind-aware output-span validation to the dormant A5.8 render
   queue. WORLD_ADMIT positions, WORLD_LOWER records/commands, ACTOR_ADMIT

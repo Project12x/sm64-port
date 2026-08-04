@@ -59,4 +59,7 @@ The isolated audio lane now has a standalone soundtest CUE candidate. Its
 CC0 proof bank contains three sounds in 4,408 bytes. Host register, pitch,
 endianness, loop/stop, bank, boot-order, bounds, timeout, and ring tests pass.
 It is not linked into sourceboot. Independent rereview is GO for the source
-and standalone build; manual Ymir audibility confirmation remains open.
+and standalone build. On 2026-08-04 the owner manually confirmed audible
+A/B/C playback and that X stops playback in desktop Ymir. The supplied screen
+also showed READY, an advancing heartbeat, consumed commands, a started voice,
+and zero drops. Automated telemetry and transport-cost gates remain open.

@@ -60,7 +60,11 @@ KYONEX last, and seeds the first populated controller report before accepting
 one-shot edges. Fresh independent rereview is GO for the source and standalone
 build scope: the reviewer confirmed the mapped-zero path and native `movew`
 SCSP sequence in the actual 68K disassembly and reran the focused host, image,
-and zero-map gates. Manual Ymir audibility remains deliberately unclaimed.
+and zero-map gates. On 2026-08-04 the owner manually confirmed that A/B/C are
+audible and X stops playback in desktop Ymir. The supplied screenshot showed
+READY, heartbeat 13881, consumed commands 2, started voices 1, drops 0, and
+high-water 2. This owner-observed emulator evidence remains separate from the
+open automated three-command telemetry and transport-cost gates.
 
 ## Fresh artifacts
 
@@ -79,6 +83,5 @@ target-local CUE input verification pass.
 
 1. one serialized desktop-Ymir run showing READY, heartbeat advance, consumed
    commands, voices started, zero drops, and bounded high-water;
-2. separate owner confirmation that at least one generated sound is audible;
-3. a measured SH-2 enqueue cost below 1% of the soundtest source-tick; and
-4. explicit owner approval before any sourceboot audio integration.
+2. a measured SH-2 enqueue cost below 1% of the soundtest source-tick; and
+3. explicit owner approval before any sourceboot audio integration.

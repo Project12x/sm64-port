@@ -239,7 +239,7 @@ credited.
 - [ ] Implement a bounded Ymir client using the existing JSON-RPC patterns. Read the mailbox from paused sound RAM, pulse A/B/C with duration-aware input, and read it again. Do not infer audibility from slot state.
 - [ ] Run the Python test; expect pass.
 - [ ] Run one serial Ymir capture of the fresh soundtest image. Require heartbeat advancement, at least three commands consumed, three voices started, zero drops, and high-water below 32.
-- [ ] Ask the owner for one manual audible confirmation. Record it separately from machine telemetry and label all Ymir results emulator evidence.
+- [x] Ask the owner for one manual audible confirmation. On 2026-08-04 the owner confirmed audible A/B/C playback and that X stops playback in desktop Ymir. The supplied screenshot separately showed READY, heartbeat 13881, consumed 2, started 1, drops 0, and high-water 2; this does not satisfy the automated three-command capture gate.
 - [ ] Measure SH-2 enqueue/transport work and require it below 1% of soundtest source-tick time.
 - [ ] Commit: `docs: prove standalone PCM68K transport`.
 
@@ -274,7 +274,7 @@ const sm64_saturn_pcm_transport_t *sm64_saturn_pcm_service_stats(void);
 - [ ] The 68K image is source-built, fixed-address, unresolved-symbol-free, and at most 16 KiB.
 - [ ] The generated bank is public-domain, deterministic, and at most 32 KiB.
 - [ ] Ymir shows heartbeat, three consumed play commands, three voices started, zero drops, bounded high-water, and transport below 1%.
-- [ ] The owner separately confirms one sample is audible.
+- [x] The owner separately confirms one sample is audible (A/B/C and X stop confirmed in desktop Ymir on 2026-08-04).
 - [ ] PoneSound MIT attribution, pinned SHA, inspected paths, direct-adaptation sites, and change notices are preserved.
 - [ ] No proprietary driver/binary, extracted Nintendo sample, ADX/CDDA path, or copied unlicensed reference code enters the repository.
 - [ ] `sourceboot` remains unchanged and the FPS comparison image remains audio-free.
