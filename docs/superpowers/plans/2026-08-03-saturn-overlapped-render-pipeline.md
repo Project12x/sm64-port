@@ -499,6 +499,15 @@ types, ownership rules, or production fallbacks.
   Runtime-contract closure, target cache evidence, and fresh reviews remain
   open.
 
+  Fix round 4 serializes quarantine, completion, and positive retirement with
+  the same release claim used by acquisition. Each transition locks then
+  revalidates its legal predecessor before writing a terminal state, so a
+  quarantined generation cannot be overwritten by an already-validating
+  claimant. The new deterministic race fixture is red against the prior
+  lock-bypassing quarantine path and green after the repair; focused host
+  evidence only, with runtime-contract closure, target coherency evidence,
+  and fresh reviews still open.
+
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 
 **Files:**

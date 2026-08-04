@@ -65,9 +65,9 @@ typedef struct sm64_saturn_render_snapshot_bank {
     sm64_saturn_render_snapshot_slot_t slot[2];
 } sm64_saturn_render_snapshot_bank_t;
 
-/* Payload is written through its ordinary cached address. Release state and
- * a peer's immutable payload use P2 cache-through aliases on SH-2; the host
- * identity branch preserves the exact protocol for fixture coverage. */
+/* Release state and both producer/peer payload accesses use P2 cache-through
+ * aliases on SH-2; the host identity branch preserves the protocol for the
+ * lifecycle fixture. */
 static inline const void *sm64_saturn_render_snapshot_cache_through(
     const void *cached)
 {

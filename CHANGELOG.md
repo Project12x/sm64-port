@@ -13,6 +13,12 @@
 
 ### Fixed
 
+- Serialized every A2 snapshot terminal transition through its release claim
+  lock. A timeout quarantine can no longer be overwritten by a stale
+  `READY → RENDERING` claimant; completion and positive retirement likewise
+  revalidate their owned state before publishing, preserving fail-closed bank
+  ownership when the two SH-2s contend.
+
 - Hardened snapshot-bank recovery so public initialization touches only
   already-free slots: quarantined and in-flight generations remain terminal or
   owned until explicit lifecycle retirement. Release state and peer payload are

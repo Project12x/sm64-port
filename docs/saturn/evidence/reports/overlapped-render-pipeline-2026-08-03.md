@@ -524,3 +524,23 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   writes. `verify-render-snapshot-bank` passes the structural and lifecycle
   checks. This is source correction only: target cache-coherency evidence and
   the preserved unrelated runtime-contract failure remain open.
+
+### A2 terminal-state ownership fix round 4 (2026-08-04)
+
+- Critical review finding: `acquire_ready()` correctly held its claim while it
+  validated `READY`, but quarantine wrote its terminal state without that
+  lock. It could write `QUARANTINED` between validation and the claimant's
+  `RENDERING` store, allowing the stale claimant to overwrite terminal
+  ownership and later retire the bank.
+- Red: the deterministic fixture held the release claim, called public
+  quarantine, and expected it to fail closed instead of writing around the
+  in-flight owner. The old implementation returned success; the companion
+  source structural test also failed because quarantine, completion, and
+  retirement did not all claim and release the lock.
+- Green: reset/begin/publication and every terminal lifecycle transition now
+  share the release claim and revalidate their predecessor state while held.
+  Quarantine first prevents later acquisition from seeing `READY`; if another
+  owner holds the claim, it returns false for retry rather than overwriting.
+  `verify-render-snapshot-bank` passes its C race fixture and structural
+  source gate. No target build/Ymir was run, target multicore/cache evidence
+  remains open, and the unrelated runtime-contract failure remains uncredited.

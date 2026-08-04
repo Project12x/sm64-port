@@ -89,6 +89,28 @@ static void test_claim_lock_allows_one_contender(void)
     assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 19U) == slot);
 }
 
+static void test_quarantine_waits_for_claim_then_stays_terminal(void)
+{
+    sm64_saturn_render_snapshot_bank_t bank = {0};
+    sm64_saturn_render_snapshot_t *slot = NULL;
+    volatile sm64_saturn_render_snapshot_release_t *release;
+
+    assert(sm64_saturn_render_snapshot_begin_write(&bank, 23U, &slot));
+    slot->camera.generation = 23U;
+    slot->actor_generation = 23U;
+    assert(sm64_saturn_render_snapshot_publish(&bank, slot));
+    release = sm64_saturn_render_snapshot_release_uncached(&bank.slot[0]);
+    assert(sm64_saturn_render_snapshot_release_claim_try(release));
+    /* A terminal transition never writes around an in-flight READY claimant. */
+    assert(!sm64_saturn_render_snapshot_quarantine(&bank, 23U));
+    assert(release->state == SM64_SATURN_RENDER_SNAPSHOT_READY);
+    sm64_saturn_render_snapshot_release_claim_release(release);
+    assert(sm64_saturn_render_snapshot_quarantine(&bank, 23U));
+    assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 23U) == NULL);
+    assert(!sm64_saturn_render_snapshot_complete(&bank, slot));
+    assert(!sm64_saturn_render_snapshot_retire(&bank, slot));
+}
+
 int main(void)
 {
     test_rejects_zero_generation();
@@ -96,5 +118,6 @@ int main(void)
     test_rejects_stale_and_mixed_generations();
     test_rejects_double_acquire_and_quarantined_reuse();
     test_claim_lock_allows_one_contender();
+    test_quarantine_waits_for_claim_then_stays_terminal();
     return 0;
 }

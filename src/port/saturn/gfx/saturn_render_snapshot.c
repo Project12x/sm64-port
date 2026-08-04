@@ -34,10 +34,15 @@ void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank)
         sm64_saturn_render_snapshot_t *const payload =
             sm64_saturn_render_snapshot_owner_payload(&bank->slot[index]);
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
+        if (!sm64_saturn_render_snapshot_release_claim_try(release)) continue;
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) {
+            sm64_saturn_render_snapshot_release_claim_release(release);
+            continue;
+        }
         memset(payload, 0, sizeof(*payload));
         release->generation = 0U;
-        release->claim_lock = 0U;
         release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
+        sm64_saturn_render_snapshot_release_claim_release(release);
     }
     sm64_saturn_render_snapshot_fence();
 }
@@ -66,12 +71,17 @@ bool sm64_saturn_render_snapshot_begin_write(
         sm64_saturn_render_snapshot_t *const payload =
             sm64_saturn_render_snapshot_owner_payload(slot);
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
+        if (!sm64_saturn_render_snapshot_release_claim_try(release)) continue;
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) {
+            sm64_saturn_render_snapshot_release_claim_release(release);
+            continue;
+        }
         memset(payload, 0, sizeof(*payload));
         payload->generation = generation;
         release->generation = generation;
-        release->claim_lock = 0U;
         sm64_saturn_render_snapshot_fence();
         release->state = SM64_SATURN_RENDER_SNAPSHOT_WRITING;
+        sm64_saturn_render_snapshot_release_claim_release(release);
         *out = sm64_saturn_render_snapshot_owner_payload(slot);
         return true;
     }
@@ -87,14 +97,19 @@ bool sm64_saturn_render_snapshot_publish(
         sm64_saturn_render_snapshot_release_uncached(slot);
 
     if (slot == NULL || release == NULL ||
-        release->state != SM64_SATURN_RENDER_SNAPSHOT_WRITING ||
+        !sm64_saturn_render_snapshot_release_claim_try(release)) return false;
+    if (release->state != SM64_SATURN_RENDER_SNAPSHOT_WRITING ||
         !sm64_saturn_render_snapshot_generation_valid(snapshot,
                                                        snapshot->generation) ||
-        release->generation != snapshot->generation) return false;
+        release->generation != snapshot->generation) {
+        sm64_saturn_render_snapshot_release_claim_release(release);
+        return false;
+    }
     sm64_saturn_render_snapshot_fence();
     release->generation = snapshot->generation;
     sm64_saturn_render_snapshot_fence();
     release->state = SM64_SATURN_RENDER_SNAPSHOT_READY;
+    sm64_saturn_render_snapshot_release_claim_release(release);
     return true;
 }
 
@@ -138,11 +153,14 @@ bool sm64_saturn_render_snapshot_complete(
         sm64_saturn_render_snapshot_release_uncached(slot);
 
     if (slot == NULL || release == NULL ||
-        release->state != SM64_SATURN_RENDER_SNAPSHOT_RENDERING) {
+        !sm64_saturn_render_snapshot_release_claim_try(release)) return false;
+    if (release->state != SM64_SATURN_RENDER_SNAPSHOT_RENDERING) {
+        sm64_saturn_render_snapshot_release_claim_release(release);
         return false;
     }
     sm64_saturn_render_snapshot_fence();
     release->state = SM64_SATURN_RENDER_SNAPSHOT_COMPLETE;
+    sm64_saturn_render_snapshot_release_claim_release(release);
     return true;
 }
 
@@ -155,15 +173,17 @@ bool sm64_saturn_render_snapshot_retire(
         sm64_saturn_render_snapshot_release_uncached(slot);
 
     if (slot == NULL || release == NULL ||
-        release->state != SM64_SATURN_RENDER_SNAPSHOT_COMPLETE) {
+        !sm64_saturn_render_snapshot_release_claim_try(release)) return false;
+    if (release->state != SM64_SATURN_RENDER_SNAPSHOT_COMPLETE) {
+        sm64_saturn_render_snapshot_release_claim_release(release);
         return false;
     }
     memset(sm64_saturn_render_snapshot_owner_payload(slot), 0,
            sizeof(slot->snapshot));
     release->generation = 0U;
-    release->claim_lock = 0U;
     sm64_saturn_render_snapshot_fence();
     release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
+    sm64_saturn_render_snapshot_release_claim_release(release);
     return true;
 }
 
@@ -180,8 +200,16 @@ bool sm64_saturn_render_snapshot_quarantine(
         if (release->generation != generation ||
             release->state == SM64_SATURN_RENDER_SNAPSHOT_FREE ||
             release->state == SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED) continue;
+        if (!sm64_saturn_render_snapshot_release_claim_try(release)) continue;
+        if (release->generation != generation ||
+            release->state == SM64_SATURN_RENDER_SNAPSHOT_FREE ||
+            release->state == SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED) {
+            sm64_saturn_render_snapshot_release_claim_release(release);
+            continue;
+        }
         sm64_saturn_render_snapshot_fence();
         release->state = SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED;
+        sm64_saturn_render_snapshot_release_claim_release(release);
         return true;
     }
     return false;

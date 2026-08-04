@@ -91,8 +91,21 @@ def test_producer_writes_payload_through_cache_through_alias() -> None:
     assert "*out = sm64_saturn_render_snapshot_owner_payload(slot);" in implementation
 
 
+def test_terminal_transitions_share_the_claim_lock() -> None:
+    implementation = IMPLEMENTATION.read_text(encoding="utf-8")
+    for name in (
+        "sm64_saturn_render_snapshot_quarantine",
+        "sm64_saturn_render_snapshot_complete",
+        "sm64_saturn_render_snapshot_retire",
+    ):
+        body = function_body(implementation, name)
+        assert "sm64_saturn_render_snapshot_release_claim_try" in body
+        assert "sm64_saturn_render_snapshot_release_claim_release" in body
+
+
 if __name__ == "__main__":
     test_snapshot_types_have_no_pointer_fields()
     test_release_and_peer_payload_use_cache_through_accessors()
     test_ready_claim_uses_sh2_atomic_test_and_set()
     test_producer_writes_payload_through_cache_through_alias()
+    test_terminal_transitions_share_the_claim_lock()
