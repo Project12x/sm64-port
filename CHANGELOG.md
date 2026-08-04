@@ -52,6 +52,12 @@
 
 ### Fixed
 
+- Moved A3's bulk per-cluster LOD and admitted-result scratch from HWRAM BSS
+  into the linker-owned CPU-only LWRAM section. The initial target A3 link
+  exceeded HWRAM by 29,680 bytes; the route-0 sourceboot candidate now keeps
+  its required 4 KiB libyaul heap floor while retaining the same admission
+  behavior. This is a build-budget repair, not a measured FPS claim.
+
 - Corrected A3 render-cluster header integration for sourceboot's declared
   include paths. The scene-neutral gfx header now reaches its isolated GPL
   promotion dependency relatively, and its host gate no longer supplies a

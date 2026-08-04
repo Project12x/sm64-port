@@ -641,3 +641,23 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   `verify-render-snapshot-bank` passes its C race fixture and structural
   source gate. No target build/Ymir was run, target multicore/cache evidence
   remains open, and the unrelated runtime-contract failure remains uncredited.
+
+### A3 HWRAM budget repair (2026-08-04)
+
+- Reproduction: the exact serial route-0 A3 sourceboot configuration reached
+  the final ELF link, where `ld` rejected `.bss`: `region ram overflowed by
+  29680 bytes`. The map attributes 0x5ED4 bytes to
+  `s_render_cluster_lod` and 0x3630 bytes to
+  `s_admitted_cluster_results`—38,148 bytes introduced by A3's bulk
+  CPU-only scratch.
+- Red: `test_renderer_keeps_bulk_cluster_state_out_of_hwram_bss` failed for
+  both declarations because neither selected the linker-owned `.lwram_bss`
+  section.
+- Green: both arrays now select `.lwram_bss`. The focused generator/contract
+  test suite passes (7 tests), and the same single-job target build produced a
+  fresh route-0 CUE/ISO. Its map reports `.bss` ending at `0x060FDEF0`, leaving
+  0x2110 HWRAM bytes above the required 0x1000 libyaul TLSF floor; LWRAM ends
+  at `0x002E33A0` with 0x1CC60 bytes free. No Ymir launch or performance claim
+  was made by this repair.
+- Remaining A3 gates: independent rereview plus target visual, counter, and
+  FPS observation. The normal A3 performance candidate is now linkable.

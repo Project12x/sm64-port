@@ -240,3 +240,16 @@ passed. No target build/Ymir ran. This closes only the final review's Critical
 world-Z defect: a fresh independent rereview, the documented generation-wrap
 Minor, and target visual/counter gates remain open. Commit: `fix(saturn): use
 view depth for compact cluster admission`.
+
+2026-08-04 A3 target-budget repair: the exact serial route-0 A3 sourceboot
+build reached `ld` and failed because `ram` overflowed by 29,680 bytes. The
+map isolated the A3-owned 0x5ED4-byte per-cluster LOD array and 0x3630-byte
+admitted-result array (38,148 bytes total) in HWRAM BSS. A watched RED source
+placement gate failed for both arrays; the minimal repair moves only those
+CPU-only arrays to linker-owned `.lwram_bss`, which is not an SCU-DMA source.
+The focused generator/placement suite passes 7/7. The same `-j1` target
+configuration now produces a CUE/ISO: HWRAM ends at `0x060FDEF0` with 0x2110
+bytes above the required 0x1000 libyaul floor, and LWRAM ends at `0x002E33A0`
+with 0x1CC60 free. This is target link/memory evidence only—no Ymir, counter,
+or FPS evidence and no independent A3 rereview. Commit:
+`fix(saturn): fit A3 cluster scratch in LWRAM`.

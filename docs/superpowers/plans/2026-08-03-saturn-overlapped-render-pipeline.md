@@ -75,8 +75,13 @@ and the evidence report before starting another task.
   render-cluster header also owns its GPL promotion dependency through a
   relative path, matching sourceboot's declared `gfx`-only Saturn include
   path; `verify-render-clusters` intentionally omits `gpl` so this boundary
-  stays host-checked. The scoped repair is committed; no target build or Ymir
-  run occurred.
+  stays host-checked. A later target serial build exposed that the two bulk A3
+  arrays consumed 38,148 bytes of HWRAM and overflowed the target by 29,680
+  bytes. They now use the linker-owned CPU-only LWRAM section; the same route-0
+  sourceboot configuration links and emits a fresh CUE with HWRAM ending at
+  `0x060FDEF0` (0x2110 free, above the 4 KiB libyaul floor) and LWRAM ending at
+  `0x002E33A0`. This proves only the target memory budget for that candidate;
+  independent rereview and target visual/counter/FPS evidence remain open.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
