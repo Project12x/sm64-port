@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added descriptor-owned terrain and actor output-bank publication for the A5
+  SH-2 work queue. The CPU that actually claims a descriptor now publishes its
+  output lane through an atomic P2-visible release record, so an opportunistic
+  master steal cannot read its own cached work through the slave alias. This is
+  a source-only prerequisite: the accepted renderer still uses its existing
+  fixed worker while live queue integration, master VDP1 ordering validation,
+  and target evidence remain pending.
+
 - Extended the source-only A5 queue contract with master/slave polling drains
   and a local callback table. Descriptors still carry only callback
   IDs; resolution happens after an exact-once claim and exposes the claiming

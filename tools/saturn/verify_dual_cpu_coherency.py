@@ -205,6 +205,77 @@ def queue_self_test(source_path: Path, header_path: Path) -> int:
     return 0
 
 
+def output_bank_source_failures(source: str, header: str) -> list[str]:
+    """Reject fixed-split output ownership in opportunistic queue jobs."""
+    failures: list[str] = []
+    if "SM64_SATURN_RENDER_OUTPUT_BANK_TERRAIN" not in header or \
+       "SM64_SATURN_RENDER_OUTPUT_BANK_ACTOR" not in header:
+        failures.append("terrain/actor descriptor output-bank kinds are missing")
+    if "volatile uint32_t claimed_state;" not in header or \
+       "volatile uint32_t ready;" not in header:
+        failures.append("output lane release lacks claimed state or ready word")
+    if "begin == 0" in source or "begin==0" in source:
+        failures.append("output owner still derives from logical begin")
+    if "SM64_SATURN_RENDER_JOB_WORLD_LOWER" not in source or \
+       "SM64_SATURN_RENDER_JOB_ACTOR_LOWER" not in source:
+        failures.append("descriptor kind does not select terrain/actor bank")
+    if "sm64_saturn_dual_frame_cache_through(bank)" not in source:
+        failures.append("output-bank metadata does not use cache-through P2")
+    if "tas.b" not in source or "output_claim_try" not in source:
+        failures.append("output-lane publication is not SH-2 atomic")
+    publish = re.search(
+        r"bool\s+sm64_saturn_render_output_bank_publish\(.*?\n}\n",
+        source, re.DOTALL)
+    if publish is None:
+        failures.append("output-bank publication implementation is missing")
+    else:
+        text = publish.group(0)
+        generation = text.find("release->generation = job->snapshot_generation;")
+        job_index = text.find("release->job_index = job_index;")
+        claimed = text.find("release->claimed_state = (uint32_t)claimed_state;")
+        ready = text.find("release->ready = 1U;")
+        if min(generation, job_index, claimed, ready) < 0 or \
+           not generation < job_index < claimed < ready:
+            failures.append("output lane publishes ready before ownership metadata")
+    read_range = re.search(
+        r"const\s+void\s+\*sm64_saturn_render_output_bank_read_range\(.*?\n}\n",
+        source, re.DOTALL)
+    if read_range is None or "sm64_saturn_dual_frame_read_range(" not in read_range.group(0):
+        failures.append("output reader bypasses the owner-selected P2 alias")
+    return failures
+
+
+def output_bank_self_test(source_path: Path, header_path: Path) -> int:
+    source = source_path.read_text(encoding="utf-8")
+    header = header_path.read_text(encoding="utf-8")
+    mutants = (
+        (source.replace("sm64_saturn_dual_frame_cache_through(bank)",
+                        "(const void *)bank", 1), header,
+         "cached output metadata"),
+        (source.replace("tas.b", "rejected_atomic", 1), header,
+         "missing output atomic claim"),
+        (source.replace("release->claimed_state = (uint32_t)claimed_state;\n"
+                        "    output_bank_fence();\n"
+                        "    release->ready = 1U;",
+                        "release->ready = 1U;\n"
+                        "    output_bank_fence();\n"
+                        "    release->claimed_state = (uint32_t)claimed_state;", 1),
+         header, "ready before owner"),
+        (source.replace("return sm64_saturn_dual_frame_read_range(reader_lane, owner_lane, cached);",
+                        "return cached;", 1), header,
+         "reader bypasses P2 alias"),
+        (source + "\nuint8_t rejected_output_lane(uint16_t begin) { return begin == 0U ? 0U : 1U; }\n",
+         header, "logical-range lane inference"),
+    )
+    for mutant_source, mutant_header, name in mutants:
+        if not output_bank_source_failures(mutant_source, mutant_header):
+            print(f"render output-bank mutation unexpectedly passed: {name}",
+                  file=sys.stderr)
+            return 1
+    print("render output-bank mutation gate OK: five unsafe ownership variants rejected")
+    return 0
+
+
 def check_symbols(arguments: list[str]) -> int:
     if len(arguments) == 1:
         out = Path(arguments[0]).read_text(encoding="utf-8", errors="replace")
@@ -240,9 +311,27 @@ def main() -> int:
     parser.add_argument("--header", type=Path)
     parser.add_argument("--queue-source", type=Path)
     parser.add_argument("--queue-header", type=Path)
+    parser.add_argument("--output-bank-source", type=Path)
+    parser.add_argument("--output-bank-header", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("symbols", nargs="*")
     args = parser.parse_args()
+    if args.output_bank_source is not None:
+        if args.output_bank_header is None:
+            parser.error("--output-bank-source requires --output-bank-header")
+        failures = output_bank_source_failures(
+            args.output_bank_source.read_text(encoding="utf-8"),
+            args.output_bank_header.read_text(encoding="utf-8"))
+        if failures:
+            print("render output-bank coherency source gate FAILED:",
+                  file=sys.stderr)
+            for failure in failures:
+                print(f"  {failure}", file=sys.stderr)
+            return 1
+        print("render output-bank coherency source gate OK: claimed CPU owns P2 lane")
+        return output_bank_self_test(args.output_bank_source,
+                                     args.output_bank_header) \
+            if args.self_test else 0
     if args.queue_source is not None:
         if args.queue_header is None:
             parser.error("--queue-source requires --queue-header")

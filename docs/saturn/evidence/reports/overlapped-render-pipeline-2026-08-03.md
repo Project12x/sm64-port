@@ -769,3 +769,36 @@ open.
   visual/counter/FPS evidence remain required; no target build, CUE, or Ymir
   run occurred.
 - Commit: `c5944bac` (`fix(saturn): admit Mario meshlets from live poses`).
+
+## A5 descriptor-owned output lanes (2026-08-04)
+
+- RED: the direct Qt MinGW host command for
+  `tools/saturn/render_output_bank_test.c` failed because
+  `saturn_render_output_bank.{h,c}` did not exist. This intentionally preceded
+  production code.
+- GREEN: each immutable queue descriptor selects its output bank solely by
+  type (`WORLD_*` terrain, `ACTOR_*` actor); its actual
+  `CLAIMED_MASTER`/`CLAIMED_SLAVE` state atomically publishes the output lane.
+  A reader obtains cached versus cache-through P2 access only through that
+  record. Logical input offsets and `begin == 0` never select a lane. The
+  release record is fixed-width, pointer-free, and its `ready` word is written
+  only after generation/job/claimed-state metadata.
+- Focused source-only host command:
+  `C:\\Qt\\Tools\\mingw1310_64\\bin\\gcc.exe -std=c11 -Wall -Wextra -Werror
+  -I src/port/saturn/gfx tools/saturn/render_output_bank_test.c
+  src/port/saturn/gfx/saturn_render_output_bank.c` then
+  `.tmp-task5/render-output-bank-test.exe` passed. It covers descriptor bank
+  selection, a master-steal whose input offset lies in the former slave range,
+  cache-through selection for the peer, mismatched-bank rejection, overwrite
+  rejection, and a concurrent master/slave publication race with one winner.
+- Focused coherency gate:
+  `verify_dual_cpu_coherency.py --output-bank-source ... --output-bank-header
+  ... --self-test` passed and rejected five mutations: cached metadata, missing
+  `tas.b`, ready-before-owner publication, direct cached read, and logical-range
+  lane inference.
+- Design boundary: this source-only prerequisite does not modify
+  `saturn_demo_render.c`, its current fixed split, or master-only VDP1 command
+  lowering/painter ordering. No target build, CUE, desktop Ymir launch, visual,
+  counter, or FPS claim occurred. Independent specification and quality review,
+  live queue wiring, and target cache/ordering evidence remain open.
+- Commit: `0026a3a1` (`feat(saturn): publish descriptor-owned output lanes`).

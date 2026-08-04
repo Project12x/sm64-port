@@ -95,10 +95,13 @@ and the evidence report before starting another task.
   open; no performance claim is made.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** active. The
   immutable, cache-through queue contract, host exact-once fixture, and
-  coherency mutation gate are source-complete; wiring it into the currently
-  active A3/A4 renderer candidate is deliberately deferred so this task does
-  not silently alter either candidate's accepted path. Slave polling,
-  callback-table integration, and target evidence remain open.
+  coherency mutation gate are source-complete. Descriptor kind now selects a
+  terrain or actor output bank, and the CPU that actually claims the descriptor
+  publishes its cache lane atomically; this removes the unsafe `begin == 0`
+  inference that prevented work stealing. Wiring that source-only contract into
+  the currently active A3/A4 renderer candidate remains deliberately deferred
+  so this task does not silently alter either candidate's accepted path. Live
+  queue integration, target evidence, and independent reviews remain open.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
@@ -837,7 +840,19 @@ types, ownership rules, or production fallbacks.
   later read its own cached write through the peer alias. Replace that fixed
   lane coupling with descriptor-owned output banks plus an explicit execution
   lane before making the queue the accepted CPU-DUAL callback. No dormant or
-  compile-disabled second `cpu_dual_slave_set` path is permitted.
+  compile-disabled second `cpu_dual_slave_set` path is permitted. **Source
+  prerequisite complete (2026-08-04):**
+  `saturn_render_output_bank.{h,c}` derives bank identity only from the
+  immutable descriptor kind (world = terrain, actor = actor). The successful
+  queue claim publishes `MASTER` or `SLAVE` as the output owner through an
+  atomic, P2-visible release record; consumers select their cached/P2 range
+  only from that publication. The focused fixture races both CPUs, verifies a
+  master steal of a nominally slave-offset world job remains master-cached, and
+  verifies the peer P2 selection. Five source mutations are rejected. This is
+  not live renderer integration and does not move master VDP1 lowering or its
+  stable painter order. Behavior/docs commit: `0026a3a1`
+  (`feat(saturn): publish descriptor-owned output lanes`). Independent reviews
+  remain open.
 
 - [ ] **Step 5: Integrate terrain and actor jobs into one frame queue**
 
