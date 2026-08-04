@@ -13,6 +13,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 try:
+    import capture_sourceboot_boot_trace as boot_trace
     from capture_sourceboot_boot_trace import (
         SOURCEBOOT_BOOT_TRACE_MAGIC,
         SOURCEBOOT_BOOT_TRACE_VERSION,
@@ -60,6 +61,13 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         self.assertEqual(parse_symbol_address(nm_output), 0x0601A2B0)
         with self.assertRaisesRegex(ValueError, "sourceboot_boot_trace"):
             parse_symbol_address("0601a2d0 B another_symbol\n")
+
+    def test_rejects_zero_post_bios_frames_before_ymir_rpc(self) -> None:
+        validate = getattr(boot_trace, "validate_post_bios_frames", None)
+        self.assertTrue(callable(validate), "reader must validate post-BIOS frames")
+        with self.assertRaisesRegex(ValueError, "between 1 and"):
+            validate(0)
+        self.assertEqual(validate(1), 1)
 
 
 if __name__ == "__main__":

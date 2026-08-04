@@ -16,6 +16,8 @@
 
 ### Fixed
 
+- The post-BIOS trace reader now rejects zero frame requests before issuing a
+  Ymir `exec.run_for` RPC, preventing an invalid diagnostic capture request.
 - Restored the sourceboot startup VDP2 begin/commit retirement barrier before
   frontend and scheduler initialization. This drains the sky-DMA work queued
   by `user_init()` before the first paired VDP1/VDP2 presentation, avoiding a

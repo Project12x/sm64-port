@@ -64,6 +64,14 @@ def parse_symbol_address(nm_output: str) -> int:
     raise ValueError(f"ELF does not export {SOURCEBOOT_BOOT_TRACE_SYMBOL}")
 
 
+def validate_post_bios_frames(frames: int) -> int:
+    if not 1 <= frames <= YMIR_MAX_RUN_FOR_FRAMES:
+        raise ValueError(
+            f"post-BIOS frames must be between 1 and {YMIR_MAX_RUN_FOR_FRAMES}"
+        )
+    return frames
+
+
 def resolve_trace_symbol(elf: Path, *, nm: Path = NM) -> int:
     completed = subprocess.run(
         [str(nm), "-g", "--defined-only", str(elf)],
@@ -146,8 +154,10 @@ def main() -> int:
     for label, path in (("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
         if not path.is_file():
             parser.error(f"{label} is not a file: {path}")
-    if not 0 <= args.post_bios_frames <= YMIR_MAX_RUN_FOR_FRAMES:
-        parser.error(f"--post-bios-frames must be between 0 and {YMIR_MAX_RUN_FOR_FRAMES}")
+    try:
+        args.post_bios_frames = validate_post_bios_frames(args.post_bios_frames)
+    except ValueError as error:
+        parser.error(str(error))
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
 
