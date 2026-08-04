@@ -277,7 +277,22 @@ typedef struct demo_actor_primitive_ref {
     uint16_t primitive_id;
     uint16_t material_vertex;
 } demo_actor_primitive_ref_t;
+typedef struct demo_actor_queue_vertex_result {
+    demo_actor_vertex_result_t result;
+    uint16_t vertex_id;
+} demo_actor_queue_vertex_result_t;
+typedef struct demo_actor_queue_metadata {
+    volatile uint32_t generation;
+    volatile uint32_t sequence;
+    volatile uint16_t job_index;
+    volatile uint16_t record_count;
+    volatile uint8_t writer_lane;
+    volatile uint8_t claimed_state;
+    volatile uint16_t ready;
+} demo_actor_queue_metadata_t;
 #define DEMO_ACTOR_PRIMITIVE_REJECTED UINT16_MAX
+#define DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY \
+    (SM64_MARIO_VERTEX_COUNT + SM64_MARIO_PRIMITIVE_COUNT)
 /* This one contiguous bank is deliberately split into master [0, split) and
  * slave [split, vertex_count) result spans.  It contains no VDP state. */
 static demo_actor_vertex_result_t s_actor_results[SM64_MARIO_VERTEX_COUNT]
@@ -288,6 +303,27 @@ static uint8_t s_actor_vertex_owner[SM64_MARIO_VERTEX_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static demo_actor_primitive_ref_t s_actor_refs[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
+static uint8_t s_actor_ref_owner[SM64_MARIO_PRIMITIVE_COUNT]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
+/* Dormant A5.8 queue storage. Descriptor output offsets are global and
+ * disjoint, so both typed payload banks retain the same bounded address
+ * space. Only the descriptor-appropriate region is ever read. */
+static demo_actor_queue_vertex_result_t s_actor_queue_vertex_master[
+    DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY] __attribute__((section(".lwram_bss")));
+static demo_actor_queue_vertex_result_t s_actor_queue_vertex_slave[
+    DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY] __attribute__((section(".lwram_bss")));
+static demo_actor_primitive_ref_t s_actor_queue_ref_master[
+    DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY] __attribute__((section(".lwram_bss")));
+static demo_actor_primitive_ref_t s_actor_queue_ref_slave[
+    DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY] __attribute__((section(".lwram_bss")));
+static sm64_saturn_render_payload_bank_t s_actor_vertex_payload;
+static sm64_saturn_render_payload_bank_t s_actor_ref_payload;
+static demo_actor_queue_metadata_t s_actor_admit_metadata[
+    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
+static demo_actor_queue_metadata_t s_actor_result_metadata[
+    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_job_result_identity_t s_actor_queue_merge_ids[
+    SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_draw_order[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_transform_refs[SM64_MARIO_VERTEX_COUNT]
@@ -479,8 +515,8 @@ static inline const demo_actor_vertex_result_t *demo_actor_result_read(
 static inline const demo_actor_primitive_ref_t *demo_actor_ref_read(
     uint16_t primitive)
 {
-    const uint8_t owner = sm64_saturn_dual_frame_owner_for_split(
-        primitive, s_actor_primitive_slave_begin);
+    const uint8_t owner = primitive < SM64_MARIO_PRIMITIVE_COUNT &&
+        s_actor_ref_owner[primitive] <= 1U ? s_actor_ref_owner[primitive] : 0U;
     return (const demo_actor_primitive_ref_t *)
         sm64_saturn_dual_frame_read_range(0U, owner, s_actor_refs) +
         primitive;
@@ -890,6 +926,7 @@ typedef struct demo_mario_transform_context {
     const uint16_t (*primitives)[5];
     const uint8_t (*material_rgb)[3];
     const uint16_t *vertex_refs;
+    uint16_t vertex_ref_slot[SM64_MARIO_VERTEX_COUNT];
     uint16_t vertex_slave_begin;
     uint16_t transform_ref_count;
     uint16_t primitive_slave_begin;
@@ -979,6 +1016,29 @@ static uint8_t demo_lod_select(uint16_t primitive_index, int32_t depth,
     return next;
 }
 
+static bool demo_transform_mario_vertex(
+    const demo_mario_transform_context_t *context, uint16_t vertex,
+    int32_t sine, int32_t cosine, demo_actor_vertex_result_t *result)
+{
+    if (context == NULL || result == NULL || vertex >= context->vertex_count)
+        return false;
+    const int16_t *source = context->vertices[vertex];
+    const int32_t sx = (int32_t)source[0] << 16;
+    const int32_t sz = (int32_t)source[2] << 16;
+    const sm64_saturn_vec3i_t world = {
+        (int32_t)context->snapshot.position[0] +
+            ((sm64_saturn_q16_mul(sx, cosine) +
+              sm64_saturn_q16_mul(sz, sine)) >> 16),
+        (int32_t)context->snapshot.position[1] + source[1],
+        (int32_t)context->snapshot.position[2] +
+            ((-sm64_saturn_q16_mul(sx, sine) +
+              sm64_saturn_q16_mul(sz, cosine)) >> 16)};
+    sm64_saturn_vec3i_t view;
+    result->valid = sm64_saturn_ir_transform_one(
+        &context->job, world, &view, &result->projected) ? 1U : 0U;
+    return true;
+}
+
 static void demo_transform_mario_range(void *opaque, uint16_t begin,
                                        uint16_t end)
 {
@@ -996,23 +1056,9 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) break;
         const uint16_t vertex = context->vertex_refs[i];
-        if (vertex >= context->vertex_count)
-            continue;
-        const int16_t *source = context->vertices[vertex];
-        const int32_t sx = (int32_t)source[0] << 16;
-        const int32_t sz = (int32_t)source[2] << 16;
-        const sm64_saturn_vec3i_t world = {
-            (int32_t)context->snapshot.position[0] +
-                ((sm64_saturn_q16_mul(sx, cosine) +
-                  sm64_saturn_q16_mul(sz, sine)) >> 16),
-            (int32_t)context->snapshot.position[1] + source[1],
-            (int32_t)context->snapshot.position[2] +
-                ((-sm64_saturn_q16_mul(sx, sine) +
-                  sm64_saturn_q16_mul(sz, cosine)) >> 16)};
-        sm64_saturn_vec3i_t view;
-        s_actor_results[vertex].valid = sm64_saturn_ir_transform_one(
-            &context->job, world, &view, &s_actor_results[vertex].projected) ?
-            1U : 0U;
+        if (vertex >= context->vertex_count) continue;
+        (void)demo_transform_mario_vertex(context, vertex, sine, cosine,
+                                          &s_actor_results[vertex]);
     }
     sm64_saturn_dual_frame_publish(&s_actor_frame_bank, lane,
                                    context->sequence,
@@ -1075,34 +1121,52 @@ static void demo_classify_mario_range(void *opaque, uint16_t begin,
  * copied records let the slave transform/classify a disjoint vertex span with
  * no game-state or VDP1 dependency; the master remains the only actor command
  * allocator and inserter. */
+static bool demo_snapshot_mario_transform_context(
+    demo_mario_transform_context_t *context,
+    const sm64_saturn_ir_transform_job_t *job,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose)
+{
+    if (context == NULL || job == NULL || snapshot == NULL || pose == NULL ||
+        !snapshot->valid || pose->vertices == NULL ||
+        pose->vertex_count != SM64_MARIO_VERTEX_COUNT ||
+        s_actor_transform_ref_count == 0U)
+        return false;
+    memset(context, 0, sizeof(*context));
+    context->job = *job;
+    context->snapshot = *snapshot;
+    memcpy(context->vertices, pose->vertices, sizeof(context->vertices));
+    if (pose->light_intensity != NULL)
+        memcpy(context->light_intensity, pose->light_intensity,
+               sizeof(context->light_intensity));
+    context->vertex_count = pose->vertex_count;
+    context->pose_frame = pose->frame;
+    context->pose_frame_count = pose->frame_count;
+    context->pose_walking_bank = pose->walking_bank;
+    context->primitives = sm64_mario_primitives;
+    context->material_rgb = sm64_mario_material_rgb;
+    context->vertex_refs = s_actor_transform_refs;
+    context->transform_ref_count = s_actor_transform_ref_count;
+    memset(context->vertex_ref_slot, 0xFF, sizeof(context->vertex_ref_slot));
+    for (uint16_t ref = 0U; ref < context->transform_ref_count; ref++) {
+        const uint16_t vertex = context->vertex_refs[ref];
+        if (vertex >= SM64_MARIO_VERTEX_COUNT ||
+            context->vertex_ref_slot[vertex] != UINT16_MAX)
+            return false;
+        context->vertex_ref_slot[vertex] = ref;
+    }
+    s_actor_light_intensity = context->light_intensity;
+    return true;
+}
+
 static void demo_dispatch_mario_transform(
     const sm64_saturn_ir_transform_job_t *job,
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
     sm64_saturn_fast3d_profile_t *profile)
 {
-    if (job == NULL || snapshot == NULL || pose == NULL || !snapshot->valid ||
-        pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
-        return;
-    memset(&s_mario_transform_context, 0, sizeof(s_mario_transform_context));
-    s_mario_transform_context.job = *job;
-    s_mario_transform_context.snapshot = *snapshot;
-    memcpy(s_mario_transform_context.vertices, pose->vertices,
-           sizeof(s_mario_transform_context.vertices));
-    if (pose->light_intensity != NULL) {
-        memcpy(s_mario_transform_context.light_intensity, pose->light_intensity,
-               sizeof(s_mario_transform_context.light_intensity));
-    }
-    s_mario_transform_context.vertex_count = pose->vertex_count;
-    s_mario_transform_context.pose_frame = pose->frame;
-    s_mario_transform_context.pose_frame_count = pose->frame_count;
-    s_mario_transform_context.pose_walking_bank = pose->walking_bank;
-    s_mario_transform_context.primitives = sm64_mario_primitives;
-    s_mario_transform_context.material_rgb = sm64_mario_material_rgb;
-    s_actor_light_intensity = s_mario_transform_context.light_intensity;
-    s_mario_transform_context.vertex_refs = s_actor_transform_refs;
-    s_mario_transform_context.transform_ref_count = s_actor_transform_ref_count;
-    if (s_mario_transform_context.transform_ref_count == 0U) {
+    if (!demo_snapshot_mario_transform_context(
+            &s_mario_transform_context, job, snapshot, pose)) {
         profile->pipeline_faults++;
         return;
     }
@@ -1117,10 +1181,6 @@ static void demo_dispatch_mario_transform(
     for (uint16_t ref = 0U;
          ref < s_mario_transform_context.transform_ref_count; ref++) {
         const uint16_t vertex = s_mario_transform_context.vertex_refs[ref];
-        if (vertex >= SM64_MARIO_VERTEX_COUNT) {
-            profile->pipeline_faults++;
-            return;
-        }
         s_actor_vertex_owner[vertex] = ref < s_actor_slave_begin ? 0U : 1U;
     }
     s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
@@ -1179,6 +1239,10 @@ static void demo_dispatch_mario_transform(
     memset(s_actor_refs, 0xFF, sizeof(s_actor_refs));
     s_actor_primitive_slave_begin =
         (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT / 2U);
+    for (uint16_t primitive = 0U;
+         primitive < SM64_MARIO_PRIMITIVE_COUNT; primitive++)
+        s_actor_ref_owner[primitive] =
+            primitive < s_actor_primitive_slave_begin ? 0U : 1U;
     s_mario_transform_context.primitive_slave_begin =
         s_actor_primitive_slave_begin;
     sm64_saturn_dual_worker_stats_t actor_classify_stats = {0};
@@ -1208,12 +1272,14 @@ static void demo_dispatch_mario_transform(
 #else
     profile->master_worker_started++;
     s_actor_primitive_slave_begin = SM64_MARIO_PRIMITIVE_COUNT;
+    memset(s_actor_ref_owner, 0, sizeof(s_actor_ref_owner));
     demo_classify_mario_range(&s_mario_transform_context, 0U,
                               SM64_MARIO_PRIMITIVE_COUNT);
 #endif
     if (!classify_complete) {
         profile->pipeline_faults++;
         s_actor_primitive_slave_begin = SM64_MARIO_PRIMITIVE_COUNT;
+        memset(s_actor_ref_owner, 0, sizeof(s_actor_ref_owner));
         s_mario_transform_context.primitive_slave_begin =
             s_actor_primitive_slave_begin;
         sm64_saturn_dual_frame_reset(&s_actor_ref_frame_bank);
@@ -1282,6 +1348,14 @@ void sm64_saturn_demo_render_init(void)
         &s_terrain_command_payload, s_terrain_master_commands,
         s_terrain_slave_commands, SM64_SATURN_TERRAIN_COMMAND_BYTES,
         DEMO_TERRAIN_RESULT_CAPACITY);
+    sm64_saturn_render_payload_bank_init(
+        &s_actor_vertex_payload, s_actor_queue_vertex_master,
+        s_actor_queue_vertex_slave, sizeof(s_actor_queue_vertex_master[0]),
+        DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY);
+    sm64_saturn_render_payload_bank_init(
+        &s_actor_ref_payload, s_actor_queue_ref_master,
+        s_actor_queue_ref_slave, sizeof(s_actor_queue_ref_master[0]),
+        DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY);
     saturn_lod_reset(s_primitive_lod_tier, sizeof(s_primitive_lod_tier));
     saturn_lod_scene_init(&s_lod_scene);
     memset(s_primitive_lod_transition, 0,
@@ -1735,7 +1809,7 @@ static bool demo_terrain_queue_publish_metadata(
     uint16_t record_count, uint32_t sequence)
 {
     uint16_t job_index;
-    if (metadata == NULL || sequence == 0U || writer_lane > 1U ||
+    if (metadata == NULL || job == NULL || sequence == 0U || writer_lane > 1U ||
         !demo_terrain_queue_claim_index(job, claimed_state, &job_index))
         return false;
     metadata = (demo_terrain_queue_metadata_t *)
@@ -1877,6 +1951,384 @@ static bool __attribute__((unused)) demo_terrain_queue_bind_output(
     }
     output->capacity = execution.output_capacity;
     output->writer_lane = execution.writer_lane;
+    return true;
+}
+
+typedef struct demo_actor_queue_output {
+    void *records;
+    uint16_t capacity;
+    uint16_t job_index;
+    uint8_t writer_lane;
+} demo_actor_queue_output_t;
+
+static bool demo_actor_queue_bind_output(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state,
+    demo_actor_queue_output_t *output)
+{
+    if (output != NULL) *output = (demo_actor_queue_output_t){0};
+    uint16_t job_index;
+    if (job == NULL || output == NULL ||
+        sm64_saturn_render_output_bank_kind_for_job(job) !=
+            SM64_SATURN_RENDER_OUTPUT_BANK_ACTOR ||
+        !demo_terrain_queue_claim_index(job, claimed_state, &job_index))
+        return false;
+    sm64_saturn_render_job_execution_t execution;
+    if (!sm64_saturn_render_job_bridge_begin_output(
+            &s_render_job_queue, &s_terrain_output_bank, &s_actor_output_bank,
+            job_index, &execution))
+        return false;
+    sm64_saturn_render_payload_bank_t *const payload =
+        job->type == SM64_SATURN_RENDER_JOB_ACTOR_ADMIT
+            ? &s_actor_vertex_payload : &s_actor_ref_payload;
+    output->records = sm64_saturn_render_payload_bank_write(payload,
+                                                             &execution);
+    if (output->records == NULL) {
+        *output = (demo_actor_queue_output_t){0};
+        return false;
+    }
+    output->capacity = execution.output_capacity;
+    output->job_index = execution.job_index;
+    output->writer_lane = execution.writer_lane;
+    return true;
+}
+
+static bool demo_actor_queue_publish_metadata(
+    demo_actor_queue_metadata_t *metadata,
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, uint8_t writer_lane,
+    uint16_t record_count, uint32_t sequence)
+{
+    uint16_t job_index;
+    if (metadata == NULL || job == NULL || sequence == 0U || writer_lane > 1U ||
+        record_count > job->output_capacity ||
+        !demo_terrain_queue_claim_index(job, claimed_state, &job_index))
+        return false;
+    metadata = (demo_actor_queue_metadata_t *)
+        sm64_saturn_dual_frame_cache_through(metadata);
+    metadata->ready = 0U;
+    metadata->generation = job->snapshot_generation;
+    metadata->sequence = sequence;
+    metadata->job_index = job_index;
+    metadata->record_count = record_count;
+    metadata->writer_lane = writer_lane;
+    metadata->claimed_state = (uint8_t)claimed_state;
+    sm64_saturn_dual_frame_compiler_fence();
+    metadata->ready = 1U;
+    return true;
+}
+
+static const demo_actor_queue_metadata_t *demo_actor_queue_metadata_read(
+    const demo_actor_queue_metadata_t *metadata,
+    const sm64_saturn_render_job_t *job, uint16_t job_index)
+{
+    if (metadata == NULL || job == NULL ||
+        job_index >= SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY ||
+        metadata->ready == 0U)
+        return NULL;
+    sm64_saturn_dual_frame_compiler_fence();
+    uint8_t output_lane = UINT8_MAX;
+    if (metadata->generation != job->snapshot_generation ||
+        metadata->job_index != job_index || metadata->sequence == 0U ||
+        metadata->record_count > job->output_capacity ||
+        metadata->writer_lane > 1U ||
+        (metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) ||
+        !sm64_saturn_render_output_bank_owner_lane(
+            &s_actor_output_bank, &s_render_job_queue, job_index,
+            &output_lane) || output_lane != metadata->writer_lane)
+        return NULL;
+    return metadata;
+}
+
+static bool demo_actor_queue_read_vertices_done(
+    uint16_t job_index, uint8_t reader_lane,
+    const demo_actor_queue_vertex_result_t **records, uint16_t *record_count,
+    uint32_t *sequence)
+{
+    if (records != NULL) *records = NULL;
+    if (record_count != NULL) *record_count = 0U;
+    if (sequence != NULL) *sequence = 0U;
+    const sm64_saturn_render_job_t *const job =
+        sm64_saturn_render_job_queue_done_job(&s_render_job_queue, job_index);
+    const demo_actor_queue_metadata_t *const metadata = job == NULL ? NULL :
+        demo_actor_queue_metadata_read(&s_actor_admit_metadata[job_index],
+                                       job, job_index);
+    if (records == NULL || record_count == NULL || sequence == NULL ||
+        job == NULL || metadata == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_ACTOR_ADMIT ||
+        reader_lane > SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE)
+        return false;
+    *records = sm64_saturn_render_payload_bank_read(
+        &s_actor_vertex_payload, &s_render_job_queue, &s_terrain_output_bank,
+        &s_actor_output_bank, job_index, reader_lane);
+    if (*records == NULL) return false;
+    *record_count = metadata->record_count;
+    *sequence = metadata->sequence;
+    return true;
+}
+
+static bool demo_actor_queue_read_refs_done(
+    uint16_t job_index, uint8_t reader_lane,
+    const demo_actor_primitive_ref_t **records, uint16_t *record_count,
+    uint32_t *sequence)
+{
+    if (records != NULL) *records = NULL;
+    if (record_count != NULL) *record_count = 0U;
+    if (sequence != NULL) *sequence = 0U;
+    const sm64_saturn_render_job_t *const job =
+        sm64_saturn_render_job_queue_done_job(&s_render_job_queue, job_index);
+    const demo_actor_queue_metadata_t *const metadata = job == NULL ? NULL :
+        demo_actor_queue_metadata_read(&s_actor_result_metadata[job_index],
+                                       job, job_index);
+    if (records == NULL || record_count == NULL || sequence == NULL ||
+        job == NULL || metadata == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
+        reader_lane > SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE)
+        return false;
+    *records = sm64_saturn_render_payload_bank_read(
+        &s_actor_ref_payload, &s_render_job_queue, &s_terrain_output_bank,
+        &s_actor_output_bank, job_index, reader_lane);
+    if (*records == NULL) return false;
+    *record_count = metadata->record_count;
+    *sequence = metadata->sequence;
+    return true;
+}
+
+static bool __attribute__((unused)) demo_actor_queue_transform(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *opaque)
+{
+    demo_mario_transform_context_t *const context = opaque;
+    demo_actor_queue_output_t output;
+    if (job == NULL || context == NULL || !context->snapshot.valid ||
+        context->vertex_refs == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_ACTOR_ADMIT ||
+        job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT ||
+        job->input_offset != 0U ||
+        job->input_count != context->transform_ref_count ||
+        job->input_count > SM64_MARIO_VERTEX_COUNT ||
+        !demo_actor_queue_bind_output(job, claimed_state, &output) ||
+        output.capacity < job->input_count)
+        return false;
+    demo_actor_queue_vertex_result_t *const records = output.records;
+    const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
+    const int32_t cosine = sm64_saturn_coss_q16(context->snapshot.yaw);
+    for (uint16_t local = 0U; local < job->input_count; local++) {
+        const uint16_t ref = (uint16_t)(job->input_offset + local);
+        const uint16_t vertex = context->vertex_refs[ref];
+        if (vertex >= context->vertex_count ||
+            !demo_transform_mario_vertex(context, vertex, sine, cosine,
+                                          &records[local].result))
+            return false;
+        records[local].vertex_id = vertex;
+    }
+    return demo_actor_queue_publish_metadata(
+        &s_actor_admit_metadata[output.job_index], job, claimed_state,
+        output.writer_lane, job->input_count, context->sequence);
+}
+
+static const demo_actor_vertex_result_t *demo_actor_queue_vertex_lookup(
+    const demo_mario_transform_context_t *context,
+    const demo_actor_queue_vertex_result_t *records, uint16_t record_count,
+    uint16_t vertex)
+{
+    if (context == NULL || records == NULL || vertex >= context->vertex_count)
+        return NULL;
+    const uint16_t slot = context->vertex_ref_slot[vertex];
+    if (slot >= record_count || records[slot].vertex_id != vertex) return NULL;
+    return &records[slot].result;
+}
+
+static bool __attribute__((unused)) demo_actor_queue_classify(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *opaque)
+{
+    demo_mario_transform_context_t *const context = opaque;
+    demo_actor_queue_output_t output;
+    uint16_t lower_job_index;
+    uint16_t admit_job_index;
+    if (job == NULL || context == NULL || context->primitives == NULL ||
+        context->material_rgb == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
+        job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER ||
+        job->input_offset > SM64_MARIO_PRIMITIVE_COUNT ||
+        job->input_count >
+            (uint16_t)(SM64_MARIO_PRIMITIVE_COUNT - job->input_offset) ||
+        !demo_actor_queue_bind_output(job, claimed_state, &output) ||
+        output.capacity < job->input_count ||
+        !demo_terrain_queue_claim_index(job, claimed_state, &lower_job_index) ||
+        !sm64_saturn_render_job_graph_actor_lower_admit_done(
+            &s_render_job_graph, job->snapshot_generation, lower_job_index,
+            claimed_state, &admit_job_index))
+        return false;
+    const demo_actor_queue_vertex_result_t *vertices;
+    uint16_t vertex_count;
+    uint32_t sequence;
+    if (!demo_actor_queue_read_vertices_done(
+            admit_job_index, output.writer_lane, &vertices, &vertex_count,
+            &sequence) || vertex_count != context->transform_ref_count ||
+        sequence != context->sequence)
+        return false;
+    demo_actor_primitive_ref_t *const records = output.records;
+    for (uint16_t local = 0U; local < job->input_count; local++) {
+        const uint16_t primitive_id = (uint16_t)(job->input_offset + local);
+        const uint16_t *const primitive = context->primitives[primitive_id];
+        demo_actor_primitive_ref_t *const result = &records[local];
+        result->primitive_id = DEMO_ACTOR_PRIMITIVE_REJECTED;
+        result->material_vertex = 0U;
+        if (context->material_rgb[primitive[0]][0] > 31U) continue;
+        const demo_actor_vertex_result_t *const a =
+            demo_actor_queue_vertex_lookup(context, vertices, vertex_count,
+                                           primitive[1]);
+        const demo_actor_vertex_result_t *const b =
+            demo_actor_queue_vertex_lookup(context, vertices, vertex_count,
+                                           primitive[2]);
+        const demo_actor_vertex_result_t *const c =
+            demo_actor_queue_vertex_lookup(context, vertices, vertex_count,
+                                           primitive[3]);
+        const demo_actor_vertex_result_t *const d =
+            demo_actor_queue_vertex_lookup(context, vertices, vertex_count,
+                                           primitive[4]);
+        if (a == NULL || b == NULL || c == NULL || d == NULL ||
+            a->valid == 0U || b->valid == 0U || c->valid == 0U ||
+            d->valid == 0U)
+            continue;
+        const int32_t cross =
+            (int32_t)(b->projected.x - a->projected.x) *
+                (c->projected.y - a->projected.y) -
+            (int32_t)(b->projected.y - a->projected.y) *
+                (c->projected.x - a->projected.x);
+        if (cross == 0) continue;
+        result->primitive_id = primitive_id;
+        result->material_vertex = primitive[0];
+    }
+    return demo_actor_queue_publish_metadata(
+        &s_actor_result_metadata[output.job_index], job, claimed_state,
+        output.writer_lane, job->input_count, context->sequence);
+}
+
+static bool demo_actor_queue_validate_payloads(
+    const demo_mario_transform_context_t *context,
+    const demo_actor_queue_vertex_result_t *vertices, uint16_t vertex_count,
+    const uint16_t *lower_jobs,
+    const demo_actor_primitive_ref_t *const *lower_records,
+    const uint16_t *lower_record_counts, uint16_t lower_count)
+{
+    if (context == NULL || vertices == NULL || lower_jobs == NULL ||
+        lower_records == NULL || lower_record_counts == NULL)
+        return false;
+    for (uint16_t local = 0U; local < vertex_count; local++) {
+        const uint16_t vertex = vertices[local].vertex_id;
+        if (vertex >= context->vertex_count ||
+            context->vertex_ref_slot[vertex] != local)
+            return false;
+    }
+    for (uint16_t stream = 0U; stream < lower_count; stream++) {
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
+                                                   lower_jobs[stream]);
+        if (job == NULL || lower_records[stream] == NULL ||
+            lower_record_counts[stream] != job->input_count)
+            return false;
+        for (uint16_t local = 0U; local < lower_record_counts[stream]; local++) {
+            const uint16_t primitive = (uint16_t)(job->input_offset + local);
+            const uint16_t result_id = lower_records[stream][local].primitive_id;
+            if (primitive >= SM64_MARIO_PRIMITIVE_COUNT ||
+                (result_id != DEMO_ACTOR_PRIMITIVE_REJECTED &&
+                 result_id != primitive))
+                return false;
+        }
+    }
+    return true;
+}
+
+/* Terminal assembly is master-only and deterministic: lower descriptors are
+ * consumed in queue order, then local result order. It restores the legacy
+ * master-owned projected/ref banks so the proven Castle animation emission
+ * path remains unchanged after the eventual atomic scheduler cutover. */
+static bool __attribute__((unused)) demo_actor_queue_assemble_done(
+    uint8_t reader_lane, demo_mario_transform_context_t *context)
+{
+    if (reader_lane != SM64_SATURN_RENDER_OUTPUT_LANE_MASTER ||
+        context == NULL)
+        return false;
+    uint16_t lower_jobs[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t lower_count = 0U;
+    if (!sm64_saturn_render_job_graph_collect_done_actor_lower(
+            &s_render_job_graph, s_render_job_graph.generation, lower_jobs,
+            SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count))
+        return false;
+    const demo_actor_primitive_ref_t *lower_records[
+        SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t lower_record_counts[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t identity_count = 0U;
+    uint16_t expected_primitive = 0U;
+    uint16_t admit_job_index = UINT16_MAX;
+    uint32_t sequence = 0U;
+    for (uint16_t stream = 0U; stream < lower_count; stream++) {
+        const uint16_t job_index = lower_jobs[stream];
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
+                                                   job_index);
+        uint16_t predecessor;
+        uint32_t stream_sequence;
+        if (job == NULL || job->input_offset != expected_primitive ||
+            !sm64_saturn_render_job_graph_actor_done_lower_admit_done(
+                &s_render_job_graph, s_render_job_graph.generation, job_index,
+                &predecessor) ||
+            !demo_actor_queue_read_refs_done(
+                job_index, reader_lane, &lower_records[stream],
+                &lower_record_counts[stream], &stream_sequence) ||
+            lower_record_counts[stream] != job->input_count ||
+            identity_count > SM64_MARIO_PRIMITIVE_COUNT - job->input_count)
+            return false;
+        if (admit_job_index == UINT16_MAX) admit_job_index = predecessor;
+        if (predecessor != admit_job_index) return false;
+        if (sequence == 0U) sequence = stream_sequence;
+        if (stream_sequence != sequence || sequence != context->sequence)
+            return false;
+        for (uint16_t local = 0U; local < job->input_count; local++)
+            s_actor_queue_merge_ids[identity_count++] =
+                (sm64_saturn_render_job_result_identity_t){job_index, local};
+        expected_primitive =
+            (uint16_t)(expected_primitive + job->input_count);
+    }
+    if (expected_primitive != SM64_MARIO_PRIMITIVE_COUNT ||
+        !sm64_saturn_render_job_graph_validate_actor_merge(
+            &s_render_job_graph, s_render_job_graph.generation,
+            s_actor_queue_merge_ids, identity_count))
+        return false;
+    const demo_actor_queue_vertex_result_t *vertices;
+    uint16_t vertex_count;
+    uint32_t vertex_sequence;
+    if (admit_job_index == UINT16_MAX ||
+        !demo_actor_queue_read_vertices_done(
+            admit_job_index, reader_lane, &vertices, &vertex_count,
+            &vertex_sequence) || vertex_count != context->transform_ref_count ||
+        vertex_sequence != sequence ||
+        !demo_actor_queue_validate_payloads(
+            context, vertices, vertex_count, lower_jobs, lower_records,
+            lower_record_counts, lower_count))
+        return false;
+    memset(s_actor_results, 0, sizeof(s_actor_results));
+    memset(s_actor_vertex_owner, 0, sizeof(s_actor_vertex_owner));
+    for (uint16_t local = 0U; local < vertex_count; local++) {
+        const uint16_t vertex = vertices[local].vertex_id;
+        s_actor_results[vertex] = vertices[local].result;
+    }
+    memset(s_actor_refs, 0xFF, sizeof(s_actor_refs));
+    memset(s_actor_ref_owner, 0, sizeof(s_actor_ref_owner));
+    for (uint16_t stream = 0U; stream < lower_count; stream++) {
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
+                                                   lower_jobs[stream]);
+        for (uint16_t local = 0U; local < lower_record_counts[stream]; local++) {
+            const uint16_t primitive = (uint16_t)(job->input_offset + local);
+            const demo_actor_primitive_ref_t result = lower_records[stream][local];
+            s_actor_refs[primitive] = result;
+        }
+    }
     return true;
 }
 

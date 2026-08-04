@@ -257,3 +257,120 @@ bool sm64_saturn_render_job_graph_validate_terrain_merge(
     }
     return true;
 }
+
+bool sm64_saturn_render_job_graph_actor_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index, sm64_saturn_render_job_state_t claimed_state,
+    uint16_t *admit_job_index)
+{
+    if (admit_job_index != NULL) *admit_job_index = UINT16_MAX;
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    if (!graph_current(graph, generation) || admit_job_index == NULL ||
+        lower_job_index >= graph->count)
+        return false;
+    const sm64_saturn_render_job_t *const lower =
+        sm64_saturn_render_job_queue_claimed_job(
+            graph->queue, generation, lower_job_index, claimed_state);
+    if (lower == NULL || lower->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
+        lower->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER)
+        return false;
+    const uint8_t dependencies = graph->dependency_mask[lower_job_index];
+    if (dependencies == 0U ||
+        (dependencies & (uint8_t)(dependencies - 1U)) != 0U)
+        return false;
+    uint16_t admit_index = 0U;
+    while ((dependencies & (uint8_t)(1U << admit_index)) == 0U) admit_index++;
+    const sm64_saturn_render_job_t *const admit =
+        sm64_saturn_render_job_queue_job(graph->queue, generation, admit_index);
+    if (admit == NULL || admit->type != SM64_SATURN_RENDER_JOB_ACTOR_ADMIT ||
+        admit->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT)
+        return false;
+    *admit_job_index = admit_index;
+    return true;
+}
+
+bool sm64_saturn_render_job_graph_actor_done_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index, uint16_t *admit_job_index)
+{
+    if (admit_job_index != NULL) *admit_job_index = UINT16_MAX;
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    if (!graph_current(graph, generation) || admit_job_index == NULL ||
+        lower_job_index >= graph->count)
+        return false;
+    const sm64_saturn_render_job_t *const lower =
+        sm64_saturn_render_job_queue_done_job(graph->queue, lower_job_index);
+    if (lower == NULL || lower->snapshot_generation != generation ||
+        lower->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
+        lower->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER)
+        return false;
+    const uint8_t dependencies = graph->dependency_mask[lower_job_index];
+    if (dependencies == 0U ||
+        (dependencies & (uint8_t)(dependencies - 1U)) != 0U)
+        return false;
+    uint16_t admit_index = 0U;
+    while ((dependencies & (uint8_t)(1U << admit_index)) == 0U) admit_index++;
+    const sm64_saturn_render_job_t *const admit =
+        sm64_saturn_render_job_queue_job(graph->queue, generation, admit_index);
+    if (admit == NULL || admit->type != SM64_SATURN_RENDER_JOB_ACTOR_ADMIT ||
+        admit->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT)
+        return false;
+    *admit_job_index = admit_index;
+    return true;
+}
+
+bool sm64_saturn_render_job_graph_collect_done_actor_lower(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t *job_indices, uint16_t capacity, uint16_t *count)
+{
+    if (count != NULL) *count = 0U;
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    if (!graph_current(graph, generation) || job_indices == NULL ||
+        count == NULL || capacity == 0U)
+        return false;
+    uint16_t found = 0U;
+    for (uint16_t job_index = 0U; job_index < graph->count; job_index++) {
+        const sm64_saturn_render_job_t *const descriptor =
+            sm64_saturn_render_job_queue_published_job(
+                graph->queue, generation, job_index);
+        if (descriptor == NULL) return false;
+        if (descriptor->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER) continue;
+        const sm64_saturn_render_job_t *const done =
+            sm64_saturn_render_job_queue_done_job(graph->queue, job_index);
+        if (done == NULL || done != descriptor || found >= capacity)
+            return false;
+        job_indices[found++] = job_index;
+    }
+    if (found == 0U) return false;
+    *count = found;
+    return true;
+}
+
+bool sm64_saturn_render_job_graph_validate_actor_merge(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    const sm64_saturn_render_job_result_identity_t *identities,
+    uint16_t count)
+{
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    uint16_t lower_jobs[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t lower_count = 0U;
+    if (!sm64_saturn_render_job_graph_collect_done_actor_lower(
+            graph, generation, lower_jobs,
+            SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count) ||
+        (count != 0U && identities == NULL))
+        return false;
+    for (uint16_t index = 0U; index < count; index++) {
+        const sm64_saturn_render_job_result_identity_t identity = identities[index];
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_job(graph->queue, generation,
+                                              identity.job_index);
+        if (job == NULL || job->type != SM64_SATURN_RENDER_JOB_ACTOR_LOWER ||
+            identity.output_index >= job->output_capacity) return false;
+        if (index > 0U &&
+            (identities[index - 1U].job_index > identity.job_index ||
+             (identities[index - 1U].job_index == identity.job_index &&
+              identities[index - 1U].output_index >= identity.output_index)))
+            return false;
+    }
+    return true;
+}

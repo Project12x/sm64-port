@@ -18,6 +18,13 @@ static const sm64_saturn_render_job_t k_jobs[] = {
      SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT, 19U, 8U, 2U, 12U, 2U},
 };
 
+static const sm64_saturn_render_job_t k_actor_jobs[] = {
+    {SM64_SATURN_RENDER_JOB_ACTOR_ADMIT,
+     SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT, 23U, 0U, 12U, 0U, 12U},
+    {SM64_SATURN_RENDER_JOB_ACTOR_LOWER,
+     SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER, 23U, 0U, 24U, 12U, 24U},
+};
+
 int main(void)
 {
     sm64_saturn_render_job_queue_t queue;
@@ -188,6 +195,72 @@ int main(void)
                             &graph, 19U) &&
                         sm64_saturn_render_job_queue_all_terminal(&queue, 19U),
                     "failure propagation must quarantine every reverse-chain dependent")) return 1;
+    }
+    {
+        const uint8_t actor_deps[] = {0U, 1U << 0U};
+        const sm64_saturn_render_job_result_identity_t actor_merge[] = {
+            {1U, 0U}, {1U, 1U}, {1U, 2U},
+        };
+        uint16_t admit = UINT16_MAX;
+        uint16_t actor_lower[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] = {0U};
+        uint16_t actor_lower_count = 0U;
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(sm64_saturn_render_job_graph_publish(
+                        &graph, 23U, k_actor_jobs, actor_deps, 2U),
+                    "actor graph must publish")) return 1;
+        if (!expect(sm64_saturn_render_job_graph_claim_slave(
+                        &graph, 23U, &job) && job == 0U,
+                    "actor transform producer must claim first")) return 1;
+        if (!expect(sm64_saturn_render_job_queue_complete(
+                        &queue, 23U, 0U,
+                        SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE),
+                    "actor transform producer must complete")) return 1;
+        if (!expect(sm64_saturn_render_job_graph_claim_master(
+                        &graph, 23U, &job) && job == 1U,
+                    "actor classify consumer must claim after transform")) return 1;
+        if (!expect(sm64_saturn_render_job_graph_actor_lower_admit_done(
+                        &graph, 23U, 1U,
+                        SM64_SATURN_RENDER_JOB_CLAIMED_MASTER, &admit) &&
+                        admit == 0U,
+                    "actor lower must prove its exact completed ACTOR_ADMIT predecessor"))
+            return 1;
+        if (!expect(!sm64_saturn_render_job_graph_collect_done_actor_lower(
+                        &graph, 23U, actor_lower,
+                        SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY,
+                        &actor_lower_count),
+                    "actor merge must reject a claimed lower descriptor"))
+            return 1;
+        if (!expect(sm64_saturn_render_job_queue_complete(
+                        &queue, 23U, 1U,
+                        SM64_SATURN_RENDER_JOB_CLAIMED_MASTER) &&
+                        sm64_saturn_render_job_graph_actor_done_lower_admit_done(
+                            &graph, 23U, 1U, &admit) && admit == 0U &&
+                        sm64_saturn_render_job_graph_collect_done_actor_lower(
+                            &graph, 23U, actor_lower,
+                            SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY,
+                            &actor_lower_count) &&
+                        actor_lower_count == 1U && actor_lower[0] == 1U &&
+                        sm64_saturn_render_job_graph_validate_actor_merge(
+                            &graph, 23U, actor_merge, 3U),
+                    "actor merge must retain terminal descriptor/local order"))
+            return 1;
+    }
+    {
+        const uint8_t actor_wrong_deps[] = {0U, 0U};
+        uint16_t admit = UINT16_MAX;
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(sm64_saturn_render_job_graph_publish(
+                        &graph, 23U, k_actor_jobs, actor_wrong_deps, 2U) &&
+                        sm64_saturn_render_job_queue_claim_index(
+                            &queue, 23U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER) &&
+                        !sm64_saturn_render_job_graph_actor_lower_admit_done(
+                            &graph, 23U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER, &admit),
+                    "actor lower must reject a missing transform predecessor"))
+            return 1;
     }
     puts("render job graph fixture: PASS");
     return 0;

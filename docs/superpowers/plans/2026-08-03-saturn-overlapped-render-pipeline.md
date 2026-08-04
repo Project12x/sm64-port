@@ -188,6 +188,25 @@ and the evidence report before starting another task.
   claimant-derived lane from the exact producer; the range inference is
   confined to the legacy adapter. The focused route contract includes that
   slave-at-zero mutation and is GREEN; fresh re-review remains required.
+  **A5.8 Mario queue-parity increment (2026-08-04):** source-complete,
+  pending independent review. The dormant actor route snapshots the same live
+  posed vertices, light intensities, animation frame/bank metadata, and yaw
+  already proven by the legacy Castle demo. ACTOR_ADMIT transforms the exact
+  descriptor-owned compact vertex-reference payload; ACTOR_LOWER fails closed
+  unless its one immutable ACTOR_ADMIT predecessor is the exact completed
+  descriptor, then classifies through the predecessor's claimant-selected
+  payload alias. Both phases publish descriptor-keyed count, sequence,
+  claimant state, and writer lane before runtime may expose DONE. The dormant
+  master assembler requires every ACTOR_LOWER to be DONE, validates complete
+  primitive coverage in descriptor/local order, validates all payload
+  identities before mutating renderer state, and restores the legacy
+  master-owned projected/ref banks so command emission and full animation
+  remain unchanged. No callback is registered and the live-cutover gate stays
+  RED. Activation remains blocked on a deliberate output-offset namespace
+  decision (per-payload-kind overlap validation versus a bounded global
+  layout), terrain command lookup from ordered descriptor streams, one atomic
+  CPU-DUAL owner replacement, target link/cache evidence, and manual Ymir
+  validation.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

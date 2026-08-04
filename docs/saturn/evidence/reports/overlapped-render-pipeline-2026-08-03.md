@@ -1126,3 +1126,38 @@ open.
   is DONE; the stable stream builder then returns an empty merge. Direct strict
   queue, graph, and terrain-route fixtures PASS. No activation, target build,
   CUE/Ymir run, or FPS claim occurred; fresh scoped re-review remains required.
+
+### A5.8 dormant Mario queue parity (2026-08-04)
+
+- RED: a new direct C11 route-source executable required an ACTOR_ADMIT
+  descriptor-owned transform payload, an ACTOR_LOWER exact predecessor proof,
+  terminal metadata/readback, fail-before-mutation validation, and a
+  descriptor/local-order master merge. It failed before those functions
+  existed. The graph executable separately failed to compile before actor
+  claimed/DONE predecessor and terminal collection APIs existed.
+- GREEN: the actor snapshot copies the live posed vertex and lighting banks,
+  animation frame/bank metadata, actor transform, and compact meshlet
+  references. ACTOR_ADMIT publishes dense vertex-id/projected records to the
+  actual claimant's payload lane. ACTOR_LOWER requires its exact one-bit DONE
+  ACTOR_ADMIT edge, reads that lane through the terminal bridge, classifies its
+  immutable primitive span, and publishes count/sequence/claimant metadata.
+  Master terminal assembly requires all lower descriptors DONE and complete
+  contiguous primitive coverage, validates every vertex/ref payload before
+  mutating renderer banks, and retains descriptor/local order.
+- Regression correction during self-review: the shared transform helper keeps
+  sine/cosine calculation once per range rather than once per vertex, and the
+  legacy non-slave classification path explicitly retains master ownership.
+  This avoids slowing or corrupting the accepted legacy candidate while the
+  queue route remains dormant.
+- GREEN host evidence using Qt MinGW C11 `-std=c11 -Wall -Wextra -Werror`:
+  actor route-source, graph, terrain route-source, queue, bridge, graph-aware
+  runtime, and payload-bank executables PASS. The configured Windows Python
+  launcher remains unavailable, so Python source wrappers were not credited.
+- Expected RED: the live-cutover executable still reports that A5 has not
+  atomically replaced the legacy worker. No target build, CUE/Ymir run, or FPS
+  claim occurred.
+- Open activation gates: independent review; resolve global queue output
+  offsets versus type-local payload-bank offsets; connect terrain command
+  lookup to ordered descriptor streams; publish/drain the combined graph under
+  the sole CPU-DUAL callback; prove target link/cache behavior; then manually
+  validate a new Ymir CUE.

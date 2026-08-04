@@ -53,5 +53,22 @@ bool sm64_saturn_render_job_graph_validate_terrain_merge(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     const sm64_saturn_render_job_result_identity_t *identities,
     uint16_t count);
+/* Actor transform/classify mirrors the terrain producer/consumer contract.
+ * ACTOR_LOWER must name exactly one completed ACTOR_ADMIT descriptor before
+ * it may read the descriptor-owned projected-vertex payload. */
+bool sm64_saturn_render_job_graph_actor_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index,
+    sm64_saturn_render_job_state_t claimed_state, uint16_t *admit_job_index);
+bool sm64_saturn_render_job_graph_actor_done_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index, uint16_t *admit_job_index);
+bool sm64_saturn_render_job_graph_collect_done_actor_lower(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t *job_indices, uint16_t capacity, uint16_t *count);
+bool sm64_saturn_render_job_graph_validate_actor_merge(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    const sm64_saturn_render_job_result_identity_t *identities,
+    uint16_t count);
 
 #endif

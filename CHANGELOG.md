@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added the dormant Mario half of the A5.8 descriptor-owned render queue.
+  ACTOR_ADMIT now has a claimant-selected transform payload and ACTOR_LOWER
+  requires its exact completed predecessor before classification; terminal
+  metadata and ordered master assembly validate the complete pose/ref payload
+  before restoring the Castle-proven animation emission banks. This remains
+  source-only: no CPU-DUAL callback or default renderer path changed, and
+  combined activation still requires an explicit output-offset namespace,
+  ordered terrain command lookup, review, and target/cache evidence.
+
 - Added an isolated bounded SH-2-to-68K PCM command path. The pointer-free,
   big-endian ring rejects corrupt indices, invalid commands, and full queues
   without spinning; the 68K consumes at most eight commands per heartbeat,

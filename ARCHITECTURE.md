@@ -22,3 +22,22 @@ that transform payload: it accepts exactly one completed WORLD_ADMIT
 predecessor, rejects an unready or wrong-type descriptor, and then checks the
 predecessor's P2 metadata against output-bank ownership. Scheduler eligibility
 alone is not treated as permission to consume a payload.
+
+Mario follows the same dormant producer/consumer law. A master snapshot first
+copies the source-owned fully posed vertex bank, per-vertex lighting, animation
+frame/bank metadata, actor transform, and compact meshlet vertex references.
+ACTOR_ADMIT transforms that immutable snapshot into a descriptor-owned dense
+`{vertex id, projected result}` payload. ACTOR_LOWER accepts exactly one DONE
+ACTOR_ADMIT predecessor, uses the copied vertex-id-to-slot map for bounded
+lookup, and publishes descriptor-owned primitive classification records. The
+master consumes every DONE lower descriptor in descriptor/local order,
+validates complete primitive coverage and all payload identities before any
+renderer mutation, then copies results into the existing master-owned banks.
+Thus the eventual scheduler cutover changes SH-2 work ownership without
+changing the Castle-proven animation or final VDP1 emission path.
+
+The queue currently validates output spans in one global namespace, while the
+physical terrain and actor payload banks are type-local. The dormant routes do
+not paper over that mismatch. Atomic activation must explicitly choose
+per-payload-kind overlap validation or a bounded global offset layout and prove
+its memory budget before publishing a combined terrain/actor graph.
