@@ -1,6 +1,6 @@
 # Visual-slice upstream code ledger
 
-Last updated 2026-07-19.
+Last updated 2026-08-04.
 
 This is the implementation-facing companion to [PROVENANCE.md](PROVENANCE.md).
 It answers a narrower question: which reviewed upstream code or design pattern
@@ -17,6 +17,13 @@ no extracted ROM asset is committed.
   license text, and a change note in `PROVENANCE.md` before it is merged.
 - The current visual milestones deliberately prefer small host tools and
   target-specific C over importing another engine runtime.
+
+## A5 — shared opportunistic SH-2 queue (2026-08-04)
+
+| Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
+|---|---|---|---|
+| `Lobotomy-Software/SlaveDriver-Engine` | `a8986591557b6e680550d3c23970284d3b38ff8f` / GPL-3.0-or-later | `WALLS.C:1803-1950` | **Pattern-only.** Its one persistent slave loop and disjoint compact results establish the ownership constraint. `src/port/saturn/gfx/saturn_render_job_queue.{h,c}` is original project-owned code with a different fixed descriptor ABI; no scheduler code was copied. |
+| `Maxime-XL2/SONIC-Z-TREME` | `cff75451c1616aac1236fc2b44223902b55c706b` / GPL-3.0 | `Projects/SONIC Z-TREME/ZTE/ZT_RENDERING.c:718-786`, `workarea.c:12-25` | **Pattern-only.** Early slave dispatch and fixed, non-overlapping work areas support bounded producer/consumer work, but SGL command ownership and callback ABI are architecture-incompatible. No source is copied. |
 
 ## M1 — living title face
 

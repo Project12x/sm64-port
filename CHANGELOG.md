@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added the source-only A5 immutable render-job queue contract: fixed-width,
+  pointer-free terrain/actor descriptor records publish through cache-through
+  release words; master and slave claims are exact-once and terminal work alone
+  can retire a generation. This establishes an auditable queue boundary before
+  the active A3/A4 renderer candidate is rewired, avoiding a scheduler change
+  that would obscure its pending review and target evidence.
+
 - Added generated, bounded Mario actor meshlets (at most 32 primitives each)
   with material/opacity partitions, source ordinals, tight bounds, and compact
   near/mid/far primitive and position remaps. The serial master path now

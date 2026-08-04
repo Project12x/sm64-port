@@ -90,7 +90,12 @@ and the evidence report before starting another task.
   sorting. Focused host tests and mutation checks are green. Independent
   reviews and source-only-authorized target visual/counter evidence remain
   open; no performance claim is made.
-- [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
+- [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** active. The
+  immutable, cache-through queue contract, host exact-once fixture, and
+  coherency mutation gate are source-complete; wiring it into the currently
+  active A3/A4 renderer candidate is deliberately deferred so this task does
+  not silently alter either candidate's accepted path. Slave polling,
+  callback-table integration, and target evidence remain open.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
@@ -793,30 +798,32 @@ types, ownership rules, or production fallbacks.
       sm64_saturn_render_job_queue_t *queue, uint32_t generation);
   ```
 
-- [ ] **Step 1: Write failing exactly-once queue tests**
+- [x] **Step 1: Write failing exactly-once queue tests**
 
   Use host threads to race master/slave claims. Assert every job has one owner,
   no output overlap, stable completion merge order, queue-full fail-closed,
   stale-generation rejection, and useful master claims while the slave is
   occupied.
 
-- [ ] **Step 2: Extend coherency mutation tests**
+- [x] **Step 2: Extend coherency mutation tests**
 
   Reject cached state words, publication before descriptor completion,
   function pointers in descriptors, missing cache-through peer reads, and
   reset before terminal retirement.
 
-- [ ] **Step 3: Add `verify-render-job-queue` and record red evidence**
+- [x] **Step 3: Add `verify-render-job-queue` and record red evidence**
 
   Expected: missing queue API/source patterns.
 
-- [ ] **Step 4: Implement the host state machine and SH-2 polling consumer**
+- [ ] **Step 4: Implement the host state machine and SH-2 polling consumer — ACTIVE**
 
   Use uncached 32-bit claim/state words and generation-last publication. The
   slave polling entry repeatedly claims `READY` work until no work remains;
   the master calls `claim_master` after simulation and between final-order
   tasks. Use callback IDs for world admission, world lowering, actor admission,
-  and actor lowering.
+  and actor lowering. The host state machine is present and explicitly tested;
+  the SH-2 polling entry and callback-table integration remain open because
+  the live A3/A4 candidate must not be changed by this source-only task.
 
 - [ ] **Step 5: Integrate terrain and actor jobs into one frame queue**
 
@@ -833,7 +840,7 @@ types, ownership rules, or production fallbacks.
   Expected: all PASS; a fixture with a deliberately slow slave proves the
   master claims other work rather than spinning.
 
-- [ ] **Step 8: Update provenance and live documents**
+- [x] **Step 8: Update provenance and live documents**
 
   Record this scheduler as project-owned pattern-informed code unless exact
   upstream lines were close-ported; cite Z-Treme/SGL persistent consumer and

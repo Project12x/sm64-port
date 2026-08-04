@@ -138,6 +138,73 @@ def self_test(source_path: Path, header_path: Path) -> int:
     return 0
 
 
+def queue_source_failures(source: str, header: str) -> list[str]:
+    """Reject the queue shortcuts that would reintroduce cross-CPU races."""
+    failures: list[str] = []
+    descriptor = re.search(
+        r"typedef\s+struct\s+sm64_saturn_render_job\s*\{(.*?)\}\s*"
+        r"sm64_saturn_render_job_t;", header, re.DOTALL)
+    if descriptor is None:
+        failures.append("immutable render-job descriptor is missing")
+    elif "*" in descriptor.group(1):
+        failures.append("render-job descriptor contains a pointer")
+    if "volatile uint32_t state;" not in header or \
+       "volatile uint32_t claim;" not in header:
+        failures.append("queue state/claim words are not uncached-width words")
+    if "sm64_saturn_render_job_queue_cache_through" not in source:
+        failures.append("queue does not select cache-through shared memory")
+    publish = re.search(
+        r"bool\s+sm64_saturn_render_job_queue_publish\(.*?\n}\n",
+        source, re.DOTALL)
+    if publish is None:
+        failures.append("queue publish implementation is missing")
+    else:
+        text = publish.group(0)
+        descriptor_copy = text.find("memcpy(queue->jobs, jobs")
+        count = text.find("queue->count = count;")
+        generation = text.find("queue->generation = generation;")
+        ready = text.find("SM64_SATURN_RENDER_JOB_READY")
+        if min(descriptor_copy, count, generation, ready) < 0 or \
+           not descriptor_copy < count < generation < ready:
+            failures.append("queue publishes READY before immutable descriptors")
+    reset = re.search(
+        r"bool\s+sm64_saturn_render_job_queue_reset_retired\(.*?\n}\n",
+        source, re.DOTALL)
+    if reset is None or "sm64_saturn_render_job_queue_all_terminal" not in reset.group(0):
+        failures.append("queue can reset before all jobs retire")
+    if "release_claim_try(" not in source or "tas.b" not in source:
+        failures.append("queue claim path is not SH-2 atomic")
+    return failures
+
+
+def queue_self_test(source_path: Path, header_path: Path) -> int:
+    source = source_path.read_text(encoding="utf-8")
+    header = header_path.read_text(encoding="utf-8")
+    mutants = (
+        (source, header.replace("volatile uint32_t state;", "uint32_t state;"),
+         "cached state word"),
+        (source, header.replace("uint16_t type;",
+                                "void (*rejected_callback)(void);\n    uint16_t type;",
+                                1), "function pointer descriptor"),
+        (source.replace("memcpy(queue->jobs, jobs", "/* absent */ memcpy(jobs, jobs", 1),
+         header, "missing descriptor copy"),
+        (source.replace("queue->generation = generation;\n    sm64_saturn_render_job_queue_fence();\n    for",
+                                "for", 1), header, "generation-last publication"),
+        (source.replace("if (!sm64_saturn_render_job_queue_all_terminal(queue, generation)) return false;",
+                                "if (false) return false;", 1), header,
+         "reset before terminal retirement"),
+        (source.replace("tas.b", "rejected_atomic", 1), header,
+         "missing SH-2 atomic claim"),
+    )
+    for mutant_source, mutant_header, name in mutants:
+        if not queue_source_failures(mutant_source, mutant_header):
+            print(f"render-job queue mutation unexpectedly passed: {name}",
+                  file=sys.stderr)
+            return 1
+    print("render-job queue mutation gate OK: six unsafe queue variants rejected")
+    return 0
+
+
 def check_symbols(arguments: list[str]) -> int:
     if len(arguments) == 1:
         out = Path(arguments[0]).read_text(encoding="utf-8", errors="replace")
@@ -171,9 +238,25 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path)
     parser.add_argument("--header", type=Path)
+    parser.add_argument("--queue-source", type=Path)
+    parser.add_argument("--queue-header", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("symbols", nargs="*")
     args = parser.parse_args()
+    if args.queue_source is not None:
+        if args.queue_header is None:
+            parser.error("--queue-source requires --queue-header")
+        failures = queue_source_failures(
+            args.queue_source.read_text(encoding="utf-8"),
+            args.queue_header.read_text(encoding="utf-8"))
+        if failures:
+            print("render-job queue coherency source gate FAILED:", file=sys.stderr)
+            for failure in failures:
+                print(f"  {failure}", file=sys.stderr)
+            return 1
+        print("render-job queue coherency source gate OK: immutable P2 jobs")
+        return queue_self_test(args.queue_source, args.queue_header) \
+            if args.self_test else 0
     if args.source is not None:
         if args.header is None:
             parser.error("--source requires --header")
