@@ -1198,8 +1198,10 @@ slave idle or merely move the same serial critical path between CPUs.
 ### Task 5.9: Observe coarse-graph claim ownership before rescheduling
 
 **Status:** source-complete, host-green, and repair rereview GO at `e98210ba`.
-One serialized target build is authorized next. No scheduling policy, target
-build, CUE, Ymir run, or FPS claim is included yet.
+The serialized Route-0/live-input/Pipe4 target build is green with the
+append-only profile/HUD telemetry linked and memory-fit; a fresh CUE exists.
+No scheduling-policy change, Ymir HUD observation, or FPS claim is included
+yet.
 
 - [x] **Step 1: Write the delayed-slave schedule RED.** The host fixture now
   models the live four-job graph and its exact notify → immediate master drain
@@ -1232,6 +1234,10 @@ build, CUE, Ymir run, or FPS claim is included yet.
   after review, build once and read the visible `QM/QS/QN/QR/QW/QF/QQ` values.
   Those values choose the next scheduler repair; no optimization is guessed
   from the host schedule alone.
+  Target half complete: the guarded `-B -j1` build exits 0, retains the runtime
+  telemetry snapshot and VDP2 HUD consumers, has zero unresolved symbols, and
+  leaves 15,412 bytes HWRAM plus 30,800 bytes LWRAM. Desktop Ymir and the
+  visible counter transcription remain unchecked.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

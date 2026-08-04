@@ -80,8 +80,10 @@ the master to claim all four coarse jobs before the slave runs. This is a
 scheduling possibility, not yet target evidence. The first review found and
 the implementer repaired a release-order race: retired telemetry now publishes
 before the positive retirement marker, pinned by a source mutation test. Fresh
-rereview is GO at `e98210ba`; one serialized target build and manual HUD
-observation remain open. A5.8 must not be
+rereview is GO at `e98210ba`. The serialized Route-0/live-input/Pipe4 target
+build now compiles, links, and packages with the appended telemetry ABI live,
+15,412 bytes HWRAM and 30,800 bytes LWRAM margin, and zero unresolved symbols.
+Only manual desktop-Ymir HUD observation remains open. A5.8 must not be
 called a performance win from source/link evidence alone.
 
 The isolated audio lane now has a standalone soundtest CUE candidate. Its

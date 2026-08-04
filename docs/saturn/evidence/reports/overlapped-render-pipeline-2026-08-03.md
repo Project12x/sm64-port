@@ -1460,3 +1460,43 @@ open.
   rereview is GO at `e98210ba`. The reviewer independently passed diff-check,
   strict runtime and VDP2 fixtures, and 20 focused Python cases (one historical
   capture skip). One serialized target build is the next gate.
+
+### A5.9 telemetry target link proof (2026-08-04)
+
+- The effective guarded Route-0/live-input/Pipe4 `-B -j1` target build exits
+  0 in 447.8 seconds and completes ELF, binary, `SOURCE.DAT`, ISO, and CUE
+  packaging. Full successful log:
+  `.tmp-a59-telemetry-target-rebuild-20260804.log`; targeted scanning finds
+  zero compiler errors, undefined references, overflows, or region-fit
+  failures. The existing executable-stack/RWX linker warning remains.
+- Two environment-only starts are not credited as target results: the first
+  stopped before compilation because `.yaul.env` was not loaded; the second
+  reached soft-fp compilation but MSYS selected an unwritable `/tmp`. No
+  source was changed. The successful invocation redirected only compiler
+  temporaries to the worktree-local `.msys-home/tmp` and loaded the established
+  Yaul environment.
+- Linked sections: `.text` `0x06004000+0x7f728`, `.data`
+  `0x060855c0+0x9cd4`, `.bss` `0x0608f2a0+0x6cad0`, P2 `.uncached`
+  `0x260fbd70+0x65c` with physical `___end=0x060fc3cc`, `.lwram_cmdts`
+  `0x00200000+0x20000`, and `.lwram_bss` `0x00220000+0xd87b0` ending
+  `0x002f87b0`. HWRAM margin is `0x3c34` (15,412 bytes); LWRAM margin is
+  `0x7850` (30,800 bytes). `sh-elf-nm -u` is empty.
+- The appended profile/runtime telemetry is target-link clean. The ELF retains
+  `sm64_saturn_render_job_runtime_telemetry_snapshot` at `0x060759c0`, slave
+  poll at `0x06075704`, slave entry at `0x06075820`, master drain at
+  `0x0607584c`, VDP2 frame begin at `0x06076434`, and VDP2 frame commit at
+  `0x06076684`. Thus both the producer snapshot and HUD consumers survived
+  section garbage collection; live counter values remain a Ymir-only gate.
+- Fresh artifacts (UTC 2026-08-04): CUE 88 bytes at `23:51:51.3516383`,
+  SHA-256 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`;
+  ISO 4,646,912 bytes at `23:51:50.1756383`, SHA-256
+  `d21138b2fa759543de21cf70a8521a9193ad4741683aebb688e8dac423d84f3f`;
+  ELF 8,653,180 bytes at `23:51:43.5976385`, SHA-256
+  `76bccfc48e55b3cd9d3f7cb3ef673aa51101b4fe3a10d944a227807816519f6a`;
+  map SHA-256 `284aa0a4ada496969d7eba60644db433db511c1246a2160d9fc3ac22b45f1222`;
+  `SOURCE.DAT` SHA-256
+  `8f2a51029a9a22f35d63ff699c9596366104726128c9f2f1939f52b8c068e125`.
+- Exact desktop-test CUE:
+  `build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue`.
+  No Ymir launch, visible HUD transcription, scheduler conclusion, or FPS
+  claim occurred in this gate.
