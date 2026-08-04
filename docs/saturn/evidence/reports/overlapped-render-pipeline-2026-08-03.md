@@ -1110,3 +1110,19 @@ open.
   metadata or payload reads. Direct C11/Werror graph and terrain-route
   fixtures PASS. No queue activation, target build, CUE/Ymir run, or FPS
   claim occurred; fresh scoped re-review remains required.
+
+### A5.8 executable merge-completeness and empty-frame repair (2026-08-04)
+
+- NO-GO rereview found two gaps: the incomplete-lower guarantee was asserted
+  only by source substring, and `validate_terrain_merge()` rejected a valid
+  all-culled frame because its identity count was zero.
+- RED: the graph fixture required an executable collection API, READY and
+  CLAIMED lower rejection, exact DONE enumeration, and successful zero-result
+  validation after that lower retired. It failed before the collection API.
+- GREEN: graph collection P2-enumerates every current immutable WORLD_LOWER
+  and requires exact DONE identity. The renderer consumes that list before
+  metadata/payload reads. Merge identity validation accepts `count == 0` only
+  after collection proves at least one expected lower exists and every lower
+  is DONE; the stable stream builder then returns an empty merge. Direct strict
+  queue, graph, and terrain-route fixtures PASS. No activation, target build,
+  CUE/Ymir run, or FPS claim occurred; fresh scoped re-review remains required.

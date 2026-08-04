@@ -43,6 +43,12 @@ bool sm64_saturn_render_job_graph_world_lower_admit_done(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     uint16_t lower_job_index,
     sm64_saturn_render_job_state_t claimed_state, uint16_t *admit_job_index);
+/* Enumerate every immutable WORLD_LOWER in a current generation and require
+ * each exact descriptor to be terminal DONE. This is the executable
+ * completeness gate used before renderer metadata/payload assembly. */
+bool sm64_saturn_render_job_graph_collect_done_world_lower(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t *job_indices, uint16_t capacity, uint16_t *count);
 bool sm64_saturn_render_job_graph_validate_terrain_merge(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     const sm64_saturn_render_job_result_identity_t *identities,

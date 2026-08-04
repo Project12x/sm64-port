@@ -2127,14 +2127,19 @@ static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
     if (spans == NULL || reader_lane != SM64_SATURN_RENDER_OUTPUT_LANE_MASTER)
         return false;
     *spans = (demo_terrain_queue_merge_spans_t){0};
+    uint16_t lower_jobs[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t lower_count = 0U;
+    if (!sm64_saturn_render_job_graph_collect_done_world_lower(
+            &s_render_job_graph, s_render_job_graph.generation, lower_jobs,
+            SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count))
+        return false;
     uint16_t identity_count = 0U;
-    for (uint16_t job_index = 0U; job_index < s_render_job_graph.count;
-         job_index++) {
+    for (uint16_t lower_index = 0U; lower_index < lower_count; lower_index++) {
+        const uint16_t job_index = lower_jobs[lower_index];
         const sm64_saturn_render_job_t *const descriptor =
             sm64_saturn_render_job_queue_published_job(
                 &s_render_job_queue, s_render_job_graph.generation, job_index);
         if (descriptor == NULL) return false;
-        if (descriptor->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER) continue;
         const sm64_saturn_render_job_t *const job =
             sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
                                                    job_index);

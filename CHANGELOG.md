@@ -13,7 +13,9 @@
   remains legacy until Mario reaches the same contract, leaving the 3–4 FPS
   rollback candidate unchanged. A generation-current descriptor accessor now
   makes that assembler fail closed if any published WORLD_LOWER is READY or
-  claimed rather than silently omitting it.
+  claimed rather than silently omitting it. The executable graph contract also
+  preserves the valid all-culled case: once every lower job is DONE, zero
+  result records form a successful empty stable merge.
 
 - Added a source-provenanced animated-actor generalization spike selecting
   Goomba as the first non-Mario proof. It records the real BOB instance budget,

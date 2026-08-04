@@ -177,8 +177,10 @@ and the evidence report before starting another task.
   silently absent. It now enumerates every immutable P2 current-generation
   descriptor first and fails closed unless each WORLD_LOWER rereads as the
   identical `DONE` descriptor before metadata/payload consumption. The graph
-  fixture covers access to a current lower before it is DONE; no callback is
-  activated.
+  fixture now executes the collection contract and proves both READY and
+  CLAIMED lower jobs reject merge. Once every lower is DONE, a zero-record
+  all-culled frame validates and produces an empty stable merge rather than a
+  false failure. No callback is activated.
   **Review repair (2026-08-04):** the first dormant callback still entered
   classification through a helper that inferred the lane from `begin == 0`.
   A legal slave claim at descriptor input offset zero would therefore select

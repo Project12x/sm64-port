@@ -24,6 +24,8 @@ int main(void)
     sm64_saturn_render_job_graph_t graph;
     const uint8_t deps[] = {0U, 1U << 0U, 0U};
     uint16_t job = 0U;
+    uint16_t lower_jobs[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] = {0U};
+    uint16_t lower_count = 0U;
     const sm64_saturn_render_job_result_identity_t merge[] = {
         {1U, 0U}, {1U, 1U}, {1U, 2U}, {1U, 3U},
     };
@@ -37,6 +39,10 @@ int main(void)
                     &queue, 19U, 1U) != NULL,
                 "a current immutable lower descriptor must remain inspectable before DONE"))
         return 1;
+    if (!expect(!sm64_saturn_render_job_graph_collect_done_world_lower(
+                    &graph, 19U, lower_jobs,
+                    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count),
+                "terrain assembly must reject a READY lower descriptor")) return 1;
     if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
                     job == 0U,
                 "a slave may claim a ready producer")) return 1;
@@ -56,6 +62,10 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_claim_master(&graph, 19U, &job) &&
                     job == 1U,
                 "a consumer may claim only after its producer retires")) return 1;
+    if (!expect(!sm64_saturn_render_job_graph_collect_done_world_lower(
+                    &graph, 19U, lower_jobs,
+                    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count),
+                "terrain assembly must reject a CLAIMED lower descriptor")) return 1;
     {
         uint16_t admit = UINT16_MAX;
         if (!expect(sm64_saturn_render_job_graph_world_lower_admit_done(
@@ -75,6 +85,15 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_validate_terrain_merge(
                     &graph, 19U, merge, 4U),
                 "terrain multi-result merge must retain descriptor/local order")) return 1;
+    if (!expect(sm64_saturn_render_job_graph_collect_done_world_lower(
+                    &graph, 19U, lower_jobs,
+                    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count) &&
+                    lower_count == 1U && lower_jobs[0] == 1U,
+                "terrain assembly must enumerate the exact DONE lower descriptor"))
+        return 1;
+    if (!expect(sm64_saturn_render_job_graph_validate_terrain_merge(
+                    &graph, 19U, NULL, 0U),
+                "a DONE all-culled lower must validate as an empty merge")) return 1;
 
     sm64_saturn_render_job_queue_init(&queue);
     sm64_saturn_render_job_graph_init(&graph, &queue);

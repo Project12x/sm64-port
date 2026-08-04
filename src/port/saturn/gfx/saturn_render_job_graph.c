@@ -202,13 +202,45 @@ bool sm64_saturn_render_job_graph_world_lower_admit_done(
     return true;
 }
 
+bool sm64_saturn_render_job_graph_collect_done_world_lower(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t *job_indices, uint16_t capacity, uint16_t *count)
+{
+    if (count != NULL) *count = 0U;
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    if (!graph_current(graph, generation) || job_indices == NULL ||
+        count == NULL || capacity == 0U)
+        return false;
+    uint16_t found = 0U;
+    for (uint16_t job_index = 0U; job_index < graph->count; job_index++) {
+        const sm64_saturn_render_job_t *const descriptor =
+            sm64_saturn_render_job_queue_published_job(
+                graph->queue, generation, job_index);
+        if (descriptor == NULL) return false;
+        if (descriptor->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER) continue;
+        const sm64_saturn_render_job_t *const done =
+            sm64_saturn_render_job_queue_done_job(graph->queue, job_index);
+        if (done == NULL || done != descriptor || found >= capacity)
+            return false;
+        job_indices[found++] = job_index;
+    }
+    if (found == 0U) return false;
+    *count = found;
+    return true;
+}
+
 bool sm64_saturn_render_job_graph_validate_terrain_merge(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     const sm64_saturn_render_job_result_identity_t *identities,
     uint16_t count)
 {
     graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
-    if (!graph_current(graph, generation) || identities == NULL || count == 0U)
+    uint16_t lower_jobs[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t lower_count = 0U;
+    if (!sm64_saturn_render_job_graph_collect_done_world_lower(
+            graph, generation, lower_jobs,
+            SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY, &lower_count) ||
+        (count != 0U && identities == NULL))
         return false;
     for (uint16_t index = 0U; index < count; index++) {
         const sm64_saturn_render_job_result_identity_t identity = identities[index];
