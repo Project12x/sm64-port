@@ -141,3 +141,23 @@ Fix-round behavior/docs commit: `a358927e`
 
 Fix-round behavior/docs commit: `52aec1e1`
 (`fix(saturn): serialize render snapshot claims`).
+
+Task 2/A2 fix round 4: the independent cache-publication rereview was NO-GO
+despite accepting the P2 producer repair, because quarantine could write
+`QUARANTINED` while an in-flight claimant held the release byte and then be
+overwritten by `RENDERING`. The red deterministic fixture held that byte and
+proved the old public quarantine wrote around it; the companion source gate
+was also red because quarantine, completion, and retirement did not all use
+the claim. `c95feda8` gives reset/begin/publication and every terminal
+transition the same claim/revalidate/publish/release protocol. While a claim
+is owned, quarantine now fails closed for retry; when quarantine owns it
+first, later acquisition observes a non-`READY` state and cannot return,
+complete, or retire that generation. The stale cached-producer header comment
+was corrected to the P2 protocol. Focused source and host snapshot gates pass;
+`verify-runtime-contracts` remains the unrerun/uncredited terrain-command
+failure at `runtime_contract_test.c:4018`; no target build/Ymir was run.
+Fresh independent rereview and target coherency/multicore evidence remain
+required.
+
+Fix-round behavior/docs commit: `c95feda8`
+(`fix(saturn): serialize snapshot terminal states`).

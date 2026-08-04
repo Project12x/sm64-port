@@ -114,3 +114,34 @@ unrelated runtime-contract gate remain open.
 
 Fix-round behavior/docs commit: `a358927e`
 (`fix(saturn): publish snapshot payload uncached`).
+
+## Terminal-state ownership fix round 4
+
+The cache-publication rereview accepted the round-3 P2 producer correction but
+was NO-GO for a Critical terminal race: `acquire_ready()` held `claim_lock`
+after validating `READY`, while `quarantine()` wrote `QUARANTINED` without the
+lock. The claimant could then overwrite quarantine with `RENDERING`, complete,
+and positively retire it to `FREE`. The required correction was a single
+state-transition ownership mechanism, not a new fence.
+
+TDD first added a deterministic regression that holds the release claim and
+calls the public quarantine API. It was red against the old code because
+quarantine returned success and wrote around the in-flight owner. The source
+test was independently red because quarantine, complete, and retire did not
+all claim/release the transition byte. `c95feda8` serializes reset,
+begin-write, publication, quarantine, completion, and retirement with that
+same byte, revalidating the legal predecessor after acquiring it. A contender
+that finds the byte held fails closed for retry. Once quarantine owns it,
+acquisition sees non-`READY`, and completion/retirement reject the terminal
+generation. The stale header comment now accurately says producer and peer
+payloads use P2 cache-through aliases.
+
+Green: `verify-render-snapshot-bank` passed the C regression and its source
+structural gate under the explicit host root/compiler override. No target
+build or Ymir run occurred. `verify-runtime-contracts` was not rerun; its
+preserved terrain-command `memcmp` failure at
+`tools/saturn/runtime_contract_test.c:4018` remains uncredited. The follow-up
+independent rereview and target cache/multicore evidence are still required.
+
+Fix-round behavior/docs commit: `c95feda8`
+(`fix(saturn): serialize snapshot terminal states`).
