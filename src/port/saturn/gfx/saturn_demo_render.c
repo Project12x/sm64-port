@@ -15,6 +15,11 @@
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
 #include "saturn_matrix_kernels.h"
+#include "saturn_render_job_bridge.h"
+#include "saturn_render_job_graph.h"
+#include "saturn_render_job_queue.h"
+#include "saturn_render_output_bank.h"
+#include "saturn_render_payload_bank.h"
 #include "saturn_terrain_command_template.h"
 #include "saturn_terrain_emit_policy.h"
 #include "saturn_terrain_fused.h"
@@ -210,6 +215,19 @@ static uint8_t s_terrain_master_commands[DEMO_TERRAIN_RESULT_CAPACITY]
 static uint8_t s_terrain_slave_commands[DEMO_TERRAIN_RESULT_CAPACITY]
     [SM64_SATURN_TERRAIN_COMMAND_BYTES]
     __attribute__((section(".lwram_bss")));
+/* A5.8 descriptor output metadata is uncached.  The physical terrain arrays
+ * remain LWRAM work storage; this metadata determines which lane owns an
+ * exact descriptor span before a renderer callback can write it. */
+static sm64_saturn_render_job_queue_t s_render_job_queue
+    DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_job_graph_t s_render_job_graph
+    DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_output_bank_t s_terrain_output_bank
+    DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_output_bank_t s_actor_output_bank
+    DEMO_CROSS_CPU_SHARED;
+static sm64_saturn_render_payload_bank_t s_terrain_record_payload;
+static sm64_saturn_render_payload_bank_t s_terrain_command_payload;
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_refs[
     DEMO_TERRAIN_RESULT_CAPACITY];
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
@@ -1214,6 +1232,21 @@ static void demo_build_primitive_work_metadata(void)
 
 void sm64_saturn_demo_render_init(void)
 {
+    sm64_saturn_render_job_queue_init(&s_render_job_queue);
+    sm64_saturn_render_job_graph_init(&s_render_job_graph,
+                                      &s_render_job_queue);
+    sm64_saturn_render_output_bank_init(
+        &s_terrain_output_bank, SM64_SATURN_RENDER_OUTPUT_BANK_TERRAIN);
+    sm64_saturn_render_output_bank_init(
+        &s_actor_output_bank, SM64_SATURN_RENDER_OUTPUT_BANK_ACTOR);
+    sm64_saturn_render_payload_bank_init(
+        &s_terrain_record_payload, s_terrain_master_results,
+        s_terrain_slave_results, sizeof(s_terrain_master_results[0]),
+        DEMO_TERRAIN_RESULT_CAPACITY);
+    sm64_saturn_render_payload_bank_init(
+        &s_terrain_command_payload, s_terrain_master_commands,
+        s_terrain_slave_commands, SM64_SATURN_TERRAIN_COMMAND_BYTES,
+        DEMO_TERRAIN_RESULT_CAPACITY);
     saturn_lod_reset(s_primitive_lod_tier, sizeof(s_primitive_lod_tier));
     saturn_lod_scene_init(&s_lod_scene);
     memset(s_primitive_lod_transition, 0,
@@ -1626,6 +1659,62 @@ typedef struct demo_terrain_compact_context {
     sm64_saturn_terrain_result_spans_t *spans;
     uint32_t sequence;
 } demo_terrain_compact_context_t;
+
+typedef struct demo_terrain_queue_output {
+    sm64_saturn_terrain_result_t *records;
+    uint8_t *commands;
+    uint16_t capacity;
+    uint8_t writer_lane;
+} demo_terrain_queue_output_t;
+
+/* A future graph callback calls this immediately after it has claimed a
+ * WORLD descriptor.  It is intentionally not installed in the CPU-DUAL
+ * callback table until the terrain callback also owns transform/classify and
+ * terminal publication.  That keeps the current fixed worker as the explicit
+ * default while making a mistaken begin-offset/lane selection impossible in
+ * the new path. */
+static bool __attribute__((unused)) demo_terrain_queue_bind_output(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state,
+    demo_terrain_queue_output_t *output)
+{
+    if (output != NULL) *output = (demo_terrain_queue_output_t){0};
+    const uintptr_t job_address = (uintptr_t)job;
+    const uintptr_t first_job = (uintptr_t)&s_render_job_queue.jobs[0];
+    const uintptr_t end_job = (uintptr_t)&s_render_job_queue.jobs[
+        s_render_job_queue.count];
+    if (job == NULL || output == NULL ||
+        (claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) ||
+        job_address < first_job || job_address >= end_job ||
+        (job_address - first_job) % sizeof(*job) != 0U ||
+        sm64_saturn_render_output_bank_kind_for_job(job) !=
+            SM64_SATURN_RENDER_OUTPUT_BANK_TERRAIN)
+        return false;
+    const uint16_t job_index = (uint16_t)((job_address - first_job) /
+                                          sizeof(*job));
+    const sm64_saturn_render_job_t *const claimed =
+        sm64_saturn_render_job_queue_claimed_job(
+            &s_render_job_queue, job->snapshot_generation, job_index,
+            claimed_state);
+    if (claimed != job) return false;
+    sm64_saturn_render_job_execution_t execution;
+    if (!sm64_saturn_render_job_bridge_begin_output(
+            &s_render_job_queue, &s_terrain_output_bank, &s_actor_output_bank,
+            job_index, &execution))
+        return false;
+    output->records = sm64_saturn_render_payload_bank_write(
+        &s_terrain_record_payload, &execution);
+    output->commands = sm64_saturn_render_payload_bank_write(
+        &s_terrain_command_payload, &execution);
+    if (output->records == NULL || output->commands == NULL) {
+        *output = (demo_terrain_queue_output_t){0};
+        return false;
+    }
+    output->capacity = execution.output_capacity;
+    output->writer_lane = execution.writer_lane;
+    return true;
+}
 
 /* One coarse same-frame callback. Each SH-2 transforms its owned subset of
  * the shared indexed position bank, crosses one phase fence, then classifies

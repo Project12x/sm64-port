@@ -982,3 +982,23 @@ open.
 - `test_render_job_runtime_source.py`, direct Qt MinGW runtime and graph C11
   `-Wall -Wextra -Werror` fixtures, and `git diff --check` pass. No target
   build, Ymir run, renderer binding, or FPS claim occurred.
+
+### A5.8 terrain descriptor-binding milestone (2026-08-04)
+
+- RED: the new host-compiled `render_job_live_cutover_source_test.c` reports
+  `A5 renderer has not atomically cut over to graph runtime` against the
+  current frame path. This replaces the unusable configured `py -3` launcher;
+  the red result is expected and confirms no queue/legacy hybrid has been
+  enabled.
+- GREEN component: `demo_terrain_queue_bind_output()` requires an exact
+  `CLAIMED_MASTER` or `CLAIMED_SLAVE` descriptor reread, publishes the matching
+  terrain output release through the bridge, and derives terrain record and
+  command pointers through `saturn_render_payload_bank`. Its storage selection
+  does not use a range begin, work split, or actor owner array. Renderer init
+  owns the queue, graph, output banks, and terrain payload-bank setup, but does
+  not register a runtime callback or publish a generation.
+- Direct Qt MinGW C11 `-std=c11 -Wall -Wextra -Werror` payload-bank fixture
+  passes after the existing queue/bridge/output sources are linked. No target
+  build, CUE, Ymir launch, target visual/counter capture, or FPS claim ran.
+  Remaining gate: turn this binding into the complete terrain producer and
+  reader callback, then migrate Mario before any atomic CPU-DUAL activation.

@@ -113,6 +113,16 @@ and the evidence report before starting another task.
   dispatch; no partial queue bind is permitted. The accepted 3–4 FPS A3+A4
   CUE remains the rollback baseline. Live queue integration, target evidence,
   and independent reviews remain open.
+  **A5.8 terrain migration milestone (2026-08-04):** the live-cutover source
+  gate is now a host-compiled C executable because the configured `py -3`
+  launcher is unavailable. Its expected RED result proves the default frame
+  remains legacy. The renderer now has an unactivated terrain binding seam
+  that verifies an exact claimed WORLD descriptor and derives its terrain
+  record/command span from `output_offset`, `output_capacity`, and recorded
+  claimant lane through the existing payload-bank primitive. It does not run
+  terrain work, register CPU-DUAL, or mark a descriptor terminal; activation
+  remains forbidden until terrain and Mario producer/consumer callbacks are
+  both complete.
 - [ ] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete pending independent review. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

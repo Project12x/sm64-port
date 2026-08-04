@@ -346,7 +346,10 @@ verify-render-job-bridge:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_render_job_bridge_source.py"
 
 verify-render-job-live-cutover:
-	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_render_job_live_cutover_source.py"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_live_cutover_source_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-live-cutover-source-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/render-job-live-cutover-source-test$(HOST_EXEEXT)"
 
 verify-render-job-runtime:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

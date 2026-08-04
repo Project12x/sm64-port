@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added the first A5.8 terrain descriptor-binding seam and an executable C
+  live-cutover contract. A future WORLD callback now proves its exact claimed
+  queue descriptor before deriving terrain record/command addresses from the
+  recorded output span and claimant lane; it cannot choose storage from a
+  range begin or fixed split. The default renderer still uses the accepted
+  legacy worker until terrain and Mario callbacks can be converted together,
+  so this changes no target behavior or FPS result. The old Python-only
+  source check is replaced by a host-compiled test because the configured
+  Windows Python launcher is unavailable in this workspace.
+
 - Added A5.8.1 graph-aware render-job runtime drains. The sole eventual
   CPU-DUAL owner now has an activation path that claims only graph-eligible
   descriptors, so a published consumer cannot run ahead of its required

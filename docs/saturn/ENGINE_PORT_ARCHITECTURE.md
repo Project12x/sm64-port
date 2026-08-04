@@ -257,6 +257,19 @@ package-loader clients before M5 closes.
 
 ## Migration gates
 
+### A5.8 render-job cutover boundary (active)
+
+The A5 graph runtime will replace the existing range worker only as one
+atomic transition. Before that point, a terrain or actor callback must prove
+that its descriptor is the queue's current exact claim, publish the matching
+output-bank release, and derive every physical payload address from that
+descriptor's `output_offset`, `output_capacity`, and recorded claimant lane.
+Range begins, static slave splits, and source-order position cannot select a
+payload cache alias. The A5.8 terrain binding seam implements this rule but is
+not registered with CPU-DUAL or called by the default frame path. Mario must
+gain the same producer/read contract before graph runtime activation; master
+retains final VDP1 lowering and painter ordering throughout.
+
 ### E0 — Shared types without behavior change
 
 Extract frame timing, camera/transform records, render-job records, command

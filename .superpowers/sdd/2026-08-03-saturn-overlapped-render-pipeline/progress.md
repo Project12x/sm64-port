@@ -252,4 +252,180 @@ configuration now produces a CUE/ISO: HWRAM ends at `0x060FDEF0` with 0x2110
 bytes above the required 0x1000 libyaul floor, and LWRAM ends at `0x002E33A0`
 with 0x1CC60 free. This is target link/memory evidence only—no Ymir, counter,
 or FPS evidence and no independent A3 rereview. Commit:
-`fix(saturn): fit A3 cluster scratch in LWRAM`.
+ `fix(saturn): fit A3 cluster scratch in LWRAM`.
+
+2026-08-04 A3+A4 manual result: the owner ran the fresh Pipe4 Route0/live-input
+candidate in desktop Ymir with the project 32-Mbit DRAM-cart profile and
+observed roughly 3–4 FPS, up from the earlier 1–2 FPS baseline. This is the
+first positive qualitative performance observation. It retains open visual and
+counter gates but authorizes future candidates to retain A3+A4 as the baseline.
+
+Task 4/A4: **ACTIVE — source implementation and host gates complete; review
+and target evidence open.** Watched RED: `verify-actor-meshlets` failed before
+the missing `saturn_actor_meshlets.{h,c}` API existed. The generated Mario bank
+now carries 31 source-ordered material/opacity meshlets (maximum 32 primitives)
+with tight bounds and compact near/mid/far primitive/position remaps. The
+serial master rejects behind meshlets before actor transform dispatch,
+transforms each admitted position once, retains opaque source order, and places
+only textured/translucent work in stable far-to-near bins; `s_actor_order` and
+the quadratic insertion loop are absent from the accepted path. Green: explicit
+MSYS host command ran `verify-actor-meshlets`, `verify-dual-actor-worker`,
+`verify-terrain-depth-bins`, and `verify-terrain-command-template`; normal
+fixtures pass and malformed-span/cached-owner mutations fail as required. No
+target build/CUE/Ymir, counter, visual, or FPS gate ran. Independent spec
+review, independent quality review, and target visual/counter evidence remain
+required. A3 remains independently active; no target result was used to advance
+it.
+
+2026-08-04 A4 final source-only verification: Qt-host
+`verify-actor-meshlets`, `verify-dual-actor-worker`,
+`verify-terrain-depth-bins`, and `verify-terrain-command-template` are green;
+the span and cached-owner mutation executables fail as required. The repository
+tools environment also passes the focused Mario actor/profile tests (30 tests,
+one expected skip). `verify-runtime-contracts` regenerated quad maps but its
+host compile exited 1 without a diagnostic, so it remains uncredited; no target
+build/CUE/Ymir was run. Commit: `7e419484` (`perf(saturn): cull and bin Mario
+by meshlet`). Pending: two independent reviews and target visual/counter/FPS
+evidence.
+
+2026-08-04 A4 NO-GO remediation: review found that neutral-AABB-centre depth
+ignored live yaw/animation and that the renderer rebuilt primitive corners
+instead of consuming generated position spans. RED expanded actor fixture
+failed its transform-stream telemetry assertion. GREEN projects live pose
+vertices through the Mario yaw before admission (furthest for behind culling
+and translucent binning, nearest for LOD), returns the exact globally
+deduplicated selected-tier generated position union, and feeds it directly to
+the actor worker. Focused actor/dual/depth/template plus Mario/profile gates
+are green; span/cached-owner mutations remain caught. No target/CUE/Ymir.
+Commit: `c5944bac` (`fix(saturn): admit Mario meshlets from live poses`). Fresh
+independent spec and quality rereview, runtime-contract infrastructure closure,
+and target visual/counter/FPS evidence remain open.
+
+2026-08-04 Task 5/A5: **ACTIVE — queue contract source-complete; renderer
+integration intentionally deferred.** A watched direct-host RED failed because
+`saturn_render_job_queue.h` did not exist. The new project-owned bounded queue
+uses fixed 16-byte pointer-free descriptors, uncached 32-bit generation/state/
+claim words, cache-through access, generation-last publication, exactly-once
+master/slave claims, terminal-only reset, and fail-closed full/stale/overlap
+rejection. The focused host race fixture is green and the coherency source gate
+plus six mutations (cached state, function pointer descriptor, missing
+descriptor copy, non-final generation publication, premature reset, and
+missing `tas.b`) pass. The
+canonical Make wrapper attempted this target but hit the existing MSYS-to-
+Windows `\\d\\Code...` repository-root translation/access failure before the
+compiler; the same compiler invocation and Python gate pass directly. No
+target build or Ymir run occurred. No A3/A4 renderer source was changed:
+pending work is the slave polling consumer, static callback-table dispatch,
+terrain/actor frame-queue integration, diagnostics, reviews, and target
+coherency/visual/counter/FPS evidence. Behavior/docs commit: `11895af9`
+(`feat(saturn): add immutable render job queue contract`). Independent
+specification and quality reviews are **PENDING**; no verdict is claimed. See
+`docs/saturn/evidence/reports/task5-a5-render-job-queue-2026-08-04.md`.
+
+2026-08-04 A5 polling-contract increment: watched RED direct-host fixture
+failed on the absent callback-table/drain APIs; GREEN adds local
+callback-table resolution after an exact-once master/slave claim and drains
+READY work until none remains. The direct C fixture and queue coherency gate
+(including six mutations) pass. While preparing live terrain/actor wiring we
+found a hard ownership incompatibility: existing worker callbacks derive their
+cache lane from `begin == 0`, and fixed split ownership makes an opportunistic
+master claim of a nominal slave range later read its own cached output through
+the peer alias. No unsafe renderer seam, second `cpu_dual_slave_set`, target
+build, or Ymir run was introduced. The next safe A5 task is descriptor-owned
+output banks with an explicit claimed-CPU lane, then live queue integration;
+the old fixed split remains diagnostic-only once that replacement exists.
+
+2026-08-04 A5 descriptor-owned output-bank prerequisite: **SOURCE-COMPLETE —
+live integration blocked on review.** Watched RED: the direct Qt-host fixture
+failed because `saturn_render_output_bank.{h,c}` was absent. GREEN keeps the
+queue's 16-byte pointer-free descriptor ABI: descriptor type selects terrain
+or actor output storage, and the actual `CLAIMED_MASTER`/`CLAIMED_SLAVE` queue
+owner atomically publishes the lane through P2-visible metadata. A reader uses
+the recorded owner (never `begin == 0`) to select cached versus cache-through
+output. The focused two-thread fixture passes descriptor-kind selection,
+master-steal/cache-alias behavior, mismatch/overwrite failure, and exact-one
+race publication; the structural gate passes and rejects five invalid
+mutations. `saturn_demo_render.c` is deliberately untouched, so fixed split
+workers remain the only accepted renderer path and master VDP1 painter order is
+unchanged. No target build/CUE/Ymir/FPS evidence occurred. Commit: `0026a3a1`
+(`feat(saturn): publish descriptor-owned output lanes`); independent spec/quality review and live queue
+integration are open. See `task5-a5-output-bank-lanes-2026-08-04.md`.
+
+2026-08-04 A5 output-bank critical-review remediation: **SOURCE-COMPLETE —
+fresh review required.** The review correctly found that publication trusted a
+callback-supplied claim lane. RED added a forged pre-claim publication attempt;
+GREEN changes the API to receive the queue/job index only, locks and validates
+the live queue release state, and derives the lane from that actual claim while
+the queue record remains locked. The host fixture proves forged publication
+fails and a real master claim succeeds; the race/cache-alias cases remain
+green. The structural gate now rejects six mutations including absent
+claimed-state validation. No renderer/target/Ymir change. Commit: `f0a3b99c`
+(`fix(saturn): bind output lanes to queue claims`); independent review and
+live integration remain open.
+
+2026-08-04 Task 5.5/A5.5: **SOURCE-COMPLETE — independent review pending.**
+RED: the direct Qt-host bridge fixture failed for the absent header. GREEN:
+the project-owned bridge creates one local execution record only after a real
+queue claim, routes terrain/actor ownership by exact descriptor index and
+kind, and rejects a reader before that exact job reaches P2-visible `DONE`.
+It contains no output-offset scan, fixed split, or `begin == 0` lane rule. A
+single attach/notify lifecycle rejects a second polling callback registration;
+it is not attached by the live renderer. Bridge and queue fixtures compile
+with `-std=c11 -Wall -Wextra -Werror` and PASS. No target build/Ymir ran.
+Pending: independent spec/quality review, then renderer conversion that removes
+all fixed owner reads before enabling the queue callback.
+
+2026-08-04 Task 5.5 fix round 1: **SOURCE-COMPLETE — fresh re-review
+required.** NO-GO correctly found A5.5 compiled a second CPU-DUAL callback
+registration beside the linked legacy fixed worker. RED source gate rejected
+`cpu_dual_slave_set` and `cpu_dual_slave_notify`. GREEN retains only the
+testable one-owner attachment state while compiling neither token; bridge and
+queue host fixtures remain green. The atomic live cutover owns callback binding
+only after all legacy dispatches are removed. No target build/Ymir ran.
+
+2026-08-04 Task 5.5 fix round 2: **SOURCE-COMPLETE — fresh re-review
+required.** NO-GO found source-only `slave_attach`/`slave_notify` names falsely
+claimed a target callback lifecycle. GREEN renames them to `source_arm` and
+`source_armed`; they record one static source-side owner and cannot activate a
+slave or report a notification. The static gate scans queue plus bridge for
+CPU-DUAL activation tokens and passes; bridge/queue host fixtures remain
+green. No target build/Ymir ran.
+
+2026-08-04 A5.6 runtime review repair: NO-GO found the runtime slave poll
+directly read the cached queue generation. Red source coverage failed for the
+absent P2 accessor; green adds a public cache-through generation reader and
+forbids the direct dereference. Runtime and bridge C11/Werror fixtures and
+source guards pass. Commit: `6eb532e2`; no renderer bind,
+target build, Ymir, or FPS claim.
+
+2026-08-04 Task 5.7: **ACTIVE — source foundation awaiting focused host rerun
+and independent specification/quality review.** A5.6 preflight found that
+independent descriptors cannot encode terrain transform→classify→ordered
+multi-result merge or Mario transform→classify dependencies. RED graph fixture
+preceded `saturn_render_job_graph.h`; GREEN adds P2-visible renderer-local
+dependency masks, exact-index claims, failed-predecessor quarantine, and
+`(job_index, output_index)` terrain merge identities. The fixed renderer,
+legacy CPU-DUAL callback, and intentionally red live-cutover source gate remain
+unchanged. No target build/Ymir. Pending commit and review.
+
+2026-08-04 Task 5.7 fix round 1: **SOURCE-COMPLETE pending fresh independent
+review.** Review found independent READY work was falsely expected to block,
+cycle masks were accepted, and one-pass failure propagation could leave a
+reverse-chain dependent READY. RED added those cases; GREEN rejects
+self/cyclic masks, preserves independent eligibility, and iterates dependent
+quarantine to a fixed point. Direct MinGW C11 `-Wall -Wextra -Werror` graph
+fixture PASS; Python static graph guard PASS (2 tests). The separate live
+cutover source gate remains intentionally RED; no target build/Ymir.
+
+2026-08-04 A5.8 terrain descriptor-binding milestone: **ACTIVE — component
+source foundation, not an activation.** TDD RED replaced the unavailable
+configured `py -3` source guard with a host-compiled C live-cutover contract;
+it correctly reports that the default frame remains legacy. GREEN component
+initializes the renderer-owned queue/graph/output metadata and makes a future
+WORLD callback reread its exact claim before deriving terrain record/command
+payload pointers from descriptor output span plus claimant lane. It neither
+publishes a live graph generation, registers CPU-DUAL, runs the callback, nor
+marks terminal work. Direct Qt MinGW C11 payload-bank fixture passes with
+`-Wall -Wextra -Werror`; no target build/Ymir. Remaining: complete terrain
+producer + merge reader conversion, then Mario conversion, then two reviews
+before one atomic runtime activation.
