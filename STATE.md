@@ -77,8 +77,11 @@ telemetry records per-phase master/slave claims, notified/retired generation,
 master retirement-wait iterations, failures, and quarantines. Its delayed-slave
 fixture demonstrates that the current notify-then-master-drain order permits
 the master to claim all four coarse jobs before the slave runs. This is a
-scheduling possibility, not yet target evidence; fresh review and then one
-serialized target build/manual HUD observation remain open. A5.8 must not be
+scheduling possibility, not yet target evidence. The first review found and
+the implementer repaired a release-order race: retired telemetry now publishes
+before the positive retirement marker, pinned by a source mutation test. Fresh
+rereview and then one serialized target build/manual HUD observation remain
+open. A5.8 must not be
 called a performance win from source/link evidence alone.
 
 The isolated audio lane now has a standalone soundtest CUE candidate. Its

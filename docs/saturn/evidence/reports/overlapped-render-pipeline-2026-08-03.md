@@ -1451,3 +1451,10 @@ open.
   include is absent; it is not credited. The broad tools suite was stopped at
   the 120-second host timeout after beginning green tests. No target build,
   CUE, Ymir run, cache observation, or FPS claim occurred.
+- First independent review found a cross-CPU publication race: the slave set
+  `retired_sequence` before its retired telemetry. A master could therefore
+  observe positive retirement and snapshot stale zero generation/sequence.
+  Watched RED/GREEN adds a source-order mutation test and publishes telemetry
+  first, then the positive retirement release marker, in both SH-2 and host
+  paths. Strict runtime fixture and five runtime source tests pass; fresh
+  rereview remains required.

@@ -61,8 +61,12 @@ static void render_job_slave_entry(void)
     const uint32_t generation = s_runtime.telemetry.notified_generation;
     (void)sm64_saturn_render_job_runtime_poll_slave();
     runtime_fence();
-    s_runtime.retired_sequence = notified;
     telemetry_retire(generation, notified);
+    runtime_fence();
+    /* Positive retirement is the release marker. Publish every diagnostic
+     * field first so a master that observes this sequence can snapshot one
+     * coherent completed generation. */
+    s_runtime.retired_sequence = notified;
     runtime_fence();
 }
 #endif
@@ -170,8 +174,9 @@ uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
     }
     runtime_fence();
 #if !defined(__sh__)
-    s_runtime.retired_sequence = s_runtime.notify_sequence;
     telemetry_retire(generation, s_runtime.notify_sequence);
+    runtime_fence();
+    s_runtime.retired_sequence = s_runtime.notify_sequence;
     runtime_fence();
 #endif
     return completed;

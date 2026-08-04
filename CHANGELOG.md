@@ -23,6 +23,12 @@
 
 ### Fixed
 
+- Fixed A5.9 retirement telemetry publication so the slave writes its retired
+  generation/sequence before releasing the positive retirement marker. The
+  earlier order allowed the master to leave its wait and snapshot stale zero
+  telemetry even though the callback had returned; a source-order mutation
+  test now pins the SH-2 and host paths to release-marker-last ordering.
+
 - Moved the two master-only terrain merge streams from HWRAM into the existing
   LWRAM work arena. Activating the reviewed four-phase queue made its callback
   graph reachable and exposed a 10,032-byte HWRAM link overflow; retaining
