@@ -132,6 +132,21 @@ and the evidence report before starting another task.
   terrain work, register CPU-DUAL, or mark a descriptor terminal; activation
   remains forbidden until terrain and Mario producer/consumer callbacks are
   both complete.
+  **A5.8 terrain producer/reader increment (2026-08-04):** the dormant
+  `WORLD_LOWER` callback now passes its exact claimed descriptor's input span,
+  claimant-derived lane, and descriptor-owned result arena into the shared
+  transform/classify/compact producer. It seals that arena before returning to
+  the graph runtime, which is the only code permitted to publish that claim's
+  `DONE`. A matching master reader refuses anything but that exact terminal
+  WORLD_LOWER descriptor and derives both record and command payload aliases
+  through the bridge. The legacy wrapper remains the accepted default path and
+  contains the fixed `begin == 0` rule; the dormant queue route contains none.
+  The new host C source contract was watched RED then GREEN. This is still not
+  a live migration: `WORLD_ADMIT` must first own descriptor-indexed
+  transformed-position output/publication, and `WORLD_LOWER` must persist its
+  per-job result count/sequence for exact DONE merge. Mario's matching
+  producer/reader conversion is also required before atomic CPU-DUAL
+  activation.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

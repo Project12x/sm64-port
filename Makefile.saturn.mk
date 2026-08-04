@@ -351,6 +351,12 @@ verify-render-job-live-cutover:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-live-cutover-source-test$(HOST_EXEEXT)"
 	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/render-job-live-cutover-source-test$(HOST_EXEEXT)"
 
+verify-render-job-terrain-route:
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_terrain_route_source_test.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-terrain-route-source-test$(HOST_EXEEXT)"
+	cd "$(SATURN_REPO_ROOT)" && "build/saturn/host-tests/render-job-terrain-route-source-test$(HOST_EXEEXT)"
+
 verify-render-job-runtime:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \

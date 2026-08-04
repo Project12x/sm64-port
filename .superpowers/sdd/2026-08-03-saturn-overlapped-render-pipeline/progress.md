@@ -429,3 +429,16 @@ marks terminal work. Direct Qt MinGW C11 payload-bank fixture passes with
 `-Wall -Wextra -Werror`; no target build/Ymir. Remaining: complete terrain
 producer + merge reader conversion, then Mario conversion, then two reviews
 before one atomic runtime activation.
+
+2026-08-04 A5.8 terrain producer/terminal-reader increment: **ACTIVE —
+source-only, no activation.** Watched RED: direct Qt-host C source contract
+reported absent exact terrain queue ownership. GREEN: the common terrain
+compact producer now receives explicit descriptor bounds, writer lane, and
+result arena; the new dormant WORLD_LOWER callback derives each from its exact
+claimed descriptor and seals before graph runtime may publish DONE. Its
+terminal reader requires the exact DONE descriptor before payload-bank record
+and command reads. Direct C11/Werror route-source, payload-bank, and graph
+fixtures PASS; `git diff --check` PASS. `make` is unavailable in this shell,
+so no configured Make/MSYS result is credited; no target/Ymir ran. Open:
+persistent per-job count/merge assembly, Mario conversion, fresh spec/quality
+reviews, atomic CPU-DUAL activation, target evidence.

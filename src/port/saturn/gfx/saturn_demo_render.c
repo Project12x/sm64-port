@@ -1720,15 +1720,20 @@ static bool __attribute__((unused)) demo_terrain_queue_bind_output(
  * the shared indexed position bank, crosses one phase fence, then classifies
  * and compacts its disjoint primitive range. This deliberately follows
  * SlaveDriver's coarse split/join rather than dispatching per face. */
-static void demo_terrain_compact_range(void *opaque, uint16_t begin,
-                                       uint16_t end)
+/* Both the legacy coarse worker and the dormant graph callback enter this
+ * exact producer.  The caller supplies the physical output arena and the
+ * claimant lane; this routine must never infer either from a logical range.
+ */
+static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
+                                       uint16_t begin, uint16_t end,
+                                       uint8_t lane,
+                                       sm64_saturn_terrain_result_arena_t *arena)
 {
-    demo_terrain_compact_context_t *context = opaque;
-    const uint8_t lane = begin == 0U ? 0U : 1U;
-    if (!demo_transform_owned_positions(context->classify, lane)) return;
+    if (context == NULL || arena == NULL || lane > 1U || begin > end ||
+        end > s_render_work_count)
+        return false;
+    if (!demo_transform_owned_positions(context->classify, lane)) return false;
     demo_classify_range(context->classify, begin, end);
-    sm64_saturn_terrain_result_arena_t *arena = lane == 0U
-        ? &context->spans->master : &context->spans->slave;
     for (uint16_t work = begin; work < end; work++) {
         const uint16_t primitive_index = context->classify->work_order[work];
         if (s_primitive_visible[primitive_index] == 0U) continue;
@@ -1820,6 +1825,74 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
         }
     }
     sm64_saturn_terrain_result_arena_seal(arena, context->sequence);
+    return true;
+}
+
+/* Legacy-only adapter.  It keeps the old worker's fixed split contained while
+ * the dormant queue callback below proves that queue work takes its lane from
+ * the accepted descriptor claim instead. */
+static void demo_terrain_compact_range(void *opaque, uint16_t begin,
+                                       uint16_t end)
+{
+    demo_terrain_compact_context_t *context = opaque;
+    if (context == NULL) return;
+    const uint8_t lane = begin == 0U ? 0U : 1U;
+    sm64_saturn_terrain_result_arena_t *const arena = lane == 0U
+        ? &context->spans->master : &context->spans->slave;
+    (void)demo_terrain_compact_exact(context, begin, end, lane, arena);
+}
+
+/* A5.8's WORLD_LOWER callback is deliberately dormant until Mario uses the
+ * same descriptor-owned protocol.  Runtime completes the exact claimed job
+ * only after this returns true, so sealing the result arena here precedes the
+ * queue's DONE publication. */
+static bool __attribute__((unused)) demo_terrain_queue_world_lower(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *opaque)
+{
+    demo_terrain_compact_context_t *const context = opaque;
+    demo_terrain_queue_output_t output;
+    if (job == NULL || context == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
+        job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER ||
+        job->input_offset > s_render_work_count ||
+        job->input_count > (uint16_t)(s_render_work_count - job->input_offset) ||
+        !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
+        output.capacity == 0U)
+        return false;
+    sm64_saturn_terrain_result_arena_t arena;
+    sm64_saturn_terrain_result_arena_init(
+        &arena, output.records, output.commands, output.capacity, 8U);
+    return demo_terrain_compact_exact(
+        context, job->input_offset,
+        (uint16_t)(job->input_offset + job->input_count),
+        output.writer_lane, &arena);
+}
+
+/* The master-side merge route likewise has no fixed peer range: DONE plus the
+ * descriptor index determines both payload aliases.  The caller supplies the
+ * record count it collected from that job's arena; it cannot ask for more
+ * than the immutable descriptor reserved. */
+static bool __attribute__((unused)) demo_terrain_queue_read_done(
+    uint16_t job_index, uint16_t record_count, uint8_t reader_lane,
+    const sm64_saturn_terrain_result_t **records, const uint8_t **commands)
+{
+    if (records != NULL) *records = NULL;
+    if (commands != NULL) *commands = NULL;
+    const sm64_saturn_render_job_t *const job =
+        sm64_saturn_render_job_queue_done_job(&s_render_job_queue, job_index);
+    if (records == NULL || commands == NULL || job == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
+        reader_lane > SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE ||
+        record_count > job->output_capacity)
+        return false;
+    *records = sm64_saturn_render_payload_bank_read(
+        &s_terrain_record_payload, &s_render_job_queue,
+        &s_terrain_output_bank, &s_actor_output_bank, job_index, reader_lane);
+    *commands = sm64_saturn_render_payload_bank_read(
+        &s_terrain_command_payload, &s_render_job_queue,
+        &s_terrain_output_bank, &s_actor_output_bank, job_index, reader_lane);
+    return *records != NULL && *commands != NULL;
 }
 
 static bool demo_merge_terrain_results(

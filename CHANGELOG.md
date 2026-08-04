@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added the A5.8 dormant terrain queue producer/reader seam. A WORLD_LOWER
+  callback now passes its exact descriptor span and actual claimant lane into
+  the common transform/classify/compact producer, seals its descriptor-owned
+  result arena before graph runtime may publish `DONE`, and exposes a terminal
+  reader that derives record and command aliases from that exact job identity.
+  The fixed-split legacy wrapper remains the default path because Mario and
+  persistent per-job merge counts are not yet migrated; this intentionally
+  changes no target behavior or FPS result.
+
 - Added a maintained roadmap and reconciled state/plan status with the
   reviewed A5 ownership bridge and graph-aware runtime. The next accepted
   milestone is now explicitly the atomic terrain/Mario renderer conversion;

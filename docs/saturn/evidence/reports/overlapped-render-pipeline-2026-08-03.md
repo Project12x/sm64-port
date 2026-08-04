@@ -1002,3 +1002,26 @@ open.
   build, CUE, Ymir launch, target visual/counter capture, or FPS claim ran.
   Remaining gate: turn this binding into the complete terrain producer and
   reader callback, then migrate Mario before any atomic CPU-DUAL activation.
+
+### A5.8 dormant terrain producer/terminal-reader increment (2026-08-04)
+
+- RED: `render_job_terrain_route_source_test.c` failed with `terrain queue
+  route does not bind exact descriptor ownership` before the exact compact
+  producer and terminal reader existed.
+- GREEN: `demo_terrain_compact_exact()` takes explicit work bounds, claimant
+  lane, and caller-owned arena; the fixed range callback is now only a legacy
+  adapter. Dormant `WORLD_LOWER` validates its exact input span, obtains its
+  descriptor-owned result arena through the bridge, and seals it before it
+  returns success to graph runtime (which alone publishes the claim's DONE).
+  The matching reader first requires the exact `DONE` descriptor, then obtains
+  record and command payload aliases through the payload bank; neither queue
+  route reads `s_slave_begin`.
+- GREEN host evidence: direct Qt MinGW C11 `-std=c11 -Wall -Wextra -Werror`
+  route source contract, payload-bank fixture, and graph fixture all PASS;
+  `git diff --check` passes. The configured Make/MSYS path was not credited:
+  `make` is unavailable in this host shell and no target build was attempted.
+  No graph generation is published, no queue callback is registered, and no
+  CUE/Ymir/FPS claim occurred. Remaining: WORLD_ADMIT descriptor-indexed
+  transformed-position publication, persistent per-job terrain counts and
+  merge-span assembly, Mario's matching producer/reader route, independent
+  specification and quality reviews, then one atomic CPU-DUAL activation.
