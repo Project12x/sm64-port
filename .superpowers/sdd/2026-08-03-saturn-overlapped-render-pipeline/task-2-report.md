@@ -3,6 +3,9 @@
 Status: source-complete; runtime-contract closure, target evidence, and two
 independent reviews remain open.
 
+Behavior/docs commit: `56866662` (`feat(saturn): add immutable render snapshot
+banks`).
+
 ## Scope and design
 
 - Added the Saturn-only `sm64_saturn_render_snapshot_bank_t`: two slots with

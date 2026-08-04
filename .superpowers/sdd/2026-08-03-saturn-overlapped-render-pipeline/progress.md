@@ -98,6 +98,7 @@ translation failure. With an explicit forward-slash repository-root override,
 also runs the source pointer-field guard. `verify-runtime-contracts` compiled
 but failed at the preserved terrain command byte assertion
 `runtime_contract_test.c:4018`; do not credit that gate. No target build/Ymir
-was run. Task commit: `feat(saturn): add immutable render snapshot banks`
-(pending at this ledger transition). Independent specification and quality
-reviews, runtime-contract closure, and target evidence remain required.
+was run. Task behavior/docs commit: `56866662`
+(`feat(saturn): add immutable render snapshot banks`). Independent
+specification and quality reviews, runtime-contract closure, and target
+evidence remain required.
