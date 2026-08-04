@@ -1156,8 +1156,22 @@ open.
 - Expected RED: the live-cutover executable still reports that A5 has not
   atomically replaced the legacy worker. No target build, CUE/Ymir run, or FPS
   claim occurred.
-- Open activation gates: independent review; resolve global queue output
-  offsets versus type-local payload-bank offsets; connect terrain command
+- Open activation gates: resolve global queue output offsets versus type-local
+  payload-bank offsets; connect terrain command
   lookup to ordered descriptor streams; publish/drain the combined graph under
   the sole CPU-DUAL callback; prove target link/cache behavior; then manually
   validate a new Ymir CUE.
+
+### A5.8 Mario queue-parity independent review (2026-08-04)
+
+- Commit `1d1137f1`; audit commit `3ad0d23e`.
+- Verdict: GO for dormant source scope, with no critical or important finding.
+  The reviewer independently reran all seven strict Qt MinGW C fixtures and
+  verified full live-pose preservation, claimant-derived payload lanes, exact
+  ACTOR_ADMIT dependency proof, terminal metadata, validate-before-mutate
+  ordered merge, legacy-path ownership, and absence of CPU-DUAL activation.
+- Minor activation debt: the actor route fixture is structural rather than a
+  direct callback behavior harness. Before activation, add corrupt vertex/ref
+  identity, incomplete coverage, stale sequence, and cross-lane read cases and
+  explicitly publish the callback context through P2/cache-through ownership.
+- The output-offset namespace and all target/CUE/Ymir/FPS gates remain open.
