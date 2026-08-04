@@ -1453,13 +1453,15 @@ static bool demo_transform_owned_positions(
     return true;
 }
 
-static void demo_classify_range(void *opaque, uint16_t begin, uint16_t end)
+/* Classification is entered with the actual execution lane.  Queue work may
+ * legally begin at zero on the slave, so no range boundary can identify a
+ * cache owner here. */
+static void demo_classify_exact(demo_classify_context_t *context,
+                                uint16_t begin, uint16_t end, uint8_t lane)
 {
-    demo_classify_context_t *context = opaque;
 #if !(SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS)
     const sm64_saturn_camera_transform_t *camera = context->camera;
 #endif
-    const uint8_t lane = begin == 0U ? 0U : 1U;
     for (uint16_t work = begin; work < end; work++) {
         if (((uint16_t)(work - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
@@ -1733,7 +1735,7 @@ static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
         end > s_render_work_count)
         return false;
     if (!demo_transform_owned_positions(context->classify, lane)) return false;
-    demo_classify_range(context->classify, begin, end);
+    demo_classify_exact(context->classify, begin, end, lane);
     for (uint16_t work = begin; work < end; work++) {
         const uint16_t primitive_index = context->classify->work_order[work];
         if (s_primitive_visible[primitive_index] == 0U) continue;

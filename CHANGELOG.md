@@ -111,6 +111,13 @@
 
 ### Fixed
 
+- Corrected the dormant A5.8 terrain queue route so classification receives
+  the actual claimant/execution lane explicitly. A legal slave claim whose
+  descriptor begins at input offset zero can no longer be mistaken for master
+  work by a `begin == 0` rule; that legacy-only inference remains confined to
+  the fixed worker adapter. This is source-only and does not activate the
+  queue or alter target behavior.
+
 - Hardened A5.8.1 graph-runtime descriptor access after review. A claimed job
   is now fetched through a P2/cache-through accessor that revalidates the
   exact claimant state; the runtime no longer raw-dereferences its cached

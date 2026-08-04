@@ -1025,3 +1025,19 @@ open.
   transformed-position publication, persistent per-job terrain counts and
   merge-span assembly, Mario's matching producer/reader route, independent
   specification and quality reviews, then one atomic CPU-DUAL activation.
+
+### A5.8 terrain claimant-lane review repair (2026-08-04)
+
+- NO-GO review found that `demo_terrain_compact_exact()` accepted a claimed
+  lane but called `demo_classify_range()`, which re-derived it as
+  `begin == 0 ? MASTER : SLAVE`. A valid slave descriptor with input offset
+  zero would read/write with the master cache policy.
+- RED: the expanded route source fixture required an explicit classify lane
+  and prohibited a range-derived lane in every queue-reachable compact/
+  classify callback; it failed against the reviewed code.
+- GREEN: `demo_classify_exact(context, begin, end, lane)` receives the exact
+  producer's claimant lane and passes it to all projected reads. The former
+  range choice exists only in the legacy fixed-worker adapter. Direct Qt
+  MinGW C11 `-std=c11 -Wall -Wextra -Werror` route fixture passes; no runtime
+  activation, target build, CUE/Ymir run, or FPS claim occurred. Fresh scoped
+  re-review remains mandatory.

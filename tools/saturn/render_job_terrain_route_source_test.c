@@ -57,6 +57,16 @@ int main(void)
     const int ok =
         function_contains(source, "demo_terrain_compact_exact(",
                           "sm64_saturn_terrain_result_arena_seal") &&
+        function_contains(source, "demo_terrain_compact_exact(",
+                          "demo_classify_exact") &&
+        !function_contains(source, "demo_terrain_compact_exact(",
+                           "begin == 0U") &&
+        !function_contains(source, "demo_classify_exact(",
+                           "begin == 0U") &&
+        function_contains(source, "demo_classify_exact(",
+                          "demo_projected_read(lane,") &&
+        !function_contains(source, "demo_classify_exact(",
+                           "demo_projected_read(0U,") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "demo_terrain_queue_bind_output") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
@@ -65,6 +75,8 @@ int main(void)
                           "job->input_offset") &&
         !function_contains(source, "demo_terrain_queue_world_lower(",
                            "s_slave_begin") &&
+        !function_contains(source, "demo_terrain_queue_world_lower(",
+                           "begin == 0U") &&
         function_contains(source, "demo_terrain_queue_read_done(",
                           "sm64_saturn_render_job_queue_done_job") &&
         function_contains(source, "demo_terrain_queue_read_done(",

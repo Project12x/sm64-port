@@ -147,6 +147,13 @@ and the evidence report before starting another task.
   per-job result count/sequence for exact DONE merge. Mario's matching
   producer/reader conversion is also required before atomic CPU-DUAL
   activation.
+  **Review repair (2026-08-04):** the first dormant callback still entered
+  classification through a helper that inferred the lane from `begin == 0`.
+  A legal slave claim at descriptor input offset zero would therefore select
+  master cache ownership. `demo_classify_exact()` now receives the explicit
+  claimant-derived lane from the exact producer; the range inference is
+  confined to the legacy adapter. The focused route contract includes that
+  slave-at-zero mutation and is GREEN; fresh re-review remains required.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the
