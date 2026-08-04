@@ -1931,11 +1931,15 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "demo_render_clusters_admitted",
             "demo_positions_admitted",
             "demo_positions_transformed",
+            "demo_actor_meshlets_tested",
+            "demo_actor_meshlets_admitted",
+            "demo_actor_meshlets_culled",
+            "demo_actor_positions_admitted",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-22:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-26:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-23].end,
+            layout.fields[-27].end,
         )
 
         data = bytearray(layout.size)
@@ -1963,6 +1967,10 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "demo_render_clusters_admitted": 67,
             "demo_positions_admitted": 71,
             "demo_positions_transformed": 73,
+            "demo_actor_meshlets_tested": 79,
+            "demo_actor_meshlets_admitted": 83,
+            "demo_actor_meshlets_culled": 89,
+            "demo_actor_positions_admitted": 97,
         }
         for name, value in expected.items():
             field = layout.field(name)
@@ -2104,6 +2112,14 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "scene_graph_walks_suppressed",
                 "vblank_presentation_generation",
                 "sim_vblank_credit_dropped",
+                "demo_render_clusters_tested",
+                "demo_render_clusters_admitted",
+                "demo_positions_admitted",
+                "demo_positions_transformed",
+                "demo_actor_meshlets_tested",
+                "demo_actor_meshlets_admitted",
+                "demo_actor_meshlets_culled",
+                "demo_actor_positions_admitted",
             ],
         )
         # Fields the older build did have still read correctly.

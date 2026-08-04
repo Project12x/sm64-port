@@ -82,7 +82,14 @@ and the evidence report before starting another task.
   `0x060FDEF0` (0x2110 free, above the 4 KiB libyaul floor) and LWRAM ending at
   `0x002E33A0`. This proves only the target memory budget for that candidate;
   independent rereview and target visual/counter/FPS evidence remain open.
-- [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
+- [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** active. Generated
+  full-game Mario meshlets carry tight bounds, material/opacity partitions,
+  source ordinals, and compact near/mid/far remaps. The serial master path
+  admits them before actor transform dispatch, keeps opaque source order, and bins only
+  textured/translucent work; it no longer has `s_actor_order` insertion
+  sorting. Focused host tests and mutation checks are green. Independent
+  reviews and source-only-authorized target visual/counter evidence remain
+  open; no performance claim is made.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
@@ -686,44 +693,48 @@ types, ownership rules, or production fallbacks.
       sm64_saturn_fast3d_profile_t *stats);
   ```
 
-- [ ] **Step 1: Write failing actor fixtures**
+- [x] **Step 1: Write failing actor fixtures**
 
   Cover culled meshlets causing zero transforms, shared-position remaps,
   opaque source order, translucent stable-bin order, command capacity, invalid
   generated spans, and serial output equivalence for a fully admitted pose.
 
-- [ ] **Step 2: Add an anti-regression source assertion**
+- [x] **Step 2: Add an anti-regression source assertion**
 
   Require that the accepted `demo_prepare_mario` path contains no nested
   insertion loop over `s_actor_draw_count` and does not transform
   `SM64_MARIO_VERTEX_COUNT` unconditionally.
 
-- [ ] **Step 3: Add `verify-actor-meshlets` and record red evidence**
+- [x] **Step 3: Add `verify-actor-meshlets` and record red evidence**
 
   Expected: missing API and source assertion failure.
 
-- [ ] **Step 4: Generate bounded Mario meshlets and per-LOD remaps**
+- [x] **Step 4: Generate bounded Mario meshlets and per-LOD remaps**
 
   Partition by material/opacity and a fixed maximum of 32 primitives per
   meshlet. Preserve source primitive IDs and texture-tile relationships.
 
-- [ ] **Step 5: Implement early meshlet admission and compact transforms**
+- [x] **Step 5: Implement early meshlet admission and compact transforms**
 
   Reject by bounds, select LOD, transform referenced positions once, then run
   primitive backface/zero-area/window rejection. Batch opaque meshlets without
   global comparison sorting; feed translucent refs to existing stable bins.
 
-- [ ] **Step 6: Integrate serially before changing the worker scheduler**
+- [x] **Step 6: Integrate serially before changing the worker scheduler**
 
   Keep the existing dual-worker mode disabled for this gate so failures are
   attributable to meshlet/ordering changes. Preserve master-owned Gouraud,
   texture, slot allocation, and terrain-relative insertion.
 
-- [ ] **Step 7: Run actor-meshlet, dual-actor, depth-bin, command-template, and runtime gates**
+- [x] **Step 7: Run actor-meshlet, dual-actor, depth-bin, and command-template gates**
 
   Expected: all PASS and no insertion-sort source pattern.
 
-- [ ] **Step 8: Update documents, commit, and complete two-stage review**
+- [ ] **Step 8: Update documents, commit, and complete two-stage review — ACTIVE**
+
+  Documentation/evidence is updated with the watched red, green host gates,
+  explicit source-only scope, and remaining review/target gates. The behavior
+  commit and independent specification then quality reviews remain open.
 
   Commit with `perf(saturn): cull and bin Mario by meshlet`.
 

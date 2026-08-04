@@ -84,6 +84,13 @@ SOURCE_RENDER_COUNTERS = (
     "scene_graph_walks_suppressed",
 )
 
+ACTOR_MESHLET_COUNTERS = (
+    "demo_actor_meshlets_tested",
+    "demo_actor_meshlets_admitted",
+    "demo_actor_meshlets_culled",
+    "demo_actor_positions_admitted",
+)
+
 # ctype -> (size in bytes, big-endian struct format).  Alignment equals size
 # for every one of these on sh-elf, which is what makes the layout model below
 # a two-line calculation rather than a target-description table.

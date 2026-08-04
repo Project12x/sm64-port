@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added generated, bounded Mario actor meshlets (at most 32 primitives each)
+  with material/opacity partitions, source ordinals, tight bounds, and compact
+  near/mid/far primitive and position remaps. The serial master path now
+  rejects behind meshlets before actor transform dispatch, transforms each
+  admitted position once, preserves opaque source order, and
+  puts textured/translucent work into stable fixed far-to-near depth bins;
+  this replaces the quadratic actor insertion sort without moving camera,
+  material, Gouraud, texture-slot, terrain-relative insertion, or VDP1
+  ownership away from the master. Target visual/counter evidence and
+  independent reviews remain required.
+
 - Added the first A3 scene-neutral render-cluster contract and a focused host
   gate. It chooses a hysteretic near/mid/far compact position span from a
   cluster AABB before transforms, rejects empty/behind optional spans, and

@@ -80,6 +80,47 @@ Source sub-slice commit: `feat(saturn): admit compact terrain position spans
 before transform`. Independent review verdict: not yet requested; this remains
 an active A3 task.
 
+## Task 4 / A4 — bounded Mario meshlets and ordering (2026-08-04)
+
+This source-only A4 slice adds an original generated actor-bank format: 31
+Mario meshlets, each with at most 32 primitives, one material/opacity class,
+a stable source ordinal, a tight actor-local AABB, and compact near/mid/far
+primitive plus position-reference spans. It does not import upstream code.
+The existing pinned Yaul/libmic3d depth-bucket record remains dependency/pattern
+context only; the actor implementation is project-owned and preserves the
+master as sole owner of Gouraud allocation, texture slots, terrain-relative
+insertion, VDP1 command ownership, and presentation.
+
+TDD red: before the actor API or implementation existed,
+`verify-actor-meshlets` failed at compilation because both
+`saturn_actor_meshlets.h` and `saturn_actor_meshlets.c` were absent. The
+fixture names the observable failures: behind bounds must produce no admitted
+positions, opaque records retain source order, textured/translucent records
+remain stable far-to-near bins, capacity fails closed, invalid spans are
+rejected, and source primitive identity is retained. Its explicit malformed
+span mutation is caught after the normal green run.
+
+Green host command:
+
+```powershell
+& tools/saturn/with-msys-toolchain.ps1 C:\msys64\usr\bin\make.exe \
+  -f Makefile.saturn.mk \
+  SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge \
+  HOST_CC=C:/Qt/Tools/mingw1310_64/bin/gcc.exe \
+  verify-actor-meshlets verify-dual-actor-worker verify-terrain-depth-bins \
+  verify-terrain-command-template
+```
+
+Result: PASS. The normal actor fixture and dual-actor fixture pass; the
+invalid generated-span and cached-owner mutations are both caught as expected;
+the retained terrain depth-bin and command-template gates pass. The dual actor
+source assertion rejects reintroduction of `s_actor_order`, the former nested
+insertion loop, or an unconditional Mario-vertex transform loop in the
+accepted transform dispatch. No target build, CUE, Ymir launch, visual
+capture, counter capture, or FPS measurement was run or claimed. Remaining
+gates are the behavior commit, independent specification review, independent
+quality review, and later target visual/counter evidence.
+
 ## Current verdict
 
 **SAFE-BLOCKED — quality-fix round 1/5.** Full-range review covered
@@ -661,3 +702,32 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   was made by this repair.
 - Remaining A3 gates: independent rereview plus target visual, counter, and
   FPS observation. The normal A3 performance candidate is now linkable.
+
+## A4 — Mario meshlets and bounded ordering (2026-08-04)
+
+- RED: `verify-actor-meshlets` first failed because
+  `saturn_actor_meshlets.{h,c}` and the accepted-path source assertions did
+  not exist.
+- GREEN: the regenerated Mario bank contains 31 source-ordered meshlets, each
+  capped at 32 primitives and carrying material/opacity identity, bounds, and
+  near/mid/far primitive and position spans. The master-side preparation API
+  rejects behind meshlets before actor transform dispatch, transforms each
+  admitted position once, preserves opaque source order, and
+  emits textured/translucent references through fixed stable far-to-near bins.
+  `s_actor_order` and its quadratic insertion loop are absent from
+  `demo_prepare_mario`; master-owned Gouraud, texture-slot, terrain-relative
+  insertion, and VDP1 responsibilities remain unchanged.
+- Focused source-only host command (Qt MinGW host compiler):
+  `verify-actor-meshlets verify-dual-actor-worker verify-terrain-depth-bins
+  verify-terrain-command-template` passed. The actor invalid-span mutation and
+  dual-worker cached-owner mutation both failed as required. The focused
+  `MarioActorPoseTests` and `Fast3dProfileDecodeTests` run passed 30 tests with
+  one expected skip.
+- Open/uncredited: `verify-runtime-contracts` regenerated the three quad-map
+  summaries then its host compile exited 1 without a compiler diagnostic, so
+  it is an infrastructure gate rather than an A4 green result. A prior broad
+  `test_tools.py` aggregate also exposed two A4 fixture expectations, repaired
+  before the focused rerun above; its remaining Bob route-schema/emitter drift
+  failures are preserved unrelated work. No target build, CUE, Ymir, visual,
+  counter, or FPS gate ran. Independent specification and quality review remain
+  required before A4 can be source-complete.

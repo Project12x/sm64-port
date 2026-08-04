@@ -450,6 +450,12 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_render_clusters_admitted;
     uint32_t demo_positions_admitted;
     uint32_t demo_positions_transformed;
+    /* Task 4 actor meshlet admission evidence. These remain diagnostics only;
+     * final command ownership and presentation stay on the master. */
+    uint32_t demo_actor_meshlets_tested;
+    uint32_t demo_actor_meshlets_admitted;
+    uint32_t demo_actor_meshlets_culled;
+    uint32_t demo_actor_positions_admitted;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

@@ -581,7 +581,111 @@ def mario_render_clusters(
     }
 
 
-def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
+def mario_meshlets(
+    triangles: list[dict[str, object]],
+    compiled_primitives: list[dict[str, object]],
+    positions: list[list[int]],
+) -> dict[str, object]:
+    """Build bounded, source-ordered material/opacity actor work units.
+
+    The meshlet table is deliberately an actor-bank format, not a Mario
+    renderer policy: records carry only generated bounds, material/opacity
+    partition identity, source ordinal, and compact per-tier references.
+    """
+    source_texture = {
+        index: triangle.get("texture") is not None
+        for index, triangle in enumerate(triangles)
+    }
+    meshlets: list[dict[str, object]] = []
+    current: list[int] = []
+    current_key: tuple[int, int] | None = None
+
+    def primitive_key(index: int) -> tuple[int, int]:
+        primitive = compiled_primitives[index]
+        sources = primitive.get("source_triangles")
+        if not isinstance(sources, list) or not sources:
+            raise ValueError(f"Mario primitive {index} has no source triangles")
+        opaque = all(not source_texture.get(int(source), False) for source in sources)
+        material = primitive.get("material")
+        if isinstance(material, bool) or not isinstance(material, int) or material < 0 or material > 0xFFFF:
+            raise ValueError(f"Mario primitive {index} has invalid material")
+        return material, 0 if opaque else 1
+
+    def flush() -> None:
+        nonlocal current
+        if not current:
+            return
+        seen: set[int] = set()
+        vertices: list[int] = []
+        for primitive_index in current:
+            indices = compiled_primitives[primitive_index]["indices"]
+            for vertex in indices:
+                if vertex not in seen:
+                    seen.add(vertex)
+                    vertices.append(vertex)
+        if not vertices:
+            raise ValueError("Mario meshlet cannot be empty")
+        tiers: list[tuple[list[int], list[int]]] = []
+        for tier in range(3):
+            primitives = current if tier < 2 else [
+                primitive for primitive in current if primitive % 8 == 1
+            ]
+            tier_seen: set[int] = set()
+            tier_vertices: list[int] = []
+            for primitive_index in primitives:
+                for vertex in compiled_primitives[primitive_index]["indices"]:
+                    if vertex not in tier_seen:
+                        tier_seen.add(vertex)
+                        tier_vertices.append(vertex)
+            tiers.append((primitives, tier_vertices))
+        meshlets.append({
+            "material": current_key[0],
+            "opacity": current_key[1],
+            "source_ordinal": current[0],
+            "bounds": {
+                "min": [min(positions[vertex][axis] for vertex in vertices) for axis in range(3)],
+                "max": [max(positions[vertex][axis] for vertex in vertices) for axis in range(3)],
+            },
+            "tiers": tiers,
+        })
+        current = []
+
+    for primitive_index in range(len(compiled_primitives)):
+        key = primitive_key(primitive_index)
+        if current and (key != current_key or len(current) == 32):
+            flush()
+        if not current:
+            current_key = key
+        current.append(primitive_index)
+    flush()
+    if not meshlets:
+        raise ValueError("Mario meshlet generator emitted no records")
+
+    primitive_offsets = [0]
+    primitive_indices: list[int] = []
+    position_offsets = [0]
+    position_indices: list[int] = []
+    for meshlet in meshlets:
+        for primitives, vertices in meshlet["tiers"]:
+            primitive_indices.extend(primitives)
+            primitive_offsets.append(len(primitive_indices))
+            position_indices.extend(vertices)
+            position_offsets.append(len(position_indices))
+    if len(primitive_indices) > 0xFFFF or len(position_indices) > 0xFFFF:
+        raise ValueError("Mario meshlet reference stream exceeds uint16_t")
+    return {
+        "count": len(meshlets),
+        "max_primitives": 32,
+        "meshlets": meshlets,
+        "lod_primitive_offsets": primitive_offsets,
+        "lod_primitive_indices": primitive_indices,
+        "lod_position_offsets": position_offsets,
+        "lod_position_indices": position_indices,
+    }
+
+
+def c_render_cluster_metadata(metadata: dict[str, object],
+                              meshlets: dict[str, object] | None = None) -> list[str]:
     """Format scene-neutral, compact actor cluster tables for the target."""
     count = int(metadata["count"])
     primitive_indices = list(metadata["primitive_indices"])
@@ -648,6 +752,47 @@ def c_render_cluster_metadata(metadata: dict[str, object]) -> list[str]:
             % (", ".join(map(str, bounds["min"])), ", ".join(map(str, bounds["max"])))
         )
     lines.append("};")
+    if meshlets is None:
+        return lines
+    meshlet_records = list(meshlets["meshlets"])
+    primitive_offsets = list(meshlets["lod_primitive_offsets"])
+    primitive_indices = list(meshlets["lod_primitive_indices"])
+    position_offsets = list(meshlets["lod_position_offsets"])
+    position_indices = list(meshlets["lod_position_indices"])
+    if len(primitive_offsets) != len(meshlet_records) * 3 + 1:
+        raise ValueError("Mario meshlet primitive offsets must cover every tier")
+    if len(position_offsets) != len(meshlet_records) * 3 + 1:
+        raise ValueError("Mario meshlet position offsets must cover every tier")
+    lines += [
+        "/* Bounded source-ordered actor meshlets: no record crosses material or opacity. */",
+        f"#define SM64_MARIO_MESHLET_COUNT {len(meshlet_records)}U",
+        "#define SM64_MARIO_MESHLET_LOD_TIER_COUNT 3U",
+        "#define SM64_MARIO_MESHLET_MAX_PRIMITIVES 32U",
+        f"#define SM64_MARIO_MESHLET_LOD_PRIMITIVE_LIST_COUNT {len(primitive_indices)}U",
+        f"#define SM64_MARIO_MESHLET_LOD_POSITION_LIST_COUNT {len(position_indices)}U",
+        "#define SM64_MARIO_MESHLET_OPACITY_OPAQUE 0U",
+        "#define SM64_MARIO_MESHLET_OPACITY_TRANSLUCENT 1U",
+        "static const uint16_t sm64_mario_meshlet_material[SM64_MARIO_MESHLET_COUNT] = {",
+    ]
+    lines += rows([int(record["material"]) for record in meshlet_records])
+    lines += ["};", "static const uint8_t sm64_mario_meshlet_opacity[SM64_MARIO_MESHLET_COUNT] = {"]
+    lines += rows([int(record["opacity"]) for record in meshlet_records])
+    lines += ["};", "static const uint16_t sm64_mario_meshlet_source_ordinal[SM64_MARIO_MESHLET_COUNT] = {"]
+    lines += rows([int(record["source_ordinal"]) for record in meshlet_records])
+    lines += ["};", "static const int16_t sm64_mario_meshlet_bounds[SM64_MARIO_MESHLET_COUNT][2][3] = {"]
+    for record in meshlet_records:
+        bounds = record["bounds"]
+        lines.append("    {{%s}, {%s}}," % (
+            ", ".join(map(str, bounds["min"])), ", ".join(map(str, bounds["max"]))))
+    lines += ["};", "static const uint16_t sm64_mario_meshlet_lod_primitive_offsets[SM64_MARIO_MESHLET_COUNT * 3U + 1U] = {"]
+    lines += rows(primitive_offsets)
+    lines += ["};", "static const uint16_t sm64_mario_meshlet_lod_primitive_list[SM64_MARIO_MESHLET_LOD_PRIMITIVE_LIST_COUNT] = {"]
+    lines += rows(primitive_indices)
+    lines += ["};", "static const uint16_t sm64_mario_meshlet_lod_position_offsets[SM64_MARIO_MESHLET_COUNT * 3U + 1U] = {"]
+    lines += rows(position_offsets)
+    lines += ["};", "static const uint16_t sm64_mario_meshlet_lod_position_list[SM64_MARIO_MESHLET_LOD_POSITION_LIST_COUNT] = {"]
+    lines += rows(position_indices)
+    lines += ["};"]
     return lines
 
 
@@ -789,6 +934,7 @@ def main() -> None:
     render_clusters = mario_render_clusters(
         triangles, compiled_ir["primitives"], positions
     )
+    meshlets = mario_meshlets(triangles, compiled_ir["primitives"], positions)
     compiled_ir["render_clusters"] = render_clusters
     animation_light_intensities = [
         mario_vertex_light_intensities(frame, primitives)
@@ -884,7 +1030,7 @@ def main() -> None:
         for index in range(0, len(primitive_cull_back), 24)
     ]
     lines.append("};")
-    lines += c_render_cluster_metadata(render_clusters)
+    lines += c_render_cluster_metadata(render_clusters, meshlets)
     lines += ["/* First UV subtile for a compiled primitive, or TEXTURE_TILE_NONE. */", "static const uint16_t sm64_mario_texture_tile_start[SM64_MARIO_PRIMITIVE_COUNT] = {"]
     lines += ["    " + ", ".join(f"{value}U" for value in texture_tile_start[index:index + 12]) + "," for index in range(0, len(texture_tile_start), 12)]
     lines += [

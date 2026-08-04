@@ -132,6 +132,53 @@ static int all_master_ref_fallback_uses_cached_owner(void)
                SM64_MARIO_PRIMITIVE_COUNT / 2U) == 1U;
 }
 
+static int text_range_contains(const char *begin, const char *end,
+                               const char *needle)
+{
+    const size_t length = strlen(needle);
+    if (begin == NULL || end == NULL || needle == NULL || begin > end) return 0;
+    for (const char *cursor = begin; cursor + length <= end; cursor++)
+        if (memcmp(cursor, needle, length) == 0) return 1;
+    return 0;
+}
+
+static int renderer_uses_bounded_meshlet_order(void)
+{
+    FILE *source = fopen("src/port/saturn/gfx/saturn_demo_render.c", "rb");
+    if (source == NULL) return 0;
+    if (fseek(source, 0L, SEEK_END) != 0) return fclose(source), 0;
+    const long bytes = ftell(source);
+    if (bytes <= 0L || fseek(source, 0L, SEEK_SET) != 0) return fclose(source), 0;
+    char *text = malloc((size_t)bytes + 1U);
+    if (text == NULL) return fclose(source), 0;
+    const size_t read = fread(text, 1U, (size_t)bytes, source);
+    fclose(source);
+    text[read] = '\0';
+    char *const prepare = strstr(text, "static uint16_t demo_prepare_mario");
+    char *const reserve = prepare == NULL ? NULL :
+        strstr(prepare, "static void demo_reserve_mario_gouraud");
+    char *const dispatch = strstr(text, "static void demo_dispatch_mario_transform");
+    char *const dispatch_end = dispatch == NULL ? NULL :
+        strstr(dispatch, "static uint16_t demo_prepare_mario");
+    char *const frame = strstr(text, "void sm64_saturn_demo_render_frame");
+    char *const prepare_call = frame == NULL ? NULL :
+        strstr(frame, "demo_prepare_mario(");
+    char *const dispatch_call = frame == NULL ? NULL :
+        strstr(frame, "demo_dispatch_mario_transform(");
+    const int valid = prepare != NULL && reserve != NULL && dispatch != NULL &&
+        dispatch_end != NULL &&
+        prepare_call != NULL && dispatch_call != NULL &&
+        prepare_call < dispatch_call &&
+        strstr(prepare, "sm64_saturn_actor_meshlets_prepare(") != NULL &&
+        strstr(text, "s_actor_order") == NULL &&
+        strstr(text, "while (j > 0U)") == NULL &&
+        strstr(dispatch, "transform_ref_count") != NULL &&
+        !text_range_contains(dispatch, dispatch_end,
+                             "i < SM64_MARIO_VERTEX_COUNT");
+    free(text);
+    return valid;
+}
+
 int main(void)
 {
     actor_vertex_t serial_vertices[SM64_MARIO_VERTEX_COUNT];
@@ -181,6 +228,10 @@ int main(void)
     }
     if (!all_master_ref_fallback_uses_cached_owner()) {
         fprintf(stderr, "fallback compact refs can still select a stale peer alias\n");
+        return 1;
+    }
+    if (!renderer_uses_bounded_meshlet_order()) {
+        fprintf(stderr, "accepted Mario path retains a full transform or insertion sort\n");
         return 1;
     }
     transform_range(serial_vertices, 0U, SM64_MARIO_VERTEX_COUNT);

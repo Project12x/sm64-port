@@ -10,6 +10,7 @@
 #include <assert.h>
 #include "game/camera.h"
 #include "saturn_dual_frame_bank.h"
+#include "saturn_actor_meshlets.h"
 #include "saturn_gouraud.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
@@ -234,7 +235,14 @@ static uint8_t s_actor_vertex_owner[SM64_MARIO_VERTEX_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static demo_actor_primitive_ref_t s_actor_refs[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
-static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_draw_order[SM64_MARIO_PRIMITIVE_COUNT]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
+static uint16_t s_actor_transform_refs[SM64_MARIO_VERTEX_COUNT]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
+static sm64_saturn_actor_draw_ref_t s_actor_opaque_refs[
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
+static sm64_saturn_actor_draw_ref_t s_actor_translucent_refs[
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
 
@@ -245,6 +253,7 @@ static sm64_saturn_gouraud_table_t *s_actor_gouraud[
 static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT];
 static const uint8_t *s_actor_light_intensity;
 static uint16_t s_actor_draw_count;
+static uint16_t s_actor_transform_ref_count;
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
     __attribute__((section(".lwram_bss")));
 static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
@@ -1037,24 +1046,9 @@ static void demo_dispatch_mario_transform(
     s_mario_transform_context.pose_walking_bank = pose->walking_bank;
     s_mario_transform_context.primitives = sm64_mario_primitives;
     s_mario_transform_context.material_rgb = sm64_mario_material_rgb;
-    const uint8_t tier = s_pretransform_lod_tier;
-    if (tier >= SM64_MARIO_RENDER_CLUSTER_LOD_TIER_COUNT) {
-        profile->pipeline_faults++;
-        return;
-    }
-    const uint16_t ref_first =
-        sm64_mario_render_cluster_lod_vertex_offsets[tier];
-    const uint16_t ref_end =
-        sm64_mario_render_cluster_lod_vertex_offsets[tier + 1U];
-    if (ref_end < ref_first ||
-        ref_end > SM64_MARIO_RENDER_CLUSTER_LOD_VERTEX_LIST_COUNT) {
-        profile->pipeline_faults++;
-        return;
-    }
-    s_mario_transform_context.vertex_refs =
-        &sm64_mario_render_cluster_lod_vertex_list[ref_first];
-    s_mario_transform_context.transform_ref_count =
-        (uint16_t)(ref_end - ref_first);
+    s_actor_light_intensity = s_mario_transform_context.light_intensity;
+    s_mario_transform_context.vertex_refs = s_actor_transform_refs;
+    s_mario_transform_context.transform_ref_count = s_actor_transform_ref_count;
     if (s_mario_transform_context.transform_ref_count == 0U) {
         profile->pipeline_faults++;
         return;
@@ -2168,7 +2162,7 @@ static void __attribute__((unused)) demo_emit_mario_range(void *opaque, uint16_t
         if (((uint16_t)(ordinal - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled())
             break;
-        const uint16_t primitive = s_actor_order[ordinal];
+        const uint16_t primitive = s_actor_draw_order[ordinal];
         const uint16_t *indices = sm64_mario_primitives[primitive];
         const int16_vec2_t vertices[4] = {
             INT16_VEC2_INITIALIZER(demo_actor_projected_read(indices[1])->x,
@@ -2289,65 +2283,91 @@ static void demo_upload_vdp1_dual(sm64_saturn_vdp1_backend_t *backend,
 
 static uint16_t demo_prepare_mario(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
-    const sm64_saturn_mario_actor_pose_t *pose)
+    const sm64_saturn_mario_actor_pose_t *pose,
+    const sm64_saturn_ir_transform_job_t *job,
+    sm64_saturn_fast3d_profile_t *profile)
 {
     s_actor_draw_count = 0U;
+    s_actor_transform_ref_count = 0U;
     s_actor_texture_count = 0U;
     s_actor_command_count = 0U;
-    if (snapshot == NULL || pose == NULL || !snapshot->valid ||
-        pose->vertices == NULL || pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
+    if (snapshot == NULL || pose == NULL || job == NULL || profile == NULL ||
+        !snapshot->valid || pose->vertices == NULL ||
+        pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
         return 0U;
 
-    /* Lighting is copied into the immutable actor worker record before the
-     * second phase.  Master-only lowering therefore does not reach back into
-     * the bridge pose after the hand-off. */
-    s_actor_light_intensity = s_mario_transform_context.light_intensity;
+    const uint32_t meshlet_generation = s_actor_publish_sequence == UINT32_MAX
+        ? 1U : s_actor_publish_sequence + 1U;
+    sm64_saturn_render_snapshot_t meshlet_snapshot = {0};
+    meshlet_snapshot.generation = meshlet_generation;
+    meshlet_snapshot.actor_generation = meshlet_generation;
+    meshlet_snapshot.mario = *snapshot;
+    sm64_saturn_render_view_t meshlet_view = {0};
+    meshlet_view.camera_position_q16[0] =
+        (int32_t)((int64_t)job->camera.position.x * (1 << 16));
+    meshlet_view.camera_position_q16[1] =
+        (int32_t)((int64_t)job->camera.position.y * (1 << 16));
+    meshlet_view.camera_position_q16[2] =
+        (int32_t)((int64_t)job->camera.position.z * (1 << 16));
+    meshlet_view.view_forward_q16[0] = job->camera.forward.x;
+    meshlet_view.view_forward_q16[1] = job->camera.forward.y;
+    meshlet_view.view_forward_q16[2] = job->camera.forward.z;
+    meshlet_view.generation = meshlet_generation;
+    sm64_saturn_actor_meshlet_output_t meshlet_output = {
+        .opaque = s_actor_opaque_refs,
+        .translucent = s_actor_translucent_refs,
+    };
+    if (!sm64_saturn_actor_meshlets_prepare(
+            &meshlet_snapshot, pose, &meshlet_view, &meshlet_output,
+            SM64_MARIO_PRIMITIVE_COUNT, profile)) {
+        profile->pipeline_faults++;
+        return 0U;
+    }
+    uint8_t position_selected[SM64_MARIO_VERTEX_COUNT] = {0};
+    for (uint8_t pass = 0U; pass < 2U; pass++) {
+        const sm64_saturn_actor_draw_ref_t *refs = pass == 0U
+            ? meshlet_output.opaque : meshlet_output.translucent;
+        const uint16_t count = pass == 0U ? meshlet_output.opaque_count
+                                            : meshlet_output.translucent_count;
+        for (uint16_t i = 0U; i < count; i++) {
+            const uint16_t primitive_id = refs[i].primitive_id;
+            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return 0U;
+            s_actor_draw_order[s_actor_draw_count++] = primitive_id;
+            const uint16_t *const primitive = sm64_mario_primitives[primitive_id];
+            for (uint8_t corner = 1U; corner <= 4U; corner++) {
+                const uint16_t position = primitive[corner];
+                if (position >= SM64_MARIO_VERTEX_COUNT) {
+                    profile->pipeline_faults++;
+                    return 0U;
+                }
+                if (position_selected[position] == 0U) {
+                    position_selected[position] = 1U;
+                    s_actor_transform_refs[s_actor_transform_ref_count++] = position;
+                }
+            }
+        }
+    }
+    return s_actor_transform_ref_count;
+}
+
+static uint16_t demo_finalize_mario_draws(void)
+{
+    const uint16_t candidate_count = s_actor_draw_count;
+    s_actor_draw_count = 0U;
+    s_actor_texture_count = 0U;
+    for (uint16_t i = 0U; i < candidate_count; i++) {
+        const uint16_t primitive_id = s_actor_draw_order[i];
+        if (demo_actor_ref_read(primitive_id)->primitive_id ==
+            DEMO_ACTOR_PRIMITIVE_REJECTED)
+            continue;
+        s_actor_draw_order[s_actor_draw_count++] = primitive_id;
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
-    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
-        const demo_actor_primitive_ref_t *const ref = demo_actor_ref_read(i);
-        if (ref->primitive_id == DEMO_ACTOR_PRIMITIVE_REJECTED) continue;
-        const uint16_t primitive_id = ref->primitive_id;
-        s_actor_order[s_actor_draw_count++] = primitive_id;
         if (sm64_mario_texture_tile_start[primitive_id] !=
             SM64_MARIO_TEXTURE_TILE_NONE)
             s_actor_texture_count++;
-    }
-    /* VDP1 has no depth buffer. Castleviewer therefore paints Mario leaves
-     * from far to near; source primitive order is only topology order and can
-     * put a front-facing texture over the back of the actor. Keep the sort
-     * stable for equal depths so captures remain deterministic. */
-    for (uint16_t i = 1U; i < s_actor_draw_count; i++) {
-        const uint16_t value = s_actor_order[i];
-        const uint16_t *value_indices = sm64_mario_primitives[value];
-        const int32_t value_depth =
-            (demo_actor_projected_read(value_indices[1])->z +
-             demo_actor_projected_read(value_indices[2])->z +
-             demo_actor_projected_read(value_indices[3])->z +
-             demo_actor_projected_read(value_indices[4])->z) / 4;
-        uint16_t j = i;
-        while (j > 0U) {
-            const uint16_t previous = s_actor_order[j - 1U];
-            const uint16_t *previous_indices = sm64_mario_primitives[previous];
-            const int32_t previous_depth =
-                (demo_actor_projected_read(previous_indices[1])->z +
-                 demo_actor_projected_read(previous_indices[2])->z +
-                 demo_actor_projected_read(previous_indices[3])->z +
-                 demo_actor_projected_read(previous_indices[4])->z) / 4;
-            if (previous_depth >= value_depth) break;
-            s_actor_order[j] = previous;
-            j--;
-        }
-        s_actor_order[j] = value;
-    }
-    s_actor_command_count =
-        (uint16_t)(s_actor_draw_count + s_actor_texture_count);
-#else
-    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
-        if (demo_actor_ref_read(i)->primitive_id !=
-            DEMO_ACTOR_PRIMITIVE_REJECTED)
-            s_actor_command_count++;
-    }
 #endif
+    }
+    s_actor_command_count = (uint16_t)(s_actor_draw_count + s_actor_texture_count);
     return s_actor_command_count;
 }
 
@@ -2392,7 +2412,7 @@ static void demo_emit_mario(
                                            s_actor_command_count);
         for (uint16_t i = 0; i < s_actor_draw_count; i++) {
             s_actor_slots[i] = command_slot++;
-            if (sm64_mario_texture_tile_start[s_actor_order[i]] !=
+            if (sm64_mario_texture_tile_start[s_actor_draw_order[i]] !=
                 SM64_MARIO_TEXTURE_TILE_NONE)
                 s_actor_texture_slots[i] = command_slot++;
         }
@@ -2417,10 +2437,8 @@ static void demo_emit_mario(
         return;
     }
 #endif
-    for (uint16_t i = 0; i < SM64_MARIO_PRIMITIVE_COUNT; i++) {
-        const demo_actor_primitive_ref_t *const ref = demo_actor_ref_read(i);
-        if (ref->primitive_id == DEMO_ACTOR_PRIMITIVE_REJECTED) continue;
-        const uint16_t *primitive = sm64_mario_primitives[ref->primitive_id];
+    for (uint16_t i = 0; i < s_actor_draw_count; i++) {
+        const uint16_t *primitive = sm64_mario_primitives[s_actor_draw_order[i]];
         const int16_vec2_t vertices[4] = {
             INT16_VEC2_INITIALIZER(demo_actor_projected_read(primitive[1])->x,
                                    demo_actor_projected_read(primitive[1])->y),
@@ -2661,8 +2679,9 @@ void sm64_saturn_demo_render_frame(
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
     /* The terrain worker has retired and its merge is complete.  Only now may
      * the single slave be dispatched for Mario's copied transform snapshot. */
-    demo_dispatch_mario_transform(&actor_job, snapshot, pose, profile);
-    const uint16_t actor_command_count = demo_prepare_mario(snapshot, pose);
+    if (demo_prepare_mario(snapshot, pose, &actor_job, profile) != 0U)
+        demo_dispatch_mario_transform(&actor_job, snapshot, pose, profile);
+    const uint16_t actor_command_count = demo_finalize_mario_draws();
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     /* Essential actor shading is reserved before optional world shading.
      * Previously terrain consumed the Gouraud bank first, which made Mario
