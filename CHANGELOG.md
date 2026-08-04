@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added A5.8.1 graph-aware render-job runtime drains. The sole eventual
+  CPU-DUAL owner now has an activation path that claims only graph-eligible
+  descriptors, so a published consumer cannot run ahead of its required
+  producer merely because it appears earlier in queue storage. The focused
+  host contract deliberately publishes `WORLD_LOWER` before its `WORLD_ADMIT`
+  producer and proves the producer still runs first. Renderer payload routing
+  and live activation remain pending; no target/FPS claim changes.
+
 - Added the A5.7 render-job graph foundation: P2-visible dependency masks stop
   consumers claiming before every producer is `DONE`, failed producers
   quarantine only ready dependents, and terrain multi-result consumers use

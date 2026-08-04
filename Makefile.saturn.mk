@@ -354,6 +354,7 @@ verify-render-job-runtime:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_job_runtime_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-runtime-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-job-runtime-test$(HOST_EXEEXT)"

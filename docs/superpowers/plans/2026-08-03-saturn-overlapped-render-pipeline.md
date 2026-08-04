@@ -137,6 +137,16 @@ and the evidence report before starting another task.
   publication and propagates a failed predecessor to every reverse-chain
   ready dependent before terminal merge/reset; independent READY jobs remain
   eligible and are not treated as blocked.
+- [ ] **Task 5.8.1 / A5.8 — graph-aware runtime prerequisite:** source-complete
+  pending independent review. The queue runtime's ordinary ready-drain would
+  bypass graph eligibility, so it cannot own a live callback for dependent
+  terrain/Mario phases. The graph activation/drains now claim through the
+  graph for both CPUs and propagate failed-predecessor quarantine. Its focused
+  host test publishes `WORLD_LOWER` before its required `WORLD_ADMIT` and
+  proves the producer runs first. This is a scheduler prerequisite only:
+  physical terrain/actor payload arrays, renderer readers, and the sole
+  CPU-DUAL live cutover remain unbound; the A3+A4 3–4 FPS candidate remains
+  rollback baseline.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.

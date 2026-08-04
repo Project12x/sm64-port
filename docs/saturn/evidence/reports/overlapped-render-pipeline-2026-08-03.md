@@ -952,3 +952,19 @@ open.
   quarantine to a fixed point. Direct MinGW C11 `-Wall -Wextra -Werror` fixture
   now reports `render job graph fixture: PASS`; the two-test static graph guard
   also passes. The separate live-cutover source gate remains intentionally RED.
+
+### A5.8.1 graph-aware runtime prerequisite (2026-08-04)
+
+- RED: the revised runtime fixture called the missing
+  `sm64_saturn_render_job_runtime_activate_graph()` API and direct Qt MinGW
+  C11 compilation failed with the expected implicit-declaration error.
+- GREEN: the runtime now stores a graph alongside its queue and both slave
+  polling and master drains claim only through graph eligibility, completing
+  or failing the exact claimed descriptor and propagating dependency failure
+  quarantine. The fixture intentionally publishes `WORLD_LOWER` first with a
+  dependency on `WORLD_ADMIT`; `render-job-runtime-a58-test.exe` prints PASS
+  under `-std=c11 -Wall -Wextra -Werror`, proving a raw storage-order drain is
+  not accepted.
+- This does not activate CPU-DUAL in the renderer, migrate production payload
+  arrays, build a CUE, run Ymir, or make an FPS claim. The prior A3+A4 desktop
+  observation of roughly 3–4 FPS remains the rollback baseline.
