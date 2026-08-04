@@ -50,6 +50,26 @@ static int frame_contains(const char *source, const char *needle)
     return found != NULL && end != NULL && found < end;
 }
 
+static unsigned frame_count(const char *source, const char *needle)
+{
+    const char *frame = strstr(source, "void sm64_saturn_demo_render_frame(");
+    const char *end = frame == NULL ? NULL : function_end(frame);
+    unsigned count = 0U;
+    if (frame == NULL || end == NULL) return 0U;
+    for (const char *found = strstr(frame, needle);
+         found != NULL && found < end; found = strstr(found + 1, needle))
+        count++;
+    return count;
+}
+
+static int init_contains(const char *source, const char *needle)
+{
+    const char *init = strstr(source, "void sm64_saturn_demo_render_init(");
+    const char *end = init == NULL ? NULL : function_end(init);
+    const char *found = init == NULL ? NULL : strstr(init, needle);
+    return found != NULL && end != NULL && found < end;
+}
+
 int main(void)
 {
     char *source = read_file("src/port/saturn/gfx/saturn_demo_render.c");
@@ -60,10 +80,21 @@ int main(void)
     const int ok =
         strstr(source, "#include \"saturn_render_job_bridge.h\"") != NULL &&
         strstr(source, "#include \"saturn_render_job_runtime.h\"") != NULL &&
+        init_contains(source, "sm64_saturn_render_job_runtime_activate_graph") &&
+        frame_contains(source, "demo_render_queue_reset_frame_banks") &&
         frame_contains(source, "sm64_saturn_render_job_graph_publish") &&
+        frame_count(source,
+                    ".output_capacity = DEMO_TERRAIN_RESULT_CAPACITY") == 2U &&
+        frame_contains(source, "demo_render_queue_prepare_contexts") &&
+        frame_contains(source,
+                       "sm64_saturn_render_job_queue_quarantine_ready") &&
         frame_contains(source, "sm64_saturn_render_job_runtime_notify") &&
         frame_contains(source, "sm64_saturn_render_job_runtime_drain_master") &&
         frame_contains(source, "sm64_saturn_render_job_queue_all_terminal") &&
+        frame_contains(source, "sm64_saturn_render_job_runtime_slave_retired") &&
+        frame_contains(source, "demo_terrain_queue_assemble_merge_spans") &&
+        frame_contains(source, "demo_actor_queue_assemble_done") &&
+        frame_contains(source, "sm64_saturn_render_job_queue_reset_retired") &&
         !frame_contains(source, "sm64_saturn_terrain_worker_run") &&
         !frame_contains(source, "demo_dispatch_mario_transform");
     free(source);

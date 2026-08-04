@@ -55,7 +55,10 @@ int main(void)
         !sm64_saturn_render_job_runtime_activate_graph(&graph, &callbacks, NULL) ||
         sm64_saturn_render_job_runtime_activate_graph(&graph, &callbacks, NULL) ||
         !sm64_saturn_render_job_graph_publish(&graph, 7U, jobs, dependencies, 2U) ||
+        (sm64_saturn_render_job_runtime_notify(),
+         sm64_saturn_render_job_runtime_slave_retired()) ||
         sm64_saturn_render_job_runtime_poll_slave() != 2U ||
+        !sm64_saturn_render_job_runtime_slave_retired() ||
         s_callbacks != 2U ||
         !sm64_saturn_render_job_queue_all_terminal(&queue, 7U)) {
         fputs("render job runtime lifecycle failed\n", stderr);

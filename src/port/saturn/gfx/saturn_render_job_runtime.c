@@ -10,6 +10,8 @@ typedef struct sm64_saturn_render_job_runtime {
     const sm64_saturn_render_job_callback_table_t *callbacks;
     void *context;
     uint32_t active;
+    volatile uint32_t notify_sequence;
+    volatile uint32_t retired_sequence;
 } sm64_saturn_render_job_runtime_t;
 
 #if defined(__sh__)
@@ -31,7 +33,11 @@ static void runtime_fence(void)
 #if defined(__sh__)
 static void render_job_slave_entry(void)
 {
+    const uint32_t notified = s_runtime.notify_sequence;
     (void)sm64_saturn_render_job_runtime_poll_slave();
+    runtime_fence();
+    s_runtime.retired_sequence = notified;
+    runtime_fence();
 }
 #endif
 
@@ -71,9 +77,20 @@ bool sm64_saturn_render_job_runtime_activate_graph(
 void sm64_saturn_render_job_runtime_notify(void)
 {
     if (s_runtime.active == 0U || s_runtime.queue == NULL) return;
+    uint32_t sequence = s_runtime.notify_sequence + 1U;
+    if (sequence == 0U) sequence = 1U;
+    s_runtime.notify_sequence = sequence;
+    runtime_fence();
 #if defined(__sh__)
     cpu_dual_slave_notify();
 #endif
+}
+
+bool sm64_saturn_render_job_runtime_slave_retired(void)
+{
+    runtime_fence();
+    return s_runtime.active != 0U && s_runtime.notify_sequence != 0U &&
+        s_runtime.retired_sequence == s_runtime.notify_sequence;
 }
 
 uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
@@ -119,6 +136,11 @@ uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
             s_runtime.graph, generation);
         completed++;
     }
+    runtime_fence();
+#if !defined(__sh__)
+    s_runtime.retired_sequence = s_runtime.notify_sequence;
+    runtime_fence();
+#endif
     return completed;
 }
 

@@ -1032,7 +1032,7 @@ types, ownership rules, or production fallbacks.
 
   Expected: missing queue API/source patterns.
 
-- [ ] **Step 4: Implement the host state machine and SH-2 polling consumer — ACTIVE**
+- [x] **Step 4: Implement the host state machine and SH-2 polling consumer — SOURCE-COMPLETE**
 
   Use uncached 32-bit claim/state words and generation-last publication. The
   slave polling entry repeatedly claims `READY` work until no work remains;
@@ -1067,17 +1067,17 @@ types, ownership rules, or production fallbacks.
   (`fix(saturn): bind output lanes to queue claims`). Independent reviews
   remain open.
 
-- [ ] **Step 5: Integrate terrain and actor jobs into one frame queue**
+- [x] **Step 5: Integrate terrain and actor jobs into one frame queue — SOURCE-COMPLETE, REVIEW REQUIRED**
 
   Remove separate terrain join, Mario transform join, and Mario classify join
   from the accepted path. Merge only after `all_terminal(generation)`.
 
-- [ ] **Step 6: Preserve old fixed-split worker as a diagnostic build mode**
+- [ ] **Step 6: Preserve old fixed-split worker as a diagnostic build mode — DEFAULT PATH REMOVED; EXPLICIT MODE OPEN**
 
   The diagnostic mode may compare output but cannot be the production default
   or trigger full-span replay.
 
-- [ ] **Step 7: Run queue/coherency/actor/cluster/runtime gates**
+- [ ] **Step 7: Run queue/coherency/actor/cluster/runtime gates — ACTIVE**
 
   Expected: all PASS; a fixture with a deliberately slow slave proves the
   master claims other work rather than spinning.
@@ -1117,8 +1117,8 @@ types, ownership rules, or production fallbacks.
 - [x] **Step 3a: Source-only coexistence proof.** A Python source gate rejects
   either `cpu_dual_slave_set` or `cpu_dual_slave_notify` in A5.5. The live
   cutover owns the only permitted registration after legacy worker removal.
-- [ ] **Step 4: Independent specification and quality review.**
-- [ ] **Step 5: Live renderer transition.** Replace every terrain/Mario
+- [x] **Step 4: Independent specification and quality review.**
+- [x] **Step 5: Live renderer transition — SOURCE-COMPLETE, CUTOVER REVIEW OPEN.** Replace every terrain/Mario
   producer/read with bridge routing, replace source arming with the queue as the sole slave
   callback, publish terrain/actor jobs, and remove accepted fixed joins only
   after `all_terminal()`. This remains a separate source/target gate; no
@@ -1126,30 +1126,36 @@ types, ownership rules, or production fallbacks.
 
 ### Task 5.6: Descriptor-owned payload banks and atomic CPU-DUAL cutover
 
-**Status:** active, red integration gate recorded; this is the required
-prerequisite for Task 5 Step 5, not target-performance evidence.
+**Status:** source-complete atomic cutover, host-green, fresh independent
+review required before any target build or performance evidence.
 
 - [x] **Step 1: Record the live seam and red gate.** The current frame still
   calls the fixed terrain dispatcher and chained Mario dispatcher. The new
   test_render_job_live_cutover_source.py fails before production changes:
   the renderer has no bridge include, queue publish/drain/terminal boundary,
   or queue runtime lifecycle.
-- [ ] **Step 2: Make terrain and actor payload ownership descriptor-indexed.**
+- [x] **Step 2: Make terrain and actor payload ownership descriptor-indexed.**
   Replace physical master/slave result arrays and fixed actor owner reads with
   output-bank slots selected by exact queue descriptor identity; readers must
   reject non-DONE output and choose cached/P2 only from the recorded claimant.
-  **Active:** the TDD-covered generic physical payload-bank helper now derives
-  a writer address from the bridge execution record and a reader address from
-  exact DONE metadata; terrain and actor call sites remain to be migrated.
-- [ ] **Step 3: Add the one-owner queue CPU-DUAL runtime.** Bind exactly one
+  The TDD-covered physical payload-bank helper derives a writer address from
+  the bridge execution record and a reader address from exact DONE metadata;
+  the atomic source cutover now routes both terrain and actor call sites
+  through it.
+- [x] **Step 3: Add the one-owner queue CPU-DUAL runtime.** Bind exactly one
   polling callback only after default legacy dispatch is gone; persistent slave
   drain and master drain share the same local callback table and immutable
   renderer context.
-- [ ] **Step 4: Atomically switch the accepted frame path.** Publish terrain
+- [x] **Step 4: Atomically switch the accepted frame path.** Publish terrain
   and actor descriptors, drain opportunistically, and merge only after
   all_terminal(generation). Preserve master-only final VDP1 lowering and
   painter order. The fixed worker may remain only behind an isolated explicit
   diagnostic configuration.
+  The cutover uses one four-job graph, publishes callback contexts before
+  notify, positively observes the slave polling entry return, validates both
+  terminal assemblies before mutating the command backend, and never replays
+  a failed generation serially. Pre-notify publication failures quarantine
+  and retire their unclaimed descriptors so later frames are not poisoned.
 - [ ] **Step 5: Green source gates and two independent reviews.** Run bridge,
   queue, coherency, actor/cluster/runtime gates plus the live-cutover static
   guard. A target build/Ymir run remains prohibited until this source scope

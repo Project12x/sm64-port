@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Cut the accepted Saturn frame atomically from three fixed terrain/Mario
+  joins to one four-phase dependency graph shared by both SH-2s. The renderer
+  publishes self-contained terrain and live-pose Mario contexts before the
+  first claim, lets master and slave steal eligible admit/lower work, waits
+  for both terminal descriptors and positive slave callback retirement, then
+  performs deterministic terrain/Mario assembly before the master alone
+  lowers final VDP1 commands. Incomplete publication or execution preserves
+  the prior complete command list without a serial full-frame replay. This is
+  source-complete pending independent review; no new target build, CUE, Ymir,
+  cache-behavior, or FPS evidence is claimed.
+
 ### Fixed
 
 - Fixed the A5.8 render-job queue's SH-2 include boundary. The first guarded

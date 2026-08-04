@@ -19,6 +19,7 @@
 #include "saturn_render_callback_context.h"
 #include "saturn_render_job_graph.h"
 #include "saturn_render_job_queue.h"
+#include "saturn_render_job_runtime.h"
 #include "saturn_render_output_bank.h"
 #include "saturn_render_payload_bank.h"
 #include "saturn_terrain_command_template.h"
@@ -338,6 +339,10 @@ static sm64_saturn_actor_draw_ref_t s_actor_translucent_refs[
     SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
 static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
+
+static const sm64_saturn_render_job_callback_table_t *
+demo_render_job_callbacks(void);
+static uint8_t s_render_job_runtime_active;
 
 static uint16_t s_actor_texture_count;
 static uint16_t s_actor_command_count;
@@ -1406,6 +1411,10 @@ void sm64_saturn_demo_render_init(void)
     vdp1_vram_partitions_get(&partitions);
     demo_resolve_terrain_command_templates(&partitions);
     demo_build_primitive_work_metadata();
+    s_render_job_runtime_active =
+        sm64_saturn_render_job_runtime_activate_graph(
+            &s_render_job_graph, demo_render_job_callbacks(), NULL) ? 1U : 0U;
+    if (s_render_job_runtime_active == 0U) return;
     s_bob_resident_ready = 1U;
 }
 
@@ -1910,6 +1919,23 @@ static bool __attribute__((unused)) demo_render_queue_prepare_contexts(
     return demo_snapshot_terrain_queue_context(
                &s_terrain_queue_context, classify, sequence) &&
         demo_render_queue_contexts_publish();
+}
+
+static bool demo_render_queue_reset_frame_banks(void)
+{
+    if (sm64_saturn_render_job_queue_generation(&s_render_job_queue) != 0U)
+        return false;
+    sm64_saturn_render_callback_context_bank_init(
+        &s_render_callback_contexts);
+    sm64_saturn_render_output_bank_init(
+        &s_terrain_output_bank, SM64_SATURN_RENDER_OUTPUT_BANK_TERRAIN);
+    sm64_saturn_render_output_bank_init(
+        &s_actor_output_bank, SM64_SATURN_RENDER_OUTPUT_BANK_ACTOR);
+    memset(s_terrain_admit_metadata, 0, sizeof(s_terrain_admit_metadata));
+    memset(s_terrain_result_metadata, 0, sizeof(s_terrain_result_metadata));
+    memset(s_actor_admit_metadata, 0, sizeof(s_actor_admit_metadata));
+    memset(s_actor_result_metadata, 0, sizeof(s_actor_result_metadata));
+    return true;
 }
 
 static bool demo_render_queue_context_open(
@@ -2655,8 +2681,17 @@ static bool __attribute__((unused)) demo_terrain_queue_world_admit(
         !demo_terrain_queue_classify_context(context, &classify) ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
-        !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
-        !demo_transform_owned_positions(&classify, output.writer_lane))
+        !demo_terrain_queue_bind_output(job, claimed_state, &output))
+        return false;
+    /* One coarse admit descriptor owns the complete transformed-position
+     * payload. Rebuild ownership from the actual claimant lane; retaining the
+     * legacy logical split here would leave half the visible positions
+     * unwritten when the job is stolen by the other SH-2. */
+    demo_prepare_position_owners(
+        output.writer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_MASTER
+            ? context->work_count : 0U,
+        output.writer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE);
+    if (!demo_transform_owned_positions(&classify, output.writer_lane))
         return false;
     return demo_terrain_queue_publish_admit(
         job, claimed_state, output.writer_lane,
@@ -2720,6 +2755,18 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
         return false;
     return demo_terrain_queue_publish_result(
         job, claimed_state, output.writer_lane, arena.count, compact.sequence);
+}
+
+static const sm64_saturn_render_job_callback_table_t *
+demo_render_job_callbacks(void)
+{
+    static const sm64_saturn_render_job_callback_table_t callbacks = {{
+        demo_terrain_queue_world_admit,
+        demo_terrain_queue_world_lower,
+        demo_actor_queue_transform,
+        demo_actor_queue_classify,
+    }};
+    return &callbacks;
 }
 
 /* The master-side merge route likewise has no fixed peer range: DONE plus the
@@ -3618,17 +3665,10 @@ void sm64_saturn_demo_render_frame(
         &terrain_job.camera, profile, transform_generation);
     const uint16_t required_positions = demo_build_visible_position_set(
         profile, transform_generation);
-    const uint16_t work_split = demo_choose_work_split();
-#if SATURN_SLAVE_RENDER
-    const bool dual_transform_phase = work_split < s_render_work_count;
-#else
-    const bool dual_transform_phase = false;
-#endif
     memset(s_position_valid, 0, sizeof(s_position_valid));
     sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
     s_transform_phase_failed = 0U;
     s_transform_publish_sequence = transform_generation;
-    demo_prepare_position_owners(work_split, dual_transform_phase);
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
     memset(s_primitive_lod_suppressed, 0,
@@ -3640,151 +3680,132 @@ void sm64_saturn_demo_render_frame(
         .work_order = s_render_work_order,
         .camera = &terrain_job.camera,
         .job = &terrain_job,
-        .visible = {0U, 0U},
-        .transformed = {0U, 0U},
-        .radius_rejected = {0U, 0U},
-        .near_rejected = {0U, 0U},
-        .degenerate = {0U, 0U},
         .work_count = s_render_work_count,
         .required_positions = required_positions,
         .transform_sequence = s_transform_publish_sequence,
-        .dual_phase = dual_transform_phase
+        .dual_phase = true,
     };
-    s_terrain_publish_sequence++;
-    if (s_terrain_publish_sequence == 0U)
-        s_terrain_publish_sequence = 1U;
-    sm64_saturn_terrain_result_spans_init(
-        &s_terrain_spans_shared,
-        sm64_saturn_terrain_result_records(s_terrain_master_results),
-        sm64_saturn_terrain_result_commands(s_terrain_master_commands),
-        DEMO_TERRAIN_RESULT_CAPACITY,
-        sm64_saturn_terrain_result_records(s_terrain_slave_results),
-        sm64_saturn_terrain_result_commands(s_terrain_slave_commands),
-        DEMO_TERRAIN_RESULT_CAPACITY, 8U);
-    demo_terrain_compact_context_t compact = {
-        .classify = &classify, .spans = &s_terrain_spans_shared,
-        .sequence = s_terrain_publish_sequence};
-    sm64_saturn_dual_worker_stats_t classify_stats;
-    bool classify_ok = true;
-#if SATURN_SLAVE_RENDER
-    const sm64_saturn_terrain_worker_job_t terrain_worker = {
-        .range = demo_terrain_compact_range,
-        .context = &compact,
-        .count = s_render_work_count,
-        .slave_begin = work_split};
-    s_slave_begin = terrain_worker.slave_begin;
-    profile->master_worker_started++;
-    if (terrain_worker.slave_begin < terrain_worker.count)
-        profile->slave_worker_started++;
-    const bool worker_completed = sm64_saturn_terrain_worker_run(
-        &terrain_worker, &classify_stats);
-    /* The peer-transform fence is bounded. Its existing serial recovery
-     * remains authoritative; count the latched failure once before that
-     * recovery clears the latch, without altering the dispatch or wait. */
-    if (s_transform_phase_failed != 0U)
-        profile->pipeline_faults++;
-    classify_ok = worker_completed && s_transform_phase_failed == 0U;
-    if (work_split >= s_render_work_count)
-        sm64_saturn_terrain_result_arena_seal(
-            &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
-#else
-    classify_stats = (sm64_saturn_dual_worker_stats_t){0};
-    profile->master_worker_started++;
-    demo_terrain_compact_range(&compact, 0U, s_render_work_count);
-    sm64_saturn_terrain_result_arena_seal(
-        &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
-#endif
-    if (!classify_ok) {
-        memset(s_primitive_visible, 0, sizeof(s_primitive_visible));
-        memset(s_position_valid, 0, sizeof(s_position_valid));
-        memset(classify.visible, 0, sizeof(classify.visible));
-        memset(classify.transformed, 0, sizeof(classify.transformed));
-        memset(classify.radius_rejected, 0, sizeof(classify.radius_rejected));
-        memset(classify.near_rejected, 0, sizeof(classify.near_rejected));
-        memset(classify.degenerate, 0, sizeof(classify.degenerate));
-        memset(classify.clip_away, 0, sizeof(classify.clip_away));
-        memset(classify.clip_to_one, 0, sizeof(classify.clip_to_one));
-        memset(classify.clip_to_two, 0, sizeof(classify.clip_to_two));
-        memset(classify.clip_recovery, 0, sizeof(classify.clip_recovery));
-        memset(classify.clip_overflow, 0, sizeof(classify.clip_overflow));
-        sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
-        s_transform_phase_failed = 0U;
-        classify.dual_phase = false;
-        demo_prepare_position_owners(s_render_work_count, false);
-        sm64_saturn_terrain_result_spans_init(
-            &s_terrain_spans_shared,
-            sm64_saturn_terrain_result_records(s_terrain_master_results),
-            sm64_saturn_terrain_result_commands(s_terrain_master_commands),
-            DEMO_TERRAIN_RESULT_CAPACITY,
-            sm64_saturn_terrain_result_records(s_terrain_slave_results),
-            sm64_saturn_terrain_result_commands(s_terrain_slave_commands),
-            DEMO_TERRAIN_RESULT_CAPACITY, 8U);
-        demo_terrain_compact_range(&compact, 0U, s_render_work_count);
-        sm64_saturn_terrain_result_arena_seal(
-            &s_terrain_spans_shared.slave, s_terrain_publish_sequence);
-    }
-    profile->slave_jobs_completed += classify_stats.slave_jobs_completed;
-    profile->slave_busy_ticks += classify_stats.slave_busy_ticks;
-    profile->master_wait_ticks += classify_stats.master_wait_ticks;
-    profile->slave_timeouts += classify_stats.slave_timeouts;
-    profile->pipeline_faults += classify_stats.slave_timeouts;
-    s_last_master_wait_ticks = classify_stats.master_wait_ticks > UINT16_MAX
-        ? UINT16_MAX : (uint16_t)classify_stats.master_wait_ticks;
-    profile->triangles_transformed += classify.transformed[0] +
-                                     classify.transformed[1];
-    profile->demo_positions_transformed += classify.transformed[0] +
-                                           classify.transformed[1];
-    /* Task 11 HUD diagnostics: preserve the actual owner split rather than
-     * inferring transform work from compact-result counts after the join. */
-    profile->master_transform_count += classify.transformed[0];
-    profile->slave_transform_count += classify.transformed[1];
-    profile->demo_bob_primitives_visible += classify.visible[0] +
-                                            classify.visible[1];
-    profile->demo_bob_primitives_radius_rejected +=
-        classify.radius_rejected[0] + classify.radius_rejected[1];
-    profile->demo_bob_primitives_near_rejected +=
-        classify.near_rejected[0] + classify.near_rejected[1];
-    profile->demo_bob_primitives_degenerate +=
-        classify.degenerate[0] + classify.degenerate[1];
-    profile->demo_bob_clip_away += classify.clip_away[0] + classify.clip_away[1];
-    profile->demo_bob_clip_to_one += classify.clip_to_one[0] + classify.clip_to_one[1];
-    profile->demo_bob_clip_to_two += classify.clip_to_two[0] + classify.clip_to_two[1];
-    profile->demo_bob_clip_recovery += classify.clip_recovery[0] + classify.clip_recovery[1];
-    profile->demo_bob_clip_overflow += classify.clip_overflow[0] + classify.clip_overflow[1];
-    profile->pipeline_faults += classify.clip_overflow[0] + classify.clip_overflow[1];
-    profile->demo_bob_results_master += s_terrain_spans_shared.master.count;
-    profile->demo_bob_results_slave += s_terrain_spans_shared.slave.count;
-    profile->demo_bob_terrain_descriptor_bytes_written +=
-        (uint32_t)(s_terrain_spans_shared.master.count +
-                   s_terrain_spans_shared.slave.count) *
-        (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
-    profile->demo_bob_result_reserve_rejects +=
-        s_terrain_spans_shared.master.reserve_rejects + s_terrain_spans_shared.slave.reserve_rejects;
-    profile->pipeline_faults += s_terrain_spans_shared.master.reserve_rejects +
-                                s_terrain_spans_shared.slave.reserve_rejects;
-    for (uint16_t primitive = 0U;
-         primitive < SM64_SATURN_BOB_PRIMITIVE_COUNT; primitive++) {
-        switch (s_primitive_lod_tier[primitive]) {
-        case 2U: profile->demo_lod_tier_far++; break;
-        case 1U: profile->demo_lod_tier_mid++; break;
-        default: profile->demo_lod_tier_near++; break;
+
+    s_terrain_publish_sequence =
+        sm64_saturn_render_generation_next(s_terrain_publish_sequence);
+    const uint16_t actor_vertex_count =
+        demo_prepare_mario(snapshot, pose, &actor_job, profile);
+    s_actor_publish_sequence =
+        sm64_saturn_render_generation_next(s_actor_publish_sequence);
+    bool queue_ok =
+        s_render_job_runtime_active != 0U && actor_vertex_count != 0U &&
+        demo_snapshot_mario_transform_context(
+            &s_mario_transform_context, &actor_job, snapshot, pose);
+    if (queue_ok)
+        s_mario_transform_context.sequence = s_actor_publish_sequence;
+    queue_ok = queue_ok && demo_render_queue_reset_frame_banks();
+    const sm64_saturn_render_job_t frame_jobs[] = {
+        {
+            .type = SM64_SATURN_RENDER_JOB_WORLD_ADMIT,
+            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT,
+            .snapshot_generation = transform_generation,
+            .input_count = s_render_work_count,
+            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
+        }, {
+            .type = SM64_SATURN_RENDER_JOB_ACTOR_ADMIT,
+            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT,
+            .snapshot_generation = transform_generation,
+            .input_count = actor_vertex_count,
+            .output_capacity = actor_vertex_count,
+        }, {
+            .type = SM64_SATURN_RENDER_JOB_WORLD_LOWER,
+            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER,
+            .snapshot_generation = transform_generation,
+            .input_count = s_render_work_count,
+            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
+        }, {
+            .type = SM64_SATURN_RENDER_JOB_ACTOR_LOWER,
+            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER,
+            .snapshot_generation = transform_generation,
+            .input_count = SM64_MARIO_PRIMITIVE_COUNT,
+            .output_capacity = SM64_MARIO_PRIMITIVE_COUNT,
+        },
+    };
+    const uint8_t frame_dependencies[] = {
+        0U, 0U, (uint8_t)(1U << 0U), (uint8_t)(1U << 1U),
+    };
+    queue_ok = queue_ok && sm64_saturn_render_job_graph_publish(
+        &s_render_job_graph, transform_generation, frame_jobs,
+        frame_dependencies,
+        (uint16_t)(sizeof(frame_jobs) / sizeof(frame_jobs[0])));
+    queue_ok = queue_ok &&
+        demo_render_queue_prepare_contexts(&classify,
+                                           s_terrain_publish_sequence);
+    if (!queue_ok) {
+        /* Publication can fail after descriptors became READY but before the
+         * first notify. No claimant exists yet, so quarantine that incomplete
+         * generation and retire it without replaying work or poisoning every
+         * later frame. */
+        if (sm64_saturn_render_job_queue_generation(&s_render_job_queue) ==
+                transform_generation) {
+            for (uint16_t job_index = 0U;
+                 job_index < s_render_job_graph.count; job_index++)
+                (void)sm64_saturn_render_job_queue_quarantine_ready(
+                    &s_render_job_queue, transform_generation, job_index);
+            if (sm64_saturn_render_job_queue_all_terminal(
+                    &s_render_job_queue, transform_generation))
+                (void)sm64_saturn_render_job_queue_reset_retired(
+                    &s_render_job_queue, transform_generation);
         }
-        profile->demo_lod_transitions +=
-            s_primitive_lod_transition[primitive];
-        profile->demo_lod_primitives_suppressed +=
-            s_primitive_lod_suppressed[primitive];
-        profile->demo_lod_texture_downgrades +=
-            s_primitive_lod_texture_downgraded[primitive];
+        profile->pipeline_faults++;
+        return;
     }
-    if (!demo_merge_terrain_results(&s_terrain_spans_shared))
-        profile->demo_bob_terrain_sequence_rejects++;
+
+    profile->master_worker_started++;
+    profile->slave_worker_started++;
+    sm64_saturn_render_job_runtime_notify();
+    uint16_t master_jobs =
+        sm64_saturn_render_job_runtime_drain_master();
+    while (!sm64_saturn_render_job_runtime_slave_retired()) {
+        /* Positive peer retirement is a payload-lifetime condition, not a
+         * performance timeout. The queue generation cannot be recycled while
+         * the polling callback may still have a descriptor on its stack. */
+    }
+    master_jobs = (uint16_t)(master_jobs +
+        sm64_saturn_render_job_runtime_drain_master());
+    const bool terminal = sm64_saturn_render_job_queue_all_terminal(
+        &s_render_job_queue, transform_generation);
+    queue_ok = terminal &&
+        demo_terrain_queue_assemble_merge_spans(
+            SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
+            &s_terrain_queue_merge_spans) &&
+        demo_actor_queue_assemble_done(
+            SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
+            &s_mario_transform_context);
+    uint32_t terrain_results_by_lane[2] = {0U, 0U};
+    if (queue_ok) {
+        for (uint16_t job_index = 0U;
+             job_index < s_render_job_graph.count; job_index++) {
+            const demo_terrain_queue_metadata_t *const metadata =
+                &s_terrain_result_metadata[job_index];
+            if (metadata->ready != 0U && metadata->writer_lane < 2U)
+                terrain_results_by_lane[metadata->writer_lane] +=
+                    metadata->record_count;
+        }
+    }
+    const bool retired = terminal &&
+        sm64_saturn_render_job_queue_reset_retired(
+            &s_render_job_queue, transform_generation);
+    if (!queue_ok || !retired) {
+        /* No serial replay: backend_begin() has not run, so the previously
+         * complete VDP1 frame remains the only presentable command list. */
+        profile->pipeline_faults++;
+        return;
+    }
+    profile->slave_jobs_completed +=
+        (uint32_t)(4U - (master_jobs > 4U ? 4U : master_jobs));
+    profile->triangles_transformed += required_positions;
+    profile->demo_positions_transformed += required_positions;
+    profile->demo_bob_results_master += terrain_results_by_lane[0];
+    profile->demo_bob_results_slave += terrain_results_by_lane[1];
     profile->demo_bob_terrain_descriptor_bytes_read +=
         (uint32_t)s_terrain_emit_count *
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
-    /* The terrain worker has retired and its merge is complete.  Only now may
-     * the single slave be dispatched for Mario's copied transform snapshot. */
-    if (demo_prepare_mario(snapshot, pose, &actor_job, profile) != 0U)
-        demo_dispatch_mario_transform(&actor_job, snapshot, pose, profile);
     const uint16_t actor_command_count = demo_finalize_mario_draws();
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     /* Essential actor shading is reserved before optional world shading.

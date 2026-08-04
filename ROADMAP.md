@@ -9,10 +9,11 @@ target CUE with a manual desktop-Ymir comparison against the accepted 3–4 FPS
 baseline.
 
 The ordered terrain-command lookup and pointer-free P2 callback-context gate
-are source-review GO and target compile/link/section-green. The next
-implementation transition is the single-owner live cutover, not another
-parallel callback registration; target cache behavior is proven only after
-that live route executes.
+are source-review GO and target compile/link/section-green. The single-owner
+live cutover is now source-complete and host-green, pending independent source
+review. After review, the next transition is one serialized target rebuild
+and desktop-Ymir comparison; target cache behavior is proven only when that
+new live route executes.
 
 ## Next — frame lifetime and transfer overlap
 

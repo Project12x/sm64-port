@@ -1302,3 +1302,30 @@ open.
 - This closes only dormant target compile/link/section placement. No Ymir was
   launched, the legacy CPU-DUAL path remains live, and cache/runtime/FPS gates
   remain open.
+
+### A5.8 atomic live renderer cutover — source implementation (2026-08-04)
+
+- Watched RED: `render_job_live_cutover_source_test.c` reported that the
+  accepted frame still used the fixed terrain and Mario dispatchers. A second
+  runtime RED failed to compile before positive notified-slave retirement was
+  observable.
+- GREEN: `sm64_saturn_demo_render_init()` installs one graph-aware CPU-DUAL
+  callback table. Each frame publishes four coarse descriptors (terrain
+  admit/lower and Mario admit/lower), resets and publishes pointer-free
+  callback contexts before the first notify, drains eligible master work, and
+  waits for the notified slave polling entry to positively return. Only a
+  fully terminal graph may feed descriptor-owned terrain command assembly and
+  Mario result assembly; final VDP1 order/lowering remains master-only.
+- Correctness repair during the same TDD cycle: WORLD_ADMIT reserves a bounded
+  full terrain capacity because it publishes transformed-position count, and
+  it rebuilds all position ownership from its actual claimant lane. A stolen
+  coarse admit therefore cannot inherit half of the removed logical split.
+  Pre-notify publication failure quarantines and retires only unclaimed
+  descriptors. Post-notify failure performs no serial replay and returns
+  before backend begin, preserving the prior complete command list.
+- Strict Qt MinGW C11/Werror live-cutover, terrain-route, actor-route, runtime,
+  queue, graph, bridge, payload-bank, and callback-context fixtures PASS.
+  `git diff --check` is clean apart from line-ending notices on pre-existing
+  dirty files. This is source implementation only, pending fresh independent
+  review. No post-cutover target build, CUE/Ymir run, cache proof, or FPS claim
+  occurred.

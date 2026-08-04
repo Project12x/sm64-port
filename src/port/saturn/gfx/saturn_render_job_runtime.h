@@ -21,6 +21,12 @@ bool sm64_saturn_render_job_runtime_activate_graph(
 /* The master calls this only after queue publication. */
 void sm64_saturn_render_job_runtime_notify(void);
 
+/* True only after the polling slave has returned from the most recently
+ * notified pass. Queue terminal state alone is insufficient: the master may
+ * not recycle descriptor-owned payload while the peer still has a callback
+ * on its stack. */
+bool sm64_saturn_render_job_runtime_slave_retired(void);
+
 /* Public for the host fixture and the SH-2 polling entry. */
 uint16_t sm64_saturn_render_job_runtime_poll_slave(void);
 
