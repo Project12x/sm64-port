@@ -823,4 +823,4 @@ open.
   claimed-state validation to the original five. No target build, CUE, Ymir,
   visual, counter, or FPS claim occurred. Independent review and live renderer
   queue wiring remain open.
-- Commit: `d0230820` (`fix(saturn): bind output lanes to queue claims`).
+- Commit: `f0a3b99c` (`fix(saturn): bind output lanes to queue claims`).

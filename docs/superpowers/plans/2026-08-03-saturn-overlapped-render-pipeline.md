@@ -852,7 +852,7 @@ types, ownership rules, or production fallbacks.
   verifies the peer P2 selection. Six source mutations are rejected. This is
   not live renderer integration and does not move master VDP1 lowering or its
   stable painter order. Behavior/docs commits: `0026a3a1`
-  (`feat(saturn): publish descriptor-owned output lanes`) and `d0230820`
+  (`feat(saturn): publish descriptor-owned output lanes`) and `f0a3b99c`
   (`fix(saturn): bind output lanes to queue claims`). Independent reviews
   remain open.
 

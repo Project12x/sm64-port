@@ -38,4 +38,4 @@ lowering or stable painter order.
 - Target SH-2 cache/coherency, visual, counter, and FPS evidence.
 
 Commits: `0026a3a1` (`feat(saturn): publish descriptor-owned output lanes`)
-and `d0230820` (`fix(saturn): bind output lanes to queue claims`).
+and `f0a3b99c` (`fix(saturn): bind output lanes to queue claims`).
