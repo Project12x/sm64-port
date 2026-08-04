@@ -96,7 +96,19 @@ int main(void)
         function_contains(source, "demo_terrain_queue_read_done(",
                           "demo_terrain_queue_result_metadata") &&
         !function_contains(source, "demo_terrain_queue_read_done(",
-                           "uint16_t record_count");
+                           "uint16_t record_count") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "demo_terrain_queue_read_done") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "sm64_saturn_render_job_graph_validate_terrain_merge") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "sm64_saturn_terrain_depth_bins_build_streams") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "metadata->claimed_state") &&
+        !function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                           "s_terrain_spans_shared") &&
+        !function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                           "begin == 0U");
     free(source);
     if (!ok) {
         fputs("terrain queue route does not bind exact descriptor ownership\n",

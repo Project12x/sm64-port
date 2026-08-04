@@ -1076,3 +1076,22 @@ open.
   the corresponding P2 publication/output-bank lane before classification.
   Both mutations fail closed; normal graph route and source contracts pass.
 - No queue activation, target build, CUE/Ymir run, or FPS claim occurred.
+
+### A5.8 dormant terrain merge-span assembly (2026-08-04)
+
+- RED: the expanded direct C11 route-source contract required a distinct
+  descriptor-stream merge assembler, terminal DONE reader, graph identity
+  validation, and the existing master stable depth-bin builder; it failed
+  before that route existed.
+- GREEN: the dormant assembler consumes only `done_job` WORLD_LOWER entries.
+  It rereads validated P2 release metadata through the terminal reader,
+  requires matching generation/sequence/count/claimant lane, constructs
+  descriptor/local-output identities, validates them against the graph, then
+  runs the master-owned stable stream ordering. It preserves per-descriptor
+  record/command aliases and does not recreate or consult the legacy
+  master/slave result spans.
+- GREEN host evidence: direct Qt MinGW C11 `-std=c11 -Wall -Wextra -Werror`
+  terrain route-source and graph fixtures PASS. No queue activation, target
+  build, CUE/Ymir run, or FPS claim occurred. Remaining: command lookup from
+  the ordered descriptor stream, Mario parity, independent review, one atomic
+  CPU-DUAL cutover, then target/cache/visual evidence.

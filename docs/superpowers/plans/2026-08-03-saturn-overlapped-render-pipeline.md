@@ -163,6 +163,15 @@ and the evidence report before starting another task.
   classifying. Host mutations cover both an unready predecessor and a terminal
   wrong-type predecessor; both fail closed. This is still dormant source work,
   not authorization for CPU-DUAL activation.
+  **A5.8 terrain merge-span increment (2026-08-04):** the dormant master
+  assembler now visits only terminal WORLD_LOWER descriptors, revalidates each
+  P2 result release and its actual claimant lane, requires one generation and
+  one sequence across the frame, and constructs result identities in immutable
+  descriptor/local-output order. The graph validates those identities before
+  the existing stable depth-bin ordering runs. It retains descriptor-owned
+  record/command streams rather than reconstructing the fixed legacy arenas;
+  master final ordering remains sole owner. The callback is unregistered and
+  the legacy worker is unchanged pending Mario parity and review.
   **Review repair (2026-08-04):** the first dormant callback still entered
   classification through a helper that inferred the lane from `begin == 0`.
   A legal slave claim at descriptor input offset zero would therefore select

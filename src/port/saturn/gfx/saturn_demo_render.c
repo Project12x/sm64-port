@@ -252,6 +252,23 @@ static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
     DEMO_TERRAIN_RESULT_CAPACITY];
 static uint16_t s_terrain_emit_count;
 static uint32_t s_terrain_publish_sequence;
+/* The dormant queue merge keeps one stream for every exact WORLD_LOWER
+ * descriptor.  It deliberately does not coerce those streams back into the
+ * legacy master/slave arenas: once live, an SH-2 may claim either descriptor.
+ * The master still owns the one final depth/order pass and later VDP1 lower. */
+typedef struct demo_terrain_queue_merge_spans {
+    const sm64_saturn_terrain_result_t *records[
+        SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    const uint8_t *commands[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    size_t counts[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t job_indices[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t stream_count;
+    uint32_t generation;
+    uint32_t sequence;
+} demo_terrain_queue_merge_spans_t;
+static demo_terrain_queue_merge_spans_t s_terrain_queue_merge_spans;
+static sm64_saturn_render_job_result_identity_t s_terrain_queue_merge_ids[
+    DEMO_TERRAIN_RESULT_CAPACITY];
 typedef struct demo_actor_vertex_result {
     sm64_saturn_projected_vertex_t projected;
     uint8_t valid;
@@ -2097,6 +2114,70 @@ static bool __attribute__((unused)) demo_terrain_queue_read_done(
     if (*records == NULL || *commands == NULL) return false;
     *record_count = metadata->record_count;
     *sequence = metadata->sequence;
+    return true;
+}
+
+/* Assemble only terminal, descriptor-owned WORLD_LOWER output.  Descriptor
+ * index is the producer order for stable ties; the bounded bin pass below is
+ * still master-owned, so queue work cannot change final VDP1 ordering.  This
+ * route is intentionally dormant until Mario has the same DONE contract. */
+static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
+    uint8_t reader_lane, demo_terrain_queue_merge_spans_t *spans)
+{
+    if (spans == NULL || reader_lane != SM64_SATURN_RENDER_OUTPUT_LANE_MASTER)
+        return false;
+    *spans = (demo_terrain_queue_merge_spans_t){0};
+    uint16_t identity_count = 0U;
+    for (uint16_t job_index = 0U; job_index < s_render_job_graph.count;
+         job_index++) {
+        const sm64_saturn_render_job_t *const job =
+            sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
+                                                   job_index);
+        if (job == NULL) continue;
+        if (job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER) continue;
+        const demo_terrain_queue_metadata_t *const metadata =
+            demo_terrain_queue_result_metadata(job_index, job, reader_lane);
+        const sm64_saturn_terrain_result_t *records;
+        const uint8_t *commands;
+        uint16_t record_count;
+        uint32_t sequence;
+        if (metadata == NULL ||
+            (metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+             metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) ||
+            !demo_terrain_queue_read_done(job_index, reader_lane, &records,
+                                          &commands, &record_count,
+                                          &sequence) ||
+            record_count != metadata->record_count ||
+            sequence != metadata->sequence || sequence == 0U ||
+            spans->stream_count >= SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY ||
+            identity_count > DEMO_TERRAIN_RESULT_CAPACITY - record_count)
+            return false;
+        if (spans->sequence == 0U) spans->sequence = sequence;
+        if (spans->sequence != sequence) return false;
+        if (spans->generation == 0U)
+            spans->generation = job->snapshot_generation;
+        if (spans->generation != job->snapshot_generation) return false;
+        const uint16_t stream = spans->stream_count++;
+        spans->records[stream] = records;
+        spans->commands[stream] = commands;
+        spans->counts[stream] = record_count;
+        spans->job_indices[stream] = job_index;
+        for (uint16_t output_index = 0U; output_index < record_count;
+             output_index++)
+            s_terrain_queue_merge_ids[identity_count++] =
+                (sm64_saturn_render_job_result_identity_t){
+                    .job_index = job_index, .output_index = output_index};
+    }
+    if (spans->stream_count == 0U ||
+        !sm64_saturn_render_job_graph_validate_terrain_merge(
+            &s_render_job_graph, spans->generation, s_terrain_queue_merge_ids,
+            identity_count))
+        return false;
+    const size_t count = sm64_saturn_terrain_depth_bins_build_streams(
+        spans->records, spans->counts, spans->stream_count, s_terrain_emit_refs,
+        s_terrain_emit_scratch, DEMO_TERRAIN_RESULT_CAPACITY);
+    if (count == SIZE_MAX) return false;
+    s_terrain_emit_count = (uint16_t)count;
     return true;
 }
 
