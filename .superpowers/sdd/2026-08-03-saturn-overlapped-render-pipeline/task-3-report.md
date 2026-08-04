@@ -114,3 +114,4 @@ recorded in `docs/saturn/UPSTREAM_CODE_LEDGER.md` and the active plan.
   target evidence remain open. In-tree reference inspected:
   `saturn_fast3d_frontend.c`'s nonzero wrap discipline; reuse mode:
   pattern-only, no source copied.
+  Commit: `1a4db6ed` (`fix(saturn): normalize A3 admission generation`).

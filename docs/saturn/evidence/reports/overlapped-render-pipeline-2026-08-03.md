@@ -73,6 +73,8 @@ hysteresis, empty-span, and invalid-argument fixture). The visible-position
 host fixture additionally passes its direct compact-reference fail-closed
 check. No target build, CUE, Ymir launch, or performance capture was run.
 Remaining A3 gates: independent rereview and target visual/counter evidence.
+Generation-repair commit: `1a4db6ed` (`fix(saturn): normalize A3 admission
+generation`).
 
 Source sub-slice commit: `feat(saturn): admit compact terrain position spans
 before transform`. Independent review verdict: not yet requested; this remains
