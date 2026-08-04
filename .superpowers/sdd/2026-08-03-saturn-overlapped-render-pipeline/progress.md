@@ -166,14 +166,33 @@ Fix-round behavior/docs commit: `c95feda8`
 `verify-runtime-contracts` red reproduced at
 `runtime_contract_test.c:4018`. Git history showed `d80020cab` originally
 published fully patched worker command images, while `e50fc478` intentionally
-made worker command images private dynamic payloads (zero material words plus
-coordinates) and moved immutable template copying to master-owned
+made worker command images private dynamic payloads and moved immutable
+template copying to master-owned
 `demo_emit_terrain_result()`. The retained full-command comparison was
 therefore obsolete, not an A2 or target-renderer defect. `533471e5`
 (`test(saturn): align terrain worker command contract`) replaces it with
-stronger checks for zero private material words, preserved coordinates, and
+stronger checks for the private payload boundary, preserved coordinates, and
 complete resolved-template construction. The same fresh Make target passes
 under the explicit forward-slash repository/compiler override; `git diff
---check` passes. No snapshot logic, production renderer code, target build, or
-Ymir run was changed/performed. Independent review is not yet obtained; fresh
+--check` passes. No snapshot logic, target build, or Ymir run was
+changed/performed. Independent review is not yet obtained; fresh
 A2 reviews and target cache/coherency evidence remain required.
+
+2026-08-04 runtime-contract review correction: the independent review
+`runtime-contract-4018-review.md` is NO-GO for the overbroad claim that worker
+bytes 0..11 are always zero. The live producer uses
+`sm64_saturn_terrain_result_write_with_shades()` and may retain four
+post-light RGB1555 words at bytes 0..7. The repaired fixture uses both the
+no-shades wrapper and `publish_with_shades()` through the same sorted
+master/slave spans. It verifies the exact dynamic layout: bytes 0..7 are zero
+without shades or equal the four supplied shade words with the post-light flag;
+bytes 8..11 and 28..31 remain zero; bytes 12..27 preserve coordinates; and
+the master-side resolved template remains complete and separate. The new
+shade regression was mutation-tested RED by temporarily replacing the shade
+copy with zeros (failure at its shade `memcmp`), then restored and rerun GREEN
+with the explicit-host runtime-contract command. The test-first clear-flag
+case was also RED against the current writer: it passed non-null shades with
+`POST_LIGHT_SHADES` clear and observed those forbidden bytes. `90fc3c76`
+gates the copy on the flag; the live flagged shade path remains green. No
+snapshot, target build, or Ymir gate ran, and a fresh independent rereview
+remains required.

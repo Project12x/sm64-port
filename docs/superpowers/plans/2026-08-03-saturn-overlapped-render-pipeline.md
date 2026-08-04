@@ -466,11 +466,14 @@ types, ownership rules, or production fallbacks.
   green at the final terminal-state repair. The fresh runtime-contract run is
   green at `533471e5`: its former line-4018 assertion expected a complete
   VDP1 command from the worker even though `e50fc478` intentionally changed
-  the worker to publish private zero-material/coordinate payloads and leaves
-  template copying to the master. The repaired contract verifies both the
-  private payload boundary and the resolved-template reconstruction; it does
-  not change snapshot or target-renderer behavior. No target build or Ymir
-  gate was run here.
+  the worker to publish private dynamic payloads and leaves template copying
+  to the master. The contract covers the zero-shade and post-light-shade
+  variants: bytes 0..7 are zero or four worker-owned RGB1555 shades, bytes
+  8..11 and 28..31 remain zero, and bytes 12..27 preserve coordinates. The
+  resolved template still owns immutable material. `90fc3c76` gates the writer
+  shade copy on that flag, so ignored shade inputs cannot populate a clear-flag
+  payload. No snapshot or master VDP1 behavior changed, and no target build or
+  Ymir gate was run.
 
 - [ ] **Step 7: Update documents, commit, and complete two-stage review — ACTIVE**
 
@@ -480,9 +483,12 @@ types, ownership rules, or production fallbacks.
   A2 implementation has a watched missing-header/API red compile, then green
   lifecycle/source-boundary test, green dual-frame-bank fixture, and green
   runtime contract. The line-4018 terrain mismatch was a stale host assertion,
-  diagnosed in `runtime-contract-4018-report.md`, not a snapshot defect.
-  Target build/Ymir and both independent reviews remain unexecuted; A2 is
-  source-complete only, never a performance claim.
+  diagnosed in `runtime-contract-4018-report.md`, not a snapshot defect. Its
+  first independent runtime-contract review was NO-GO because the initial
+  repair incorrectly required bytes 0..11 to be zero. The live shades-path
+  regression now addresses that finding, but a fresh independent rereview is
+  still required. Target build/Ymir and the remaining independent A2 review
+  are unexecuted; A2 is source-complete only, never a performance claim.
 
   Fix round 1 corrects the specification review’s two Important findings and
   one Moderate finding: reset is free-slot-only (quarantine and all in-flight

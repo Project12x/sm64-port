@@ -149,16 +149,28 @@ Fix-round behavior/docs commit: `c95feda8`
 ## Runtime-contract classification (2026-08-04)
 
 `533471e5` (`test(saturn): align terrain worker command contract`) resolves
-the remaining host runtime-contract failure without changing A2 or production
+the remaining host runtime-contract failure without changing A2 or master VDP1
 renderer behavior. A fresh explicit-host `verify-runtime-contracts` run first
 reproduced the line-4018 `memcmp` failure. History showed that `d80020cab`
 initially wrote a fully patched VDP1 command per worker result, but
-`e50fc478` intentionally changed that payload to zero material words plus
-dynamic coordinates; `demo_emit_terrain_result()` applies the immutable
+`e50fc478` intentionally changed that payload to a private dynamic image;
+`demo_emit_terrain_result()` applies the immutable
 resolved template after the master-only join. The old assertion compared the
 private worker payload to the final master command and was stale. The repaired
-contract now proves private material remains zero, coordinates survive sorting,
-and the template helper still creates the complete final image. The same Make
-target is green, as is `git diff --check`. No target build/Ymir run or new
-independent review occurred. A2 remains source-complete pending the required
-fresh reviews and target cache/coherency evidence.
+contract now proves the worker retains only its permitted dynamic payload:
+bytes 0..7 are either zero or four post-light RGB1555 shade words, bytes 8..11
+and 28..31 remain zero, and coordinates survive sorting. The template helper
+still creates the complete final image. The first independent runtime-contract
+review was NO-GO because it found the original repair had covered only the
+no-shades wrapper; the live-shades regression now addresses that finding, but
+its fresh independent rereview remains required. No target build/Ymir run
+occurred. A2 remains source-complete pending the required fresh reviews and
+target cache/coherency evidence.
+
+The regression's clear-flag case was RED against the existing writer because
+the live caller passes a shades buffer even when post-light shades are not
+valid. `90fc3c76` (`fix(saturn): gate post-light terrain shades`) now copies
+the four dynamic shade words only when the compact post-light flag is set. The
+flagged path retains those values; the clear-flag path remains zero through the
+sort. The same explicit-host runtime-contract target is green after this
+minimal source repair. No snapshot logic, target build, or Ymir run changed.
