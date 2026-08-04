@@ -71,7 +71,12 @@ and the evidence report before starting another task.
   derives one nonzero generation before admission and transform publication,
   including `UINT32_MAX -> 1`, and rejects a mismatched result before its
   compact references are marked. It remains active for independent rereview
-  and target visual/counter evidence; no performance claim is made.
+  and target visual/counter evidence; no performance claim is made. The A3
+  render-cluster header also owns its GPL promotion dependency through a
+  relative path, matching sourceboot's declared `gfx`-only Saturn include
+  path; `verify-render-clusters` intentionally omits `gpl` so this boundary
+  stays host-checked. The scoped repair is committed; no target build or Ymir
+  run occurred.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.

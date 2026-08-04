@@ -52,6 +52,13 @@
 
 ### Fixed
 
+- Corrected A3 render-cluster header integration for sourceboot's declared
+  include paths. The scene-neutral gfx header now reaches its isolated GPL
+  promotion dependency relatively, and its host gate no longer supplies a
+  hidden `gpl` include directory. This prevents target compilation from
+  depending on a host-only include-path accident; target/Ymir evidence remains
+  pending.
+
 - Corrected A3 admission/transform generation agreement at 32-bit wrap. The
   renderer now derives one nonzero frame generation before either consumer,
   reuses it for admission and publication, and fails closed on a mismatched

@@ -12,7 +12,7 @@
 #include <stdint.h>
 
 #include "saturn_render_snapshot.h"
-#include "ztreme_hot_promotion.h"
+#include "../gpl/ztreme_hot_promotion.h"
 
 typedef struct sm64_saturn_render_cluster {
     int32_t bounds_min_q16[3];

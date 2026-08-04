@@ -605,6 +605,23 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   checks. This is source correction only: target cache-coherency evidence and
   the preserved unrelated runtime-contract failure remain open.
 
+### A3 sourceboot include-boundary repair (2026-08-04)
+
+- Red: compiling `render_cluster_test.c` with only the `gfx` include directory,
+  which matches sourceboot's declared Saturn include boundary, failed at
+  `saturn_render_cluster.h` because its bare `ztreme_hot_promotion.h` include
+  could not locate the isolated `gpl` header.
+- Green: the render-cluster header now uses the established relative
+  `../gpl/ztreme_hot_promotion.h` spelling. `verify-render-clusters` removes
+  its previously masking `-I.../gpl` flag and passes, so the persistent host
+  gate exercises the same boundary. No target build or Ymir run occurred.
+- Commit: the scoped `fix(saturn): make A3 GPL include self-contained` repair.
+  Independent specification and quality rereviews are not part of this scoped
+  build repair and remain pending with A3's existing target gates.
+- Remaining gates: A3 stays active; independent rereview and target visual,
+  counter, and performance evidence remain open. This repair makes no target
+  performance or correctness claim.
+
 ### A2 terminal-state ownership fix round 4 (2026-08-04)
 
 - Critical review finding: `acquire_ready()` correctly held its claim while it
