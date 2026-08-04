@@ -1374,3 +1374,43 @@ open.
   `git diff --check` PASS.
 - Fresh review and exactly one post-repair serialized target rebuild remain
   required. No repeated build or emulator launch occurred.
+
+### A5.8 live-cutover target link proof (2026-08-04)
+
+- Memory repair `0519f50d` received independent GO with no findings at audit
+  `b997fea1`. The reviewer independently passed the two focused tests and
+  confirmed the 27,744-byte relocation is master-only and leaves more than
+  the 16 KiB required LWRAM floor.
+- The sole post-review Route-0/live-input/Pipe4 `-B -j1` rebuild completed at
+  exit 0 in 522.4 seconds. Full log:
+  `.tmp-a58-cutover-target-rebuild-20260804.log`; it contains zero compile,
+  unresolved-reference, overflow, or region-fit error matches. Link, binary,
+  `SOURCE.DAT`, ISO, and CUE packaging all completed.
+- Linked sections: `.text` `0x06004000+0x7f4d8`, `.data`
+  `0x06085370+0x9cd4`, `.bss` `0x0608f060+0x6ca70`, P2 `.uncached`
+  `0x260fbad0+0x61c` with physical `___end=0x060fc0ec`, `.lwram_cmdts`
+  `0x00200000+0x20000`, and `.lwram_bss` `0x00220000+0xd87b0` ending
+  `0x002f87b0`. HWRAM margin is `0x3f14` (16,148 bytes); LWRAM margin is
+  `0x7850` (30,800 bytes). `sh-elf-nm -u` is empty.
+- Live ELF symbols include WORLD_ADMIT `0x060711d8`, WORLD_LOWER
+  `0x06070754`, ACTOR_ADMIT/transform `0x0606fc88`, ACTOR_LOWER/classify
+  `0x0606fe90`, graph publish `0x0607474c`, runtime master drain
+  `0x060757a4`, slave poll `0x06075690`, and slave entry `0x06075780`.
+  These callbacks/drains are no longer garbage-collected.
+- Disassembly proves one non-null application registration: runtime activation
+  loads `render_job_slave_entry` into `r4` and calls `cpu_dual_slave_set` once.
+  The only other linked call is libyaul reset passing null; the old
+  SlaveDriver `dual_slave_entry` is absent. Thus the accepted application has
+  exactly one CPU-DUAL owner.
+- Fresh artifacts (UTC 2026-08-04): CUE 88 bytes at `23:08:00.6561115`,
+  SHA-256 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`;
+  ISO 4,646,912 bytes at `23:07:59.2521110`, SHA-256
+  `122682dc5f775b0459b878f3fabc56965fb1ae74baf4eba0381a7fe21be91bc1`;
+  ELF 8,646,804 bytes at `23:07:51.7491114`, SHA-256
+  `40fe0b737ccbce7a0815cd9eb9b108df4510c79664066cf8dc3a12fd93abf9f2`;
+  map SHA-256 `ebbd62a560b858fb5100b4e65280e0d4537e67463090c3a9be6072f9efbc670c`;
+  `SOURCE.DAT` SHA-256
+  `9890b2d44f18c9e2828bec63de938bfb4d29136301a30ae1da99517dba2e3809`.
+- Exact desktop-test CUE:
+  `build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue`.
+  No Ymir launch or FPS claim occurred in this build gate.

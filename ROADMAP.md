@@ -16,7 +16,8 @@ and desktop-Ymir comparison; target cache behavior is proven only when that
 new live route executes.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
-scratch to LWRAM before the one reviewed rebuild.
+scratch to LWRAM. Independent review and the one target rebuild now pass;
+the next gate is the fresh desktop-Ymir comparison and live cache behavior.
 
 ## Next — frame lifetime and transfer overlap
 

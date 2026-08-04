@@ -17,9 +17,12 @@ re-review is GO at audit `1819f2b4`; the next gate is one serialized
 post-cutover target build. That build compiled but exposed a 10,032-byte
 HWRAM link overflow once callbacks became reachable. The narrow repair moves
 only the two master-owned 13,872-byte final terrain merge streams into
-`.lwram_bss`; its focused host contract is green and awaits fresh review plus
-one serialized rebuild. No post-cutover CUE, Ymir, cache-behavior, or FPS
-result exists yet.
+`.lwram_bss`; its focused host contract is green. Review is GO at
+`b997fea1`, and the sole post-review serialized rebuild
+now links and packages with 16,148 bytes HWRAM and 30,800 bytes LWRAM margin,
+zero unresolved symbols, live graph callbacks/drains, and one non-null
+CPU-DUAL application registration. A fresh post-cutover CUE exists; desktop
+Ymir, observed cache behavior, and FPS remain open.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact
@@ -46,7 +49,8 @@ payload size, and cache-through peer selection. The repair following
 `891f64b2` makes Mario's dynamic refs inline, terrain's queue snapshot
 self-contained, and publication an explicit preclaim preparation step. Its
 final prerequisite re-review is GO. Post-cutover target link/cache evidence
-remains open.
+is now split: link/section evidence is green, while observed cache behavior
+remains open for desktop Ymir.
 
 The first repair re-review found no remaining context/coherency defect but
 kept source acceptance NO-GO because part of the mutation matrix covered only

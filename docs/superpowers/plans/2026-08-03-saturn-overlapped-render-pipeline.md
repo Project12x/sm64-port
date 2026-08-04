@@ -1127,8 +1127,9 @@ types, ownership rules, or production fallbacks.
 ### Task 5.6: Descriptor-owned payload banks and atomic CPU-DUAL cutover
 
 **Status:** source-complete atomic cutover, host-green and scoped re-review GO
-at audit `1819f2b4`; one serialized post-cutover target build is the next
-gate. Audit `8e64b482` rejected the first cutover because its
+at audit `1819f2b4`; target link/section proof is green after the reviewed
+memory-fit repair, and desktop Ymir is the next gate. Audit `8e64b482`
+rejected the first cutover because its
 single WORLD_ADMIT waited for a nonexistent peer and cross-lane lower could
 read stale owner bytes. The repair makes queue transform explicitly
 single-producer and rebuilds lower's local owner map from exact DONE admit
@@ -1141,7 +1142,13 @@ master-only 13,872-byte terrain final-merge streams now reside in
 `.lwram_bss`; a focused source contract preserves that placement and tracks
 the accepted graph/runtime public calls rather than obsolete direct queue
 calls. Host RED/GREEN is complete. Fresh review and one post-repair serialized
-link remain open; no CUE/Ymir/FPS evidence is credited.
+link were required. Independent review is GO at `b997fea1`; the one
+post-review rebuild exits 0 and packages a fresh CUE. Linked HWRAM margin is
+`0x3f14` (16,148 bytes), LWRAM margin is `0x7850` (30,800 bytes), all four
+callbacks plus master/slave graph drains are live, and exactly one non-null
+application CPU-DUAL registration targets `render_job_slave_entry`. Target
+compile/link/section evidence is complete; desktop Ymir, observed target
+cache behavior, and FPS remain unchecked.
 
 - [x] **Step 1: Record the live seam and red gate.** The current frame still
   calls the fixed terrain dispatcher and chained Mario dispatcher. The new
