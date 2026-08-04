@@ -64,3 +64,35 @@ The A5.8 evidence section says `saturn_render_callback_context.c` is “not yet 
 2. Make the actual callback payload graph cache-safe: eliminate mutable nested pointers or resolve each pointer-free bank identity through reader-lane-aware P1/P2 helpers inside the callbacks.
 3. Add executable callback tests that invoke all four renderer callbacks after real publication and cover both producer lanes for both terrain and Mario; mutate generation, sequence, index, phase, payload bytes, producer lane, ready, and claim independently.
 4. Correct the evidence report's target-source-list statement. Then run a target compile/link and section-symbol audit before accepting source GO; keep CPU-DUAL cutover gated on the later target/cache/manual proof.
+
+## Re-review — repair `8a1b05e5` (2026-08-04)
+
+### Verdict
+
+**NO-GO — one important acceptance/claim gap remains.** The critical renderer-context lifetime and nested-pointer defects are repaired, but the documented full per-phase corruption matrix is not implemented.
+
+### Resolved findings
+
+- Terrain now publishes a self-contained `demo_terrain_queue_context_t`: transform job and bounded work order are copied inline. Queue callbacks reconstruct a caller-local `demo_classify_context_t`; neither callback follows the legacy stack-local `classify` or `spans` pointers.
+- Mario now copies frame-varying `s_actor_transform_refs` inline. The remaining primitive/material references are immutable generated banks resolved from local symbols rather than cached pointer fields crossing CPUs.
+- `demo_render_queue_prepare_contexts()` forms a viable future preclaim chain from terrain snapshot to all-descriptor release publication. It remains deliberately dormant, so it is not yet proof of live scheduling or target cache behavior.
+- Four phase-specific open APIs exist and are independently executed for master and slave claims. The outer release remains pointer-free and bounded.
+- The stale evidence statement about the target source list is corrected.
+- Independent strict host rerun: terrain command stream, callback context, terrain route source, actor route source, and existing terrain depth bins all PASS under Qt MinGW GCC C11 `-Wall -Wextra -Werror`.
+
+### Remaining important finding
+
+#### The claimed full mutation matrix still does not run for all four phases
+
+`run_identity_mutations()` now exercises corrupt payload bytes, producer lane, stored job index, and post-publication generation for WORLD_ADMIT, WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER (`tools/saturn/render_callback_context_test.c:70-140`). Both claimant lanes also succeed for all four phases.
+
+However, corrupt phase, incomplete `ready`, stale sequence, wrong claimant, and out-of-range identity remain in the old hand-written blocks for WORLD_LOWER and ACTOR_LOWER only (`tools/saturn/render_callback_context_test.c:143-245`). WORLD_ADMIT and ACTOR_ADMIT never receive those mutations. The plan and evidence explicitly state that generation, sequence, stored index, phase, byte bound, producer lane, ready, claim, and range are covered for all four phases; that statement is false as written.
+
+Move the entire matrix into one parameterized helper and invoke it for every phase. The helper should use the phase-specific `open_phase()` path for every mutation, including an incorrect phase-specific wrapper case, so one lower-phase generic-open test cannot stand in for the two admit callbacks.
+
+### Gates that remain open
+
+- Fresh source GO after the complete four-phase matrix.
+- Target compile/link and section placement.
+- Live sole-owner CPU-DUAL cutover.
+- Target cache behavior, CUE/Ymir, and manual FPS evidence.
