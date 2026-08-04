@@ -476,6 +476,14 @@ types, ownership rules, or production fallbacks.
   build/Ymir and both independent reviews remain unexecuted; A2 is
   source-complete only, never a performance claim.
 
+  Fix round 1 corrects the specification review’s two Important findings and
+  one Moderate finding: reset is free-slot-only (quarantine and all in-flight
+  states remain owned), release words and peer payload use target P2
+  cache-through aliases, and the public generation validator is exercised
+  directly. The focused fixture has new red evidence for reset reuse, missing
+  cache-through accessors, and missing validation API, then passes green.
+  Runtime-contract closure and a fresh independent review remain open.
+
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 
 **Files:**

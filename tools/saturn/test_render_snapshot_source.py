@@ -6,6 +6,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "src/port/saturn/gfx/saturn_render_snapshot.h"
 ACTOR = ROOT / "src/port/saturn/gfx/saturn_actor_bridge.h"
+IMPLEMENTATION = ROOT / "src/port/saturn/gfx/saturn_render_snapshot.c"
 
 
 def typedef_body(path: Path, name: str) -> str:
@@ -33,5 +34,26 @@ def test_snapshot_types_have_no_pointer_fields() -> None:
         )
 
 
+def test_release_and_peer_payload_use_cache_through_accessors() -> None:
+    header = SNAPSHOT.read_text(encoding="utf-8")
+    implementation = IMPLEMENTATION.read_text(encoding="utf-8")
+    assert "#if defined(__sh__)" in header
+    assert "CPU_CACHE_THROUGH" in header
+    for symbol in (
+        "sm64_saturn_render_snapshot_cache_through",
+        "sm64_saturn_render_snapshot_release_uncached",
+        "sm64_saturn_render_snapshot_peer_payload",
+    ):
+        assert symbol in header
+    for symbol in (
+        "sm64_saturn_render_snapshot_release_uncached",
+        "sm64_saturn_render_snapshot_peer_payload",
+    ):
+        assert symbol in implementation
+    assert "slot->release.state" not in implementation
+    assert "slot->release.generation" not in implementation
+
+
 if __name__ == "__main__":
     test_snapshot_types_have_no_pointer_fields()
+    test_release_and_peer_payload_use_cache_through_accessors()

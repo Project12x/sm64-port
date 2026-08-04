@@ -7,6 +7,10 @@
 
 #include "saturn_actor_bridge.h"
 
+#if defined(__sh__)
+#include <cpu/cache.h>
+#endif
+
 /* This project-owned state machine uses only the bank handoff pattern studied
  * in SlaveDriver Engine (a8986591557b6e680550d3c23970284d3b38ff8f,
  * GPL-3.0-or-later) and Sonic Z-Treme (cff75451c1616aac1236fc2b44223902b55c706b,
@@ -59,12 +63,48 @@ typedef struct sm64_saturn_render_snapshot_bank {
     sm64_saturn_render_snapshot_slot_t slot[2];
 } sm64_saturn_render_snapshot_bank_t;
 
+/* Payload is written through its ordinary cached address. Release state and
+ * a peer's immutable payload use P2 cache-through aliases on SH-2; the host
+ * identity branch preserves the exact protocol for fixture coverage. */
+static inline const void *sm64_saturn_render_snapshot_cache_through(
+    const void *cached)
+{
+    if (cached == NULL) return NULL;
+#if defined(__sh__)
+    return (const void *)(CPU_CACHE_THROUGH | (uintptr_t)cached);
+#else
+    return cached;
+#endif
+}
+
+static inline volatile sm64_saturn_render_snapshot_release_t *
+sm64_saturn_render_snapshot_release_uncached(
+    sm64_saturn_render_snapshot_slot_t *slot)
+{
+    if (slot == NULL) return NULL;
+    return (volatile sm64_saturn_render_snapshot_release_t *)
+        sm64_saturn_render_snapshot_cache_through(&slot->release);
+}
+
+static inline const sm64_saturn_render_snapshot_t *
+sm64_saturn_render_snapshot_peer_payload(
+    const sm64_saturn_render_snapshot_slot_t *slot)
+{
+    if (slot == NULL) return NULL;
+    return (const sm64_saturn_render_snapshot_t *)
+        sm64_saturn_render_snapshot_cache_through(&slot->snapshot);
+}
+
 _Static_assert(sizeof(sm64_saturn_render_view_t) == 92U,
                "render-view ABI must remain fixed-width");
 _Static_assert(sizeof(sm64_saturn_render_snapshot_release_t) == 8U,
                "snapshot release record must remain two words");
 
+/* Initialization hygiene for already-FREE slots only. It never releases a
+ * WRITING, READY, RENDERING, COMPLETE, or QUARANTINED generation. */
 void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank);
+bool sm64_saturn_render_snapshot_generation_valid(
+    const sm64_saturn_render_snapshot_t *snapshot, uint32_t generation);
 bool sm64_saturn_render_snapshot_begin_write(
     sm64_saturn_render_snapshot_bank_t *bank, uint32_t generation,
     sm64_saturn_render_snapshot_t **out);

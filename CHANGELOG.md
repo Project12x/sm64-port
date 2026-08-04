@@ -11,6 +11,15 @@
   quarantined slots fail closed so later pre-transform admission cannot mix
   live game state or reuse an unsafe bank.
 
+### Fixed
+
+- Hardened snapshot-bank recovery so public initialization touches only
+  already-free slots: quarantined and in-flight generations remain terminal or
+  owned until explicit lifecycle retirement. Release state and peer payload are
+  now accessed through SH-2 P2 cache-through helpers (host identity aliases
+  preserve fixture coverage), and callers can use one exported generation
+  validator instead of duplicating mixed-frame checks.
+
 - Added an opt-in desktop Ymir launch helper that records the exact SDL3
   command, working directory, project profile, staged CUE, and CUE-referenced
   ISO identities before manual testing. It keeps the 32-Mbit DRAM cart

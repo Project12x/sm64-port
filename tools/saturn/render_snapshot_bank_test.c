@@ -39,8 +39,11 @@ static void test_rejects_stale_and_mixed_generations(void)
     assert(!sm64_saturn_render_snapshot_publish(&bank, slot));
     slot->camera.generation = 9U;
     slot->actor_generation = 8U;
+    assert(!sm64_saturn_render_snapshot_generation_valid(slot, 9U));
     assert(!sm64_saturn_render_snapshot_publish(&bank, slot));
     slot->actor_generation = 9U;
+    assert(sm64_saturn_render_snapshot_generation_valid(slot, 9U));
+    assert(!sm64_saturn_render_snapshot_generation_valid(slot, 8U));
     assert(sm64_saturn_render_snapshot_publish(&bank, slot));
     assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 8U) == NULL);
     assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 9U) == slot);
@@ -63,6 +66,8 @@ static void test_rejects_double_acquire_and_quarantined_reuse(void)
     assert(!sm64_saturn_render_snapshot_retire(&bank, slot));
     assert(sm64_saturn_render_snapshot_begin_write(&bank, 12U, &other));
     assert(other != slot);
+    sm64_saturn_render_snapshot_reset(&bank);
+    assert(!sm64_saturn_render_snapshot_begin_write(&bank, 13U, &other));
 }
 
 int main(void)

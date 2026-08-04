@@ -58,3 +58,23 @@ banks`).
 - Obtain independent specification and code-quality reviews.
 - Run the later authorized target build/evidence gate; no target build or Ymir
   run was performed for A2.
+
+## Specification-review fix round 1
+
+The review correctly found three gaps. First, public reset cleared a terminal
+quarantine; the new test creates a quarantined slot plus a writing companion,
+calls reset, and proves no third allocation is available. Reset now clears only
+already-free slots. Second, `volatile` and a compiler fence did not select the
+SH-2 uncached address: release words and peer payload now use explicit P2
+`CPU_CACHE_THROUGH` helpers, while host aliases remain identity for the real
+state-machine fixture. The source test rejects both an absent helper and direct
+release-field accesses. Third, the exported
+`sm64_saturn_render_snapshot_generation_valid(snapshot, generation)` now owns
+the nonzero/expected/camera/actor coherence rule and is called by publish and
+acquire as well as directly by the fixture.
+
+TDD red evidence was observed in order: reset-reuse assertion failure,
+cache-through structural assertion failure, then C compilation failure for the
+missing generation-validator declaration. The focused gate is green after the
+repair. Runtime contracts still fail at the preserved terrain-command
+comparison, and target/Ymir plus fresh reviews remain open.

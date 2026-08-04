@@ -17,7 +17,9 @@ static sm64_saturn_render_snapshot_slot_t *snapshot_slot(
 
     if (bank == NULL || snapshot == NULL) return NULL;
     for (index = 0U; index < 2U; index++) {
-        if (snapshot == &bank->slot[index].snapshot) return &bank->slot[index];
+        if (snapshot == &bank->slot[index].snapshot ||
+            snapshot == sm64_saturn_render_snapshot_peer_payload(
+                &bank->slot[index])) return &bank->slot[index];
     }
     return NULL;
 }
@@ -28,11 +30,23 @@ void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank)
 
     if (bank == NULL) return;
     for (index = 0U; index < 2U; index++) {
+        volatile sm64_saturn_render_snapshot_release_t *const release =
+            sm64_saturn_render_snapshot_release_uncached(&bank->slot[index]);
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
         memset(&bank->slot[index].snapshot, 0, sizeof(bank->slot[index].snapshot));
-        bank->slot[index].release.generation = 0U;
-        bank->slot[index].release.state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
+        release->generation = 0U;
+        release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
     }
     sm64_saturn_render_snapshot_fence();
+}
+
+bool sm64_saturn_render_snapshot_generation_valid(
+    const sm64_saturn_render_snapshot_t *snapshot, uint32_t generation)
+{
+    return snapshot != NULL && generation != 0U &&
+        snapshot->generation == generation &&
+        snapshot->camera.generation == generation &&
+        snapshot->actor_generation == generation;
 }
 
 bool sm64_saturn_render_snapshot_begin_write(
@@ -45,12 +59,14 @@ bool sm64_saturn_render_snapshot_begin_write(
     if (bank == NULL || out == NULL || generation == 0U) return false;
     for (index = 0U; index < 2U; index++) {
         sm64_saturn_render_snapshot_slot_t *const slot = &bank->slot[index];
-        if (slot->release.state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
+        volatile sm64_saturn_render_snapshot_release_t *const release =
+            sm64_saturn_render_snapshot_release_uncached(slot);
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
         memset(&slot->snapshot, 0, sizeof(slot->snapshot));
         slot->snapshot.generation = generation;
-        slot->release.generation = generation;
+        release->generation = generation;
         sm64_saturn_render_snapshot_fence();
-        slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_WRITING;
+        release->state = SM64_SATURN_RENDER_SNAPSHOT_WRITING;
         *out = &slot->snapshot;
         return true;
     }
@@ -62,16 +78,18 @@ bool sm64_saturn_render_snapshot_publish(
     sm64_saturn_render_snapshot_t *snapshot)
 {
     sm64_saturn_render_snapshot_slot_t *const slot = snapshot_slot(bank, snapshot);
+    volatile sm64_saturn_render_snapshot_release_t *const release =
+        sm64_saturn_render_snapshot_release_uncached(slot);
 
-    if (slot == NULL || slot->release.state != SM64_SATURN_RENDER_SNAPSHOT_WRITING ||
-        snapshot->generation == 0U ||
-        slot->release.generation != snapshot->generation ||
-        snapshot->camera.generation != snapshot->generation ||
-        snapshot->actor_generation != snapshot->generation) return false;
+    if (slot == NULL || release == NULL ||
+        release->state != SM64_SATURN_RENDER_SNAPSHOT_WRITING ||
+        !sm64_saturn_render_snapshot_generation_valid(snapshot,
+                                                       snapshot->generation) ||
+        release->generation != snapshot->generation) return false;
     sm64_saturn_render_snapshot_fence();
-    slot->release.generation = snapshot->generation;
+    release->generation = snapshot->generation;
     sm64_saturn_render_snapshot_fence();
-    slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_READY;
+    release->state = SM64_SATURN_RENDER_SNAPSHOT_READY;
     return true;
 }
 
@@ -84,15 +102,19 @@ sm64_saturn_render_snapshot_acquire_ready(
     if (bank == NULL || generation == 0U) return NULL;
     for (index = 0U; index < 2U; index++) {
         sm64_saturn_render_snapshot_slot_t *const slot = &bank->slot[index];
-        if (slot->release.state != SM64_SATURN_RENDER_SNAPSHOT_READY ||
-            slot->release.generation != generation) continue;
+        volatile sm64_saturn_render_snapshot_release_t *const release =
+            sm64_saturn_render_snapshot_release_uncached(slot);
+        const sm64_saturn_render_snapshot_t *const payload =
+            sm64_saturn_render_snapshot_peer_payload(slot);
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_READY ||
+            release->generation != generation) continue;
         sm64_saturn_render_snapshot_fence();
-        if (slot->snapshot.generation != generation ||
-            slot->snapshot.camera.generation != generation ||
-            slot->snapshot.actor_generation != generation) return NULL;
-        slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_RENDERING;
+        if (!sm64_saturn_render_snapshot_generation_valid(payload, generation)) {
+            return NULL;
+        }
+        release->state = SM64_SATURN_RENDER_SNAPSHOT_RENDERING;
         sm64_saturn_render_snapshot_fence();
-        return &slot->snapshot;
+        return payload;
     }
     return NULL;
 }
@@ -102,12 +124,15 @@ bool sm64_saturn_render_snapshot_complete(
     const sm64_saturn_render_snapshot_t *snapshot)
 {
     sm64_saturn_render_snapshot_slot_t *const slot = snapshot_slot(bank, snapshot);
+    volatile sm64_saturn_render_snapshot_release_t *const release =
+        sm64_saturn_render_snapshot_release_uncached(slot);
 
-    if (slot == NULL || slot->release.state != SM64_SATURN_RENDER_SNAPSHOT_RENDERING) {
+    if (slot == NULL || release == NULL ||
+        release->state != SM64_SATURN_RENDER_SNAPSHOT_RENDERING) {
         return false;
     }
     sm64_saturn_render_snapshot_fence();
-    slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_COMPLETE;
+    release->state = SM64_SATURN_RENDER_SNAPSHOT_COMPLETE;
     return true;
 }
 
@@ -116,14 +141,17 @@ bool sm64_saturn_render_snapshot_retire(
     const sm64_saturn_render_snapshot_t *snapshot)
 {
     sm64_saturn_render_snapshot_slot_t *const slot = snapshot_slot(bank, snapshot);
+    volatile sm64_saturn_render_snapshot_release_t *const release =
+        sm64_saturn_render_snapshot_release_uncached(slot);
 
-    if (slot == NULL || slot->release.state != SM64_SATURN_RENDER_SNAPSHOT_COMPLETE) {
+    if (slot == NULL || release == NULL ||
+        release->state != SM64_SATURN_RENDER_SNAPSHOT_COMPLETE) {
         return false;
     }
     memset(&slot->snapshot, 0, sizeof(slot->snapshot));
-    slot->release.generation = 0U;
+    release->generation = 0U;
     sm64_saturn_render_snapshot_fence();
-    slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
+    release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
     return true;
 }
 
@@ -135,11 +163,13 @@ bool sm64_saturn_render_snapshot_quarantine(
     if (bank == NULL || generation == 0U) return false;
     for (index = 0U; index < 2U; index++) {
         sm64_saturn_render_snapshot_slot_t *const slot = &bank->slot[index];
-        if (slot->release.generation != generation ||
-            slot->release.state == SM64_SATURN_RENDER_SNAPSHOT_FREE ||
-            slot->release.state == SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED) continue;
+        volatile sm64_saturn_render_snapshot_release_t *const release =
+            sm64_saturn_render_snapshot_release_uncached(slot);
+        if (release->generation != generation ||
+            release->state == SM64_SATURN_RENDER_SNAPSHOT_FREE ||
+            release->state == SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED) continue;
         sm64_saturn_render_snapshot_fence();
-        slot->release.state = SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED;
+        release->state = SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED;
         return true;
     }
     return false;

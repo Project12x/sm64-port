@@ -102,3 +102,13 @@ was run. Task behavior/docs commit: `56866662`
 (`feat(saturn): add immutable render snapshot banks`). Independent
 specification and quality reviews, runtime-contract closure, and target
 evidence remain required.
+
+Task 2/A2 fix round 1: the first independent specification review was NO-GO
+for terminal-quarantine reset escape, missing target cache-through accesses,
+and a missing public generation validator. Red lifecycle/source/API tests
+observed each gap. The repair preserves every non-FREE state through reset,
+uses `CPU_CACHE_THROUGH` release and peer-payload accessors on SH-2 with host
+identity aliases, and exports `sm64_saturn_render_snapshot_generation_valid`.
+The focused snapshot-bank gate is green; runtime contracts still fail at the
+preserved terrain-command comparison and no target/Ymir gate was run. Fresh
+independent spec and quality review remain required.

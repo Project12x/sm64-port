@@ -475,3 +475,20 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   It is not attributed to A2 and remains uncredited. No target build or Ymir
   run was performed. A2 is source-complete only and requires independent
   specification and code-quality review before task completion.
+
+### A2 specification-review fix round 1 (2026-08-04)
+
+- Red: the lifecycle fixture showed that `reset()` incorrectly made the second
+  allocation available after a slot was quarantined and the other was writing.
+  The source guard separately failed before the required cache-through helper
+  names existed, and the C fixture then failed to compile before the exported
+  generation validator existed.
+- Green: reset clears only already-free slots; no lifecycle state, including
+  `QUARANTINED`, is downgraded by the public API. Release state is read/written
+  through the SH-2 `CPU_CACHE_THROUGH` accessor, and acquired peer payloads
+  use the corresponding cache-through alias. The host identity branch permits
+  the same state-machine test to execute without claiming host cache behavior.
+- Green: `verify-render-snapshot-bank` passes the terminal-reset regression,
+  direct generation-validator checks, and structural rejection of direct
+  release-field access. No target build/Ymir was run. The unrelated
+  `verify-runtime-contracts` failure remains open and uncredited.
