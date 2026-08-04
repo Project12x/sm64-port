@@ -757,3 +757,4 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   quality rereview, runtime-contract infrastructure closure, and target
   visual/counter/FPS evidence remain required; no target build, CUE, or Ymir
   run occurred.
+- Commit: `c5944bac` (`fix(saturn): admit Mario meshlets from live poses`).

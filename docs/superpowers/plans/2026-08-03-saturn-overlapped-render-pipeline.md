@@ -744,7 +744,8 @@ types, ownership rules, or production fallbacks.
   extent, bins translucent work by furthest extent, and publishes the exact
   globally deduplicated generated position union to the transform worker. Its
   yaw/view-plane, walking-pose, compact-stream, and existing mutation gates
-  require a fresh independent rereview; no target evidence is authorized here.
+  are in remediation commit `c5944bac`; they require a fresh independent
+  rereview, and no target evidence is authorized here.
 
   Commit with `perf(saturn): cull and bin Mario by meshlet`.
 
