@@ -28,7 +28,10 @@ def build_render_clusters(mesh: dict[str, object],
                 "min": [min(point[axis] for point in points) for axis in range(3)],
                 "max": [max(point[axis] for point in points) for axis in range(3)],
             },
-            "position_refs": [[0, 1, 2], [0, 1, 2], [0, 1, 2] if far_enabled else []],
+            "position_refs": [[ordinal * 3, ordinal * 3 + 1, ordinal * 3 + 2],
+                              [ordinal * 3, ordinal * 3 + 1, ordinal * 3 + 2],
+                              [ordinal * 3, ordinal * 3 + 1, ordinal * 3 + 2]
+                              if far_enabled else []],
             "position_values": points,
         })
     return clusters
@@ -39,6 +42,16 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
     positions: list[list[int]] = []
     primitives: list[dict[str, object]] = []
     clusters = build_render_clusters(mesh, scene)
+    cluster_position_refs: list[int] = []
+    for cluster in clusters:
+        firsts: list[int] = []
+        counts: list[int] = []
+        for refs in cluster["position_refs"]:
+            firsts.append(len(cluster_position_refs))
+            counts.append(len(refs))
+            cluster_position_refs.extend(refs)
+        cluster["position_ref_first"] = firsts
+        cluster["position_ref_count"] = counts
     for fragment in scene["fragments"]:
         source = mesh["primitives"][int(fragment["source_primitive"])]
         material = mesh["materials"][int(source["material"])]
@@ -82,6 +95,7 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         "#ifndef SM64_SATURN_BOB_BSP_FRAGMENTS_H",
         "#define SM64_SATURN_BOB_BSP_FRAGMENTS_H",
         "#include <stdint.h>",
+        "#include \"saturn_render_cluster.h\"",
         f"#define SM64_SATURN_BOB_FRAGMENT_POSITION_COUNT {len(positions)}U",
         f"#define SM64_SATURN_BOB_FRAGMENT_PRIMITIVE_COUNT {len(primitives)}U",
         f"#define SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT {bsp['node_count']}U",
@@ -89,6 +103,7 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         "#define SM64_SATURN_BOB_FRAGMENT_LOD_TIER_COUNT 3U",
         f"#define SM64_SATURN_BOB_FRAGMENT_LOD_POSITION_REF_COUNT {len(lod_position_stream)}U",
         f"#define SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT {len(clusters)}U",
+        f"#define SM64_SATURN_BOB_FRAGMENT_CLUSTER_POSITION_REF_COUNT {len(cluster_position_refs)}U",
         "typedef struct sm64_saturn_bob_fragment_primitive {",
         "    uint16_t indices[4]; uint16_t source0; uint16_t source1; uint8_t rgb[3];",
         "    uint8_t textured; uint8_t tile_size; uint32_t tile_offset;",
@@ -99,18 +114,20 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
     lines.extend("    {%d, %d, %d}," % tuple(point) for point in positions)
     lines += [
         "};",
-        "typedef struct sm64_saturn_bob_fragment_cluster_metadata {",
-        "    int32_t bounds_min[3]; int32_t bounds_max[3];",
-        "    uint16_t primitive_first; uint16_t primitive_count;",
-        "    uint16_t material_partition; uint16_t source_ordinal; uint8_t mandatory;",
-        "} sm64_saturn_bob_fragment_cluster_metadata_t;",
-        "static const sm64_saturn_bob_fragment_cluster_metadata_t sm64_saturn_bob_fragment_render_clusters[SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT] = {",
+        "static const uint16_t sm64_saturn_bob_fragment_cluster_position_refs[SM64_SATURN_BOB_FRAGMENT_CLUSTER_POSITION_REF_COUNT] = {",
+    ]
+    lines.extend("    " + ", ".join(str(value) + "U" for value in cluster_position_refs[offset:offset + 16]) + ","
+                 for offset in range(0, len(cluster_position_refs), 16))
+    lines += [
+        "};",
+        "static const sm64_saturn_render_cluster_t sm64_saturn_bob_fragment_render_clusters[SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT] = {",
     ]
     for cluster in clusters:
-        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, %dU}," % (
-            ", ".join(map(str, cluster["bounds"]["min"])),
-            ", ".join(map(str, cluster["bounds"]["max"])),
+        lines.append("    {{%s}, {%s}, %dU, %dU, {%dU, %dU, %dU}, {%dU, %dU, %dU}, %dU, %dU, %dU, {0U, 0U, 0U}}," % (
+            ", ".join(str(value * 65536) for value in cluster["bounds"]["min"]),
+            ", ".join(str(value * 65536) for value in cluster["bounds"]["max"]),
             cluster["primitive_first"], cluster["primitive_count"],
+            *cluster["position_ref_first"], *cluster["position_ref_count"],
             cluster["material_partition"], cluster["source_ordinal"],
             1 if cluster["mandatory"] else 0))
     lines += [

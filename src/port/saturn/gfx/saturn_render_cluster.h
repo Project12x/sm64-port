@@ -60,7 +60,11 @@ static inline bool sm64_saturn_render_cluster_admit(
     if (cluster->mandatory == 0U && furthest_depth <= 0)
         return false;
 
-    const int32_t depth = nearest_depth > 0 ? nearest_depth : 0;
+    /* Bounds and view positions are Q16.16, while the shared LOD policy is
+     * expressed in whole world units. Keep the conversion at this generic
+     * boundary so callers cannot accidentally compare Q16 depth against raw
+     * threshold constants. */
+    const int32_t depth = nearest_depth > 0 ? nearest_depth >> 16 : 0;
     const saturn_lod_tier_t tier = saturn_lod_select(
         lod_state->previous, depth, 0U, &lod_state->thresholds);
     if (cluster->position_ref_count[tier] == 0U)

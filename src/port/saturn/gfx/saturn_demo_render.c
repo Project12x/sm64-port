@@ -41,10 +41,18 @@
 #undef SM64_SATURN_BOB_LOD_POSITION_REF_COUNT
 #undef sm64_saturn_bob_lod_position_ref_offsets
 #undef sm64_saturn_bob_lod_position_refs
+#undef SM64_SATURN_BOB_CLUSTER_COUNT
+#undef SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT
+#undef sm64_saturn_bob_render_clusters
+#undef sm64_saturn_bob_cluster_position_refs
 #define SM64_SATURN_BOB_LOD_TIER_COUNT SM64_SATURN_BOB_FRAGMENT_LOD_TIER_COUNT
 #define SM64_SATURN_BOB_LOD_POSITION_REF_COUNT SM64_SATURN_BOB_FRAGMENT_LOD_POSITION_REF_COUNT
 #define sm64_saturn_bob_lod_position_ref_offsets sm64_saturn_bob_fragment_lod_position_ref_offsets
 #define sm64_saturn_bob_lod_position_refs sm64_saturn_bob_fragment_lod_position_refs
+#define SM64_SATURN_BOB_CLUSTER_COUNT SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT
+#define SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT SM64_SATURN_BOB_FRAGMENT_CLUSTER_POSITION_REF_COUNT
+#define sm64_saturn_bob_render_clusters sm64_saturn_bob_fragment_render_clusters
+#define sm64_saturn_bob_cluster_position_refs sm64_saturn_bob_fragment_cluster_position_refs
 #endif
 #include "saturn_mario_actor_mesh.h"
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
@@ -179,6 +187,11 @@ static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_pretransform_lod_tier;
+static sm64_saturn_render_lod_state_t s_render_cluster_lod[
+    SM64_SATURN_BOB_CLUSTER_COUNT];
+static sm64_saturn_render_cluster_result_t s_admitted_cluster_results[
+    SM64_SATURN_BOB_CLUSTER_COUNT];
+static uint16_t s_admitted_cluster_count;
 static saturn_lod_scene_t s_lod_scene;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
@@ -559,18 +572,16 @@ static void demo_spatial_admit(
 }
 #endif
 
-static bool demo_pretransform_primitive_admitted(uint16_t primitive_index)
+static int32_t demo_q16_from_world(int32_t value)
 {
-    if (primitive_index >= SM64_SATURN_BOB_PRIMITIVE_COUNT)
-        return false;
-    const sm64_saturn_bob_primitive_t *const primitive =
-        &s_bob_primitives_active[primitive_index];
-    return s_pretransform_lod_tier != SATURN_LOD_FAR ||
-        primitive->source0 < DEMO_LOD_MANDATORY_ROUTE_PREFIX ||
-        sm64_saturn_bob_lod_far_mask[primitive_index] != 0U;
+    if (value > INT32_MAX / 65536) return INT32_MAX;
+    if (value < INT32_MIN / 65536) return INT32_MIN;
+    return value * 65536;
 }
 
-static void demo_prepare_render_work_order(void)
+static void demo_prepare_render_work_order(
+    const sm64_saturn_camera_transform_t *camera,
+    sm64_saturn_fast3d_profile_t *profile)
 {
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     /* BSP traversal has already appended the bounded work list. */
@@ -579,13 +590,45 @@ static void demo_prepare_render_work_order(void)
     for (uint16_t i = 0U; i < SM64_SATURN_BOB_PRIMITIVE_COUNT; i++)
         s_render_work_order[s_render_work_count++] = i;
 #endif
-    uint16_t admitted = 0U;
-    for (uint16_t work = 0U; work < s_render_work_count; work++) {
+    const sm64_saturn_render_view_t view = {
+        .camera_position_q16 = {
+            demo_q16_from_world(camera->position.x),
+            demo_q16_from_world(camera->position.y),
+            demo_q16_from_world(camera->position.z)},
+        .generation = s_transform_publish_sequence + 1U,
+    };
+    const uint16_t candidate_count = s_render_work_count;
+    s_render_work_count = 0U;
+    s_admitted_cluster_count = 0U;
+    for (uint16_t work = 0U; work < candidate_count; work++) {
         const uint16_t primitive = s_render_work_order[work];
-        if (demo_pretransform_primitive_admitted(primitive))
-            s_render_work_order[admitted++] = primitive;
+        if (primitive >= SM64_SATURN_BOB_CLUSTER_COUNT) {
+            profile->pipeline_faults++;
+            continue;
+        }
+        sm64_saturn_render_lod_state_t *const lod =
+            &s_render_cluster_lod[primitive];
+        if (lod->thresholds.mid_enter_depth == 0 &&
+            lod->thresholds.far_enter_depth == 0)
+            lod->thresholds = saturn_lod_default_thresholds();
+        sm64_saturn_render_cluster_result_t result;
+        profile->demo_render_clusters_tested++;
+        if (!sm64_saturn_render_cluster_admit(
+                &sm64_saturn_bob_render_clusters[primitive], &view, lod,
+                &result))
+            continue;
+        if (result.primitive_first != primitive || result.primitive_count != 1U ||
+            result.position_ref_first > SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT ||
+            result.position_ref_count >
+                SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT -
+                    result.position_ref_first) {
+            profile->pipeline_faults++;
+            continue;
+        }
+        s_render_work_order[s_render_work_count++] = primitive;
+        s_admitted_cluster_results[s_admitted_cluster_count++] = result;
+        profile->demo_render_clusters_admitted++;
     }
-    s_render_work_count = admitted;
 }
 
 /* The master finishes this complete bitset before it publishes either SH-2
@@ -597,20 +640,22 @@ static uint16_t demo_build_visible_position_set(
     sm64_saturn_visible_position_set_reset(
         &s_visible_position_set, s_visible_position_words,
         DEMO_VISIBLE_POSITION_WORDS, SM64_SATURN_BOB_POSITION_COUNT);
-    const uint8_t tier = s_pretransform_lod_tier;
-    if (tier >= SM64_SATURN_BOB_LOD_TIER_COUNT) {
-        profile->pipeline_faults++;
-        return 0U;
-    }
-    const uint16_t first = sm64_saturn_bob_lod_position_ref_offsets[tier];
-    const uint16_t end = sm64_saturn_bob_lod_position_ref_offsets[tier + 1U];
-    if (first > SM64_SATURN_BOB_LOD_POSITION_REF_COUNT ||
-        end < first || end > SM64_SATURN_BOB_LOD_POSITION_REF_COUNT ||
-        !sm64_saturn_visible_position_set_mark_refs(
-            &s_visible_position_set, &sm64_saturn_bob_lod_position_refs[first],
-            (uint16_t)(end - first))) {
-        profile->pipeline_faults++;
-        return 0U;
+    for (uint16_t admitted = 0U; admitted < s_admitted_cluster_count;
+         admitted++) {
+        const sm64_saturn_render_cluster_result_t *const result =
+            &s_admitted_cluster_results[admitted];
+        if (result->position_ref_first >
+                SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT ||
+            result->position_ref_count >
+                SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT -
+                    result->position_ref_first ||
+            !sm64_saturn_visible_position_set_mark_refs(
+                &s_visible_position_set,
+                &sm64_saturn_bob_cluster_position_refs[
+                    result->position_ref_first], result->position_ref_count)) {
+            profile->pipeline_faults++;
+            return 0U;
+        }
     }
     const uint16_t required_positions =
         sm64_saturn_visible_position_set_count(&s_visible_position_set);
@@ -1223,9 +1268,13 @@ void sm64_saturn_demo_render_init(void)
 void sm64_saturn_demo_render_scene_observe(bool active, int16_t level,
                                            int16_t area)
 {
-    (void)saturn_lod_scene_observe(&s_lod_scene, active, level, area,
-                                   s_primitive_lod_tier,
-                                   sizeof(s_primitive_lod_tier));
+    if (saturn_lod_scene_observe(&s_lod_scene, active, level, area,
+                                 s_primitive_lod_tier,
+                                 sizeof(s_primitive_lod_tier))) {
+        /* Cluster hysteresis belongs to the immutable generated scene bank;
+         * a level/area transition may not inherit its previous depth tier. */
+        memset(s_render_cluster_lod, 0, sizeof(s_render_cluster_lod));
+    }
 }
 
 static sm64_saturn_camera_transform_t demo_camera(
@@ -2430,18 +2479,16 @@ void sm64_saturn_demo_render_frame(
         .coord_max = terrain_job.coord_max,
         .clip_near = false
     };
-    /* The compiled demo configuration selects the admission tier before any
-     * position transform. The generated span is exact for that tier; later
-     * projected-area/near rejection remains authoritative per primitive. */
+    /* Mario keeps the selected build tier while terrain cluster admission
+     * below derives each tier from the immutable camera view and its own
+     * hysteretic state before any worker transforms positions. */
     s_pretransform_lod_tier = (uint8_t)SATURN_DEMO_POLY_TIER;
-    profile->demo_render_clusters_tested++;
-    profile->demo_render_clusters_admitted++;
     vdp1_vram_partitions_t partitions;
     vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
-    demo_prepare_render_work_order();
+    demo_prepare_render_work_order(&terrain_job.camera, profile);
     const uint16_t required_positions = demo_build_visible_position_set(profile);
     const uint16_t work_split = demo_choose_work_split();
 #if SATURN_SLAVE_RENDER

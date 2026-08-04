@@ -49,9 +49,11 @@ class RenderClusterGenerationTest(unittest.TestCase):
         marking = source[begin:end]
 
         self.assertIn("sm64_saturn_visible_position_set_mark_refs", marking)
-        self.assertIn("sm64_saturn_bob_lod_position_ref_offsets", marking)
+        self.assertIn("s_admitted_cluster_results", marking)
+        self.assertIn("sm64_saturn_bob_cluster_position_refs", marking)
         self.assertNotIn("sm64_saturn_visible_position_set_mark_primitive", marking)
-        self.assertIn("demo_pretransform_primitive_admitted", source)
+        self.assertIn("sm64_saturn_render_cluster_admit", source)
+        self.assertIn("sm64_saturn_bob_cluster_position_refs", source)
 
     def test_renderer_uses_mario_selected_tier_reference_stream(self) -> None:
         root = Path(__file__).resolve().parents[2]

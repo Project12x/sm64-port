@@ -63,9 +63,11 @@ and the evidence report before starting another task.
   reference span with explicit original-vertex ownership. Generated BOB and
   fragment cluster metadata is host-checked for tight bounds, one material,
   mandatory retention, and FAR reduction; post-transform projected rejection
-  remains. It is not source-complete: generic runtime admission over those
-  cluster records, independent review, and target visual/counter evidence
-  remain; no performance claim is made.
+  remains. The generic runtime now admits those cluster records from the
+  frame camera and builds the exact admitted position union before workers;
+  tier state resets at scene transitions. It is not source-complete:
+  independent review and target visual/counter evidence remain; no performance
+  claim is made.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.

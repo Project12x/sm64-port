@@ -76,6 +76,16 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
             "textured": 1 if tile else 0,
         })
     clusters = build_render_clusters(mesh, manifest)
+    cluster_position_refs: list[int] = []
+    for cluster in clusters:
+        firsts: list[int] = []
+        counts: list[int] = []
+        for refs in cluster["position_refs"]:
+            firsts.append(len(cluster_position_refs))
+            counts.append(len(refs))
+            cluster_position_refs.extend(refs)
+        cluster["position_ref_first"] = firsts
+        cluster["position_ref_count"] = counts
     # Keep one shared position/normal identity while baking deterministic
     # material/primitive masks for runtime LOD selection. The mid tier keeps
     # every source primitive; the far tier drops one of every eight non-
@@ -117,12 +127,13 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
         "#ifndef SM64_SATURN_BOB_SCENE_H",
         "#define SM64_SATURN_BOB_SCENE_H",
         "#include <stdint.h>",
+        "#include \"saturn_render_cluster.h\"",
         f"#define SM64_SATURN_BOB_POSITION_COUNT {len(positions)}U",
         f"#define SM64_SATURN_BOB_PRIMITIVE_COUNT {len(primitives)}U",
         "#define SM64_SATURN_BOB_LOD_TIER_COUNT 3U",
         f"#define SM64_SATURN_BOB_LOD_POSITION_REF_COUNT {len(flat_lod_position_refs)}U",
         f"#define SM64_SATURN_BOB_CLUSTER_COUNT {len(primitives)}U",
-        f"#define SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT {sum(len(refs) for cluster in clusters for refs in cluster['position_refs'])}U",
+        f"#define SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT {len(cluster_position_refs)}U",
         "/* bob_bsp.h owns the node-span arrays; identity must match exactly. */",
         f"#define SM64_SATURN_BOB_SCENE_NODE_SPAN_COUNT {node_span_count}U",
         f"#define SM64_SATURN_BOB_SCENE_PRIMITIVE_REF_COUNT {primitive_ref_count}U",
@@ -151,18 +162,19 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
         )
     lines += [
         "};",
-        "typedef struct sm64_saturn_bob_render_cluster_metadata {",
-        "    int32_t bounds_min[3]; int32_t bounds_max[3];",
-        "    uint16_t primitive_first; uint16_t primitive_count;",
-        "    uint16_t material_partition; uint16_t source_ordinal; uint8_t mandatory;",
-        "} sm64_saturn_bob_render_cluster_metadata_t;",
-        "static const sm64_saturn_bob_render_cluster_metadata_t sm64_saturn_bob_render_clusters[SM64_SATURN_BOB_CLUSTER_COUNT] = {",
+        "static const uint16_t sm64_saturn_bob_cluster_position_refs[SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT] = {",
+    ]
+    lines.extend(c_array(cluster_position_refs, width=16))
+    lines += [
+        "};",
+        "static const sm64_saturn_render_cluster_t sm64_saturn_bob_render_clusters[SM64_SATURN_BOB_CLUSTER_COUNT] = {",
     ]
     for cluster in clusters:
-        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, %dU}," % (
-            ", ".join(map(str, cluster["bounds"]["min"])),
-            ", ".join(map(str, cluster["bounds"]["max"])),
+        lines.append("    {{%s}, {%s}, %dU, %dU, {%dU, %dU, %dU}, {%dU, %dU, %dU}, %dU, %dU, %dU, {0U, 0U, 0U}}," % (
+            ", ".join(str(value * 65536) for value in cluster["bounds"]["min"]),
+            ", ".join(str(value * 65536) for value in cluster["bounds"]["max"]),
             cluster["primitive_first"], cluster["primitive_count"],
+            *cluster["position_ref_first"], *cluster["position_ref_count"],
             cluster["material_partition"], cluster["source_ordinal"],
             1 if cluster["mandatory"] else 0))
     lines += [

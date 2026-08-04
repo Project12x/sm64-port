@@ -6,8 +6,8 @@
 static sm64_saturn_render_cluster_t cluster(void)
 {
     return (sm64_saturn_render_cluster_t){
-        .bounds_min_q16 = {-16, -16, 64},
-        .bounds_max_q16 = {16, 16, 96},
+        .bounds_min_q16 = {-16 * 65536, -16 * 65536, 64 * 65536},
+        .bounds_max_q16 = {16 * 65536, 16 * 65536, 96 * 65536},
         .primitive_first = 7U,
         .primitive_count = 3U,
         .position_ref_first = {0U, 8U, 12U},
@@ -19,7 +19,7 @@ static sm64_saturn_render_cluster_t cluster(void)
 static sm64_saturn_render_view_t view_at(int32_t z, uint32_t generation)
 {
     sm64_saturn_render_view_t view = {0};
-    view.camera_position_q16[2] = z;
+    view.camera_position_q16[2] = z * 65536;
     view.generation = generation;
     return view;
 }

@@ -32,6 +32,16 @@ the aggregate FAR span is smaller. This closes only those host-source review
 findings; generic per-cluster runtime admission and target evidence remain
 open. No target build, CUE, Ymir, or performance capture was run.
 
+Generic-runtime remediation: generated BOB and fragment headers now contain
+`sm64_saturn_render_cluster_t` records with Q16 tight bounds, a material
+partition, stable source ordinal, mandatory flag, and exact near/mid/far
+cluster-reference spans. The accepted terrain path constructs a frame view
+from the copied camera, calls `sm64_saturn_render_cluster_admit()` for each
+deterministic candidate, and marks only the union of returned spans. Cluster
+LOD state is reset across scene boundaries. Fine projected/near/material tests
+remain after transform. Host-only validation passes; target evidence remains
+unrun by authorization.
+
 TDD evidence: the C fixture first failed because
 `saturn_render_cluster.h` did not exist; the generator fixture then failed
 because its compact stream fields did not exist. Green command:

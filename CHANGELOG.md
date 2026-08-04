@@ -35,6 +35,14 @@
   host gates for tight bounds, single material identity, mandatory retention,
   in-range/unique tier references, and a strictly smaller FAR stream.
 
+- Routed accepted terrain work through the scene-neutral render-cluster
+  contract before transforms. Generated BOB and fragment banks now provide
+  Q16 tight bounds and exact per-cluster tier spans; the runtime derives a
+  camera view, maintains per-cluster hysteresis (reset at scene changes),
+  admits only validated clusters, and marks exactly their returned references.
+  This replaces the former global tier span while retaining the existing
+  post-transform projected, near, material, and capacity tests.
+
 - Added Saturn-only immutable two-slot render snapshot banks with fixed-width
   camera, scene, Mario, pose-selector, and generated-bank-ID records. The
   master publishes a generation only after camera and actor records agree;
