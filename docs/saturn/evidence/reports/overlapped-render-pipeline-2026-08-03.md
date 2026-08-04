@@ -1238,3 +1238,8 @@ open.
   producer lane, ready state, claimant, and out-of-range identity.
 - Repair is source-complete pending fresh re-review. No callback activation,
   target build, CUE/Ymir run, cache proof, or FPS claim occurred.
+- First re-review remained NO-GO because the phase/ready/sequence/claim/range
+  cases still exercised only the two lower phases. The repair now runs one
+  common complete mutation matrix, including the wrong phase-specific opener,
+  for WORLD_ADMIT, WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER. Fresh final
+  re-review remains required.

@@ -9,8 +9,9 @@
   image alongside its result without growing the eight-byte SH-2 reference;
   pointer-free P2 release records bind terrain and Mario callback snapshots to
   exact generation, phase, byte bound, producer lane, and claimant identity.
-  Corrupt, stale, incomplete, wrong-claim, and cross-lane host cases fail
-  closed. Queue snapshots are self-contained: Mario copies dynamic compact
+  Every phase-specific API rejects corrupt, stale, incomplete, wrong-phase,
+  wrong-claim, out-of-range, and cross-lane host cases. Queue snapshots are
+  self-contained: Mario copies dynamic compact
   refs inline and terrain copies the transform job/work order rather than
   following cached nested or stack pointers. This does not activate CPU-DUAL
   or change the accepted live renderer.

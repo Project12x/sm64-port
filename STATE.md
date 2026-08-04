@@ -38,6 +38,11 @@ inline, terrain's queue snapshot self-contained, and publication an explicit
 preclaim preparation step. Target link/cache evidence and one atomic CPU-DUAL
 owner replacement remain open.
 
+The first repair re-review found no remaining context/coherency defect but
+kept source acceptance NO-GO because part of the mutation matrix covered only
+lower phases. All mutations now run against all four phase-specific APIs;
+final independent re-review is pending.
+
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset
 zero without accidentally taking the legacy master lane.

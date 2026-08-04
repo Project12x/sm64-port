@@ -252,6 +252,10 @@ and the evidence report before starting another task.
   phase, byte bound, producer lane, ready, claim, and range for WORLD_ADMIT,
   WORLD_LOWER, ACTOR_ADMIT, and ACTOR_LOWER. Fresh re-review is required; live
   activation and all target/manual gates remain unchecked.
+  First re-review retained one test-coverage NO-GO: several mutations still
+  named only lower callbacks. The final source repair parameterizes the entire
+  matrix across all four phases and explicitly invokes a mismatched
+  phase-specific opener. Final re-review is pending.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the
