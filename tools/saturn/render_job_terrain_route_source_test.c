@@ -104,6 +104,8 @@ int main(void)
         function_contains(source, "demo_terrain_queue_world_admit(",
                           "demo_terrain_queue_bind_output") &&
         function_contains(source, "demo_terrain_queue_world_admit(",
+                          "output.writer_lane, true") &&
+        function_contains(source, "demo_terrain_queue_world_admit(",
                           "demo_terrain_queue_publish_admit") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "demo_terrain_queue_publish_result") &&

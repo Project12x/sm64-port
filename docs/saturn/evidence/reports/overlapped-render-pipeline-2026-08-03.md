@@ -1329,3 +1329,25 @@ open.
   dirty files. This is source implementation only, pending fresh independent
   review. No post-cutover target build, CUE/Ymir run, cache proof, or FPS claim
   occurred.
+
+### A5.8 atomic-cutover first-review repair (2026-08-04)
+
+- Independent audit `8e64b482` was NO-GO despite all nine prior host gates
+  passing. It found that the sole WORLD_ADMIT retained `dual_phase=true` and
+  would wait for a peer transform descriptor that does not exist. It also
+  found that slave-admit to master-lower could read a stale cached
+  `s_position_owner` map from the previous generation.
+- Watched RED/GREEN added `terrain_queue_handoff_test.c` and the
+  `saturn_terrain_queue_handoff.h` policy. The executable fixture runs actual
+  admit/lower callback-shaped transitions through two queue generations,
+  poisons the prior lower-local owner in both directions, and proves that the
+  exact admit claimant overwrites it with no peer-transform requirement.
+- The live queue snapshot now has `dual_phase=false`. WORLD_ADMIT treats its
+  actual claimant as sole producer and transforms every visible position
+  without consulting the removed split's cached owner map. WORLD_LOWER
+  rebuilds its own cached owner bytes from exact DONE admit metadata before
+  projected/view/valid payload reads. The legacy diagnostic helper retains
+  its old rendezvous and per-position ownership.
+- The new handoff fixture and all nine original strict C11/Werror gates PASS.
+  Fresh independent re-review remains required. No target build, CUE/Ymir run,
+  cache-runtime proof, or FPS claim occurred.

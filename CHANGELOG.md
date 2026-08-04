@@ -17,6 +17,16 @@
 
 ### Fixed
 
+- Fixed two target-blocking terrain handoff defects found in the independent
+  A5.8 cutover review. The single WORLD_ADMIT producer no longer inherits the
+  legacy two-lane rendezvous, and WORLD_LOWER rebuilds its local owner map from
+  the exact DONE admit claimant before choosing cached versus P2 position
+  payloads. The sole admit producer transforms the complete visible set
+  directly, so a slave claimant never rereads its freshly cached owner bytes
+  through the obsolete producer-0 P2 alias. An executable two-generation
+  callback fixture poisons prior owner state and proves both slave-to-master
+  and master-to-slave handoffs.
+
 - Fixed the A5.8 render-job queue's SH-2 include boundary. The first guarded
   serial sourceboot target build exposed that `CPU_CACHE_THROUGH` was used
   without importing Yaul's cache definition; the queue now includes the

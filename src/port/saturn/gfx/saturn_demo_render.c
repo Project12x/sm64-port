@@ -25,6 +25,7 @@
 #include "saturn_terrain_command_template.h"
 #include "saturn_terrain_emit_policy.h"
 #include "saturn_terrain_fused.h"
+#include "saturn_terrain_queue_handoff.h"
 #include "saturn_transform.h"
 #include "saturn_visible_position_set.h"
 #include "bob_scene.h"
@@ -257,7 +258,7 @@ static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
 static uint16_t s_terrain_emit_count;
 static uint8_t s_terrain_emit_commands_bound;
 static uint32_t s_terrain_publish_sequence;
-/* The dormant queue merge keeps one stream for every exact WORLD_LOWER
+/* The live queue merge keeps one stream for every exact WORLD_LOWER
  * descriptor.  It deliberately does not coerce those streams back into the
  * legacy master/slave arenas: once live, an SH-2 may claim either descriptor.
  * The master still owns the one final depth/order pass and later VDP1 lower. */
@@ -1513,7 +1514,7 @@ static bool __attribute__((unused)) demo_primitive_in_radius(
 }
 
 static bool demo_transform_owned_positions(
-    demo_classify_context_t *context, uint8_t lane)
+    demo_classify_context_t *context, uint8_t lane, bool single_producer)
 {
     if (context == NULL || context->job == NULL || lane > 1U ||
         s_transform_phase_failed != 0U)
@@ -1525,7 +1526,8 @@ static bool demo_transform_owned_positions(
          position < SM64_SATURN_BOB_POSITION_COUNT; position++) {
         if (!sm64_saturn_visible_position_set_test(
                 &s_visible_position_set, position) ||
-            demo_position_owner_read(lane, position) != lane)
+            (!single_producer &&
+             demo_position_owner_read(lane, position) != lane))
             continue;
         if ((position % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) {
@@ -1909,10 +1911,8 @@ static bool __attribute__((unused)) demo_render_queue_contexts_publish(void)
     return true;
 }
 
-/* Called by the future atomic scheduler cutover after it has published the
- * complete graph and snapshotted Mario, but before either SH-2 may claim a
- * descriptor. Keeping this preparation separate makes source staging
- * executable without installing a second CPU-DUAL owner. */
+/* Called after the complete graph and Mario snapshot are published, but
+ * before either SH-2 may claim a descriptor. */
 static bool __attribute__((unused)) demo_render_queue_prepare_contexts(
     const demo_classify_context_t *classify, uint32_t sequence)
 {
@@ -2085,12 +2085,8 @@ demo_terrain_queue_admit_metadata(uint16_t job_index,
     return metadata;
 }
 
-/* A future graph callback calls this immediately after it has claimed a
- * WORLD descriptor.  It is intentionally not installed in the CPU-DUAL
- * callback table until the terrain callback also owns transform/classify and
- * terminal publication.  That keeps the current fixed worker as the explicit
- * default while making a mistaken begin-offset/lane selection impossible in
- * the new path. */
+/* A graph callback calls this immediately after it has claimed a WORLD
+ * descriptor, making begin-offset/lane inference impossible. */
 static bool __attribute__((unused)) demo_terrain_queue_bind_output(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state,
@@ -2436,7 +2432,7 @@ static bool demo_actor_queue_validate_payloads(
 /* Terminal assembly is master-only and deterministic: lower descriptors are
  * consumed in queue order, then local result order. It restores the legacy
  * master-owned projected/ref banks so the proven Castle animation emission
- * path remains unchanged after the eventual atomic scheduler cutover. */
+ * path remains unchanged after the atomic scheduler cutover. */
 static bool __attribute__((unused)) demo_actor_queue_assemble_done(
     uint8_t reader_lane, demo_mario_transform_context_t *context)
 {
@@ -2526,7 +2522,7 @@ static bool __attribute__((unused)) demo_actor_queue_assemble_done(
  * the shared indexed position bank, crosses one phase fence, then classifies
  * and compacts its disjoint primitive range. This deliberately follows
  * SlaveDriver's coarse split/join rather than dispatching per face. */
-/* Both the legacy coarse worker and the dormant graph callback enter this
+/* Both the isolated legacy coarse worker and the live graph callback enter this
  * exact producer.  The caller supplies the physical output arena and the
  * claimant lane; this routine must never infer either from a logical range.
  */
@@ -2641,12 +2637,12 @@ static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
                                        sm64_saturn_terrain_result_arena_t *arena)
 {
     return context != NULL &&
-        demo_transform_owned_positions(context->classify, lane) &&
+        demo_transform_owned_positions(context->classify, lane, false) &&
         demo_terrain_compact_transformed(context, begin, end, lane, arena);
 }
 
 /* Legacy-only adapter.  It keeps the old worker's fixed split contained while
- * the dormant queue callback below proves that queue work takes its lane from
+ * the live queue callback below proves that queue work takes its lane from
  * the accepted descriptor claim instead. */
 static void demo_terrain_compact_range(void *opaque, uint16_t begin,
                                        uint16_t end)
@@ -2661,8 +2657,7 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
 
 /* WORLD_ADMIT owns transformed-position publication by descriptor identity.
  * Its P2 metadata record is the release between transform payload writes and
- * a future graph-dependent lower callback; it remains dormant until Mario
- * joins the same queue contract. */
+ * the graph-dependent lower callback. */
 static bool __attribute__((unused)) demo_terrain_queue_world_admit(
     const sm64_saturn_render_job_t *job,
     sm64_saturn_render_job_state_t claimed_state, void *opaque)
@@ -2677,21 +2672,26 @@ static bool __attribute__((unused)) demo_terrain_queue_world_admit(
     const demo_terrain_queue_context_t *const context = published_context;
     demo_classify_context_t classify;
     demo_terrain_queue_output_t output;
+    sm64_saturn_terrain_queue_handoff_t handoff;
     if (job == NULL || context == NULL ||
         !demo_terrain_queue_classify_context(context, &classify) ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
-        !demo_terrain_queue_bind_output(job, claimed_state, &output))
+        !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
+        !sm64_saturn_terrain_queue_handoff_single_producer(
+            output.writer_lane, &handoff) ||
+        handoff.peer_transform_required != 0U)
         return false;
     /* One coarse admit descriptor owns the complete transformed-position
      * payload. Rebuild ownership from the actual claimant lane; retaining the
      * legacy logical split here would leave half the visible positions
      * unwritten when the job is stolen by the other SH-2. */
     demo_prepare_position_owners(
-        output.writer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_MASTER
+        handoff.producer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_MASTER
             ? context->work_count : 0U,
-        output.writer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE);
-    if (!demo_transform_owned_positions(&classify, output.writer_lane))
+        handoff.producer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE);
+    if (!demo_transform_owned_positions(
+            &classify, output.writer_lane, true))
         return false;
     return demo_terrain_queue_publish_admit(
         job, claimed_state, output.writer_lane,
@@ -2699,8 +2699,7 @@ static bool __attribute__((unused)) demo_terrain_queue_world_admit(
         context->sequence);
 }
 
-/* A5.8's WORLD_LOWER callback is deliberately dormant until Mario uses the
- * same descriptor-owned protocol.  Runtime completes the exact claimed job
+/* Runtime completes the exact claimed WORLD_LOWER job
  * only after this returns true, so sealing the result arena here precedes the
  * queue's DONE publication. */
 static bool __attribute__((unused)) demo_terrain_queue_world_lower(
@@ -2742,9 +2741,22 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
     const sm64_saturn_render_job_t *const admit =
         sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
                                                admit_job_index);
-    if (demo_terrain_queue_admit_metadata(admit_job_index, admit,
-                                          output.writer_lane) == NULL)
+    const demo_terrain_queue_metadata_t *const admit_metadata =
+        demo_terrain_queue_admit_metadata(admit_job_index, admit,
+                                          output.writer_lane);
+    sm64_saturn_terrain_queue_handoff_t handoff;
+    if (admit_metadata == NULL ||
+        !sm64_saturn_terrain_queue_handoff_single_producer(
+            admit_metadata->writer_lane, &handoff) ||
+        handoff.peer_transform_required != 0U)
         return false;
+    /* Rebuild the owner bytes in this lower claimant's local cache from the
+     * exact DONE admit claimant before selecting P1/P2 position payloads.
+     * This makes slave-admit -> master-lower safe across frame generations. */
+    demo_prepare_position_owners(
+        handoff.producer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_MASTER
+            ? context->work_count : 0U,
+        handoff.producer_lane == SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE);
     sm64_saturn_terrain_result_arena_t arena;
     sm64_saturn_terrain_result_arena_init(
         &arena, output.records, output.commands, output.capacity, 8U);
@@ -2807,7 +2819,7 @@ static bool __attribute__((unused)) demo_terrain_queue_read_done(
 /* Assemble only terminal, descriptor-owned WORLD_LOWER output.  Descriptor
  * index is the producer order for stable ties; the bounded bin pass below is
  * still master-owned, so queue work cannot change final VDP1 ordering.  This
- * route is intentionally dormant until Mario has the same DONE contract. */
+ * route consumes the same DONE contract as Mario. */
 static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
     uint8_t reader_lane, demo_terrain_queue_merge_spans_t *spans)
 {
@@ -3683,7 +3695,7 @@ void sm64_saturn_demo_render_frame(
         .work_count = s_render_work_count,
         .required_positions = required_positions,
         .transform_sequence = s_transform_publish_sequence,
-        .dual_phase = true,
+        .dual_phase = false,
     };
 
     s_terrain_publish_sequence =

@@ -10,8 +10,8 @@ baseline.
 
 The ordered terrain-command lookup and pointer-free P2 callback-context gate
 are source-review GO and target compile/link/section-green. The single-owner
-live cutover is now source-complete and host-green, pending independent source
-review. After review, the next transition is one serialized target rebuild
+live cutover is source-complete and host-green after repairing the first
+review's terrain handoff NO-GO; fresh re-review is pending. After review, the next transition is one serialized target rebuild
 and desktop-Ymir comparison; target cache behavior is proven only when that
 new live route executes.
 

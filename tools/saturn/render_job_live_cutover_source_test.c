@@ -82,6 +82,7 @@ int main(void)
         strstr(source, "#include \"saturn_render_job_runtime.h\"") != NULL &&
         init_contains(source, "sm64_saturn_render_job_runtime_activate_graph") &&
         frame_contains(source, "demo_render_queue_reset_frame_banks") &&
+        frame_contains(source, ".dual_phase = false") &&
         frame_contains(source, "sm64_saturn_render_job_graph_publish") &&
         frame_count(source,
                     ".output_capacity = DEMO_TERRAIN_RESULT_CAPACITY") == 2U &&

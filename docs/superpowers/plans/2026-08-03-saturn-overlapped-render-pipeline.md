@@ -1126,8 +1126,13 @@ types, ownership rules, or production fallbacks.
 
 ### Task 5.6: Descriptor-owned payload banks and atomic CPU-DUAL cutover
 
-**Status:** source-complete atomic cutover, host-green, fresh independent
-review required before any target build or performance evidence.
+**Status:** source-complete atomic cutover, host-green after first-review
+repairs, fresh independent re-review required before any target build or
+performance evidence. Audit `8e64b482` rejected the first cutover because its
+single WORLD_ADMIT waited for a nonexistent peer and cross-lane lower could
+read stale owner bytes. The repair makes queue transform explicitly
+single-producer and rebuilds lower's local owner map from exact DONE admit
+claimant metadata; a two-generation poisoned-owner callback fixture passes.
 
 - [x] **Step 1: Record the live seam and red gate.** The current frame still
   calls the fixed terrain dispatcher and chained Mario dispatcher. The new
