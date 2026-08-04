@@ -4,6 +4,24 @@
 
 ### Added
 
+- Added a dormant descriptor-indexed terrain merge assembler. It accepts only
+  completed WORLD_LOWER outputs whose P2 metadata, claimant lane, generation,
+  count, and sequence agree with the exact descriptor; it validates every
+  result identity before the master performs its existing stable depth order.
+  Queue streams are not coerced back into the legacy master/slave arenas, so
+  later work stealing cannot silently select a fixed range. The live renderer
+  remains legacy until Mario reaches the same contract, leaving the 3–4 FPS
+  rollback candidate unchanged.
+
+- Added a source-provenanced animated-actor generalization spike selecting
+  Goomba as the first non-Mario proof. It records the real BOB instance budget,
+  source model/geo/animation/behavior inputs, required billboard/alpha/shadow
+  treatment, and the descriptor-owned queue contract so future enemy support
+  can reuse the Mario actor path without silently inventing a BOB-only or
+  fixed-split renderer. A host-only inventory fixture keeps those assumptions
+  explicit; this does not activate enemy rendering or change the 3–4 FPS
+  rollback baseline.
+
 - Hardened dormant A5.8 terrain lowering with a callback-side graph proof.
   WORLD_LOWER now requires exactly one immutable, completed WORLD_ADMIT
   predecessor and validates that predecessor's P2 publication before it reads
