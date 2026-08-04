@@ -193,7 +193,7 @@ result from the visual timeline.
 
 | Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
 | --- | --- | --- | --- |
-| `ponut64/SCSP_poneSound` | `31782e4c61337327f23eb9aa45ecd37fe0944ea0` / MIT | `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, `jo_demo/pcmsys.h` | **Pattern-only.** `src/port/saturn/audio/saturn_pcm_protocol.h` is original byte-addressed protocol code, informed by the reference's fixed sound-RAM boundary. It copies no code, C struct, driver, wrapper, ADX/CDDA path, or binary. The retained MIT notice and exact change boundary are in `docs/saturn/audio/PCM68K_PROVENANCE.md`. |
+| `ponut64/SCSP_poneSound` | `31782e4c61337327f23eb9aa45ecd37fe0944ea0` / MIT | `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, `jo_demo/pcmsys.h` | **Pattern-only** for `saturn_pcm_protocol.h`; **close-port** of only the vector/reset/linker shape in `audio68k/start.S` and `audio68k/linker.ld`. The local image adds a 16 KiB cap, low stack, fixed mailbox, bounded BSS clearing, and an original heartbeat loop. No upstream driver/control/ADX/CDDA code or binary is included. The retained MIT notice and change boundary are in `docs/saturn/audio/PCM68K_PROVENANCE.md`. |
 
 ## M4 — input/cache probe additions (2026-07-19)
 

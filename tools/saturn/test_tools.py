@@ -118,6 +118,111 @@ from quad_map import (  # noqa: E402
     render_quad_map_h,
     resolve_display_list_vertices,
 )
+from verify_pcm68k_image import ImageContractError, verify_image  # noqa: E402
+
+
+def _pcm68k_elf(load_address: int = 0, file_size: int = 0x500,
+                 memory_size: int = 0x600, flags: int = 7,
+                 writable_bank_segment: bool = False, entry: int = 0x400,
+                 reset_pc: int = 0x400, initial_sp: int = 0x3FFC) -> bytes:
+    """Build the smallest ELF32/MC68000 fixture needed by the image gate."""
+    identification = bytearray(16)
+    identification[0:4] = b"\x7fELF"
+    identification[4] = 1  # ELFCLASS32
+    identification[5] = 2  # ELFDATA2MSB
+    identification[6] = 1  # EV_CURRENT
+    program_count = 2 if writable_bank_segment else 1
+    load_offset = 0x100
+    header = struct.pack(
+        ">16sHHIIIIIHHHHHH", bytes(identification), 2, 4, 1,
+        entry, 52, 0, 0, 52, 32, program_count, 0, 0, 0)
+    program = struct.pack(
+        ">IIIIIIII", 1, load_offset, load_address, load_address,
+        file_size, memory_size, flags, 4)
+    if writable_bank_segment:
+        program += struct.pack(">IIIIIIII", 1, load_offset, 0x8000, 0x8000,
+                               4, 4, 7, 2)
+    data = bytearray(load_offset + file_size)
+    data[:len(header)] = header
+    data[len(header):len(header) + len(program)] = program
+    struct.pack_into(">II", data, load_offset, initial_sp, reset_pc)
+    return bytes(data)
+
+
+def _pcm68k_map(driver_end: int = 0x600, mailbox_start: int = 0x4000,
+                bank_start: int = 0x8000, stack_bottom: int = 0x3C00,
+                stack_top: int = 0x3FFC) -> str:
+    return "\n".join((
+        f"0x00000000 __image_start = ORIGIN (driver)",
+        f"0x{driver_end:08x} __driver_end = ALIGN (0x4)",
+        f"0x{mailbox_start:08x} __mailbox_start = 0x4000",
+        f"0x{bank_start:08x} __pcm_bank_start = 0x8000",
+        f"0x{stack_bottom:08x} __stack_bottom = 0x3c00",
+        f"0x{stack_top:08x} __stack_top = 0x3ffc",
+    )) + "\n"
+
+
+class Pcm68kImageContractTests(unittest.TestCase):
+    def _verify(self, elf: bytes | None = None, map_text: str | None = None,
+                unresolved: str = "") -> dict[str, int]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            elf_path = root / "pcm68k.elf"
+            map_path = root / "pcm68k.map"
+            elf_path.write_bytes(elf if elf is not None else _pcm68k_elf())
+            map_path.write_text(
+                map_text if map_text is not None else _pcm68k_map(),
+                encoding="utf-8")
+            return verify_image(elf_path, map_path, unresolved_output=unresolved)
+
+    def test_accepts_fixed_zero_based_driver_below_mailbox(self) -> None:
+        result = self._verify()
+        self.assertEqual(result["image_base"], 0)
+        self.assertEqual(result["driver_end"], 0x600)
+        self.assertEqual(result["stack_bottom"], 0x3C00)
+        self.assertEqual(result["stack_top"], 0x3FFC)
+
+    def test_rejects_nonzero_image_base(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "image base"):
+            self._verify(elf=_pcm68k_elf(load_address=0x400))
+
+    def test_rejects_driver_end_past_16kib(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "16 KiB"):
+            self._verify(map_text=_pcm68k_map(driver_end=0x4002))
+
+    def test_rejects_driver_content_in_reserved_stack(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "reserved stack"):
+            self._verify(map_text=_pcm68k_map(driver_end=0x3C02))
+
+    def test_rejects_wrong_elf_entry(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "ELF entry"):
+            self._verify(elf=_pcm68k_elf(entry=0x404))
+
+    def test_rejects_reset_vector_disagreeing_with_entry(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "reset vector"):
+            self._verify(elf=_pcm68k_elf(reset_pc=0x404))
+
+    def test_rejects_initial_stack_disagreeing_with_map(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "initial stack"):
+            self._verify(elf=_pcm68k_elf(initial_sp=0x3FF8))
+
+    def test_rejects_mailbox_overlap(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "mailbox"):
+            self._verify(elf=_pcm68k_elf(memory_size=0x4100))
+
+    def test_rejects_writable_content_in_pcm_bank(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "PCM bank"):
+            self._verify(elf=_pcm68k_elf(load_address=0, file_size=0x8100,
+                                         memory_size=0x8100, flags=7),
+                         map_text=_pcm68k_map(driver_end=0x600))
+
+    def test_rejects_writable_segment_starting_at_pcm_bank(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "PCM bank"):
+            self._verify(elf=_pcm68k_elf(writable_bank_segment=True))
+
+    def test_rejects_unresolved_symbols(self) -> None:
+        with self.assertRaisesRegex(ImageContractError, "unresolved"):
+            self._verify(unresolved="         U memcpy\n")
 
 
 class AssetClassifierTests(unittest.TestCase):

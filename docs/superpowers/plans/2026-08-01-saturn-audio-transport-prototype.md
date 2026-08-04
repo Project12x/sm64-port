@@ -25,6 +25,9 @@
 
 ## Task 1: Freeze the Wire Protocol and Provenance
 
+**Status (2026-08-04): complete in `f782bdec`.** The focused host protocol
+contract passed; no target/audio behavior was activated.
+
 **Files:**
 
 - Create: `src/port/saturn/audio/saturn_pcm_protocol.h`
@@ -33,8 +36,8 @@
 - Create: `docs/saturn/audio/PONESOUND_MIT.txt`
 - Create: `docs/saturn/audio/PCM68K_PROVENANCE.md`
 
-- [ ] Copy the upstream MIT license text verbatim into `PONESOUND_MIT.txt`; record repository, pinned SHA, inspected files, reuse mode, and a list of changes in `PCM68K_PROVENANCE.md`.
-- [ ] Add a failing host test that validates every byte offset, total size, opcode value, ring wrap, and sound-RAM region boundary without casting a shared byte buffer to a C struct.
+- [x] Copy the upstream MIT license text verbatim into `PONESOUND_MIT.txt`; record repository, pinned SHA, inspected files, reuse mode, and a list of changes in `PCM68K_PROVENANCE.md`.
+- [x] Add a failing host test that validates every byte offset, total size, opcode value, ring wrap, and sound-RAM region boundary without casting a shared byte buffer to a C struct.
 
 ```c
 enum {
@@ -58,12 +61,19 @@ uint16_t sm64_saturn_pcm_get_be16(const volatile uint8_t *base,
                                  uint16_t offset);
 ```
 
-- [ ] Add `verify-pcm-protocol` to `Makefile.saturn.mk` and run it; expect compile failure before the header exists.
-- [ ] Implement constants and byte-wise big-endian accessors. Add `_Static_assert` checks for non-overlap and exact ring capacity.
-- [ ] Run `make -f Makefile.saturn.mk verify-pcm-protocol`; expect pass.
-- [ ] Commit: `audio: define attributed PCM68K wire protocol`.
+- [x] Add `verify-pcm-protocol` to `Makefile.saturn.mk` and observe the expected compile failure before the header exists.
+- [x] Implement constants and byte-wise big-endian accessors. Add `_Static_assert` checks for non-overlap and exact ring capacity.
+- [x] Run the equivalent direct host protocol compile/execute gate; expect pass. The repository Make wrapper was not credited in this CPU-constrained source-only lane.
+- [x] Commit: `audio: define attributed PCM68K wire protocol` (`f782bdec`).
 
 ## Task 2: Build a Freestanding 68K Heartbeat Image
+
+**Status (2026-08-04): source-complete, cross-image gate open.** Fixed-address
+source, executable heartbeat publication, an explicit 1 KiB stack reservation,
+and adversarial ELF/map verification fixtures are green. No ELF/BIN/MAP is credited because the guarded PATH does
+not currently provide `m68keb-elf-gcc`; the unrelated upstream-local
+`m68k-elf` bundle was not substituted. Evidence:
+`docs/saturn/evidence/reports/pcm68k-heartbeat-source-2026-08-04.md`.
 
 **Files:**
 
@@ -75,10 +85,10 @@ uint16_t sm64_saturn_pcm_get_be16(const volatile uint8_t *base,
 - Create: `tools/saturn/verify_pcm68k_image.py`
 - Modify: `tools/saturn/test_tools.py`
 
-- [ ] Add Python fixtures for a valid ELF/map and failures for nonzero image base, driver end beyond `0x4000`, mailbox overlap, writable content in the PCM bank, and unresolved symbols.
-- [ ] Run `./.venv-saturn-tools/Scripts/python.exe tools/saturn/test_tools.py`; expect failure because the verifier does not exist.
-- [ ] Adapt the minimal vector/reset/linker structure from PoneSound, with attribution comments at each closely ported block. Initialize the stack within the driver region, clear only declared BSS, then poll forever.
-- [ ] Publish a 16-bit protocol magic, version, `BOOTING` state, and monotonically wrapping heartbeat in the mailbox. Do not touch SCSP slots yet.
+- [x] Add Python fixtures for a valid ELF/map and failures for nonzero image base, driver end beyond `0x4000`, mailbox overlap, writable content in the PCM bank, and unresolved symbols.
+- [x] Run the focused `Pcm68kImageContractTests`; observe failure because the verifier does not exist.
+- [x] Adapt the minimal vector/reset/linker structure from PoneSound, with attribution comments at each closely ported block. Initialize the stack within the driver region, clear only declared BSS, then poll forever.
+- [x] Publish a 16-bit protocol magic, version, `BOOTING` state, and monotonically wrapping heartbeat in the mailbox. Do not touch SCSP slots yet. The real publisher is exercised by a host C fixture, including `0xFFFF -> 0` wrap.
 
 ```c
 for (;;) {
@@ -90,9 +100,10 @@ for (;;) {
 }
 ```
 
-- [ ] Build with `m68keb-elf-gcc -mc68000 -ffreestanding -fno-builtin -nostdlib`, emit ELF/BIN/MAP, and make `verify_pcm68k_image.py` enforce the 16 KiB cap and zero unresolved symbols.
-- [ ] In the guarded MSYS2 shell run `make -C src/port/saturn/audio68k clean all verify`; expect pass. Inspect only from the same shell.
-- [ ] Re-run the Python suite; expect pass.
+- [ ] Build with `m68keb-elf-gcc -mc68000 -ffreestanding -fno-builtin -nostdlib` and emit ELF/BIN/MAP. The Makefile and verifier are source-complete; actual artifacts remain blocked on the missing guarded compiler.
+- [x] Make `verify_pcm68k_image.py` enforce zero base, entry/reset-vector agreement, the reserved-stack/16 KiB/mailbox/bank boundaries, fixed stack/bank symbols, and zero unresolved symbols against ELF/map/nm inputs.
+- [ ] In the guarded MSYS2 shell run `make -C src/port/saturn/audio68k clean all verify`; blocked because `m68keb-elf-gcc` is not discoverable through the DLL-safe wrapper.
+- [x] Re-run the eleven focused Python image-contract tests plus protocol and heartbeat host C gates; all pass. The broader `test_tools.py` suite and cross-image checks remain uncredited.
 - [ ] Commit: `audio: add freestanding 68K heartbeat image`.
 
 ## Task 3: Implement and Host-Test the SH-2 Ring Writer

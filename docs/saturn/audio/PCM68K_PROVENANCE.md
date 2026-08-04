@@ -9,7 +9,7 @@
 | License | MIT; verbatim text in [PONESOUND_MIT.txt](PONESOUND_MIT.txt) |
 | Local inspected checkout | `sm64-port/work/upstream/SCSP_poneSound` |
 | Files inspected | `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, `jo_demo/pcmsys.h` |
-| Reuse mode | Pattern-only for the first protocol increment; a later, separately reviewed 68K driver may be a MIT close port of only the vector/linker, SNDOFF/SNDON, slot-word, pitch, and PCM-metadata portions named in the approved audio plan. |
+| Reuse mode | Pattern-only for the protocol; close-port of the vector-at-zero/reset-entry and linker-section shape in `audio68k/start.S` and `audio68k/linker.ld`. |
 
 ## Current increment
 
@@ -28,3 +28,19 @@ The shared ABI intentionally differs from the reference:
 - the first scope supports only PCM `PLAY`, `STOP_ALL`, and `SET_MASTER`.
 
 No Nintendo sample, sequence, or prebuilt driver data is included.
+
+## Heartbeat image increment
+
+`src/port/saturn/audio68k/start.S` and `linker.ld` closely port only the
+approved vector/reset/linker shape. Each adapted file carries the upstream
+repository, pinned SHA, MIT license, copyright, and local change boundary.
+The local image differs materially: it has a complete 1 KiB vector table, a
+reserved `0x3C00-0x3FFC` stack below `0x4000`, a hard 16 KiB driver cap,
+byte-exact BSS clearing, and a fixed mailbox at `0x4000`. `main.c` and
+`pcm68k_heartbeat.h` are original
+project code that publish protocol magic/version/state/heartbeat only.
+
+No SCSP slot is touched in this increment. PoneSound's driver logic, mutable C
+control structs, ADX/CDDA code, high sound-RAM stack, and `sdrv.bin` remain
+excluded. The cross-image build is also intentionally uncredited until the
+documented `m68keb-elf` tools are available through the guarded build path.
