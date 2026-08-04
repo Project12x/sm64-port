@@ -301,3 +301,13 @@ This is target evidence for an early loading/memory-layout investigation, not
 evidence that a VBlank scheduler change regressed the build. The next active
 task is a one-capture post-release frame bisection; no scheduler, VDP, or
 camera change is permitted from this result alone.
+
+**Task 8 active — P1/P2 observation-alias comparison:** The target trace is
+published through the SH-2 cache-through alias, but the existing reader only
+observes the ELF-resolved P1 address. The reader now takes both reads at every
+existing checkpoint and at the final sample, preserving their byte/word values
+independently while retaining the legacy P1 fields. This is a host-only
+diagnostic contract: its focused test is green, but no build or Ymir capture
+has yet established whether the aliases disagree on the target. The next gate
+is exactly one bounded headless capture of the already staged artifact pair;
+no scheduler, VDP, or camera source change is authorized by this host result.

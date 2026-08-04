@@ -4,6 +4,12 @@
 
 ### Added
 
+- The sourceboot boot-trace reader now samples every checkpoint and final
+  record through both the resolved P1 address and its SH-2 P2 cache-through
+  alias, retaining each address, raw byte vector, and decoded words
+  independently. This separates a cache/alias disagreement from a real target
+  memory overwrite without changing the bounded capture cadence or legacy P1
+  fields.
 - The sourceboot boot-trace reader now accepts an optional positive
   `--post-bios-checkpoint-interval`. When set, it samples the raw trace after
   every bounded post-BIOS execution chunk, including the final remainder, so

@@ -80,11 +80,17 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
                 }
             ]
 
+            calls: list[dict[str, int]] = []
+
             def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                self.calls.append(params)
+                if params["address"] == 0x2608B43C:
+                    return {"data": words_to_bytes([0x53394254, 1, 8, 8, 4, 1, 3, 4])}
                 return {"data": words_to_bytes([0x045E02AA, 1, 2, 3, 4, 5, 6, 7])}
 
+        client = Client()
         checkpoint = capture_trace_checkpoint(
-            Client(), 0x0608B43C, "bios-initial-wait", 120
+            client, 0x0608B43C, "bios-initial-wait", 120
         )
         self.assertEqual(checkpoint["label"], "bios-initial-wait")
         self.assertEqual(checkpoint["emulated_frames"], 120)
@@ -93,6 +99,17 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         )
         self.assertEqual(checkpoint["stopped_pcs"], [0x060402E8])
         self.assertEqual(checkpoint["notification_count"], 1)
+        self.assertEqual(checkpoint["p1"]["address"], 0x0608B43C)
+        self.assertEqual(checkpoint["p1"]["raw_words"], checkpoint["raw_words"])
+        self.assertEqual(checkpoint["p2"]["address"], 0x2608B43C)
+        self.assertEqual(checkpoint["p2"]["raw_words"], [0x53394254, 1, 8, 8, 4, 1, 3, 4])
+        self.assertEqual([call["address"] for call in client.calls], [0x0608B43C, 0x2608B43C])
+
+    def test_cache_through_alias_preserves_existing_p2_address(self) -> None:
+        alias = getattr(boot_trace, "cpu_cache_through_alias", None)
+        self.assertTrue(callable(alias), "reader must derive a P2 cache-through alias")
+        self.assertEqual(alias(0x0608B43C), 0x2608B43C)
+        self.assertEqual(alias(0x2608B43C), 0x2608B43C)
 
     def test_artifact_binding_reports_cue_referenced_iso_and_elf(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -31,6 +31,7 @@ SOURCEBOOT_BOOT_TRACE_VERSION = 1
 SOURCEBOOT_BOOT_TRACE_WORD_COUNT = 8
 SOURCEBOOT_BOOT_TRACE_BYTES = SOURCEBOOT_BOOT_TRACE_WORD_COUNT * 4
 YMIR_MAX_RUN_FOR_FRAMES = 3600
+CPU_CACHE_THROUGH_ALIAS_BIT = 0x20000000
 _CUE_FILE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))\s+\S+\s*$', re.IGNORECASE)
 
 STAGE_NAMES = {
@@ -274,21 +275,42 @@ def stopped_pcs(client: YmirClient) -> list[int]:
     ]
 
 
+def cpu_cache_through_alias(address: int) -> int:
+    """Return the SH-2 P2 cache-through alias for a P1/P2 target address."""
+    return address | CPU_CACHE_THROUGH_ALIAS_BIT
+
+
+def capture_trace_sample(client: YmirClient, address: int) -> dict[str, dict[str, Any]]:
+    """Read the trace through both aliases without conflating their evidence."""
+    samples: dict[str, dict[str, Any]] = {}
+    for alias, sample_address in (("p1", address), ("p2", cpu_cache_through_alias(address))):
+        result = client.call(
+            "mem.peek", {"address": sample_address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
+        )
+        data = result.get("data")
+        if not isinstance(data, list):
+            raise ValueError(f"Ymir boot trace {alias} sample has no byte data")
+        samples[alias] = {
+            "address": sample_address,
+            "raw_bytes": data,
+            "raw_words": raw_trace_words(data),
+        }
+    return samples
+
+
 def capture_trace_checkpoint(
     client: YmirClient, address: int, label: str, emulated_frames: int
 ) -> dict[str, Any]:
     """Preserve a raw trace sample at one deterministic BIOS boundary."""
-    result = client.call(
-        "mem.peek", {"address": address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
-    )
-    data = result.get("data")
-    if not isinstance(data, list):
-        raise ValueError("Ymir boot trace checkpoint has no byte data")
+    samples = capture_trace_sample(client, address)
+    data = samples["p1"]["raw_bytes"]
     return {
         "label": label,
         "emulated_frames": emulated_frames,
         "raw_bytes": data,
         "raw_words": raw_trace_words(data),
+        "p1": samples["p1"],
+        "p2": samples["p2"],
         "stopped_pcs": stopped_pcs(client),
         "notification_count": len(client.notifications),
     }
@@ -362,6 +384,7 @@ def main() -> int:
     emulated_frames = 0
     client: YmirClient | None = None
     raw_data: list[int] | None = None
+    final_trace_sample: dict[str, dict[str, Any]] | None = None
     trace_checkpoints: list[dict[str, Any]] = []
     trace: dict[str, Any] | None = None
     failure: BaseException | None = None
@@ -386,14 +409,11 @@ def main() -> int:
             post_bios_frames=args.post_bios_frames,
             checkpoint_interval=args.post_bios_checkpoint_interval,
         )
-        result = client.call(
-            "mem.peek", {"address": trace_address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
-        )
-        data = result.get("data")
-        if not isinstance(data, list):
-            raise ValueError("Ymir boot trace capture has no byte data")
-        raw_data = data
+        final_trace_sample = capture_trace_sample(client, trace_address)
+        raw_data = final_trace_sample["p1"]["raw_bytes"]
         trace = decode_boot_trace(raw_data)
+        trace["p1"] = final_trace_sample["p1"]
+        trace["p2"] = final_trace_sample["p2"]
         client.shutdown()
     except BaseException as error:
         failure = error
@@ -413,6 +433,7 @@ def main() -> int:
         "artifacts": artifacts,
         "trace_symbol": SOURCEBOOT_BOOT_TRACE_SYMBOL,
         "trace_address": trace_address,
+        "trace_cache_through_address": cpu_cache_through_alias(trace_address),
         "emulated_frames": emulated_frames,
         "post_bios_checkpoint_interval": args.post_bios_checkpoint_interval,
         "trace_checkpoints": trace_checkpoints,
@@ -423,6 +444,9 @@ def main() -> int:
         report.update(protocol_and_diagnostics(client))
     else:
         report.update(build_failed_trace_report(client=client, raw_data=raw_data, error=failure))
+        if final_trace_sample is not None:
+            report["trace"]["p1"] = final_trace_sample["p1"]
+            report["trace"]["p2"] = final_trace_sample["p2"]
         report["failure"] = {"message": str(failure), "type": type(failure).__name__}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -121,6 +121,13 @@ load/runtime memory-layout fault, not a stale artifact, byte-order error, or
 supported VBlank regression. Post-release frame bisection is active; no
 scheduler/VDP/camera repair is authorized until it locates the first change.
 
+Task 8: active — add a paired P1/P2 trace observation to distinguish the
+ELF-resolved cacheable address from the trace writer's cache-through alias.
+Host test was RED for missing paired samples and GREEN after the reader
+preserved both address/byte/word samples for every checkpoint and final
+report. No target build or Ymir capture has run; the one bounded capture gate
+remains open.
+
 Task 4: source-complete; independent review and target evidence pending. The
 first bounded capture read eight zero words at the resolved trace address, so
 main entry remains unproven. The same eight-word cache-through ABI now writes
