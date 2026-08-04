@@ -4,6 +4,11 @@
 
 ### Added
 
+- The sourceboot boot-trace reader now accepts an optional positive
+  `--post-bios-checkpoint-interval`. When set, it samples the raw trace after
+  every bounded post-BIOS execution chunk, including the final remainder, so
+  a single headless capture can locate the first sentinel mutation without
+  changing the default one-sample capture behavior.
 - The sourceboot boot-trace reader now records raw 32-byte samples at
   protocol-ready and each existing BIOS-handoff boundary, with accumulated
   emulated frames plus any stopped SH-2 PCs. This makes the first loss of the

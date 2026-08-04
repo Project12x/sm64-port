@@ -114,6 +114,36 @@ def validate_post_bios_frames(frames: int) -> int:
     return frames
 
 
+def validate_post_bios_checkpoint_interval(interval: int | None) -> int | None:
+    """Accept an omitted interval or a strictly positive frame chunk size."""
+    if interval is not None and interval <= 0:
+        raise ValueError("post-BIOS checkpoint interval must be positive")
+    return interval
+
+
+def run_post_bios_window(
+    run_for: Any,
+    checkpoint: Any,
+    *,
+    post_bios_frames: int,
+    checkpoint_interval: int | None,
+) -> None:
+    """Run the bounded post-BIOS window, optionally preserving each raw chunk."""
+    if checkpoint_interval is None:
+        run_for(post_bios_frames)
+        checkpoint("post-bios")
+        return
+
+    elapsed = 0
+    remaining = post_bios_frames
+    while remaining:
+        chunk = min(checkpoint_interval, remaining)
+        run_for(chunk)
+        elapsed += chunk
+        remaining -= chunk
+        checkpoint(f"post-bios-{elapsed}")
+
+
 def wrapped_nm_command(elf: Path, *, nm: Path = NM) -> list[str]:
     """Run nm only through the DLL-safe project MSYS environment."""
     return [
@@ -295,6 +325,12 @@ def main() -> int:
         default=180,
         help="bounded frames to run after BIOS handoff (default: 180)",
     )
+    parser.add_argument(
+        "--post-bios-checkpoint-interval",
+        type=int,
+        default=None,
+        help="optional positive frame interval for post-BIOS trace checkpoints",
+    )
     parser.add_argument("--timeout", type=float, default=120.0)
     args = parser.parse_args()
 
@@ -303,6 +339,9 @@ def main() -> int:
             parser.error(f"{label} is not a file: {path}")
     try:
         args.post_bios_frames = validate_post_bios_frames(args.post_bios_frames)
+        args.post_bios_checkpoint_interval = validate_post_bios_checkpoint_interval(
+            args.post_bios_checkpoint_interval
+        )
     except ValueError as error:
         parser.error(str(error))
     if args.timeout <= 0:
@@ -341,8 +380,12 @@ def main() -> int:
 
         checkpoint("protocol-ready")
         run_bios_handoff(client, run_for, checkpoint)
-        run_for(args.post_bios_frames)
-        checkpoint("post-bios")
+        run_post_bios_window(
+            run_for,
+            checkpoint,
+            post_bios_frames=args.post_bios_frames,
+            checkpoint_interval=args.post_bios_checkpoint_interval,
+        )
         result = client.call(
             "mem.peek", {"address": trace_address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
         )
@@ -371,6 +414,7 @@ def main() -> int:
         "trace_symbol": SOURCEBOOT_BOOT_TRACE_SYMBOL,
         "trace_address": trace_address,
         "emulated_frames": emulated_frames,
+        "post_bios_checkpoint_interval": args.post_bios_checkpoint_interval,
         "trace_checkpoints": trace_checkpoints,
         "wall_seconds": time.perf_counter() - wall_start,
     }

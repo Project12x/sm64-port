@@ -25,6 +25,8 @@ try:
         decode_boot_trace,
         parse_cue_file_reference,
         parse_symbol_address,
+        run_post_bios_window,
+        validate_post_bios_checkpoint_interval,
     )
 except ModuleNotFoundError as error:
     raise AssertionError("sourceboot boot-trace reader is missing") from error
@@ -38,6 +40,37 @@ def words_to_bytes(words: list[int]) -> list[int]:
 
 
 class SourcebootBootTraceReaderTests(unittest.TestCase):
+    def test_post_bios_window_preserves_single_legacy_checkpoint_without_interval(self) -> None:
+        runs: list[int] = []
+        checkpoints: list[str] = []
+
+        run_post_bios_window(
+            runs.append, checkpoints.append, post_bios_frames=180, checkpoint_interval=None
+        )
+
+        self.assertEqual(runs, [180])
+        self.assertEqual(checkpoints, ["post-bios"])
+
+    def test_post_bios_window_samples_every_chunk_including_final_remainder(self) -> None:
+        runs: list[int] = []
+        checkpoints: list[str] = []
+
+        run_post_bios_window(
+            runs.append, checkpoints.append, post_bios_frames=180, checkpoint_interval=64
+        )
+
+        self.assertEqual(runs, [64, 64, 52])
+        self.assertEqual(
+            checkpoints,
+            ["post-bios-64", "post-bios-128", "post-bios-180"],
+        )
+
+    def test_rejects_non_positive_post_bios_checkpoint_interval(self) -> None:
+        self.assertIsNone(validate_post_bios_checkpoint_interval(None))
+        self.assertEqual(validate_post_bios_checkpoint_interval(1), 1)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            validate_post_bios_checkpoint_interval(0)
+
     def test_checkpoint_records_raw_words_frame_and_stopped_pc(self) -> None:
         class Client:
             notifications = [
