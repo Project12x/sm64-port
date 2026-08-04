@@ -1041,3 +1041,22 @@ open.
   MinGW C11 `-std=c11 -Wall -Wextra -Werror` route fixture passes; no runtime
   activation, target build, CUE/Ymir run, or FPS claim occurred. Fresh scoped
   re-review remains mandatory.
+
+### A5.8 terrain admit/merge metadata increment (2026-08-04)
+
+- RED: the expanded host route contract required a `WORLD_ADMIT` callback,
+  descriptor-keyed admit publication, terminal result publication, and a
+  DONE reader that derives count/sequence from stored metadata; it failed
+  before those symbols existed.
+- GREEN: WORLD_ADMIT transforms its claimant-owned position payload, then
+  publishes a P2-visible record keyed by generation, job index, claimant
+  state, lane, and sequence. WORLD_LOWER uses the already-admitted transform
+  payload, seals its result arena, and publishes its own exact count/sequence
+  record before returning to graph runtime. The DONE reader revalidates the
+  descriptor/output-bank lane and returns the stored count/sequence rather
+  than trusting caller-supplied merge metadata.
+- GREEN host evidence: direct Qt MinGW C11 `-std=c11 -Wall -Wextra -Werror`
+  route source contract prints PASS. No target build, queue activation, CUE,
+  Ymir run, or FPS claim occurred. Open gates: actual terrain merge-span
+  assembly, Mario parity, independent review, atomic CPU-DUAL cutover, then
+  target/cache/visual evidence.

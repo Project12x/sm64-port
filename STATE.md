@@ -9,11 +9,12 @@ runtime drains are source-review GO; the current live frame remains legacy
 until terrain execution/merge and Mario transform/classify use exact
 descriptor-owned payloads and can replace the sole CPU-DUAL callback atomically.
 
-Terrain's dormant WORLD_LOWER callback now uses its exact descriptor input
-span, bridge-derived physical output lane, and terminal-DONE reader contract;
-the live legacy adapter is still authoritative. Descriptor-indexed WORLD_ADMIT
-position publication, per-job result-count retention, and Mario's equivalent
-route remain the blockers to a reviewable atomic cutover.
+Terrain's dormant WORLD_ADMIT callback now publishes transformed-position
+completion by exact descriptor identity, and WORLD_LOWER records its exact
+result count/sequence/claimant lane before its terminal reader may merge it.
+The live legacy adapter is still authoritative. Merge-span assembly and
+Mario's equivalent producer/reader route remain the blockers to a reviewable
+atomic cutover.
 
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset

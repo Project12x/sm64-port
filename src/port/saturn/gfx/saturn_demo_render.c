@@ -228,6 +228,24 @@ static sm64_saturn_render_output_bank_t s_actor_output_bank
     DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_payload_bank_t s_terrain_record_payload;
 static sm64_saturn_render_payload_bank_t s_terrain_command_payload;
+/* Queue callbacks may not hand a lower/merge stage an inferred result count.
+ * Each entry is a P2-visible, descriptor-keyed release record: READY is
+ * written last after the producer's position/result payload and identity.
+ * The legacy spans below remain the accepted default until the atomic
+ * terrain+Mario cutover. */
+typedef struct demo_terrain_queue_metadata {
+    volatile uint32_t generation;
+    volatile uint32_t sequence;
+    volatile uint16_t job_index;
+    volatile uint16_t record_count;
+    volatile uint8_t writer_lane;
+    volatile uint8_t claimed_state;
+    volatile uint16_t ready;
+} demo_terrain_queue_metadata_t;
+static demo_terrain_queue_metadata_t s_terrain_admit_metadata[
+    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
+static demo_terrain_queue_metadata_t s_terrain_result_metadata[
+    SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_refs[
     DEMO_TERRAIN_RESULT_CAPACITY];
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
@@ -1669,6 +1687,108 @@ typedef struct demo_terrain_queue_output {
     uint8_t writer_lane;
 } demo_terrain_queue_output_t;
 
+static bool demo_terrain_queue_claim_index(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, uint16_t *job_index)
+{
+    if (job_index != NULL) *job_index = UINT16_MAX;
+    const uintptr_t first = (uintptr_t)&s_render_job_queue.jobs[0];
+    const uintptr_t end = (uintptr_t)&s_render_job_queue.jobs[
+        s_render_job_queue.count];
+    const uintptr_t address = (uintptr_t)job;
+    if (job == NULL || job_index == NULL ||
+        (claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) ||
+        address < first || address >= end ||
+        (address - first) % sizeof(*job) != 0U)
+        return false;
+    const uint16_t index = (uint16_t)((address - first) / sizeof(*job));
+    if (sm64_saturn_render_job_queue_claimed_job(
+            &s_render_job_queue, job->snapshot_generation, index,
+            claimed_state) != job)
+        return false;
+    *job_index = index;
+    return true;
+}
+
+static bool demo_terrain_queue_publish_metadata(
+    demo_terrain_queue_metadata_t *metadata,
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, uint8_t writer_lane,
+    uint16_t record_count, uint32_t sequence)
+{
+    uint16_t job_index;
+    if (metadata == NULL || sequence == 0U || writer_lane > 1U ||
+        !demo_terrain_queue_claim_index(job, claimed_state, &job_index))
+        return false;
+    metadata = (demo_terrain_queue_metadata_t *)
+        sm64_saturn_dual_frame_cache_through(metadata);
+    metadata->ready = 0U;
+    metadata->generation = job->snapshot_generation;
+    metadata->sequence = sequence;
+    metadata->job_index = job_index;
+    metadata->record_count = record_count;
+    metadata->writer_lane = writer_lane;
+    metadata->claimed_state = (uint8_t)claimed_state;
+    sm64_saturn_dual_frame_compiler_fence();
+    metadata->ready = 1U;
+    return true;
+}
+
+static bool demo_terrain_queue_publish_admit(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, uint8_t writer_lane,
+    uint16_t transformed_count, uint32_t sequence)
+{
+    uint16_t job_index;
+    if (!demo_terrain_queue_claim_index(job, claimed_state, &job_index))
+        return false;
+    return demo_terrain_queue_publish_metadata(
+        &s_terrain_admit_metadata[job_index], job, claimed_state, writer_lane,
+        transformed_count, sequence);
+}
+
+static bool demo_terrain_queue_publish_result(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, uint8_t writer_lane,
+    uint16_t record_count, uint32_t sequence)
+{
+    uint16_t job_index;
+    if (!demo_terrain_queue_claim_index(job, claimed_state, &job_index) ||
+        record_count > job->output_capacity)
+        return false;
+    return demo_terrain_queue_publish_metadata(
+        &s_terrain_result_metadata[job_index], job, claimed_state, writer_lane,
+        record_count, sequence);
+}
+
+static const demo_terrain_queue_metadata_t *
+demo_terrain_queue_result_metadata(uint16_t job_index,
+                                   const sm64_saturn_render_job_t *job,
+                                   uint8_t reader_lane)
+{
+    if (job == NULL || reader_lane > 1U ||
+        job_index >= SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY)
+        return NULL;
+    const demo_terrain_queue_metadata_t *const metadata =
+        &s_terrain_result_metadata[job_index];
+    if (metadata->ready == 0U) return NULL;
+    sm64_saturn_dual_frame_compiler_fence();
+    if (metadata->generation != job->snapshot_generation ||
+        metadata->job_index != job_index || metadata->sequence == 0U ||
+        metadata->record_count > job->output_capacity ||
+        metadata->writer_lane > 1U ||
+        (metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE))
+        return NULL;
+    uint8_t output_lane = UINT8_MAX;
+    if (!sm64_saturn_render_output_bank_owner_lane(
+            &s_terrain_output_bank, &s_render_job_queue, job_index,
+            &output_lane) || output_lane != metadata->writer_lane)
+        return NULL;
+    return metadata;
+}
+
 /* A future graph callback calls this immediately after it has claimed a
  * WORLD descriptor.  It is intentionally not installed in the CPU-DUAL
  * callback table until the terrain callback also owns transform/classify and
@@ -1726,15 +1846,13 @@ static bool __attribute__((unused)) demo_terrain_queue_bind_output(
  * exact producer.  The caller supplies the physical output arena and the
  * claimant lane; this routine must never infer either from a logical range.
  */
-static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
-                                       uint16_t begin, uint16_t end,
-                                       uint8_t lane,
-                                       sm64_saturn_terrain_result_arena_t *arena)
+static bool demo_terrain_compact_transformed(
+    demo_terrain_compact_context_t *context, uint16_t begin, uint16_t end,
+    uint8_t lane, sm64_saturn_terrain_result_arena_t *arena)
 {
     if (context == NULL || arena == NULL || lane > 1U || begin > end ||
         end > s_render_work_count)
         return false;
-    if (!demo_transform_owned_positions(context->classify, lane)) return false;
     demo_classify_exact(context->classify, begin, end, lane);
     for (uint16_t work = begin; work < end; work++) {
         const uint16_t primitive_index = context->classify->work_order[work];
@@ -1830,6 +1948,19 @@ static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
     return true;
 }
 
+/* The legacy worker keeps its transform+lower operation together. Queue
+ * WORLD_LOWER deliberately bypasses this wrapper: its graph predecessor is
+ * WORLD_ADMIT, which publishes the transformed-position payload first. */
+static bool demo_terrain_compact_exact(demo_terrain_compact_context_t *context,
+                                       uint16_t begin, uint16_t end,
+                                       uint8_t lane,
+                                       sm64_saturn_terrain_result_arena_t *arena)
+{
+    return context != NULL &&
+        demo_transform_owned_positions(context->classify, lane) &&
+        demo_terrain_compact_transformed(context, begin, end, lane, arena);
+}
+
 /* Legacy-only adapter.  It keeps the old worker's fixed split contained while
  * the dormant queue callback below proves that queue work takes its lane from
  * the accepted descriptor claim instead. */
@@ -1842,6 +1973,28 @@ static void demo_terrain_compact_range(void *opaque, uint16_t begin,
     sm64_saturn_terrain_result_arena_t *const arena = lane == 0U
         ? &context->spans->master : &context->spans->slave;
     (void)demo_terrain_compact_exact(context, begin, end, lane, arena);
+}
+
+/* WORLD_ADMIT owns transformed-position publication by descriptor identity.
+ * Its P2 metadata record is the release between transform payload writes and
+ * a future graph-dependent lower callback; it remains dormant until Mario
+ * joins the same queue contract. */
+static bool __attribute__((unused)) demo_terrain_queue_world_admit(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *opaque)
+{
+    demo_terrain_compact_context_t *const context = opaque;
+    demo_terrain_queue_output_t output;
+    if (job == NULL || context == NULL || context->classify == NULL ||
+        job->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
+        job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
+        !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
+        !demo_transform_owned_positions(context->classify, output.writer_lane))
+        return false;
+    return demo_terrain_queue_publish_admit(
+        job, claimed_state, output.writer_lane,
+        (uint16_t)context->classify->transformed[output.writer_lane],
+        context->sequence);
 }
 
 /* A5.8's WORLD_LOWER callback is deliberately dormant until Mario uses the
@@ -1865,10 +2018,13 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
     sm64_saturn_terrain_result_arena_t arena;
     sm64_saturn_terrain_result_arena_init(
         &arena, output.records, output.commands, output.capacity, 8U);
-    return demo_terrain_compact_exact(
+    if (!demo_terrain_compact_transformed(
         context, job->input_offset,
         (uint16_t)(job->input_offset + job->input_count),
-        output.writer_lane, &arena);
+        output.writer_lane, &arena))
+        return false;
+    return demo_terrain_queue_publish_result(
+        job, claimed_state, output.writer_lane, arena.count, context->sequence);
 }
 
 /* The master-side merge route likewise has no fixed peer range: DONE plus the
@@ -1876,17 +2032,23 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
  * record count it collected from that job's arena; it cannot ask for more
  * than the immutable descriptor reserved. */
 static bool __attribute__((unused)) demo_terrain_queue_read_done(
-    uint16_t job_index, uint16_t record_count, uint8_t reader_lane,
-    const sm64_saturn_terrain_result_t **records, const uint8_t **commands)
+    uint16_t job_index, uint8_t reader_lane,
+    const sm64_saturn_terrain_result_t **records, const uint8_t **commands,
+    uint16_t *record_count, uint32_t *sequence)
 {
     if (records != NULL) *records = NULL;
     if (commands != NULL) *commands = NULL;
+    if (record_count != NULL) *record_count = 0U;
+    if (sequence != NULL) *sequence = 0U;
     const sm64_saturn_render_job_t *const job =
         sm64_saturn_render_job_queue_done_job(&s_render_job_queue, job_index);
-    if (records == NULL || commands == NULL || job == NULL ||
+    const demo_terrain_queue_metadata_t *const metadata =
+        demo_terrain_queue_result_metadata(job_index, job, reader_lane);
+    if (records == NULL || commands == NULL || record_count == NULL ||
+        sequence == NULL || job == NULL || metadata == NULL ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
         reader_lane > SM64_SATURN_RENDER_OUTPUT_LANE_SLAVE ||
-        record_count > job->output_capacity)
+        metadata->record_count > job->output_capacity)
         return false;
     *records = sm64_saturn_render_payload_bank_read(
         &s_terrain_record_payload, &s_render_job_queue,
@@ -1894,7 +2056,10 @@ static bool __attribute__((unused)) demo_terrain_queue_read_done(
     *commands = sm64_saturn_render_payload_bank_read(
         &s_terrain_command_payload, &s_render_job_queue,
         &s_terrain_output_bank, &s_actor_output_bank, job_index, reader_lane);
-    return *records != NULL && *commands != NULL;
+    if (*records == NULL || *commands == NULL) return false;
+    *record_count = metadata->record_count;
+    *sequence = metadata->sequence;
+    return true;
 }
 
 static bool demo_merge_terrain_results(

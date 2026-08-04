@@ -55,11 +55,11 @@ int main(void)
     char *source = read_file("src/port/saturn/gfx/saturn_demo_render.c");
     if (source == NULL) return 2;
     const int ok =
-        function_contains(source, "demo_terrain_compact_exact(",
+        function_contains(source, "demo_terrain_compact_transformed(",
                           "sm64_saturn_terrain_result_arena_seal") &&
-        function_contains(source, "demo_terrain_compact_exact(",
+        function_contains(source, "demo_terrain_compact_transformed(",
                           "demo_classify_exact") &&
-        !function_contains(source, "demo_terrain_compact_exact(",
+        !function_contains(source, "demo_terrain_compact_transformed(",
                            "begin == 0U") &&
         !function_contains(source, "demo_classify_exact(",
                            "begin == 0U") &&
@@ -70,7 +70,7 @@ int main(void)
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "demo_terrain_queue_bind_output") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
-                          "demo_terrain_compact_exact") &&
+                          "demo_terrain_compact_transformed") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "job->input_offset") &&
         !function_contains(source, "demo_terrain_queue_world_lower(",
@@ -80,7 +80,19 @@ int main(void)
         function_contains(source, "demo_terrain_queue_read_done(",
                           "sm64_saturn_render_job_queue_done_job") &&
         function_contains(source, "demo_terrain_queue_read_done(",
-                          "sm64_saturn_render_payload_bank_read");
+                          "sm64_saturn_render_payload_bank_read") &&
+        function_contains(source, "demo_terrain_queue_world_admit(",
+                          "SM64_SATURN_RENDER_JOB_WORLD_ADMIT") &&
+        function_contains(source, "demo_terrain_queue_world_admit(",
+                          "demo_terrain_queue_bind_output") &&
+        function_contains(source, "demo_terrain_queue_world_admit(",
+                          "demo_terrain_queue_publish_admit") &&
+        function_contains(source, "demo_terrain_queue_world_lower(",
+                          "demo_terrain_queue_publish_result") &&
+        function_contains(source, "demo_terrain_queue_read_done(",
+                          "demo_terrain_queue_result_metadata") &&
+        !function_contains(source, "demo_terrain_queue_read_done(",
+                           "uint16_t record_count");
     free(source);
     if (!ok) {
         fputs("terrain queue route does not bind exact descriptor ownership\n",

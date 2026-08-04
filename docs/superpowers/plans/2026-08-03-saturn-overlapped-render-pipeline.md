@@ -147,6 +147,15 @@ and the evidence report before starting another task.
   per-job result count/sequence for exact DONE merge. Mario's matching
   producer/reader conversion is also required before atomic CPU-DUAL
   activation.
+  **A5.8 terrain admit/merge increment (2026-08-04):** WORLD_ADMIT now owns
+  transformed-position publication through a P2-visible record keyed by the
+  exact claim. WORLD_LOWER no longer repeats that transform; after compacting
+  it seals its descriptor-owned arena and records exact count, sequence,
+  claimant state, and writer lane. The terminal reader accepts only a DONE
+  WORLD_LOWER whose queue/output-bank identity agrees with that record, then
+  returns the record's count/sequence instead of accepting caller metadata.
+  These dormant callbacks remain unregistered; merge-span assembly, Mario's
+  equivalent route, review, and one atomic CPU-DUAL activation are still open.
   **Review repair (2026-08-04):** the first dormant callback still entered
   classification through a helper that inferred the lane from `begin == 0`.
   A legal slave claim at descriptor input offset zero would therefore select

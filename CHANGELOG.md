@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added the next dormant A5.8 terrain queue foundation: WORLD_ADMIT now
+  publishes transformed-position completion through a descriptor-indexed,
+  P2-visible release record, while WORLD_LOWER records its exact result count,
+  sequence, claimant state, and writer lane before runtime may mark it DONE.
+  Terminal merge now derives those values from the completed descriptor rather
+  than accepting a caller-supplied count. The legacy worker remains the active
+  renderer, so this intentionally changes no target behavior or FPS result.
+
 - Added the A5.8 dormant terrain queue producer/reader seam. A WORLD_LOWER
   callback now passes its exact descriptor span and actual claimant lane into
   the common transform/classify/compact producer, seals its descriptor-owned
