@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "pcm_voice.h"
+#include "scsp_pcm8.h"
 #include "saturn_pcm_protocol.h"
 
 static void put_command(uint8_t *ram, uint16_t index, uint16_t opcode,
@@ -108,6 +109,7 @@ static void test_consumer_caps_each_poll_and_rejects_corrupt_indices(void)
     uint16_t i;
 
     sm64_saturn_pcm_voice_state_init(&state);
+    assert(sm64_saturn_pcm68k_consume(NULL, &state) == 0U);
     for (i = 0; i < 12U; ++i) {
         put_command(ram, i, SM64_SATURN_PCM_OPCODE_STOP_ALL, stop);
     }
@@ -126,11 +128,41 @@ static void test_consumer_caps_each_poll_and_rejects_corrupt_indices(void)
     assert(state.protocol_faults == 2U);
 }
 
+static uint16_t register_word(const uint16_t *registers, uint16_t offset)
+{
+    return registers[offset / 2U];
+}
+
+static void test_consumer_drives_scsp_play_master_and_stop(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_pcm_voice_state_t state;
+    const uint16_t play[7] = {0U, 12U, 0U, 0U, 0U, 0U, 0U};
+    const uint16_t master[7] = {9U, 0U, 0U, 0U, 0U, 0U, 0U};
+    const uint16_t stop[7] = {0};
+
+    sm64_saturn_pcm_voice_state_init(&state);
+    put_command(ram, 0U, SM64_SATURN_PCM_OPCODE_PLAY, play);
+    put_command(ram, 1U, SM64_SATURN_PCM_OPCODE_SET_MASTER, master);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_PRODUCER_OFFSET, 2U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 2U);
+    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) == 0x1810U);
+    assert(register_word(register_words, SM64_SATURN_SCSP_MASTER_OFFSET) == 0x0209U);
+
+    put_command(ram, 2U, SM64_SATURN_PCM_OPCODE_STOP_ALL, stop);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_PRODUCER_OFFSET, 3U);
+    assert(sm64_saturn_pcm68k_consume_scsp(ram, registers, &state) == 1U);
+    assert(register_word(register_words, SM64_SATURN_SCSP_SLOT_KEYS) == 0x1000U);
+}
+
 int main(void)
 {
     test_proof_metadata_is_deterministic_and_bounded();
     test_consumer_plays_round_robin_and_reuses_with_keyoff();
     test_master_stop_invalid_and_unknown_are_safe();
     test_consumer_caps_each_poll_and_rejects_corrupt_indices();
+    test_consumer_drives_scsp_play_master_and_stop();
     return 0;
 }

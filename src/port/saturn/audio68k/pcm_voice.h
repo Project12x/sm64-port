@@ -7,6 +7,7 @@
 enum {
     SM64_SATURN_PCM_VOICE_COUNT = 4U,
     SM64_SATURN_PCM_COMMANDS_PER_POLL = 8U,
+    SM64_SATURN_PCM_SAMPLE_LOOP = 1U,
 };
 
 typedef struct sm64_saturn_pcm_sample {
@@ -44,5 +45,11 @@ uint16_t sm64_saturn_pcm_proof_sample_count(void);
 const sm64_saturn_pcm_sample_t *sm64_saturn_pcm_proof_sample(uint16_t sample_id);
 uint16_t sm64_saturn_pcm68k_consume(volatile uint8_t *sound_ram,
                                    sm64_saturn_pcm_voice_state_t *state);
+uint16_t sm64_saturn_pcm68k_consume_scsp(volatile uint8_t *sound_ram,
+                                        volatile uint8_t *scsp_registers,
+                                        sm64_saturn_pcm_voice_state_t *state);
+uint16_t sm64_saturn_pcm68k_consume_mapped_zero(
+    volatile uint8_t *scsp_registers,
+    sm64_saturn_pcm_voice_state_t *state);
 
 #endif

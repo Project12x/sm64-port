@@ -9,6 +9,7 @@
 
 #include "pcm68k_heartbeat.h"
 #include "pcm_voice.h"
+#include "scsp_regs.h"
 #include "saturn_pcm_protocol.h"
 
 void sm64_saturn_pcm68k_publish_boot(volatile uint8_t *sound_ram)
@@ -51,6 +52,8 @@ void sm64_saturn_pcm68k_publish_tick(volatile uint8_t *sound_ram,
 void pcm68k_main(void)
 {
     volatile uint8_t *const sound_ram = (volatile uint8_t *)(uintptr_t)0;
+    volatile uint8_t *const scsp_registers =
+        (volatile uint8_t *)(uintptr_t)SM64_SATURN_SCSP_SLOT_BASE;
     sm64_saturn_pcm_voice_state_t voice_state;
     uint16_t heartbeat = 0;
 
@@ -58,7 +61,9 @@ void pcm68k_main(void)
     sm64_saturn_pcm_voice_state_init(&voice_state);
 
     for (;;) {
-        (void)sm64_saturn_pcm68k_consume(sound_ram, &voice_state);
+        (void)sound_ram;
+        (void)sm64_saturn_pcm68k_consume_mapped_zero(scsp_registers,
+                                                     &voice_state);
         sm64_saturn_pcm68k_publish_tick(sound_ram, &heartbeat);
     }
 }

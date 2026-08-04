@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added the isolated standalone Saturn PCM68K audibility candidate. The
+  source-built 68K now programs four bounded SCSP PCM8 slots using attributed
+  PoneSound register/pitch patterns; a deterministic 4,408-byte CC0 proof bank
+  and Yaul soundtest exercise SNDOFF/copy/SNDON, heartbeat validation, bounded
+  enqueue, controller-triggered play/stop/volume, and visible telemetry. This
+  remains outside sourceboot and does not change renderer scheduling or the
+  accepted FPS comparison image; Ymir audibility is still an open manual gate.
+
 - Added payload-kind-aware output-span validation to the dormant A5.8 render
   queue. WORLD_ADMIT positions, WORLD_LOWER records/commands, ACTOR_ADMIT
   projected vertices, and ACTOR_LOWER primitive references may reuse their

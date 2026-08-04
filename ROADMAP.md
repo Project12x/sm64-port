@@ -19,3 +19,11 @@ publication, measured terminal waits, and source/target contract evidence.
 Generalize generated scene banks, animated actor/enemy banks, and coarse
 BSP/frustum/portal-window admission beyond BOB. Add full occlusion/PVS only
 when level evidence proves the coarse path is insufficient.
+
+## Parallel prototype — Saturn PCM audio
+
+Review and manually prove the standalone PCM68K soundtest before any game
+integration. The promotion gate requires a live heartbeat, consumed commands,
+audible generated PCM, zero drops, and explicit owner approval. Sourceboot
+sound effects, positional audio, sample extraction, music, and sequencing stay
+deferred until that isolated proof is accepted.

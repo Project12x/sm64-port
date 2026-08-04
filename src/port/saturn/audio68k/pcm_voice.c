@@ -1,5 +1,6 @@
 #include "pcm_voice.h"
 
+#include "scsp_pcm8.h"
 #include "saturn_pcm_protocol.h"
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -72,11 +73,15 @@ const sm64_saturn_pcm_sample_t *sm64_saturn_pcm_proof_sample(uint16_t sample_id)
     return sample;
 }
 
-static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state)
+static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state,
+                                     volatile uint8_t *scsp_registers)
 {
     uint16_t i;
     for (i = 0U; i < SM64_SATURN_PCM_VOICE_COUNT; ++i) {
         if (state->voices[i].active) {
+            if (scsp_registers != 0) {
+                (void)sm64_saturn_scsp_pcm8_stop(scsp_registers, i);
+            }
             state->keyoffs++;
             state->voices[i].active = false;
         }
@@ -86,10 +91,13 @@ static void sm64_saturn_pcm_stop_all(sm64_saturn_pcm_voice_state_t *state)
 
 static void sm64_saturn_pcm_play(sm64_saturn_pcm_voice_state_t *state,
                                  uint16_t sample_id, uint16_t volume,
-                                 int16_t pan)
+                                 int16_t pan,
+                                 volatile uint8_t *scsp_registers)
 {
+    const sm64_saturn_pcm_sample_t *sample;
     sm64_saturn_pcm_voice_t *voice;
-    if (sm64_saturn_pcm_proof_sample(sample_id) == 0) {
+    sample = sm64_saturn_pcm_proof_sample(sample_id);
+    if (sample == 0) {
         state->invalid_samples++;
         return;
     }
@@ -107,20 +115,28 @@ static void sm64_saturn_pcm_play(sm64_saturn_pcm_voice_state_t *state,
     }
     voice->pan = pan;
     voice->generation = (uint16_t)(voice->generation + 1U);
+    if (scsp_registers != 0 &&
+        !sm64_saturn_scsp_pcm8_start(scsp_registers, state->next_slot,
+                                     sample, voice->volume, voice->pan)) {
+        voice->active = false;
+        state->invalid_samples++;
+        return;
+    }
     state->voices_started++;
     state->active_slot = state->next_slot;
     state->next_slot = (uint16_t)((state->next_slot + 1U) %
                                   SM64_SATURN_PCM_VOICE_COUNT);
 }
 
-uint16_t sm64_saturn_pcm68k_consume(volatile uint8_t *sound_ram,
-                                   sm64_saturn_pcm_voice_state_t *state)
+static uint16_t sm64_saturn_pcm68k_consume_internal(
+    volatile uint8_t *sound_ram, volatile uint8_t *scsp_registers,
+    sm64_saturn_pcm_voice_state_t *state)
 {
     uint16_t producer;
     uint16_t consumer;
     uint16_t consumed = 0U;
 
-    if (sound_ram == 0 || state == 0) {
+    if (state == 0) {
         return 0U;
     }
     producer = sm64_saturn_pcm_get_be16(sound_ram,
@@ -149,13 +165,18 @@ uint16_t sm64_saturn_pcm68k_consume(volatile uint8_t *sound_ram,
 
         switch (opcode) {
             case SM64_SATURN_PCM_OPCODE_PLAY:
-                sm64_saturn_pcm_play(state, word0, word1, (int16_t)word2);
+                sm64_saturn_pcm_play(state, word0, word1, (int16_t)word2,
+                                     scsp_registers);
                 break;
             case SM64_SATURN_PCM_OPCODE_STOP_ALL:
-                sm64_saturn_pcm_stop_all(state);
+                sm64_saturn_pcm_stop_all(state, scsp_registers);
                 break;
             case SM64_SATURN_PCM_OPCODE_SET_MASTER:
                 state->master_volume = sm64_saturn_pcm_clamp_u16(word0, 15U);
+                if (scsp_registers != 0) {
+                    (void)sm64_saturn_scsp_set_master(scsp_registers,
+                                                      state->master_volume);
+                }
                 break;
             default:
                 state->unknown_opcodes++;
@@ -207,4 +228,33 @@ uint16_t sm64_saturn_pcm68k_consume(volatile uint8_t *sound_ram,
             SM64_SATURN_PCM_CONSUMER_OFFSET);
     }
     return consumed;
+}
+
+uint16_t sm64_saturn_pcm68k_consume(volatile uint8_t *sound_ram,
+                                   sm64_saturn_pcm_voice_state_t *state)
+{
+    if (sound_ram == 0) {
+        return 0U;
+    }
+    return sm64_saturn_pcm68k_consume_internal(sound_ram, 0, state);
+}
+
+uint16_t sm64_saturn_pcm68k_consume_scsp(volatile uint8_t *sound_ram,
+                                        volatile uint8_t *scsp_registers,
+                                        sm64_saturn_pcm_voice_state_t *state)
+{
+    if (sound_ram == 0) {
+        return 0U;
+    }
+    return sm64_saturn_pcm68k_consume_internal(sound_ram, scsp_registers,
+                                               state);
+}
+
+uint16_t sm64_saturn_pcm68k_consume_mapped_zero(
+    volatile uint8_t *scsp_registers,
+    sm64_saturn_pcm_voice_state_t *state)
+{
+    volatile uint8_t *const sound_ram = (volatile uint8_t *)(uintptr_t)0;
+    return sm64_saturn_pcm68k_consume_internal(sound_ram, scsp_registers,
+                                               state);
 }

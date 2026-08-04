@@ -42,3 +42,10 @@ The accepted desktop-Ymir A3+A4 candidate remains the manual rollback baseline
 at roughly 3–4 FPS (up from 1–2 FPS). It is qualitative evidence only; no new
 target CUE or FPS claim is authorized until the live A5 cutover is reviewed,
 built, and manually tested.
+
+The isolated audio lane now has a standalone soundtest CUE candidate. Its
+2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated
+CC0 proof bank contains three sounds in 4,408 bytes. Host register, pitch,
+endianness, loop/stop, bank, boot-order, bounds, timeout, and ring tests pass.
+It is not linked into sourceboot. Independent rereview is GO for the source
+and standalone build; manual Ymir audibility confirmation remains open.

@@ -67,3 +67,20 @@ snapshot, consumes at most eight records, publishes telemetry, then publishes
 each consumer index. Corrupt indices, invalid sample IDs, unknown opcodes, and
 full rings fail closed or increment visible counters. SCSP programming remains
 an explicit later gate.
+
+## SCSP PCM8 and proof-bank increment
+
+`audio68k/scsp_pcm8.c` is a documented close-port of only PoneSound's SCSP
+slot-word layout, 44.1 kHz OCT/FNS pitch equation, key-off-before-programming,
+and key-execute-last sequence. The inspected upstream files are
+`PROJ/main.c` and `jo_demo/pcmsys.c` at the pinned revision above. The local
+implementation changes the boundary to aligned native 68K 16-bit MMIO writes,
+restricts ownership to slots 0-3, validates every offset/count/rate, uses a
+bounded freestanding divider, and excludes PoneSound's driver loop, timers,
+channel scan, shared structs, ADX, CDDA, and prebuilt binaries.
+
+`tools/saturn/gen_pcm_proof_bank.py` is original project code. Its integer
+square-wave and LFSR formulas produce three signed mono PCM8 samples totaling
+4,408 bytes. The generated waveform bytes are dedicated to the public domain
+under CC0-1.0 and contain no extracted game audio. Generated BIN/header/JSON
+artifacts remain ignored build output.

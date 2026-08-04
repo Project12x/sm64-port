@@ -143,11 +143,11 @@ bool sm64_saturn_pcm_enqueue(sm64_saturn_pcm_transport_t *transport,
 
 ## Task 4: Implement the 68K Ring Consumer and Four-Voice Allocator
 
-**Status (2026-08-04): voice-state source seam complete; SCSP programming and
-audibility gates open.** The command decoder, bounded poll, four-slot allocator,
-metadata validation, and telemetry are linked into a verified 68K image. No
-SCSP register is touched yet, by design. Fresh independent rereview is GO for
-this source-only boundary.
+**Status (2026-08-04): source-complete and independently reviewed GO through
+SCSP programming.** The command decoder, bounded poll, four-slot allocator,
+metadata validation, telemetry, and tested PCM8 register writer are linked
+into a verified 2,918-byte 68K image. Audibility remains an unexecuted manual
+gate.
 
 **Files:**
 
@@ -159,7 +159,7 @@ this source-only boundary.
 
 - [x] Add a portable model test for command decoding, consumer publication last, round-robin slots `0-3`, reuse key-off state before reprogramming, master-volume clamp, stop-all, invalid sample metadata, unknown opcode counts, corrupt indices, and the eight-command cap.
 - [x] Add `verify-pcm68k-model` and observe the expected missing-header compile failure.
-- [ ] Closely adapt only the attributed PoneSound SCSP slot-word and pitch calculations. Keep register writes behind a tiny interface so the host model supplies fake registers. Deferred deliberately: the current increment proves state transitions without hardware writes.
+- [x] Closely adapt only the attributed PoneSound SCSP slot-word and pitch calculations. Target MMIO uses aligned native 68K 16-bit writes; an observer seam lets host tests prove exact word values and ordering.
 
 ```c
 typedef struct sm64_saturn_pcm_sample {
@@ -175,13 +175,17 @@ bool sm64_saturn_pcm_voice_play(uint16_t slot,
                                uint16_t volume, int16_t pan);
 ```
 
-- [x] Support only `PLAY`, `STOP_ALL`, and `SET_MASTER` in the portable state model. `PLAY` validates bounded deterministic proof metadata and models key-off-before-reuse; actual PCM8 register programming remains unchecked.
+- [x] Support only `PLAY`, `STOP_ALL`, and `SET_MASTER`. `PLAY` validates bounded deterministic proof metadata and performs tested key-off-before-reuse plus PCM8 register programming.
 - [x] Consume at most eight commands per poll iteration so a malformed producer cannot starve heartbeat publication.
 - [x] Publish telemetry fields: commands consumed, voices started, unknown opcodes, last opcode, active/reused slot, invalid samples, protocol faults, and heartbeat.
 - [x] Run direct protocol, transport, model, and heartbeat host gates; rebuild and verify the real 68K image. The wrapper failure is recorded separately and is not credited.
 - [ ] Commit: `audio: consume PCM commands on four SCSP voices`.
 
 ## Task 5: Generate the Three-Sample Proof Bank
+
+**Status (2026-08-04): source-complete and host-green.** The deterministic CC0
+bank is 4,408 bytes with SHA-256
+`05b33bfb7518118b2ab1601e03bdfac65f3f470526cddc8284b3090122b35b58`.
 
 **Files:**
 
@@ -190,14 +194,18 @@ bool sm64_saturn_pcm_voice_play(uint16_t slot,
 - Create: `src/port/saturn/soundtest/assets/README.md`
 - Modify: `Makefile.saturn.mk`
 
-- [ ] Add deterministic tests for signed mono 8-bit encoding, sample boundaries, 2-byte alignment, metadata offsets, reproducible hashes, maximum 65,536 samples per entry, and total bank cap of 32 KiB.
-- [ ] Run `./.venv-saturn-tools/Scripts/python.exe tools/saturn/test_gen_pcm_proof_bank.py`; expect import/command failure before the generator exists.
-- [ ] Generate three unmistakable short public-domain waveforms at 11,025 Hz: low tone, high tone, and decaying noise burst. Emit `pcm_proof_bank.bin`, `pcm_proof_bank.h`, and a JSON manifest under `build/saturn/soundtest/generated`; do not commit generated binaries.
-- [ ] Record generation formulas and public-domain dedication in the asset README.
-- [ ] Run the generator test and `make -f Makefile.saturn.mk compile-pcm-proof-bank`; expect pass and bank size at most 32 KiB.
+- [x] Add deterministic tests for signed mono 8-bit encoding, sample boundaries, 2-byte alignment, metadata offsets, reproducible hashes, maximum 65,535 samples per entry, and total bank cap of 32 KiB.
+- [x] Run `./.venv-saturn-tools/Scripts/python.exe tools/saturn/test_gen_pcm_proof_bank.py`; observe the expected missing-module failure before the generator exists.
+- [x] Generate three unmistakable short public-domain waveforms at 11,025 Hz: low tone, high tone, and decaying noise burst. Emit `pcm_proof_bank.bin`, `pcm_proof_bank.h`, and a JSON manifest under `build/saturn/soundtest/generated`; generated binaries remain uncommitted.
+- [x] Record generation formulas and public-domain dedication in the asset README.
+- [x] Run the generator test and direct compile target; pass at 4,408 bytes.
 - [ ] Commit: `audio: generate bounded public-domain PCM proof bank`.
 
 ## Task 6: Add the Standalone `soundtest` Saturn Target
+
+**Status (2026-08-04): source-complete candidate independently reviewed GO;
+Ymir gate open.** A serial guarded build produced a 471,040-byte ISO and
+standalone CUE. No emulator or sourceboot run is credited.
 
 **Files:**
 
@@ -206,13 +214,13 @@ bool sm64_saturn_pcm_voice_play(uint16_t slot,
 - Modify: `Makefile.saturn.mk`
 - Create: `tools/saturn/soundtest_boot_contract_test.c`
 
-- [ ] Add a host state-machine test for correct order: prepare driver/bank, SNDOFF, copy declared regions through `0x25A00000`, initialize 4-Mbit mode/master volume, SNDON, bounded heartbeat wait, then enqueue. Add timeout and oversize mutations.
-- [ ] Add `verify-soundtest-boot` and run it; expect compile failure.
-- [ ] Create a small Yaul target that shows status/counters on VDP2 and maps controller buttons A/B/C to the three `PLAY` commands, X to `STOP_ALL`, and L/R to `SET_MASTER`.
-- [ ] Copy only the verified 68K binary, protocol region initialization, metadata table, and generated bank. Require heartbeat change within a fixed VBlank budget; on timeout, display failure and never enqueue.
-- [ ] Add top-level `soundtest` and `verify-soundtest` targets. Make `verify-soundtest` depend on protocol, transport, model, generator, image, boot, ELF, CUE, and size gates.
-- [ ] Run all host gates; expect pass.
-- [ ] In the guarded MSYS2 shell run `make -f Makefile.saturn.mk soundtest -j1` and `make -f Makefile.saturn.mk verify-soundtest`; expect a valid standalone CUE. Do not run sourceboot.
+- [x] Add a host state-machine test for correct order: validate driver/bank, SNDOFF, copy declared regions through `0x25A00000`, SNDON, bounded heartbeat wait, then enqueue. Add timeout and oversize mutations. Master volume is deliberately an initial ring command owned by the 68K, not an SH-2 register write.
+- [x] Add `verify-soundtest-boot` and observe the expected missing-module compile failure.
+- [x] Create a small Yaul target that shows status/counters on VDP2 and maps controller buttons A/B/C to the three `PLAY` commands, X to `STOP_ALL`, and L/R to `SET_MASTER`.
+- [x] Copy only the verified 68K binary and generated bank, clear the protocol mailbox, and require heartbeat change within a fixed VBlank budget; on timeout, display failure and never enqueue.
+- [x] Add top-level `soundtest` and `verify-soundtest` plumbing with protocol, transport, model, generator, image, boot, ELF, CUE, and size seams.
+- [x] Run all focused host gates; protocol, transport, PCM model, SCSP writer, heartbeat, proof-bank generator, mapped-zero mutation verifier, and soundtest boot tests pass. The aggregate wrapper still has a known MSYS/native-Python path-conversion failure and is not credited.
+- [x] In the guarded MSYS2 shell run the serialized soundtest build and target-local verification; a valid standalone CUE was produced. Full aggregate `verify-soundtest` remains to be rerun after review. Sourceboot was not run.
 - [ ] Commit: `audio: add standalone PCM68K soundtest`.
 
 ## Task 7: Prove the Standalone Transport in Ymir
