@@ -192,6 +192,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_output_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_bridge.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_render_payload_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c \
   $(ROOT)/src/port/saturn/gfx/saturn_demo_render.c \
   $(ROOT)/src/port/saturn/gfx/saturn_vdp2_frame.c \

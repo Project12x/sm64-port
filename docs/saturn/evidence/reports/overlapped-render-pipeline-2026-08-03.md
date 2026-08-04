@@ -897,3 +897,17 @@ open.
   descriptor, and observes its terminal state: PASS with -std=c11 -Wall
   -Wextra -Werror. This does not bind the renderer or replace the linked legacy
   worker yet, so no target build/Ymir/FPS evidence is claimed.
+
+### A5.6 payload-bank foundation (2026-08-04)
+
+- RED: direct Qt-host compile of render_job_payload_bank_test.c failed for the
+  absent payload-bank interface and source.
+- GREEN: the payload-bank helper selects its physical master/slave write base
+  only from the bridge execution's actual claimant and exact output offset; a
+  DONE reader obtains the same descriptor-owned base through the bridge's
+  metadata/P2 policy. The focused host fixture proves a master steal of an old
+  slave-offset input writes only master payload and reads the exact terminal
+  span: PASS with -std=c11 -Wall -Wextra -Werror.
+- Terrain and actor production arrays/readers remain unmigrated, so this is a
+  source prerequisite only. The live-cutover gate remains RED; no target
+  build, CUE, Ymir, or FPS claim occurred.

@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added descriptor-indexed physical payload-bank helpers for A5.6. A claimed
+  job selects master or slave storage from its recorded queue claimant and
+  exact output span, while a reader refuses non-terminal/mismatched metadata
+  and uses the bridge's P2 policy. This is the payload migration primitive for
+  terrain and actor banks; the live fixed-split renderer is not yet switched.
+
 - Added the source-only A5.6 render-job runtime lifecycle. It holds one
   queue/callback-table/context owner and, on SH-2 only, installs the sole
   polling CPU-DUAL entry; publication remains separate and host coverage

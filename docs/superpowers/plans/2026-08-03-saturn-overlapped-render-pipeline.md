@@ -950,6 +950,9 @@ prerequisite for Task 5 Step 5, not target-performance evidence.
   Replace physical master/slave result arrays and fixed actor owner reads with
   output-bank slots selected by exact queue descriptor identity; readers must
   reject non-DONE output and choose cached/P2 only from the recorded claimant.
+  **Active:** the TDD-covered generic physical payload-bank helper now derives
+  a writer address from the bridge execution record and a reader address from
+  exact DONE metadata; terrain and actor call sites remain to be migrated.
 - [ ] **Step 3: Add the one-owner queue CPU-DUAL runtime.** Bind exactly one
   polling callback only after default legacy dispatch is gone; persistent slave
   drain and master drain share the same local callback table and immutable
