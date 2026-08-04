@@ -12,9 +12,10 @@ then assembles descriptor-owned results before master-only VDP1 lowering. The
 cutover is host-green. Its first independent review, audit `8e64b482`, was
 NO-GO because the single terrain admit retained a nonexistent peer wait and a
 slave-admit/master-lower handoff could read stale owner bytes. Both findings
-are repaired with an executable two-generation handoff fixture; fresh
-re-review is required. No post-cutover target build, CUE, Ymir,
-cache-behavior, or FPS result exists yet.
+are repaired with an executable two-generation handoff fixture. Fresh scoped
+re-review is GO at audit `1819f2b4`; the next gate is one serialized
+post-cutover target build. No post-cutover CUE, Ymir, cache-behavior, or FPS
+result exists yet.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

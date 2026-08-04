@@ -1126,9 +1126,9 @@ types, ownership rules, or production fallbacks.
 
 ### Task 5.6: Descriptor-owned payload banks and atomic CPU-DUAL cutover
 
-**Status:** source-complete atomic cutover, host-green after first-review
-repairs, fresh independent re-review required before any target build or
-performance evidence. Audit `8e64b482` rejected the first cutover because its
+**Status:** source-complete atomic cutover, host-green and scoped re-review GO
+at audit `1819f2b4`; one serialized post-cutover target build is the next
+gate. Audit `8e64b482` rejected the first cutover because its
 single WORLD_ADMIT waited for a nonexistent peer and cross-lane lower could
 read stale owner bytes. The repair makes queue transform explicitly
 single-producer and rebuilds lower's local owner map from exact DONE admit
@@ -1165,6 +1165,11 @@ claimant metadata; a two-generation poisoned-owner callback fixture passes.
   queue, coherency, actor/cluster/runtime gates plus the live-cutover static
   guard. A target build/Ymir run remains prohibited until this source scope
   receives both reviews.
+  First NO-GO/re-review loop is closed: repair `1667958e` received scoped GO
+  at audit `1819f2b4`, with the new handoff fixture and prior nine gates
+  independently green. A separate second quality review remains unchecked if
+  required before promotion; this scoped verdict authorizes only the next
+  serialized target-build gate, never a Ymir/FPS claim by itself.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

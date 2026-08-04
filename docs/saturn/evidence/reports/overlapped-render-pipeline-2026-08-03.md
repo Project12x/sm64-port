@@ -1349,5 +1349,7 @@ open.
   projected/view/valid payload reads. The legacy diagnostic helper retains
   its old rendezvous and per-position ownership.
 - The new handoff fixture and all nine original strict C11/Werror gates PASS.
-  Fresh independent re-review remains required. No target build, CUE/Ymir run,
-  cache-runtime proof, or FPS claim occurred.
+  Fresh scoped re-review is GO at audit commit `1819f2b4`; the reviewer
+  inspected actual renderer wiring and independently reran all ten gates plus
+  diff-check. No target build, CUE/Ymir run, cache-runtime proof, or FPS claim
+  occurred. One serialized post-cutover target build is the next gate.
