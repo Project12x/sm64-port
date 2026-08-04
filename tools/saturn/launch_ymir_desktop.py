@@ -12,7 +12,6 @@ import argparse
 import hashlib
 import json
 import subprocess
-import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,43 +76,32 @@ def build_launch_plan(executable: Path, profile: Path, cue: Path) -> dict[str, A
     }
 
 
-def _drain(stream: Any, destination: list[str]) -> None:
-    for line in iter(stream.readline, ""):
-        destination.append(line)
-    stream.close()
-
-
-def launch_and_monitor(plan: dict[str, Any], monitor_seconds: float) -> dict[str, Any]:
+def launch_and_monitor(
+    plan: dict[str, Any], monitor_seconds: float, report_output: Path
+) -> dict[str, Any]:
     if monitor_seconds < 0:
         raise ValueError("monitor seconds must be non-negative")
     started = datetime.now(UTC)
-    process = subprocess.Popen(
-        plan["command"],
-        cwd=plan["working_directory"],
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    assert process.stdout is not None
-    assert process.stderr is not None
-    stdout: list[str] = []
-    stderr: list[str] = []
-    threads = [
-        threading.Thread(target=_drain, args=(process.stdout, stdout), daemon=True),
-        threading.Thread(target=_drain, args=(process.stderr, stderr), daemon=True),
-    ]
-    for thread in threads:
-        thread.start()
-    deadline = time.monotonic() + monitor_seconds
-    while process.poll() is None and time.monotonic() < deadline:
-        time.sleep(0.1)
-    exit_code = process.poll()
-    if exit_code is not None:
-        for thread in threads:
-            thread.join(timeout=1)
+    stdout_log = report_output.with_suffix(".stdout.log").resolve()
+    stderr_log = report_output.with_suffix(".stderr.log").resolve()
+    stdout_log.parent.mkdir(parents=True, exist_ok=True)
+    with stdout_log.open("w", encoding="utf-8", errors="replace") as stdout, stderr_log.open(
+        "w", encoding="utf-8", errors="replace"
+    ) as stderr:
+        process = subprocess.Popen(
+            plan["command"],
+            cwd=plan["working_directory"],
+            stdin=subprocess.DEVNULL,
+            stdout=stdout,
+            stderr=stderr,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        deadline = time.monotonic() + monitor_seconds
+        while process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+        exit_code = process.poll()
     return {
         "requested": True,
         "pid": process.pid,
@@ -121,8 +109,8 @@ def launch_and_monitor(plan: dict[str, Any], monitor_seconds: float) -> dict[str
         "monitor_seconds": monitor_seconds,
         "exit_code": exit_code,
         "alive_after_monitor": exit_code is None,
-        "stdout": "".join(stdout),
-        "stderr": "".join(stderr),
+        "stdout_log": str(stdout_log),
+        "stderr_log": str(stderr_log),
     }
 
 
@@ -150,7 +138,7 @@ def main() -> int:
         "execution": {"requested": False, "reason": "dry-run; pass --launch to start GUI"},
     }
     if args.launch:
-        report["execution"] = launch_and_monitor(plan, args.monitor_seconds)
+        report["execution"] = launch_and_monitor(plan, args.monitor_seconds, output)
     write_report(report, output)
     print(output.resolve())
     return 0

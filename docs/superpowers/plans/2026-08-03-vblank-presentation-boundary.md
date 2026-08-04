@@ -345,7 +345,19 @@ Ymir's executable directory as its working directory. It records command,
 working directory, profile, CUE and referenced-ISO identity (SHA-256, bytes,
 timestamp), and the profile-managed 32-Mbit DRAM-cart declaration before any
 GUI starts. GUI execution requires explicit `--launch`; its bounded monitor
-captures available stdout/stderr and early exit into a timestamped report, but
-a live interactive SDL process cannot have its later output/exit recorded once
-the helper returns. Focused host tests are green. No GUI was launched, no
+now redirects stdout/stderr to durable timestamped files beside the JSON
+report rather than to helper-owned pipes. Closing the helper therefore cannot
+close the live SDL process's output handles, while late crash output remains
+inspectable. Focused host tests are green. No GUI was launched, no
 profile/configuration was changed, and the manual target gate remains open.
+
+**Task 10 correction — durable GUI log handles:** The prior GUI crash report
+occurred after a launch in which the helper attached `subprocess.PIPE` to both
+desktop-Ymir outputs, then returned after its bounded monitor. Those pipes and
+their reader threads belonged to the helper process, so a live GUI could lose
+both handles at helper teardown. The corrected launcher opens report-adjacent
+`.stdout.log` and `.stderr.log` files before `Popen`; Ymir retains its own file
+handles after the helper exits. A host regression test was RED for the old
+two-argument, pipe-backed launch function and GREEN after the file-backed
+redirection. This establishes launcher lifetime correctness only; a new manual
+Ymir result is still required before claiming a target boot result.

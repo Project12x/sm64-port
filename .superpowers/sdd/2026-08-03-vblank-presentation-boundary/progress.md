@@ -149,3 +149,14 @@ after VDP configuration and a cached-only writer. No target build, CUE
 construction, Ymir launch, or capture ran. The serial diagnostic CUE and
 bounded capture are still required before any scheduler/VDP change; target
 evidence is not claimed from these host tests.
+
+Task 10 correction: desktop Ymir's GUI launch attached stdout/stderr to
+helper-owned pipes and then returned after the bounded monitor; the user
+observed a pre-display crash. `launch_ymir_desktop.py` now gives the child
+durable report-adjacent `.stdout.log`/`.stderr.log` handles, records their
+paths in the JSON execution result, and never closes a live GUI pipe at helper
+teardown. RED: the new host test called the absent three-argument launch
+contract and failed with `TypeError`; GREEN: all three launcher tests pass,
+Python compilation and `git diff --check` pass. No GUI launch, target build,
+or profile change was performed. Commit pending; manual desktop target
+observation remains the only open gate.

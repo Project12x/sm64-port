@@ -7,9 +7,10 @@
 - Added an opt-in desktop Ymir launch helper that records the exact SDL3
   command, working directory, project profile, staged CUE, and CUE-referenced
   ISO identities before manual testing. It keeps the 32-Mbit DRAM cart
-  profile-managed and reports the bounded GUI stdout/stderr/early-exit window,
-  so a later BIOS failure can be investigated without silently launching a
-  different emulator mode or disc.
+  profile-managed and writes durable stdout/stderr logs beside its timestamped
+  JSON report. This prevents the short-lived launcher from closing the GUI's
+  pipe handles after monitoring, while preserving later crash diagnostics
+  without silently launching a different emulator mode or disc.
 
 - The bounded sourceboot boot-trace reader now verifies a caller-selectable
   linked text probe (default `main`) at every BIOS/checkpoint and final

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -60,6 +61,31 @@ class DesktopYmirLaunchTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "referenced ISO"):
                 desktop.build_launch_plan(executable, profile, cue)
+
+    def test_launch_redirects_gui_output_to_report_adjacent_durable_logs(self) -> None:
+        """A live GUI must not depend on pipes owned by the short-lived helper."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "ymir-desktop-launch-20260804T010203Z.json"
+            plan = {
+                "command": ["ymir-sdl3.exe"],
+                "working_directory": str(root),
+            }
+            process = mock.Mock(pid=1234)
+            process.poll.return_value = None
+
+            with mock.patch.object(desktop.subprocess, "Popen", return_value=process) as popen:
+                execution = desktop.launch_and_monitor(plan, 0, report)
+
+            kwargs = popen.call_args.kwargs
+            self.assertNotEqual(kwargs["stdout"], desktop.subprocess.PIPE)
+            self.assertNotEqual(kwargs["stderr"], desktop.subprocess.PIPE)
+            self.assertEqual(Path(kwargs["stdout"].name), report.with_suffix(".stdout.log"))
+            self.assertEqual(Path(kwargs["stderr"].name), report.with_suffix(".stderr.log"))
+            self.assertEqual(execution["stdout_log"], str(report.with_suffix(".stdout.log")))
+            self.assertEqual(execution["stderr_log"], str(report.with_suffix(".stderr.log")))
+            self.assertTrue(report.with_suffix(".stdout.log").is_file())
+            self.assertTrue(report.with_suffix(".stderr.log").is_file())
 
 
 if __name__ == "__main__":
