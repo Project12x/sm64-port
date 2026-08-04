@@ -78,3 +78,6 @@ cache-through structural assertion failure, then C compilation failure for the
 missing generation-validator declaration. The focused gate is green after the
 repair. Runtime contracts still fail at the preserved terrain-command
 comparison, and target/Ymir plus fresh reviews remain open.
+
+Fix-round behavior/docs commit: `4a590101`
+(`fix(saturn): harden render snapshot publication`).

@@ -112,3 +112,6 @@ identity aliases, and exports `sm64_saturn_render_snapshot_generation_valid`.
 The focused snapshot-bank gate is green; runtime contracts still fail at the
 preserved terrain-command comparison and no target/Ymir gate was run. Fresh
 independent spec and quality review remain required.
+
+Fix-round behavior/docs commit: `4a590101`
+(`fix(saturn): harden render snapshot publication`).
