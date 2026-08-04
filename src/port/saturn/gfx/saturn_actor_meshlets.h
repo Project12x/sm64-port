@@ -17,13 +17,16 @@ typedef struct sm64_saturn_actor_draw_ref {
 typedef struct sm64_saturn_actor_meshlet_output {
     sm64_saturn_actor_draw_ref_t *opaque;
     sm64_saturn_actor_draw_ref_t *translucent;
+    uint16_t *positions;
+    uint16_t position_capacity;
     uint16_t opaque_count;
     uint16_t translucent_count;
+    uint16_t position_count;
 } sm64_saturn_actor_meshlet_output_t;
 
-/* The generated Mario tables are only an input bank: this API contains no
- * actor-specific pointer, VDP, worker, or allocator state, so future actor
- * bank implementations can use the same bounded output contract. */
+/* This is deliberately Mario-bank scoped: it contains no live game, VDP,
+ * worker, or allocator state, but a future actor needs its own bank descriptor
+ * before it can share this implementation. */
 bool sm64_saturn_actor_meshlets_prepare(
     const sm64_saturn_render_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,

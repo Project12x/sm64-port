@@ -15,6 +15,17 @@
   ownership away from the master. Target visual/counter evidence and
   independent reviews remain required.
 
+### Fixed
+
+- Corrected Mario meshlet admission to project each meshlet's live animation
+  pose after Mario yaw, rather than using its neutral-pose AABB centre. Whole
+  meshlets now cull only when their furthest live extent is behind the view
+  plane, choose LOD from their nearest live extent, and bin translucent work by
+  its furthest live extent. The generated compact position streams now provide
+  the globally deduplicated transform references directly, so telemetry matches
+  actual transform work and walking/animated poses cannot be rejected from
+  stale neutral bounds.
+
 - Added the first A3 scene-neutral render-cluster contract and a focused host
   gate. It chooses a hysteretic near/mid/far compact position span from a
   cluster AABB before transforms, rejects empty/behind optional spans, and

@@ -732,3 +732,28 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   counter, or FPS gate ran. Independent specification and quality review remain
   required before A4 can be source-complete.
 - Commit: `7e419484` (`perf(saturn): cull and bin Mario by meshlet`).
+
+### A4 independent-review critical remediation (2026-08-04)
+
+- NO-GO review finding: A4 used a neutral generated AABB centre for admission
+  and binning, ignoring live animation vertices and Mario yaw; its renderer
+  also rebuilt transform references from primitive corners instead of consuming
+  generated compact position spans. This could falsely cull/LOD/bin ordinary
+  turning or walking Mario geometry.
+- RED: expanded actor fixture failed because the position telemetry did not
+  equal the advertised transform stream. It additionally adds a yawed
+  view-plane crossing and a walking-bank animated-pose crossing case, plus
+  global deduplication/element validation of the generated position union.
+- GREEN: admission now projects each near-tier meshlet position from the
+  supplied live pose through the same Q16 Mario yaw used by transform. It culls
+  only when the furthest live depth is non-positive, chooses LOD from nearest
+  live depth, and bins translucent work by furthest live depth. The prepare API
+  returns the exact globally deduplicated selected-tier position union, which
+  the renderer passes directly to `transform_ref_count`; it no longer rebuilds
+  that union from primitive corners. The focused actor/dual-worker/depth-bin/
+  command-template host gates and 30 focused Mario/profile tests pass (one
+  expected skip); both existing mutation fixtures still fail as required.
+- Open: this is source-only remediation. A fresh independent specification and
+  quality rereview, runtime-contract infrastructure closure, and target
+  visual/counter/FPS evidence remain required; no target build, CUE, or Ymir
+  run occurred.

@@ -170,6 +170,11 @@ static int renderer_uses_bounded_meshlet_order(void)
         prepare_call != NULL && dispatch_call != NULL &&
         prepare_call < dispatch_call &&
         strstr(prepare, "sm64_saturn_actor_meshlets_prepare(") != NULL &&
+        text_range_contains(prepare, reserve,
+                            ".positions = s_actor_transform_refs") &&
+        text_range_contains(prepare, reserve,
+                            "s_actor_transform_ref_count = meshlet_output.position_count") &&
+        !text_range_contains(prepare, reserve, "primitive[corner]") &&
         strstr(text, "s_actor_order") == NULL &&
         strstr(text, "while (j > 0U)") == NULL &&
         strstr(dispatch, "transform_ref_count") != NULL &&

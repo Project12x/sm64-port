@@ -2316,6 +2316,8 @@ static uint16_t demo_prepare_mario(
     sm64_saturn_actor_meshlet_output_t meshlet_output = {
         .opaque = s_actor_opaque_refs,
         .translucent = s_actor_translucent_refs,
+        .positions = s_actor_transform_refs,
+        .position_capacity = SM64_MARIO_VERTEX_COUNT,
     };
     if (!sm64_saturn_actor_meshlets_prepare(
             &meshlet_snapshot, pose, &meshlet_view, &meshlet_output,
@@ -2323,7 +2325,6 @@ static uint16_t demo_prepare_mario(
         profile->pipeline_faults++;
         return 0U;
     }
-    uint8_t position_selected[SM64_MARIO_VERTEX_COUNT] = {0};
     for (uint8_t pass = 0U; pass < 2U; pass++) {
         const sm64_saturn_actor_draw_ref_t *refs = pass == 0U
             ? meshlet_output.opaque : meshlet_output.translucent;
@@ -2333,20 +2334,9 @@ static uint16_t demo_prepare_mario(
             const uint16_t primitive_id = refs[i].primitive_id;
             if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return 0U;
             s_actor_draw_order[s_actor_draw_count++] = primitive_id;
-            const uint16_t *const primitive = sm64_mario_primitives[primitive_id];
-            for (uint8_t corner = 1U; corner <= 4U; corner++) {
-                const uint16_t position = primitive[corner];
-                if (position >= SM64_MARIO_VERTEX_COUNT) {
-                    profile->pipeline_faults++;
-                    return 0U;
-                }
-                if (position_selected[position] == 0U) {
-                    position_selected[position] = 1U;
-                    s_actor_transform_refs[s_actor_transform_ref_count++] = position;
-                }
-            }
         }
     }
+    s_actor_transform_ref_count = meshlet_output.position_count;
     return s_actor_transform_ref_count;
 }
 

@@ -352,6 +352,7 @@ verify-actor-meshlets:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_meshlet_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-test$(HOST_EXEEXT)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
@@ -361,6 +362,7 @@ verify-actor-meshlets:
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_meshlet_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_meshlets.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-span-mutation$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-meshlet-span-mutation$(HOST_EXEEXT)" \

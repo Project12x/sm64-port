@@ -737,6 +737,15 @@ types, ownership rules, or production fallbacks.
   commit `7e419484` is recorded; independent specification then quality
   reviews remain open.
 
+  The first independent A4 review returned **NO-GO**: neutral-AABB centre
+  admission ignored yaw/live animation and the renderer reconstructed rather
+  than consumed compact position spans. The active remediation projects each
+  live pose vertex after yaw, culls by furthest extent, chooses LOD by nearest
+  extent, bins translucent work by furthest extent, and publishes the exact
+  globally deduplicated generated position union to the transform worker. Its
+  yaw/view-plane, walking-pose, compact-stream, and existing mutation gates
+  require a fresh independent rereview; no target evidence is authorized here.
+
   Commit with `perf(saturn): cull and bin Mario by meshlet`.
 
 ### Task 5: Replace fixed terrain/Mario joins with one opportunistic SH-2 queue
