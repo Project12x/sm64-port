@@ -100,3 +100,30 @@ uint8_t sm64_saturn_mario_actor_pose(
     }
     return 1U;
 }
+
+uint8_t sm64_saturn_mario_actor_pose_selector(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    sm64_saturn_mario_pose_selector_t *selector)
+{
+    sm64_saturn_mario_actor_pose_t pose;
+
+    if (selector == NULL) return 0U;
+    selector->vertex_bank_id = 0U;
+    selector->material_bank_id = 0U;
+    selector->frame = 0U;
+    selector->frame_count = 0U;
+    selector->vertex_count = 0U;
+    selector->walking_bank = 0U;
+    selector->valid = 0U;
+    if (!sm64_saturn_mario_actor_pose(snapshot, &pose)) return 0U;
+    selector->vertex_bank_id = pose.walking_bank ?
+        SM64_SATURN_MARIO_VERTEX_BANK_WALKING :
+        SM64_SATURN_MARIO_VERTEX_BANK_NEUTRAL;
+    selector->material_bank_id = SM64_SATURN_MARIO_MATERIAL_BANK_DEFAULT;
+    selector->frame = pose.frame;
+    selector->frame_count = pose.frame_count;
+    selector->vertex_count = pose.vertex_count;
+    selector->walking_bank = pose.walking_bank;
+    selector->valid = 1U;
+    return 1U;
+}

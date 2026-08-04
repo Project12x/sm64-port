@@ -29,6 +29,22 @@ typedef struct sm64_saturn_mario_actor_pose {
     uint8_t walking_bank;
 } sm64_saturn_mario_actor_pose_t;
 
+typedef struct sm64_saturn_mario_pose_selector {
+    uint32_t vertex_bank_id;
+    uint32_t material_bank_id;
+    uint16_t frame;
+    uint16_t frame_count;
+    uint16_t vertex_count;
+    uint8_t walking_bank;
+    uint8_t valid;
+} sm64_saturn_mario_pose_selector_t;
+
+enum {
+    SM64_SATURN_MARIO_VERTEX_BANK_NEUTRAL = 1U,
+    SM64_SATURN_MARIO_VERTEX_BANK_WALKING = 2U,
+    SM64_SATURN_MARIO_MATERIAL_BANK_DEFAULT = 1U,
+};
+
 /* Reads only gMarioState/gMarioObject; it never writes simulation state. */
 uint8_t sm64_saturn_mario_actor_snapshot(
     sm64_saturn_mario_actor_snapshot_t *snapshot);
@@ -37,5 +53,9 @@ uint8_t sm64_saturn_mario_actor_snapshot(
 uint8_t sm64_saturn_mario_actor_pose(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     sm64_saturn_mario_actor_pose_t *pose);
+
+uint8_t sm64_saturn_mario_actor_pose_selector(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    sm64_saturn_mario_pose_selector_t *selector);
 
 #endif

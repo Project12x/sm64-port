@@ -48,7 +48,7 @@ the unsafe suppression Step 5 unchecked/BLOCKED and marks the CUE/Ymir step
 NOT AUTHORIZED. No code or tests were run in this documentation transition;
 only `git diff --check` is required before the tracked documentation commit.
 
-Task 1D: **ACTIVE in quality-fix round 2/5**, not source-complete. Runtime
+Task 1D: **source-complete; target CUE/Ymir pending**. Runtime
 containment is implemented at `98f26f26`; review-fix round 1 is `fe1074b8` and
 quality-fix round 2 is `98670c48`. The scoped spec rereview marks both prior
 Important findings **ADDRESSED** with no new Critical or Important findings.
@@ -62,6 +62,42 @@ observable whitespace and malformed values before activation. Tests compare
 otherwise identical demo+replay configurations, scan the complete normal
 compile-time path, and discover tool paths without clone-specific constants.
 The plan/spec/evidence consistently define D1 as the sole owner-authorized,
-non-promotable exception; it does not reopen A1. Quality rereview, the known
-host-wrapper path gate, target build, and Ymir remain open. A1 remains
-**BLOCKED**. No target build or Ymir run occurred.
+non-promotable exception; it does not reopen A1. Both scoped rereviews are GO.
+Focused source policy passed 4/4 and a fresh DLL-safe direct execution of
+`build/saturn/host-tests/runtime-contract-test.exe` exited 0. The Make wrapper
+path-translation failure remains an infrastructure gate; target build and Ymir
+remain open. A1 remains **BLOCKED**. No target build or Ymir run occurred.
+Task 1D: complete (commits 98f26f26..1e828879, spec and quality rereviews
+clean). Serial `make -B -j1` through the audited wrapper built the tagged
+diagnostic CUE in 258.5 seconds. The owner ran it in Ymir with the project
+32-Mbit DRAM profile and observed approximately 2 FPS with no obvious
+improvement. This is a negative upper-bound result: A1 stays BLOCKED for
+correctness and is deferred behind Emergency A9.0. The runtime-contract Make
+wrapper WinError 5 remains an infrastructure gate, not a D1 completion blocker.
+
+2026-08-04 task transition: the valid desktop-Ymir run is launch-stable but
+still visibly slow. The owner reports VDP1 ≈2 FPS and VDP2 ≈60 FPS. This
+supersedes the earlier reversed counter interpretation and invalidates VDP2
+as the active bottleneck; headless BIOS traces are not target evidence because
+they did not load paired ELF main bytes at linked address. Emergency A9.0 is
+source-complete/launch-stable with no claimed FPS gain. Task 2/A2 is ACTIVE at
+Step 1: failing immutable snapshot-bank lifecycle tests. Its remaining gates
+are the red test, minimal state machine, sourceboot capture integration,
+pointer-free static proof, focused host gates, two reviews, and a later target
+test. No build or emulator run occurred in this documentation transition.
+
+Task 2/A2: **source-complete; verification/review pending**. The task adds a
+Saturn-only fixed-width two-slot snapshot bank with fenced `FREE → WRITING →
+READY → RENDERING → COMPLETE → FREE` lifecycle plus terminal quarantine. The
+master alone captures live SM64 state after every source tick; the published
+record retains scalar Mario/camera data and generated-bank identifiers only.
+The watched direct-host red failed on the intentionally missing header/API;
+the normal wrapper first hit the known `\\d\\Code...` Windows-Python path
+translation failure. With an explicit forward-slash repository-root override,
+`verify-render-snapshot-bank` and `verify-dual-frame-bank` passed. The former
+also runs the source pointer-field guard. `verify-runtime-contracts` compiled
+but failed at the preserved terrain command byte assertion
+`runtime_contract_test.c:4018`; do not credit that gate. No target build/Ymir
+was run. Task commit: `feat(saturn): add immutable render snapshot banks`
+(pending at this ledger transition). Independent specification and quality
+reviews, runtime-contract closure, and target evidence remain required.

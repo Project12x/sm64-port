@@ -436,3 +436,42 @@ the helper and `git diff --check` also pass. No target build, headless run,
 GUI launch, or Ymir configuration change occurred. The remaining gate is one
 owner-observed desktop launch of a freshly staged CUE, followed by inspection
 of its generated report before interpreting any post-BIOS failure.
+
+## 2026-08-04 runtime observation — VDP1 is the active bottleneck
+
+The owner manually ran the stable desktop-Ymir path with the project profile,
+the staged CUE, and the profile-managed 32-Mbit DRAM cart. The target stayed
+open and remained visibly slow. Ymir reported VDP1 at approximately 2 FPS and
+VDP2 at approximately 60 FPS. This is qualitative target evidence, not a
+benchmark, but it decisively contradicts the previous VDP1≈60/VDP2≈1–2
+interpretation. The active optimization path is therefore command/plot work
+sent to VDP1 and CPU work serialized ahead of it; VDP2 is not treated as the
+current limiting subsystem. No headless BIOS trace result may be used to
+override this observation because that harness did not load paired ELF main
+bytes at their linked address.
+
+Task transition: Emergency A9.0 is source-complete and launch-stable but has
+no claimed FPS gain. Task 2/A2 begins at its failing lifecycle-test step.
+Snapshot publication is a prerequisite for scene-neutral pre-transform
+cluster/LOD admission in A3; it is not itself counted as a performance result.
+
+## A2 immutable snapshot-bank source evidence (2026-08-04)
+
+- TDD red: the new lifecycle fixture was compiled before the snapshot header
+  existed and failed for the missing API/header. The normal MSYS wrapper first
+  hit the known `\\d\\Code...` Windows-Python path translation failure; a direct
+  host compiler invocation then reached the intended missing-header failure.
+- Green: `verify-render-snapshot-bank` passed with an explicit forward-slash
+  `SATURN_REPO_ROOT` override, compiling with `-std=c11 -Wall -Wextra -Werror`.
+  It covers generation-zero rejection, write/publish/acquire/complete/retire,
+  stale and mixed camera/actor generation rejection, double acquire, and
+  quarantined-bank non-reuse. Its companion source test rejects pointer fields
+  in the published view/snapshot/release, Mario scalar snapshot, and pose
+  selector records.
+- Green: `verify-dual-frame-bank` passed, including the uncached-release source
+  gate and five-invalid-handoff mutation gate.
+- Open: `verify-runtime-contracts` compiled but failed at the preserved
+  terrain-command `memcmp` assertion in `tools/saturn/runtime_contract_test.c:4018`.
+  It is not attributed to A2 and remains uncredited. No target build or Ymir
+  run was performed. A2 is source-complete only and requires independent
+  specification and code-quality review before task completion.

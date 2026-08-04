@@ -43,19 +43,18 @@ and the evidence report before starting another task.
   A1 remains blocked for full-game correctness but is deferred behind the
   presentation-boundary correction; D1 remains deliberately broken,
   compile-time-only, and never a default, replay baseline, or full-game evidence.
-- [ ] **Emergency A9.0 — one VBlank, one presentation generation:**
-  Task 3 trace implementation is source-complete; independent reviews and one
-  serial trace CUE/headless debug capture remain pending in
-  `docs/superpowers/plans/2026-08-03-vblank-presentation-boundary.md`. After
-  the first and replacement A9 CUEs froze/exited after BIOS, `30123c1b`
-  exposes the persistent, symbol-resolvable boot trace needed to distinguish
-  bootstrap, scheduler, and VDP handoff stalls. It is diagnostic only, with no
-  GUI or performance path. Ymir's prior VDP1 ≈60 / VDP2 ≈1–2 FPS counters
-  still indicate VDP1 submission had outrun displayed-field completion. The
-  existing runtime-contract wrapper remains blocked by the recorded
-  Windows-path failure before compilation. This full-game-safe correction
-  moves ahead of A2–A8 and the broader A9 overlap work.
-- [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
+- [x] **Emergency A9.0 — one VBlank, one presentation generation:**
+  source-complete and desktop-Ymir launch-stable, but it did not produce the
+  expected performance improvement. The earlier headless trace harness is
+  invalid for target-health conclusions because it did not load paired ELF
+  main bytes at their linked address. The owner's valid desktop-Ymir
+  observation is VDP1 ≈2 FPS and VDP2 ≈60 FPS, reversing the prior counter
+  reading: VDP2 is not the current bottleneck. A9.0 remains retained as a
+  bounded-cadence correctness repair, not evidence of an FPS gain.
+- [ ] **Task 2 / A2 — immutable snapshot banks:** source-complete; runtime
+  contract and two independent reviews remain open. This is the full-game-safe
+  prerequisite for A3's pre-transform VDP1 workload reduction; it is not
+  itself claimed as an FPS improvement.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
@@ -421,7 +420,7 @@ types, ownership rules, or production fallbacks.
       sm64_saturn_render_snapshot_bank_t *bank, uint32_t generation);
   ```
 
-- [ ] **Step 1: Write failing bank-lifecycle tests**
+- [x] **Step 1: Write failing bank-lifecycle tests**
 
   Cover generation zero rejection, write/publish/acquire/complete/retire,
   stale acquire rejection, mixed camera/actor generation rejection, double
@@ -439,36 +438,43 @@ types, ownership rules, or production fallbacks.
   assert(sm64_saturn_render_snapshot_retire(&bank, slot));
   ```
 
-- [ ] **Step 2: Add `verify-render-snapshot-bank` and record red evidence**
+- [x] **Step 2: Add `verify-render-snapshot-bank` and record red evidence**
 
   Compile the fixture with `-std=c11 -Wall -Wextra -Werror`; expected failure
   is the missing header/API.
 
-- [ ] **Step 3: Implement the minimal state machine**
+- [x] **Step 3: Implement the minimal state machine**
 
   Use fixed-width fields and compiler fences. Keep bulk snapshot data separate
   from the uncached release record. Reject every illegal state transition
   without mutating the bank.
 
-- [ ] **Step 4: Capture authoritative state once per simulation generation**
+- [x] **Step 4: Capture authoritative state once per simulation generation**
 
   In `sourceboot/main.c`, fill a `WRITING` slot only after the source tick.
   Copy Q16 camera state and scalar actor/pose selectors; reference only
   generated immutable vertex/material banks. Publish generation last.
 
-- [ ] **Step 5: Prove the slave-facing snapshot has no live pointers**
+- [x] **Step 5: Prove the slave-facing snapshot has no live pointers**
 
   Add `_Static_assert`/source checks forbidding `MarioState *`, graph-node
   pointers, VDP1 backend pointers, and VRAM pointers in snapshot types.
 
-- [ ] **Step 6: Run `verify-render-snapshot-bank`, runtime contracts, and the dual-frame-bank fixture**
+- [ ] **Step 6: Run `verify-render-snapshot-bank`, runtime contracts, and the dual-frame-bank fixture — ACTIVE**
 
   Expected: all PASS, including stale/mixed generation failures.
 
-- [ ] **Step 7: Update documents, commit, and complete two-stage review**
+- [ ] **Step 7: Update documents, commit, and complete two-stage review — ACTIVE**
 
   Record every transition/test and commit with
   `feat(saturn): add immutable render snapshot banks`.
+
+  A2 implementation has a watched missing-header/API red compile, then green
+  lifecycle/source-boundary test and green dual-frame-bank fixture. The wider
+  runtime contract remains red at its existing terrain-command byte comparison
+  (`runtime_contract_test.c:4018`), so it is not credited as green. Target
+  build/Ymir and both independent reviews remain unexecuted; A2 is
+  source-complete only, never a performance claim.
 
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 

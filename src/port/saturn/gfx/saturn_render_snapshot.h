@@ -1,0 +1,86 @@
+/* Immutable master-to-render snapshot publication for the Saturn path. */
+#ifndef SM64_SATURN_RENDER_SNAPSHOT_H
+#define SM64_SATURN_RENDER_SNAPSHOT_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "saturn_actor_bridge.h"
+
+/* This project-owned state machine uses only the bank handoff pattern studied
+ * in SlaveDriver Engine (a8986591557b6e680550d3c23970284d3b38ff8f,
+ * GPL-3.0-or-later) and Sonic Z-Treme (cff75451c1616aac1236fc2b44223902b55c706b,
+ * GPL-3.0). No upstream implementation was copied. */
+
+enum sm64_saturn_render_snapshot_state {
+    SM64_SATURN_RENDER_SNAPSHOT_FREE = 0U,
+    SM64_SATURN_RENDER_SNAPSHOT_WRITING = 1U,
+    SM64_SATURN_RENDER_SNAPSHOT_READY = 2U,
+    SM64_SATURN_RENDER_SNAPSHOT_RENDERING = 3U,
+    SM64_SATURN_RENDER_SNAPSHOT_COMPLETE = 4U,
+    SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED = 5U,
+};
+
+typedef struct sm64_saturn_render_view {
+    int32_t view_projection_q16[4][4];
+    int32_t camera_position_q16[3];
+    int32_t camera_focus_q16[3];
+    uint32_t generation;
+} sm64_saturn_render_view_t;
+
+/* The source bank deliberately contains scalar copies and generated-bank IDs
+ * only. It contains no live SM64, graph-node, VDP1, or VRAM pointer. */
+typedef struct sm64_saturn_render_snapshot {
+    sm64_saturn_render_view_t camera;
+    sm64_saturn_mario_actor_snapshot_t mario;
+    sm64_saturn_mario_pose_selector_t mario_pose;
+    uint32_t generation;
+    uint32_t actor_generation;
+    uint32_t scene_id;
+    uint32_t area_id;
+    uint32_t geometry_bank_id;
+    uint32_t material_bank_id;
+} sm64_saturn_render_snapshot_t;
+
+/* Keep the small release record distinct from the bulk snapshot. Target code
+ * locates this record through its cache-through alias before a peer reads the
+ * snapshot payload. */
+typedef struct sm64_saturn_render_snapshot_release {
+    volatile uint32_t generation;
+    volatile uint32_t state;
+} sm64_saturn_render_snapshot_release_t;
+
+typedef struct sm64_saturn_render_snapshot_slot {
+    sm64_saturn_render_snapshot_t snapshot;
+    sm64_saturn_render_snapshot_release_t release;
+} sm64_saturn_render_snapshot_slot_t;
+
+typedef struct sm64_saturn_render_snapshot_bank {
+    sm64_saturn_render_snapshot_slot_t slot[2];
+} sm64_saturn_render_snapshot_bank_t;
+
+_Static_assert(sizeof(sm64_saturn_render_view_t) == 92U,
+               "render-view ABI must remain fixed-width");
+_Static_assert(sizeof(sm64_saturn_render_snapshot_release_t) == 8U,
+               "snapshot release record must remain two words");
+
+void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank);
+bool sm64_saturn_render_snapshot_begin_write(
+    sm64_saturn_render_snapshot_bank_t *bank, uint32_t generation,
+    sm64_saturn_render_snapshot_t **out);
+bool sm64_saturn_render_snapshot_publish(
+    sm64_saturn_render_snapshot_bank_t *bank,
+    sm64_saturn_render_snapshot_t *snapshot);
+const sm64_saturn_render_snapshot_t *
+sm64_saturn_render_snapshot_acquire_ready(
+    sm64_saturn_render_snapshot_bank_t *bank, uint32_t generation);
+bool sm64_saturn_render_snapshot_complete(
+    sm64_saturn_render_snapshot_bank_t *bank,
+    const sm64_saturn_render_snapshot_t *snapshot);
+bool sm64_saturn_render_snapshot_retire(
+    sm64_saturn_render_snapshot_bank_t *bank,
+    const sm64_saturn_render_snapshot_t *snapshot);
+bool sm64_saturn_render_snapshot_quarantine(
+    sm64_saturn_render_snapshot_bank_t *bank, uint32_t generation);
+
+#endif

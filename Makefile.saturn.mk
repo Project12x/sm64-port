@@ -62,7 +62,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-dual-frame-bank verify-dual-actor-worker verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-snapshot-bank verify-dual-frame-bank verify-dual-actor-worker verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -289,6 +289,16 @@ verify-visible-position-set:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/visible_position_set_test.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/visible-position-set-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/visible-position-set-test$(HOST_EXEEXT)"
+
+verify-render-snapshot-bank:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_snapshot_bank_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_render_snapshot_source.py"
 
 verify-dual-frame-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

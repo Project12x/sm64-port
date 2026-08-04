@@ -10,6 +10,7 @@
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_actor_bridge.h"
+#include "saturn_render_snapshot.h"
 #include "saturn_demo_render.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_math_route_capture.h"
@@ -117,6 +118,8 @@ static uint32_t sourceboot_trace_vdp1_presentation_generation;
 static uint32_t sourceboot_trace_vdp2_presentation_generation;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
+static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
+static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
 sm64_saturn_camera_timing_t sm64_saturn_camera_timing;
@@ -161,6 +164,49 @@ static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
     return (uint16_t)(end - start);
 }
 
+static int32_t sourceboot_world_to_q16(int32_t value)
+{
+    if (value > INT32_MAX / 65536) return INT32_MAX;
+    if (value < INT32_MIN / 65536) return INT32_MIN;
+    return value * 65536;
+}
+
+static void sourceboot_capture_render_snapshot(uint32_t generation)
+{
+    sm64_saturn_render_snapshot_t *snapshot = NULL;
+    uint32_t axis;
+
+    if (!sm64_saturn_render_snapshot_begin_write(&sourceboot_render_snapshots,
+                                                 generation, &snapshot)) {
+        return;
+    }
+    if (!sm64_saturn_mario_actor_snapshot(&snapshot->mario)) {
+        snapshot->mario.valid = 0U;
+    }
+    (void)sm64_saturn_mario_actor_pose_selector(&snapshot->mario,
+                                                &snapshot->mario_pose);
+    for (axis = 0U; axis < 4U; axis++) {
+        snapshot->camera.view_projection_q16[axis][axis] = 65536;
+    }
+    for (axis = 0U; axis < 3U; axis++) {
+        snapshot->camera.camera_position_q16[axis] =
+            sourceboot_world_to_q16(snapshot->mario.camera_position[axis]);
+        snapshot->camera.camera_focus_q16[axis] =
+            sourceboot_world_to_q16(snapshot->mario.camera_focus[axis]);
+    }
+    snapshot->camera.generation = generation;
+    snapshot->actor_generation = generation;
+    snapshot->scene_id = (uint32_t)gCurrLevelNum;
+    snapshot->area_id = (uint32_t)gCurrAreaIndex;
+    snapshot->geometry_bank_id = snapshot->mario_pose.vertex_bank_id;
+    snapshot->material_bank_id = snapshot->mario_pose.material_bank_id;
+    if (!sm64_saturn_render_snapshot_publish(&sourceboot_render_snapshots,
+                                             snapshot)) {
+        (void)sm64_saturn_render_snapshot_quarantine(&sourceboot_render_snapshots,
+                                                      generation);
+    }
+}
+
 static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
@@ -202,6 +248,7 @@ static void sourceboot_run_source_tick(void)
         sm64_saturn_source_runtime_state()->scene_graph_walks;
     sourceboot_fast3d.profile.scene_graph_walks_suppressed =
         sm64_saturn_source_runtime_state()->scene_graph_walks_suppressed;
+    sourceboot_capture_render_snapshot(sourceboot_sim_tick_count);
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     if (sm64_saturn_source_runtime_state()->input_replay_complete) {
         sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);
@@ -675,6 +722,7 @@ int main(void) {
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED, 0U);
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
+    sm64_saturn_render_snapshot_reset(&sourceboot_render_snapshots);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
      * IR bridge below. Keep the original exec_display_list symbol reachable
@@ -913,22 +961,30 @@ int main(void) {
         }
         sourceboot_trace_scheduler_credit = sim_vblank_credit;
 
-        /* Renderer-facing actor state is captured after the authoritative
-         * source tick and before command emission. The bridge is read-only;
-         * the eventual IR renderer consumes these records instead of
-         * consulting live globals from a transform worker. */
-#if SATURN_DEMO_PATH
-        if (simulation_ran &&
-            sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
+        /* Current sourceboot renders only the latest completed fixed-step
+         * state. A bounded recovery tick can leave one older READY snapshot;
+         * consume and retire that intentionally skipped record before taking
+         * the newest generation. A later overlapped worker replaces this
+         * master-only catch-up retirement with its own terminal join. */
+        if (sourceboot_sim_tick_count > 1U) {
+            const sm64_saturn_render_snapshot_t *const skipped_snapshot =
+                sm64_saturn_render_snapshot_acquire_ready(
+                    &sourceboot_render_snapshots, sourceboot_sim_tick_count - 1U);
+            if (skipped_snapshot != NULL) {
+                (void)sm64_saturn_render_snapshot_complete(
+                    &sourceboot_render_snapshots, skipped_snapshot);
+                (void)sm64_saturn_render_snapshot_retire(
+                    &sourceboot_render_snapshots, skipped_snapshot);
+            }
+        }
+        sourceboot_active_render_snapshot =
+            sm64_saturn_render_snapshot_acquire_ready(
+                &sourceboot_render_snapshots, sourceboot_sim_tick_count);
+        if (sourceboot_active_render_snapshot != NULL) {
+            sourceboot_mario_snapshot = sourceboot_active_render_snapshot->mario;
             (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                                &sourceboot_mario_pose);
         }
-#else
-        if (sm64_saturn_mario_actor_snapshot(&sourceboot_mario_snapshot)) {
-            (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
-                                               &sourceboot_mario_pose);
-        }
-#endif
         sourceboot_fast3d.profile.demo_actor_snapshot_valid =
             sourceboot_mario_snapshot.valid;
         sourceboot_fast3d.profile.demo_actor_pose_vertices =
@@ -1018,5 +1074,12 @@ int main(void) {
 #endif
 
         sourceboot_present_generation(scheduler_now);
+        if (sourceboot_active_render_snapshot != NULL) {
+            (void)sm64_saturn_render_snapshot_complete(
+                &sourceboot_render_snapshots, sourceboot_active_render_snapshot);
+            (void)sm64_saturn_render_snapshot_retire(
+                &sourceboot_render_snapshots, sourceboot_active_render_snapshot);
+            sourceboot_active_render_snapshot = NULL;
+        }
     }
 }

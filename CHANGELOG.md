@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added Saturn-only immutable two-slot render snapshot banks with fixed-width
+  camera, scene, Mario, pose-selector, and generated-bank-ID records. The
+  master publishes a generation only after camera and actor records agree;
+  illegal lifecycle transitions, stale acquires, double acquires, and timed-out
+  quarantined slots fail closed so later pre-transform admission cannot mix
+  live game state or reuse an unsafe bank.
+
 - Added an opt-in desktop Ymir launch helper that records the exact SDL3
   command, working directory, project profile, staged CUE, and CUE-referenced
   ISO identities before manual testing. It keeps the 32-Mbit DRAM cart
