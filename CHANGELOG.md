@@ -4,6 +4,11 @@
 
 ### Added
 
+- Sourceboot debug builds now publish a low-cost, symbol-resolvable RAM trace
+  across bootstrap, scheduler, VDP1, and VDP2 boundaries. The bounded headless
+  Ymir reader reports its last stage and raw words after BIOS handoff, so the
+  repeated post-BIOS freeze can be diagnosed without a GUI launch or a timing
+  measurement.
 - Default-off `diag-skip-geo` measures a risky duplicate geo-walk upper bound;
   it requires demo/replay and is not a full-game mode or promotion path.
 - Declared Saturn-only build support so obsolete PC/N64 guidance cannot imply a

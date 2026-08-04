@@ -49,6 +49,43 @@
 
 #define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
 #define SOURCEBOOT_MAX_SIM_CATCHUP 2U
+#define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
+#define SOURCEBOOT_BOOT_TRACE_VERSION 1U
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t stage;
+    uint32_t stage_id;
+    uint32_t observed_vblank_generation;
+    uint32_t scheduler_credit;
+    uint32_t vdp1_presentation_generation;
+    uint32_t vdp2_presentation_generation;
+} sm64_saturn_sourceboot_boot_trace_t;
+
+enum {
+    SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY = 1U,
+    SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED,
+    SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_AFTER,
+    SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER,
+    SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_AFTER,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_AFTER,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_BEFORE,
+    SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_AFTER,
+};
+
+/* Deliberately non-static: headless Ymir resolves this symbol from the ELF
+ * and reads the record from target RAM after BIOS handoff.  `stage` is a
+ * monotonically advancing publication sequence; `stage_id` names the last
+ * boundary reached, so repeated frame-loop stages remain distinguishable. */
+volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace;
 
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
@@ -63,6 +100,9 @@ static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
 static uint32_t sourceboot_vdp1_bank_late_dma;
 static uint32_t sourceboot_dma_wait_ticks_accum;
 static uint32_t sourceboot_vdp1_wait_ticks_accum;
+static uint32_t sourceboot_trace_scheduler_credit;
+static uint32_t sourceboot_trace_vdp1_presentation_generation;
+static uint32_t sourceboot_trace_vdp2_presentation_generation;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
@@ -74,6 +114,23 @@ volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture;
 
 const sm64_saturn_input_replay_sample_t *
 sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
+
+static void sourceboot_boot_trace_write(uint32_t stage_id,
+                                        uint32_t observed_vblank_generation)
+{
+    sourceboot_boot_trace.magic = SOURCEBOOT_BOOT_TRACE_MAGIC;
+    sourceboot_boot_trace.version = SOURCEBOOT_BOOT_TRACE_VERSION;
+    sourceboot_boot_trace.observed_vblank_generation =
+        observed_vblank_generation;
+    sourceboot_boot_trace.scheduler_credit =
+        sourceboot_trace_scheduler_credit;
+    sourceboot_boot_trace.vdp1_presentation_generation =
+        sourceboot_trace_vdp1_presentation_generation;
+    sourceboot_boot_trace.vdp2_presentation_generation =
+        sourceboot_trace_vdp2_presentation_generation;
+    sourceboot_boot_trace.stage_id = stage_id;
+    sourceboot_boot_trace.stage++;
+}
 
 static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
 {
@@ -482,8 +539,19 @@ sourceboot_vdp2_camera_snapshot(void)
 static void sourceboot_present_generation(uint32_t presentation_generation)
 {
     const uint16_t vdp1_wait_start = cpu_frt_count_get();
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_BEFORE,
+        presentation_generation);
     vdp1_sync_render();
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_RENDER_AFTER,
+        presentation_generation);
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_BEFORE,
+                                presentation_generation);
     vdp1_sync();
+    sourceboot_trace_vdp1_presentation_generation = presentation_generation;
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_VDP1_SYNC_AFTER,
+                                presentation_generation);
     sourceboot_fast3d.profile.vdp1_wait_ticks_last =
         sourceboot_frt_delta(vdp1_wait_start, cpu_frt_count_get());
     sourceboot_vdp1_wait_ticks_accum +=
@@ -495,8 +563,15 @@ static void sourceboot_present_generation(uint32_t presentation_generation)
     sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,
                                  &sourceboot_fast3d.profile,
                                  sourceboot_sim_tick_count);
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_BEFORE,
+        presentation_generation);
     sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
                                   &sourceboot_vdp2_backend);
+    sourceboot_trace_vdp2_presentation_generation = presentation_generation;
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_AFTER,
+        presentation_generation);
     sourceboot_vdp1_bank_generation = presentation_generation;
     sourceboot_vdp1_bank_submitted = presentation_generation;
     sourceboot_fast3d.profile.vdp1_bank_generation = presentation_generation;
@@ -538,6 +613,7 @@ int main(void) {
     /* Keep the one-shot SH-2 kernel vector observable in headless Ymir's
      * no-cart negative-control configuration too: cart loading may fail
      * before the source game loop is available. */
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY, 0U);
     sm64_saturn_sourceboot_q16_kernel_probe_run();
     const sm64_saturn_source_cart_status_t cart_status =
         sm64_saturn_source_cart_load();
@@ -560,12 +636,16 @@ int main(void) {
                "SOURCE.DAT -> 4 MiB RAM cart\n"
                "Source loop -> Fast3D task intake\n");
     dbgio_flush();
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE, 0U);
     sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
                                  &sourceboot_fast3d.profile,
                                  sourceboot_sim_tick_count);
     sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
                                   &sourceboot_vdp2_backend);
     vdp2_sync_wait();
+    sourceboot_boot_trace_write(
+        SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED, 0U);
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
@@ -743,10 +823,15 @@ int main(void) {
      * demo build instead schedules authoritative source ticks at 30 Hz and
      * suppresses only the source display-list submission while it catches up
      * after a slow IR render. */
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE,
+                                sourceboot_vblank_out_count);
     thread5_game_loop(NULL);
     uint32_t scheduler_vblank_clock = sourceboot_vblank_out_count;
     uint32_t sourceboot_presentation_generation = scheduler_vblank_clock;
     uint32_t sim_vblank_credit = SOURCEBOOT_SIM_VBLANK_DIVISOR;
+    sourceboot_trace_scheduler_credit = sim_vblank_credit;
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_AFTER,
+                                scheduler_vblank_clock);
     for (;;) {
         /* Sample the ISR-owned VBlank clock exactly once before any source
          * tick.  A tick can take longer than a field, but it cannot refill
@@ -757,10 +842,17 @@ int main(void) {
         uint32_t scheduler_now = sourceboot_vblank_out_count;
         sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
         scheduler_vblank_clock = scheduler_now;
+        sourceboot_trace_scheduler_credit = sim_vblank_credit;
         if (scheduler_now == sourceboot_presentation_generation) {
             /* No completed fresh field: retain the previously completed
              * VDP1 list and wait rather than rebuilding/uploading/syncing. */
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE,
+                scheduler_now);
             sm64_saturn_source_runtime_wait_vblank();
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER,
+                scheduler_now);
             continue;
         }
         sourceboot_presentation_generation = scheduler_now;
@@ -768,7 +860,14 @@ int main(void) {
              sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
              catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
             sim_vblank_credit -= SOURCEBOOT_SIM_VBLANK_DIVISOR;
+            sourceboot_trace_scheduler_credit = sim_vblank_credit;
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE,
+                scheduler_now);
             sourceboot_run_source_tick();
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER,
+                scheduler_now);
 #if SATURN_DEMO_PATH
             simulation_ran = true;
 #endif
@@ -784,6 +883,7 @@ int main(void) {
                 dropped_vblank_credit;
             sim_vblank_credit -= dropped_vblank_credit;
         }
+        sourceboot_trace_scheduler_credit = sim_vblank_credit;
 
         /* Renderer-facing actor state is captured after the authoritative
          * source tick and before command emission. The bridge is read-only;
