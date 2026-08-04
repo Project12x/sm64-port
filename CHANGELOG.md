@@ -4,6 +4,15 @@
 
 ### Added
 
+- Extended the source-only A5 queue contract with master/slave polling drains
+  and a local callback table. Descriptors still carry only callback
+  IDs; resolution happens after an exact-once claim and exposes the claiming
+  CPU to the callback, which is required before a future work-stealing render
+  path can publish cache-correct output ownership. The host fixture now proves
+  the slave drains all callback IDs without per-job function pointers; target
+  scheduling and FPS behavior remain unchanged until the existing fixed-lane
+  renderer is converted to descriptor-owned output banks.
+
 - Added the source-only A5 immutable render-job queue contract: fixed-width,
   pointer-free terrain/actor descriptor records publish through cache-through
   release words; master and slave claims are exact-once and terminal work alone

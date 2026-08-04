@@ -261,3 +261,67 @@ const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
         return NULL;
     return &queue->jobs[job_index];
 }
+
+static sm64_saturn_render_job_callback_fn callback_resolve(
+    const sm64_saturn_render_job_callback_table_t *callbacks,
+    uint16_t callback_id)
+{
+    if (callbacks == NULL ||
+        callback_id < SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
+        callback_id > SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER)
+        return NULL;
+    return callbacks->entries[callback_id -
+                              SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT];
+}
+
+static uint16_t drain(sm64_saturn_render_job_queue_t *queue,
+                      uint32_t generation,
+                      sm64_saturn_render_job_state_t claimed_state,
+                      const sm64_saturn_render_job_callback_table_t *callbacks,
+                      void *context)
+{
+    uint16_t completed = 0U;
+    uint16_t job_index = 0U;
+    bool claimed;
+
+    do {
+        claimed = claimed_state == SM64_SATURN_RENDER_JOB_CLAIMED_MASTER
+            ? sm64_saturn_render_job_queue_claim_master(queue, generation,
+                                                        &job_index)
+            : sm64_saturn_render_job_queue_claim_slave(queue, generation,
+                                                       &job_index);
+        if (!claimed) break;
+
+        queue = sm64_saturn_render_job_queue_cache_through(queue);
+        const sm64_saturn_render_job_t *const job =
+            queue == NULL ? NULL : &queue->jobs[job_index];
+        const sm64_saturn_render_job_callback_fn callback =
+            job == NULL ? NULL : callback_resolve(callbacks, job->callback_id);
+        const bool succeeded = callback != NULL &&
+            callback(job, claimed_state, context);
+        if (succeeded)
+            (void)sm64_saturn_render_job_queue_complete(
+                queue, generation, job_index, claimed_state);
+        else
+            (void)sm64_saturn_render_job_queue_fail(
+                queue, generation, job_index, claimed_state);
+        completed++;
+    } while (claimed);
+    return completed;
+}
+
+uint16_t sm64_saturn_render_job_queue_drain_master(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context)
+{
+    return drain(queue, generation, SM64_SATURN_RENDER_JOB_CLAIMED_MASTER,
+                 callbacks, context);
+}
+
+uint16_t sm64_saturn_render_job_queue_drain_slave(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context)
+{
+    return drain(queue, generation, SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE,
+                 callbacks, context);
+}

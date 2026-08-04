@@ -52,6 +52,20 @@ typedef struct sm64_saturn_render_job {
     uint16_t output_capacity;
 } sm64_saturn_render_job_t;
 
+/* The table belongs to the local renderer, not to a published descriptor.
+ * Jobs cross SH-2s by fixed callback ID only; the polling consumer resolves
+ * that ID after it has claimed the immutable descriptor. */
+typedef bool (*sm64_saturn_render_job_callback_fn)(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *context);
+
+#define SM64_SATURN_RENDER_JOB_CALLBACK_COUNT 4U
+
+typedef struct sm64_saturn_render_job_callback_table {
+    sm64_saturn_render_job_callback_fn
+        entries[SM64_SATURN_RENDER_JOB_CALLBACK_COUNT];
+} sm64_saturn_render_job_callback_table_t;
+
 /* State and claim are independent uncached 32-bit words.  TAS.B claims the
  * zero word before each state transition, so a descriptor has exactly one
  * owner from READY until it is terminal. */
@@ -97,5 +111,16 @@ bool sm64_saturn_render_job_queue_reset_retired(
 const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
     const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index);
+
+/* One polling pass claims until no READY work remains. The caller provides a
+ * renderer-local static callback table; callback addresses never enter the
+ * shared descriptor ABI. A failed/missing callback terminally fails only its
+ * own claimed job, preserving the generation's merge order. */
+uint16_t sm64_saturn_render_job_queue_drain_master(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context);
+uint16_t sm64_saturn_render_job_queue_drain_slave(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context);
 
 #endif

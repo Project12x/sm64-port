@@ -30,6 +30,7 @@ build, CUE, Ymir launch, replay, counter, visual, or FPS claim was made.
 | Gate | Result | Notes |
 |---|---|---|
 | Direct host C fixture | PASS | `gcc -std=c11 -Wall -Wextra -Werror -I src/port/saturn/gfx tools/saturn/render_job_queue_test.c src/port/saturn/gfx/saturn_render_job_queue.c` then `render-job-queue-test.exe`: racing host master/slave claimers give each job exactly one owner; stale/full/reset-before-terminal paths fail closed; master claims work while a slave claim remains occupied. |
+| Polling callback-table fixture | PASS | The same direct fixture publishes generation 11, drains it through `drain_slave`, and proves all four callback IDs resolve through a local table after claim. The claimed owner is passed to each callback; no callback pointer enters a descriptor. |
 | Queue coherency structural + mutation gate | PASS | `tools/saturn/verify_dual_cpu_coherency.py --queue-source ... --queue-header ... --self-test`: rejects cached state, a function-pointer descriptor, missing descriptor completion, non-final generation publication, reset before terminal retirement, and missing `tas.b`. |
 | `make verify-render-job-queue` | UNEXECUTED / infrastructure-blocked | The audited MSYS wrapper reached its known `\\d\\Code...` Windows-Python root translation/access error while creating `build/saturn/host-tests`; it failed before compiling this target. Direct equivalent gates above are green, but this broader wrapper gate is not credited. |
 
@@ -45,9 +46,13 @@ new queue is project-owned code; the existing GPL boundary is not expanded.
 
 ## Remaining gates
 
-1. SH-2 polling consumer and static callback-ID table.
-2. One-frame terrain/actor integration after the current A3/A4 candidate is
-   reviewed/handed off; old fixed split stays diagnostic-only.
+1. Bind the polling consumer to the accepted SH-2 entry only after terrain and
+   actor callbacks stop deriving output ownership from their fixed `begin ==
+   0` split. A master-steal of today’s nominal slave span would violate the
+   cache-through read protocol, so the required next design is
+   descriptor-owned output banks plus explicit claimed-CPU lane publication.
+2. One-frame terrain/actor integration after that ownership conversion and the
+   current A3/A4 candidate reviews; old fixed split stays diagnostic-only.
 3. Queue/coherency/actor/cluster/runtime aggregate gates, two independent
    reviews, target cache/coherency evidence, deterministic replay, and manual
    target visual/counter/FPS evidence.

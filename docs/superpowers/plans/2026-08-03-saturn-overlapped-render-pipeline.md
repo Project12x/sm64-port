@@ -826,7 +826,18 @@ types, ownership rules, or production fallbacks.
   tasks. Use callback IDs for world admission, world lowering, actor admission,
   and actor lowering. The host state machine is present and explicitly tested;
   the SH-2 polling entry and callback-table integration remain open because
-  the live A3/A4 candidate must not be changed by this source-only task.
+  the live A3/A4 candidate must not be changed by this source-only task. The
+  queue now has host-tested `drain_master`/`drain_slave` polling loops and a
+  local callback-table ABI: callbacks receive the claimed CPU state
+  after descriptor claim, while descriptors remain pointer-free. **Design
+  correction (2026-08-04):** this is not yet safe to bind to the live fixed
+  terrain/Mario callbacks. Those callbacks derive the output/cache lane from
+  `begin == 0` and their position/result banks encode a preassigned CPU split.
+  Allowing the master to steal a nominal slave range would make the master
+  later read its own cached write through the peer alias. Replace that fixed
+  lane coupling with descriptor-owned output banks plus an explicit execution
+  lane before making the queue the accepted CPU-DUAL callback. No dormant or
+  compile-disabled second `cpu_dual_slave_set` path is permitted.
 
 - [ ] **Step 5: Integrate terrain and actor jobs into one frame queue**
 

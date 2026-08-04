@@ -12,6 +12,11 @@ typedef struct claimant_context {
     volatile LONG claims[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
 } claimant_context_t;
 
+typedef struct callback_context {
+    uint16_t calls[SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY];
+    uint16_t total;
+} callback_context_t;
+
 static const sm64_saturn_render_job_t k_jobs[] = {
     {.type = SM64_SATURN_RENDER_JOB_WORLD_ADMIT,
      .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT,
@@ -54,6 +59,22 @@ static int expect(bool condition, const char *message)
     if (condition) return 1;
     fprintf(stderr, "%s\n", message);
     return 0;
+}
+
+static bool record_callback(const sm64_saturn_render_job_t *job,
+                            sm64_saturn_render_job_state_t claimed_state,
+                            void *opaque)
+{
+    callback_context_t *context = opaque;
+    if (job == NULL || context == NULL ||
+        job->callback_id == 0U ||
+        job->callback_id > SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER ||
+        (claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE))
+        return false;
+    context->calls[job->callback_id - 1U]++;
+    context->total++;
+    return true;
 }
 
 int main(void)
@@ -122,6 +143,31 @@ int main(void)
                 "master must claim useful work while slave is occupied")) return 1;
     if (!expect(!sm64_saturn_render_job_queue_reset_retired(&queue, 7U),
                 "reset before terminal retirement must fail closed")) return 1;
+
+    /* The persistent polling consumer resolves descriptor callback IDs through
+     * a static table. It claims until no READY work remains and never needs a
+     * per-job function pointer or a second join path. */
+    sm64_saturn_render_job_queue_init(&queue);
+    callback_context_t callbacks = {0};
+    sm64_saturn_render_job_t polling_jobs[4];
+    memcpy(polling_jobs, k_jobs, sizeof(polling_jobs));
+    for (uint16_t job = 0U; job < 4U; job++)
+        polling_jobs[job].snapshot_generation = 11U;
+    const sm64_saturn_render_job_callback_table_t callback_table = {
+        .entries = {record_callback, record_callback, record_callback,
+                    record_callback}};
+    if (!expect(sm64_saturn_render_job_queue_publish(
+                    &queue, 11U, polling_jobs, 4U),
+                "polling queue generation must publish")) return 1;
+    if (!expect(sm64_saturn_render_job_queue_drain_slave(
+                    &queue, 11U, &callback_table, &callbacks) == 4U,
+                "slave polling consumer must drain every ready job")) return 1;
+    if (!expect(callbacks.total == 4U && callbacks.calls[0] == 1U &&
+                    callbacks.calls[1] == 1U && callbacks.calls[2] == 1U &&
+                    callbacks.calls[3] == 1U,
+                "callback IDs must resolve through the static table")) return 1;
+    if (!expect(sm64_saturn_render_job_queue_all_terminal(&queue, 11U),
+                "polling consumer must terminally retire every callback")) return 1;
 
     puts("render job queue fixture: PASS");
     return 0;
