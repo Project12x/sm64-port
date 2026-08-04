@@ -1263,4 +1263,42 @@ open.
   `Ran 4 tests ... OK`. `git diff --check` also passed.
 - This is a target include-boundary repair only. It does not activate the
   dormant queue, replace the legacy CPU-DUAL callback, launch Ymir, or make an
-  FPS claim. One serialized post-review target rebuild remains required.
+  FPS claim. One serialized post-review target rebuild remained required.
+
+### A5.8 post-review target link and section proof (2026-08-04)
+
+- Repair `eb2ec2a2` received independent GO with no findings in audit commit
+  `8eef1c22`. The reviewer independently passed the wrapped four-case source
+  contract and range `git diff --check`.
+- The one authorized post-review exact Route-0/live-input/Pipe4 `-B -j1`
+  rebuild completed with exit 0 in 490.4 seconds. Full transcript:
+  `.tmp-a58-target-rebuild-20260804.log`. It compiled every new queue, graph,
+  runtime, bridge, payload, and callback-context source, linked the ELF, made
+  `SOURCE.DAT`, and packaged a fresh ISO/CUE. The log contains zero error,
+  undefined-reference, overflow, or region-fit matches. Existing source
+  warnings remain, plus the established RWX LOAD-segment linker warning; no
+  new render-queue warning appears.
+- Linked sections: `.text` `0x06004000+0x7d058`, `.data`
+  `0x06082ef0+0x9cd4`, `.bss` `0x0608cbe0+0x717f0`, `.uncached` P2
+  `0x260fe3d0+0x420` with physical load end `0x060fe7f0`, `.lwram_cmdts`
+  `0x00200000+0x20000`, and `.lwram_bss` `0x00220000+0xd1430`.
+  Physical HWRAM margin is `0x1810` (6,160 bytes), above the linker-enforced
+  `0x1000` floor; LWRAM margin is `0xebd0` (60,368 bytes).
+- The live initializers resolve in HWRAM at context `0x06073590`, graph
+  `0x060735a8`, queue `0x060735d8`, and payload `0x0607363c`. Shared actor/
+  terrain output metadata, callback contexts, graph, and queue resolve through
+  P2 from `0x260fe3d0` through `0x260fe5ac`. Dormant unreferenced callback and
+  drain routines are correctly garbage-collected until atomic cutover.
+  `sh-elf-nm -u` reports no unresolved symbols.
+- Artifact evidence (UTC 2026-08-04): CUE 88 bytes at `22:05:43.8512092`,
+  SHA-256 `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`;
+  ISO 4,657,152 bytes at `22:05:42.4357086`, SHA-256
+  `3dfb1627bd38aeb7dcd296f913e778f045685861f66fb3aaa153500125901f01`;
+  ELF 8,614,404 bytes at `22:05:35.4477100`, SHA-256
+  `7c62b65e2fc83a70e81c0655a8607b74716f694070d9ebce6bdfe1331b010a48`;
+  map SHA-256 `b9d3da9e5ea97a5d7016bb4fa03190279a3537e284d163cf55c546e8ae1a9426`;
+  `SOURCE.DAT` SHA-256
+  `1e4b622b7757367c8eba2e724db74e49a7fc4b4c5044182c6d09b7f8e62d266b`.
+- This closes only dormant target compile/link/section placement. No Ymir was
+  launched, the legacy CPU-DUAL path remains live, and cache/runtime/FPS gates
+  remain open.

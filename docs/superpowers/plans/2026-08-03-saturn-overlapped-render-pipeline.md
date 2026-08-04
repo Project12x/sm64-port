@@ -263,9 +263,13 @@ and the evidence report before starting another task.
   but failed before link because `saturn_render_job_queue.c` used Yaul's
   `CPU_CACHE_THROUGH` without importing its defining header. A watched source
   contract now requires the SH-only `<cpu/cache.h>` include, and the narrow
-  fix is host-green. Target link, section placement, artifact hashes, and
-  memory margins remain unchecked until the one serialized post-review
-  rebuild succeeds; no CPU-DUAL activation or Ymir launch occurred.
+  fix is host-green. Independent repair review is GO at `8eef1c22`; the one
+  serialized post-review rebuild then compiled, linked, and packaged at exit
+  0. The map proves live queue/graph/context/payload initializers in HWRAM,
+  P2 shared metadata placement, no unresolved symbols, 6,160 bytes of HWRAM
+  margin, and 60,368 bytes of LWRAM margin. Target compile/link/section
+  placement is therefore complete for the dormant route. Runtime cache
+  behavior, atomic CPU-DUAL activation, Ymir, and FPS remain unchecked.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

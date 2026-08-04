@@ -43,9 +43,10 @@ kept source acceptance NO-GO because part of the mutation matrix covered only
 lower phases. All mutations now run against all four phase-specific APIs and
 final independent source re-review is GO. The first exact serialized target
 build exposed a missing SH-only Yaul cache-header import in the queue source;
-the narrow repair is host-green and awaits review plus one serialized target
-rebuild. Target link and section placement, live sole-owner cutover, cache
-behavior, CUE/Ymir, and FPS evidence remain open.
+the narrow repair and independent review are GO. The one post-review serial
+rebuild now compiles, links, and packages with 6,160 bytes HWRAM and 60,368
+bytes LWRAM margin and no unresolved symbols. Live sole-owner cutover, target
+cache behavior, CUE/Ymir runtime validation, and FPS evidence remain open.
 
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset
