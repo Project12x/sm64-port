@@ -733,8 +733,9 @@ types, ownership rules, or production fallbacks.
 - [ ] **Step 8: Update documents, commit, and complete two-stage review — ACTIVE**
 
   Documentation/evidence is updated with the watched red, green host gates,
-  explicit source-only scope, and remaining review/target gates. The behavior
-  commit and independent specification then quality reviews remain open.
+  explicit source-only scope, and remaining review/target gates. Behavior
+  commit `7e419484` is recorded; independent specification then quality
+  reviews remain open.
 
   Commit with `perf(saturn): cull and bin Mario by meshlet`.
 
