@@ -93,3 +93,12 @@ source (2), reader (3), and presentation (6) pass plus Python compilation;
 the mutation suite rejects cached-only alias/writer and ABI-size changes. No
 target build/CUE/Ymir action occurred. Quality rereview, serial trace CUE, and
 bounded capture remain unexecuted.
+
+Task 3 fix round 3/5: the attempted bounded capture stopped before emulation
+when direct `sh-elf-nm` resolution produced no usable trace symbol. `2ba3ba64`
+uses the audited DLL-safe MSYS wrapper and accepts the target ABI's one leading
+underscore. RED covered empty direct output versus wrapper output, then the
+underscored symbol spelling. GREEN: reader (4), source trace (2), presentation
+(6), and Python compilation pass. The newest existing linked ELF resolves
+read-only at `0x060eb53c`; no target build/CUE/Ymir action occurred. Quality
+rereview and target capture remain pending.

@@ -102,3 +102,24 @@ alias removal, a cached writer, and a resized ABI. Reader (3) and retained
 presentation (6) gates pass, as does Python compilation. No target build, CUE
 construction, Ymir launch, or capture was performed. Quality rereview and the
 existing serial trace-CUE/capture gates remain open.
+
+## Fix round 3/5 — DLL-safe ELF symbol resolution
+
+The first bounded capture stopped before emulation because the reader launched
+`sh-elf-nm.exe` directly and then reported no exported trace symbol. The
+direct output path can be empty without the required MSYS DLL environment;
+the linked SH-ELF also spells the global `_sourceboot_boot_trace`, not the C
+source spelling without its ABI underscore. `2ba3ba64`
+(`fix(saturn): resolve boot trace symbol through MSYS`) now invokes the
+repository's `with-msys-toolchain.ps1` wrapper for `sh-elf-nm -g
+--defined-only` and accepts exactly the source and one-leading-underscore
+spellings.
+
+TDD RED: the reader contract first failed because no wrapper command builder
+existed; the added leading-underscore fixture then failed until the parser
+accepted that ABI spelling. GREEN: reader (4), trace source (2), and retained
+presentation (6) gates pass plus Python compilation. A read-only wrapper
+resolution of the newest linked sourceboot ELF succeeded at `0x060eb53c`.
+No target build, CUE construction, Ymir launch, or capture was performed.
+Independent quality rereview and the serial trace-CUE/capture gates remain
+open.
