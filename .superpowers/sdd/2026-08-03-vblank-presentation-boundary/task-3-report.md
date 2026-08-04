@@ -1,0 +1,67 @@
+# Task 3 report — persistent post-BIOS boundary trace
+
+Date: 2026-08-03
+Status: **source-complete; independent review and target evidence pending**
+
+## Outcome
+
+`30123c1b` (`diag(saturn): trace post-BIOS presentation boundaries`) adds the
+non-static volatile `sourceboot_boot_trace` target-RAM global. Its fixed
+eight-word layout is magic, version, monotonic write sequence (`stage`), named
+last boundary (`stage_id`), observed VBlank generation, scheduler credit, and
+VDP1/VDP2 presentation generations. The host resolves that exact global from
+the matching ELF, then reports both a decoded last stage and the raw words.
+
+## TDD evidence
+
+Before the source edit:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_boot_trace.py
+```
+
+RED: exit 1; both tests failed with `boot trace must publish a magic word`.
+
+Before the reader implementation:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_capture_sourceboot_boot_trace.py
+```
+
+RED: exit 1; explicit `AssertionError: sourceboot boot-trace reader is
+missing`.
+
+Focused GREEN and retained contract checks:
+
+```powershell
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_boot_trace.py
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_capture_sourceboot_boot_trace.py
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_presentation_boundary.py
+& .\.venv-saturn-tools\Scripts\python.exe tools\saturn\capture_sourceboot_boot_trace.py --help
+& .\.venv-saturn-tools\Scripts\python.exe -m py_compile tools\saturn\capture_sourceboot_boot_trace.py tools\saturn\test_sourceboot_boot_trace.py tools\saturn\test_capture_sourceboot_boot_trace.py
+```
+
+GREEN: exit 0. The trace and reader tests each ran two tests; the retained
+presentation-boundary mutation gate ran six. `git diff --check` over the
+behavior files also exited 0 before the implementation commit.
+
+## Contract mapping
+
+| Requirement | Evidence |
+| --- | --- |
+| Stable, volatile, symbol-resolvable target RAM record | The non-static `sourceboot_boot_trace` has a fixed eight-word uint32 layout. The source mutation gate rejects a static/non-volatile replacement; the reader resolves its exact global `nm` symbol. |
+| Monotonic stage plus scheduler/presentation state | The scalar writer increments `stage`, names `stage_id`, and publishes observed VBlank, current credit, and independent VDP1/VDP2 generations. Its mutation test rejects a non-monotonic assignment. |
+| Unambiguous boundaries with no side effects | Trace stages bracket bootstrap retirement, thread5, stale waits, source ticks, VDP1 render/sync, and VDP2 commit. The writer test rejects a VDP sync and requires no allocator or BOB branch. |
+| Bounded post-BIOS capture | The headless reader runs the proven BIOS input macro, accepts at most 3,600 post-BIOS frames, performs one `mem.peek`, and emits stage plus raw words. It is marked diagnostic-only, not a GUI launch, target build, or performance measurement. |
+
+## Remaining gates
+
+1. Independent specification and quality review of `30123c1b`.
+2. One serial trace CUE build through the audited MSYS wrapper.
+3. One bounded headless Ymir capture using the project profile/32-Mbit DRAM
+   cart and matching CUE/ELF; record its exact final stage and raw words before
+   any repair decision.
+
+No target build, CUE construction, Ymir launch, or capture was performed in
+this task. The trace establishes diagnostic observability only; it does not
+claim the cause of the post-BIOS failure.

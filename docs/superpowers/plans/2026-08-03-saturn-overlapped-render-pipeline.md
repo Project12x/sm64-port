@@ -44,17 +44,17 @@ and the evidence report before starting another task.
   presentation-boundary correction; D1 remains deliberately broken,
   compile-time-only, and never a default, replay baseline, or full-game evidence.
 - [ ] **Emergency A9.0 — one VBlank, one presentation generation:**
-  source-complete; independent reviews and replacement serial target/Ymir
-  evidence remain pending in
+  Task 3 trace implementation is source-complete; independent reviews and one
+  serial trace CUE/headless debug capture remain pending in
   `docs/superpowers/plans/2026-08-03-vblank-presentation-boundary.md`. After
-  the first A9 CUE froze/exited after BIOS, `815c4352` restored the
-  predecessor's VDP2 queue-retirement barrier before scheduler initialization;
-  the focused mutation gate is green but this hypothesis is not runtime-proven.
-  Ymir's prior VDP1 ≈60 / VDP2 ≈1–2 FPS counters still indicate VDP1
-  submission had outrun displayed-field completion. The existing
-  runtime-contract wrapper remains blocked by the recorded Windows-path
-  failure before compilation. This full-game-safe correction moves ahead of
-  A2–A8 and the broader A9 overlap work.
+  the first and replacement A9 CUEs froze/exited after BIOS, `30123c1b`
+  exposes the persistent, symbol-resolvable boot trace needed to distinguish
+  bootstrap, scheduler, and VDP handoff stalls. It is diagnostic only, with no
+  GUI or performance path. Ymir's prior VDP1 ≈60 / VDP2 ≈1–2 FPS counters
+  still indicate VDP1 submission had outrun displayed-field completion. The
+  existing runtime-contract wrapper remains blocked by the recorded
+  Windows-path failure before compilation. This full-game-safe correction
+  moves ahead of A2–A8 and the broader A9 overlap work.
 - [ ] **Task 2 / A2 — immutable snapshot banks:** pending.
 - [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.

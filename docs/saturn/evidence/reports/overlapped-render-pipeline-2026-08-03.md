@@ -115,6 +115,32 @@ barrier is source-complete but not a proven root-cause fix until independent
 reviews and one replacement serial CUE/manual `.ymir-profile` observation
 record post-BIOS liveness.
 
+## Emergency A9.0 Task 3 — persistent post-BIOS trace source evidence
+
+Both A9 CUEs stop immediately after BIOS without a target-readable fault
+record. `30123c1b` therefore exports the non-static volatile
+`sourceboot_boot_trace` symbol in target RAM. Its eight 32-bit words contain
+magic, version, monotonically increasing write sequence, named stage, observed
+VBlank generation, scheduler credit, and independent VDP1/VDP2 presentation
+generations. The writer records only scalar stores; it performs no VDP sync,
+allocation, or BOB-specific branch.
+
+The named stages bracket bootstrap retirement, `thread5_game_loop()`, stale
+VBlank waiting, source ticks, VDP1 render/sync, and VDP2 commit. The matching
+`capture_sourceboot_boot_trace.py` resolves the global by `sh-elf-nm` from the
+matching ELF, uses the existing bounded headless Ymir BIOS macro, performs one
+post-handoff `mem.peek`, and emits the decoded last stage plus raw words. It
+explicitly records that it is diagnostic-only, not a GUI launch, target build,
+or performance measurement.
+
+Focused RED: `test_sourceboot_boot_trace.py` failed against the pre-change
+source because no trace magic existed; the reader test failed because the
+module was absent. GREEN: both focused test modules pass (two tests each), and
+the retained presentation-boundary mutation gate passes all six tests. Python
+compilation and reader `--help` also pass. No target CUE, Ymir process, or
+runtime observation was run. Independent review and the serial trace-CUE plus
+bounded-capture gates remain open.
+
 ## Task 1D — sealed geo-walk upper-bound diagnostic
 
 ### Current verdict and scope

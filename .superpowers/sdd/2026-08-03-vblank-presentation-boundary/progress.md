@@ -59,3 +59,18 @@ CUE/ISO copied without modification to `.tmp-experimental-cue/presentation-bound
 for Ymir's long-path limitation. Ymir launched with `.ymir-profile`; manual
 owner observation is active, so speed/controls/VDP counter evidence remains
 unrecorded and Step 7 stays unchecked.
+
+Task 3: source-complete; independent review and target capture pending.
+Commit `30123c1b` (`diag(saturn): trace post-BIOS presentation boundaries`)
+adds a stable non-static volatile eight-word target-RAM trace and a bounded,
+symbol-aware headless Ymir reader. RED was observed before source work: the
+two-test source contract failed for missing magic, and the reader contract
+failed because its module was absent. GREEN: `test_sourceboot_boot_trace.py`
+(2), `test_capture_sourceboot_boot_trace.py` (2), and the retained
+`test_sourceboot_presentation_boundary.py` (6) all passed; the reader's help
+and Python compilation also passed. `git diff --check` passed before the
+commit. No target build, CUE construction, Ymir launch, or capture occurred.
+Remaining gates: independent specification/quality review, one serial trace
+CUE, then one bounded post-BIOS debug capture that records its exact last
+stage/raw words. The existing runtime-contract wrapper remains separately
+unpassed due to its known MSYS-to-Windows pre-compilation PermissionError.
