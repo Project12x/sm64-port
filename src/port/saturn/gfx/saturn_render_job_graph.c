@@ -60,6 +60,26 @@ static bool predecessor_failed(const sm64_saturn_render_job_graph_t *graph,
     return false;
 }
 
+static bool dependency_graph_acyclic(const uint8_t *dependency_mask,
+                                     uint16_t count)
+{
+    uint8_t retired = 0U;
+    const uint8_t valid_mask = (uint8_t)((1U << count) - 1U);
+    for (uint16_t pass = 0U; pass < count; pass++) {
+        bool progressed = false;
+        for (uint16_t index = 0U; index < count; index++) {
+            const uint8_t bit = (uint8_t)(1U << index);
+            if ((retired & bit) != 0U) continue;
+            if ((dependency_mask[index] & (uint8_t)~retired & valid_mask) != 0U)
+                continue;
+            retired |= bit;
+            progressed = true;
+        }
+        if (!progressed) break;
+    }
+    return retired == valid_mask;
+}
+
 void sm64_saturn_render_job_graph_init(sm64_saturn_render_job_graph_t *graph,
                                        sm64_saturn_render_job_queue_t *queue)
 {
@@ -83,6 +103,7 @@ bool sm64_saturn_render_job_graph_publish(
         if ((dependency_mask[index] & (uint8_t)~valid_mask) != 0U ||
             (dependency_mask[index] & (uint8_t)(1U << index)) != 0U)
             return false;
+    if (!dependency_graph_acyclic(dependency_mask, count)) return false;
     memcpy(graph->dependency_mask, dependency_mask, count);
     graph->generation = generation;
     graph->count = count;
@@ -136,11 +157,17 @@ bool sm64_saturn_render_job_graph_propagate_failures(
 {
     bool changed = false;
     if (!graph_current(graph, generation)) return false;
-    for (uint16_t index = 0U; index < graph->count; index++)
-        if (predecessor_failed(graph, index) &&
-            sm64_saturn_render_job_queue_quarantine_ready(graph->queue,
-                                                           generation, index))
-            changed = true;
+    bool pass_changed;
+    do {
+        pass_changed = false;
+        for (uint16_t index = 0U; index < graph->count; index++)
+            if (predecessor_failed(graph, index) &&
+                sm64_saturn_render_job_queue_quarantine_ready(graph->queue,
+                                                               generation, index)) {
+                changed = true;
+                pass_changed = true;
+            }
+    } while (pass_changed);
     return changed;
 }
 

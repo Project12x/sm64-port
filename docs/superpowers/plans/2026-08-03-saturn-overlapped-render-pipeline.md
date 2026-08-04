@@ -133,6 +133,10 @@ and the evidence report before starting another task.
   It deliberately does not bind the renderer or alter its sole legacy
   CPU-DUAL owner; the live-cutover source gate remains RED until one atomic
   conversion.
+  **Review correction:** the graph rejects cyclic/self dependencies before queue
+  publication and propagates a failed predecessor to every reverse-chain
+  ready dependent before terminal merge/reset; independent READY jobs remain
+  eligible and are not treated as blocked.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.

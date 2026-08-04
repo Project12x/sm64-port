@@ -940,3 +940,15 @@ open.
 - The renderer remains unbound and the `test_render_job_live_cutover_source.py`
   gate intentionally remains RED. No target build, CUE, Ymir run, counter, or
   FPS claim occurred.
+
+### A5.7 graph review repair (2026-08-04)
+
+- NO-GO found the original fixture incorrectly expected independent READY work
+  to block, accepted cycles, and used one-pass failure propagation that could
+  leave a reverse-chain dependent READY.
+- RED: fixture additions required cycle rejection and complete reverse-chain
+  quarantine; the foundation did not provide either. GREEN rejects self/cyclic
+  masks before queue publication, leaves independent work eligible, and repeats
+  quarantine to a fixed point. Direct MinGW C11 `-Wall -Wextra -Werror` fixture
+  now reports `render job graph fixture: PASS`; the two-test static graph guard
+  also passes. The separate live-cutover source gate remains intentionally RED.

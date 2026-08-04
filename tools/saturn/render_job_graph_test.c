@@ -36,8 +36,15 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
                     job == 0U,
                 "a slave may claim a ready producer")) return 1;
+    if (!expect(sm64_saturn_render_job_graph_claim_master(&graph, 19U, &job) &&
+                    job == 2U,
+                "an independent job remains eligible before another chain retires")) return 1;
+    if (!expect(sm64_saturn_render_job_queue_complete(
+                    &queue, 19U, 2U,
+                    SM64_SATURN_RENDER_JOB_CLAIMED_MASTER),
+                "independent work must retire independently")) return 1;
     if (!expect(!sm64_saturn_render_job_graph_claim_master(&graph, 19U, &job),
-                "a consumer must not claim before its producer is DONE")) return 1;
+                "a dependent consumer must not claim before its producer is DONE")) return 1;
     if (!expect(sm64_saturn_render_job_queue_complete(
                     &queue, 19U, 0U,
                     SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE),
@@ -55,13 +62,6 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_validate_terrain_merge(
                     &graph, 19U, merge, 4U),
                 "terrain multi-result merge must retain descriptor/local order")) return 1;
-    if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
-                    job == 2U,
-                "independent work remains eligible while another chain retires")) return 1;
-    if (!expect(sm64_saturn_render_job_queue_complete(
-                    &queue, 19U, 2U,
-                    SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE),
-                "independent job must retire")) return 1;
 
     sm64_saturn_render_job_queue_init(&queue);
     sm64_saturn_render_job_graph_init(&graph, &queue);
@@ -75,18 +75,48 @@ int main(void)
                     &queue, 19U, 0U,
                     SM64_SATURN_RENDER_JOB_CLAIMED_MASTER),
                 "producer failure must retire terminally")) return 1;
-    if (!expect(!sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job),
-                "failed producer must never expose its consumer")) return 1;
+    if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
+                    job == 2U,
+                "an independent job remains eligible after another chain fails")) return 1;
+    if (!expect(sm64_saturn_render_job_queue_complete(
+                    &queue, 19U, 2U,
+                    SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE),
+                "independent job must still retire")) return 1;
     if (!expect(sm64_saturn_render_job_graph_propagate_failures(&graph, 19U),
                 "failed producer must terminally quarantine dependent work")) return 1;
-    if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
-                    job == 2U &&
-                    sm64_saturn_render_job_queue_complete(
-                        &queue, 19U, job,
-                        SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE),
-                "an independent chain must still retire after another fails")) return 1;
     if (!expect(sm64_saturn_render_job_queue_all_terminal(&queue, 19U),
                 "failure propagation must leave a terminal generation")) return 1;
+
+    {
+        const uint8_t cycle[] = {1U << 1U, 1U << 0U, 0U};
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(!sm64_saturn_render_job_graph_publish(
+                        &graph, 19U, k_jobs, cycle, 3U),
+                    "cyclic dependencies must fail before queue publication")) return 1;
+    }
+    {
+        const sm64_saturn_render_job_t chain[] = {
+            k_jobs[0], k_jobs[1],
+            {SM64_SATURN_RENDER_JOB_WORLD_LOWER,
+             SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER, 19U, 12U, 2U,
+             14U, 2U},
+        };
+        const uint8_t chain_deps[] = {0U, 1U << 0U, 1U << 1U};
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(sm64_saturn_render_job_graph_publish(
+                        &graph, 19U, chain, chain_deps, 3U) &&
+                        sm64_saturn_render_job_graph_claim_master(
+                            &graph, 19U, &job) && job == 0U &&
+                        sm64_saturn_render_job_queue_fail(
+                            &queue, 19U, 0U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER) &&
+                        sm64_saturn_render_job_graph_propagate_failures(
+                            &graph, 19U) &&
+                        sm64_saturn_render_job_queue_all_terminal(&queue, 19U),
+                    "failure propagation must quarantine every reverse-chain dependent")) return 1;
+    }
     puts("render job graph fixture: PASS");
     return 0;
 }

@@ -70,6 +70,11 @@
 
 ### Fixed
 
+- Hardened the A5.7 job graph after review: independent READY work is no
+  longer mistaken for a blocked dependent, cyclic/self dependency masks fail
+  before queue publication, and failed-producer quarantine reaches every
+  reverse-chain ready dependent before a generation can merge or reset.
+
 - Corrected the A5.6 queue runtime to read its shared generation through the
   queue's SH-2 cache-through accessor. The slave poll can no longer observe a
   stale P1 queue header before deciding whether to drain work; a source gate
