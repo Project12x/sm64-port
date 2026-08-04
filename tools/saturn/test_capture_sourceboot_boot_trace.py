@@ -153,6 +153,40 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         self.assertEqual(commands[0], command_builder(Path("trace.elf")))
         self.assertIn(str(boot_trace.MSYS_TOOLCHAIN_WRAPPER), commands[0])
 
+    def test_invalid_trace_report_retains_raw_target_and_ymir_evidence(self) -> None:
+        class Client:
+            notifications = [
+                {"method": "instance.ready", "params": {"model": "saturn"}},
+                {"method": "instance.stopped", "params": {"reason": "crash"}},
+            ]
+            stderr = "x" * 32
+
+        raw = words_to_bytes([0x045E02AA, 1, 2, 3, 4, 5, 6, 7])
+        report_builder = getattr(boot_trace, "build_failed_trace_report", None)
+        self.assertTrue(callable(report_builder), "invalid traces must still produce evidence")
+        report = report_builder(
+            client=Client(), raw_data=raw, error=ValueError("boot trace magic is 0x045e02aa")
+        )
+        self.assertEqual(report["trace"]["raw_bytes"], raw)
+        self.assertEqual(report["trace"]["raw_words"], [0x045E02AA, 1, 2, 3, 4, 5, 6, 7])
+        self.assertEqual(report["trace"]["decode_error"], "boot trace magic is 0x045e02aa")
+        self.assertTrue(report["protocol"]["ready"])
+        self.assertEqual(report["protocol"]["notifications"], Client.notifications)
+        self.assertEqual(report["diagnostics"]["stderr"], Client.stderr)
+        self.assertFalse(report["diagnostics"]["stderr_truncated"])
+
+    def test_failed_trace_report_caps_ymir_stderr(self) -> None:
+        class Client:
+            notifications: list[dict[str, object]] = []
+            stderr = "x" * (70 * 1024)
+
+        report = boot_trace.build_failed_trace_report(
+            client=Client(), raw_data=None, error=ValueError("no byte data")
+        )
+        self.assertTrue(report["diagnostics"]["stderr_truncated"])
+        self.assertEqual(report["diagnostics"]["stderr_original_bytes"], 70 * 1024)
+        self.assertLess(len(report["diagnostics"]["stderr"]), 70 * 1024)
+
 
 if __name__ == "__main__":
     unittest.main()

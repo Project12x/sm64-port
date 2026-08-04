@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from capture_hwtest import artifact_identity
+from capture_hwtest import artifact_identity, cap_stderr
 from capture_route_views import YmirClient
 
 
@@ -130,6 +130,58 @@ def decode_boot_trace(data: list[int]) -> dict[str, Any]:
     }
 
 
+def raw_trace_words(data: list[int] | None) -> list[int] | None:
+    """Decode the words for evidence even when the trace header is invalid."""
+    if (
+        not isinstance(data, list)
+        or len(data) != SOURCEBOOT_BOOT_TRACE_BYTES
+        or any(not isinstance(byte, int) or not 0 <= byte <= 0xFF for byte in data)
+    ):
+        return None
+    return [
+        int.from_bytes(bytes(data[index : index + 4]), byteorder="big")
+        for index in range(0, SOURCEBOOT_BOOT_TRACE_BYTES, 4)
+    ]
+
+
+def protocol_and_diagnostics(client: YmirClient | None) -> dict[str, Any]:
+    """Return bounded Ymir host evidence shared by passing and failing captures."""
+    stderr = client.stderr if client else ""
+    capped_stderr, stderr_original_bytes = cap_stderr(stderr)
+    notifications = client.notifications if client else []
+    return {
+        "protocol": {
+            "ready": any(
+                message.get("method") == "instance.ready" for message in notifications
+            ),
+            "stopped_reasons": [
+                message.get("params", {}).get("reason")
+                for message in notifications
+                if message.get("method") == "instance.stopped"
+            ],
+            "notifications": notifications,
+        },
+        "diagnostics": {
+            "stderr": capped_stderr,
+            "stderr_truncated": stderr_original_bytes > len(capped_stderr),
+            "stderr_original_bytes": stderr_original_bytes,
+        },
+    }
+
+
+def build_failed_trace_report(
+    *, client: YmirClient | None, raw_data: list[int] | None, error: BaseException
+) -> dict[str, Any]:
+    """Return bounded host evidence for an unsuccessful target trace capture."""
+    report = protocol_and_diagnostics(client)
+    report["trace"] = {
+        "raw_bytes": raw_data,
+        "raw_words": raw_trace_words(raw_data),
+        "decode_error": str(error),
+    }
+    return report
+
+
 def read_boot_trace(client: YmirClient, address: int) -> dict[str, Any]:
     result = client.call(
         "mem.peek", {"address": address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
@@ -189,6 +241,9 @@ def main() -> int:
     wall_start = time.perf_counter()
     emulated_frames = 0
     client: YmirClient | None = None
+    raw_data: list[int] | None = None
+    trace: dict[str, Any] | None = None
+    failure: BaseException | None = None
     try:
         client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
 
@@ -199,12 +254,19 @@ def main() -> int:
 
         run_bios_handoff(client, run_for)
         run_for(args.post_bios_frames)
-        trace = read_boot_trace(client, trace_address)
+        result = client.call(
+            "mem.peek", {"address": trace_address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
+        )
+        data = result.get("data")
+        if not isinstance(data, list):
+            raise ValueError("Ymir boot trace capture has no byte data")
+        raw_data = data
+        trace = decode_boot_trace(raw_data)
         client.shutdown()
-    except BaseException:
+    except BaseException as error:
+        failure = error
         if client is not None:
             client.abort()
-        raise
 
     report = {
         "evidence_kind": "ymir-sourceboot-post-bios-boot-trace",
@@ -220,24 +282,17 @@ def main() -> int:
         "trace_address": trace_address,
         "emulated_frames": emulated_frames,
         "wall_seconds": time.perf_counter() - wall_start,
-        "trace": trace,
-        "protocol": {
-            "ready": any(
-                message.get("method") == "instance.ready"
-                for message in (client.notifications if client else [])
-            ),
-            "stopped_reasons": [
-                message.get("params", {}).get("reason")
-                for message in (client.notifications if client else [])
-                if message.get("method") == "instance.stopped"
-            ],
-        },
-        "diagnostics": {"stderr": client.stderr if client else ""},
     }
+    if failure is None:
+        report["trace"] = trace
+        report.update(protocol_and_diagnostics(client))
+    else:
+        report.update(build_failed_trace_report(client=client, raw_data=raw_data, error=failure))
+        report["failure"] = {"message": str(failure), "type": type(failure).__name__}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 0
+    return 1 if failure is not None else 0
 
 
 if __name__ == "__main__":

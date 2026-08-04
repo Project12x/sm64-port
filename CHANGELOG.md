@@ -23,6 +23,11 @@
 
 ### Fixed
 
+- Failed post-BIOS trace captures now still write a bounded JSON evidence
+  report containing any raw `mem.peek` bytes/words, Ymir protocol
+  notifications, and capped stderr before returning failure. This preserves
+  the observable target state when a bad trace header or missing byte payload
+  would previously discard the only crash-boundary evidence.
 - The post-BIOS trace reader now resolves the target ELF through the audited
   DLL-safe MSYS wrapper and accepts the SH-ELF leading-underscore symbol ABI,
   preventing an otherwise valid trace capture from stopping before emulation.
