@@ -115,3 +115,14 @@ independent spec and quality review remain required.
 
 Fix-round behavior/docs commit: `4a590101`
 (`fix(saturn): harden render snapshot publication`).
+
+Task 2/A2 fix round 2: specification rereview found `READY → RENDERING` was a
+non-atomic read/validate/store sequence. A red deterministic contention test
+first failed because no claim API existed, and the source gate separately
+failed without SH-2 `tas.b`. The repair adds an uncached fixed-width claim byte
+to the release record; `tas.b` selects one SH-2 winner and a host atomic models
+the same contract. Acquisition holds the claim through validation and the
+state transition, so a second contender receives no payload. Focused snapshot
+bank gate is green; no target/Ymir and no runtime-contract rerun occurred.
+Fresh review and the existing terrain-command runtime-contract gate remain
+open.

@@ -35,6 +35,7 @@ void sm64_saturn_render_snapshot_reset(sm64_saturn_render_snapshot_bank_t *bank)
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_FREE) continue;
         memset(&bank->slot[index].snapshot, 0, sizeof(bank->slot[index].snapshot));
         release->generation = 0U;
+        release->claim_lock = 0U;
         release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
     }
     sm64_saturn_render_snapshot_fence();
@@ -65,6 +66,7 @@ bool sm64_saturn_render_snapshot_begin_write(
         memset(&slot->snapshot, 0, sizeof(slot->snapshot));
         slot->snapshot.generation = generation;
         release->generation = generation;
+        release->claim_lock = 0U;
         sm64_saturn_render_snapshot_fence();
         release->state = SM64_SATURN_RENDER_SNAPSHOT_WRITING;
         *out = &slot->snapshot;
@@ -108,12 +110,17 @@ sm64_saturn_render_snapshot_acquire_ready(
             sm64_saturn_render_snapshot_peer_payload(slot);
         if (release->state != SM64_SATURN_RENDER_SNAPSHOT_READY ||
             release->generation != generation) continue;
+        if (!sm64_saturn_render_snapshot_release_claim_try(release)) continue;
         sm64_saturn_render_snapshot_fence();
-        if (!sm64_saturn_render_snapshot_generation_valid(payload, generation)) {
-            return NULL;
+        if (release->state != SM64_SATURN_RENDER_SNAPSHOT_READY ||
+            release->generation != generation ||
+            !sm64_saturn_render_snapshot_generation_valid(payload, generation)) {
+            sm64_saturn_render_snapshot_release_claim_release(release);
+            continue;
         }
         release->state = SM64_SATURN_RENDER_SNAPSHOT_RENDERING;
         sm64_saturn_render_snapshot_fence();
+        sm64_saturn_render_snapshot_release_claim_release(release);
         return payload;
     }
     return NULL;
@@ -150,6 +157,7 @@ bool sm64_saturn_render_snapshot_retire(
     }
     memset(&slot->snapshot, 0, sizeof(slot->snapshot));
     release->generation = 0U;
+    release->claim_lock = 0U;
     sm64_saturn_render_snapshot_fence();
     release->state = SM64_SATURN_RENDER_SNAPSHOT_FREE;
     return true;

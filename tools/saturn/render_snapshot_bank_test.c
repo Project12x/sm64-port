@@ -70,11 +70,31 @@ static void test_rejects_double_acquire_and_quarantined_reuse(void)
     assert(!sm64_saturn_render_snapshot_begin_write(&bank, 13U, &other));
 }
 
+static void test_claim_lock_allows_one_contender(void)
+{
+    sm64_saturn_render_snapshot_bank_t bank = {0};
+    sm64_saturn_render_snapshot_t *slot = NULL;
+    volatile sm64_saturn_render_snapshot_release_t *release;
+
+    assert(sm64_saturn_render_snapshot_begin_write(&bank, 19U, &slot));
+    slot->camera.generation = 19U;
+    slot->actor_generation = 19U;
+    assert(sm64_saturn_render_snapshot_publish(&bank, slot));
+    release = sm64_saturn_render_snapshot_release_uncached(&bank.slot[0]);
+    assert(sm64_saturn_render_snapshot_release_claim_try(release));
+    /* This is the second concurrent contender's acquire attempt while the
+     * first has atomically claimed the release record. */
+    assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 19U) == NULL);
+    sm64_saturn_render_snapshot_release_claim_release(release);
+    assert(sm64_saturn_render_snapshot_acquire_ready(&bank, 19U) == slot);
+}
+
 int main(void)
 {
     test_rejects_zero_generation();
     test_lifecycle_publishes_one_matching_generation();
     test_rejects_stale_and_mixed_generations();
     test_rejects_double_acquire_and_quarantined_reuse();
+    test_claim_lock_allows_one_contender();
     return 0;
 }

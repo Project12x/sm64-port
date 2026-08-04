@@ -81,3 +81,17 @@ comparison, and target/Ymir plus fresh reviews remain open.
 
 Fix-round behavior/docs commit: `4a590101`
 (`fix(saturn): harden render snapshot publication`).
+
+## Concurrent-claim fix round 2
+
+The second specification review found the former uncached `READY` check and
+later `RENDERING` store were not one indivisible claim. The new TDD fixture
+first failed on the absent claim helper, then the structural source fixture
+failed before it found SH-2 `tas.b` and its use from acquire. The release record
+now has a fixed-width claim byte. On SH-2, `tas.b` atomically changes zero to a
+held byte and `movt` returns the single winner; the host fixture uses the GCC
+atomic equivalent. `acquire_ready()` locks before its final release/payload
+validation, publishes `RENDERING` while held, and clears the lock only after
+the state is no longer ready. The deterministic first-held/second-acquire test
+observes exactly one claimant. The focused host gate is green. Runtime
+contracts, target/Ymir, and fresh independent reviews remain open.

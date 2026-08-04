@@ -52,6 +52,8 @@ typedef struct sm64_saturn_render_snapshot {
 typedef struct sm64_saturn_render_snapshot_release {
     volatile uint32_t generation;
     volatile uint32_t state;
+    volatile uint8_t claim_lock;
+    uint8_t reserved[3];
 } sm64_saturn_render_snapshot_release_t;
 
 typedef struct sm64_saturn_render_snapshot_slot {
@@ -86,6 +88,40 @@ sm64_saturn_render_snapshot_release_uncached(
         sm64_saturn_render_snapshot_cache_through(&slot->release);
 }
 
+/* SH-2 TAS.B performs a bus-atomic zero-to-set transition on the uncached
+ * release byte. `movt` returns the single winner; host atomics model the same
+ * operation for the lifecycle fixture. */
+static inline bool sm64_saturn_render_snapshot_release_claim_try(
+    volatile sm64_saturn_render_snapshot_release_t *release)
+{
+#if defined(__sh__)
+    uint32_t acquired;
+
+    if (release == NULL) return false;
+    __asm__ volatile("tas.b @%1\n\tmovt %0"
+                     : "=r" (acquired)
+                     : "r" (&release->claim_lock)
+                     : "memory");
+    return acquired != 0U;
+#else
+    return release != NULL &&
+        __sync_lock_test_and_set(&release->claim_lock, 1U) == 0U;
+#endif
+}
+
+static inline void sm64_saturn_render_snapshot_release_claim_release(
+    volatile sm64_saturn_render_snapshot_release_t *release)
+{
+    if (release == NULL) return;
+#if defined(__GNUC__)
+    __asm__ volatile("" ::: "memory");
+#endif
+    release->claim_lock = 0U;
+#if defined(__GNUC__)
+    __asm__ volatile("" ::: "memory");
+#endif
+}
+
 static inline const sm64_saturn_render_snapshot_t *
 sm64_saturn_render_snapshot_peer_payload(
     const sm64_saturn_render_snapshot_slot_t *slot)
@@ -97,8 +133,8 @@ sm64_saturn_render_snapshot_peer_payload(
 
 _Static_assert(sizeof(sm64_saturn_render_view_t) == 92U,
                "render-view ABI must remain fixed-width");
-_Static_assert(sizeof(sm64_saturn_render_snapshot_release_t) == 8U,
-               "snapshot release record must remain two words");
+_Static_assert(sizeof(sm64_saturn_render_snapshot_release_t) == 12U,
+               "snapshot release record must remain fixed-width");
 
 /* Initialization hygiene for already-FREE slots only. It never releases a
  * WRITING, READY, RENDERING, COMPLETE, or QUARANTINED generation. */

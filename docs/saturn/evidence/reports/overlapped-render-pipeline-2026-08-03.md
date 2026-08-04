@@ -492,3 +492,18 @@ cluster/LOD admission in A3; it is not itself counted as a performance result.
   direct generation-validator checks, and structural rejection of direct
   release-field access. No target build/Ymir was run. The unrelated
   `verify-runtime-contracts` failure remains open and uncredited.
+
+### A2 concurrent-claim fix round 2 (2026-08-04)
+
+- Red: a new deterministic contention fixture held the first release claim and
+  asked the public acquire API for a second contender. Before the lock API
+  existed, the fixture failed to compile; the companion source test also failed
+  before the required SH-2 `tas.b` and acquire/release use existed.
+- Green: the fixed-width uncached release record now has a claim byte. SH-2
+  `tas.b` provides the bus-atomic zero-to-held transition; after claiming, the
+  winner rechecks `READY`, generation, and payload validity, changes the state
+  to `RENDERING`, then releases the claim. A loser returns no payload while the
+  first claim is held, and later observes `RENDERING` rather than claiming it.
+- Green: `verify-render-snapshot-bank` passes the deterministic contention
+  test and source structural gate. No target build/Ymir was run; the unrelated
+  runtime-contract failure remains open and uncredited.

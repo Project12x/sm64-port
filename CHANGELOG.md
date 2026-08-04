@@ -20,6 +20,11 @@
   preserve fixture coverage), and callers can use one exported generation
   validator instead of duplicating mixed-frame checks.
 
+- Made `READY → RENDERING` exclusive across both SH-2s. An uncached release
+  lock now uses the SH-2 `tas.b` bus-atomic transition (with a host atomic
+  equivalent), so only one renderer can claim a snapshot generation; the
+  losing contender must observe no acquired payload.
+
 - Added an opt-in desktop Ymir launch helper that records the exact SDL3
   command, working directory, project profile, staged CUE, and CUE-referenced
   ISO identities before manual testing. It keeps the 32-Mbit DRAM cart

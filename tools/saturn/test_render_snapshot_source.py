@@ -54,6 +54,15 @@ def test_release_and_peer_payload_use_cache_through_accessors() -> None:
     assert "slot->release.generation" not in implementation
 
 
+def test_ready_claim_uses_sh2_atomic_test_and_set() -> None:
+    header = SNAPSHOT.read_text(encoding="utf-8")
+    implementation = IMPLEMENTATION.read_text(encoding="utf-8")
+    assert "tas.b" in header
+    assert "sm64_saturn_render_snapshot_release_claim_try" in implementation
+    assert "sm64_saturn_render_snapshot_release_claim_release" in implementation
+
+
 if __name__ == "__main__":
     test_snapshot_types_have_no_pointer_fields()
     test_release_and_peer_payload_use_cache_through_accessors()
+    test_ready_claim_uses_sh2_atomic_test_and_set()

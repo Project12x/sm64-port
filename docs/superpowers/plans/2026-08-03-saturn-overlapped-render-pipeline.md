@@ -484,6 +484,13 @@ types, ownership rules, or production fallbacks.
   cache-through accessors, and missing validation API, then passes green.
   Runtime-contract closure and a fresh independent review remain open.
 
+  Fix round 2 makes the slave-facing `READY → RENDERING` claim single-winner.
+  The uncached release record now includes a fixed-width claim byte acquired
+  by SH-2 `tas.b`; a deterministic held-first-claim test proves a second public
+  acquire returns `NULL`. The cache-through source test requires both TAS and
+  claim/release use in the implementation. Runtime-contract closure and fresh
+  independent reviews remain open.
+
 ### Task 3: Generate tight clusters and choose compact LODs before transformation
 
 **Files:**
