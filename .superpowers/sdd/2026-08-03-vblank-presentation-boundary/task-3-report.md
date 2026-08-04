@@ -65,3 +65,20 @@ behavior files also exited 0 before the implementation commit.
 No target build, CUE construction, Ymir launch, or capture was performed in
 this task. The trace establishes diagnostic observability only; it does not
 claim the cause of the post-BIOS failure.
+
+## Fix round 1/5 — zero-frame reader validation
+
+Specification review rejected `30123c1b..4d064bb7` because the parser accepted
+`--post-bios-frames 0` even though it unconditionally sent that value to
+Ymir's 1..3600-frame `exec.run_for` RPC. `2c1acca8`
+(`fix(saturn): reject empty post-BIOS trace runs`) adds the small reusable
+`validate_post_bios_frames()` guard and invokes it before any headless client
+is constructed. Zero now fails locally; 1 is the valid lower bound.
+
+TDD RED: the new reader test failed because the validation function was
+absent. GREEN: the reader test now runs three tests and passes; the trace
+source gate (2) and retained presentation gate (6) also pass, as does Python
+compilation. No target build, CUE construction, Ymir launch, or capture was
+performed. The review verdict remains REJECT until an independent rereview
+records that this Important finding is addressed; the trace-CUE and capture
+gates remain open.

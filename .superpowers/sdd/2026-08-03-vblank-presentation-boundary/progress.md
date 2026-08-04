@@ -74,3 +74,11 @@ Remaining gates: independent specification/quality review, one serial trace
 CUE, then one bounded post-BIOS debug capture that records its exact last
 stage/raw words. The existing runtime-contract wrapper remains separately
 unpassed due to its known MSYS-to-Windows pre-compilation PermissionError.
+
+Task 3 fix round 1/5: specification review REJECT found that the headless
+reader accepted zero post-BIOS frames but then issued an invalid Ymir RPC.
+`2c1acca8` adds and uses a 1..3600 validator before any client is created.
+The new test was observed RED (validator absent), then GREEN: reader (3),
+trace source (2), and retained presentation (6) gates pass; Python
+compilation passes. No target build/CUE/Ymir action occurred. Independent
+rereview remains required; Step 3 stays unchecked.
