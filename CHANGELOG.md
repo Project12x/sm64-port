@@ -123,6 +123,12 @@
   ownership away from the master. Target visual/counter evidence and
   independent reviews remain required.
 
+- Added an isolated, pointer-free SH-2/68K PCM wire-protocol foundation for
+  the future standalone soundtest. The fixed big-endian mailbox/ring map and
+  host contract prevent separately built CPUs from exchanging compiler-layout
+  dependent structures, while leaving sourceboot, SCSP, the render queue, and
+  the accepted FPS candidate unchanged.
+
 ### Fixed
 
 - Corrected the dormant A5.8 terrain queue route so classification receives
