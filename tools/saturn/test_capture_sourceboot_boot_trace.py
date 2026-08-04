@@ -21,6 +21,7 @@ try:
         SOURCEBOOT_BOOT_TRACE_MAGIC,
         SOURCEBOOT_BOOT_TRACE_VERSION,
         bind_capture_artifacts,
+        capture_trace_checkpoint,
         decode_boot_trace,
         parse_cue_file_reference,
         parse_symbol_address,
@@ -37,6 +38,29 @@ def words_to_bytes(words: list[int]) -> list[int]:
 
 
 class SourcebootBootTraceReaderTests(unittest.TestCase):
+    def test_checkpoint_records_raw_words_frame_and_stopped_pc(self) -> None:
+        class Client:
+            notifications = [
+                {
+                    "method": "instance.stopped",
+                    "params": {"pc": 0x060402E8, "reason": "frame_limit"},
+                }
+            ]
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                return {"data": words_to_bytes([0x045E02AA, 1, 2, 3, 4, 5, 6, 7])}
+
+        checkpoint = capture_trace_checkpoint(
+            Client(), 0x0608B43C, "bios-initial-wait", 120
+        )
+        self.assertEqual(checkpoint["label"], "bios-initial-wait")
+        self.assertEqual(checkpoint["emulated_frames"], 120)
+        self.assertEqual(
+            checkpoint["raw_words"], [0x045E02AA, 1, 2, 3, 4, 5, 6, 7]
+        )
+        self.assertEqual(checkpoint["stopped_pcs"], [0x060402E8])
+        self.assertEqual(checkpoint["notification_count"], 1)
+
     def test_artifact_binding_reports_cue_referenced_iso_and_elf(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

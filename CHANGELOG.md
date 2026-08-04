@@ -4,6 +4,11 @@
 
 ### Added
 
+- The sourceboot boot-trace reader now records raw 32-byte samples at
+  protocol-ready and each existing BIOS-handoff boundary, with accumulated
+  emulated frames plus any stopped SH-2 PCs. This makes the first loss of the
+  trace sentinel observable, instead of attributing an end-of-run bad word to
+  the entire boot sequence.
 - The sourceboot post-BIOS trace reader now binds each diagnostic launch to
   the CUE, its referenced ISO, and its CUE-local ELF, recording SHA-256,
   size, and timestamp identities for all three. It rejects stale ISO/ELF

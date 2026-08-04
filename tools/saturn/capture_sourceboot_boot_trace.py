@@ -233,17 +233,53 @@ def read_boot_trace(client: YmirClient, address: int) -> dict[str, Any]:
     return decode_boot_trace(data)
 
 
-def run_bios_handoff(client: YmirClient, run_for: Any) -> None:
+def stopped_pcs(client: YmirClient) -> list[int]:
+    """Return every PC Ymir reported at a bounded run stop so far."""
+    return [
+        pc
+        for message in client.notifications
+        if message.get("method") == "instance.stopped"
+        for pc in [message.get("params", {}).get("pc")]
+        if isinstance(pc, int)
+    ]
+
+
+def capture_trace_checkpoint(
+    client: YmirClient, address: int, label: str, emulated_frames: int
+) -> dict[str, Any]:
+    """Preserve a raw trace sample at one deterministic BIOS boundary."""
+    result = client.call(
+        "mem.peek", {"address": address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
+    )
+    data = result.get("data")
+    if not isinstance(data, list):
+        raise ValueError("Ymir boot trace checkpoint has no byte data")
+    return {
+        "label": label,
+        "emulated_frames": emulated_frames,
+        "raw_bytes": data,
+        "raw_words": raw_trace_words(data),
+        "stopped_pcs": stopped_pcs(client),
+        "notification_count": len(client.notifications),
+    }
+
+
+def run_bios_handoff(client: YmirClient, run_for: Any, checkpoint: Any) -> None:
     """Use the proven USA BIOS input sequence, then release all buttons."""
     run_for(120)
+    checkpoint("bios-initial-wait")
     client.call("input.pulse", {"buttons": 0x4000})
     run_for(30)
+    checkpoint("bios-menu-pulse")
     client.call("input.pulse", {"buttons": 0x0400})
     run_for(1200)
-    for _ in range(5):
+    checkpoint("bios-disc-start")
+    for index in range(5):
         client.call("input.pulse", {"buttons": 0x4000})
         run_for(30)
+        checkpoint(f"bios-start-pulse-{index + 1}")
     client.call("input.pulse", {"buttons": 0xFFF8})
+    checkpoint("bios-input-release")
 
 
 def main() -> int:
@@ -287,6 +323,7 @@ def main() -> int:
     emulated_frames = 0
     client: YmirClient | None = None
     raw_data: list[int] | None = None
+    trace_checkpoints: list[dict[str, Any]] = []
     trace: dict[str, Any] | None = None
     failure: BaseException | None = None
     try:
@@ -297,8 +334,15 @@ def main() -> int:
             client.call("exec.run_for", {"frames": frames})
             emulated_frames += frames
 
-        run_bios_handoff(client, run_for)
+        def checkpoint(label: str) -> None:
+            trace_checkpoints.append(
+                capture_trace_checkpoint(client, trace_address, label, emulated_frames)
+            )
+
+        checkpoint("protocol-ready")
+        run_bios_handoff(client, run_for, checkpoint)
         run_for(args.post_bios_frames)
+        checkpoint("post-bios")
         result = client.call(
             "mem.peek", {"address": trace_address, "count": SOURCEBOOT_BOOT_TRACE_BYTES}
         )
@@ -327,6 +371,7 @@ def main() -> int:
         "trace_symbol": SOURCEBOOT_BOOT_TRACE_SYMBOL,
         "trace_address": trace_address,
         "emulated_frames": emulated_frames,
+        "trace_checkpoints": trace_checkpoints,
         "wall_seconds": time.perf_counter() - wall_start,
     }
     if failure is None:
