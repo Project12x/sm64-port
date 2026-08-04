@@ -11,6 +11,7 @@
 #include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_actor_bridge.h"
 #include "saturn_render_snapshot.h"
+#include "saturn_transform.h"
 #include "saturn_demo_render.h"
 #include "saturn_gouraud_bank.h"
 #include "saturn_math_route_capture.h"
@@ -194,6 +195,14 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
         snapshot->camera.camera_focus_q16[axis] =
             sourceboot_world_to_q16(snapshot->mario.camera_focus[axis]);
     }
+    const sm64_saturn_vec3i_t forward = sm64_saturn_vec3_normalize_q16(
+        (sm64_saturn_vec3i_t){
+            snapshot->mario.camera_focus[0] - snapshot->mario.camera_position[0],
+            snapshot->mario.camera_focus[1] - snapshot->mario.camera_position[1],
+            snapshot->mario.camera_focus[2] - snapshot->mario.camera_position[2]});
+    snapshot->camera.view_forward_q16[0] = forward.x;
+    snapshot->camera.view_forward_q16[1] = forward.y;
+    snapshot->camera.view_forward_q16[2] = forward.z;
     snapshot->camera.generation = generation;
     snapshot->actor_generation = generation;
     snapshot->scene_id = (uint32_t)gCurrLevelNum;

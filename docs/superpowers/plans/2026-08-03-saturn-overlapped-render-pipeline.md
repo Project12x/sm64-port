@@ -65,9 +65,12 @@ and the evidence report before starting another task.
   mandatory retention, and FAR reduction; post-transform projected rejection
   remains. The generic runtime now admits those cluster records from the
   frame camera and builds the exact admitted position union before workers;
-  tier state resets at scene transitions. It is not source-complete:
-  independent review and target visual/counter evidence remain; no performance
-  claim is made.
+  tier state resets at scene transitions. Cluster depth is the conservative
+  projection of the Q16 AABB onto the immutable Q16 camera-forward vector,
+  rather than world Z; yaw/pitch admission coverage is host-tested. It is not
+  source-complete: the prior final review's critical finding needs an
+  independent rereview, and target visual/counter evidence remain; no
+  performance claim is made.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
@@ -553,6 +556,8 @@ types, ownership rules, or production fallbacks.
 - Produces
   `sm64_saturn_render_cluster_admit(cluster, view, lod_state, result)`; the
   result names the chosen tier and exact compact position/primitive spans.
+  It conservatively projects the Q16 AABB onto the immutable Q16
+  `view_forward_q16` direction; it must never infer depth from world Z.
 - Per-primitive projected area/window rejection remains after transform.
 
   ```c
@@ -584,11 +589,14 @@ types, ownership rules, or production fallbacks.
   material partition, tight bounds enclosing every referenced position, and
   each LOD position list equal to the unique positions used by that LOD.
 
-- [ ] **Step 2: Add the red runtime fixture**
+- [x] **Step 2: Add the red runtime fixture**
 
   Test outside/inside/intersecting bounds, mandatory far clusters, hysteresis,
   empty spans, bad indices, and that FAR admission exposes fewer position refs
-  than NEAR for a synthetic cluster.
+  than NEAR for a synthetic cluster. The focused fixture also covers
+  non-axis-aligned yaw and pitch: front clusters with negative world Z,
+  behind clusters with positive world Z, mandatory behind work, exact returned
+  compact spans, and a yawed MID hysteresis boundary.
 
 - [ ] **Step 3: Add `verify-render-clusters` and record both red commands**
 

@@ -355,6 +355,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 | 2026-08-03 | SlaveDriver's active path is not evidence of asynchronous queued DMA; only its queue/bank patterns are prior art. | Corrected after pinned-source call-site audit. |
 | 2026-08-03 | Keep the two 64 KiB command banks in LWRAM and transfer them with CPU-DMAC; reserve SCU DMA for HWRAM Gouraud staging. | File-map correction: two 2,048 × 32-byte command banks exceed the linker's `0x1B00` HWRAM margin, and SCU DMA cannot source LWRAM. |
 | 2026-08-03 | Execute the architecture as ten reviewer-sized tasks with A1 producing the earliest manual CUE. | Implementation plan linked above; every task updates this ledger, its own steps/status, and the evidence report before transition. |
+| 2026-08-04 | Generic A3 cluster depth is view-space Z, not the world-Z coordinate. | The immutable render view now carries a Q16 camera-forward vector. Admission conservatively projects each Q16 AABB onto it before optional behind rejection and hysteretic LOD selection; direct yaw/pitch fixtures prove front/behind and compact-span behavior. This resolves the final review's Critical depth defect at source level, but a fresh independent rereview and target visual/counter evidence remain open. |
 
 ## Verification and visible-progress policy
 

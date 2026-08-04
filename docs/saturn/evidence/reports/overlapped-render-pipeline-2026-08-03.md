@@ -42,6 +42,17 @@ LOD state is reset across scene boundaries. Fine projected/near/material tests
 remain after transform. Host-only validation passes; target evidence remains
 unrun by authorization.
 
+Final-review critical remediation: generic cluster depth now uses the
+immutable Q16 camera-forward vector and a conservative per-axis AABB
+projection. It no longer treats world Z as view depth. The focused C contract
+fixture was written first and exercises non-axis-aligned yaw and pitch front
+clusters with negative world Z, behind optional clusters with positive world
+Z, mandatory behind work, exact selected compact spans, and yawed MID
+hysteresis. `verify-render-clusters` passed after the repair through the MSYS
+host shell on 2026-08-04. No target build, CUE, Ymir launch, target visual, or
+counter capture was run. The prior review's unrelated generation-wrap Minor,
+fresh independent A3 rereview, and all target evidence gates remain open.
+
 TDD evidence: the C fixture first failed because
 `saturn_render_cluster.h` did not exist; the generator fixture then failed
 because its compact stream fields did not exist. Green command:
@@ -53,12 +64,12 @@ because its compact stream fields did not exist. Green command:
 ```
 
 Result: PASS (deterministic BOB/fragment generator and renderer-substitution
-source checks, plus the C outside/inside, mandatory, hysteresis, empty-span,
-and invalid-argument fixture). The visible-position host fixture additionally
-passes its direct compact-reference fail-closed check. No target build, CUE,
-Ymir launch, or performance capture was run. Remaining A3 gates: generated
-per-cluster bounds/material property checks, independent review, and target
-visual/counter evidence.
+source checks, plus the C outside/inside, yaw/pitch view-space, mandatory,
+hysteresis, empty-span, and invalid-argument fixture). The visible-position
+host fixture additionally passes its direct compact-reference fail-closed
+check. No target build, CUE, Ymir launch, or performance capture was run.
+Remaining A3 gates: independent rereview, generation-wrap remediation, and
+target visual/counter evidence.
 
 Source sub-slice commit: `feat(saturn): admit compact terrain position spans
 before transform`. Independent review verdict: not yet requested; this remains

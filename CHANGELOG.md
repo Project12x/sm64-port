@@ -52,6 +52,13 @@
 
 ### Fixed
 
+- Corrected A3 generic compact-cluster admission to derive conservative depth
+  from the immutable Q16 camera-forward vector instead of world Z. This keeps
+  yawed and pitched optional terrain from being rejected or assigned the wrong
+  LOD tier, while preserving mandatory work and the exact selected compact
+  position span before transform. Focused host fixtures now cover both rotated
+  views; target visual and counter evidence remain pending.
+
 - Corrected the Saturn terrain runtime-contract fixture to distinguish optional
   worker-owned post-light RGB1555 shades from immutable VDP1 material words.
   It now exercises both no-shades and live-shades publication through sorted

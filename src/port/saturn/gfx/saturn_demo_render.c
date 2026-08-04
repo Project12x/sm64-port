@@ -595,6 +595,8 @@ static void demo_prepare_render_work_order(
             demo_q16_from_world(camera->position.x),
             demo_q16_from_world(camera->position.y),
             demo_q16_from_world(camera->position.z)},
+        .view_forward_q16 = {
+            camera->forward.x, camera->forward.y, camera->forward.z},
         .generation = s_transform_publish_sequence + 1U,
     };
     const uint16_t candidate_count = s_render_work_count;

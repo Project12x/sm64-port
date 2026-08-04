@@ -25,10 +25,13 @@ enum sm64_saturn_render_snapshot_state {
     SM64_SATURN_RENDER_SNAPSHOT_QUARANTINED = 5U,
 };
 
+/* Render-view forward is a unit Q16.16 camera vector. Pre-transform admission
+ * projects conservative cluster bounds onto this immutable view-space Z axis. */
 typedef struct sm64_saturn_render_view {
     int32_t view_projection_q16[4][4];
     int32_t camera_position_q16[3];
     int32_t camera_focus_q16[3];
+    int32_t view_forward_q16[3];
     uint32_t generation;
 } sm64_saturn_render_view_t;
 
@@ -142,7 +145,7 @@ sm64_saturn_render_snapshot_peer_payload(
             (sm64_saturn_render_snapshot_slot_t *)slot);
 }
 
-_Static_assert(sizeof(sm64_saturn_render_view_t) == 92U,
+_Static_assert(sizeof(sm64_saturn_render_view_t) == 104U,
                "render-view ABI must remain fixed-width");
 _Static_assert(sizeof(sm64_saturn_render_snapshot_release_t) == 12U,
                "snapshot release record must remain fixed-width");

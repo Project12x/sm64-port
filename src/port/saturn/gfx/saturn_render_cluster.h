@@ -42,6 +42,40 @@ typedef struct sm64_saturn_render_lod_state {
     saturn_lod_tier_t previous;
 } sm64_saturn_render_lod_state_t;
 
+/* Project an AABB's eight corners onto the immutable Q16.16 view-forward
+ * axis without materializing those corners. Each axis independently selects
+ * its min/max contribution, producing conservative view-space depth bounds. */
+static inline void sm64_saturn_render_cluster_view_depth_bounds(
+    const sm64_saturn_render_cluster_t *cluster,
+    const sm64_saturn_render_view_t *view, int32_t *nearest_depth,
+    int32_t *furthest_depth)
+{
+    int64_t nearest_q32 = 0;
+    int64_t furthest_q32 = 0;
+    for (uint8_t axis = 0U; axis < 3U; axis++) {
+        const int64_t minimum = (int64_t)cluster->bounds_min_q16[axis] -
+                                view->camera_position_q16[axis];
+        const int64_t maximum = (int64_t)cluster->bounds_max_q16[axis] -
+                                view->camera_position_q16[axis];
+        const int64_t forward = view->view_forward_q16[axis];
+        if (forward >= 0) {
+            nearest_q32 += minimum * forward;
+            furthest_q32 += maximum * forward;
+        } else {
+            nearest_q32 += maximum * forward;
+            furthest_q32 += minimum * forward;
+        }
+    }
+    const int64_t nearest_q16 = nearest_q32 >> 16;
+    const int64_t furthest_q16 = furthest_q32 >> 16;
+    *nearest_depth = nearest_q16 > INT32_MAX ? INT32_MAX :
+                     nearest_q16 < INT32_MIN ? INT32_MIN :
+                     (int32_t)nearest_q16;
+    *furthest_depth = furthest_q16 > INT32_MAX ? INT32_MAX :
+                      furthest_q16 < INT32_MIN ? INT32_MIN :
+                      (int32_t)furthest_q16;
+}
+
 static inline bool sm64_saturn_render_cluster_admit(
     const sm64_saturn_render_cluster_t *cluster,
     const sm64_saturn_render_view_t *view,
@@ -53,10 +87,14 @@ static inline bool sm64_saturn_render_cluster_admit(
         cluster->primitive_count == 0U)
         return false;
 
-    const int32_t nearest_depth = cluster->bounds_min_q16[2] -
-                                  view->camera_position_q16[2];
-    const int32_t furthest_depth = cluster->bounds_max_q16[2] -
-                                   view->camera_position_q16[2];
+    if (view->view_forward_q16[0] == 0 && view->view_forward_q16[1] == 0 &&
+        view->view_forward_q16[2] == 0)
+        return false;
+
+    int32_t nearest_depth;
+    int32_t furthest_depth;
+    sm64_saturn_render_cluster_view_depth_bounds(
+        cluster, view, &nearest_depth, &furthest_depth);
     if (cluster->mandatory == 0U && furthest_depth <= 0)
         return false;
 

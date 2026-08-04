@@ -206,3 +206,37 @@ case was also RED against the current writer: it passed non-null shades with
 gates the copy on the flag; the live flagged shade path remains green. No
 snapshot, target build, or Ymir gate ran, and a fresh independent rereview
 remains required.
+2026-08-04 A3: active terrain path now consumes the selected generated compact
+fragment position span before transform; fragment and Mario generated banks
+carry deterministic tier streams, mandatory far-route primitives stay
+admitted, and profile counters record coarse cluster/position admission and
+transform work. Host green: verify-visible-position-set, verify-render-clusters,
+actor reproducibility/synthetic streams, profile decoder, diff --check. No
+target/Ymir; A3 still needs generated per-cluster property checks, independent
+review, and target evidence.
+Commit: incremental A3 compact-span substitution (`feat(saturn): admit compact
+terrain position spans before transform`).
+2026-08-04 review remediation: red->green actor selected-tier source gate and
+BOB/fragment metadata properties. Mario now transforms 228 FAR references
+through original-vertex owner mapping; host gates include generated BOB headers,
+visible-position set, render clusters, actor reproducibility, and profile
+decoder. No target/Ymir. A3 remains active for generic cluster records on the
+runtime admission boundary, independent rereview, and target evidence.
+2026-08-04 generic A3 remediation: TDD Q16 contract conversion first failed
+its MID assertion, then passed after the generic helper converts Q16 view
+depth to world-unit LOD thresholds. Generated BOB/fragment headers now contain
+`sm64_saturn_render_cluster_t` and per-cluster exact tier refs. Terrain calls
+the helper per candidate and marks only returned spans; scene changes reset
+cluster hysteresis. Host green: generator/property, cluster C fixture,
+generated BOB headers, visible position set, and prior actor/profile gates.
+No target/Ymir; independent rereview and target evidence remain.
+2026-08-04 A3 final-review critical remediation: test-first yaw and pitch
+fixtures proved that a front cluster may have negative world Z and a behind
+cluster may have positive world Z. The immutable render view now carries the
+Q16 camera-forward vector; generic admission conservatively projects each
+AABB onto it for optional rejection and hysteretic LOD, preserving the exact
+returned compact span. The focused `verify-render-clusters` MSYS host gate
+passed. No target build/Ymir ran. This closes only the final review's Critical
+world-Z defect: a fresh independent rereview, the documented generation-wrap
+Minor, and target visual/counter gates remain open. Commit: `fix(saturn): use
+view depth for compact cluster admission`.

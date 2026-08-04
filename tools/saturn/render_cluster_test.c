@@ -16,12 +16,24 @@ static sm64_saturn_render_cluster_t cluster(void)
     };
 }
 
-static sm64_saturn_render_view_t view_at(int32_t z, uint32_t generation)
+static sm64_saturn_render_view_t view_with_forward(
+    int32_t x, int32_t y, int32_t z, int32_t forward_x, int32_t forward_y,
+    int32_t forward_z, uint32_t generation)
 {
     sm64_saturn_render_view_t view = {0};
+    view.camera_position_q16[0] = x * 65536;
+    view.camera_position_q16[1] = y * 65536;
     view.camera_position_q16[2] = z * 65536;
+    view.view_forward_q16[0] = forward_x;
+    view.view_forward_q16[1] = forward_y;
+    view.view_forward_q16[2] = forward_z;
     view.generation = generation;
     return view;
+}
+
+static sm64_saturn_render_view_t view_at(int32_t z, uint32_t generation)
+{
+    return view_with_forward(0, 0, z, 0, 0, 65536, generation);
 }
 
 int main(void)
@@ -69,5 +81,65 @@ int main(void)
     assert(!sm64_saturn_render_cluster_admit(&subject, NULL, &lod, &result));
     assert(!sm64_saturn_render_cluster_admit(&subject, &view, NULL, &result));
     assert(!sm64_saturn_render_cluster_admit(&subject, &view, &lod, NULL));
+
+    /* A non-axis-aligned yaw must use the immutable view forward vector, not
+     * world Z. The cluster is in front at 45 degrees despite negative Z. */
+    subject = cluster();
+    subject.bounds_min_q16[0] = 120 * 65536;
+    subject.bounds_max_q16[0] = 136 * 65536;
+    subject.bounds_min_q16[2] = -64 * 65536;
+    subject.bounds_max_q16[2] = -48 * 65536;
+    lod.previous = SATURN_LOD_NEAR;
+    view = view_with_forward(0, 0, 0, 46341, 0, 46341, 14U);
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.admitted == 1U && result.generation == 14U);
+    assert(result.lod_tier == SATURN_LOD_MID);
+    assert(result.position_ref_first == 8U && result.position_ref_count == 4U);
+
+    /* The reverse yaw case has positive world Z but lies behind the camera. */
+    subject.bounds_min_q16[0] = -192 * 65536;
+    subject.bounds_max_q16[0] = -176 * 65536;
+    subject.bounds_min_q16[2] = 64 * 65536;
+    subject.bounds_max_q16[2] = 80 * 65536;
+    assert(!sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.admitted == 0U);
+
+    /* Mandatory behind-camera work retains its exact near compact span. */
+    subject.mandatory = 1U;
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.lod_tier == SATURN_LOD_NEAR);
+    assert(result.position_ref_first == 0U && result.position_ref_count == 8U);
+
+    /* MID hysteresis also follows yawed view depth: 28 units stays MID. */
+    subject = cluster();
+    subject.bounds_min_q16[0] = 104 * 65536;
+    subject.bounds_max_q16[0] = 120 * 65536;
+    subject.bounds_min_q16[2] = -64 * 65536;
+    subject.bounds_max_q16[2] = -48 * 65536;
+    lod.previous = SATURN_LOD_MID;
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.lod_tier == SATURN_LOD_MID);
+    assert(result.position_ref_first == 8U && result.position_ref_count == 4U);
+
+    /* A pitched view has the same contract: positive elevation can outweigh
+     * negative world Z, and the reverse remains behind despite positive Z. */
+    subject = cluster();
+    subject.bounds_min_q16[1] = 120 * 65536;
+    subject.bounds_max_q16[1] = 136 * 65536;
+    subject.bounds_min_q16[2] = -64 * 65536;
+    subject.bounds_max_q16[2] = -48 * 65536;
+    lod.previous = SATURN_LOD_NEAR;
+    view = view_with_forward(0, 0, 0, 0, 46341, 46341, 15U);
+    assert(sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.admitted == 1U && result.generation == 15U);
+    assert(result.lod_tier == SATURN_LOD_MID);
+    assert(result.position_ref_first == 8U && result.position_ref_count == 4U);
+
+    subject.bounds_min_q16[1] = -192 * 65536;
+    subject.bounds_max_q16[1] = -176 * 65536;
+    subject.bounds_min_q16[2] = 64 * 65536;
+    subject.bounds_max_q16[2] = 80 * 65536;
+    assert(!sm64_saturn_render_cluster_admit(&subject, &view, &lod, &result));
+    assert(result.admitted == 0U);
     return 0;
 }
