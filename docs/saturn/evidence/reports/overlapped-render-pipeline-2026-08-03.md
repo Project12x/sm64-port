@@ -21,6 +21,17 @@ admitted/transformed; this is source evidence only, not a measured gain.
 Mario's checked-in neutral-pose bank has 424 near/mid references and 228 far
 references, verified from the regenerated intake report.
 
+Review-remediation source evidence: the Mario transform worker now ranges over
+the selected immutable reference list, stores output at each original vertex
+ID, and uses a matching ownership map for cache-through reads. It therefore
+does not claim a compact stream while scheduling all 424 source vertices. The
+deterministic BOB and fragment generator gate now proves each emitted
+one-primitive material partition has tight bounds enclosing every referenced
+position, mandatory work retains a FAR span, references are sorted/unique, and
+the aggregate FAR span is smaller. This closes only those host-source review
+findings; generic per-cluster runtime admission and target evidence remain
+open. No target build, CUE, Ymir, or performance capture was run.
+
 TDD evidence: the C fixture first failed because
 `saturn_render_cluster.h` did not exist; the generator fixture then failed
 because its compact stream fields did not exist. Green command:

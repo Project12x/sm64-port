@@ -7,10 +7,38 @@ import json
 from pathlib import Path
 
 
+def build_render_clusters(mesh: dict[str, object],
+                          scene: dict[str, object]) -> list[dict[str, object]]:
+    """Return deterministic fragment cluster metadata with tight source bounds."""
+    clusters: list[dict[str, object]] = []
+    for ordinal, fragment in enumerate(scene["fragments"]):
+        source_ordinal = int(fragment["source_primitive"])
+        points = [list(map(int, point)) for point in fragment["positions"]]
+        if len(points) != 3:
+            raise ValueError("BSP fragment must remain a triangle")
+        mandatory = source_ordinal < 128
+        far_enabled = mandatory or source_ordinal % 8 != 0
+        clusters.append({
+            "source_ordinal": source_ordinal,
+            "primitive_first": ordinal,
+            "primitive_count": 1,
+            "material_partition": int(mesh["primitives"][source_ordinal]["material"]),
+            "mandatory": mandatory,
+            "bounds": {
+                "min": [min(point[axis] for point in points) for axis in range(3)],
+                "max": [max(point[axis] for point in points) for axis in range(3)],
+            },
+            "position_refs": [[0, 1, 2], [0, 1, 2], [0, 1, 2] if far_enabled else []],
+            "position_values": points,
+        })
+    return clusters
+
+
 def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
     bsp = scene["bsp"]
     positions: list[list[int]] = []
     primitives: list[dict[str, object]] = []
+    clusters = build_render_clusters(mesh, scene)
     for fragment in scene["fragments"]:
         source = mesh["primitives"][int(fragment["source_primitive"])]
         material = mesh["materials"][int(source["material"])]
@@ -60,6 +88,7 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         f"#define SM64_SATURN_BOB_FRAGMENT_BSP_REF_COUNT {bsp['ref_count']}U",
         "#define SM64_SATURN_BOB_FRAGMENT_LOD_TIER_COUNT 3U",
         f"#define SM64_SATURN_BOB_FRAGMENT_LOD_POSITION_REF_COUNT {len(lod_position_stream)}U",
+        f"#define SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT {len(clusters)}U",
         "typedef struct sm64_saturn_bob_fragment_primitive {",
         "    uint16_t indices[4]; uint16_t source0; uint16_t source1; uint8_t rgb[3];",
         "    uint8_t textured; uint8_t tile_size; uint32_t tile_offset;",
@@ -68,6 +97,22 @@ def emit(mesh: dict[str, object], scene: dict[str, object]) -> str:
         "static const int32_t sm64_saturn_bob_fragment_positions[SM64_SATURN_BOB_FRAGMENT_POSITION_COUNT][3] = {",
     ]
     lines.extend("    {%d, %d, %d}," % tuple(point) for point in positions)
+    lines += [
+        "};",
+        "typedef struct sm64_saturn_bob_fragment_cluster_metadata {",
+        "    int32_t bounds_min[3]; int32_t bounds_max[3];",
+        "    uint16_t primitive_first; uint16_t primitive_count;",
+        "    uint16_t material_partition; uint16_t source_ordinal; uint8_t mandatory;",
+        "} sm64_saturn_bob_fragment_cluster_metadata_t;",
+        "static const sm64_saturn_bob_fragment_cluster_metadata_t sm64_saturn_bob_fragment_render_clusters[SM64_SATURN_BOB_FRAGMENT_CLUSTER_COUNT] = {",
+    ]
+    for cluster in clusters:
+        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, %dU}," % (
+            ", ".join(map(str, cluster["bounds"]["min"])),
+            ", ".join(map(str, cluster["bounds"]["max"])),
+            cluster["primitive_first"], cluster["primitive_count"],
+            cluster["material_partition"], cluster["source_ordinal"],
+            1 if cluster["mandatory"] else 0))
     lines += [
         "};",
         "static const int32_t sm64_saturn_bob_fragment_bsp_planes[SM64_SATURN_BOB_FRAGMENT_BSP_NODE_COUNT][3] = {",

@@ -215,6 +215,10 @@ typedef struct demo_actor_primitive_ref {
  * slave [split, vertex_count) result spans.  It contains no VDP state. */
 static demo_actor_vertex_result_t s_actor_results[SM64_MARIO_VERTEX_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
+/* Actor tier streams are compact lists of original vertex IDs.  Ownership is
+ * therefore by stream slot, not by the numeric vertex ID. */
+static uint8_t s_actor_vertex_owner[SM64_MARIO_VERTEX_COUNT]
+    DEMO_TERRAIN_TRANSFORM_CACHE;
 static demo_actor_primitive_ref_t s_actor_refs[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_order[SM64_MARIO_PRIMITIVE_COUNT];
@@ -376,8 +380,9 @@ static inline const uint8_t *demo_position_valid_read(uint8_t lane,
 static inline const demo_actor_vertex_result_t *demo_actor_result_read_lane_split(
     uint8_t lane, uint16_t slave_begin, uint16_t vertex)
 {
-    const uint8_t owner = sm64_saturn_dual_frame_owner_for_split(
-        vertex, slave_begin);
+    (void)slave_begin;
+    const uint8_t owner = vertex < SM64_MARIO_VERTEX_COUNT &&
+        s_actor_vertex_owner[vertex] <= 1U ? s_actor_vertex_owner[vertex] : 0U;
     return (const demo_actor_vertex_result_t *)
         sm64_saturn_dual_frame_read_range(lane, owner, s_actor_results) +
         vertex;
@@ -774,7 +779,9 @@ typedef struct demo_mario_transform_context {
     /* These point only at generated, read-only mesh/material banks. */
     const uint16_t (*primitives)[5];
     const uint8_t (*material_rgb)[3];
+    const uint16_t *vertex_refs;
     uint16_t vertex_slave_begin;
+    uint16_t transform_ref_count;
     uint16_t primitive_slave_begin;
     uint32_t sequence;
 } demo_mario_transform_context_t;
@@ -870,7 +877,7 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
     if (context == NULL || !context->snapshot.valid ||
         context->vertex_count != SM64_MARIO_VERTEX_COUNT ||
         context->primitives == NULL || context->material_rgb == NULL ||
-        end > context->vertex_count) {
+        context->vertex_refs == NULL || end > context->transform_ref_count) {
         return;
     }
     const int32_t sine = sm64_saturn_sins_q16(context->snapshot.yaw);
@@ -878,7 +885,10 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
     for (uint16_t i = begin; i < end; i++) {
         if (((uint16_t)(i - begin) % DEMO_CANCEL_POLL_INTERVAL) == 0U &&
             sm64_saturn_dual_worker_cancelled()) break;
-        const int16_t *source = context->vertices[i];
+        const uint16_t vertex = context->vertex_refs[i];
+        if (vertex >= context->vertex_count)
+            continue;
+        const int16_t *source = context->vertices[vertex];
         const int32_t sx = (int32_t)source[0] << 16;
         const int32_t sz = (int32_t)source[2] << 16;
         const sm64_saturn_vec3i_t world = {
@@ -890,8 +900,8 @@ static void demo_transform_mario_range(void *opaque, uint16_t begin,
                 ((-sm64_saturn_q16_mul(sx, sine) +
                   sm64_saturn_q16_mul(sz, cosine)) >> 16)};
         sm64_saturn_vec3i_t view;
-        s_actor_results[i].valid = sm64_saturn_ir_transform_one(
-            &context->job, world, &view, &s_actor_results[i].projected) ?
+        s_actor_results[vertex].valid = sm64_saturn_ir_transform_one(
+            &context->job, world, &view, &s_actor_results[vertex].projected) ?
             1U : 0U;
     }
     sm64_saturn_dual_frame_publish(&s_actor_frame_bank, lane,
@@ -979,12 +989,45 @@ static void demo_dispatch_mario_transform(
     s_mario_transform_context.pose_walking_bank = pose->walking_bank;
     s_mario_transform_context.primitives = sm64_mario_primitives;
     s_mario_transform_context.material_rgb = sm64_mario_material_rgb;
+    const uint8_t tier = s_pretransform_lod_tier;
+    if (tier >= SM64_MARIO_RENDER_CLUSTER_LOD_TIER_COUNT) {
+        profile->pipeline_faults++;
+        return;
+    }
+    const uint16_t ref_first =
+        sm64_mario_render_cluster_lod_vertex_offsets[tier];
+    const uint16_t ref_end =
+        sm64_mario_render_cluster_lod_vertex_offsets[tier + 1U];
+    if (ref_end < ref_first ||
+        ref_end > SM64_MARIO_RENDER_CLUSTER_LOD_VERTEX_LIST_COUNT) {
+        profile->pipeline_faults++;
+        return;
+    }
+    s_mario_transform_context.vertex_refs =
+        &sm64_mario_render_cluster_lod_vertex_list[ref_first];
+    s_mario_transform_context.transform_ref_count =
+        (uint16_t)(ref_end - ref_first);
+    if (s_mario_transform_context.transform_ref_count == 0U) {
+        profile->pipeline_faults++;
+        return;
+    }
     s_actor_publish_sequence++;
     if (s_actor_publish_sequence == 0U) s_actor_publish_sequence = 1U;
     s_mario_transform_context.sequence = s_actor_publish_sequence;
     sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
     memset(s_actor_results, 0, sizeof(s_actor_results));
-    s_actor_slave_begin = (uint16_t)(SM64_MARIO_VERTEX_COUNT / 2U);
+    memset(s_actor_vertex_owner, UINT8_MAX, sizeof(s_actor_vertex_owner));
+    s_actor_slave_begin =
+        (uint16_t)(s_mario_transform_context.transform_ref_count / 2U);
+    for (uint16_t ref = 0U;
+         ref < s_mario_transform_context.transform_ref_count; ref++) {
+        const uint16_t vertex = s_mario_transform_context.vertex_refs[ref];
+        if (vertex >= SM64_MARIO_VERTEX_COUNT) {
+            profile->pipeline_faults++;
+            return;
+        }
+        s_actor_vertex_owner[vertex] = ref < s_actor_slave_begin ? 0U : 1U;
+    }
     s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
     sm64_saturn_dual_worker_stats_t actor_stats = {0};
     bool actor_complete = true;
@@ -999,36 +1042,40 @@ static void demo_dispatch_mario_transform(
             demo_transform_mario_range,
             (void *)sm64_saturn_dual_frame_cache_through(
                 &s_mario_transform_context),
-            SM64_MARIO_VERTEX_COUNT, s_actor_slave_begin, &actor_stats);
+            s_mario_transform_context.transform_ref_count,
+            s_actor_slave_begin, &actor_stats);
 #if defined(__sh__)
         uint16_t slave_count = 0U;
         actor_complete = actor_complete &&
             sm64_saturn_dual_frame_peer_ready(
                 &s_actor_frame_bank, 0U, s_actor_publish_sequence,
                 &slave_count) &&
-            slave_count == SM64_MARIO_VERTEX_COUNT - s_actor_slave_begin;
+            slave_count == s_mario_transform_context.transform_ref_count -
+                s_actor_slave_begin;
 #endif
     } else {
         actor_complete = false;
     }
 #else
     profile->master_worker_started++;
-    s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;
+    s_actor_slave_begin = s_mario_transform_context.transform_ref_count;
+    memset(s_actor_vertex_owner, 0, sizeof(s_actor_vertex_owner));
     demo_transform_mario_range(&s_mario_transform_context, 0U,
-                               SM64_MARIO_VERTEX_COUNT);
+                               s_mario_transform_context.transform_ref_count);
 #endif
     if (!actor_complete) {
         /* The generic worker does not return until a cancelled slave callback
          * has retired, so this full-span recovery cannot overlap its writes. */
         profile->pipeline_faults++;
-        s_actor_slave_begin = SM64_MARIO_VERTEX_COUNT;
+        s_actor_slave_begin = s_mario_transform_context.transform_ref_count;
+        memset(s_actor_vertex_owner, 0, sizeof(s_actor_vertex_owner));
         /* Classification follows this recovery on the master.  Its copied
          * ownership metadata must match the all-master result span so it does
          * not read freshly rewritten vertices through a peer alias. */
         s_mario_transform_context.vertex_slave_begin = s_actor_slave_begin;
         sm64_saturn_dual_frame_reset(&s_actor_frame_bank);
         demo_transform_mario_range(&s_mario_transform_context, 0U,
-                                   SM64_MARIO_VERTEX_COUNT);
+                                   s_mario_transform_context.transform_ref_count);
     }
     s_actor_ref_publish_sequence++;
     if (s_actor_ref_publish_sequence == 0U) s_actor_ref_publish_sequence = 1U;

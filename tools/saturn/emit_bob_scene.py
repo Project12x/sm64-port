@@ -15,6 +15,41 @@ def c_array(values: list[object], width: int = 12) -> list[str]:
     return lines
 
 
+def build_render_clusters(mesh: dict[str, object],
+                          manifest: dict[str, object]) -> list[dict[str, object]]:
+    """Return deterministic one-material cluster metadata for the BOB bank."""
+    entries = {int(entry["source_triangle"]): entry for entry in manifest["entries"]}
+    positions = [list(map(int, point)) for point in mesh["positions"]]
+    clusters: list[dict[str, object]] = []
+    for ordinal, primitive in enumerate(mesh["primitives"]):
+        indices = [int(value) for value in primitive["indices"]]
+        sources = [int(value) for value in primitive["source_triangles"]]
+        if len(indices) != 4 or not sources:
+            raise ValueError("compiled primitive has no stable cluster identity")
+        if any(index < 0 or index >= len(positions) for index in indices):
+            raise ValueError("compiled primitive has an out-of-range position")
+        source0 = sources[0]
+        mandatory = source0 < 128
+        far_enabled = mandatory or source0 % 8 != 0
+        refs = sorted(set(indices))
+        points = [positions[index] for index in refs]
+        clusters.append({
+            "source_ordinal": source0,
+            "primitive_first": ordinal,
+            "primitive_count": 1,
+            "material_partition": int(primitive["material"]),
+            "mandatory": mandatory,
+            "bounds": {
+                "min": [min(point[axis] for point in points) for axis in range(3)],
+                "max": [max(point[axis] for point in points) for axis in range(3)],
+            },
+            "position_refs": [refs, refs, refs if far_enabled else []],
+            "position_values": points,
+            "tile_present": source0 in entries,
+        })
+    return clusters
+
+
 def emit(mesh: dict[str, object], manifest: dict[str, object],
          bsp: dict[str, object]) -> str:
     entries = {int(entry["source_triangle"]): entry for entry in manifest["entries"]}
@@ -40,6 +75,7 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
             "tile_size": int(tile["tile_size"]) if tile else 0,
             "textured": 1 if tile else 0,
         })
+    clusters = build_render_clusters(mesh, manifest)
     # Keep one shared position/normal identity while baking deterministic
     # material/primitive masks for runtime LOD selection. The mid tier keeps
     # every source primitive; the far tier drops one of every eight non-
@@ -86,6 +122,7 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
         "#define SM64_SATURN_BOB_LOD_TIER_COUNT 3U",
         f"#define SM64_SATURN_BOB_LOD_POSITION_REF_COUNT {len(flat_lod_position_refs)}U",
         f"#define SM64_SATURN_BOB_CLUSTER_COUNT {len(primitives)}U",
+        f"#define SM64_SATURN_BOB_CLUSTER_POSITION_REF_COUNT {sum(len(refs) for cluster in clusters for refs in cluster['position_refs'])}U",
         "/* bob_bsp.h owns the node-span arrays; identity must match exactly. */",
         f"#define SM64_SATURN_BOB_SCENE_NODE_SPAN_COUNT {node_span_count}U",
         f"#define SM64_SATURN_BOB_SCENE_PRIMITIVE_REF_COUNT {primitive_ref_count}U",
@@ -112,6 +149,22 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
                 primitive["tile_offset"], primitive["clut_offset"],
             )
         )
+    lines += [
+        "};",
+        "typedef struct sm64_saturn_bob_render_cluster_metadata {",
+        "    int32_t bounds_min[3]; int32_t bounds_max[3];",
+        "    uint16_t primitive_first; uint16_t primitive_count;",
+        "    uint16_t material_partition; uint16_t source_ordinal; uint8_t mandatory;",
+        "} sm64_saturn_bob_render_cluster_metadata_t;",
+        "static const sm64_saturn_bob_render_cluster_metadata_t sm64_saturn_bob_render_clusters[SM64_SATURN_BOB_CLUSTER_COUNT] = {",
+    ]
+    for cluster in clusters:
+        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, %dU}," % (
+            ", ".join(map(str, cluster["bounds"]["min"])),
+            ", ".join(map(str, cluster["bounds"]["max"])),
+            cluster["primitive_first"], cluster["primitive_count"],
+            cluster["material_partition"], cluster["source_ordinal"],
+            1 if cluster["mandatory"] else 0))
     lines += [
         "};",
         "/* Compact, sorted unique position references for near/mid/far. The",

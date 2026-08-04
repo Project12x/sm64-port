@@ -27,6 +27,14 @@
   so the actor stream is a real compact future-workload input rather than a
   nominal tier with the same unique positions.
 
+- Wired Mario's selected compact tier references into the actor transform
+  dispatch. Worker ranges now index the immutable reference span and retain an
+  explicit original-vertex ownership map for cache-through reads, so FAR
+  transforms 228 selected vertices without classifying untransformed vertices
+  as valid. Added deterministic BOB and BSP-fragment cluster metadata plus
+  host gates for tight bounds, single material identity, mandatory retention,
+  in-range/unique tier references, and a strictly smaller FAR stream.
+
 - Added Saturn-only immutable two-slot render snapshot banks with fixed-width
   camera, scene, Mario, pose-selector, and generated-bank-ID records. The
   master publishes a generation only after camera and actor records agree;
