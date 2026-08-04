@@ -95,3 +95,6 @@ validation, publishes `RENDERING` while held, and clears the lock only after
 the state is no longer ready. The deterministic first-held/second-acquire test
 observes exactly one claimant. The focused host gate is green. Runtime
 contracts, target/Ymir, and fresh independent reviews remain open.
+
+Fix-round behavior/docs commit: `52aec1e1`
+(`fix(saturn): serialize render snapshot claims`).

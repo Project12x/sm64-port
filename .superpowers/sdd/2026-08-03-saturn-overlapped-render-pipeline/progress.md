@@ -126,3 +126,6 @@ state transition, so a second contender receives no payload. Focused snapshot
 bank gate is green; no target/Ymir and no runtime-contract rerun occurred.
 Fresh review and the existing terrain-command runtime-contract gate remain
 open.
+
+Fix-round behavior/docs commit: `52aec1e1`
+(`fix(saturn): serialize render snapshot claims`).
