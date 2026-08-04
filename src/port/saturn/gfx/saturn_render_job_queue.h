@@ -83,15 +83,14 @@ typedef struct sm64_saturn_render_job_queue {
     volatile uint32_t count;
 } sm64_saturn_render_job_queue_t;
 
-/* Exactly one queue consumer may reserve the future Yaul polling callback.
- * Attach is a pipeline-initialization operation, not a per-frame callback
- * registration. While the legacy fixed-split worker is linked, `notify` only
- * validates this single-owner state; the atomic live cutover alone may bind
- * and notify CPU-DUAL after every legacy dispatch is removed. */
-bool sm64_saturn_render_job_queue_slave_attach(
+/* Source-only preparation for the future queue cutover. This records one
+ * immutable callback-table/context owner but cannot register, wake, or
+ * otherwise activate a CPU-DUAL slave. The atomic live cutover must replace
+ * this API after every legacy worker dispatch is removed. */
+bool sm64_saturn_render_job_queue_source_arm(
     sm64_saturn_render_job_queue_t *queue,
     const sm64_saturn_render_job_callback_table_t *callbacks, void *context);
-bool sm64_saturn_render_job_queue_slave_notify(void);
+bool sm64_saturn_render_job_queue_source_armed(void);
 
 _Static_assert(sizeof(sm64_saturn_render_job_t) == 16U,
                "job descriptor ABI must stay pointer-free and fixed-width");

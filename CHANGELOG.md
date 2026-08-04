@@ -8,10 +8,9 @@
   renderer. It routes result reads and writes using the exact queue descriptor
   index and actual master/slave claim, and rejects readers before that job is
   `DONE`, so a work-stealing master cannot accidentally select the slave cache
-  alias. The queue now also reserves one
-  explicit polling callback attachment and notification lifecycle; this is not
-  enabled in the current fixed-split renderer until its producers and readers
-  are converted and reviewed.
+  alias. The queue now exposes source-side arming only—not a polling callback
+  attachment or notification—and cannot activate a slave until the atomic
+  renderer cutover replaces the legacy worker.
 
 - Added descriptor-owned terrain and actor output-bank publication for the A5
   SH-2 work queue. The CPU that actually claims a descriptor now publishes its
@@ -55,6 +54,11 @@
   lifecycle without compiling a second callback beside the legacy fixed-split
   worker. The later atomic renderer cutover must remove that worker before it
   binds the queue to CPU-DUAL.
+
+- Renamed A5.5's misleading slave attach/notify API to explicit source arming.
+  This prevents callers from treating the unbound bridge as an active worker;
+  the static source gate now scans both queue and bridge sources for CPU-DUAL
+  activation.
 
 - Hardened A5 output-bank publication to bind each published cache lane to the
   actual queue release record, rather than trusting a callback-supplied claim

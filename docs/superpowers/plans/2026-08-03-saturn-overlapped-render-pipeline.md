@@ -107,9 +107,9 @@ and the evidence report before starting another task.
   queue descriptor index, actual claimant, and output kind select the
   writer/reader cache lane; consumers reject a job until it is `DONE`.
   Neither `begin == 0` nor a fixed terrain/actor split participates. It also
-  defines a one-time queue-owned polling callback lifecycle, rejecting a
-  second attachment. A5.5 deliberately compiles no CPU-DUAL registration or
-  notify while the legacy worker is linked; only the atomic live cutover may
+  defines one-owner source arming only, rejecting a second arm. A5.5
+  deliberately compiles no CPU-DUAL registration or notification while the
+  legacy worker is linked; only the atomic live cutover may
   bind it after removing all legacy dispatches. It is not
   bound to the renderer yet: live activation may begin only after the bridge
   review and a renderer conversion makes every producer and consumer use this
@@ -911,8 +911,8 @@ types, ownership rules, or production fallbacks.
   publishes only through the matching descriptor-kind bank and returns the
   queue-validated claimant lane. `read_output()` accepts only the immutable
   descriptor index and requires its terminal `DONE` state before using the
-  recorded owner. The queue
-  attach is single-owner and its explicit notify is inert until attached.
+  recorded owner. The queue records a single source-side arm only; it cannot
+  activate a slave or report a notification.
 - [x] **Step 3: Focused host proof.** The bridge fixture and existing queue
   fixture pass with `-Wall -Wextra -Werror` under the Qt MinGW host compiler.
 - [x] **Step 3a: Source-only coexistence proof.** A Python source gate rejects
@@ -920,7 +920,7 @@ types, ownership rules, or production fallbacks.
   cutover owns the only permitted registration after legacy worker removal.
 - [ ] **Step 4: Independent specification and quality review.**
 - [ ] **Step 5: Live renderer transition.** Replace every terrain/Mario
-  producer/read with bridge routing, attach the queue as the sole slave
+  producer/read with bridge routing, replace source arming with the queue as the sole slave
   callback, publish terrain/actor jobs, and remove accepted fixed joins only
   after `all_terminal()`. This remains a separate source/target gate; no
   target build or Ymir run is authorized by Steps 1–3 alone.

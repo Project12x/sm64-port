@@ -2,14 +2,14 @@
 
 #include <string.h>
 
-typedef struct sm64_saturn_render_job_slave_attachment {
+typedef struct sm64_saturn_render_job_source_arm {
     sm64_saturn_render_job_queue_t *queue;
     const sm64_saturn_render_job_callback_table_t *callbacks;
     void *context;
     uint32_t attached;
-} sm64_saturn_render_job_slave_attachment_t;
+} sm64_saturn_render_job_source_arm_t;
 
-static sm64_saturn_render_job_slave_attachment_t s_slave_attachment;
+static sm64_saturn_render_job_source_arm_t s_source_arm;
 
 static inline void sm64_saturn_render_job_queue_fence(void)
 {
@@ -84,31 +84,24 @@ void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue)
     sm64_saturn_render_job_queue_fence();
 }
 
-bool sm64_saturn_render_job_queue_slave_attach(
+bool sm64_saturn_render_job_queue_source_arm(
     sm64_saturn_render_job_queue_t *queue,
     const sm64_saturn_render_job_callback_table_t *callbacks, void *context)
 {
-    if (queue == NULL || callbacks == NULL || s_slave_attachment.attached != 0U)
+    if (queue == NULL || callbacks == NULL || s_source_arm.attached != 0U)
         return false;
-    s_slave_attachment.queue = sm64_saturn_render_job_queue_cache_through(queue);
-    s_slave_attachment.callbacks = callbacks;
-    s_slave_attachment.context = context;
+    s_source_arm.queue = sm64_saturn_render_job_queue_cache_through(queue);
+    s_source_arm.callbacks = callbacks;
+    s_source_arm.context = context;
     sm64_saturn_render_job_queue_fence();
-    s_slave_attachment.attached = 1U;
+    s_source_arm.attached = 1U;
     sm64_saturn_render_job_queue_fence();
     return true;
 }
 
-bool sm64_saturn_render_job_queue_slave_notify(void)
+bool sm64_saturn_render_job_queue_source_armed(void)
 {
-    if (s_slave_attachment.attached == 0U ||
-        s_slave_attachment.queue == NULL)
-        return false;
-    /* Source-only A5.5 reserves the single-owner lifecycle but does not
-     * register or notify Yaul's CPU-DUAL callback while the legacy fixed
-     * worker remains linked. The atomic live cutover owns both registration
-     * and notification after every legacy dispatch has been removed. */
-    return true;
+    return s_source_arm.attached != 0U && s_source_arm.queue != NULL;
 }
 
 bool sm64_saturn_render_job_queue_publish(

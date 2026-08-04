@@ -836,7 +836,7 @@ open.
   rejected before that exact descriptor becomes `DONE`, a slave actor job
   routes to the master peer through its own bank, and a wrong descriptor index
   fails closed. It also
-  proves the queue accepts one persistent polling attach and rejects a second.
+  proves the queue accepts one source-side arm and rejects a second.
 - Focused direct host commands compiled with `-std=c11 -Wall -Wextra -Werror`:
   `render-job-bridge-test.exe` and `render-job-queue-test.exe` both report
   PASS. No MSYS target build, CUE, Ymir launch, cache-coherency target proof,
@@ -846,7 +846,7 @@ open.
   result ownership) and pinned Z-Treme
   `cff75451c1616aac1236fc2b44223902b55c706b` (GPLv3, fixed work areas); no
   upstream lines were copied. Live renderer conversion and independent review
-  remain required before the queue attaches to the SH-2 callback.
+  remain required before the queue is allowed to activate an SH-2 callback.
 
 ### A5.5 CPU-DUAL coexistence correction (2026-08-04)
 
@@ -858,3 +858,13 @@ open.
   source gate passes, as do the bridge and queue host fixtures. The atomic
   live cutover must remove all legacy dispatches before it owns Yaul callback
   registration; no target build/Ymir/FPS evidence ran.
+
+### A5.5 source-arm terminology correction (2026-08-04)
+
+- NO-GO review finding: `slave_attach`/`slave_notify` falsely implied target
+  polling activation although A5.5 contains no Yaul callback.
+- GREEN: the API is now `source_arm`/`source_armed`. It records only a unique
+  source-side callback-table/context owner, cannot report a notification, and
+  explicitly cannot activate the slave. The static source test scans both the
+  queue and bridge sources for CPU-DUAL registration/notify tokens; it and the
+  bridge/queue host fixtures pass. No target build/Ymir/FPS evidence ran.

@@ -40,16 +40,16 @@ int main(void)
                 "bridge fixture must publish immutable jobs")) return 1;
     const sm64_saturn_render_job_callback_table_t callbacks = {{NULL, NULL,
                                                                   NULL, NULL}};
-    if (!expect(sm64_saturn_render_job_queue_slave_attach(
+    if (!expect(sm64_saturn_render_job_queue_source_arm(
                     &queue, &callbacks, NULL),
-                "queue must accept one persistent polling attachment"))
+                "source-only queue preparation must accept one owner"))
         return 1;
-    if (!expect(!sm64_saturn_render_job_queue_slave_attach(
+    if (!expect(!sm64_saturn_render_job_queue_source_arm(
                     &queue, &callbacks, NULL),
-                "queue must reject a second polling callback attachment"))
+                "source-only queue preparation must reject a second owner"))
         return 1;
-    if (!expect(sm64_saturn_render_job_queue_slave_notify(),
-                "attached queue must accept an explicit slave notification"))
+    if (!expect(sm64_saturn_render_job_queue_source_armed(),
+                "source-only preparation must expose its armed state"))
         return 1;
 
     /* `input_offset` is deliberately in the old slave range.  A master
