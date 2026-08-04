@@ -3949,7 +3949,7 @@ static void test_terrain_shade_policy_preserves_textures_and_skips_flat_gouraud(
            SM64_SATURN_SHADE_GOURAUD);
 }
 
-static void test_fused_terrain_publication_preserves_private_dynamic_commands(void)
+static void test_fused_terrain_publication_preserves_private_dynamic_commands_and_post_light_shades(void)
 {
     assert(sizeof(sm64_saturn_visible_terrain_t) == 12U);
     assert(sizeof(sm64_saturn_visible_terrain_t) +
@@ -3974,6 +3974,8 @@ static void test_fused_terrain_publication_preserves_private_dynamic_commands(vo
         {4, 5}, {14, 5}, {14, 15}, {4, 15}};
     const int16_t primitive_3_triangle[4][2] = {
         {-7, 8}, {9, 8}, {1, 19}, {1, 19}};
+    const uint16_t post_light_shades[4] = {
+        0x801FU, 0x83E0U, 0xFC00U, 0x83FFU};
     uint8_t split_primitive_2[SM64_SATURN_VDP1_COMMAND_BYTES];
     uint8_t split_primitive_1[SM64_SATURN_VDP1_COMMAND_BYTES];
     uint8_t split_primitive_3[SM64_SATURN_VDP1_COMMAND_BYTES];
@@ -3986,9 +3988,10 @@ static void test_fused_terrain_publication_preserves_private_dynamic_commands(vo
     assert(sm64_saturn_terrain_template_patch_resolved_record(
         split_primitive_3, &resolved, primitive_3_triangle,
         0U, false, false, 0U));
-    /* The worker result owns only the dynamic coordinate payload.  Its
-     * material words must stay private-zero until the master copies the
-     * immutable load-resolved template after the cross-CPU join. */
+    /* The worker result owns only dynamic payload: optional post-light
+     * shades at bytes 0..7 and coordinates at bytes 12..27. Immutable
+     * material is copied from the resolved template by the master after the
+     * cross-CPU join. */
     assert(memcmp(split_primitive_1, resolved.words, 12U) == 0);
     assert(memcmp(split_primitive_1 + 12U, primitive_1,
                   sizeof(primitive_1)) == 0);
@@ -4009,13 +4012,15 @@ static void test_fused_terrain_publication_preserves_private_dynamic_commands(vo
             SM64_SATURN_TERRAIN_RESULT_RECOVERY_MATERIAL |
             SM64_SATURN_TERRAIN_RESULT_TEXTURE_SUPPRESSED,
         NULL, primitive_2));
-    assert(sm64_saturn_terrain_result_publish(
+    assert(sm64_saturn_terrain_result_publish_with_shades(
         &spans.slave, 3U, 18U, 500U, 3U,
-        SM64_SATURN_TERRAIN_CLIP_CROSSES, &resolved,
-        primitive_3_triangle));
-    assert(sm64_saturn_terrain_result_publish(
+        SM64_SATURN_TERRAIN_CLIP_CROSSES |
+            SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES,
+        &resolved, post_light_shades, primitive_3_triangle));
+    assert(sm64_saturn_terrain_result_publish_with_shades(
         &spans.master, 1U, 17U, 500U, 4U,
-        SM64_SATURN_TERRAIN_CLIP_FRONT, &resolved, primitive_1));
+        SM64_SATURN_TERRAIN_CLIP_FRONT,
+        &resolved, post_light_shades, primitive_1));
     sm64_saturn_terrain_result_arena_seal(&spans.master, 41U);
     sm64_saturn_terrain_result_arena_seal(&spans.slave, 41U);
 
@@ -4028,6 +4033,7 @@ static void test_fused_terrain_publication_preserves_private_dynamic_commands(vo
     assert(sm64_saturn_terrain_result_clip_class(refs[1].record) ==
            SM64_SATURN_TERRAIN_CLIP_CROSSES);
     assert(sm64_saturn_terrain_result_corner_count(refs[1].record) == 3U);
+    assert(sm64_saturn_terrain_result_has_post_light_shades(refs[1].record));
     const uint8_t zero_material[12] = {0U};
     const uint8_t zero_tail[4] = {0U};
     const uint8_t *const worker_primitive_1 =
@@ -4042,8 +4048,10 @@ static void test_fused_terrain_publication_preserves_private_dynamic_commands(vo
                   sizeof(primitive_1)) == 0);
     assert(memcmp(worker_primitive_1 + 28U, zero_tail,
                   sizeof(zero_tail)) == 0);
-    assert(memcmp(worker_primitive_3, zero_material,
-                  sizeof(zero_material)) == 0);
+    assert(memcmp(worker_primitive_3, post_light_shades,
+                  sizeof(post_light_shades)) == 0);
+    assert(memcmp(worker_primitive_3 + 8U, zero_tail,
+                  sizeof(zero_tail)) == 0);
     assert(memcmp(worker_primitive_3 + 12U, primitive_3_triangle,
                   sizeof(primitive_3_triangle)) == 0);
     assert(memcmp(worker_primitive_3 + 28U, zero_tail,
@@ -4128,7 +4136,7 @@ int main(void)
     test_default_camera_replay_keeps_the_2000_tick_boundary();
     test_source_runtime_records_the_applied_camera_replay_pad();
     test_bounded_terrain_result_spans();
-    test_fused_terrain_publication_preserves_private_dynamic_commands();
+    test_fused_terrain_publication_preserves_private_dynamic_commands_and_post_light_shades();
     test_terrain_depth_bins_key_and_failures();
     test_view_space_terrain_clip();
     test_frame_profile();

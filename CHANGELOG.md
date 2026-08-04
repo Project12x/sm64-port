@@ -13,6 +13,14 @@
 
 ### Fixed
 
+- Corrected the Saturn terrain runtime-contract fixture to distinguish optional
+  worker-owned post-light RGB1555 shades from immutable VDP1 material words.
+  It now exercises both no-shades and live-shades publication through sorted
+  master/slave spans. The compact writer now drops supplied shade values unless
+  `POST_LIGHT_SHADES` is set, keeping ignored bytes zero while preserving the
+  live four-word shade payload; this prevents material-like values leaking
+  across the master/worker boundary under a clear flag.
+
 - Serialized every A2 snapshot terminal transition through its release claim
   lock. A timeout quarantine can no longer be overwritten by a stale
   `READY → RENDERING` claimant; completion and positive retirement likewise

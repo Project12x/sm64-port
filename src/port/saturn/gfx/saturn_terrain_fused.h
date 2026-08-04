@@ -63,7 +63,8 @@ static inline bool sm64_saturn_terrain_result_write_with_shades(
      * the cross-CPU join; no worker may reconstruct material state. */
     const bool patched = resolved != NULL;
     memset(command, 0, SM64_SATURN_TERRAIN_COMMAND_BYTES);
-    if (shades != NULL)
+    if ((clip_class & SM64_SATURN_TERRAIN_RESULT_POST_LIGHT_SHADES) != 0U &&
+        shades != NULL)
         memcpy(command, shades, 4U * sizeof(shades[0]));
     memcpy(command + 12U, vertices, 8U * sizeof(int16_t));
     record->primitive_id = primitive_id;
