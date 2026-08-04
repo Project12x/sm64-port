@@ -576,6 +576,17 @@ no claimed FPS gain. Task 2/A2 begins at its failing lifecycle-test step.
 Snapshot publication is a prerequisite for scene-neutral pre-transform
 cluster/LOD admission in A3; it is not itself counted as a performance result.
 
+## 2026-08-04 A3+A4 manual Ymir result
+
+The owner manually tested the freshly linked Pipe4 Route0/live-input A3+A4
+candidate in desktop Ymir with the project 32-Mbit DRAM-cart profile. The
+observed rate improved from approximately 1–2 FPS to approximately 3–4 FPS.
+This is qualitative emulator evidence, not a retail benchmark, but it is the
+first positive manual result for the pre-transform terrain and live-pose Mario
+workload reductions. Keep A3+A4 as the comparison baseline while A5 queue,
+A8 transfer, and A9 overlap work proceed; target visual/counter gates remain
+open.
+
 ## A2 immutable snapshot-bank source evidence (2026-08-04)
 
 - TDD red: the new lifecycle fixture was compiled before the snapshot header

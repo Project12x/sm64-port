@@ -71,7 +71,10 @@ and the evidence report before starting another task.
   derives one nonzero generation before admission and transform publication,
   including `UINT32_MAX -> 1`, and rejects a mismatched result before its
   compact references are marked. It remains active for independent rereview
-  and target visual/counter evidence; no performance claim is made. The A3
+  and target visual/counter evidence. The owner manually observed roughly
+  3–4 FPS in the fresh A3+A4 desktop-Ymir candidate, up from the 1–2 FPS
+  baseline; this is positive qualitative evidence, not a completed target
+  acceptance gate. The A3
   render-cluster header also owns its GPL promotion dependency through a
   relative path, matching sourceboot's declared `gfx`-only Saturn include
   path; `verify-render-clusters` intentionally omits `gpl` so this boundary
