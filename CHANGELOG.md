@@ -21,6 +21,12 @@
   cluster and position admission/transform counters; target performance and
   visual evidence are still outstanding.
 
+- Tightened Mario's generated far-tier policy to retain one deterministic
+  source-primitive residue, rather than merely omitting one. The checked-in
+  neutral pose now carries 228 far references versus 424 near/mid references,
+  so the actor stream is a real compact future-workload input rather than a
+  nominal tier with the same unique positions.
+
 - Added Saturn-only immutable two-slot render snapshot banks with fixed-width
   camera, scene, Mario, pose-selector, and generated-bank-ID records. The
   master publishes a generation only after camera and actor records agree;

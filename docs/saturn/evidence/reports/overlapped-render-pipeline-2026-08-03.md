@@ -18,6 +18,8 @@ The mandatory route prefix remains admitted. Per-primitive projected-area,
 near, degeneracy, material, and capacity checks still run after transform.
 The append-only profile exposes coarse clusters tested/admitted and positions
 admitted/transformed; this is source evidence only, not a measured gain.
+Mario's checked-in neutral-pose bank has 424 near/mid references and 228 far
+references, verified from the regenerated intake report.
 
 TDD evidence: the C fixture first failed because
 `saturn_render_cluster.h` did not exist; the generator fixture then failed

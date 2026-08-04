@@ -544,15 +544,16 @@ def mario_render_clusters(
     if len(primitive_indices) > 0xFFFF or len(vertex_indices) > 0xFFFF:
         raise ValueError("Mario render-cluster index stream exceeds uint16_t")
     # The actor currently has no authored proxy mesh. Near and mid preserve
-    # every cluster reference; far deterministically keeps terrain's source
-    # primitive subset. This is a compact pre-transform stream, not another
+    # every cluster reference; far keeps one deterministic source residue so
+    # the stream is meaningfully smaller even for highly shared actor meshes.
+    # This is a compact pre-transform stream, not another
     # pose bank, so the target retains one canonical actor position set.
     lod_vertex_indices: list[int] = []
     lod_vertex_offsets = [0]
     for tier in range(3):
         seen_vertices: set[int] = set()
         for primitive_index in primitive_indices:
-            if tier == 2 and primitive_index % 8 == 0:
+            if tier == 2 and primitive_index % 8 != 1:
                 continue
             for vertex in compiled_primitives[primitive_index]["indices"]:
                 if vertex not in seen_vertices:

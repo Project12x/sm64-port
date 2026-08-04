@@ -312,11 +312,11 @@ class MarioActorPoseTests(unittest.TestCase):
         self.assertEqual(metadata["primitive_indices"], [1, 0, 2])
         self.assertEqual(metadata["unique_vertex_offsets"], [0, 3, 8])
         self.assertEqual(metadata["unique_vertex_indices"], [1, 3, 4, 0, 1, 2, 4, 5])
-        self.assertEqual(metadata["lod_unique_vertex_offsets"], [0, 6, 12, 17])
+        self.assertEqual(metadata["lod_unique_vertex_offsets"], [0, 6, 12, 15])
         self.assertEqual(metadata["lod_unique_vertex_indices"],
                          [1, 3, 4, 0, 2, 5,
                           1, 3, 4, 0, 2, 5,
-                          1, 3, 4, 2, 5])
+                          1, 3, 4])
         self.assertEqual(
             metadata["clusters"][1]["bounds"],
             {"min": [0, 0, 0], "max": [10, 2, 0]},
