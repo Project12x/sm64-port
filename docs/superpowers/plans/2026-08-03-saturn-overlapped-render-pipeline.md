@@ -1134,6 +1134,15 @@ read stale owner bytes. The repair makes queue transform explicitly
 single-producer and rebuilds lower's local owner map from exact DONE admit
 claimant metadata; a two-generation poisoned-owner callback fixture passes.
 
+**Target-memory repair (2026-08-04):** the first exact serialized post-cutover
+build compiled all sources but failed at link because live callbacks retained
+enough formerly GC'd state to overflow HWRAM by 10,032 bytes. The two
+master-only 13,872-byte terrain final-merge streams now reside in
+`.lwram_bss`; a focused source contract preserves that placement and tracks
+the accepted graph/runtime public calls rather than obsolete direct queue
+calls. Host RED/GREEN is complete. Fresh review and one post-repair serialized
+link remain open; no CUE/Ymir/FPS evidence is credited.
+
 - [x] **Step 1: Record the live seam and red gate.** The current frame still
   calls the fixed terrain dispatcher and chained Mario dispatcher. The new
   test_render_job_live_cutover_source.py fails before production changes:

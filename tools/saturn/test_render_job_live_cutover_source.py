@@ -33,12 +33,27 @@ class RenderJobLiveCutoverSourceTests(unittest.TestCase):
         frame = function_body(source, "sm64_saturn_demo_render_frame")
 
         self.assertIn('#include "saturn_render_job_bridge.h"', source)
-        self.assertIn("sm64_saturn_render_job_queue_publish", frame)
-        self.assertIn("sm64_saturn_render_job_queue_drain_master", frame)
+        self.assertIn("sm64_saturn_render_job_graph_publish", frame)
+        self.assertIn("sm64_saturn_render_job_runtime_drain_master", frame)
         self.assertIn("sm64_saturn_render_job_queue_all_terminal", frame)
         self.assertIn("sm64_saturn_render_job_runtime_activate", source)
         self.assertNotIn("sm64_saturn_terrain_worker_run", frame)
         self.assertNotIn("demo_dispatch_mario_transform", frame)
+
+    def test_master_only_terrain_merge_scratch_stays_out_of_hwram(self):
+        source = RENDERER.read_text(encoding="utf-8")
+        for symbol in ("s_terrain_emit_refs", "s_terrain_emit_scratch"):
+            declaration = re.search(
+                r"static\s+sm64_saturn_terrain_emit_ref_t\s+"
+                + symbol
+                + r"\s*\[[^;]+;",
+                source,
+                re.MULTILINE,
+            )
+            self.assertIsNotNone(declaration, "missing " + symbol)
+            self.assertIn(
+                '__attribute__((section(".lwram_bss")))', declaration.group(0)
+            )
 
 
 if __name__ == "__main__":

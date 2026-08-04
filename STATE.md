@@ -14,7 +14,11 @@ NO-GO because the single terrain admit retained a nonexistent peer wait and a
 slave-admit/master-lower handoff could read stale owner bytes. Both findings
 are repaired with an executable two-generation handoff fixture. Fresh scoped
 re-review is GO at audit `1819f2b4`; the next gate is one serialized
-post-cutover target build. No post-cutover CUE, Ymir, cache-behavior, or FPS
+post-cutover target build. That build compiled but exposed a 10,032-byte
+HWRAM link overflow once callbacks became reachable. The narrow repair moves
+only the two master-owned 13,872-byte final terrain merge streams into
+`.lwram_bss`; its focused host contract is green and awaits fresh review plus
+one serialized rebuild. No post-cutover CUE, Ymir, cache-behavior, or FPS
 result exists yet.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position

@@ -14,6 +14,9 @@ live cutover is source-complete and host-green after repairing the first
 review's terrain handoff NO-GO; scoped re-review is GO. The next transition is one serialized target rebuild
 and desktop-Ymir comparison; target cache behavior is proven only when that
 new live route executes.
+The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
+the active narrow repair relocates 27,744 bytes of master-only terrain merge
+scratch to LWRAM before the one reviewed rebuild.
 
 ## Next — frame lifetime and transfer overlap
 

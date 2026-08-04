@@ -1353,3 +1353,24 @@ open.
   inspected actual renderer wiring and independently reran all ten gates plus
   diff-check. No target build, CUE/Ymir run, cache-runtime proof, or FPS claim
   occurred. One serialized post-cutover target build is the next gate.
+
+### A5.8 atomic-cutover target-memory repair (2026-08-04)
+
+- The one exact guarded Route-0/live-input/Pipe4 `-B -j1` build at source GO
+  `1819f2b4` compiled successfully and reached the linker after 299.6 seconds.
+  Link failed before artifact packaging: `.bss` overflowed HWRAM by 10,032
+  bytes. Full log: `.tmp-a58-cutover-target-build-20260804.log`. No fresh
+  ELF/ISO/CUE, runtime cache, Ymir, or FPS evidence is credited.
+- Map/object inspection showed activation retained previously GC'd callback
+  state. The two master-only final terrain streams `s_terrain_emit_refs` and
+  `s_terrain_emit_scratch` consumed 13,872 bytes each in HWRAM. They are used
+  only after terminal descriptor assembly by the master's stable sort and
+  final VDP1 lower, so moving their 27,744 bytes to `.lwram_bss` does not
+  change claimant ownership or expose VDP state to the slave.
+- Watched RED/GREEN: the live-cutover source suite first failed placement and
+  also exposed stale assertions for pre-graph direct queue calls. It now
+  requires `.lwram_bss` on both merge streams and checks graph publication and
+  runtime master drain. Wrapped Python result: two tests PASS; scoped
+  `git diff --check` PASS.
+- Fresh review and exactly one post-repair serialized target rebuild remain
+  required. No repeated build or emulator launch occurred.

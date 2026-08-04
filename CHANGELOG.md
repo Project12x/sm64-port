@@ -17,6 +17,12 @@
 
 ### Fixed
 
+- Moved the two master-only terrain merge streams from HWRAM into the existing
+  LWRAM work arena. Activating the reviewed four-phase queue made its callback
+  graph reachable and exposed a 10,032-byte HWRAM link overflow; retaining
+  these 27,744 bytes in scarce HWRAM provided no cross-CPU or VDP ownership
+  benefit. Final sorting and VDP1 lowering remain master-owned.
+
 - Fixed two target-blocking terrain handoff defects found in the independent
   A5.8 cutover review. The single WORLD_ADMIT producer no longer inherits the
   legacy two-lane rendezvous, and WORLD_LOWER rebuilds its local owner map from

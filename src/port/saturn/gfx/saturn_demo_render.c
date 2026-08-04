@@ -252,9 +252,9 @@ static demo_terrain_queue_metadata_t s_terrain_admit_metadata[
 static demo_terrain_queue_metadata_t s_terrain_result_metadata[
     SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_refs[
-    DEMO_TERRAIN_RESULT_CAPACITY];
+    DEMO_TERRAIN_RESULT_CAPACITY] __attribute__((section(".lwram_bss")));
 static sm64_saturn_terrain_emit_ref_t s_terrain_emit_scratch[
-    DEMO_TERRAIN_RESULT_CAPACITY];
+    DEMO_TERRAIN_RESULT_CAPACITY] __attribute__((section(".lwram_bss")));
 static uint16_t s_terrain_emit_count;
 static uint8_t s_terrain_emit_commands_bound;
 static uint32_t s_terrain_publish_sequence;
