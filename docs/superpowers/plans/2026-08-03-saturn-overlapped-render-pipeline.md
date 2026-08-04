@@ -102,6 +102,16 @@ and the evidence report before starting another task.
   the currently active A3/A4 renderer candidate remains deliberately deferred
   so this task does not silently alter either candidate's accepted path. Live
   queue integration, target evidence, and independent reviews remain open.
+- [ ] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
+  source-complete pending independent review. The new bridge proves an exact
+  queue descriptor index, actual claimant, and output kind select the
+  writer/reader cache lane; consumers reject a job until it is `DONE`.
+  Neither `begin == 0` nor a fixed terrain/actor split participates. It also
+  defines the one-time queue-owned polling callback attach/notify lifecycle,
+  rejecting a second attachment. It is not
+  bound to the renderer yet: live activation may begin only after the bridge
+  review and a renderer conversion makes every producer and consumer use this
+  route. Target cache/ordering/FPS evidence remains open.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
@@ -880,6 +890,35 @@ types, ownership rules, or production fallbacks.
 - [ ] **Step 9: Commit and complete two-stage review**
 
   Commit with `perf(saturn): schedule render work opportunistically`.
+
+### Task 5.5: Convert fixed range ownership into descriptor-owned result routing
+
+**Files:**
+- Create: `src/port/saturn/gfx/saturn_render_job_bridge.{h,c}`
+- Create: `tools/saturn/render_job_bridge_test.c`
+- Modify: `src/port/saturn/gfx/saturn_render_job_queue.{h,c}`
+- Modify: `src/port/saturn/sourceboot/Makefile`, `Makefile.saturn.mk`
+- Modify: architecture, evidence, ledger, plan, and changelog
+
+- [x] **Step 1: Red bridge fixture.** The direct host compile failed for the
+  absent bridge header. Its fixture requires an actual master steal of a
+  former-slave input range to stay cached, the peer to select the same exact
+  job only after `DONE`, a slave actor job to route in reverse, and a wrong
+  descriptor index to fail closed.
+- [x] **Step 2: Source bridge and one polling owner.** `begin_output()`
+  publishes only through the matching descriptor-kind bank and returns the
+  queue-validated claimant lane. `read_output()` accepts only the immutable
+  descriptor index and requires its terminal `DONE` state before using the
+  recorded owner. The queue
+  attach is single-owner and its explicit notify is inert until attached.
+- [x] **Step 3: Focused host proof.** The bridge fixture and existing queue
+  fixture pass with `-Wall -Wextra -Werror` under the Qt MinGW host compiler.
+- [ ] **Step 4: Independent specification and quality review.**
+- [ ] **Step 5: Live renderer transition.** Replace every terrain/Mario
+  producer/read with bridge routing, attach the queue as the sole slave
+  callback, publish terrain/actor jobs, and remove accepted fixed joins only
+  after `all_terminal()`. This remains a separate source/target gate; no
+  target build or Ymir run is authorized by Steps 1–3 alone.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added the A5.5 descriptor-to-result bridge for the future opportunistic
+  renderer. It routes result reads and writes using the exact queue descriptor
+  index and actual master/slave claim, and rejects readers before that job is
+  `DONE`, so a work-stealing master cannot accidentally select the slave cache
+  alias. The queue now also reserves one
+  explicit polling callback attachment and notification lifecycle; this is not
+  enabled in the current fixed-split renderer until its producers and readers
+  are converted and reviewed.
+
 - Added descriptor-owned terrain and actor output-bank publication for the A5
   SH-2 work queue. The CPU that actually claims a descriptor now publishes its
   output lane through an atomic P2-visible release record, so an opportunistic

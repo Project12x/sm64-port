@@ -824,3 +824,26 @@ open.
   visual, counter, or FPS claim occurred. Independent review and live renderer
   queue wiring remain open.
 - Commit: `f0a3b99c` (`fix(saturn): bind output lanes to queue claims`).
+
+### A5.5 descriptor-to-result bridge (2026-08-04)
+
+- RED: the direct Qt MinGW host compile of `render_job_bridge_test.c` failed
+  because `saturn_render_job_bridge.h` did not exist.
+- GREEN: the bridge first selects terrain versus actor output by immutable job
+  kind, then binds writer/reader lane selection to the queue's actual claim
+  and exact descriptor index. The host fixture proves a master stealing a
+  former-slave input offset keeps its cached result range, its slave peer is
+  rejected before that exact descriptor becomes `DONE`, a slave actor job
+  routes to the master peer through its own bank, and a wrong descriptor index
+  fails closed. It also
+  proves the queue accepts one persistent polling attach and rejects a second.
+- Focused direct host commands compiled with `-std=c11 -Wall -Wextra -Werror`:
+  `render-job-bridge-test.exe` and `render-job-queue-test.exe` both report
+  PASS. No MSYS target build, CUE, Ymir launch, cache-coherency target proof,
+  visual test, counter result, or FPS claim ran.
+- Reuse record: project-owned code, **pattern-only** from pinned SlaveDriver
+  `a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later, disjoint
+  result ownership) and pinned Z-Treme
+  `cff75451c1616aac1236fc2b44223902b55c706b` (GPLv3, fixed work areas); no
+  upstream lines were copied. Live renderer conversion and independent review
+  remain required before the queue attaches to the SH-2 callback.

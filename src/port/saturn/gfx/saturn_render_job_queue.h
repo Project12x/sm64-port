@@ -83,6 +83,15 @@ typedef struct sm64_saturn_render_job_queue {
     volatile uint32_t count;
 } sm64_saturn_render_job_queue_t;
 
+/* Exactly one queue consumer may own Yaul's polling callback. Attach is a
+ * pipeline-initialization operation, not a per-frame callback registration;
+ * it binds only immutable/static renderer context. `notify` is inert until a
+ * successful attach and never coexists with the legacy fixed-split worker. */
+bool sm64_saturn_render_job_queue_slave_attach(
+    sm64_saturn_render_job_queue_t *queue,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context);
+bool sm64_saturn_render_job_queue_slave_notify(void);
+
 _Static_assert(sizeof(sm64_saturn_render_job_t) == 16U,
                "job descriptor ABI must stay pointer-free and fixed-width");
 _Static_assert(sizeof(sm64_saturn_render_job_release_t) == 12U,
@@ -111,6 +120,8 @@ bool sm64_saturn_render_job_queue_reset_retired(
 const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
     const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index);
+const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_done_job(
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index);
 
 /* One polling pass claims until no READY work remains. The caller provides a
  * renderer-local static callback table; callback addresses never enter the

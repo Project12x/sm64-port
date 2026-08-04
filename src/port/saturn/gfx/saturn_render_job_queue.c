@@ -6,6 +6,37 @@
 #include <yaul.h>
 #endif
 
+typedef struct sm64_saturn_render_job_slave_attachment {
+    sm64_saturn_render_job_queue_t *queue;
+    const sm64_saturn_render_job_callback_table_t *callbacks;
+    void *context;
+    uint32_t attached;
+} sm64_saturn_render_job_slave_attachment_t;
+
+#if defined(__sh__)
+#define SM64_SATURN_RENDER_JOB_SHARED __uncached
+#else
+#define SM64_SATURN_RENDER_JOB_SHARED
+#endif
+
+static sm64_saturn_render_job_slave_attachment_t s_slave_attachment
+    SM64_SATURN_RENDER_JOB_SHARED;
+
+#if defined(__sh__)
+static void render_job_queue_slave_entry(void)
+{
+    sm64_saturn_render_job_slave_attachment_t *const attachment =
+        &s_slave_attachment;
+    if (attachment->attached == 0U || attachment->queue == NULL)
+        return;
+    const uint32_t generation = attachment->queue->generation;
+    if (generation != 0U)
+        (void)sm64_saturn_render_job_queue_drain_slave(
+            attachment->queue, generation, attachment->callbacks,
+            attachment->context);
+}
+#endif
+
 static inline void sm64_saturn_render_job_queue_fence(void)
 {
 #if defined(__GNUC__)
@@ -77,6 +108,36 @@ void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue)
     if (queue == NULL) return;
     memset(queue, 0, sizeof(*queue));
     sm64_saturn_render_job_queue_fence();
+}
+
+bool sm64_saturn_render_job_queue_slave_attach(
+    sm64_saturn_render_job_queue_t *queue,
+    const sm64_saturn_render_job_callback_table_t *callbacks, void *context)
+{
+    if (queue == NULL || callbacks == NULL || s_slave_attachment.attached != 0U)
+        return false;
+    s_slave_attachment.queue = sm64_saturn_render_job_queue_cache_through(queue);
+    s_slave_attachment.callbacks = callbacks;
+    s_slave_attachment.context = context;
+    sm64_saturn_render_job_queue_fence();
+#if defined(__sh__)
+    cpu_dual_comm_mode_set(CPU_DUAL_ENTRY_POLLING);
+    cpu_dual_slave_set(render_job_queue_slave_entry);
+#endif
+    s_slave_attachment.attached = 1U;
+    sm64_saturn_render_job_queue_fence();
+    return true;
+}
+
+bool sm64_saturn_render_job_queue_slave_notify(void)
+{
+    if (s_slave_attachment.attached == 0U ||
+        s_slave_attachment.queue == NULL)
+        return false;
+#if defined(__sh__)
+    cpu_dual_slave_notify();
+#endif
+    return true;
 }
 
 bool sm64_saturn_render_job_queue_publish(
@@ -257,6 +318,18 @@ const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
     if (queue == NULL || generation == 0U || queue->generation != generation ||
         job_index >= queue->count ||
         queue->release[job_index].generation != generation ||
+        queue->release[job_index].state != SM64_SATURN_RENDER_JOB_DONE)
+        return NULL;
+    return &queue->jobs[job_index];
+}
+
+const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_done_job(
+    const sm64_saturn_render_job_queue_t *queue, uint16_t job_index)
+{
+    queue = sm64_saturn_render_job_queue_cache_through(
+        (sm64_saturn_render_job_queue_t *)queue);
+    if (queue == NULL || job_index >= queue->count || queue->generation == 0U ||
+        queue->release[job_index].generation != queue->generation ||
         queue->release[job_index].state != SM64_SATURN_RENDER_JOB_DONE)
         return NULL;
     return &queue->jobs[job_index];
