@@ -1195,6 +1195,38 @@ slave idle or merely move the same serial critical path between CPUs.
   required before promotion; this scoped verdict authorizes only the next
   serialized target-build gate, never a Ymir/FPS claim by itself.
 
+### Task 5.9: Observe coarse-graph claim ownership before rescheduling
+
+**Status:** source-complete and host-green; independent source review required.
+No scheduling policy, target build, CUE, Ymir run, or FPS claim is included.
+
+- [x] **Step 1: Write the delayed-slave schedule RED.** The host fixture now
+  models the live four-job graph and its exact notify → immediate master drain
+  → slave-retirement ordering. Before production changes it failed to compile
+  because no per-phase/runtime telemetry contract existed.
+- [x] **Step 2: Add bounded P2-safe runtime telemetry.** One uncached runtime
+  record distinguishes master and slave claims for WORLD_ADMIT, WORLD_LOWER,
+  ACTOR_ADMIT, and ACTOR_LOWER; records exact notified/retired generation and
+  sequence; and reports callback failure and terminal quarantine. The master
+  counts its existing retirement loop locally and publishes once after the
+  loop, avoiding shared writes or calls inside the hot wait.
+- [x] **Step 3: Expose the last completed generation.** Append-only frontend
+  profile fields feed a three-line VDP2 diagnostic: `QM` and `QS` use phase
+  order world admit/lower, actor admit/lower; `QN/QR/QW/QF/QQ` report notify,
+  retire, wait, failure, and quarantine respectively.
+- [x] **Step 4: Prove the diagnostic distinguishes idle from failure.** A
+  delayed slave permits the master to consume all four jobs (`QM 1/1/1/1`,
+  `QS 0/0/0/0`). A second generation fails WORLD_ADMIT, counts the one failed
+  slave callback, quarantines dependent WORLD_LOWER, and still completes the
+  independent actor chain.
+- [ ] **Step 5: Independent source review.** Review P2 ownership, counter
+  races, profile ABI append-only placement, and bounded HUD cost. Keep this
+  unchecked until a fresh reviewer records a verdict.
+- [ ] **Step 6: Serialized target build and desktop-Ymir observation.** Only
+  after review, build once and read the visible `QM/QS/QN/QR/QW/QF/QQ` values.
+  Those values choose the next scheduler repair; no optimization is guessed
+  from the host schedule alone.
+
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 
 **Files:**

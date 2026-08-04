@@ -2040,11 +2040,24 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "demo_actor_meshlets_admitted",
             "demo_actor_meshlets_culled",
             "demo_actor_positions_admitted",
+            "render_job_master_world_admit_claims",
+            "render_job_master_world_lower_claims",
+            "render_job_master_actor_admit_claims",
+            "render_job_master_actor_lower_claims",
+            "render_job_slave_world_admit_claims",
+            "render_job_slave_world_lower_claims",
+            "render_job_slave_actor_admit_claims",
+            "render_job_slave_actor_lower_claims",
+            "render_job_notified_generation",
+            "render_job_retired_generation",
+            "render_job_master_wait_iterations",
+            "render_job_failures",
+            "render_job_quarantined",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-26:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-39:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-27].end,
+            layout.fields[-40].end,
         )
 
         data = bytearray(layout.size)
@@ -2076,6 +2089,19 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "demo_actor_meshlets_admitted": 83,
             "demo_actor_meshlets_culled": 89,
             "demo_actor_positions_admitted": 97,
+            "render_job_master_world_admit_claims": 101,
+            "render_job_master_world_lower_claims": 103,
+            "render_job_master_actor_admit_claims": 107,
+            "render_job_master_actor_lower_claims": 109,
+            "render_job_slave_world_admit_claims": 113,
+            "render_job_slave_world_lower_claims": 127,
+            "render_job_slave_actor_admit_claims": 131,
+            "render_job_slave_actor_lower_claims": 137,
+            "render_job_notified_generation": 139,
+            "render_job_retired_generation": 149,
+            "render_job_master_wait_iterations": 151,
+            "render_job_failures": 157,
+            "render_job_quarantined": 163,
         }
         for name, value in expected.items():
             field = layout.field(name)
@@ -2225,6 +2251,19 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "demo_actor_meshlets_admitted",
                 "demo_actor_meshlets_culled",
                 "demo_actor_positions_admitted",
+                "render_job_master_world_admit_claims",
+                "render_job_master_world_lower_claims",
+                "render_job_master_actor_admit_claims",
+                "render_job_master_actor_lower_claims",
+                "render_job_slave_world_admit_claims",
+                "render_job_slave_world_lower_claims",
+                "render_job_slave_actor_admit_claims",
+                "render_job_slave_actor_lower_claims",
+                "render_job_notified_generation",
+                "render_job_retired_generation",
+                "render_job_master_wait_iterations",
+                "render_job_failures",
+                "render_job_quarantined",
             ],
         )
         # Fields the older build did have still read correctly.

@@ -49,6 +49,43 @@ static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
     out = vdp2_frame_append_u32(out, end, profile->dma_wait_ticks_last);
     out = vdp2_frame_append_text(out, end, " VDP1W ");
     out = vdp2_frame_append_u32(out, end, profile->vdp1_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, "\nQM ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_master_world_admit_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_master_world_lower_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_master_actor_admit_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_master_actor_lower_claims);
+    out = vdp2_frame_append_text(out, end, " QS ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_slave_world_admit_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_slave_world_lower_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_slave_actor_admit_claims);
+    out = vdp2_frame_append_text(out, end, "/");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_slave_actor_lower_claims);
+    out = vdp2_frame_append_text(out, end, "\nQN ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_notified_generation);
+    out = vdp2_frame_append_text(out, end, " QR ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_retired_generation);
+    out = vdp2_frame_append_text(out, end, " QW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->render_job_master_wait_iterations);
+    out = vdp2_frame_append_text(out, end, " QF ");
+    out = vdp2_frame_append_u32(out, end, profile->render_job_failures);
+    out = vdp2_frame_append_text(out, end, " QQ ");
+    out = vdp2_frame_append_u32(out, end, profile->render_job_quarantined);
     *out = '\0';
 }
 

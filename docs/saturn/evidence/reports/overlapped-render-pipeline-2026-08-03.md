@@ -1426,3 +1426,28 @@ open.
 - Next evidence must expose master/slave claim counts by phase, positive slave
   retirement timing, and the master terminal-wait interval. A5.8 is not a
   performance win until those counters lead to a visibly faster candidate.
+
+### A5.9 claim/retirement telemetry source evidence (2026-08-04)
+
+- Watched RED: the live four-job runtime fixture failed to compile because no
+  telemetry type, snapshot, or terminal-wait publication API existed; the HUD
+  fixture likewise failed on absent append-only profile fields.
+- GREEN: the runtime's existing uncached shared record now owns separate
+  master/slave claim arrays in callback-ID order, notified/retired generation
+  and sequence, per-CPU failures, bounded master wait iterations, and terminal
+  quarantine count. The master increments only a local scalar in the existing
+  retirement loop and performs one telemetry publication afterward.
+- The delayed-slave schedule is executable evidence of a legal zero-overlap
+  outcome: after notify, immediate master drain claims WORLD_ADMIT,
+  ACTOR_ADMIT, WORLD_LOWER, and ACTOR_LOWER; the delayed slave retires with no
+  claim. This does not establish that Ymir takes that schedule.
+- A failure generation proves WORLD_ADMIT failure is counted once, dependent
+  WORLD_LOWER becomes quarantined, and independent ACTOR_ADMIT/ACTOR_LOWER
+  still complete. The VDP2 HUD exposes `QM/QS` and `QN/QR/QW/QF/QQ` without
+  printf or floating-point formatting.
+- Strict direct C11/Werror runtime and VDP2 fixtures PASS. Runtime and live
+  cutover Python source suites pass (4 and 2 tests). The legacy graph-source
+  suite remains stale at HEAD because it still asserts the now-landed graph
+  include is absent; it is not credited. The broad tools suite was stopped at
+  the 120-second host timeout after beginning green tests. No target build,
+  CUE, Ymir run, cache observation, or FPS claim occurred.

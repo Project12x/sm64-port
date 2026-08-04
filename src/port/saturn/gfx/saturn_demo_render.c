@@ -3773,13 +3773,46 @@ void sm64_saturn_demo_render_frame(
     sm64_saturn_render_job_runtime_notify();
     uint16_t master_jobs =
         sm64_saturn_render_job_runtime_drain_master();
+    uint32_t master_wait_iterations = 0U;
     while (!sm64_saturn_render_job_runtime_slave_retired()) {
         /* Positive peer retirement is a payload-lifetime condition, not a
          * performance timeout. The queue generation cannot be recycled while
          * the polling callback may still have a descriptor on its stack. */
+        if (master_wait_iterations != UINT32_MAX) master_wait_iterations++;
     }
     master_jobs = (uint16_t)(master_jobs +
         sm64_saturn_render_job_runtime_drain_master());
+    sm64_saturn_render_job_runtime_record_master_wait(master_wait_iterations);
+    sm64_saturn_render_job_runtime_telemetry_t queue_telemetry;
+    const bool telemetry_ok =
+        sm64_saturn_render_job_runtime_telemetry_snapshot(&queue_telemetry);
+    if (telemetry_ok) {
+        profile->render_job_master_world_admit_claims =
+            queue_telemetry.master_claims[0];
+        profile->render_job_master_world_lower_claims =
+            queue_telemetry.master_claims[1];
+        profile->render_job_master_actor_admit_claims =
+            queue_telemetry.master_claims[2];
+        profile->render_job_master_actor_lower_claims =
+            queue_telemetry.master_claims[3];
+        profile->render_job_slave_world_admit_claims =
+            queue_telemetry.slave_claims[0];
+        profile->render_job_slave_world_lower_claims =
+            queue_telemetry.slave_claims[1];
+        profile->render_job_slave_actor_admit_claims =
+            queue_telemetry.slave_claims[2];
+        profile->render_job_slave_actor_lower_claims =
+            queue_telemetry.slave_claims[3];
+        profile->render_job_notified_generation =
+            queue_telemetry.notified_generation;
+        profile->render_job_retired_generation =
+            queue_telemetry.retired_generation;
+        profile->render_job_master_wait_iterations =
+            queue_telemetry.master_wait_iterations;
+        profile->render_job_failures = queue_telemetry.master_failures +
+            queue_telemetry.slave_failures;
+        profile->render_job_quarantined = queue_telemetry.quarantined;
+    }
     const bool terminal = sm64_saturn_render_job_queue_all_terminal(
         &s_render_job_queue, transform_generation);
     queue_ok = terminal &&

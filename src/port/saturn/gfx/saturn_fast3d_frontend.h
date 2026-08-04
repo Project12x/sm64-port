@@ -456,6 +456,22 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t demo_actor_meshlets_admitted;
     uint32_t demo_actor_meshlets_culled;
     uint32_t demo_actor_positions_admitted;
+    /* A5.9 scheduling evidence. These are the most recently completed
+     * render generation, not cumulative counters. Phase order is world
+     * admit/lower then actor admit/lower; the HUD uses the same order. */
+    uint32_t render_job_master_world_admit_claims;
+    uint32_t render_job_master_world_lower_claims;
+    uint32_t render_job_master_actor_admit_claims;
+    uint32_t render_job_master_actor_lower_claims;
+    uint32_t render_job_slave_world_admit_claims;
+    uint32_t render_job_slave_world_lower_claims;
+    uint32_t render_job_slave_actor_admit_claims;
+    uint32_t render_job_slave_actor_lower_claims;
+    uint32_t render_job_notified_generation;
+    uint32_t render_job_retired_generation;
+    uint32_t render_job_master_wait_iterations;
+    uint32_t render_job_failures;
+    uint32_t render_job_quarantined;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

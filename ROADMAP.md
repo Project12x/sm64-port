@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — A5 atomic dual-SH-2 renderer migration
+## Now — A5.9 observe atomic dual-SH-2 scheduling
 
 Move terrain execution/merge and Mario transform/classify from fixed CPU-range
 ownership into graph-gated, descriptor-owned payload banks. Replace the legacy
@@ -10,14 +10,15 @@ baseline.
 
 The ordered terrain-command lookup and pointer-free P2 callback-context gate
 are source-review GO and target compile/link/section-green. The single-owner
-live cutover is source-complete and host-green after repairing the first
-review's terrain handoff NO-GO; scoped re-review is GO. The next transition is one serialized target rebuild
-and desktop-Ymir comparison; target cache behavior is proven only when that
-new live route executes.
+live cutover is source-complete, reviewed, target-green, and manually boots,
+but its roughly 3–4 FPS result did not improve on A3+A4. Per-phase claim,
+notify/retire, wait, failure, and quarantine telemetry is now source-complete
+and host-green. Fresh review, one serialized target build, and a manual HUD
+observation are next; that evidence determines the scheduler repair.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
-scratch to LWRAM. Independent review and the one target rebuild now pass;
-the next gate is the fresh desktop-Ymir comparison and live cache behavior.
+scratch to LWRAM. Independent review and the one target rebuild now pass; the
+flat desktop result is retained as the A5.8 baseline.
 
 ## Next — frame lifetime and transfer overlap
 

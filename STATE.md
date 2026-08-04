@@ -72,8 +72,14 @@ The owner manually tested the fresh A5.8 atomic-cutover CUE in desktop Ymir on
 2026-08-04 and still observed roughly 3–4 FPS, matching the accepted A3+A4
 candidate rather than improving it. This proves the cutover boots and renders,
 but not that useful work is balanced across the two SH-2s. The next active
-diagnostic is per-CPU claim/phase/retirement telemetry; A5.8 must not be called
-a performance win from source/link evidence alone.
+diagnostic is now source-complete and host-green: append-only profile/HUD
+telemetry records per-phase master/slave claims, notified/retired generation,
+master retirement-wait iterations, failures, and quarantines. Its delayed-slave
+fixture demonstrates that the current notify-then-master-drain order permits
+the master to claim all four coarse jobs before the slave runs. This is a
+scheduling possibility, not yet target evidence; fresh review and then one
+serialized target build/manual HUD observation remain open. A5.8 must not be
+called a performance win from source/link evidence alone.
 
 The isolated audio lane now has a standalone soundtest CUE candidate. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated

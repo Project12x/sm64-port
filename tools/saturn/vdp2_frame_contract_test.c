@@ -65,6 +65,19 @@ int main(void)
     profile.ordering_count = 13U;
     profile.dma_wait_ticks_last = 14U;
     profile.vdp1_wait_ticks_last = 20U;
+    profile.render_job_master_world_admit_claims = 1U;
+    profile.render_job_master_world_lower_claims = 2U;
+    profile.render_job_master_actor_admit_claims = 3U;
+    profile.render_job_master_actor_lower_claims = 4U;
+    profile.render_job_slave_world_admit_claims = 5U;
+    profile.render_job_slave_world_lower_claims = 6U;
+    profile.render_job_slave_actor_admit_claims = 7U;
+    profile.render_job_slave_actor_lower_claims = 8U;
+    profile.render_job_notified_generation = 9U;
+    profile.render_job_retired_generation = 9U;
+    profile.render_job_master_wait_iterations = 10U;
+    profile.render_job_failures = 11U;
+    profile.render_job_quarantined = 12U;
 
     sm64_saturn_vdp2_frame_init(&frame);
     sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 0U);
@@ -76,6 +89,8 @@ int main(void)
     assert(observed.sky_x == 128 && observed.sky_y == 128);
     assert(strstr(observed.hud,
                   "FPS 0 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+    assert(strstr(observed.hud, "QM 1/2/3/4 QS 5/6/7/8") != NULL);
+    assert(strstr(observed.hud, "QN 9 QR 9 QW 10 QF 11 QQ 12") != NULL);
 
     sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 15U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);

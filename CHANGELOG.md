@@ -48,6 +48,14 @@
 
 ### Added
 
+- Added bounded A5.9 dual-SH-2 scheduling telemetry after the atomic queue
+  produced no visible FPS uplift. The VDP2 HUD and append-only profile now
+  expose master/slave claims for each world/actor admit/lower phase, exact
+  notified/retired generation, master retirement-wait iterations, failures,
+  and quarantines. A delayed-slave host schedule proves the current coarse
+  graph permits the master to consume all four jobs before the slave runs;
+  this is diagnostic evidence only and does not change scheduling policy.
+
 - Added the dormant A5.8 ordered terrain-command and callback-context
   contracts. Final terrain sorting now retains each descriptor-local command
   image alongside its result without growing the eight-byte SH-2 reference;
