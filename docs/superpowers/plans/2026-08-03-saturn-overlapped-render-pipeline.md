@@ -132,8 +132,8 @@ and the evidence report before starting another task.
   terrain work, register CPU-DUAL, or mark a descriptor terminal; activation
   remains forbidden until terrain and Mario producer/consumer callbacks are
   both complete.
-- [ ] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
-  source-complete pending independent review. The new bridge proves an exact
+- [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
+  source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the
   writer/reader cache lane; consumers reject a job until it is `DONE`.
   Neither `begin == 0` nor a fixed terrain/actor split participates. It also
@@ -156,8 +156,8 @@ and the evidence report before starting another task.
   publication and propagates a failed predecessor to every reverse-chain
   ready dependent before terminal merge/reset; independent READY jobs remain
   eligible and are not treated as blocked.
-- [ ] **Task 5.8.1 / A5.8 — graph-aware runtime prerequisite:** source-complete
-  pending independent review. The queue runtime's ordinary ready-drain would
+- [x] **Task 5.8.1 / A5.8 — graph-aware runtime prerequisite:** source-complete;
+  independent rereview is GO. The queue runtime's ordinary ready-drain would
   bypass graph eligibility, so it cannot own a live callback for dependent
   terrain/Mario phases. The graph activation/drains now claim through the
   graph for both CPUs and propagate failed-predecessor quarantine. Its focused

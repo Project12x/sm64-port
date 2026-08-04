@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a maintained roadmap and reconciled state/plan status with the
+  reviewed A5 ownership bridge and graph-aware runtime. The next accepted
+  milestone is now explicitly the atomic terrain/Mario renderer conversion;
+  the 3–4 FPS A3+A4 Ymir build remains its rollback baseline until a reviewed
+  target replacement exists.
+
 - Clarified the full-game renderer roadmap: the legacy Castle demo already
   proved source-driven full Mario animation, so the Saturn path preserves and
   optimizes that bridge rather than rebuilding animation. Future enemies use
