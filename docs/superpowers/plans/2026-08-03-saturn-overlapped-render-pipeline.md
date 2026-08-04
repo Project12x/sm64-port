@@ -156,6 +156,13 @@ and the evidence report before starting another task.
   returns the record's count/sequence instead of accepting caller metadata.
   These dormant callbacks remain unregistered; merge-span assembly, Mario's
   equivalent route, review, and one atomic CPU-DUAL activation are still open.
+  **A5.8 review correction (2026-08-04):** scheduler eligibility alone is not
+  consumer proof. WORLD_LOWER now asks the P2-visible graph for exactly one
+  immutable predecessor, requires it to be the exact terminal WORLD_ADMIT
+  descriptor, and validates that descriptor's output-bank/P2 metadata before
+  classifying. Host mutations cover both an unready predecessor and a terminal
+  wrong-type predecessor; both fail closed. This is still dormant source work,
+  not authorization for CPU-DUAL activation.
   **Review repair (2026-08-04):** the first dormant callback still entered
   classification through a helper that inferred the lane from `begin == 0`.
   A legal slave claim at descriptor input offset zero would therefore select

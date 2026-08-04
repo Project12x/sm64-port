@@ -35,6 +35,14 @@ bool sm64_saturn_render_job_graph_claim_slave(
     uint16_t *job_index);
 bool sm64_saturn_render_job_graph_propagate_failures(
     sm64_saturn_render_job_graph_t *graph, uint32_t generation);
+/* A terrain lower callback must name exactly one immutable WORLD_ADMIT
+ * predecessor and that descriptor must already be terminal DONE.  This is a
+ * callback-side proof in addition to scheduler eligibility, so a malformed
+ * graph or a stale/unready predecessor fails closed before payload reads. */
+bool sm64_saturn_render_job_graph_world_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index,
+    sm64_saturn_render_job_state_t claimed_state, uint16_t *admit_job_index);
 bool sm64_saturn_render_job_graph_validate_terrain_merge(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     const sm64_saturn_render_job_result_identity_t *identities,

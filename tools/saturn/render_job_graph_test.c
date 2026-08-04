@@ -52,6 +52,15 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_claim_master(&graph, 19U, &job) &&
                     job == 1U,
                 "a consumer may claim only after its producer retires")) return 1;
+    {
+        uint16_t admit = UINT16_MAX;
+        if (!expect(sm64_saturn_render_job_graph_world_lower_admit_done(
+                        &graph, 19U, job,
+                        SM64_SATURN_RENDER_JOB_CLAIMED_MASTER, &admit) &&
+                        admit == 0U,
+                    "a lower claim must prove its exact completed WORLD_ADMIT predecessor"))
+            return 1;
+    }
     if (!expect(!sm64_saturn_render_job_graph_validate_terrain_merge(
                     &graph, 19U, merge, 4U),
                 "terrain merge identities must reject a non-DONE consumer")) return 1;
@@ -94,6 +103,46 @@ int main(void)
         if (!expect(!sm64_saturn_render_job_graph_publish(
                         &graph, 19U, k_jobs, cycle, 3U),
                     "cyclic dependencies must fail before queue publication")) return 1;
+    }
+    {
+        /* Mutate the scheduler path deliberately: a raw lower claim before
+         * its admit predecessor is terminal must still fail the callback-side
+         * proof, even though normal graph draining cannot make this claim. */
+        uint16_t admit = UINT16_MAX;
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(sm64_saturn_render_job_graph_publish(
+                        &graph, 19U, k_jobs, deps, 3U) &&
+                        sm64_saturn_render_job_queue_claim_index(
+                            &queue, 19U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER) &&
+                        !sm64_saturn_render_job_graph_world_lower_admit_done(
+                            &graph, 19U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER, &admit),
+                    "a lower callback must reject an unready WORLD_ADMIT predecessor"))
+            return 1;
+    }
+    {
+        const uint8_t wrong_deps[] = {0U, 1U << 2U, 0U};
+        uint16_t admit = UINT16_MAX;
+        sm64_saturn_render_job_queue_init(&queue);
+        sm64_saturn_render_job_graph_init(&graph, &queue);
+        if (!expect(sm64_saturn_render_job_graph_publish(
+                        &graph, 19U, k_jobs, wrong_deps, 3U) &&
+                        sm64_saturn_render_job_queue_claim_index(
+                            &queue, 19U, 2U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) &&
+                        sm64_saturn_render_job_queue_complete(
+                            &queue, 19U, 2U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) &&
+                        sm64_saturn_render_job_queue_claim_index(
+                            &queue, 19U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER) &&
+                        !sm64_saturn_render_job_graph_world_lower_admit_done(
+                            &graph, 19U, 1U,
+                            SM64_SATURN_RENDER_JOB_CLAIMED_MASTER, &admit),
+                    "a lower callback must reject a completed non-WORLD_ADMIT predecessor"))
+            return 1;
     }
     {
         const sm64_saturn_render_job_t chain[] = {

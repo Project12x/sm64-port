@@ -1789,6 +1789,31 @@ demo_terrain_queue_result_metadata(uint16_t job_index,
     return metadata;
 }
 
+static const demo_terrain_queue_metadata_t *
+demo_terrain_queue_admit_metadata(uint16_t job_index,
+                                  const sm64_saturn_render_job_t *job,
+                                  uint8_t reader_lane)
+{
+    if (job == NULL || reader_lane > 1U ||
+        job_index >= SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY)
+        return NULL;
+    const demo_terrain_queue_metadata_t *const metadata =
+        &s_terrain_admit_metadata[job_index];
+    if (metadata->ready == 0U) return NULL;
+    sm64_saturn_dual_frame_compiler_fence();
+    uint8_t output_lane = UINT8_MAX;
+    if (metadata->generation != job->snapshot_generation ||
+        metadata->job_index != job_index || metadata->sequence == 0U ||
+        metadata->writer_lane > 1U ||
+        (metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         metadata->claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE) ||
+        !sm64_saturn_render_output_bank_owner_lane(
+            &s_terrain_output_bank, &s_render_job_queue, job_index,
+            &output_lane) || output_lane != metadata->writer_lane)
+        return NULL;
+    return metadata;
+}
+
 /* A future graph callback calls this immediately after it has claimed a
  * WORLD descriptor.  It is intentionally not installed in the CPU-DUAL
  * callback table until the terrain callback also owns transform/classify and
@@ -2007,6 +2032,8 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
 {
     demo_terrain_compact_context_t *const context = opaque;
     demo_terrain_queue_output_t output;
+    uint16_t lower_job_index;
+    uint16_t admit_job_index;
     if (job == NULL || context == NULL ||
         job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
         job->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER ||
@@ -2014,6 +2041,17 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
         job->input_count > (uint16_t)(s_render_work_count - job->input_offset) ||
         !demo_terrain_queue_bind_output(job, claimed_state, &output) ||
         output.capacity == 0U)
+        return false;
+    if (!demo_terrain_queue_claim_index(job, claimed_state, &lower_job_index) ||
+        !sm64_saturn_render_job_graph_world_lower_admit_done(
+            &s_render_job_graph, job->snapshot_generation, lower_job_index,
+            claimed_state, &admit_job_index))
+        return false;
+    const sm64_saturn_render_job_t *const admit =
+        sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
+                                               admit_job_index);
+    if (demo_terrain_queue_admit_metadata(admit_job_index, admit,
+                                          output.writer_lane) == NULL)
         return false;
     sm64_saturn_terrain_result_arena_t arena;
     sm64_saturn_terrain_result_arena_init(

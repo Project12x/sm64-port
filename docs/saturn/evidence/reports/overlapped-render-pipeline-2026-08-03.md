@@ -1060,3 +1060,19 @@ open.
   Ymir run, or FPS claim occurred. Open gates: actual terrain merge-span
   assembly, Mario parity, independent review, atomic CPU-DUAL cutover, then
   target/cache/visual evidence.
+
+### A5.8 terrain predecessor-proof review repair (2026-08-04)
+
+- NO-GO review found that metadata publication alone did not prove the lower
+  callback consumed the intended admit producer. A malformed graph edge or a
+  premature consumer could classify against unrelated transform state.
+- RED: the route source contract required the lower callback to call a
+  checked graph API and validate admit metadata; it failed before those calls
+  existed. The graph fixture added mutations for an unready predecessor and a
+  completed wrong-type predecessor.
+- GREEN: `sm64_saturn_render_job_graph_world_lower_admit_done()` P2-rereads
+  the exact current lower claim, requires a one-bit immutable dependency mask,
+  and accepts only a terminal WORLD_ADMIT predecessor. WORLD_LOWER then checks
+  the corresponding P2 publication/output-bank lane before classification.
+  Both mutations fail closed; normal graph route and source contracts pass.
+- No queue activation, target build, CUE/Ymir run, or FPS claim occurred.

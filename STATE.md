@@ -12,6 +12,8 @@ descriptor-owned payloads and can replace the sole CPU-DUAL callback atomically.
 Terrain's dormant WORLD_ADMIT callback now publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact
 result count/sequence/claimant lane before its terminal reader may merge it.
+WORLD_LOWER also fails closed unless its one immutable graph predecessor is
+the exact completed WORLD_ADMIT descriptor with matching publication metadata.
 The live legacy adapter is still authoritative. Merge-span assembly and
 Mario's equivalent producer/reader route remain the blockers to a reviewable
 atomic cutover.

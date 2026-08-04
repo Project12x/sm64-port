@@ -16,3 +16,9 @@ claimant state, and writer lane before graph runtime can expose DONE. A merge
 therefore reads its exact descriptor metadata and output lane rather than a
 fixed CPU split or caller-provided count. This remains unactivated until the
 matching Mario route is complete and reviewed.
+
+WORLD_LOWER also independently revalidates its graph edge before consuming
+that transform payload: it accepts exactly one completed WORLD_ADMIT
+predecessor, rejects an unready or wrong-type descriptor, and then checks the
+predecessor's P2 metadata against output-bank ownership. Scheduler eligibility
+alone is not treated as permission to consume a payload.

@@ -4,6 +4,12 @@
 
 ### Added
 
+- Hardened dormant A5.8 terrain lowering with a callback-side graph proof.
+  WORLD_LOWER now requires exactly one immutable, completed WORLD_ADMIT
+  predecessor and validates that predecessor's P2 publication before it reads
+  transformed positions. This closes the malformed/unready dependency gap
+  found in review without activating the queue or changing target behavior.
+
 - Added the next dormant A5.8 terrain queue foundation: WORLD_ADMIT now
   publishes transformed-position completion through a descriptor-indexed,
   P2-visible release record, while WORLD_LOWER records its exact result count,

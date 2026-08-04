@@ -171,6 +171,37 @@ bool sm64_saturn_render_job_graph_propagate_failures(
     return changed;
 }
 
+bool sm64_saturn_render_job_graph_world_lower_admit_done(
+    const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
+    uint16_t lower_job_index, sm64_saturn_render_job_state_t claimed_state,
+    uint16_t *admit_job_index)
+{
+    if (admit_job_index != NULL) *admit_job_index = UINT16_MAX;
+    graph = graph_cache_through((sm64_saturn_render_job_graph_t *)graph);
+    if (!graph_current(graph, generation) || admit_job_index == NULL ||
+        lower_job_index >= graph->count)
+        return false;
+    const sm64_saturn_render_job_t *const lower =
+        sm64_saturn_render_job_queue_claimed_job(
+            graph->queue, generation, lower_job_index, claimed_state);
+    if (lower == NULL ||
+        lower->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER ||
+        lower->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER)
+        return false;
+    const uint8_t dependencies = graph->dependency_mask[lower_job_index];
+    if (dependencies == 0U || (dependencies & (uint8_t)(dependencies - 1U)) != 0U)
+        return false;
+    uint16_t admit_index = 0U;
+    while ((dependencies & (uint8_t)(1U << admit_index)) == 0U) admit_index++;
+    const sm64_saturn_render_job_t *const admit =
+        sm64_saturn_render_job_queue_job(graph->queue, generation, admit_index);
+    if (admit == NULL || admit->type != SM64_SATURN_RENDER_JOB_WORLD_ADMIT ||
+        admit->callback_id != SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT)
+        return false;
+    *admit_job_index = admit_index;
+    return true;
+}
+
 bool sm64_saturn_render_job_graph_validate_terrain_merge(
     const sm64_saturn_render_job_graph_t *graph, uint32_t generation,
     const sm64_saturn_render_job_result_identity_t *identities,

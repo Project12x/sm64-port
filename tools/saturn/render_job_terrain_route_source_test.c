@@ -72,6 +72,10 @@ int main(void)
         function_contains(source, "demo_terrain_queue_world_lower(",
                           "demo_terrain_compact_transformed") &&
         function_contains(source, "demo_terrain_queue_world_lower(",
+                          "sm64_saturn_render_job_graph_world_lower_admit_done") &&
+        function_contains(source, "demo_terrain_queue_world_lower(",
+                          "demo_terrain_queue_admit_metadata") &&
+        function_contains(source, "demo_terrain_queue_world_lower(",
                           "job->input_offset") &&
         !function_contains(source, "demo_terrain_queue_world_lower(",
                            "s_slave_begin") &&
