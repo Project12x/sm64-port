@@ -4,6 +4,10 @@
 
 ### Added
 
+- Sourceboot's boot trace now seeds its magic and version in ELF `.data`, so
+  a bounded debugger read can distinguish a wrong RAM address or mapping
+  (all zeroes) from execution that never reached `user_init()` (valid header,
+  stage 0) without changing runtime cache-through publication.
 - Sourceboot's cache-through boot trace now publishes at `user_init()` entry
   and after VBlank callback registration, making an all-zero post-BIOS record
   distinguish a pre-main handoff failure from later scheduler or VDP work.

@@ -32,6 +32,7 @@ SOURCEBOOT_BOOT_TRACE_BYTES = SOURCEBOOT_BOOT_TRACE_WORD_COUNT * 4
 YMIR_MAX_RUN_FOR_FRAMES = 3600
 
 STAGE_NAMES = {
+    0: "elf-data-initialized",
     1: "user-init-entry",
     2: "user-init-callbacks-registered",
     3: "main-entry",

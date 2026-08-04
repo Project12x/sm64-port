@@ -60,10 +60,16 @@ def assert_boot_trace_contract(text: str) -> None:
         raise AssertionError("boot trace must publish a version word")
     if re.search(
         r"volatile\s+sm64_saturn_sourceboot_boot_trace_t\s+"
-        r"sourceboot_boot_trace\s*;",
+        r"sourceboot_boot_trace\s*=\s*\{\s*"
+        r"\.magic\s*=\s*SOURCEBOOT_BOOT_TRACE_MAGIC\s*,\s*"
+        r"\.version\s*=\s*SOURCEBOOT_BOOT_TRACE_VERSION\s*,\s*"
+        r"\}\s*;",
         text,
+        re.DOTALL,
     ) is None:
-        raise AssertionError("boot trace must be an exported volatile RAM global")
+        raise AssertionError(
+            "boot trace must be an exported volatile ELF .data record with magic/version"
+        )
 
     trace_type = re.search(
         r"typedef\s+struct\s*\{(?P<body>.*?)\}\s*"
@@ -196,12 +202,21 @@ class SourcebootBootTraceTests(unittest.TestCase):
         assert_boot_trace_contract(self.source)
 
         absent_global = self.source.replace(
-            "volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace;",
-            "static sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace;",
+            "volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace = {",
+            "static sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace = {",
             1,
         )
-        with self.assertRaisesRegex(AssertionError, "exported volatile"):
+        with self.assertRaisesRegex(AssertionError, "exported volatile ELF .data"):
             assert_boot_trace_contract(absent_global)
+
+        bss_trace = self.source.replace(
+            " = {\n    .magic = SOURCEBOOT_BOOT_TRACE_MAGIC,\n"
+            "    .version = SOURCEBOOT_BOOT_TRACE_VERSION,\n};",
+            ";",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "ELF .data"):
+            assert_boot_trace_contract(bss_trace)
 
         non_monotonic = self.source.replace(
             "trace->stage++;",

@@ -90,7 +90,14 @@ enum {
  * and reads the record from target RAM after BIOS handoff.  `stage` is a
  * monotonically advancing publication sequence; `stage_id` names the last
  * boundary reached, so repeated frame-loop stages remain distinguishable. */
-volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace;
+/* Seed the ELF .data image so a correctly addressed trace read can prove the
+ * program has not reached sourceboot's user_init() hook yet. The
+ * cache-through writer below still publishes every runtime update to backing
+ * WRAM. */
+volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace = {
+    .magic = SOURCEBOOT_BOOT_TRACE_MAGIC,
+    .version = SOURCEBOOT_BOOT_TRACE_VERSION,
+};
 
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;

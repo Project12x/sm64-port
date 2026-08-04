@@ -54,6 +54,22 @@ class SourcebootBootTraceReaderTests(unittest.TestCase):
         self.assertEqual(decoded["raw_words"], words)
 
     def test_decodes_pre_main_user_init_stages(self) -> None:
+        data_initialized = decode_boot_trace(
+            words_to_bytes(
+                [
+                    SOURCEBOOT_BOOT_TRACE_MAGIC,
+                    SOURCEBOOT_BOOT_TRACE_VERSION,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ]
+            )
+        )
+        self.assertEqual(data_initialized["last_stage"], "elf-data-initialized")
+
         entry = decode_boot_trace(
             words_to_bytes(
                 [
