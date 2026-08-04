@@ -22,14 +22,16 @@ GO. Mario's route
 copies the existing live pose, lighting, frame/bank, position, and yaw state;
 it does not replace the animation system already proven by the Castle demo.
 
-The next activation design gate is explicit: queue output spans are currently
-globally disjoint while physical terrain/actor payload banks use local address
-spaces. Before one combined graph can publish, the cutover must choose either
-per-payload-kind overlap validation or a bounded global offset layout. Terrain
-command lookup from the ordered descriptor stream, target link/cache evidence,
-an explicit P2/cache-through callback-context publication contract, direct
-corruption/cross-lane callback tests, and one atomic CPU-DUAL owner replacement
-also remain open.
+The output-offset namespace gate is source-complete pending independent review.
+Queue publication now derives one of four physical payload kinds from the
+immutable type/callback pair and checks overlap only within that kind. Separate
+terrain-admit, terrain-lower, actor-admit, and actor-lower banks may reuse local
+offsets; same-kind overlap and malformed type/callback pairs fail closed. The
+descriptor remains pointer-free and 16 bytes. Terrain command lookup from the
+ordered descriptor stream, target link/cache evidence, an explicit
+P2/cache-through callback-context publication contract, direct callback
+corruption/cross-lane tests, and one atomic CPU-DUAL owner replacement remain
+open.
 
 The terrain route's claimant lane now reaches classification and every
 queue-reachable projected read; a slave descriptor may begin at input offset

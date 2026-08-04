@@ -203,13 +203,27 @@ and the evidence report before starting another task.
   identities before mutating renderer state, and restores the legacy
   master-owned projected/ref banks so command emission and full animation
   remain unchanged. No callback is registered and the live-cutover gate stays
-  RED. Activation remains blocked on a deliberate output-offset namespace
-  decision (per-payload-kind overlap validation versus a bounded global
-  layout), terrain command lookup from ordered descriptor streams, one atomic
+  RED. The output-offset namespace is now source-resolved through
+  per-physical-payload-kind validation, pending independent review. Activation
+  remains blocked on terrain command lookup from ordered descriptor streams, one atomic
   CPU-DUAL owner replacement, target link/cache evidence, and manual Ymir
   validation. Before activation, add direct corrupt-identity, incomplete
   coverage, stale-sequence, and cross-lane callback tests and publish the
   callback context through an explicit P2/cache-through contract.
+  **A5.8 payload namespace increment (2026-08-04):** source-complete pending
+  independent review. Inspection proved a bounded global layout would add
+  artificial offset pressure because all four phases already write separate
+  physical arrays. Queue publication now derives WORLD_ADMIT, WORLD_LOWER,
+  ACTOR_ADMIT, or ACTOR_LOWER payload kind from the exact immutable
+  type/callback pair. It permits local offset reuse across those physical
+  banks, retains disjoint-span enforcement within one kind, and rejects
+  unknown or mismatched pairs. Watched RED/GREEN host mutations cover all-bank
+  offset-zero reuse, same-kind corruption, callback mismatch, and unknown
+  kind. The descriptor remains pointer-free and 16 bytes. No live CPU-DUAL
+  activation, target build, CUE/Ymir run, or FPS claim occurred. Remaining:
+  independent review, ordered terrain command lookup, callback-context P2
+  publication and corruption/cross-lane callback tests, atomic cutover, then
+  target/cache/manual evidence.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the

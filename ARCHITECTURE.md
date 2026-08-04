@@ -36,8 +36,12 @@ renderer mutation, then copies results into the existing master-owned banks.
 Thus the eventual scheduler cutover changes SH-2 work ownership without
 changing the Castle-proven animation or final VDP1 emission path.
 
-The queue currently validates output spans in one global namespace, while the
-physical terrain and actor payload banks are type-local. The dormant routes do
-not paper over that mismatch. Atomic activation must explicitly choose
-per-payload-kind overlap validation or a bounded global offset layout and prove
-its memory budget before publishing a combined terrain/actor graph.
+Queue output offsets are local to four existing physical payload kinds:
+WORLD_ADMIT transformed positions, WORLD_LOWER records/commands, ACTOR_ADMIT
+projected vertices, and ACTOR_LOWER primitive references. Queue publication
+derives the kind from the immutable type/callback pair, rejects an unknown or
+mismatched pair, and requires spans to be disjoint only among descriptors that
+write the same kind. This matches the bounded physical arrays without wasting
+memory on a synthetic global arena and preserves the pointer-free 16-byte
+descriptor ABI. This source contract remains dormant until the single atomic
+CPU-DUAL cutover and target/cache validation.

@@ -1174,4 +1174,24 @@ open.
   direct callback behavior harness. Before activation, add corrupt vertex/ref
   identity, incomplete coverage, stale sequence, and cross-lane read cases and
   explicitly publish the callback context through P2/cache-through ownership.
-- The output-offset namespace and all target/CUE/Ymir/FPS gates remain open.
+- The target/CUE/Ymir/FPS gates remain open. The output-offset namespace was
+  the next source gate and is resolved below pending independent review.
+
+### A5.8 payload-kind output namespace (2026-08-04)
+
+- Design resolution: the renderer has four separate bounded physical outputs,
+  so a synthetic global offset layout would waste address range without
+  strengthening ownership. Queue publication instead derives the physical
+  kind from the immutable type/callback pair and validates overlap within
+  that kind only. The 16-byte pointer-free descriptor is unchanged.
+- Watched RED: four descriptors using bank-local offset zero were rejected by
+  the old global overlap rule. GREEN: all four distinct kinds publish, while
+  two overlapping WORLD_LOWER spans, a WORLD/ACTOR callback mismatch, and an
+  unknown type all fail closed.
+- Strict Qt MinGW C11/Werror queue, graph, bridge, graph-runtime, and payload
+  fixtures PASS. `verify_dual_cpu_coherency.py` was not credited because no
+  installed Python launcher was available. `git diff --check` PASS.
+- Scope remains source-only and dormant. No CPU-DUAL activation, target build,
+  CUE/Ymir run, cache proof, or FPS claim occurred. Independent review,
+  ordered terrain command lookup, callback-context P2 publication, direct
+  callback corruption/cross-lane tests, and the atomic cutover remain open.

@@ -50,24 +50,58 @@ static inline void release_claim_release(volatile uint32_t *claim)
     sm64_saturn_render_job_queue_fence();
 }
 
+sm64_saturn_render_job_payload_kind_t
+sm64_saturn_render_job_payload_kind_for_job(
+    const sm64_saturn_render_job_t *job)
+{
+    if (job == NULL) return SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    switch ((sm64_saturn_render_job_type_t)job->type) {
+    case SM64_SATURN_RENDER_JOB_WORLD_ADMIT:
+        return job->callback_id ==
+                SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT
+            ? SM64_SATURN_RENDER_JOB_PAYLOAD_WORLD_ADMIT
+            : SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    case SM64_SATURN_RENDER_JOB_WORLD_LOWER:
+        return job->callback_id ==
+                SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER
+            ? SM64_SATURN_RENDER_JOB_PAYLOAD_WORLD_LOWER
+            : SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    case SM64_SATURN_RENDER_JOB_ACTOR_ADMIT:
+        return job->callback_id ==
+                SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT
+            ? SM64_SATURN_RENDER_JOB_PAYLOAD_ACTOR_ADMIT
+            : SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    case SM64_SATURN_RENDER_JOB_ACTOR_LOWER:
+        return job->callback_id ==
+                SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER
+            ? SM64_SATURN_RENDER_JOB_PAYLOAD_ACTOR_LOWER
+            : SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    default:
+        return SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID;
+    }
+}
+
 static bool descriptor_valid(const sm64_saturn_render_job_t *job,
                              uint32_t generation)
 {
     return job != NULL && job->snapshot_generation == generation &&
-        job->type >= SM64_SATURN_RENDER_JOB_WORLD_ADMIT &&
-        job->type <= SM64_SATURN_RENDER_JOB_ACTOR_LOWER &&
-        job->callback_id >= SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT &&
-        job->callback_id <= SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER &&
+        sm64_saturn_render_job_payload_kind_for_job(job) !=
+            SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID &&
         job->input_count != 0U && job->output_capacity != 0U;
 }
 
-static bool output_spans_disjoint(const sm64_saturn_render_job_t *jobs,
-                                  uint16_t count)
+static bool payload_spans_disjoint(const sm64_saturn_render_job_t *jobs,
+                                   uint16_t count)
 {
     for (uint16_t left = 0U; left < count; left++) {
+        const sm64_saturn_render_job_payload_kind_t left_kind =
+            sm64_saturn_render_job_payload_kind_for_job(&jobs[left]);
         const uint32_t left_begin = jobs[left].output_offset;
         const uint32_t left_end = left_begin + jobs[left].output_capacity;
         for (uint16_t right = (uint16_t)(left + 1U); right < count; right++) {
+            const sm64_saturn_render_job_payload_kind_t right_kind =
+                sm64_saturn_render_job_payload_kind_for_job(&jobs[right]);
+            if (left_kind != right_kind) continue;
             const uint32_t right_begin = jobs[right].output_offset;
             const uint32_t right_end = right_begin + jobs[right].output_capacity;
             if (left_begin < right_end && right_begin < left_end) return false;
@@ -122,7 +156,7 @@ bool sm64_saturn_render_job_queue_publish(
         return false;
     for (uint16_t index = 0U; index < count; index++)
         if (!descriptor_valid(&jobs[index], generation)) return false;
-    if (!output_spans_disjoint(jobs, count)) return false;
+    if (!payload_spans_disjoint(jobs, count)) return false;
 
     /* Descriptors are complete before their release records become READY;
      * queue generation is the final publication field observed by a peer. */

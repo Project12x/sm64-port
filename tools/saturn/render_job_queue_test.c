@@ -88,6 +88,47 @@ int main(void)
     DWORD master_result = 1UL;
     DWORD slave_result = 1UL;
 
+    {
+        /* Each job kind writes a physically distinct bounded payload bank, so
+         * local offset zero is legal in all four namespaces. */
+        sm64_saturn_render_job_t local_offsets[4];
+        memcpy(local_offsets, k_jobs, sizeof(local_offsets));
+        for (uint16_t job = 0U; job < 4U; job++)
+            local_offsets[job].output_offset = 0U;
+        sm64_saturn_render_job_queue_init(&queue);
+        if (!expect(sm64_saturn_render_job_queue_publish(
+                        &queue, 7U, local_offsets, 4U),
+                    "different physical payload kinds may reuse local offsets"))
+            return 1;
+    }
+    {
+        sm64_saturn_render_job_t same_kind_overlap[2] = {
+            k_jobs[1], k_jobs[1],
+        };
+        same_kind_overlap[1].input_offset = 40U;
+        same_kind_overlap[1].output_offset = 8U;
+        sm64_saturn_render_job_queue_init(&queue);
+        if (!expect(!sm64_saturn_render_job_queue_publish(
+                        &queue, 7U, same_kind_overlap, 2U),
+                    "overlapping spans in one physical payload kind must fail"))
+            return 1;
+    }
+    {
+        sm64_saturn_render_job_t mismatched = k_jobs[0];
+        mismatched.callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_ADMIT;
+        sm64_saturn_render_job_queue_init(&queue);
+        if (!expect(!sm64_saturn_render_job_queue_publish(
+                        &queue, 7U, &mismatched, 1U),
+                    "type/callback payload-kind mismatch must fail closed"))
+            return 1;
+        mismatched = k_jobs[0];
+        mismatched.type = 0U;
+        if (!expect(!sm64_saturn_render_job_queue_publish(
+                        &queue, 7U, &mismatched, 1U),
+                    "unknown payload kind must fail closed"))
+            return 1;
+    }
+
     sm64_saturn_render_job_queue_init(&queue);
     if (!expect(sm64_saturn_render_job_queue_publish(&queue, 7U, k_jobs, 4U),
                 "valid immutable jobs must publish")) return 1;

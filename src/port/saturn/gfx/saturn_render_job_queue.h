@@ -42,6 +42,17 @@ typedef enum sm64_saturn_render_job_callback {
     SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER = 4U,
 } sm64_saturn_render_job_callback_t;
 
+/* Output offsets are local to the physical payload written by one phase.
+ * These kinds are derived from the immutable type/callback pair rather than
+ * stored in the descriptor, preserving its 16-byte cross-SH-2 ABI. */
+typedef enum sm64_saturn_render_job_payload_kind {
+    SM64_SATURN_RENDER_JOB_PAYLOAD_INVALID = 0U,
+    SM64_SATURN_RENDER_JOB_PAYLOAD_WORLD_ADMIT = 1U,
+    SM64_SATURN_RENDER_JOB_PAYLOAD_WORLD_LOWER = 2U,
+    SM64_SATURN_RENDER_JOB_PAYLOAD_ACTOR_ADMIT = 3U,
+    SM64_SATURN_RENDER_JOB_PAYLOAD_ACTOR_LOWER = 4U,
+} sm64_saturn_render_job_payload_kind_t;
+
 typedef struct sm64_saturn_render_job {
     uint16_t type;
     uint16_t callback_id;
@@ -96,6 +107,10 @@ _Static_assert(sizeof(sm64_saturn_render_job_t) == 16U,
                "job descriptor ABI must stay pointer-free and fixed-width");
 _Static_assert(sizeof(sm64_saturn_render_job_release_t) == 12U,
                "job release ABI must use fixed-width words");
+
+sm64_saturn_render_job_payload_kind_t
+sm64_saturn_render_job_payload_kind_for_job(
+    const sm64_saturn_render_job_t *job);
 
 void sm64_saturn_render_job_queue_init(sm64_saturn_render_job_queue_t *queue);
 uint32_t sm64_saturn_render_job_queue_generation(
