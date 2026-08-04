@@ -2,6 +2,10 @@
 
 #include <string.h>
 
+#if defined(__sh__)
+#include <cpu/cache.h>
+#endif
+
 typedef struct sm64_saturn_render_job_source_arm {
     sm64_saturn_render_job_queue_t *queue;
     const sm64_saturn_render_job_callback_table_t *callbacks;

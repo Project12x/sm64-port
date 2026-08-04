@@ -1247,3 +1247,20 @@ open.
   fixtures independently PASS. This does not close target compile/link,
   section-placement, live CPU-DUAL ownership, target cache, CUE/Ymir, or FPS
   gates.
+
+### A5.8 first target-compile gate and include repair (2026-08-04)
+
+- The exact guarded Route-0/live-input/Pipe4 `-B -j1` build was run once at
+  `b1fb718a`. The complete transcript is retained in
+  `.tmp-a58-target-build-20260804.log`.
+- The build compiled through the new graph source and then failed before link
+  in `saturn_render_job_queue.c:26`: `CPU_CACHE_THROUGH` was undeclared. Thus
+  no link, section-placement, memory-margin, or fresh CUE/ISO/ELF evidence is
+  credited from this attempt.
+- Watched RED/GREEN: the queue source contract failed before the fix and then
+  passed all four cases after a narrow SH-only `<cpu/cache.h>` import. The
+  configured MSYS2 Python was launched through the dependency wrapper; result:
+  `Ran 4 tests ... OK`. `git diff --check` also passed.
+- This is a target include-boundary repair only. It does not activate the
+  dormant queue, replace the legacy CPU-DUAL callback, launch Ymir, or make an
+  FPS claim. One serialized post-review target rebuild remains required.

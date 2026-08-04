@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the A5.8 render-job queue's SH-2 include boundary. The first guarded
+  serial sourceboot target build exposed that `CPU_CACHE_THROUGH` was used
+  without importing Yaul's cache definition; the queue now includes the
+  narrow target cache header while host builds remain independent of Yaul.
+  This restores target compilation without activating the dormant CPU-DUAL
+  queue or changing the accepted renderer path.
+
 ### Added
 
 - Added the dormant A5.8 ordered terrain-command and callback-context

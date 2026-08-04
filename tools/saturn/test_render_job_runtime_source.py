@@ -28,6 +28,12 @@ class RenderJobRuntimeSourceTests(unittest.TestCase):
         self.assertIn("sm64_saturn_render_job_queue_cache_through", body)
         self.assertIn("queue->generation", body)
 
+    def test_queue_imports_target_cache_through_definition(self):
+        source = QUEUE.read_text(encoding="utf-8")
+        self.assertIn(
+            '#if defined(__sh__)\n#include <cpu/cache.h>\n#endif', source
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

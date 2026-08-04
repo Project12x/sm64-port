@@ -258,6 +258,14 @@ and the evidence report before starting another task.
   phase-specific opener. Final independent source re-review is GO. Target
   compile/link and section placement, the atomic sole-owner cutover, target
   cache behavior, CUE/Ymir, and FPS evidence remain unchecked.
+  **A5.8 target compile repair (2026-08-04):** the first exact serialized
+  Route-0/live-input/Pipe4 target gate reached the newly linked queue sources
+  but failed before link because `saturn_render_job_queue.c` used Yaul's
+  `CPU_CACHE_THROUGH` without importing its defining header. A watched source
+  contract now requires the SH-only `<cpu/cache.h>` include, and the narrow
+  fix is host-green. Target link, section placement, artifact hashes, and
+  memory margins remain unchecked until the one serialized post-review
+  rebuild succeeds; no CPU-DUAL activation or Ymir launch occurred.
 - [x] **Task 5.5 / A5.5 — descriptor-to-result ownership bridge:**
   source-complete; final independent source review is GO. The new bridge proves an exact
   queue descriptor index, actual claimant, and output kind select the
