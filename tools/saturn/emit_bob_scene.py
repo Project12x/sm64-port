@@ -47,6 +47,16 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
     lod_mid = [1] * len(primitives)
     lod_far = [0 if int(primitive["source0"]) % 8 == 0 else 1
                for primitive in primitives]
+    lod_masks = [[1] * len(primitives), lod_mid, lod_far]
+    lod_position_refs: list[list[int]] = []
+    for mask in lod_masks:
+        lod_position_refs.append(sorted({index for primitive, enabled in
+                                         zip(primitives, mask) if enabled
+                                         for index in primitive["indices"]}))
+    lod_position_ref_offsets = [0]
+    for refs in lod_position_refs:
+        lod_position_ref_offsets.append(lod_position_ref_offsets[-1] + len(refs))
+    flat_lod_position_refs = [index for refs in lod_position_refs for index in refs]
     spans = bsp.get("node_spans")
     if not isinstance(spans, dict):
         raise ValueError("BSP report lacks compact node spans")
@@ -72,6 +82,9 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
         "#include <stdint.h>",
         f"#define SM64_SATURN_BOB_POSITION_COUNT {len(positions)}U",
         f"#define SM64_SATURN_BOB_PRIMITIVE_COUNT {len(primitives)}U",
+        "#define SM64_SATURN_BOB_LOD_TIER_COUNT 3U",
+        f"#define SM64_SATURN_BOB_LOD_POSITION_REF_COUNT {len(flat_lod_position_refs)}U",
+        f"#define SM64_SATURN_BOB_CLUSTER_COUNT {len(primitives)}U",
         "/* bob_bsp.h owns the node-span arrays; identity must match exactly. */",
         f"#define SM64_SATURN_BOB_SCENE_NODE_SPAN_COUNT {node_span_count}U",
         f"#define SM64_SATURN_BOB_SCENE_PRIMITIVE_REF_COUNT {primitive_ref_count}U",
@@ -98,6 +111,18 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
                 primitive["tile_offset"], primitive["clut_offset"],
             )
         )
+    lines += [
+        "};",
+        "/* Compact, sorted unique position references for near/mid/far. The",
+        " * runtime selects one complete tier before workers transform vertices. */",
+        "static const uint16_t sm64_saturn_bob_lod_position_ref_offsets[SM64_SATURN_BOB_LOD_TIER_COUNT + 1U] = {",
+    ]
+    lines.extend(c_array(lod_position_ref_offsets, width=12))
+    lines += [
+        "};",
+        "static const uint16_t sm64_saturn_bob_lod_position_refs[SM64_SATURN_BOB_LOD_POSITION_REF_COUNT] = {",
+    ]
+    lines.extend(c_array(flat_lod_position_refs, width=16))
     lines += [
         "};",
         "static const uint8_t sm64_saturn_bob_lod_mid_mask[SM64_SATURN_BOB_PRIMITIVE_COUNT] = {",

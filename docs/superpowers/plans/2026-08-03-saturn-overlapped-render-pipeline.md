@@ -55,7 +55,11 @@ and the evidence report before starting another task.
   independent reviews and target coherency evidence remain open. This is the full-game-safe
   prerequisite for A3's pre-transform VDP1 workload reduction; it is not
   itself claimed as an FPS improvement.
-- [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** pending.
+- [ ] **Task 3 / A3 — pre-transform cluster/LOD admission:** active. The
+  scene-neutral host contract, deterministic BOB compact position streams, and
+  focused `verify-render-clusters` gate are in place. Runtime substitution of
+  full-position marking remains blocked on equivalent per-tier fragment-bank
+  streams and target visual/counter evidence; no performance claim is made.
 - [ ] **Task 4 / A4 — Mario meshlets and bounded ordering:** pending.
 - [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** pending.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.

@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added the first A3 scene-neutral render-cluster contract and a focused host
+  gate. It chooses a hysteretic near/mid/far compact position span from a
+  cluster AABB before transforms, rejects empty/behind optional spans, and
+  carries only generated offsets and snapshot generation. The BOB generator
+  now also emits deterministic compact unique position-reference streams for
+  each LOD tier, so the remaining fragment-bank integration can replace its
+  full-position marking without changing ownership or presentation logic.
+
 - Added Saturn-only immutable two-slot render snapshot banks with fixed-width
   camera, scene, Mario, pose-selector, and generated-bank-ID records. The
   master publishes a generation only after camera and actor records agree;

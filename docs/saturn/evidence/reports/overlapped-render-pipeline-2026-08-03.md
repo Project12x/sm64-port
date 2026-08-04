@@ -1,5 +1,38 @@
 # Overlapped-render pipeline evidence — Task 1
 
+## Task 3 / A3 — active host-contract seed (2026-08-04)
+
+The first scene-neutral A3 slice is intentionally host-only. It adds
+`sm64_saturn_render_cluster_t` and a bounded admission helper that selects a
+Z-Treme-style hysteretic LOD tier before any position transform, returning a
+generation-tagged primitive and compact-position span. Optional clusters behind
+the view or with an empty chosen-tier span fail closed; mandatory clusters stay
+admitted. The type contains no BOB, game, VDP1, allocator, or pointer field.
+
+`emit_bob_scene.py` now emits deterministic sorted unique position-reference
+streams for near/mid/far tiers. This is a preparatory generated-bank change:
+the accepted renderer still uses the established fragment-bank full-position
+set, so it cannot be credited as a VDP1/FPS gain. Replacing that marking path
+must wait until `bake_bob_bsp_fragments.py` emits equivalent validated tier
+streams, preserving fragment coverage and the existing source-order path.
+
+TDD evidence: the C fixture first failed because
+`saturn_render_cluster.h` did not exist; the generator fixture then failed
+because its compact stream fields did not exist. Green command:
+
+```powershell
+& C:\msys64\usr\bin\make.exe -f Makefile.saturn.mk \
+  SATURN_REPO_ROOT=D:/Code/RetroDev/sm64-saturn-port/sm64-port/.worktrees/sh2-native-math-purge \
+  HOST_CC=C:/Qt/Tools/mingw1310_64/bin/gcc.exe verify-render-clusters
+```
+
+Result: PASS (one deterministic generator test and the C outside/inside,
+mandatory, hysteresis, empty-span, and invalid-argument fixture). No target
+build, CUE, Ymir launch, or performance capture was run. Remaining A3 gates:
+fragment/actor per-tier stream generation, runtime replacement of accepted-path
+full-position marking, profile counters, full generator/property checks,
+independent review, and target visual/counter evidence.
+
 ## Current verdict
 
 **SAFE-BLOCKED — quality-fix round 1/5.** Full-range review covered

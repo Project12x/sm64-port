@@ -5,6 +5,16 @@ Branch: sh2/native-math-purge
 Plan commit: 1c262766586388937f1993d7accd7a6fda05b49f
 Execution base: 1c262766586388937f1993d7accd7a6fda05b49f
 
+Task 3/A3: **ACTIVE — host-contract seed complete.** The watched RED C
+compile failed for the intentionally absent `saturn_render_cluster.h`; the
+generator fixture then failed for absent compact position-stream fields. The
+minimal generic contract and deterministic BOB near/mid/far unique-reference
+streams make `verify-render-clusters` green under the explicit worktree
+root/host compiler. This does not yet replace the fragment renderer's
+full-position admission, so no target build/Ymir/FPS result is claimed.
+Fragment/actor tier streams, runtime integration/counters, property gates,
+review, and target visual evidence remain open. See `task-3-report.md`.
+
 Preflight: existing linked worktree verified; plan conflict scan clean.
 Preserved dirty scope: native-math verifier edits, prior audits/evidence,
 temporary observation/build directories, and route files remain unrelated and
