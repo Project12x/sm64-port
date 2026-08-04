@@ -82,3 +82,14 @@ The new test was observed RED (validator absent), then GREEN: reader (3),
 trace source (2), and retained presentation (6) gates pass; Python
 compilation passes. No target build/CUE/Ymir action occurred. Independent
 rereview remains required; Step 3 stays unchecked.
+
+Task 3 fix round 2/5: quality review NO-GO identified cached-P1 trace writes
+as invisible to Ymir/hardware debug reads of backing WRAM. `b317a2e5` retains
+the exported symbol but publishes every record word via the project hwtest
+precedent, `CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_boot_trace`; it also
+pins the exact eight-word ABI with a 32-byte C static assertion. RED: the
+strengthened source contract failed for the absent ABI guard. GREEN: trace
+source (2), reader (3), and presentation (6) pass plus Python compilation;
+the mutation suite rejects cached-only alias/writer and ABI-size changes. No
+target build/CUE/Ymir action occurred. Quality rereview, serial trace CUE, and
+bounded capture remain unexecuted.

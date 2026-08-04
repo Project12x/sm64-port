@@ -82,3 +82,23 @@ compilation. No target build, CUE construction, Ymir launch, or capture was
 performed. The review verdict remains REJECT until an independent rereview
 records that this Important finding is addressed; the trace-CUE and capture
 gates remain open.
+
+## Fix round 2/5 — cache-through WRAM publication and fixed ABI
+
+Quality review rejected the trace because volatile P1 writes can remain in the
+master SH-2 cache while Ymir `mem.peek` and hardware debuggers read backing
+WRAM. `b317a2e5` (`fix(saturn): publish boot trace through WRAM`) retains the
+ELF-resolvable global but writes every trace word through
+`CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_boot_trace`, following the
+project-owned `src/port/saturn/hwtest/main.c` telemetry publication precedent.
+It also adds `_Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) ==
+32U, ...)`.
+
+TDD RED: the strengthened two-test source contract failed against the prior
+writer because its 32-byte ABI assertion was absent. GREEN: it passes after
+requiring the exact ordered eight-field layout, the exact static assertion,
+and the cache-through writer. In-memory mutations independently reject an
+alias removal, a cached writer, and a resized ABI. Reader (3) and retained
+presentation (6) gates pass, as does Python compilation. No target build, CUE
+construction, Ymir launch, or capture was performed. Quality rereview and the
+existing serial trace-CUE/capture gates remain open.
