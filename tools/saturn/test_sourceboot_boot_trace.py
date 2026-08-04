@@ -71,7 +71,7 @@ def assert_boot_trace_contract(text: str) -> None:
     )
     if trace_type is None:
         raise AssertionError("boot trace record type is missing")
-    for field in (
+    expected_fields = (
         "magic",
         "version",
         "stage",
@@ -80,12 +80,28 @@ def assert_boot_trace_contract(text: str) -> None:
         "scheduler_credit",
         "vdp1_presentation_generation",
         "vdp2_presentation_generation",
-    ):
-        if re.search(rf"\buint32_t\s+{field}\s*;", trace_type.group("body")) is None:
-            raise AssertionError(f"boot trace record must contain {field}")
+    )
+    fields = tuple(re.findall(r"\buint32_t\s+(\w+)\s*;", trace_type.group("body")))
+    if fields != expected_fields:
+        raise AssertionError("boot trace record must retain its exact eight-word ABI")
+    if re.search(
+        r"_Static_assert\s*\(\s*sizeof\s*\(\s*"
+        r"sm64_saturn_sourceboot_boot_trace_t\s*\)\s*==\s*32U\s*,",
+        text,
+    ) is None:
+        raise AssertionError("boot trace record must assert its 32-byte ABI")
+
+    visible = extract_c_function(text, "sourceboot_boot_trace_visible")
+    if "CPU_CACHE_THROUGH |" not in visible or \
+            "(uintptr_t)&sourceboot_boot_trace" not in visible:
+        raise AssertionError("boot trace must publish through the cache-through alias")
 
     writer = extract_c_function(text, "sourceboot_boot_trace_write")
-    if "sourceboot_boot_trace.stage++;" not in writer:
+    if "sourceboot_boot_trace_visible()" not in writer or "trace->" not in writer:
+        raise AssertionError("boot trace writer must use the cache-through record")
+    if "sourceboot_boot_trace." in writer:
+        raise AssertionError("boot trace writer must not store through cached WRAM")
+    if "trace->stage++;" not in writer:
         raise AssertionError("boot trace stage sequence must advance monotonically")
     for forbidden in ("vdp1_sync", "vdp2_sync", "malloc", "SATURN_DEMO", "BOB"):
         if forbidden in writer:
@@ -165,8 +181,8 @@ class SourcebootBootTraceTests(unittest.TestCase):
             assert_boot_trace_contract(absent_global)
 
         non_monotonic = self.source.replace(
-            "sourceboot_boot_trace.stage++;",
-            "sourceboot_boot_trace.stage = 1U;",
+            "trace->stage++;",
+            "trace->stage = 1U;",
             1,
         )
         with self.assertRaisesRegex(AssertionError, "advance monotonically"):
@@ -180,12 +196,36 @@ class SourcebootBootTraceTests(unittest.TestCase):
             assert_boot_trace_contract(missing_stale)
 
         writer_sync = self.source.replace(
-            "sourceboot_boot_trace.stage++;",
-            "sourceboot_boot_trace.stage++;\n    vdp1_sync();",
+            "trace->stage++;",
+            "trace->stage++;\n    vdp1_sync();",
             1,
         )
         with self.assertRaisesRegex(AssertionError, "must not perform vdp1_sync"):
             assert_boot_trace_contract(writer_sync)
+
+        cached_alias = self.source.replace(
+            "CPU_CACHE_THROUGH |",
+            "0U |",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "cache-through alias"):
+            assert_boot_trace_contract(cached_alias)
+
+        cached_writer = self.source.replace(
+            "sourceboot_boot_trace_visible()",
+            "&sourceboot_boot_trace",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "cache-through record"):
+            assert_boot_trace_contract(cached_writer)
+
+        resized_record = self.source.replace(
+            "_Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 32U,",
+            "_Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 28U,",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "32-byte ABI"):
+            assert_boot_trace_contract(resized_record)
 
 
 if __name__ == "__main__":

@@ -63,6 +63,9 @@ typedef struct {
     uint32_t vdp2_presentation_generation;
 } sm64_saturn_sourceboot_boot_trace_t;
 
+_Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 32U,
+               "sourceboot boot trace ABI must remain eight words");
+
 enum {
     SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY = 1U,
     SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE,
@@ -115,21 +118,33 @@ volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture;
 const sm64_saturn_input_replay_sample_t *
 sm64_saturn_sourceboot_bob_parity_v1(uint16_t *sample_count);
 
+static volatile sm64_saturn_sourceboot_boot_trace_t *
+sourceboot_boot_trace_visible(void)
+{
+    /* Ymir's mem.peek and a hardware debugger observe backing WRAM, not
+     * dirty SH-2 cache lines. Keep the ELF-visible P1 symbol above, but
+     * publish every word through its P2 cache-through alias. */
+    return (volatile sm64_saturn_sourceboot_boot_trace_t *)(
+        CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_boot_trace);
+}
+
 static void sourceboot_boot_trace_write(uint32_t stage_id,
                                         uint32_t observed_vblank_generation)
 {
-    sourceboot_boot_trace.magic = SOURCEBOOT_BOOT_TRACE_MAGIC;
-    sourceboot_boot_trace.version = SOURCEBOOT_BOOT_TRACE_VERSION;
-    sourceboot_boot_trace.observed_vblank_generation =
+    volatile sm64_saturn_sourceboot_boot_trace_t * const trace =
+        sourceboot_boot_trace_visible();
+    trace->magic = SOURCEBOOT_BOOT_TRACE_MAGIC;
+    trace->version = SOURCEBOOT_BOOT_TRACE_VERSION;
+    trace->observed_vblank_generation =
         observed_vblank_generation;
-    sourceboot_boot_trace.scheduler_credit =
+    trace->scheduler_credit =
         sourceboot_trace_scheduler_credit;
-    sourceboot_boot_trace.vdp1_presentation_generation =
+    trace->vdp1_presentation_generation =
         sourceboot_trace_vdp1_presentation_generation;
-    sourceboot_boot_trace.vdp2_presentation_generation =
+    trace->vdp2_presentation_generation =
         sourceboot_trace_vdp2_presentation_generation;
-    sourceboot_boot_trace.stage_id = stage_id;
-    sourceboot_boot_trace.stage++;
+    trace->stage_id = stage_id;
+    trace->stage++;
 }
 
 static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)

@@ -16,6 +16,9 @@
 
 ### Fixed
 
+- Post-BIOS trace writes now use the SH-2 cache-through alias and pin their
+  eight-word ABI at 32 bytes, so Ymir and hardware debuggers read current
+  backing-WRAM telemetry instead of dirty cached data.
 - The post-BIOS trace reader now rejects zero frame requests before issuing a
   Ymir `exec.run_for` RPC, preventing an invalid diagnostic capture request.
 - Restored the sourceboot startup VDP2 begin/commit retirement barrier before
