@@ -109,12 +109,26 @@ bool sm64_saturn_render_job_queue_claim_master(
 bool sm64_saturn_render_job_queue_claim_slave(
     sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t *job_index);
+/* Graph scheduling may claim one known-ready descriptor after its local
+ * dependency policy admits it.  The descriptor still receives the same TAS.B
+ * exact-once transition as the ordinary opportunistic drains. */
+bool sm64_saturn_render_job_queue_claim_index(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index, sm64_saturn_render_job_state_t claimed_state);
 bool sm64_saturn_render_job_queue_complete(
     sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index, sm64_saturn_render_job_state_t claimed_state);
 bool sm64_saturn_render_job_queue_fail(
     sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index, sm64_saturn_render_job_state_t claimed_state);
+/* A graph dependency that has terminally failed may quarantine a still-ready
+ * dependent descriptor; it must never reclaim a claimed descriptor. */
+bool sm64_saturn_render_job_queue_quarantine_ready(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index);
+sm64_saturn_render_job_state_t sm64_saturn_render_job_queue_state(
+    const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index);
 bool sm64_saturn_render_job_queue_all_terminal(
     const sm64_saturn_render_job_queue_t *queue, uint32_t generation);
 bool sm64_saturn_render_job_queue_reset_retired(

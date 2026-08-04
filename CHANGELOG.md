@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added the A5.7 render-job graph foundation: P2-visible dependency masks stop
+  consumers claiming before every producer is `DONE`, failed producers
+  quarantine only ready dependents, and terrain multi-result consumers use
+  exact `(job_index, output_index)` identities. This supplies the missing
+  phase boundary discovered in A5.6 preflight without activating a second
+  CPU-DUAL callback or changing the accepted A3+A4 renderer path.
+
 - Added descriptor-indexed physical payload-bank helpers for A5.6. A claimed
   job selects master or slave storage from its recorded queue claimant and
   exact output span, while a reader refuses non-terminal/mismatched metadata

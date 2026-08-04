@@ -189,6 +189,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_output_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_bridge.c \

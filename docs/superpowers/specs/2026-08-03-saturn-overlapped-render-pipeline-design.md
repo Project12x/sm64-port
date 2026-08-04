@@ -316,6 +316,11 @@ each task back here.
   output slots, then install the queue as the one CPU-DUAL polling owner. A
   queue release record alone is insufficient: it cannot make an existing
   fixed-split payload cache-safe.
+- [ ] **A5.7 — dependency-aware job graph:** preserve terrain and actor phase
+  dependencies and terrain's ordered multi-result identity before A5.6
+  migration. Consumers remain ineligible until producers are `DONE`; failed
+  producers quarantine ready dependents. Graph metadata is P2-visible but
+  renderer-local, so queue descriptors remain pointer-free and fixed-width.
 - [ ] **A6 — localized recovery:** recover only unclaimed/failed jobs, reject
   stale generations, and allow previous-complete-frame presentation.
 - [ ] **A7 — alternating source banks:** patch compile-once templates in
@@ -359,6 +364,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 | 2026-08-03 | Before another timing repair, retain a persistent post-BIOS sourceboot trace in target RAM. | `30123c1b` exports `sourceboot_boot_trace`: magic/version, monotonic write sequence, last boundary ID, observed VBlank, scheduler credit, and VDP1/VDP2 presentation generations. Scalar-only writes bracket bootstrap retirement, thread5, stale wait, source tick, VDP1 render/sync, and VDP2 commit. The symbol-aware headless Ymir reader is bounded and diagnostic-only; focused source/reader gates are green, but independent review and target capture remain required. |
 | 2026-08-03 | Use a shared opportunistic terrain/actor queue, early LOD/admission, alternating RAM banks, and one terminal fence. | Approved hybrid derived from pinned SlaveDriver and Z-Treme/SGL study. |
 | 2026-08-04 | Queue claimant ownership must be bridged to exact descriptor-indexed result reads before any fixed terrain/Mario worker is replaced. | A5.5's bridge maps descriptor index + kind + actual queue claim to cached/P2 selection and rejects consumers before that exact job is `DONE`; it records one source-side arm but cannot register, wake, or claim to activate CPU-DUAL beside the legacy worker. The current renderer still uses fixed splits, so no live binding or target claim follows from this source-only bridge. |
+| 2026-08-04 | A5.6 requires an explicit phase graph before physical payload migration. | Independent descriptors and physical lanes do not encode terrain transform→classify→ordered multi-result merge or Mario transform→classify dependencies. A5.7 adds P2-visible masks, terminal consumer eligibility, failure quarantine, and `(job_index, output_index)` identities while keeping live activation forbidden. |
 | 2026-08-03 | SlaveDriver's active path is not evidence of asynchronous queued DMA; only its queue/bank patterns are prior art. | Corrected after pinned-source call-site audit. |
 | 2026-08-03 | Keep the two 64 KiB command banks in LWRAM and transfer them with CPU-DMAC; reserve SCU DMA for HWRAM Gouraud staging. | File-map correction: two 2,048 × 32-byte command banks exceed the linker's `0x1B00` HWRAM margin, and SCU DMA cannot source LWRAM. |
 | 2026-08-03 | Execute the architecture as ten reviewer-sized tasks with A1 producing the earliest manual CUE. | Implementation plan linked above; every task updates this ledger, its own steps/status, and the evidence report before transition. |

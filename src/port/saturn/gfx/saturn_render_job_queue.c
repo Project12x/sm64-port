@@ -185,6 +185,29 @@ bool sm64_saturn_render_job_queue_claim_slave(
                  job_index);
 }
 
+bool sm64_saturn_render_job_queue_claim_index(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index, sm64_saturn_render_job_state_t claimed_state)
+{
+    queue = sm64_saturn_render_job_queue_cache_through(queue);
+    if (queue == NULL || generation == 0U || job_index >= queue->count ||
+        queue->generation != generation ||
+        (claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_MASTER &&
+         claimed_state != SM64_SATURN_RENDER_JOB_CLAIMED_SLAVE)) return false;
+    sm64_saturn_render_job_release_t *const release = &queue->release[job_index];
+    if (release->state != SM64_SATURN_RENDER_JOB_READY ||
+        release->generation != generation || !release_claim_try(&release->claim))
+        return false;
+    sm64_saturn_render_job_queue_fence();
+    const bool valid = queue->generation == generation &&
+        release->generation == generation &&
+        release->state == SM64_SATURN_RENDER_JOB_READY;
+    if (valid) release->state = claimed_state;
+    sm64_saturn_render_job_queue_fence();
+    release_claim_release(&release->claim);
+    return valid;
+}
+
 static bool terminal(sm64_saturn_render_job_queue_t *queue, uint32_t generation,
                      uint16_t job_index,
                      sm64_saturn_render_job_state_t claimed_state,
@@ -221,6 +244,28 @@ bool sm64_saturn_render_job_queue_fail(
 {
     return terminal(queue, generation, job_index, claimed_state,
                     SM64_SATURN_RENDER_JOB_FAILED);
+}
+
+bool sm64_saturn_render_job_queue_quarantine_ready(
+    sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index)
+{
+    return terminal(queue, generation, job_index,
+                    SM64_SATURN_RENDER_JOB_READY,
+                    SM64_SATURN_RENDER_JOB_QUARANTINED);
+}
+
+sm64_saturn_render_job_state_t sm64_saturn_render_job_queue_state(
+    const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index)
+{
+    queue = sm64_saturn_render_job_queue_cache_through(
+        (sm64_saturn_render_job_queue_t *)queue);
+    if (queue == NULL || generation == 0U || queue->generation != generation ||
+        job_index >= queue->count ||
+        queue->release[job_index].generation != generation)
+        return SM64_SATURN_RENDER_JOB_EMPTY;
+    return (sm64_saturn_render_job_state_t)queue->release[job_index].state;
 }
 
 bool sm64_saturn_render_job_queue_all_terminal(

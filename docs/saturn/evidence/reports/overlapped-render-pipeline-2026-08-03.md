@@ -923,3 +923,20 @@ open.
 - Terrain and actor production arrays/readers remain unmigrated, so this is a
   source prerequisite only. The live-cutover gate remains RED; no target
   build, CUE, Ymir, or FPS claim occurred.
+
+### A5.7 queue job-graph foundation (2026-08-04)
+
+- A5.6 caller-migration preflight found that independent descriptors cannot
+  express terrain's transform→classify→ordered multi-result merge or Mario's
+  transform→classify chain. A physical payload lane alone cannot stop an early
+  consumer.
+- RED: the graph fixture was written before the graph interface and failed
+  because `saturn_render_job_graph.h` was absent. GREEN introduces P2-visible
+  renderer-local dependency masks, exact indexed claims, failed-predecessor
+  quarantine, and terminal terrain merge identities. It covers a slave
+  producer followed by a master consumer, early-consumer rejection, ordered
+  four-result terrain identity validation, independent work, and failure
+  propagation without reclaiming claimed work.
+- The renderer remains unbound and the `test_render_job_live_cutover_source.py`
+  gate intentionally remains RED. No target build, CUE, Ymir run, counter, or
+  FPS claim occurred.

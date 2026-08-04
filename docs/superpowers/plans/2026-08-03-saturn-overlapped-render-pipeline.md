@@ -125,6 +125,14 @@ and the evidence report before starting another task.
   bound to the renderer yet: live activation may begin only after the bridge
   review and a renderer conversion makes every producer and consumer use this
   route. Target cache/ordering/FPS evidence remains open.
+- [ ] **Task 5.7 / A5.7 — queue job graph and phase barriers:** active.
+  Independent descriptors cannot safely replace terrain's transform→classify→
+  multi-result merge or Mario's transform→classify chains. This foundation
+  adds P2-visible dependency masks, exact result identities, consumer
+  eligibility only after producer `DONE`, and failed-predecessor quarantine.
+  It deliberately does not bind the renderer or alter its sole legacy
+  CPU-DUAL owner; the live-cutover source gate remains RED until one atomic
+  conversion.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
