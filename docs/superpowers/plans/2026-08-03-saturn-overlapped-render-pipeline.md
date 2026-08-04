@@ -107,8 +107,10 @@ and the evidence report before starting another task.
   queue descriptor index, actual claimant, and output kind select the
   writer/reader cache lane; consumers reject a job until it is `DONE`.
   Neither `begin == 0` nor a fixed terrain/actor split participates. It also
-  defines the one-time queue-owned polling callback attach/notify lifecycle,
-  rejecting a second attachment. It is not
+  defines a one-time queue-owned polling callback lifecycle, rejecting a
+  second attachment. A5.5 deliberately compiles no CPU-DUAL registration or
+  notify while the legacy worker is linked; only the atomic live cutover may
+  bind it after removing all legacy dispatches. It is not
   bound to the renderer yet: live activation may begin only after the bridge
   review and a renderer conversion makes every producer and consumer use this
   route. Target cache/ordering/FPS evidence remains open.
@@ -913,6 +915,9 @@ types, ownership rules, or production fallbacks.
   attach is single-owner and its explicit notify is inert until attached.
 - [x] **Step 3: Focused host proof.** The bridge fixture and existing queue
   fixture pass with `-Wall -Wextra -Werror` under the Qt MinGW host compiler.
+- [x] **Step 3a: Source-only coexistence proof.** A Python source gate rejects
+  either `cpu_dual_slave_set` or `cpu_dual_slave_notify` in A5.5. The live
+  cutover owns the only permitted registration after legacy worker removal.
 - [ ] **Step 4: Independent specification and quality review.**
 - [ ] **Step 5: Live renderer transition.** Replace every terrain/Mario
   producer/read with bridge routing, attach the queue as the sole slave

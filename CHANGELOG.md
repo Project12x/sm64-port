@@ -50,6 +50,12 @@
 
 ### Fixed
 
+- Removed A5.5's premature Yaul CPU-DUAL callback registration and notify.
+  The source-only ownership bridge now reserves and validates its one-owner
+  lifecycle without compiling a second callback beside the legacy fixed-split
+  worker. The later atomic renderer cutover must remove that worker before it
+  binds the queue to CPU-DUAL.
+
 - Hardened A5 output-bank publication to bind each published cache lane to the
   actual queue release record, rather than trusting a callback-supplied claim
   value. Forged publication before a queue claim now fails closed, while an

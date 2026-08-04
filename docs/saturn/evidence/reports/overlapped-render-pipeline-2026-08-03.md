@@ -847,3 +847,14 @@ open.
   `cff75451c1616aac1236fc2b44223902b55c706b` (GPLv3, fixed work areas); no
   upstream lines were copied. Live renderer conversion and independent review
   remain required before the queue attaches to the SH-2 callback.
+
+### A5.5 CPU-DUAL coexistence correction (2026-08-04)
+
+- NO-GO review finding: A5.5 compiled a second `cpu_dual_slave_set`/notify
+  path while the linked legacy SlaveDriver worker still owns that callback.
+- RED: `test_render_job_bridge_source.py` rejected those source tokens.
+- GREEN: the source-only bridge retains its one-owner attach/notify state
+  contract but compiles neither target registration nor notify. The focused
+  source gate passes, as do the bridge and queue host fixtures. The atomic
+  live cutover must remove all legacy dispatches before it owns Yaul callback
+  registration; no target build/Ymir/FPS evidence ran.

@@ -83,10 +83,11 @@ typedef struct sm64_saturn_render_job_queue {
     volatile uint32_t count;
 } sm64_saturn_render_job_queue_t;
 
-/* Exactly one queue consumer may own Yaul's polling callback. Attach is a
- * pipeline-initialization operation, not a per-frame callback registration;
- * it binds only immutable/static renderer context. `notify` is inert until a
- * successful attach and never coexists with the legacy fixed-split worker. */
+/* Exactly one queue consumer may reserve the future Yaul polling callback.
+ * Attach is a pipeline-initialization operation, not a per-frame callback
+ * registration. While the legacy fixed-split worker is linked, `notify` only
+ * validates this single-owner state; the atomic live cutover alone may bind
+ * and notify CPU-DUAL after every legacy dispatch is removed. */
 bool sm64_saturn_render_job_queue_slave_attach(
     sm64_saturn_render_job_queue_t *queue,
     const sm64_saturn_render_job_callback_table_t *callbacks, void *context);

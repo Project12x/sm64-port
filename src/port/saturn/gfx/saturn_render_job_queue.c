@@ -2,10 +2,6 @@
 
 #include <string.h>
 
-#if defined(__sh__)
-#include <yaul.h>
-#endif
-
 typedef struct sm64_saturn_render_job_slave_attachment {
     sm64_saturn_render_job_queue_t *queue;
     const sm64_saturn_render_job_callback_table_t *callbacks;
@@ -13,29 +9,7 @@ typedef struct sm64_saturn_render_job_slave_attachment {
     uint32_t attached;
 } sm64_saturn_render_job_slave_attachment_t;
 
-#if defined(__sh__)
-#define SM64_SATURN_RENDER_JOB_SHARED __uncached
-#else
-#define SM64_SATURN_RENDER_JOB_SHARED
-#endif
-
-static sm64_saturn_render_job_slave_attachment_t s_slave_attachment
-    SM64_SATURN_RENDER_JOB_SHARED;
-
-#if defined(__sh__)
-static void render_job_queue_slave_entry(void)
-{
-    sm64_saturn_render_job_slave_attachment_t *const attachment =
-        &s_slave_attachment;
-    if (attachment->attached == 0U || attachment->queue == NULL)
-        return;
-    const uint32_t generation = attachment->queue->generation;
-    if (generation != 0U)
-        (void)sm64_saturn_render_job_queue_drain_slave(
-            attachment->queue, generation, attachment->callbacks,
-            attachment->context);
-}
-#endif
+static sm64_saturn_render_job_slave_attachment_t s_slave_attachment;
 
 static inline void sm64_saturn_render_job_queue_fence(void)
 {
@@ -120,10 +94,6 @@ bool sm64_saturn_render_job_queue_slave_attach(
     s_slave_attachment.callbacks = callbacks;
     s_slave_attachment.context = context;
     sm64_saturn_render_job_queue_fence();
-#if defined(__sh__)
-    cpu_dual_comm_mode_set(CPU_DUAL_ENTRY_POLLING);
-    cpu_dual_slave_set(render_job_queue_slave_entry);
-#endif
     s_slave_attachment.attached = 1U;
     sm64_saturn_render_job_queue_fence();
     return true;
@@ -134,9 +104,10 @@ bool sm64_saturn_render_job_queue_slave_notify(void)
     if (s_slave_attachment.attached == 0U ||
         s_slave_attachment.queue == NULL)
         return false;
-#if defined(__sh__)
-    cpu_dual_slave_notify();
-#endif
+    /* Source-only A5.5 reserves the single-owner lifecycle but does not
+     * register or notify Yaul's CPU-DUAL callback while the legacy fixed
+     * worker remains linked. The atomic live cutover owns both registration
+     * and notification after every legacy dispatch has been removed. */
     return true;
 }
 
