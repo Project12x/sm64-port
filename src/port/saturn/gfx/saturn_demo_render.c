@@ -2130,11 +2130,15 @@ static bool __attribute__((unused)) demo_terrain_queue_assemble_merge_spans(
     uint16_t identity_count = 0U;
     for (uint16_t job_index = 0U; job_index < s_render_job_graph.count;
          job_index++) {
+        const sm64_saturn_render_job_t *const descriptor =
+            sm64_saturn_render_job_queue_published_job(
+                &s_render_job_queue, s_render_job_graph.generation, job_index);
+        if (descriptor == NULL) return false;
+        if (descriptor->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER) continue;
         const sm64_saturn_render_job_t *const job =
             sm64_saturn_render_job_queue_done_job(&s_render_job_queue,
                                                    job_index);
-        if (job == NULL) continue;
-        if (job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER) continue;
+        if (job == NULL || job != descriptor) return false;
         const demo_terrain_queue_metadata_t *const metadata =
             demo_terrain_queue_result_metadata(job_index, job, reader_lane);
         const sm64_saturn_terrain_result_t *records;

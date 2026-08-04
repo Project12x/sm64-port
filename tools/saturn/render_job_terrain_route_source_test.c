@@ -100,6 +100,10 @@ int main(void)
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "demo_terrain_queue_read_done") &&
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "sm64_saturn_render_job_queue_published_job") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
+                          "job == NULL || job != descriptor") &&
+        function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "sm64_saturn_render_job_graph_validate_terrain_merge") &&
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "sm64_saturn_terrain_depth_bins_build_streams") &&

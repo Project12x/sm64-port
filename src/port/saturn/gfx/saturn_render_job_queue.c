@@ -340,6 +340,19 @@ const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_job(
     return &queue->jobs[job_index];
 }
 
+const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_published_job(
+    const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
+    uint16_t job_index)
+{
+    queue = sm64_saturn_render_job_queue_cache_through(
+        (sm64_saturn_render_job_queue_t *)queue);
+    if (queue == NULL || generation == 0U || queue->generation != generation ||
+        job_index >= queue->count ||
+        queue->release[job_index].generation != generation)
+        return NULL;
+    return &queue->jobs[job_index];
+}
+
 const sm64_saturn_render_job_t *sm64_saturn_render_job_queue_claimed_job(
     const sm64_saturn_render_job_queue_t *queue, uint32_t generation,
     uint16_t job_index, sm64_saturn_render_job_state_t claimed_state)

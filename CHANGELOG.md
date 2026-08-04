@@ -11,7 +11,9 @@
   Queue streams are not coerced back into the legacy master/slave arenas, so
   later work stealing cannot silently select a fixed range. The live renderer
   remains legacy until Mario reaches the same contract, leaving the 3–4 FPS
-  rollback candidate unchanged.
+  rollback candidate unchanged. A generation-current descriptor accessor now
+  makes that assembler fail closed if any published WORLD_LOWER is READY or
+  claimed rather than silently omitting it.
 
 - Added a source-provenanced animated-actor generalization spike selecting
   Goomba as the first non-Mario proof. It records the real BOB instance budget,

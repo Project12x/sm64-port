@@ -33,6 +33,10 @@ int main(void)
     if (!expect(sm64_saturn_render_job_graph_publish(
                     &graph, 19U, k_jobs, deps, 3U),
                 "dependency graph must publish immutable descriptors")) return 1;
+    if (!expect(sm64_saturn_render_job_queue_published_job(
+                    &queue, 19U, 1U) != NULL,
+                "a current immutable lower descriptor must remain inspectable before DONE"))
+        return 1;
     if (!expect(sm64_saturn_render_job_graph_claim_slave(&graph, 19U, &job) &&
                     job == 0U,
                 "a slave may claim a ready producer")) return 1;

@@ -1095,3 +1095,18 @@ open.
   build, CUE/Ymir run, or FPS claim occurred. Remaining: command lookup from
   the ordered descriptor stream, Mario parity, independent review, one atomic
   CPU-DUAL cutover, then target/cache/visual evidence.
+
+### A5.8 terrain merge completeness repair (2026-08-04)
+
+- NO-GO review found that iterating only `done_job` results could silently
+  omit a current READY/CLAIMED WORLD_LOWER descriptor rather than fail closed.
+- RED: the graph fixture required a generation-current immutable lower
+  descriptor to be inspectable before DONE; it failed to compile because the
+  queue exposed only claimed/DONE reads.
+- GREEN: `published_job()` P2-rereads a generation-current immutable
+  descriptor without granting payload access. The dormant assembler now
+  enumerates every graph descriptor through that accessor and rejects a
+  WORLD_LOWER unless its exact same descriptor is terminal DONE before result
+  metadata or payload reads. Direct C11/Werror graph and terrain-route
+  fixtures PASS. No queue activation, target build, CUE/Ymir run, or FPS
+  claim occurred; fresh scoped re-review remains required.

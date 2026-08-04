@@ -172,6 +172,13 @@ and the evidence report before starting another task.
   record/command streams rather than reconstructing the fixed legacy arenas;
   master final ordering remains sole owner. The callback is unregistered and
   the legacy worker is unchanged pending Mario parity and review.
+  **A5.8 merge review repair (2026-08-04):** the first assembler iterated
+  only `DONE` descriptors, so a current READY/CLAIMED WORLD_LOWER could be
+  silently absent. It now enumerates every immutable P2 current-generation
+  descriptor first and fails closed unless each WORLD_LOWER rereads as the
+  identical `DONE` descriptor before metadata/payload consumption. The graph
+  fixture covers access to a current lower before it is DONE; no callback is
+  activated.
   **Review repair (2026-08-04):** the first dormant callback still entered
   classification through a helper that inferred the lane from `begin == 0`.
   A legal slave claim at descriptor input offset zero would therefore select
