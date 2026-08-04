@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -30,6 +31,7 @@ SOURCEBOOT_BOOT_TRACE_VERSION = 1
 SOURCEBOOT_BOOT_TRACE_WORD_COUNT = 8
 SOURCEBOOT_BOOT_TRACE_BYTES = SOURCEBOOT_BOOT_TRACE_WORD_COUNT * 4
 YMIR_MAX_RUN_FOR_FRAMES = 3600
+_CUE_FILE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))\s+\S+\s*$', re.IGNORECASE)
 
 STAGE_NAMES = {
     0: "elf-data-initialized",
@@ -51,6 +53,45 @@ STAGE_NAMES = {
     16: "vdp2-commit-before",
     17: "vdp2-commit-after",
 }
+
+
+def parse_cue_file_reference(cue: Path) -> Path:
+    """Resolve the only disc image that this sourceboot CUE actually loads."""
+    references: list[str] = []
+    for line in cue.read_text(encoding="utf-8-sig").splitlines():
+        match = _CUE_FILE.match(line)
+        if match:
+            references.append(match.group(1) or match.group(2))
+    if len(references) != 1:
+        raise ValueError("sourceboot CUE must contain exactly one FILE reference")
+    reference = Path(references[0])
+    if reference.is_absolute() or ".." in reference.parts:
+        raise ValueError("sourceboot CUE FILE reference must stay beside the CUE")
+    iso = (cue.parent / reference).resolve()
+    if not iso.is_file():
+        raise ValueError(f"CUE referenced ISO is not a file: {iso}")
+    return iso
+
+
+def bind_capture_artifacts(cue: Path, elf: Path) -> dict[str, dict[str, Any]]:
+    """Fail closed unless CUE, its ISO, and ELF describe one fresh build."""
+    cue = cue.resolve()
+    elf = elf.resolve()
+    iso = parse_cue_file_reference(cue)
+    if cue.stem != iso.stem or cue.stem != elf.stem:
+        raise ValueError("CUE, referenced ISO, and ELF must have the same build name")
+    expected_elf = (cue.parent / "obj" / f"{cue.stem}.elf").resolve()
+    if elf != expected_elf:
+        raise ValueError(f"ELF must be the CUE sibling build ELF: {expected_elf}")
+    if iso.stat().st_mtime < elf.stat().st_mtime:
+        raise ValueError(
+            f"referenced ISO is older than ELF ({iso.name} < {elf.name}); regenerate the disc image"
+        )
+    return {
+        "cue": artifact_identity(cue),
+        "iso": artifact_identity(iso),
+        "elf": artifact_identity(elf),
+    }
 
 
 def parse_symbol_address(nm_output: str) -> int:
@@ -236,6 +277,10 @@ def main() -> int:
     args.game = args.game.resolve()
     args.elf = args.elf.resolve()
     args.output = args.output.resolve()
+    try:
+        artifacts = bind_capture_artifacts(args.game, args.elf)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
     trace_address = resolve_trace_symbol(args.elf)
 
     wall_start = time.perf_counter()
@@ -278,6 +323,7 @@ def main() -> int:
         "ipl": str(args.ipl),
         "game": artifact_identity(args.game),
         "elf": artifact_identity(args.elf),
+        "artifacts": artifacts,
         "trace_symbol": SOURCEBOOT_BOOT_TRACE_SYMBOL,
         "trace_address": trace_address,
         "emulated_frames": emulated_frames,

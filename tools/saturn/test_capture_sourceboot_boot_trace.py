@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import sys
+import os
+import tempfile
 import unittest
 from pathlib import Path
 from subprocess import CompletedProcess
@@ -18,7 +20,9 @@ try:
     from capture_sourceboot_boot_trace import (
         SOURCEBOOT_BOOT_TRACE_MAGIC,
         SOURCEBOOT_BOOT_TRACE_VERSION,
+        bind_capture_artifacts,
         decode_boot_trace,
+        parse_cue_file_reference,
         parse_symbol_address,
     )
 except ModuleNotFoundError as error:
@@ -33,6 +37,45 @@ def words_to_bytes(words: list[int]) -> list[int]:
 
 
 class SourcebootBootTraceReaderTests(unittest.TestCase):
+    def test_artifact_binding_reports_cue_referenced_iso_and_elf(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cue = root / "sm64-saturn-sourceboot-e2.cue"
+            iso = root / "sm64-saturn-sourceboot-e2.iso"
+            elf = root / "obj" / "sm64-saturn-sourceboot-e2.elf"
+            elf.parent.mkdir()
+            cue.write_text('FILE "sm64-saturn-sourceboot-e2.iso" BINARY\n', encoding="utf-8")
+            iso.write_bytes(b"disc-image")
+            elf.write_bytes(b"linked-symbols")
+            os.utime(elf, (100, 100))
+            os.utime(iso, (200, 200))
+
+            self.assertEqual(parse_cue_file_reference(cue), iso)
+            artifacts = bind_capture_artifacts(cue, elf)
+            self.assertEqual(artifacts["cue"]["path"], str(cue.resolve()))
+            self.assertEqual(artifacts["iso"]["path"], str(iso.resolve()))
+            self.assertEqual(artifacts["elf"]["path"], str(elf.resolve()))
+
+    def test_artifact_binding_rejects_stale_or_wrapper_pair_before_ymir(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cue = root / "sm64-saturn-sourceboot-e2.cue"
+            iso = root / "sm64-saturn-sourceboot-e2.iso"
+            elf = root / "obj" / "sm64-saturn-sourceboot-e2.elf"
+            elf.parent.mkdir()
+            cue.write_text('FILE "sm64-saturn-sourceboot-e2.iso" BINARY\n', encoding="utf-8")
+            iso.write_bytes(b"old-disc-image")
+            elf.write_bytes(b"new-linked-symbols")
+            os.utime(iso, (100, 100))
+            os.utime(elf, (200, 200))
+            with self.assertRaisesRegex(ValueError, "older than ELF"):
+                bind_capture_artifacts(cue, elf)
+
+            wrapper = root / "wrapper.cue"
+            wrapper.write_text('FILE "sm64-saturn-sourceboot-e2.iso" BINARY\n', encoding="utf-8")
+            os.utime(iso, (300, 300))
+            with self.assertRaisesRegex(ValueError, "same build name"):
+                bind_capture_artifacts(wrapper, elf)
     def test_decodes_last_boundary_with_raw_words(self) -> None:
         words = [
             SOURCEBOOT_BOOT_TRACE_MAGIC,

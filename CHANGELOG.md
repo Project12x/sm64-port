@@ -4,6 +4,11 @@
 
 ### Added
 
+- The sourceboot post-BIOS trace reader now binds each diagnostic launch to
+  the CUE, its referenced ISO, and its CUE-local ELF, recording SHA-256,
+  size, and timestamp identities for all three. It rejects stale ISO/ELF
+  pairs and generic same-byte CUE wrappers before Ymir starts, so symbols from
+  an unrelated ELF cannot be attributed to the loaded disc.
 - Sourceboot's boot trace now seeds its magic and version in ELF `.data`, so
   a bounded debugger read can distinguish a wrong RAM address or mapping
   (all zeroes) from execution that never reached `user_init()` (valid header,
