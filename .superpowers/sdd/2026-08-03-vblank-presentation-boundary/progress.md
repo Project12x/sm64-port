@@ -102,3 +102,27 @@ underscored symbol spelling. GREEN: reader (4), source trace (2), presentation
 (6), and Python compilation pass. The newest existing linked ELF resolves
 read-only at `0x060eb53c`; no target build/CUE/Ymir action occurred. Quality
 rereview and target capture remain pending.
+
+Task 5/6: source-complete; target diagnosis active. `2f764356` seeded the
+record header in ELF `.data`; `981b221e` retained invalid-capture raw bytes,
+notifications, and capped stderr; `5ae1cff8` bound launch provenance to the
+CUE, referenced ISO, and CUE-local matching ELF. Reader tests (9), compilation,
+and diff check pass. The first provenance-bound capture recorded CUE
+`cdbf0bfa…`, ISO `04c0c479…`, ELF `d89897b8…`; Ymir built the filesystem and
+reached game PCs, but `0x0608B43C` read `0x045E02AA` instead of trace magic.
+This is an unresolved observation-address/mapping/overwrite fault, not a
+scheduler regression and not permission to claim target trace success.
+
+Task 4: source-complete; independent review and target evidence pending. The
+first bounded capture read eight zero words at the resolved trace address, so
+main entry remains unproven. The same eight-word cache-through ABI now writes
+`user-init-entry` before any VDP configuration and
+`user-init-callbacks-registered` immediately after
+`vdp_sync_vblank_out_set()`, before the first INTBACK issue. RED: the source
+gate failed for the absent early stage; the reader gate decoded stage 1 as
+`main-entry` instead of `user-init-entry`. GREEN: source trace mutation (2)
+and reader mapping (5) pass. The source gate rejects an early trace shifted
+after VDP configuration and a cached-only writer. No target build, CUE
+construction, Ymir launch, or capture ran. The serial diagnostic CUE and
+bounded capture are still required before any scheduler/VDP change; target
+evidence is not claimed from these host tests.

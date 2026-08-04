@@ -147,11 +147,80 @@ for behavior.
 - [x] **Step 2: Restore only the bootstrap barrier and run focused GREEN.**
   Restored the predecessor sequence verbatim in `815c4352`; the focused source
   mutation gate is GREEN (6 tests).
-- [ ] **Step 3: Update records, commit, and complete spec/quality reviews.**
-  Records and behavior commit are complete; independent specification and
-  quality reviews remain pending.
+- [x] **Step 3: Update records, commit, and complete spec/quality reviews.**
+  Specification and quality reviews are GO; records are `815c4352` and
+  `2a5a909a`. The bootstrap hypothesis remains runtime-unproven.
 - [ ] **Step 4: Build one serial CUE and manually launch with `.ymir-profile`;
   record whether post-BIOS execution remains alive before evaluating speed.**
+
+## Task 3: persistent post-BIOS boundary trace
+
+**Why:** The Task 2 replacement CUE still fails immediately after BIOS. The
+bootstrap hypothesis is therefore not yet sufficient. Do not attempt another
+performance or recovery change without target-readable evidence.
+
+**Files:** `src/port/saturn/sourceboot/main.c`, a focused source/host trace
+test under `tools/saturn/`, target capture tooling only if required to read the
+existing Ymir debug protocol, and this plan/evidence/ledger/changelog as needed.
+
+**Contract:**
+
+1. Export a stable, volatile, symbol-resolvable boot-trace record in target RAM
+   with magic/version, monotonically written stage, observed VBlank generation,
+   scheduler credit, and VDP1/VDP2 presentation generation.
+2. Record unambiguous stages before and after bootstrap retirement,
+   `thread5_game_loop`, stale wait, source tick, VDP1 sync/render, and VDP2
+   commit. Stage writes must not call VDP sync, allocate, or branch on BOB.
+3. A bounded Ymir debug-service capture reads the record after BIOS handoff and
+   reports the last stage plus raw words. It is diagnostic only, not a manual
+   GUI launch or performance measurement.
+4. The trace remains default-on in debug sourceboot builds until this failure
+   is resolved, then may be retained as low-cost fault telemetry.
+
+- [x] **Step 1: Add a failing focused trace-contract/mutation test.** The
+  real source failed for its missing magic word; the new reader test failed
+  explicitly because the capture module did not yet exist.
+- [x] **Step 2: Implement trace writes and a symbol-aware debug-service reader;
+  show focused GREEN.** `30123c1b` publishes the target-RAM record and the
+  bounded headless reader. Focused source, reader, and retained presentation
+  mutation gates are green; no target artifact was built or launched.
+- [x] **Step 3: Review the diagnostic change and build one serial trace CUE.**
+  Both review streams are clean after three TDD fix rounds. The trace CUE built
+  serially; the reader resolves the matching ELF symbol at `0x060eb53c`.
+- [ ] **Step 4: Run one bounded Ymir debug capture and record the exact last
+  observed stage before deciding on any repair.**
+
+## Task 4: trace pre-main sourceboot entry
+
+The first bounded capture read eight zero words at the resolved trace address.
+Therefore no claim can yet be made that `main()` executes. Extend the same
+cache-through record with stages at the earliest reachable sourceboot C entry:
+`user_init()` entry and after display/VBlank callback registration. The source
+test must reject an initialization trace only after VDP configuration or a
+cached-only write. Build one serial diagnostic CUE and capture it before
+changing scheduler, VDP1, or VDP2 behavior again.
+
+- [x] **Step 1: Extend focused source and reader tests; observe RED.** The
+  source trace gate failed for its missing `user_init()` entry stage, and the
+  reader gate decoded stage 1 as `main-entry` rather than `user-init-entry`.
+- [x] **Step 2: Publish cache-through stages at `user_init()` entry and after
+  VBlank callback registration; show focused GREEN.** The source mutation gate
+  rejects a pre-main trace moved after VDP configuration or replaced by a
+  cached-only writer. The reader now maps both new stage IDs.
+- [ ] **Step 3: Build one serial diagnostic CUE and run one bounded headless
+  Ymir capture with its matching ELF.** Record the exact final stage and raw
+  words before any scheduler, VDP1, or VDP2 repair decision.
+
+## Live Task 4 transition — source-complete; target evidence pending
+
+The fixed eight-word cache-through record is unchanged. `user_init()` now
+publishes `user-init-entry` before peripheral or VDP setup, then
+`user-init-callbacks-registered` immediately after
+`vdp_sync_vblank_out_set()`, before the first INTBACK request. This isolates
+whether sourceboot reaches its earliest C hook and callback registration while
+preserving the existing scheduler and VDP behavior. Focused source and reader
+mutation gates are green; no target build, CUE construction, Ymir launch, or
+capture ran. Independent review plus the serial CUE/capture gate remain open.
 
 ## Live Task 2 transition — source-complete; target evidence pending
 
@@ -163,3 +232,59 @@ unchanged. The source mutation test was observed RED before the production
 edit and GREEN afterward; independent reviews and one replacement serial
 CUE/Ymir observation remain required, so the post-BIOS hypothesis is not yet
 runtime-proven.
+
+## Live Task 3 transition — source-complete; review and target capture pending
+
+`30123c1b` adds the global volatile `sourceboot_boot_trace` record. Its magic
+and version identify an eight-word, symbol-resolvable RAM contract; monotonically
+incremented `stage` publishes a named `stage_id` plus observed VBlank,
+scheduler-credit, and VDP1/VDP2 presentation generations. Writes bracket
+bootstrap retirement, the `thread5_game_loop()` handoff, stale waits, source
+ticks, VDP1 render/sync, and VDP2 commit without performing synchronization,
+allocation, or BOB-specific work. `capture_sourceboot_boot_trace.py` resolves
+the global from the matching ELF, runs the existing bounded BIOS handoff macro
+through headless Ymir, and reports the decoded last stage with raw words. It
+does not build a target, launch a GUI, or measure performance. Independent
+review, one serial trace CUE, and one bounded capture remain unchecked.
+
+**Fix round 1/5:** Specification review rejected the first Task 3 range
+because `--post-bios-frames 0` reached Ymir's invalid `exec.run_for` request.
+`2c1acca8` now rejects zero before starting the headless client; its focused
+reader test was RED first and is GREEN with the retained source/presentation
+gates. Independent rereview is still required, so Step 3 remains unchecked.
+
+**Fix round 2/5:** Quality review rejected cached P1 trace publication because
+the selected debugger reads backing WRAM. `b317a2e5` keeps the exported
+symbol but writes via its `CPU_CACHE_THROUGH` alias, following the in-repo
+hwtest telemetry precedent, and pins the exact eight-word/32-byte ABI with a
+C static assertion plus mutation coverage. The focused gate was RED before
+the fix and is GREEN afterward; quality rereview is still required, so Step 3
+remains unchecked.
+
+**Fix round 3/5:** The first bounded capture stopped before emulation during
+direct `sh-elf-nm` resolution. `2ba3ba64` routes symbol lookup through the
+audited DLL-safe MSYS wrapper and accepts the target ABI's leading underscore;
+the newest linked ELF now resolves read-only at `0x060eb53c`. The focused
+reader gate was RED first and is GREEN afterward. No build/capture ran, and
+quality rereview plus the serial trace-CUE/capture gates remain unchecked.
+
+## Live diagnostic transition — artifact-bound capture, root cause still open
+
+Task 5 seeded the trace header in ELF `.data` (`2f764356`) so a zero record
+could no longer be mistaken for the target's pre-main state. Task 6 then made
+the reader fail-safe and provenance-bound: `981b221e` writes raw target words,
+Ymir notifications, and bounded stderr even when the trace header is invalid;
+`5ae1cff8` requires the CUE `FILE` target, ISO, and CUE-local matching ELF to
+be named and recorded together before Ymir can start. Focused reader tests are
+green (9) and Python compilation/diff checks pass.
+
+One bounded, no-build headless capture used the explicitly staged pair:
+CUE SHA-256 `cdbf0bfa…`, ISO SHA-256 `04c0c479…`, and ELF SHA-256
+`d89897b8…`. Ymir reported `Filesystem built successfully`, reached live game
+PCs, and repeatedly hit the requested frame limit rather than exiting. The
+trace address resolved from that ELF was `0x0608B43C`, but its raw header was
+`0x045E02AA`, not the required `0x53394254`. Therefore the capture is valid
+provenance evidence but **not** target evidence that the trace record was
+read; it must not authorize another scheduler/VDP repair. The remaining gate
+is an ELF/RAM mapping or overwrite diagnosis that explains this contradiction,
+then one repeat bounded capture with the corrected observation point.
