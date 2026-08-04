@@ -337,3 +337,15 @@ missing text-probe functions, then GREEN (16 tests); Python compilation and
 `git diff --check` pass. No target build or Ymir run occurred. The target gate
 remains one bounded artifact-paired capture; mismatch is diagnostic evidence,
 not an authorization to change scheduler, VDP, camera, or gameplay code.
+
+**Task 10 source-complete — logged desktop Ymir launch contract:**
+`tools/saturn/launch_ymir_desktop.py` now preflights the only supported manual
+path: `ymir-sdl3.exe -p <project .ymir-profile> -d <explicit staged CUE>`, with
+Ymir's executable directory as its working directory. It records command,
+working directory, profile, CUE and referenced-ISO identity (SHA-256, bytes,
+timestamp), and the profile-managed 32-Mbit DRAM-cart declaration before any
+GUI starts. GUI execution requires explicit `--launch`; its bounded monitor
+captures available stdout/stderr and early exit into a timestamped report, but
+a live interactive SDL process cannot have its later output/exit recorded once
+the helper returns. Focused host tests are green. No GUI was launched, no
+profile/configuration was changed, and the manual target gate remains open.

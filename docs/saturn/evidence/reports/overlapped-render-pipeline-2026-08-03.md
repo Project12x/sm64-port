@@ -415,3 +415,24 @@ commit `a00cdd17`.
   replacement range, not only `4a8fe1ce`.
 - Only after both reviews are clean: controller-owned serial experimental CUE
   build and Ymir manual test with the established demo role.
+
+## Emergency A9.0 Task 10 — desktop Ymir launch observability
+
+`tools/saturn/launch_ymir_desktop.py` is source-complete. The helper is
+strictly desktop-only: it constructs `ymir-sdl3.exe -p <project
+.ymir-profile> -d <explicit staged CUE>`, uses the GUI executable directory as
+the working directory, and relies on the existing project profile for the
+32-Mbit DRAM cart. It never rewrites the profile and has no headless fallback.
+Every dry run writes a timestamped JSON plan with the exact command plus CUE
+and cue-referenced ISO SHA-256/size/timestamp identity. `--launch` is explicit;
+when selected, its bounded monitor records the process ID, startup time,
+available stdout/stderr, and early exit code. A still-live interactive SDL
+process outlives that monitor, so output and exit after return are explicitly
+unobservable by this helper rather than fabricated.
+
+Focused TDD evidence: `tools/saturn/test_launch_ymir_desktop.py` was RED for
+the missing module, then GREEN: `Ran 2 tests ... OK`. Python compilation of
+the helper and `git diff --check` also pass. No target build, headless run,
+GUI launch, or Ymir configuration change occurred. The remaining gate is one
+owner-observed desktop launch of a freshly staged CUE, followed by inspection
+of its generated report before interpreting any post-BIOS failure.
