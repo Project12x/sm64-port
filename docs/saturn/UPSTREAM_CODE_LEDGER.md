@@ -194,6 +194,7 @@ result from the visual timeline.
 | Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
 | --- | --- | --- | --- |
 | `ponut64/SCSP_poneSound` | `31782e4c61337327f23eb9aa45ecd37fe0944ea0` / MIT | `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, `jo_demo/pcmsys.h` | **Pattern-only** for `saturn_pcm_protocol.h`; **close-port** of only the vector/reset/linker shape in `audio68k/start.S` and `audio68k/linker.ld`. The local image adds a 16 KiB cap, low stack, fixed mailbox, bounded BSS clearing, and an original heartbeat loop. No upstream driver/control/ADX/CDDA code or binary is included. The retained MIT notice and change boundary are in `docs/saturn/audio/PCM68K_PROVENANCE.md`. |
+| `yaul-org/libyaul-examples` | `66b648eb059bb8bb7392eac70821605a68205b85` / no repository license file at pin | `scsp-ponesound-pcm8/Makefile`, `ponesound.c`, `ponesound.h`, `scsp-ponesound-pcm8.c` | **Validation/pattern-only.** Confirms separate driver embedding/loading, 512-KiB sound-RAM selection, generic SMPC sound-CPU commands, fixed SCSP-RAM communication, and a VBlank-published PoneSound service request without a Yaul fork. Copy no source or binary assets. The full-RAM clear and VBlank scheduler are explicitly not adopted; see `docs/saturn/audio/PCM68K_PROVENANCE.md`. |
 
 ## M4 — input/cache probe additions (2026-07-19)
 

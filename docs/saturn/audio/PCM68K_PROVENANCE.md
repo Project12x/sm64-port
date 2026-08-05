@@ -11,6 +11,25 @@
 | Files inspected | `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, `jo_demo/pcmsys.c`, `jo_demo/pcmsys.h` |
 | Reuse mode | Pattern-only for the protocol; close-port of the vector-at-zero/reset-entry and linker-section shape in `audio68k/start.S` and `audio68k/linker.ld`. |
 
+### Yaul PoneSound example loader reference
+
+| Field | Record |
+| --- | --- |
+| Upstream | `yaul-org/libyaul-examples` |
+| Pinned revision | `66b648eb059bb8bb7392eac70821605a68205b85` |
+| License evidence | No repository `LICENSE`/`COPYING` file exists at the pinned tree; the inspected source headers say `See LICENSE for details`. Treat the example as license-unclear and copy none of its source or binary assets. |
+| Local inspected checkout | `sm64-port/work/upstream/libyaul-examples` |
+| Files inspected | `scsp-ponesound-pcm8/Makefile`, `scsp-ponesound-pcm8/ponesound.c`, `scsp-ponesound-pcm8/ponesound.h`, `scsp-ponesound-pcm8/scsp-ponesound-pcm8.c` |
+| Reuse mode | Validation/pattern-only. The example proves that a Yaul title can embed and load a separate `sdrv.bin`, select 512-KiB sound RAM, communicate through fixed SCSP RAM, and issue generic SMPC SNDON/SNDOFF commands without modifying Yaul. |
+
+The example clears all sound RAM while bootstrapping and publishes its shared
+`start` field from a VBlank callback. Those are observations, not adopted
+runtime contracts. The SM64 path permits a complete clear only during cold
+boot or explicit recovery and requires MC68000 timer-driven sequence, note,
+envelope, desired-voice, and slot-shadow work independent of game VBlank.
+Neither the example's `sdrv.bin`/PCM assets nor its native shared C structures
+are copied or distributed.
+
 ## Current increment
 
 `src/port/saturn/audio/saturn_pcm_protocol.h` is original project code. It

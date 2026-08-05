@@ -18,12 +18,20 @@
 - Accepted rollback baseline: A9A BOB/live-input/Q16-camera/DRAM-cart/Pipeline-4 CUE, manually accepted with normal controls/camera and 4--6 FPS.
 - Preserve commits `27cebc7e`, `d5f70887`, and `d7b04d61`; this sprint consumes their Task 10 selector/source-contract/blocker evidence and does not relabel it.
 
+## Live design amendments
+
+- 2026-08-05 audio-loader audit: keep Yaul pinned and unmodified unless a concrete Yaul-core defect is target-proven. Use its low-level SMPC/memory-map boundary through a project-owned, tested sound-CPU boot wrapper; do not make the warned convenience SNDON/SNDOFF wrappers part of the game audio contract.
+- 2026-08-05 audio-scheduling audit: retain semantic, pointer-free SH-2 commands. Sequence/layer/note timing, ADSR, allocation, desired-voice construction, slot-shadow comparison, and SCSP register writes all remain MC68000 work; a native cross-CPU `SaturnVoiceState` table is explicitly rejected.
+- 2026-08-05 residency audit: a complete sound-RAM clear is legal only during cold boot or explicit driver recovery. Scene/package preparation may write only validated unowned spans, must retain the active generation through commit, and may retire it only after the replacement generation is live.
+- 2026-08-05 transfer audit: CPU copy is the correctness baseline. SCU DMA to sound RAM is an optional later optimization and may be enabled only after target evidence proves the exact source/destination legality, cache/barrier ordering, and non-interference with renderer DMA ownership.
+
 ## Prior art and reuse mode
 
 - SlaveDriver Engine `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0-or-later: inspected `WALLS.C:288-500,1240-1408,1803-1950,2062-2285`, `WALLASM.S:253-353`, `DMA.C`, `DMA.H`, `SCL_FUNC.C`, `V_BLANK.C:94-145`, `INITMAIN.C`, `MEMCPY.S`, and `LINK.S`. Retain the existing attributed close ports in `src/port/saturn/gpl/`; new work defaults to pattern-only unless its task records an exact compatible close-port.
 - Sonic Z-Treme `cff75451c1616aac1236fc2b44223902b55c706b`, GPL-3.0: inspected `ZT_FRUSTUM.c:126-161`, `ZT_RENDERING.c:406-505,718-786`, `ZT_LOADING.c:118-176,299-355`, `workarea.c:14-20`, and `ZTE_DEF.H`. Task 13 may extend the existing attributed frustum close-port; other work is pattern-only unless separately recorded.
 - Jo Engine `556d081146211b6a1cfa6591d70f9487d406758b`, MIT repository/BSD-3-Clause per-file: inspected `jo_engine/math.c:57-70`, `jo_engine/vdp1_command_pipeline.c`, `jo_engine/3d.c`, and `jo_engine/jo/sega_saturn.h`. Retain the documented fixed-math adaptation and pattern study; do not adopt its SGL allocator/runtime.
 - Yaul `6012f79f237773378c8014e70d8998ad95a38d98`, MIT: inspected public VDP1/VDP2/DMA/CD/CDFS/DRAM-cart APIs, `sh-elf/lib/ldscripts/yaul.x`, `libmic3d/render.c`, `libmic3d/sort.c/.h`, `libmic3d/light.c`, and `libyaul/scu/bus/cpu/cpu_dmac.c`. It remains the pinned dependency/API and memory-map authority; close-port only when a task records exact files and notices.
+- Yaul examples `66b648eb059bb8bb7392eac70821605a68205b85`, repository license file absent at the pin: inspected `scsp-ponesound-pcm8/Makefile`, `ponesound.c`, `ponesound.h`, and `scsp-ponesound-pcm8.c`. Pattern-only evidence confirms embedded `sdrv.bin` loading, 512-KiB SCSP RAM selection, generic SMPC sound-CPU commands, shared sound-RAM communication, and VBlank publication of PoneSound's `start` field. Copy no example source or binary; reject its full-RAM clear for post-boot transitions and its VBlank-triggered scheduler for SM64 cadence.
 - PoneSound `31782e4c61337327f23eb9aa45ecd37fe0944ea0`, MIT: inspected `LICENSE`, `README.md`, `documentation.md`, `PROJ/main.c`, `PROJ/linker`, `PROJ/makefile`, and `jo_demo/pcmsys.c/.h`. Retain only the documented vector/linker and SCSP slot/pitch close-port. The semantic protocol, sequence VM, and source-policy bridge are project work.
 - Inherited Project12x SM64 audio at repository pin `36d015fb`: inspect `src/audio/external.c`, `seqplayer.c`, `playback.c`, `synthesis.c`, `heap.c`, `load.c`, `data.c`, and their headers before Tasks 9, 12, 15, or 17 write code. Reuse mode is in-tree semantic close-port: retain public IDs, policy, sequence control flow, layer/note rules, ADSR/release, priority, and tuning while replacing N64 task/RSP/ABI and pointer layouts with bounded big-endian Saturn records and MC68000/SCSP execution. The inherited Project12x baseline has no root license file, so do not export these routines into a newly licensed component or claim a new license; preserve existing source notices and record exact ranges/material changes. A literal port of the N64 synthesis/task backend is rejected for architecture/runtime fit: the freestanding MC68000 has a different ABI, no RSP audio microcode, bounded sound RAM, and must emit SCSP slot events rather than N64 command lists.
 - `malucard/sm64-psx` `3073845688ea273da78d539b20c45110d8a868c3`, no repository-wide license established: inspected `README.md`, `src/game/game_init.c`, `src/port/gfx/gfx_rsp_jit.c`, `src/port/psx/gfx_dl_exec_psx.c`, `gfx_tessellation_psx.c`, `gfx_texture_psx.c`, `cd_psx.c`, `controller_psx.c`, `src/game/hud.c`, `tools/preprocess_graphics.py`, `convert_image_psx.py`, `pack_textures.py`, and `compress_mario_anims.c`. Behavior/architecture study only: compact generated IR/assets, target-native lowering, whole-loop profiling, and residency inform this plan; copy no PS1 code, GTE math, ordering tables, VRAM layout, or packets.
@@ -47,6 +55,7 @@
 13. All builds and Ymir runs are serialized. Use `-j1`, the DLL-preflight wrapper, a worktree-local MSYS `HOME/TMPDIR/TMP`, and never run concurrent cross-toolchain jobs on the user's busy CPU.
 14. Every behavior-changing commit updates `CHANGELOG.md` in the same commit. Before the next task, the controller updates this plan and its SDD ledger with status, commits, tests actually run, reviews, design corrections, and every open gate.
 15. Host evidence never closes target/Ymir/manual gates. Failed or unexecuted gates stay unchecked with a reason.
+16. Full sound-RAM clear outside cold boot/explicit recovery, VBlank-driven audio scheduling, and a native C voice table shared between SH-2 and MC68000 are forbidden on the enabled semantic-audio path. Yaul remains an upstream dependency unless an exact core defect is recorded and target-proven.
 
 ## Subagent-driven execution protocol
 
@@ -612,8 +621,9 @@ bool sm64_saturn_actor_pose_evaluate(const sm64_saturn_actor_bank_t *bank,
 
 **Format:** big-endian `S64A`, version 1, 2,048-byte-aligned chunks, source/package SHA-256, and tables for all 35 sequence IDs, 38 banks/bank sets, instruments/percussion/key splits/tuning/ADSR/release, all 219 extracted AIFF sample records, stable SFX mappings, and per-scene resident bundles. `AUDIO.DAT` is a global CD catalog; an S64P `AUDIO_DEPENDENCIES` section binds the exact closure-selected chunk hashes and generation committed for that scene. Full input is about 7.54 MiB and cannot be resident in less than 480 KiB; CD package and scene residency are mandatory.
 
-- [ ] Add RED tests for AIFF parsing/PCM8 conversion, loop/tuning/envelope preservation, duplicate/missing IDs, stale/missing assets, invalid sequence control flow, alignment/hash drift, S64P audio-dependency/global-catalog mismatch, wrong scene generation, and exact resident-bundle overflow.
+- [ ] Add RED tests for AIFF parsing/PCM8 conversion, loop/tuning/envelope preservation, duplicate/missing IDs, stale/missing assets, invalid sequence control flow, alignment/hash drift, S64P audio-dependency/global-catalog mismatch, wrong scene generation, exact resident-bundle overflow, active-generation eviction, and any post-boot request to clear the complete sound-RAM address space.
 - [ ] Consume `sound/sequences.json`, `sound/sound_banks/*.json`, built/extracted `.m64`, and user-extracted AIFFs directly. Do not require a PC game build. Normalize only pointer/endianness hazards; preserve branch behavior.
+- [ ] Emit explicit driver/mailbox/work/sample ownership spans and a replacement-generation load plan. Preparation may reuse only unowned or retired sample spans; it must prove that the currently committed generation remains readable until the MC68000 acknowledges the replacement commit. If both generations cannot coexist, preparation fails closed rather than clearing or overwriting active data.
 - [ ] Generate untracked outputs:
 
   ```text
@@ -792,18 +802,21 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 
 - Create: `src/port/saturn/audio68k/audio_engine.h/.c`
 - Create: `src/port/saturn/audio68k/voice_allocator.h/.c`
+- Create: `src/port/saturn/audio68k/desired_voice.h/.c`
+- Create: `src/port/saturn/audio68k/slot_shadow.h/.c`
 - Create: `src/port/saturn/audio68k/scsp_timer.h/.c`
 - Create: `tools/saturn/audio_voice_allocator_test.c`
+- Create: `tools/saturn/audio_slot_shadow_test.c`
 - Create: `tools/saturn/audio_scsp_timer_test.c`
 - Modify: `src/port/saturn/audio68k/scsp_pcm8.h/.c`, `pcm_voice.h/.c`, `main.c`, `Makefile`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`
 
-**Contract:** A bounded 20-note semantic allocator backed by the SCSP's 32 slots protects music-control/note classes from ordinary SFX. Timer IRQ/service cadence drives sequence ticks and ADSR independent of SH-2/game FPS. Lowest-priority eligible SFX drops first with telemetry; protected music is never displaced by ordinary SFX.
+**Contract:** A bounded 20-note semantic allocator backed by the SCSP's 32 slots protects music-control/note classes from ordinary SFX. Timer IRQ/service cadence drives sequence ticks and ADSR independent of SH-2/game FPS. The MC68000 builds a compact internal desired-voice array from sequence/note/allocator state, compares it with an MC68000-owned slot shadow, and emits only required SCSP parameter/key transitions in deterministic order. This table is never a shared-memory ABI and is never constructed or published by an SH-2. Lowest-priority eligible SFX drops first with telemetry; protected music is never displaced by ordinary SFX.
 
 **Reference-code-first boundary:** Close-port priority, note lifetime, ADSR/release, pitch/tuning, pan, and layer ownership semantics from the exact pinned in-tree Project12x functions inspected for this task. Adapt only the hardware execution boundary: N64 synthesis/task/RSP command production cannot drive SCSP slots, so register programming, timer service, slot allocation, and sound-RAM residency are Saturn-native modules informed by the pinned Yaul and PoneSound files. Record every inspected range, retained semantic, rewritten boundary, notice, and material change.
 
-- [ ] RED cases: timer divider/cadence, start/release/key-off order, pitch word, pan, volume, loop points, attack/decay/sustain/release, protected music, priority stealing, equal-priority age, slot exhaustion, SFX drop telemetry, stalled timer, and invalid sample residency.
-- [ ] Expand the four-voice proof without breaking its slot/pitch regression. Keep all register ownership on the 68K; SH-2 never writes SCSP slots after boot.
+- [ ] RED cases: timer divider/cadence, start/release/key-off order, pitch word, pan, volume, loop points, attack/decay/sustain/release, protected music, priority stealing, equal-priority age, slot exhaustion, SFX drop telemetry, stalled timer, invalid sample residency, unchanged desired voice causing zero SCSP writes, a one-field change causing only its required write set, slot reassignment forcing key-off-before-program/key-execute-last, stale package generation failing closed, and deterministic shadow output across repeated traces.
+- [ ] Expand the four-voice proof without breaking its slot/pitch regression. Keep desired voices, slot shadows, and all register ownership on the 68K; SH-2 never writes SCSP slots after boot and never publishes a native voice-state structure. Preserve explicit byte-order/version/publication rules only at the semantic command and package boundaries.
 - [ ] Run GREEN and linked driver verification:
 
   ```powershell
@@ -892,9 +905,12 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 
 - Create: `src/port/saturn/sourceboot/source_audio_service.h/.c`
 - Create: `src/port/saturn/sourceboot/source_audio_loader.h/.c`
+- Create: `src/port/saturn/audio/saturn_sound_cpu.h/.c`
 - Complete: `src/port/saturn/sourceboot/source_audio_semantics.c`
 - Create: `tools/saturn/audio_sourceboot_contract_test.c`
+- Create: `tools/saturn/audio_sound_cpu_boot_test.c`
 - Modify: `src/port/saturn/sourceboot/main.c`, `source_cart.h/.c`, `Makefile`
+- Modify: `src/port/saturn/soundtest/main.c`, `soundtest_boot.h/.c`
 - Modify: `src/port/saturn/audio68k/main.c`, `Makefile.saturn.mk`, `CHANGELOG.md`
 
 ```c
@@ -907,17 +923,18 @@ const sm64_saturn_audio_stats_t *sm64_saturn_audio_service_stats(void);
 
 Use the canonical Task 2 `SATURN_FEATURE_SEMANTIC_AUDIO` switch; do not add a second alias that can drift. `0` links the silent rollback implementation. `1` links the semantic adapter/service/loader, protocol-v2 driver, and `AUDIO.DAT`, and records the package hash in target identity. Boot occurs after successful source-cart setup and before `thread5_game_loop(NULL)`.
 
-- [ ] RED cases: feature-label drift, missing/short CD read, package/hash/version mismatch, oversized BOB bundle, stale prepare/commit generation, active-block eviction, driver not READY, heartbeat stall, queue saturation, and duplicate public symbol definitions.
-- [ ] Implement bounded boot wait and scene-transition loading only. Ordinary gameplay frames may enqueue/poll but may not issue unbounded CD reads. Audio failure mutes, increments a named fault, and returns without blocking simulation/rendering.
-- [ ] Require audio package residency and scene package generation to commit atomically from the master; do not use render queue/DMA/timer ownership.
+- [ ] RED cases: feature-label drift, direct use of Yaul's warned `smpc_smc_sndoff_call`/`smpc_smc_sndon_call` outside the project wrapper, wrong SNDOFF/copy/SNDON ordering, missing barrier or bounded wait, READY without heartbeat advance, feature-on boot without 512-KiB mode, feature-on scene transition attempting a complete sound-RAM clear, writes into driver/mailbox/active-generation spans, missing/short CD read, package/hash/version mismatch, oversized BOB bundle, stale prepare/commit generation, active-block eviction, driver not READY, heartbeat stall, queue saturation, and duplicate public symbol definitions.
+- [ ] Implement one project-owned sound-CPU wrapper around the pinned Yaul generic SMPC command boundary. Pre-stage CD data in SH-2-visible memory before SNDOFF; on cold boot or explicit recovery only, stop and wait, select 512-KiB mode, clear validated owned regions, copy/verify driver and initial package, initialize the mailbox, publish with an explicit compiler/bus barrier, restart, then wait within a fixed budget for READY plus heartbeat advance. No other production file may issue sound-CPU commands directly.
+- [ ] Implement bounded scene-transition loading without stopping the sound CPU or clearing all sound RAM. Ordinary gameplay frames may enqueue/poll but may not issue unbounded CD reads. Prepare writes only package-plan-approved unowned spans; commit atomically switches the package generation; retirement occurs only after the MC68000 acknowledgement. Audio failure mutes, increments a named fault, and returns without blocking simulation/rendering.
+- [ ] Require audio package residency and scene package generation to commit atomically from the master; do not use render queue/DMA/timer ownership. CPU copy remains mandatory correctness behavior. Any SCU-DMA path is independently switchable and stays disabled until a target test proves sound-RAM destination support, cache/barrier correctness, bounded transfer time, and no collision with renderer DMA ownership.
 - [ ] Run GREEN host/linked-image model checks only; no target or audible claim is made here. Task 23 owns the first exact audio target build/capture after Task 22 reseals the final BOB root:
 
   ```powershell
-  powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-audio-sourceboot verify-audio-residency verify-pcm68k-image
+  powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-audio-sound-cpu-boot verify-audio-sourceboot verify-audio-residency verify-pcm68k-image
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_feature_identity.py
   ```
 
-- [ ] Commit as `feat(saturn): integrate semantic audio service`; review CDFS ownership, bounded waits, feature-off rollback, package generation, and fault isolation.
+- [ ] Commit as `feat(saturn): integrate semantic audio service`; review CDFS ownership, sound-CPU stop-window ordering, barriers, forbidden post-boot clears, bounded waits, feature-off rollback, package generation, DMA isolation, and fault isolation.
 
 ### Task 22: Prove complete BOB visual/dynamic closure
 
