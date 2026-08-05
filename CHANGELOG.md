@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Extended BOB's reviewed native closure to include Koopa-shell wave, droplet,
+  flame, and sparkle chains plus exclamation-box computed cap/star/marker
+  contents. This prevents those visible effects and rewards from being omitted
+  merely because their native spawn calls are reached through helpers or a
+  source-owned contents table.
+
 - Hardened scene-closure derivation after review: every reachable native
   `spawn_object*` edge now requires a source-attested, unique reviewed rule or
   generation fails. The BOB closure consequently includes model-less

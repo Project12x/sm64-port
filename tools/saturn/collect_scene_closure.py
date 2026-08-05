@@ -188,7 +188,7 @@ def _edge_kind(model: str, behavior: str) -> str:
         return "reward"
     if "Bomb" in behavior or "BowlingBall" in behavior or "Projectile" in behavior:
         return "projectile"
-    if any(token in behavior or token in model for token in ("Smoke", "Sparkle", "Explosion", "Shadow", "Puff", "Particle", "Bubble", "MODEL_SMOKE", "MODEL_SPARKLES")):
+    if any(token in behavior or token in model for token in ("Smoke", "Sparkle", "Explosion", "Shadow", "Puff", "Particle", "Bubble", "Wave", "Droplet", "Flame", "MODEL_SMOKE", "MODEL_SPARKLES")):
         return "effect"
     return "child"
 
