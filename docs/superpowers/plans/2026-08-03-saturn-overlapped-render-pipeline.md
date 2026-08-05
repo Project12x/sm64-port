@@ -2538,7 +2538,11 @@ expected FPS lever.
   catch-up, and verify `SATURN_RENDERER_PIPELINE` is an actual validated
   compile-time feature rather than an output-directory label.
 
-- [ ] **Step 2: Run the complete host gate serially** — active next
+- [ ] **Step 2: Run the complete host gate serially** — active; source slice
+  is green, but the dirty native-math verifier currently errors while deriving
+  the renderer oracle (`expected one terrain_worker definition, got 0`). The
+  remaining runtime/generator/native-math gates stay unchecked until that
+  unrelated census state is reconciled.
 
   Run the focused targets from Tasks 1–9, `verify-tools`,
   `verify-runtime-contracts`, `verify-dual-frame-bank` (which invokes
