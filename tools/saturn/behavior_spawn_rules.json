@@ -21,6 +21,17 @@
             "location": "bhv_goomba_triplet_spawner_update",
             "expression": "+ 3",
             "kind": "literal"
+          },
+          "recurrent_bound": {
+            "kind": "state_gated_child_deletion",
+            "source": "src/game/behaviors/goomba.inc.c",
+            "spawner_location": "bhv_goomba_triplet_spawner_update",
+            "spawn_guard_expression": "o->oAction == GOOMBA_TRIPLET_SPAWNER_ACT_UNLOADED",
+            "activation_expression": "o->oAction += 1",
+            "unload_expression": "o->oAction = GOOMBA_TRIPLET_SPAWNER_ACT_UNLOADED",
+            "child_location": "bhv_goomba_update",
+            "child_guard_expression": "o->parentObj->oAction == GOOMBA_TRIPLET_SPAWNER_ACT_UNLOADED",
+            "deletion_expression": "obj_mark_for_deletion(o)"
           }
         }
       ]

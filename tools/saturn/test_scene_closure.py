@@ -129,7 +129,8 @@ class SceneClosureTest(unittest.TestCase):
         self.assertEqual(first["music_sequence_ids"], ["SEQ_LEVEL_TEST"])
         self.assertTrue(all(record["sources"] for record in first["records"]))
         self.assertEqual(records["bhvParent"]["root_provenance"]["animation"]["parent_anims"], "actors/parent/anims/table.inc.c")
-        self.assertEqual(records["bhvParent"]["root_provenance"]["geo"], "actors/parent/geo.inc.c")
+        self.assertEqual(records["bhvParent"]["root_provenance"]["models"]["MODEL_PARENT"]["geo_source"], "actors/parent/geo.inc.c")
+        self.assertEqual(records["bhvParent"]["children"], ["bhvChild"])
 
     def test_rejects_undeclared_child_and_missing_model_geo(self) -> None:
         root = self.fixture()
@@ -176,6 +177,27 @@ class SceneClosureTest(unittest.TestCase):
         parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
         self.assertIn("bhvChild", parent["spawned_children"])
         self.assertIn("src/game/create_child.c", {source["path"] for source in parent["sources"]})
+
+    def test_repository_wide_callback_definition_is_used_and_missing_definition_fails(self) -> None:
+        root = self.native_rule_fixture()
+        write(root / "src/game/behaviors/parent.inc.c", "/* callback is defined by another repository source */\n")
+        write(root / "src/engine/runtime/parent.c", "void bhv_parent_loop(void) { spawn_object(o, MODEL_CHILD, bhvChild); }\n")
+        payload = json.loads((root / "rules.json").read_text(encoding="utf-8"))
+        payload["rules"][0]["source"] = "src/engine/runtime/parent.c"
+        write(root / "rules.json", json.dumps(payload))
+        closure = self.collect(root)
+        parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+        self.assertIn("src/engine/runtime/parent.c", {source["path"] for source in parent["sources"]})
+
+        behavior = (root / "data/behavior_data.c").read_text(encoding="utf-8")
+        write(root / "data/behavior_data.c", behavior.replace("CALL_NATIVE(bhv_parent_loop)", "CALL_NATIVE(bhv_missing_callback)"))
+        write(root / "rules.json", json.dumps({"schema": "sm64-saturn-behavior-spawn-rules-v2", "rules": []}))
+        _file_source_regions.cache_clear()
+        _native_symbol_index.cache_clear()
+        _reachable_native_regions.cache_clear()
+        _native_discovery.cache_clear()
+        with self.assertRaisesRegex(ClosureError, "missing native definition bhv_missing_callback"):
+            self.collect(root)
 
     def test_recurring_native_creation_requires_a_source_attested_live_bound(self) -> None:
         root = self.native_rule_fixture()
@@ -246,6 +268,32 @@ class SceneClosureTest(unittest.TestCase):
         self.assertIn("include/sounds.h", {source["path"] for source in parent["sources"]})
         self.assertIn("include/sounds.h", closure["source_hashes"])
 
+    def test_audio_uses_call_site_argument_not_generic_helper_comparison_constants(self) -> None:
+        root = self.native_rule_fixture()
+        write(root / "src/game/behaviors/parent.inc.c", """
+            static void generic_sound_helper(u32 sound) {
+                if (sound == SOUND_GENERAL_MUST_NOT_LEAK) {
+                    sound += 0;
+                }
+                play_sound(sound, o->header.gfx.cameraToObject);
+            }
+            void bhv_parent_loop(void) {
+                u32 selected = SOUND_OBJ_SECOND_USED_BY_PARENT;
+                generic_sound_helper(SOUND_OBJ_USED_BY_PARENT);
+                generic_sound_helper(selected);
+                spawn_object(o, MODEL_CHILD, bhvChild);
+            }
+        """)
+        write(root / "include/sounds.h", """
+            #define SOUND_OBJ_USED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 1, 2, 3)
+            #define SOUND_OBJ_SECOND_USED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 7, 8, 9)
+            #define SOUND_GENERAL_MUST_NOT_LEAK SOUND_ARG_LOAD(SOUND_BANK_GENERAL, 4, 5, 6)
+        """)
+        closure = self.collect(root)
+        parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+        self.assertEqual(parent["sfx_ids"], ["SOUND_OBJ_SECOND_USED_BY_PARENT", "SOUND_OBJ_USED_BY_PARENT"])
+        self.assertEqual(parent["sfx_banks"], ["obj"])
+
     def test_audio_rejects_missing_and_ambiguous_sound_bank_declarations(self) -> None:
         for declarations, message in [
             ("", "missing SOUND_ARG_LOAD declaration"),
@@ -285,12 +333,25 @@ class SceneClosureTest(unittest.TestCase):
             validate_scene_closure(closure)
 
     def test_schema_enforces_references_typed_lists_scope_audio_and_provenance(self) -> None:
+        def swap_model_geo_claim(closure: dict) -> None:
+            record = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+            record["model_variants"][0]["geo_root"] = "child_geo"
+            record["geo_root"] = "child_geo"
+            model = record["root_provenance"]["models"]["MODEL_PARENT"]
+            model["geo_symbol"] = "child_geo"
+            model["geo_source"] = "actors/child/geo.inc.c"
+            child = next(record for record in closure["records"] if record["stable_id"] == "bhvChild")
+            record["sources"].append(next(source for source in child["sources"] if source["path"] == "actors/child/geo.inc.c"))
+
         mutations = [
             (lambda closure: closure["records"][0]["spawned_children"].append("bhvMissing"), "unknown child reference"),
-            (lambda closure: closure["records"][0]["effects"].append("bhvChild"), "typed child lists disagree"),
+            (lambda closure: next(record for record in closure["records"] if record["stable_id"] == "bhvParent")["effects"].append("bhvReward"), "typed child lists disagree"),
+            (lambda closure: next(record for record in closure["records"] if record["stable_id"] == "bhvParent")["children"].clear(), "typed child lists incomplete"),
             (lambda closure: closure["records"][0].update(level="other"), "record level/area mismatch"),
             (lambda closure: closure.update(sfx_ids=["SOUND_MISSING"]), "audio union mismatch"),
-            (lambda closure: closure["records"][0].update(root_provenance={"behavior": "actors/parent/geo.inc.c", "model": "include/model_ids.h", "geo": None, "animation": {}}), "invalid root provenance"),
+            (lambda closure: next(record for record in closure["records"] if record["stable_id"] == "bhvParent")["root_provenance"]["behavior"].update(symbol="bhvMissing"), "invalid root provenance"),
+            (lambda closure: next(record for record in closure["records"] if record["stable_id"] == "bhvParent")["root_provenance"]["models"]["MODEL_PARENT"].update(geo_symbol="child_geo"), "invalid root provenance"),
+            (swap_model_geo_claim, "invalid root provenance"),
         ]
         for mutate, message in mutations:
             with self.subTest(message=message):
@@ -304,6 +365,57 @@ class SceneClosureTest(unittest.TestCase):
         (root / "actors/parent/anims/table.inc.c").unlink()
         with self.assertRaisesRegex(ClosureError, "unresolved animation root parent_anims"):
             self.collect(root)
+
+    def test_behavior_script_capacity_is_computed_for_each_spawn_site(self) -> None:
+        root = self.fixture()
+        behavior_path = root / "data/behavior_data.c"
+        text = behavior_path.read_text(encoding="utf-8")
+        text = text.replace(
+            "const BehaviorScript bhvController[] = {};",
+            """const BehaviorScript bhvController[] = {
+                SPAWN_CHILD(MODEL_ONE_SHOT, bhvOneShot),
+                BEGIN_LOOP(),
+                    SPAWN_CHILD(MODEL_RECURRENT, bhvRecurrent),
+                END_LOOP(),
+            };
+            const BehaviorScript bhvOneShot[] = {};
+            const BehaviorScript bhvRecurrent[] = {};""",
+        )
+        write(behavior_path, text)
+        with (root / "include/model_ids.h").open("a", encoding="utf-8") as stream:
+            stream.write("#define MODEL_ONE_SHOT 6 // one_shot_geo\n#define MODEL_RECURRENT 7 // recurrent_geo\n")
+        write(root / "actors/site_bounds/geo.inc.c", "const GeoLayout one_shot_geo[] = { 0 };\nconst GeoLayout recurrent_geo[] = { 0 };\n")
+        records = {record["stable_id"]: record for record in self.collect(root)["records"]}
+        self.assertEqual(records["bhvOneShot"]["maximum_live_instances"], 3)
+        self.assertEqual(records["bhvRecurrent"]["maximum_live_instances"], 240)
+
+    def test_entry_jump_is_expanded_before_area_and_linked_comments_do_not_donate_music(self) -> None:
+        root = self.fixture()
+        write(root / "levels/test/script.c", """
+            const LevelScript level_test_entry[] = {
+                JUMP_LINK(level_test_areas),
+                EXIT(),
+            };
+            const LevelScript level_test_areas[] = {
+                LOAD_MODEL_FROM_GEO(MODEL_PARENT, parent_geo),
+                LOAD_MODEL_FROM_GEO(MODEL_CHILD, child_geo),
+                AREA(1, test_area_geo),
+                    OBJECT(MODEL_PARENT, 0, 0, 0, 0, 0, 0, 0, bhvParent),
+                    JUMP_LINK(level_test_music),
+                END_AREA(),
+                AREA(2, test_area_2_geo),
+                    SET_BACKGROUND_MUSIC(0, SEQ_LEVEL_MUST_NOT_LEAK),
+                END_AREA(),
+                RETURN(),
+            };
+            const LevelScript level_test_music[] = {
+                // SET_BACKGROUND_MUSIC(0, SEQ_COMMENT_MUST_NOT_LEAK),
+                SET_BACKGROUND_MUSIC(0, SEQ_LEVEL_TEST),
+                RETURN(),
+            };
+        """)
+        closure = self.collect(root)
+        self.assertEqual(closure["music_sequence_ids"], ["SEQ_LEVEL_TEST"])
 
 
 if __name__ == "__main__":

@@ -71,8 +71,12 @@ def _macro_presets(root: Path) -> tuple[dict[str, tuple[str, str]], str]:
 
 
 def _extract_calls(text: str, macro: str) -> list[str]:
+    return [call for call, _ in _extract_call_sites(text, macro)]
+
+
+def _extract_call_sites(text: str, macro: str) -> list[tuple[str, int]]:
     pattern = re.compile(r"\b" + re.escape(macro) + r"\s*\(")
-    calls: list[str] = []
+    calls: list[tuple[str, int]] = []
     clean = _comment_free(text)
     for match in pattern.finditer(clean):
         depth, cursor = 1, match.end()
@@ -83,7 +87,7 @@ def _extract_calls(text: str, macro: str) -> list[str]:
                 depth -= 1
             cursor += 1
         if depth == 0:
-            calls.append(clean[match.end():cursor - 1])
+            calls.append((clean[match.end():cursor - 1], match.start()))
     return calls
 
 
@@ -133,6 +137,25 @@ def _load_model_roots(root: Path, level_text: str, model_geos: dict[str, str]) -
     return sources
 
 
+def _model_binding_source(root: Path, model: str, geo: str, levelscript_sources: set[str], model_ids_path: str) -> str:
+    if model == "MODEL_NONE":
+        return model_ids_path
+    loaded = []
+    for source in sorted(levelscript_sources):
+        text = _read(root, source)
+        for macro in ("LOAD_MODEL_FROM_GEO", "LOAD_MODEL_FROM_DL"):
+            for call in _extract_calls(text, macro):
+                args = _arguments(call)
+                if len(args) >= 2 and args[0] == model and args[1] == geo:
+                    loaded.append(source)
+    if loaded:
+        return sorted(set(loaded))[0]
+    model_text = _read(root, model_ids_path)
+    if re.search(r"#define\s+" + re.escape(model) + r"\b[^\n]*//\s*" + re.escape(geo) + r"\b", model_text):
+        return model_ids_path
+    raise ClosureError(f"unresolved model/geo binding provenance {model} {geo}")
+
+
 def _levelscript_blocks(text: str) -> dict[str, str]:
     blocks: dict[str, str] = {}
     for match in re.finditer(r"(?:static\s+)?const\s+LevelScript\s+([A-Za-z0-9_]+)\s*\[\]\s*=\s*\{", text):
@@ -152,11 +175,15 @@ def _expand_levelscript(name: str, blocks: dict[str, tuple[str, str]], seen: fro
     if name not in blocks:
         raise ClosureError(f"unresolved LevelScript JUMP_LINK: {name}")
     source, body = blocks[name]
-    text, sources = body, {source}
-    for child in re.findall(r"\bJUMP_LINK\s*\(\s*([A-Za-z0-9_]+)\s*\)", _comment_free(body)):
+    sources = {source}
+
+    def expand(match: re.Match[str]) -> str:
+        child = match.group(1)
         expanded, child_sources = _expand_levelscript(child, blocks, seen | {name})
-        text += "\n" + expanded
         sources.update(child_sources)
+        return expanded
+
+    text = re.sub(r"\bJUMP_LINK\s*\(\s*([A-Za-z0-9_]+)\s*\)", expand, _comment_free(body))
     return text, sources
 
 
@@ -169,8 +196,11 @@ def _scoped_levelscript(root: Path, level: str, level_text: str, area: int) -> t
     if (root / global_path).is_file():
         blocks.update({name: (global_path, body) for name, body in _levelscript_blocks(_read(root, global_path)).items()})
     entry_name = f"level_{level}_entry"
-    entry = blocks.get(entry_name, (script_path, level_text))[1]
-    clean = _comment_free(entry)
+    if entry_name in blocks:
+        clean, area_sources = _expand_levelscript(entry_name, blocks)
+    else:
+        clean, area_sources = _comment_free(level_text), {script_path}
+    clean = _comment_free(clean)
     selected_match = None
     for match in re.finditer(r"\bAREA\s*\(([^)]*)\)(.*?)\bEND_AREA\s*\(\)", clean, re.S):
         args = _arguments(match.group(1))
@@ -180,18 +210,17 @@ def _scoped_levelscript(root: Path, level: str, level_text: str, area: int) -> t
     if selected_match is None:
         raise ClosureError(f"AREA {area} not found")
     area_text = selected_match.group(0)
-    area_sources = {script_path}
     for name in re.findall(r"\bJUMP_LINK\s*\(\s*([A-Za-z0-9_]+)\s*\)", area_text):
         expanded, sources = _expand_levelscript(name, blocks)
-        area_text += "\n" + expanded
+        area_text += "\n" + _comment_free(expanded)
         area_sources.update(sources)
     prelude = clean[:selected_match.start()]
     model_text = prelude + "\n" + area_text
     for name in re.findall(r"\bJUMP_LINK\s*\(\s*([A-Za-z0-9_]+)\s*\)", prelude):
         expanded, sources = _expand_levelscript(name, blocks)
-        model_text += "\n" + expanded
+        model_text += "\n" + _comment_free(expanded)
         area_sources.update(sources)
-    return area_text, model_text, area_sources
+    return _comment_free(area_text), _comment_free(model_text), area_sources
 
 
 @lru_cache(maxsize=None)
@@ -332,7 +361,9 @@ def _rules(root: Path, rules_path: Path) -> list[dict]:
         children = rule["children"]
         seen: set[tuple[str, str]] = set()
         for child in children:
-            if set(child) != {"model", "behavior", "maximum_instances", "edge", "capacity"} or int(child["maximum_instances"]) < 1:
+            required_child_fields = {"model", "behavior", "maximum_instances", "edge", "capacity"}
+            if (set(child) - (required_child_fields | {"recurrent_bound"}) or not required_child_fields <= set(child)
+                    or int(child["maximum_instances"]) < 1):
                 raise ClosureError("manual spawn rule child must name model, behavior, positive count, edge, and capacity")
             edge = (child["model"], child["behavior"])
             if edge in seen:
@@ -371,6 +402,33 @@ def _rules(root: Path, rules_path: Path) -> list[dict]:
             attested_count = _attested_capacity(child["capacity"], capacity_text)
             if attested_count != int(child["maximum_instances"]):
                 raise ClosureError(f"capacity expression attests {attested_count}, not {child['maximum_instances']}: {edge[0]} {edge[1]}")
+            if "recurrent_bound" in child:
+                proof = child["recurrent_bound"]
+                proof_fields = {
+                    "kind", "source", "spawner_location", "spawn_guard_expression", "activation_expression",
+                    "unload_expression", "child_location", "child_guard_expression", "deletion_expression",
+                }
+                if not isinstance(proof, dict) or set(proof) != proof_fields or proof.get("kind") != "state_gated_child_deletion":
+                    raise ClosureError(f"invalid recurrent live-bound proof: {rule['behavior']} -> {child['behavior']}")
+                try:
+                    proof_text = attestation_text(proof["source"], "recurrent live-bound proof")
+                    spawner_region = _source_region(proof_text, proof["spawner_location"])
+                    child_region = _source_region(proof_text, proof["child_location"])
+                    spawner_facts = (
+                        proof["spawn_guard_expression"], proof["activation_expression"], proof["unload_expression"],
+                    )
+                    child_facts = (proof["child_guard_expression"], proof["deletion_expression"])
+                    child_block = blocks.get(child["behavior"], "")
+                    valid = (
+                        proof["spawner_location"] in owners
+                        and all(_normalized_expression(fact) in _normalized_expression(spawner_region) for fact in spawner_facts)
+                        and all(_normalized_expression(fact) in _normalized_expression(child_region) for fact in child_facts)
+                        and re.search(r"CALL_NATIVE\s*\(\s*" + re.escape(proof["child_location"]) + r"\b", child_block)
+                    )
+                except (KeyError, TypeError, ClosureError):
+                    valid = False
+                if not valid:
+                    raise ClosureError(f"invalid recurrent live-bound proof: {rule['behavior']} -> {child['behavior']}")
             global_edge = (rule["behavior"], *edge)
             if global_edge in rule_edges:
                 raise ClosureError(f"duplicate manual rule edge: {global_edge}")
@@ -380,11 +438,9 @@ def _rules(root: Path, rules_path: Path) -> list[dict]:
 
 def _native_behavior_sources(root: Path) -> dict[str, set[str]]:
     sources: dict[str, set[str]] = defaultdict(set)
-    signature = re.compile(r"^\s*(?:static\s+)?(?:[A-Za-z_]\w*\s+)+(?:\*\s*)?(bhv_[A-Za-z0-9_]+)\s*\(", re.M)
-    for path in sorted((root / "src/game").glob("**/*.c")):
-        relative = _relative(root, path)
-        for function in signature.findall(path.read_text(encoding="utf-8", errors="ignore")):
-            sources[function].add(relative)
+    for function, definitions in _native_symbol_index(root).items():
+        if function.startswith("bhv_"):
+            sources[function].update(path for path, _ in definitions)
     return sources
 
 
@@ -508,11 +564,12 @@ def _native_discovery(root: Path, source: str, entry: str) -> tuple[list[tuple[s
 
 
 def _source_regions(text: str) -> dict[str, str]:
-    symbols = set(re.findall(r"^\s*(?:static\s+)?(?:[A-Za-z_]\w*\s+)+(?:\*\s*)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{", text, re.M))
-    symbols.update(re.findall(r"^\s*(?:static\s+)?(?:const\s+)?(?:struct\s+\w+\s+|[A-Za-z_]\w*(?:\s+|\s*\*\s*))+([A-Za-z_]\w*)\s*(?:\[[^]]*\])?\s*=\s*\{", text, re.M))
-    symbols.update(re.findall(r"^\s*(?:static\s+)?[A-Za-z_]\w*\s*\(\s*\*\s*([A-Za-z_]\w*)\s*\[[^]]*\]\s*\)\s*\([^)]*\)\s*=\s*\{", text, re.M))
+    clean = _comment_free(text)
+    symbols = set(re.findall(r"^\s*(?:static\s+)?(?:[A-Za-z_]\w*\s+)+(?:\*\s*)?([A-Za-z_]\w*)\s*\([^;{}]*\)\s*\{", clean, re.M))
+    symbols.update(re.findall(r"^\s*(?:static\s+)?(?:const\s+)?(?:struct\s+\w+\s+|[A-Za-z_]\w*(?:\s+|\s*\*\s*))+([A-Za-z_]\w*)\s*(?:\[[^]]*\])?\s*=\s*\{", clean, re.M))
+    symbols.update(re.findall(r"^\s*(?:static\s+)?[A-Za-z_]\w*\s*\(\s*\*\s*([A-Za-z_]\w*)\s*\[[^]]*\]\s*\)\s*\([^)]*\)\s*=\s*\{", clean, re.M))
     symbols.difference_update({"if", "for", "while", "switch"})
-    return {symbol: region for symbol in symbols if (region := _source_region(text, symbol))}
+    return {symbol: region for symbol in symbols if (region := _source_region(clean, symbol))}
 
 
 @lru_cache(maxsize=None)
@@ -523,17 +580,27 @@ def _file_source_regions(path: str) -> dict[str, str]:
 @lru_cache(maxsize=None)
 def _native_symbol_index(root: Path) -> dict[str, list[tuple[str, str]]]:
     index: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for path in sorted((root / "src/game").glob("**/*.c")):
+    paths = ([path for path in sorted((root / "src").rglob("*.c"))
+              if "port" not in path.relative_to(root / "src").parts]
+             if (root / "src").is_dir() else [])
+    if len(paths) > 4096:
+        raise ClosureError(f"repository native source index limit exceeded: {len(paths)} C sources")
+    symbol_count = 0
+    for path in paths:
         relative = _relative(root, path)
         for symbol, region in _file_source_regions(str(path.resolve())).items():
             index[symbol].append((relative, region))
+            symbol_count += 1
+            if symbol_count > 65536:
+                raise ClosureError("repository native symbol index limit exceeded")
     return index
 
 
 _NATIVE_TRAVERSAL_STOPS = {
     "spawn_object", "spawn_object_relative", "spawn_object_abs_with_rot", "spawn_object_with_scale",
     "spawn_object_relative_with_scale", "spawn_object_rel_with_rot", "spawn_object_at_origin",
-    "try_to_spawn_object",
+    "try_to_spawn_object", "play_sound", "play_sound_with_freq_scale", "cur_obj_play_sound_1",
+    "cur_obj_play_sound_2", "cur_obj_play_sound_at_anim_range",
 }
 
 
@@ -552,7 +619,7 @@ def _reachable_native_regions(root: Path, source: str, entry: str) -> list[tuple
         seen.add(key)
         region = _file_source_regions(str((root / current_source).resolve())).get(name, "")
         if not region:
-            continue
+            raise ClosureError(f"missing native definition {name}: {current_source}")
         reachable.append((current_source, name, region))
         reached_text = _read(root, source) + "\n" + "\n".join(item[2] for item in reachable[:-1])
         for symbol in set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\b", region)):
@@ -569,6 +636,8 @@ def _reachable_native_regions(root: Path, source: str, entry: str) -> list[tuple
             local = [item for item in definitions if item[0] == current_source]
             if local:
                 pending.append((current_source, symbol))
+            elif definitions and all(path.startswith("src/audio/") for path, _ in definitions):
+                continue  # Audio-engine sinks do not create scene objects or own caller SFX IDs.
             elif len(definitions) == 1:
                 pending.append((definitions[0][0], symbol))
             elif len(definitions) > 1 and any(re.search(r"\b" + re.escape(symbol) + r"\s*\(", region) for _ in [0]):
@@ -594,16 +663,56 @@ def _sound_declarations(root: Path) -> tuple[dict[str, list[str]], str]:
     return declarations, relative
 
 
+def _call_site_sound_ids(text: str) -> set[str]:
+    """Collect concrete SOUND_* values supplied by this source region."""
+    clean = _comment_free(text)
+    sounds: set[str] = set()
+    assignments: dict[str, tuple[set[str], set[str]]] = {}
+    for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?<![+*/%&|^!<>-])=(?!=)\s*([^;]+);", clean):
+        value = match.group(2)
+        assignments[match.group(1)] = (
+            set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", value)),
+            set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", value)),
+        )
+    resolved = {name: set(direct) for name, (direct, _) in assignments.items()}
+    for _ in range(len(assignments)):
+        changed = False
+        for name, (_, dependencies) in assignments.items():
+            combined = resolved[name] | set().union(*(resolved.get(dependency, set()) for dependency in dependencies))
+            if combined != resolved[name]:
+                resolved[name] = combined
+                changed = True
+        if not changed:
+            break
+    controls = {"if", "for", "while", "switch", "sizeof"}
+    call_names = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", clean)) - controls
+    for name in call_names:
+        for arguments, _ in _extract_call_sites(clean, name):
+            sounds.update(re.findall(r"\bSOUND_[A-Z0-9_]+\b", arguments))
+            for argument_name in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", arguments):
+                sounds.update(resolved.get(argument_name, set()))
+    return sounds
+
+
 def _behavior_sounds(root: Path, block: str, native_sources: dict[str, set[str]]) -> tuple[list[str], list[str], set[str]]:
-    reached_text = [block]
+    sounds = set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", _comment_free(block)))
     reached_sources: set[str] = set()
     for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", block):
-        for source in native_sources.get(native, set()):
+        definitions = native_sources.get(native, set())
+        if not definitions:
+            raise ClosureError(f"missing native definition {native}")
+        if len(definitions) != 1:
+            raise ClosureError(f"ambiguous native definition {native}: {', '.join(sorted(definitions))}")
+        for source in definitions:
             reached_sources.add(source)
             regions = _reachable_native_regions(root, source, native)
-            reached_text.extend(region for _, _, region in regions)
+            for _, symbol, region in regions:
+                if _function_body(region, symbol):
+                    sounds.update(_call_site_sound_ids(region))
+                else:
+                    sounds.update(re.findall(r"\bSOUND_[A-Z0-9_]+\b", _comment_free(region)))
             reached_sources.update(region_source for region_source, _, _ in regions)
-    sounds = sorted(set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", "\n".join(reached_text))))
+    sounds = sorted(sounds)
     if not sounds:
         return [], [], reached_sources
     declarations, declarations_path = _sound_declarations(root)
@@ -630,7 +739,12 @@ def find_unruled_native_spawn_sites(root: Path, document: dict, rules_path: Path
     sites: list[str] = []
     for record in document["records"]:
         for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", blocks[record["stable_id"]]):
-            for source in native_sources.get(native, set()):
+            definitions = native_sources.get(native, set())
+            if not definitions:
+                raise ClosureError(f"missing native definition {native}")
+            if len(definitions) != 1:
+                raise ClosureError(f"ambiguous native definition {native}: {', '.join(sorted(definitions))}")
+            for source in definitions:
                 discovered, computed, respawn_targets = _native_discovery(root, source, native)
                 parser_resolved = {(model, child) for model, child, _, _ in computed}
                 parser_resolved.update((model, child) for _, model, child in discovered)
@@ -649,15 +763,28 @@ def _callback_is_recurrent(block: str, owners: list[str]) -> bool:
     return first_control >= 0 and any(match.start() > first_control for owner in owners for match in re.finditer(r"CALL_NATIVE\s*\(\s*" + re.escape(owner) + r"\b", clean))
 
 
+def _behavior_script_site_is_recurrent(block: str, site: int) -> bool:
+    """Classify one BehaviorScript creation site, not the first site in its block."""
+    clean = _comment_free(block)
+    depth = 0
+    for match in re.finditer(r"\b(BEGIN_LOOP|END_LOOP|BEGIN_REPEAT|END_REPEAT|GOTO)\s*\(", clean[:site]):
+        token = match.group(1)
+        if token in {"BEGIN_LOOP", "BEGIN_REPEAT"}:
+            depth += 1
+        elif token in {"END_LOOP", "END_REPEAT"}:
+            depth = max(0, depth - 1)
+        elif token == "GOTO":
+            return True
+    return depth > 0
+
+
 def _manual_live_bound(root: Path, block: str, rule: dict, child: dict) -> tuple[int, set[str]]:
     burst = int(child["maximum_instances"])
     owners = rule["owner"] if isinstance(rule["owner"], list) else [rule["owner"]]
     if not _callback_is_recurrent(block, owners):
         return burst, set()
-    if (rule["behavior"] == "bhvGoombaTripletSpawner" and burst == 3
-            and "GOOMBA_TRIPLET_SPAWNER_ACT_UNLOADED" in _read(root, rule["source"])
-            and "+ 3" in child["capacity"]["expression"]):
-        return burst, set()
+    if child.get("recurrent_bound", {}).get("kind") == "state_gated_child_deletion":
+        return burst, {child["recurrent_bound"]["source"]}
     cap, cap_source = _object_pool_cap(root)
     return cap, {cap_source}
 
@@ -678,22 +805,20 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     roots = _object_roots(area_text, macro_text, presets)
     manual_rules = _rules(root, rules_path)
     static_edges: dict[str, list[tuple[str, str, int, frozenset[str], str]]] = defaultdict(list)
+    pool_cap: int | None = None
     for behavior, block in blocks.items():
-        for call in _extract_calls(block, "SPAWN_CHILD") + _extract_calls(block, "SPAWN_CHILD_WITH_PARAM") + _extract_calls(block, "SPAWN_OBJ"):
-            args = _arguments(call)
-            model = next((arg for arg in args if re.fullmatch(r"MODEL_[A-Z0-9_]+", arg)), None)
-            child = next((arg for arg in args if re.fullmatch(r"bhv[A-Za-z0-9_]+", arg)), None)
-            if model and child:
-                bound, sources = 1, {behavior_path}
-                controls = [position for token in ("BEGIN_LOOP", "BEGIN_REPEAT", "GOTO")
-                            if (position := _comment_free(block).find(token)) >= 0]
-                loop = min(controls, default=-1)
-                spawn = min((position for macro in ("SPAWN_CHILD", "SPAWN_CHILD_WITH_PARAM", "SPAWN_OBJ")
-                             if (position := _comment_free(block).find(macro)) >= 0), default=-1)
-                if loop >= 0 and spawn > loop:
-                    bound, cap_source = _object_pool_cap(root)
-                    sources.add(cap_source)
-                static_edges[behavior].append((model, child, bound, frozenset(sources), "spawn"))
+        for macro in ("SPAWN_CHILD", "SPAWN_CHILD_WITH_PARAM", "SPAWN_OBJ"):
+            for call, site in _extract_call_sites(block, macro):
+                args = _arguments(call)
+                model = next((arg for arg in args if re.fullmatch(r"MODEL_[A-Z0-9_]+", arg)), None)
+                child = next((arg for arg in args if re.fullmatch(r"bhv[A-Za-z0-9_]+", arg)), None)
+                if model and child:
+                    bound, sources = 1, {behavior_path}
+                    if _behavior_script_site_is_recurrent(block, site):
+                        bound, cap_source = _object_pool_cap(root)
+                        pool_cap = bound
+                        sources.add(cap_source)
+                    static_edges[behavior].append((model, child, bound, frozenset(sources), "spawn"))
     for rule in manual_rules:
         for child in rule["children"]:
             evidence_sources = {rule["source"], child["edge"].get("source", rule["source"]), child["capacity"].get("source", rule["source"])}
@@ -704,7 +829,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     occurrence: dict[str, Counter[str]] = defaultdict(Counter)
     acts: dict[str, set[str]] = defaultdict(set)
     root_names: dict[str, list[str]] = defaultdict(list)
-    declared_model: dict[str, str] = {}
+    declared_models: dict[str, set[str]] = defaultdict(set)
     queue = deque()
     for model, behavior, act, count in roots:
         queue.append((model, behavior, _acts(act), count, "level", frozenset()))
@@ -713,24 +838,25 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     used_sources: dict[str, set[str]] = defaultdict(set)
     analyzed_behaviors: set[str] = set()
     respawn_targets: set[tuple[str, str]] = set()
-    pool_cap: int | None = None
     while queue:
         model, behavior, active_acts, count, source_kind, ancestors = queue.popleft()
         if behavior not in blocks:
             raise ClosureError(f"undeclared behavior {behavior}")
         if model != "MODEL_NONE" and model not in model_geos:
             raise ClosureError(f"no geo root for {model}")
-        if behavior not in declared_model:
-            declared_model[behavior] = model
-        elif declared_model[behavior] == "MODEL_NONE" and model != "MODEL_NONE":
-            declared_model[behavior] = model
+        declared_models[behavior].add(model)
         for act in active_acts:
             occurrence[behavior][act] += count
         acts[behavior].update(active_acts)
         root_names[behavior].append(source_kind)
         used_sources[behavior].add(behavior_path)
         for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", blocks[behavior]):
-            for source in native_sources.get(native, set()):
+            definitions = native_sources.get(native, set())
+            if not definitions:
+                raise ClosureError(f"missing native definition {native}")
+            if len(definitions) != 1:
+                raise ClosureError(f"ambiguous native definition {native}: {', '.join(sorted(definitions))}")
+            for source in definitions:
                 regions = _reachable_native_regions(root, source, native)
                 used_sources[behavior].update(region_source for region_source, _, _ in regions)
                 if behavior not in analyzed_behaviors:
@@ -768,14 +894,34 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             queue.append((child_model, child, active_acts, count * maximum_live, f"spawn:{behavior}", ancestors | {behavior}))
     records = []
     for behavior in sorted(occurrence):
-        model = declared_model[behavior]
-        geo_root = "none" if model == "MODEL_NONE" else model_geos[model]
-        geo_source = _asset_root_source(root, geo_root)
-        if model != "MODEL_NONE" and not geo_source:
-            raise ClosureError(f"unresolved model/geo root {model} {geo_root}")
+        variants = []
+        model_provenance = {}
+        geo_sources: set[str] = set()
+        material_features: set[str] = set()
+        for variant_model in sorted(declared_models[behavior]):
+            variant_geo = "none" if variant_model == "MODEL_NONE" else model_geos[variant_model]
+            variant_geo_source = _asset_root_source(root, variant_geo)
+            if variant_model != "MODEL_NONE" and not variant_geo_source:
+                raise ClosureError(f"unresolved model/geo root {variant_model} {variant_geo}")
+            variants.append({"model": variant_model, "geo_root": variant_geo})
+            binding_source = _model_binding_source(
+                root, variant_model, variant_geo, levelscript_sources | {script_path}, model_ids_path,
+            )
+            model_provenance[variant_model] = {
+                "source": model_ids_path,
+                "binding_source": binding_source,
+                "geo_symbol": variant_geo,
+                "geo_source": variant_geo_source,
+            }
+            used_sources[behavior].add(binding_source)
+            if variant_geo_source:
+                geo_sources.add(variant_geo_source)
+                material_features.update(_features(root, variant_geo_source))
+        primary = next((variant for variant in variants if variant["model"] != "MODEL_NONE"), variants[0])
+        model, geo_root = primary["model"], primary["geo_root"]
         sounds, banks, sound_sources = _behavior_sounds(root, blocks[behavior], native_sources)
         sources = {behavior_path, model_ids_path} | used_sources[behavior] | sound_sources
-        if geo_source: sources.add(geo_source)
+        sources.update(geo_sources)
         block = blocks[behavior]
         animations = sorted(set(re.findall(r"LOAD_ANIMATIONS\s*\(\s*[^,]+,\s*([A-Za-z0-9_]+)", block)))
         animation_sources: dict[str, str] = {}
@@ -789,7 +935,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
         maximum_live_instances = max(occurrence[behavior].values())
         if pool_cap is not None:
             maximum_live_instances = min(maximum_live_instances, pool_cap)
-        records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": _features(root, geo_source), "maximum_live_instances": maximum_live_instances, "music_sequence_ids": [], "sfx_banks": banks, "sfx_ids": sounds, "sources": source_items, "root_provenance": {"behavior": behavior_path, "model": model_ids_path, "geo": geo_source, "animation": animation_sources}})
+        records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "model_variants": variants, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "children": sorted(typed_children[behavior]["child"]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": sorted(material_features), "maximum_live_instances": maximum_live_instances, "music_sequence_ids": [], "sfx_banks": banks, "sfx_ids": sounds, "sources": source_items, "root_provenance": {"behavior": {"symbol": behavior, "source": behavior_path}, "models": model_provenance, "animation": animation_sources}})
     area_music = sorted(set(re.findall(r"\bSEQ_[A-Z0-9_]+\b", area_text)))
     for record in records:
         record["music_sequence_ids"] = area_music

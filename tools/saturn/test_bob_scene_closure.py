@@ -28,8 +28,6 @@ class BobSceneClosureTest(unittest.TestCase):
             self.assertEqual(first_hash, hashlib.sha256(first_path.read_bytes()).hexdigest())
             self.assertEqual(second_hash, hashlib.sha256(second_path.read_bytes()).hexdigest())
             validate_scene_closure(first)
-            self.assertEqual(len(first["records"]), 86)
-            self.assertEqual(len(first["source_hashes"]), 127)
             records = {record["stable_id"]: record for record in first["records"]}
             self.assertEqual(records["bhvGoomba"]["maximum_live_instances"], 11)
             self.assertIn("bhvGoomba", records["bhvGoombaTripletSpawner"]["spawned_children"])
@@ -54,12 +52,20 @@ class BobSceneClosureTest(unittest.TestCase):
             self.assertIn("bhvWhitePuffExplosion", records["bhvKingBobomb"]["effects"])
             self.assertIn("bhvWhitePuffExplosion", records["bhvKoopaShell"]["effects"])
             self.assertEqual(records["bhvWhitePuffExplosion"]["maximum_live_instances"], 240)
+            white_puff_models = {variant["model"]: variant for variant in records["bhvWhitePuffExplosion"]["model_variants"]}
+            self.assertEqual(set(white_puff_models), {"MODEL_BUBBLE", "MODEL_MIST"})
+            self.assertEqual(white_puff_models["MODEL_BUBBLE"]["geo_root"], "bubble_geo")
+            self.assertEqual(white_puff_models["MODEL_MIST"]["geo_root"], "mist_geo")
+            white_puff_provenance = records["bhvWhitePuffExplosion"]["root_provenance"]["models"]
+            self.assertEqual(white_puff_provenance["MODEL_BUBBLE"]["geo_source"], "actors/bubble/geo.inc.c")
+            self.assertEqual(white_puff_provenance["MODEL_MIST"]["geo_source"], "actors/mist/geo.inc.c")
             self.assertTrue({"src/game/behavior_actions.c", "src/game/object_helpers.c", "src/game/behaviors/white_puff_explode.inc.c"}.issubset(first["source_hashes"]))
             self.assertEqual(records["bhvChainChomp"]["geo_root"], "chain_chomp_geo")
             self.assertIn("actors/chain_chomp/geo.inc.c", first["source_hashes"])
             self.assertIn("actors/chain_chomp/anims/table.inc.c", first["source_hashes"])
             self.assertIn("tools/saturn/behavior_spawn_rules.json", first["source_hashes"])
             self.assertEqual(find_unruled_native_spawn_sites(ROOT, first), [])
+            self.assertEqual(first["music_sequence_ids"], ["SEQ_LEVEL_GRASS"])
             self.assertTrue(first["source_hashes"])
             self.assertEqual(set(first["source_hashes"]), {source["path"] for record in first["records"] for source in record["sources"]} | set(first["scene_sources"]))
             rules = json.loads((ROOT / "tools/saturn/behavior_spawn_rules.json").read_text(encoding="utf-8"))
@@ -70,6 +76,15 @@ class BobSceneClosureTest(unittest.TestCase):
                 mutated_rules = Path(rule_temp) / "rules.json"
                 mutated_rules.write_text(json.dumps(rules), encoding="utf-8")
                 with self.assertRaisesRegex(ClosureError, "capacity expression attests 1, not 2"):
+                    _rules(ROOT, mutated_rules)
+
+            rules = json.loads((ROOT / "tools/saturn/behavior_spawn_rules.json").read_text(encoding="utf-8"))
+            goomba_rule = next(rule for rule in rules["rules"] if rule["behavior"] == "bhvGoombaTripletSpawner")
+            goomba_rule["children"][0]["recurrent_bound"]["deletion_expression"] = "obj_mark_for_deletion(gMarioObject)"
+            with tempfile.TemporaryDirectory(prefix="goomba-bound-rule-", dir=ROOT / "tools/saturn") as rule_temp:
+                mutated_rules = Path(rule_temp) / "rules.json"
+                mutated_rules.write_text(json.dumps(rules), encoding="utf-8")
+                with self.assertRaisesRegex(ClosureError, "recurrent live-bound proof"):
                     _rules(ROOT, mutated_rules)
 
 

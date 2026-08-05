@@ -4,6 +4,24 @@
 
 ### Changed
 
+- Closed the final Task 3 scene-closure provenance bypasses.  The bounded
+  native index now resolves callbacks and reachable helpers across canonical
+  repository `src` definitions (while excluding mutually exclusive port
+  overlay stubs), and missing callback definitions fail before output.
+  Behavior records retain every concrete model/geo variant with exact
+  model-to-geo binding provenance, every spawned child has one complete type,
+  and schema validation resolves the cited behavior/model/geo/animation
+  symbols rather than trusting path membership.  Audio IDs now come from
+  concrete call arguments, local value flow, and reached data definitions, so
+  generic-helper comparison constants cannot leak into a behavior.  Per-site
+  BehaviorScript recurrence replaces block-wide capacity inference, BOB's
+  Goomba triplet bound is backed by explicit state/child-deletion attestations,
+  and entry `JUMP_LINK`s are expanded with comments removed before area/music
+  selection.  Consumers now receive both White Puff bubble and mist variants;
+  the authoritative BOB host closure remains 86 behaviors and grows from 127
+  to 133 hash-covered sources because the additional binding evidence is
+  explicit.
+
 - Repaired the scene-closure collector's repository boundary: native callback,
   helper, respawner, particle, sound-spawner, and loot/triangle-effect routes
   are now walked across bounded `src/game` sources, with every reached source
