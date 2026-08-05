@@ -179,24 +179,23 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
 
     def test_fully_culled_actor_keeps_a_terrain_only_frame_valid(self) -> None:
         """Zero admitted actor meshlets are an ordinary scene result, not a fault."""
-        render = extract_c_function(
-            (REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
-                encoding="utf-8"
-            ),
-            "sm64_saturn_demo_render_frame",
-        )
-        self.assertNotIn("actor_vertex_count != 0U &&", render)
+        source = (
+            REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c"
+        ).read_text(encoding="utf-8")
+        prepare = extract_c_function(source, "demo_render_prepare_publish")
+        finalize = extract_c_function(source, "demo_render_finalize")
+        self.assertNotIn("actor_vertex_count != 0U &&", prepare)
         self.assertIn(
             "const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;",
-            render,
+            prepare,
         )
-        self.assertLess(render.index("SM64_SATURN_RENDER_JOB_WORLD_ADMIT"),
-                        render.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"))
-        self.assertLess(render.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"),
-                        render.index("SM64_SATURN_RENDER_JOB_ACTOR_ADMIT"))
-        self.assertIn("frame_dependencies, frame_job_count", render)
+        self.assertLess(prepare.index("SM64_SATURN_RENDER_JOB_WORLD_ADMIT"),
+                        prepare.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"))
+        self.assertLess(prepare.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"),
+                        prepare.index("SM64_SATURN_RENDER_JOB_ACTOR_ADMIT"))
+        self.assertIn("frame_dependencies, frame_job_count", prepare)
         self.assertRegex(
-            render,
+            finalize,
             r"actor_vertex_count\s*==\s*0U\s*\|\|\s*\n?\s*demo_actor_queue_assemble_done",
         )
         contexts = extract_c_function(
@@ -216,7 +215,7 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
             REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c"
         ).read_text(encoding="utf-8")
         prepare = extract_c_function(source, "demo_prepare_mario")
-        render = extract_c_function(source, "sm64_saturn_demo_render_frame")
+        render = extract_c_function(source, "demo_render_prepare_publish")
         self.assertIn("static bool demo_prepare_mario(", source)
         self.assertIn("uint16_t *vertex_count_out", prepare)
         self.assertIn("*vertex_count_out = 0U;", prepare)

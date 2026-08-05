@@ -73,11 +73,12 @@ class RenderClusterGenerationTest(unittest.TestCase):
         """A3 must not tag admission zero when transform wrap publishes one."""
         root = Path(__file__).resolve().parents[2]
         source = (root / "src/port/saturn/gfx/saturn_demo_render.c").read_text()
-        frame_begin = source.index("bool sm64_saturn_demo_render_frame")
+        frame_begin = source.index("static bool demo_render_prepare_publish")
         frame_end = source.index("s_terrain_publish_sequence =", frame_begin)
         frame = source[frame_begin:frame_end]
 
-        self.assertIn("sm64_saturn_render_generation_next(", frame)
+        self.assertIn("generation == 0U", frame)
+        self.assertIn("const uint32_t transform_generation = generation;", frame)
         self.assertIn("s_transform_publish_sequence", frame)
         self.assertIn("demo_prepare_render_work_order(", frame)
         self.assertIn("s_transform_publish_sequence = transform_generation", frame)

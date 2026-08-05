@@ -154,19 +154,22 @@ static int renderer_uses_bounded_meshlet_order(void)
     const size_t read = fread(text, 1U, (size_t)bytes, source);
     fclose(source);
     text[read] = '\0';
-    char *const prepare = strstr(text, "static uint16_t demo_prepare_mario");
+    char *const prepare = strstr(text, "static bool demo_prepare_mario");
     char *const reserve = prepare == NULL ? NULL :
         strstr(prepare, "static void demo_reserve_mario_gouraud");
     char *const dispatch = strstr(text, "static void demo_dispatch_mario_transform");
     char *const dispatch_end = dispatch == NULL ? NULL :
-        strstr(dispatch, "static uint16_t demo_prepare_mario");
-    char *const frame = strstr(text, "bool sm64_saturn_demo_render_frame");
-    char *const prepare_call = frame == NULL ? NULL :
-        strstr(frame, "demo_prepare_mario(");
-    char *const queue_merge = frame == NULL ? NULL :
-        strstr(frame, "demo_actor_queue_assemble_done(");
-    char *const dispatch_call = frame == NULL ? NULL :
-        strstr(frame, "demo_dispatch_mario_transform(");
+        strstr(dispatch, "static bool demo_prepare_mario");
+    char *const render_prepare =
+        strstr(text, "static bool demo_render_prepare_publish");
+    char *const render_finalize =
+        strstr(text, "static bool demo_render_finalize");
+    char *const prepare_call = render_prepare == NULL ? NULL :
+        strstr(render_prepare, "demo_prepare_mario(");
+    char *const queue_merge = render_finalize == NULL ? NULL :
+        strstr(render_finalize, "demo_actor_queue_assemble_done(");
+    char *const dispatch_call = render_prepare == NULL ? NULL :
+        strstr(render_prepare, "demo_dispatch_mario_transform(");
     const int valid = prepare != NULL && reserve != NULL && dispatch != NULL &&
         dispatch_end != NULL &&
         prepare_call != NULL && queue_merge != NULL &&

@@ -236,8 +236,8 @@ class ThroughputCaptureTests(unittest.TestCase):
             capture.decode_cadence_trace(bytes(torn))
 
     def test_phase_summary_uses_adjacent_wrap_safe_cumulative_deltas(self) -> None:
-        previous = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
-        current = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        previous = {field: 0 for field in capture.CADENCE_V1_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_V1_RECORD_FIELDS}
         previous.update({
             "observed_vblank_generation": 0xFFFFFFFE,
             "frame_generation": 0xFFFFFFFF,
@@ -310,7 +310,7 @@ class ThroughputCaptureTests(unittest.TestCase):
             FakeYmir(),
             {
                 "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
-                "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
                 "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
                 "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
             },
@@ -354,7 +354,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                 FakeYmir(),
                 {
                     "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
-                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
                     "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
                     "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
                 },
@@ -370,7 +370,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                 FakeYmir(torn_cadence=True),
                 {
                     "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
-                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
                     "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
                     "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
                 },
@@ -385,7 +385,7 @@ class ThroughputCaptureTests(unittest.TestCase):
             elf = Path(directory) / "game.elf"
             elf32_with_symbols(elf, [
                 ("_sourceboot_boot_trace", BOOT_ADDRESS, 32),
-                ("_sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
+                ("_sourceboot_cadence_trace", CADENCE_ADDRESS, capture.CADENCE_TRACE_BYTES),
                 ("_s_runtime", RUNTIME_ADDRESS, 92),
                 ("_s_render_job_queue", QUEUE_ADDRESS, 232),
             ])
@@ -393,14 +393,14 @@ class ThroughputCaptureTests(unittest.TestCase):
                 capture.resolve_required_symbols(elf),
                 {
                     "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
-                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": capture.CADENCE_TRACE_BYTES},
                     "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
                     "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
                 },
             )
             elf32_with_symbols(elf, [
                 ("sourceboot_boot_trace", BOOT_ADDRESS, 31),
-                ("sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
+                ("sourceboot_cadence_trace", CADENCE_ADDRESS, capture.CADENCE_TRACE_BYTES),
                 ("s_runtime", RUNTIME_ADDRESS, 92),
                 ("s_render_job_queue", QUEUE_ADDRESS, 232),
             ])
@@ -408,7 +408,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                 capture.resolve_required_symbols(elf)
             elf32_with_symbols(elf, [
                 ("sourceboot_boot_trace", BOOT_ADDRESS, 32),
-                ("sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
+                ("sourceboot_cadence_trace", CADENCE_ADDRESS, capture.CADENCE_TRACE_BYTES),
                 ("s_runtime", RUNTIME_ADDRESS, 92),
                 ("s_render_job_queue", QUEUE_ADDRESS, 232),
             ], duplicate=True)

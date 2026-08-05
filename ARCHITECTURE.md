@@ -120,6 +120,9 @@ one serial lane, not a parallel scheduler. A9 retains true destination-banked
 frame overlap.
 
 Task 9A adds the missing CPU lifetime overlap without changing those owners.
+Steps 1--9 implement this boundary and are focused-host-green; it remains a
+source candidate pending two-stage review, with target timing deliberately
+unmeasured.
 For generation `N`, renderer start may publish only immutable descriptor
 contexts and notify the slave, then must return before master drain, queue
 retirement, Gouraud reservation, VDP1 begin/lowering, or transfer. Sourceboot

@@ -2044,3 +2044,59 @@ The initial literal `python` and `make` invocations were unavailable in this
 PowerShell host, so the evidence reruns use the repository venv and native Qt
 MinGW make. No MSYS/SH command, target build, Ymir, broad verify, or
 native-math census was invoked. Steps 4--12 remain unchecked.
+
+## Task 9A Steps 4--9 — source implementation GREEN (2026-08-05)
+
+**Status: Steps 1--9 implemented and focused-host-green; review next.** This is
+not a source-complete, target-build, runtime, capture, or FPS claim. Steps
+10--12 remain unchecked.
+
+The renderer now owns one scene-neutral exact-generation lifecycle record.
+Start prepares/publishes the immutable graph, notifies once, and returns with
+zero master drain/final merge/Gouraud/VDP1 lowering. Poll remains PENDING until
+positive slave retirement, then drains remaining READY work and performs the
+existing terminal validation, stable merge, queue reset, Gouraud reservation,
+and VDP1 lowering exactly once. A failed generation is quarantined and cannot
+replay. Sourceboot retains the exact snapshot, Mario pose, descriptor payloads,
+and BUILDING bank across PENDING; only COMPLETE marks that bank READY and
+acknowledges render completion. A8 still exclusively owns transfer and
+resident-list publication.
+
+The existing pure frame scheduler required no production change. Its extended
+fixture proves a pending `N` across repeated fields, queued immutable `N+1`,
+wrong-generation rejection, previous-frame reuse, exact publication
+acknowledgement, and delayed promotion. Existing wrap, publish-failure,
+normal-plus-recovery, and one-service/poll-per-field coverage stays green.
+
+Cadence publication is now version 2, 76 bytes/19 words. Four appended
+cumulative words record slave-work crossings/count and master-finalization
+crossings/count. The decoder accepts only explicit v1/60-byte or v2/76-byte
+records. It exposes `source_tick`, `slave_work_overlap_window`, and
+`master_finalization`; the slave window is non-additive, preventing double
+counting with concurrent source work.
+
+Serial focused results:
+
+- `mingw32-make -f Makefile.saturn.mk verify-demo-render-overlap`: PASS;
+  nominal plus three caught mutations.
+- `mingw32-make -f Makefile.saturn.mk verify-frame-pipeline`: PASS; nominal
+  plus three caught mutations.
+- repository-venv `test_a9_frame_pipeline_integration_contract.py`: 9/9 PASS.
+- repository-venv `test_a9_sourceboot_cadence_trace_contract.py`: 3/3 PASS.
+- `verify-render-job-runtime`, `verify-render-job-live-cutover`,
+  `verify-vdp1-frame-bank`, and `verify-vdp1-transfer-pipeline`: PASS.
+- repository-venv `test_capture_sourceboot_throughput.py`: 31/31 PASS.
+- `verify-render-job-terrain-route` and the migrated cluster-generation case:
+  PASS. The optional full dual-actor executable compiles but reaches its
+  pre-existing worker-context failure before the migrated renderer assertion;
+  it is not counted as a required green gate.
+
+Pinned prior art was re-inspected at the recorded commits before production
+work. Reuse mode remains dependency/API use for Yaul and project-owned
+pattern-only lifetime code for SlaveDriver, Sonic Z-Treme, and Jo Engine;
+sm64-psx remains behavior-study only. No new upstream source was copied.
+
+RED checkpoint is `ec81ddc6`. The implementation commit is recorded by the
+subsequent reconciliation entry. Independent specification/quality review,
+the serialized target build, exact-identity cadence capture, manual Ymir, broad
+verify, and native-math census remain unchecked.

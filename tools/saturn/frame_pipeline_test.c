@@ -434,6 +434,85 @@ static int test_queued_snapshot_counts_against_next_generation_budget(void)
     return 0;
 }
 
+static int test_pending_render_spans_fields_and_excludes_queued_generation(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 100U, 0U);
+    failure = expect_action(&pipeline, 104U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 104);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 104U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 105);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 104U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 106);
+    if (failure != 0) return failure;
+    if (!pipeline.queued_snapshot_valid ||
+        pipeline.queued_snapshot_generation != 2U) {
+        return 107;
+    }
+    if (sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 108;
+    if (sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 2U))
+        return 109;
+    if (sm64_saturn_frame_pipeline_publish_complete(&pipeline, 2U, true))
+        return 110;
+
+    failure = expect_action(&pipeline, 104U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 111);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 104U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 112);
+    if (failure != 0) return failure;
+
+    /* Generation 1 stays active and is serviced at most once per newly
+     * observed field. Reuse consumes each missed presentation edge without
+     * promoting or servicing queued generation 2. */
+    failure = expect_action(&pipeline, 105U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 113);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 105U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 114);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 105U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 115);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 106U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 116);
+    if (failure != 0) return failure;
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 117;
+    failure = expect_action(&pipeline, 106U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 118);
+    if (failure != 0) return failure;
+    if (sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 2U))
+        return 119;
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U))
+        return 120;
+    failure = expect_action(&pipeline, 106U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 121);
+    if (failure != 0) return failure;
+    if (sm64_saturn_frame_pipeline_publish_complete(&pipeline, 2U, true))
+        return 122;
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
+        return 123;
+    if (pipeline.displayed_generation != 1U ||
+        pipeline.render_generation != 2U ||
+        !pipeline.render_active) {
+        return 124;
+    }
+
+    /* Publication cannot reopen service in the same field; the promoted
+     * generation begins only at the next observed field. */
+    failure = expect_action(&pipeline, 106U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 125);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 107U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 126);
+    if (failure != 0) return failure;
+    return 0;
+}
+
 int main(void)
 {
     int failure = test_two_fields_produce_one_sim_tick();
@@ -459,6 +538,8 @@ int main(void)
     failure = test_reuse_does_not_reopen_budget_before_publication();
     if (failure != 0) return failure;
     failure = test_queued_snapshot_counts_against_next_generation_budget();
+    if (failure != 0) return failure;
+    failure = test_pending_render_spans_fields_and_excludes_queued_generation();
     if (failure != 0) return failure;
     puts("frame pipeline contract: PASS");
     return 0;

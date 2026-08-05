@@ -26,10 +26,11 @@ from capture_sourceboot_boot_trace import bind_capture_artifacts, run_bios_hando
 SCHEMA = "sm64-saturn-sourceboot-throughput-v1"
 EVIDENCE_KIND = "ymir-sourceboot-queue-throughput"
 BOOT_TRACE_BYTES = 32
-CADENCE_TRACE_BYTES = 60
+CADENCE_TRACE_V1_BYTES = 60
+CADENCE_TRACE_BYTES = 76
 CADENCE_TRACE_MAGIC = 0x53394354
-CADENCE_TRACE_VERSION = 1
-CADENCE_RECORD_FIELDS = (
+CADENCE_TRACE_VERSION = 2
+CADENCE_V1_RECORD_FIELDS = (
     "observed_vblank_generation",
     "frame_generation",
     "build_generation",
@@ -41,6 +42,12 @@ CADENCE_RECORD_FIELDS = (
     "construction_count",
     "transport_presentation_vblank_crossings",
     "transport_presentation_count",
+)
+CADENCE_RECORD_FIELDS = CADENCE_V1_RECORD_FIELDS + (
+    "slave_work_vblank_crossings",
+    "slave_work_count",
+    "master_finalize_vblank_crossings",
+    "master_finalize_count",
 )
 RUNTIME_BYTES = 92
 RENDER_JOB_QUEUE_BYTES = 232
@@ -281,21 +288,31 @@ def decode_boot_trace(raw: bytes) -> dict[str, int]:
 
 def decode_cadence_trace(raw: bytes) -> dict[str, Any]:
     """Decode one stable big-endian target seqlock snapshot."""
-    if len(raw) != CADENCE_TRACE_BYTES:
+    if len(raw) not in (CADENCE_TRACE_V1_BYTES, CADENCE_TRACE_BYTES):
         raise ValueError("cadence trace has wrong size")
     if _be32(raw, 0) != CADENCE_TRACE_MAGIC:
         raise ValueError("cadence trace has wrong magic")
-    if _be32(raw, 4) != CADENCE_TRACE_VERSION:
+    version = _be32(raw, 4)
+    expected_size = {
+        1: CADENCE_TRACE_V1_BYTES,
+        CADENCE_TRACE_VERSION: CADENCE_TRACE_BYTES,
+    }.get(version)
+    if expected_size is None:
         raise ValueError("cadence trace has wrong version")
+    if len(raw) != expected_size:
+        raise ValueError("cadence trace size does not match version")
     sequence_begin = _be32(raw, 8)
-    sequence_end = _be32(raw, CADENCE_TRACE_BYTES - 4)
+    sequence_end = _be32(raw, len(raw) - 4)
     if sequence_begin != sequence_end or sequence_begin & 1:
         raise ValueError("cadence trace seqlock is not stable")
+    fields = CADENCE_RECORD_FIELDS if version == CADENCE_TRACE_VERSION \
+        else CADENCE_V1_RECORD_FIELDS
     return {
+        "version": version,
         "sequence": sequence_begin,
         "record": {
             field: _be32(raw, 12 + 4 * index)
-            for index, field in enumerate(CADENCE_RECORD_FIELDS)
+            for index, field in enumerate(fields)
         },
     }
 
@@ -361,13 +378,30 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
     transport_presentation_crossings = delta(
         "transport_presentation_vblank_crossings"
     )
+    has_overlap_phases = all(
+        field in previous and field in current for field in (
+            "slave_work_vblank_crossings", "slave_work_count",
+            "master_finalize_vblank_crossings", "master_finalize_count",
+        )
+    )
+    master_finalize_crossings = (
+        delta("master_finalize_vblank_crossings") if has_overlap_phases
+        else construction_crossings
+    )
+    slave_work_crossings = (
+        delta("slave_work_vblank_crossings") if has_overlap_phases else 0
+    )
+    if has_overlap_phases and slave_work_crossings < master_finalize_crossings:
+        raise ValueError(
+            "slave overlap window is shorter than the finalization boundary"
+        )
     attributed = (
-        simulation_crossings + construction_crossings +
+        simulation_crossings + master_finalize_crossings +
         transport_presentation_crossings
     )
     if attributed > vblank_delta:
         raise ValueError("phase VBlank crossings exceed the observed interval")
-    return {
+    result = {
         "vblank_delta": vblank_delta,
         "frame_delta": delta("frame_generation"),
         "build_delta": delta("build_generation"),
@@ -388,6 +422,17 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
         "attributed_vblank_crossings": attributed,
         "unattributed_vblank_crossings": vblank_delta - attributed,
     }
+    if has_overlap_phases:
+        result["source_tick"] = result["simulation"]
+        result["slave_work_overlap_window"] = {
+            "vblank_crossings": slave_work_crossings,
+            "count": delta("slave_work_count"),
+        }
+        result["master_finalization"] = {
+            "vblank_crossings": master_finalize_crossings,
+            "count": delta("master_finalize_count"),
+        }
+    return result
 
 
 def summarize_cadence(events: list[dict[str, Any]], *, nominal_refresh_hz: float = 60.0) -> dict[str, Any]:

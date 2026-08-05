@@ -115,7 +115,6 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
             "sm64_saturn_vdp1_frame_bank_set_camera_snapshot(",
             "sm64_saturn_vdp1_backend_bind_frame_bank(",
             "sm64_saturn_demo_render_start_frame(",
-            "sm64_saturn_demo_render_poll_frame(",
             "sm64_saturn_vdp1_frame_bank_ready(",
             "sm64_saturn_frame_pipeline_render_complete(",
             "sm64_saturn_render_snapshot_complete(",
@@ -123,6 +122,7 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
         )
         positions = [render.index(call) for call in ordered_calls]
         self.assertEqual(positions, sorted(positions))
+        self.assertIn("sm64_saturn_demo_render_poll_frame(", render)
         self.assertNotIn("sm64_saturn_demo_render_frame(", self.source)
         self.assertIn("sourceboot_active_build_bank", render)
         self.assertIn("SM64_SATURN_DEMO_RENDER_PENDING", render)

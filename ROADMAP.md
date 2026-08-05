@@ -1,17 +1,19 @@
 # Roadmap
 
-## Now — implement A9A true frame-lifetime overlap
+## Now — review A9A true frame-lifetime overlap
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
 eliminating six source ticks per presented frame. It deliberately remains
-synchronous. The next measured CPU-lifetime slice is A9A: start immutable
-render generation `N`, return while its slave work remains live, permit the
-master-owned queued source tick for `N+1`, and finalize/merge/lower `N` only
-after positive slave retirement. Retain exactly one active render generation,
+synchronous. A9A Steps 1--9 now implement the next CPU-lifetime slice: start
+immutable render generation `N`, return while its slave work remains live,
+permit the master-owned queued source tick for `N+1`, and finalize/merge/lower
+`N` only after positive slave retirement. Exactly one active render generation,
 the pending snapshot/descriptor payloads/BUILDING bank, A8 transport ownership,
-all A9 cadence/publication laws, and previous-complete-frame reuse. Failure
-quarantines `N` without replay.
+all A9 cadence/publication laws, and previous-complete-frame reuse are retained.
+Failure quarantines `N` without replay. Focused lifecycle/source/transfer tests
+and the version-2 cadence decoder are green; specification and quality review
+are the next gates.
 
 Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
 two-stage review, then exactly one serialized DLL-safe target build and exact-

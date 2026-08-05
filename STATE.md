@@ -2,27 +2,31 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-The approved plan now inserts Task 9A/A9A, true frame-lifetime overlap, before
-Task 10. This is a plan-only transition: no implementation, test, review,
-target build, capture, or FPS result exists yet. A9A splits the accepted
-synchronous demo renderer into `start_frame(N)` and `poll_frame(N)`. Start
-publishes immutable jobs and returns; poll remains PENDING until positive slave
-retirement, then the master drains remaining work, validates/merges, performs
-Gouraud/VDP1 lowering exactly once, and retires `N`. FAILED quarantines without
-full-frame replay. Snapshot `N`, descriptor payloads, and its BUILDING source
-bank remain owned while pending; a queued snapshot `N+1` may receive its sole
-master-owned source tick but cannot become an active render until `N` retires
-and publishes.
+Task 9A/A9A Steps 1--9 are source-implemented and focused-host-green; two-stage
+source review is next, so the task is not yet source-complete and no target
+build, capture, or FPS result exists. The accepted demo renderer now exposes
+`start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
+the slave once, and returns. Poll remains PENDING until positive slave
+retirement, then the master drains remaining READY work, validates/merges,
+performs Gouraud/VDP1 lowering exactly once, and retires `N`. FAILED
+quarantines without full-frame replay. Snapshot `N`, descriptor payloads, and
+its BUILDING source bank remain owned while pending; the single queued snapshot
+`N+1` may receive its master-owned source tick but cannot become an active
+render until `N` retires and publishes.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's
 nonzero successor and 30 Hz remainder, one normal plus one recovery tick,
 per-field service/poll epochs, exact publish acknowledgement, previous-frame
-reuse, and A8's transfer ownership. Required source evidence covers lifecycle,
-wrap, missed deadline/reuse, failure/no replay, and absence of BOB dependencies
-from generic state. Only after two-stage review may one serialized DLL-safe
-target build/capture split source tick, slave overlap, and master finalization.
-Task 10 is hardening/publication, not the next expected FPS lever.
+reuse, and A8's transfer ownership. Focused evidence now covers lifecycle
+exact-once behavior and three mutations, pending scheduler generations, wrap,
+missed deadline/reuse, failure/no replay, scene-neutral generic state, retained
+A8 ownership, and versioned cadence decoding. The v2 target record is 76
+bytes/19 words; it separates source tick, the non-additive slave overlap
+window, and exclusive master finalization while retaining explicit v1/60-byte
+decoding. Only after two-stage review may one serialized DLL-safe target
+build/capture run. Task 10 is hardening/publication, not the next expected FPS
+lever.
 
 Task 5/A5.9 is closed after completing the atomic cutover from fixed
 terrain/Mario workers to one dependency-aware descriptor queue and observing

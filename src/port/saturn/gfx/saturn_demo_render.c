@@ -20,6 +20,7 @@
 #include "saturn_render_job_graph.h"
 #include "saturn_render_job_queue.h"
 #include "saturn_render_job_runtime.h"
+#include "saturn_render_lifecycle.h"
 #include "saturn_render_output_bank.h"
 #include "saturn_render_payload_bank.h"
 #include "saturn_terrain_command_template.h"
@@ -461,6 +462,22 @@ static uint32_t s_actor_publish_sequence;
 static uint32_t s_actor_ref_publish_sequence;
 static uint16_t s_actor_slave_begin;
 static uint16_t s_actor_primitive_slave_begin;
+
+typedef struct demo_render_transaction {
+    sm64_saturn_render_lifecycle_t lifecycle;
+    sm64_saturn_vdp1_backend_t *backend;
+    sm64_saturn_gouraud_bank_t *gouraud_bank;
+    sm64_saturn_fast3d_profile_t *profile;
+    const sm64_saturn_mario_actor_snapshot_t *snapshot;
+    const sm64_saturn_mario_actor_pose_t *pose;
+    vdp1_vram_partitions_t partitions;
+    uint32_t transform_generation;
+    uint16_t required_positions;
+    uint16_t actor_vertex_count;
+    uint16_t frame_job_count;
+} demo_render_transaction_t;
+
+static demo_render_transaction_t s_demo_render_transaction;
 
 /* Ownership is master-produced immutable frame metadata.  The slave never
  * treats a potentially stale cached copy as permission to read a peer output
@@ -3640,14 +3657,20 @@ static void demo_emit_mario(
     }
 }
 
-bool sm64_saturn_demo_render_frame(
-    sm64_saturn_vdp1_backend_t *backend,
-    sm64_saturn_gouraud_bank_t *gouraud_bank,
-    sm64_saturn_fast3d_profile_t *profile,
-    const sm64_saturn_mario_actor_snapshot_t *snapshot,
-    const sm64_saturn_mario_actor_pose_t *pose)
+static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
 {
-    if (!s_bob_resident_ready) return false;
+    demo_render_transaction_t *transaction = opaque;
+    if (transaction == NULL || generation == 0U || !s_bob_resident_ready)
+        return false;
+    sm64_saturn_vdp1_backend_t *const backend = transaction->backend;
+    sm64_saturn_gouraud_bank_t *const gouraud_bank = transaction->gouraud_bank;
+    sm64_saturn_fast3d_profile_t *const profile = transaction->profile;
+    const sm64_saturn_mario_actor_snapshot_t *const snapshot =
+        transaction->snapshot;
+    const sm64_saturn_mario_actor_pose_t *const pose = transaction->pose;
+    if (backend == NULL || gouraud_bank == NULL || profile == NULL ||
+        snapshot == NULL || pose == NULL)
+        return false;
     const sm64_saturn_ir_transform_job_t terrain_job = {
         .camera = demo_camera(snapshot),
         .focal_length = DEMO_FOCAL_LENGTH,
@@ -3672,17 +3695,17 @@ bool sm64_saturn_demo_render_frame(
      * below derives each tier from the immutable camera view and its own
      * hysteretic state before any worker transforms positions. */
     s_pretransform_lod_tier = (uint8_t)SATURN_DEMO_POLY_TIER;
-    vdp1_vram_partitions_t partitions;
-    vdp1_vram_partitions_get(&partitions);
+    vdp1_vram_partitions_get(&transaction->partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     demo_spatial_admit(&terrain_job.camera, profile);
 #endif
-    const uint32_t transform_generation = sm64_saturn_render_generation_next(
-        s_transform_publish_sequence);
+    const uint32_t transform_generation = generation;
     demo_prepare_render_work_order(
         &terrain_job.camera, profile, transform_generation);
     const uint16_t required_positions = demo_build_visible_position_set(
         profile, transform_generation);
+    transaction->transform_generation = transform_generation;
+    transaction->required_positions = required_positions;
     memset(s_position_valid, 0, sizeof(s_position_valid));
     sm64_saturn_dual_frame_reset(&s_transform_frame_bank);
     s_transform_phase_failed = 0U;
@@ -3756,6 +3779,8 @@ bool sm64_saturn_demo_render_frame(
         0U, (uint8_t)(1U << 0U), 0U, (uint8_t)(1U << 2U),
     };
     const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;
+    transaction->actor_vertex_count = actor_vertex_count;
+    transaction->frame_job_count = frame_job_count;
     queue_ok = queue_ok && sm64_saturn_render_job_graph_publish(
         &s_render_job_graph, transform_generation, frame_jobs,
         frame_dependencies, frame_job_count);
@@ -3763,40 +3788,54 @@ bool sm64_saturn_demo_render_frame(
         demo_render_queue_prepare_contexts(&classify,
                                            s_terrain_publish_sequence);
     if (!queue_ok) {
-        /* Publication can fail after descriptors became READY but before the
-         * first notify. No claimant exists yet, so quarantine that incomplete
-         * generation and retire it without replaying work or poisoning every
-         * later frame. */
-        if (sm64_saturn_render_job_queue_generation(&s_render_job_queue) ==
-                transform_generation) {
-            for (uint16_t job_index = 0U;
-                 job_index < s_render_job_graph.count; job_index++)
-                (void)sm64_saturn_render_job_queue_quarantine_ready(
-                    &s_render_job_queue, transform_generation, job_index);
-            if (sm64_saturn_render_job_queue_all_terminal(
-                    &s_render_job_queue, transform_generation))
-                (void)sm64_saturn_render_job_queue_reset_retired(
-                    &s_render_job_queue, transform_generation);
-        }
-        profile->pipeline_faults++;
+        /* The lifecycle controller owns the one failure transition. It calls
+         * demo_render_quarantine() after this returns, including when graph
+         * publication left READY descriptors behind before the first notify. */
         return false;
     }
 
     profile->master_worker_started++;
     profile->slave_worker_started++;
+    return true;
+}
+
+static void demo_render_notify(void *opaque)
+{
+    (void)opaque;
     sm64_saturn_render_job_runtime_notify();
-    uint16_t master_jobs =
-        sm64_saturn_render_job_runtime_drain_master();
-    uint32_t master_wait_iterations = 0U;
-    while (!sm64_saturn_render_job_runtime_slave_retired()) {
-        /* Positive peer retirement is a payload-lifetime condition, not a
-         * performance timeout. The queue generation cannot be recycled while
-         * the polling callback may still have a descriptor on its stack. */
-        if (master_wait_iterations != UINT32_MAX) master_wait_iterations++;
-    }
-    master_jobs = (uint16_t)(master_jobs +
-        sm64_saturn_render_job_runtime_drain_master());
-    sm64_saturn_render_job_runtime_record_master_wait(master_wait_iterations);
+}
+
+static bool demo_render_slave_retired(void *opaque)
+{
+    (void)opaque;
+    return sm64_saturn_render_job_runtime_slave_retired();
+}
+
+static uint16_t demo_render_drain_master(void *opaque)
+{
+    (void)opaque;
+    return sm64_saturn_render_job_runtime_drain_master();
+}
+
+static bool demo_render_finalize(void *opaque, uint32_t generation,
+                                 uint16_t master_jobs)
+{
+    demo_render_transaction_t *transaction = opaque;
+    if (transaction == NULL || generation == 0U ||
+        transaction->transform_generation != generation)
+        return false;
+    sm64_saturn_vdp1_backend_t *const backend = transaction->backend;
+    sm64_saturn_gouraud_bank_t *const gouraud_bank = transaction->gouraud_bank;
+    sm64_saturn_fast3d_profile_t *const profile = transaction->profile;
+    const sm64_saturn_mario_actor_snapshot_t *const snapshot =
+        transaction->snapshot;
+    const sm64_saturn_mario_actor_pose_t *const pose = transaction->pose;
+    const uint32_t transform_generation = transaction->transform_generation;
+    const uint16_t required_positions = transaction->required_positions;
+    const uint16_t actor_vertex_count = transaction->actor_vertex_count;
+    const uint16_t frame_job_count = transaction->frame_job_count;
+    const vdp1_vram_partitions_t *const partitions = &transaction->partitions;
+
     sm64_saturn_render_job_runtime_telemetry_t queue_telemetry;
     const bool telemetry_ok =
         sm64_saturn_render_job_runtime_telemetry_snapshot(&queue_telemetry);
@@ -3829,7 +3868,7 @@ bool sm64_saturn_demo_render_frame(
     }
     const bool terminal = sm64_saturn_render_job_queue_all_terminal(
         &s_render_job_queue, transform_generation);
-    queue_ok = terminal &&
+    bool queue_ok = terminal &&
         demo_terrain_queue_assemble_merge_spans(
             SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
             &s_terrain_queue_merge_spans) &&
@@ -3900,14 +3939,14 @@ bool sm64_saturn_demo_render_frame(
             result, demo_terrain_final_command(
                         &s_terrain_spans_shared, &s_terrain_emit_refs[ordinal]),
             &s_bob_primitives_active[result->primitive_id], backend,
-            gouraud_bank, profile, &partitions);
+            gouraud_bank, profile, partitions);
     }
     /* Mario remains master-owned and consumes the live bridge pose, textured
      * material bindings, and per-vertex Gouraud data after terrain compaction.
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is
      * reserved for SCSP/audio service rather than geometry dispatch. */
     if (actor_vertex_count != 0U)
-        demo_emit_mario(snapshot, pose, backend, &partitions, profile);
+        demo_emit_mario(snapshot, pose, backend, partitions, profile);
     sm64_saturn_vdp1_backend_finish(backend);
     /* Published profile diagnostics: never read to choose an allocation,
      * scheduling, LOD, or promotion decision. */
@@ -3915,4 +3954,87 @@ bool sm64_saturn_demo_render_frame(
     profile->gouraud_bytes_saved += gouraud_bank->saved_bytes;
     profile->frame_serial++;
     return true;
+}
+
+static void demo_render_quarantine(void *opaque, uint32_t generation)
+{
+    demo_render_transaction_t *transaction = opaque;
+    if (transaction == NULL || generation == 0U) return;
+    if (sm64_saturn_render_job_queue_generation(&s_render_job_queue) ==
+            generation) {
+        for (uint16_t job_index = 0U;
+             job_index < s_render_job_graph.count; job_index++)
+            (void)sm64_saturn_render_job_queue_quarantine_ready(
+                &s_render_job_queue, generation, job_index);
+        if (sm64_saturn_render_job_queue_all_terminal(
+                &s_render_job_queue, generation))
+            (void)sm64_saturn_render_job_queue_reset_retired(
+                &s_render_job_queue, generation);
+    }
+    if (transaction->profile != NULL)
+        transaction->profile->pipeline_faults++;
+}
+
+static const sm64_saturn_render_lifecycle_ops_t s_demo_render_lifecycle_ops = {
+    .prepare_publish = demo_render_prepare_publish,
+    .notify = demo_render_notify,
+    .slave_retired = demo_render_slave_retired,
+    .drain_master = demo_render_drain_master,
+    .finalize = demo_render_finalize,
+    .quarantine = demo_render_quarantine,
+};
+
+bool sm64_saturn_demo_render_start_frame(
+    sm64_saturn_vdp1_backend_t *backend,
+    sm64_saturn_gouraud_bank_t *gouraud_bank,
+    sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_mario_actor_snapshot_t *snapshot,
+    const sm64_saturn_mario_actor_pose_t *pose,
+    uint32_t generation)
+{
+    if (backend == NULL || gouraud_bank == NULL || profile == NULL ||
+        snapshot == NULL || pose == NULL || generation == 0U ||
+        s_demo_render_transaction.lifecycle.active)
+        return false;
+    s_demo_render_transaction.backend = backend;
+    s_demo_render_transaction.gouraud_bank = gouraud_bank;
+    s_demo_render_transaction.profile = profile;
+    s_demo_render_transaction.snapshot = snapshot;
+    s_demo_render_transaction.pose = pose;
+    if (!sm64_saturn_render_lifecycle_start(
+            &s_demo_render_transaction.lifecycle,
+            &s_demo_render_lifecycle_ops, &s_demo_render_transaction,
+            generation)) {
+        s_demo_render_transaction.backend = NULL;
+        s_demo_render_transaction.gouraud_bank = NULL;
+        s_demo_render_transaction.profile = NULL;
+        s_demo_render_transaction.snapshot = NULL;
+        s_demo_render_transaction.pose = NULL;
+        return false;
+    }
+    return true;
+}
+
+sm64_saturn_demo_render_status_t sm64_saturn_demo_render_poll_frame(
+    sm64_saturn_fast3d_profile_t *profile, uint32_t generation)
+{
+    if (profile == NULL || profile != s_demo_render_transaction.profile ||
+        generation == 0U || !s_demo_render_transaction.lifecycle.active ||
+        generation != s_demo_render_transaction.lifecycle.active_generation)
+        return SM64_SATURN_DEMO_RENDER_FAILED;
+    const sm64_saturn_render_lifecycle_status_t status =
+        sm64_saturn_render_lifecycle_poll(
+            &s_demo_render_transaction.lifecycle,
+            &s_demo_render_lifecycle_ops, &s_demo_render_transaction,
+            generation);
+    if (status == SM64_SATURN_RENDER_LIFECYCLE_PENDING)
+        return SM64_SATURN_DEMO_RENDER_PENDING;
+    s_demo_render_transaction.backend = NULL;
+    s_demo_render_transaction.gouraud_bank = NULL;
+    s_demo_render_transaction.profile = NULL;
+    s_demo_render_transaction.snapshot = NULL;
+    s_demo_render_transaction.pose = NULL;
+    return status == SM64_SATURN_RENDER_LIFECYCLE_COMPLETE
+        ? SM64_SATURN_DEMO_RENDER_COMPLETE
+        : SM64_SATURN_DEMO_RENDER_FAILED;
 }

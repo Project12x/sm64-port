@@ -30,15 +30,18 @@ def function_body(source: str, name: str) -> str:
 class RenderJobLiveCutoverSourceTests(unittest.TestCase):
     def test_default_frame_path_uses_descriptor_queue_not_fixed_worker(self):
         source = RENDERER.read_text(encoding="utf-8")
-        frame = function_body(source, "sm64_saturn_demo_render_frame")
+        prepare = function_body(source, "demo_render_prepare_publish")
+        finalize = function_body(source, "demo_render_finalize")
+        accepted_lifecycle = prepare + finalize
 
         self.assertIn('#include "saturn_render_job_bridge.h"', source)
-        self.assertIn("sm64_saturn_render_job_graph_publish", frame)
-        self.assertIn("sm64_saturn_render_job_runtime_drain_master", frame)
-        self.assertIn("sm64_saturn_render_job_queue_all_terminal", frame)
+        self.assertIn("sm64_saturn_render_job_graph_publish", prepare)
+        self.assertIn("sm64_saturn_render_job_runtime_drain_master", source)
+        self.assertIn("sm64_saturn_render_job_queue_all_terminal", finalize)
         self.assertIn("sm64_saturn_render_job_runtime_activate", source)
-        self.assertNotIn("sm64_saturn_terrain_worker_run", frame)
-        self.assertNotIn("demo_dispatch_mario_transform", frame)
+        self.assertNotIn("sm64_saturn_terrain_worker_run", accepted_lifecycle)
+        self.assertNotIn("demo_dispatch_mario_transform", accepted_lifecycle)
+        self.assertNotIn("sm64_saturn_demo_render_frame(", source)
 
     def test_master_only_terrain_merge_scratch_stays_out_of_hwram(self):
         source = RENDERER.read_text(encoding="utf-8")

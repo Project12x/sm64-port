@@ -23,7 +23,7 @@ def function_body(path: str, name: str) -> str:
 class TransferPipelineSourceTests(unittest.TestCase):
     def test_both_emitters_are_construction_only(self):
         for path, name in (
-            ("src/port/saturn/gfx/saturn_demo_render.c", "sm64_saturn_demo_render_frame"),
+            ("src/port/saturn/gfx/saturn_demo_render.c", "demo_render_finalize"),
             ("src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c", "sm64_saturn_fast3d_vdp1_emit"),
         ):
             body = function_body(path, name)
@@ -32,17 +32,27 @@ class TransferPipelineSourceTests(unittest.TestCase):
             self.assertNotRegex(body, r"vdp1_sync_wait\s*\(\s*\)\s*;[\s\S]*?saturn_dma_queue_kick[\s\S]*?saturn_dma_queue_wait")
 
     def test_sourceboot_arms_resident_list_once_after_safe_transfer(self):
-        body = function_body("src/port/saturn/sourceboot/main.c", "main")
-        poll = body.find("sm64_saturn_vdp1_frame_bank_poll_transfers")
-        arm = body.find("vdp1_sync_force_put()")
-        publish = body.find("sm64_saturn_vdp1_frame_bank_publish")
-        safe = body.rfind("vdp1_sync_wait()")
-        submit = body.find("sm64_saturn_vdp1_frame_bank_submit_transfers")
-        first_kick = body.find("sm64_saturn_vdp1_frame_bank_poll_transfers", poll + 1)
-        self.assertTrue(0 <= poll < arm < publish < safe < submit < first_kick)
-        self.assertEqual(body.count("sm64_saturn_vdp1_frame_bank_submit_transfers"), 1)
-        self.assertEqual(body.count("vdp1_sync_force_put()"), 1)
-        self.assertNotIn("sm64_saturn_vdp1_frame_bank_wait_for_publish", body)
+        path = "src/port/saturn/sourceboot/main.c"
+        source = (ROOT / path).read_text(encoding="utf-8")
+        transfer = function_body(path, "sourceboot_frame_poll_transfers")
+        publish = function_body(path, "sourceboot_frame_publish")
+        dispatch = function_body(path, "sourceboot_frame_pipeline_dispatch")
+
+        safe = transfer.rfind("vdp1_sync_wait()")
+        submit = transfer.find("sm64_saturn_vdp1_frame_bank_submit_transfers")
+        poll = transfer.find("sm64_saturn_vdp1_frame_bank_poll_transfers")
+        arm = publish.find("sm64_saturn_vdp1_frame_bank_arm_resident_list")
+        force = publish.find("vdp1_sync_force_put()")
+        bank_publish = publish.find("sm64_saturn_vdp1_frame_bank_publish")
+        self.assertTrue(0 <= safe < submit < poll)
+        self.assertTrue(0 <= arm < force < bank_publish)
+        self.assertLess(
+            dispatch.index("case SM64_SATURN_FRAME_POLL_TRANSFERS"),
+            dispatch.index("case SM64_SATURN_FRAME_PUBLISH_FRAME"),
+        )
+        self.assertEqual(source.count("sm64_saturn_vdp1_frame_bank_submit_transfers"), 1)
+        self.assertEqual(source.count("vdp1_sync_force_put()"), 1)
+        self.assertNotIn("sm64_saturn_vdp1_frame_bank_wait_for_publish", source)
 
     def test_cpu_dmac_channel_zero_has_one_frame_queue_owner(self):
         users = []

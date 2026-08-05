@@ -331,8 +331,10 @@ and the evidence report before starting another task.
   six-tick catch-up death spiral while deliberately retaining synchronous
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
-- [ ] **Task 9A / A9A — true frame-lifetime overlap:** active plan; implementation
-  not started. Split the accepted synchronous renderer into start and
+- [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--9 are
+  source-implemented and focused-host-green; two-stage review is next, so the
+  task is not yet source-complete and no target/FPS claim exists. The accepted
+  synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
   the master may execute the one queued source tick for `N+1`. Exactly one
   render generation, the A8 transport owner, master-only final ordering/VDP1,
@@ -1986,9 +1988,9 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** active implementation; lifecycle/source/cadence RED evidence is
-recorded. No production implementation, review, target build, or FPS evidence
-exists yet. Task 9A is the next measured CPU-lifetime experiment.
+**Status:** Steps 1--9 source-implemented and focused-host-green; specification
+and quality review are next. No target build, capture, or FPS evidence exists
+yet, and Task 9A is not source-complete before those reviews.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
 
@@ -2164,7 +2166,7 @@ expected FPS lever.
   `make` aliases are unavailable; the recorded reruns use the repository venv
   and `mingw32-make` without invoking MSYS/SH directly.
 
-- [ ] **Step 4: Split the renderer at the existing queue-retirement boundary**
+- [x] **Step 4: Split the renderer at the existing queue-retirement boundary**
 
   Move only immutable preparation, graph activation/publication, and slave
   notify into `sm64_saturn_demo_render_start_frame()`. Preserve current static
@@ -2175,7 +2177,12 @@ expected FPS lever.
   generation and phase validity; reserve zero and fail closed on any mismatch.
   Delete the accepted-path monolithic entry rather than wrapping it.
 
-- [ ] **Step 5: Run the renderer fixture GREEN and catch failure mutations**
+  Implemented with a scene-neutral `saturn_render_lifecycle` controller and
+  renderer-owned transaction payload. Start publishes the immutable graph and
+  notifies once; poll waits for positive retirement, drains/finalizes once,
+  and clears the exact generation. The monolithic public entry is deleted.
+
+- [x] **Step 5: Run the renderer fixture GREEN and catch failure mutations**
 
   Add `verify-demo-render-overlap` to `Makefile.saturn.mk` with C11
   `-Wall -Wextra -Werror` normal and `expect_failure.py` variants that (1)
@@ -2183,7 +2190,11 @@ expected FPS lever.
   failure. Run that target. Expected: nominal PASS and all three mutations are
   rejected.
 
-- [ ] **Step 6: Extend the scheduler model for a genuinely pending render**
+  `mingw32-make -f Makefile.saturn.mk verify-demo-render-overlap` is GREEN:
+  nominal lifecycle PASS and finalize-before-retirement, double-lowering, and
+  serial-replay mutations are all caught.
+
+- [x] **Step 6: Extend the scheduler model for a genuinely pending render**
 
   In `frame_pipeline_test.c`, drive: start render `N`; observe a later field;
   execute the allowed source tick and publish only the queued immutable
@@ -2196,7 +2207,13 @@ expected FPS lever.
   Change `saturn_frame_pipeline.{h,c}` only if this RED sequence proves the
   current state model cannot express it.
 
-- [ ] **Step 7: Integrate sourceboot retention without changing A8 ownership**
+  The existing scheduler expressed the pending lifetime without production
+  changes. The extended fixture keeps `N` active across repeated fields,
+  rejects completion/transfer/publication for queued `N+1`, reuses the prior
+  frame, and promotes `N+1` only after exact publication acknowledgement for
+  `N`; existing wrap, failure, and bounded-budget cases remain GREEN.
+
+- [x] **Step 7: Integrate sourceboot retention without changing A8 ownership**
 
   Make the first `SERVICE_RENDER_JOBS(N)` acquire snapshot/build bank once,
   bind the immutable camera/pose, and call `start_frame(N)`. A later service
@@ -2208,7 +2225,12 @@ expected FPS lever.
   retain the prior published frame, increment fault/reuse evidence, and never
   invoke a serial fallback.
 
-- [ ] **Step 8: Repair every old monolithic-symbol contract and run GREEN**
+  Sourceboot now retains one active snapshot and explicit BUILDING bank across
+  PENDING. COMPLETE alone marks READY and acknowledges renderer completion;
+  FAILED quarantines the bank/snapshot and records a generation tombstone.
+  A8 transfer and presentation helpers are unchanged owners.
+
+- [x] **Step 8: Repair every old monolithic-symbol contract and run GREEN**
 
   Update the named live-cutover, terrain, cluster, A8, transfer, and dual-actor
   contracts to inspect start/poll ownership rather than the deleted function.
@@ -2229,7 +2251,13 @@ expected FPS lever.
   outcomes, queue exact-once ownership, frame-bank quarantine, and A8 deferred
   transfer ownership remain unchanged. Do not run target builds yet.
 
-- [ ] **Step 9: Add RED/GREEN versioned phase evidence**
+  All eight listed commands pass serially using the repository Python venv and
+  `mingw32-make`. The terrain-route and migrated cluster-generation assertions
+  also pass. The optional full dual-actor executable compiles but stops first
+  at its pre-existing worker-context check, before its migrated renderer
+  assertion; this is not substituted for a required green gate.
+
+- [x] **Step 9: Add RED/GREEN versioned phase evidence**
 
   First extend `test_capture_sourceboot_throughput.py` with a 76-byte/version-2
   fixture and mutations for torn seqlock, wrong size/version, wrap, slave
@@ -2239,6 +2267,12 @@ expected FPS lever.
   the existing exact P2 seqlock, retain version-1 decoding, and report separate
   `source_tick`, `slave_work_overlap_window`, and `master_finalization` deltas.
   Run both capture-tool tests and the A9 cadence source contract GREEN.
+
+  Sourceboot publishes the 76-byte/19-word version-2 record with four appended
+  counters. The decoder accepts only explicit v1/60-byte or v2/76-byte records,
+  keeps the slave lifetime outside additive attribution, and reports master
+  finalization separately. Capture tests pass 31/31 and cadence source tests
+  pass 3/3, including torn/version/size/wrap/overlap mutations.
 
 - [ ] **Step 10: Complete two-stage source review before any target build**
 

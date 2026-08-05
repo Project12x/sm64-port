@@ -45,17 +45,24 @@ class A9CadenceTraceContractTests(unittest.TestCase):
         sim_after = SOURCE.index("sourceboot_phase_accumulate", tick)
         self.assertLess(sim_before, tick)
         self.assertLess(tick, sim_after)
-        render_start = SOURCE.index("const uint32_t construction_vblank_start")
+        render_start = SOURCE.index("static void sourceboot_frame_service_render")
         snapshot = SOURCE.index("sm64_saturn_render_snapshot_acquire_ready(", render_start)
         pose = SOURCE.index("sm64_saturn_mario_actor_pose(", render_start)
         render_call = SOURCE.index("sm64_saturn_demo_render_start_frame(", render_start)
-        poll_call = SOURCE.index("sm64_saturn_demo_render_poll_frame(", render_call)
+        slave_window_start = SOURCE.index(
+            "sourceboot_active_slave_vblank_start =", render_call
+        )
+        render_started = SOURCE.index("sourceboot_render_started = true", render_call)
+        poll_call = SOURCE.index("sm64_saturn_demo_render_poll_frame(", render_start)
         render_end = SOURCE.index("sourceboot_phase_accumulate", poll_call)
         self.assertLess(render_start, snapshot)
         self.assertLess(render_start, pose)
         self.assertLess(render_start, render_call)
-        self.assertLess(render_call, poll_call)
-        self.assertLess(render_call, render_end)
+        self.assertLess(render_call, slave_window_start)
+        self.assertLess(slave_window_start, render_started)
+        self.assertLess(poll_call, render_end)
+        self.assertIn("sourceboot_active_slave_vblank_start", SOURCE)
+        self.assertIn("master_finalize_vblank_start", SOURCE)
 
 
 if __name__ == "__main__":

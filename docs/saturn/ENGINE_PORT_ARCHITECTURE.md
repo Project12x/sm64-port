@@ -198,8 +198,9 @@ and zero fields were unattributed. Nine intervals also dropped 222 credits.
 Scheduler budgets therefore reset only after a new complete frame is
 presented, never merely because the outer loop observes another VBlank.
 
-**A9A lifetime correction — planned 2026-08-05.** The accepted A9 adapter
-still constructs one frame synchronously. A9A splits generation `N` into a
+**A9A lifetime correction — source-implemented through Step 9, 2026-08-05.**
+The accepted A9 adapter formerly constructed one frame synchronously. A9A
+splits generation `N` into a
 notify-only start and a positive-retirement poll/finalize. While `N` is
 PENDING, the renderer retains its immutable snapshot, descriptor payloads, and
 BUILDING command/Gouraud source bank; the master may run the one queued
@@ -213,8 +214,9 @@ complete frame without a full-frame replay. Simulation, input, live state,
 allocation, final ordering, VDP1/VRAM, VDP2, and presentation remain master-
 owned. A8 retains transfer ownership, and A9's nonzero wrap, two-field 30 Hz
 remainder, normal-plus-recovery budget, field epochs, previous-frame reuse,
-and exact publish acknowledgement are unchanged. Generic lifecycle state may
-not depend on BOB, Mario, Castle, or demo-renderer symbols.
+and exact publish acknowledgement are unchanged. Generic lifecycle state has
+no BOB, Mario, Castle, or demo-renderer dependency. Focused host/source and
+versioned-cadence tests are green; review and target evidence remain open.
 
 At that terminal boundary, VDP2 composes only the immutable sky camera carried
 by the displayed VDP1 bank and a small displayed/rendered/simulation generation

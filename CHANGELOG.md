@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Split sourceboot's accepted demo renderer into exact-generation start and
+  poll/finalize phases so slave construction for frame `N` can remain active
+  while the master executes the single queued source tick for `N+1`. The
+  retained snapshot and BUILDING bank now survive PENDING; positive slave
+  retirement permits one master drain/merge/Gouraud/VDP1 lowering pass, while
+  failure quarantines without serial replay. A8 remains the sole transfer and
+  resident-list owner, so this changes CPU construction lifetime without
+  moving presentation or VRAM ownership.
+- Extended the cache-through cadence record from version 1/60 bytes to version
+  2/76 bytes with separate slave-work overlap and master-finalization counters.
+  Historical v1 captures remain decodable; v2 reports the slave interval as a
+  non-additive overlap window so phase attribution cannot double-count source
+  work that ran concurrently.
+
 - VDP2 composition now consumes the immutable camera carried by the displayed
   VDP1 bank together with explicit displayed/rendered/simulation generation
   metadata. The HUD labels that tuple, and a mismatched camera or render bank

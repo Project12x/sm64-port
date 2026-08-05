@@ -127,7 +127,7 @@ int main(void)
                           "sm64_saturn_terrain_depth_bins_build_command_streams") &&
         function_contains(source, "demo_terrain_final_command(",
                           "ref->command") &&
-        function_contains(source, "sm64_saturn_demo_render_frame(",
+        function_contains(source, "demo_render_finalize(",
                           "demo_terrain_final_command") &&
         function_contains(source, "demo_terrain_queue_assemble_merge_spans(",
                           "metadata->claimed_state") &&
