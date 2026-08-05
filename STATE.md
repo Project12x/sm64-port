@@ -35,7 +35,8 @@ offset 40 rather than legacy offset 28; symbol resolution accepts only the
 source-validated 92/104-byte layouts, and observation reads the exact resolved
 size. The focused capture suite passes 35/35, and direct resolution of exact
 ELF `5afbc752...3065f0` selects size 104/offset 40. Capture retry, FPS, P2
-addresses, and margins remain blocked pending independent review.
+addresses, and margins remain blocked pending independent review. Scoped
+repair/docs/evidence commit: `39b99c21`.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

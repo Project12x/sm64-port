@@ -4,6 +4,8 @@ Date: 2026-08-05
 
 Base: `7b37dfc3`
 
+Implementation/docs/evidence commit: `39b99c21`
+
 Status: Fix Round 3 source-repaired and focused-green; independent review is
 required before capture retry. The sole target build is retained unchanged.
 No target rebuild, Ymir launch, capture retry, FPS measurement, broad verify,

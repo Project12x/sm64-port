@@ -2371,7 +2371,8 @@ expected FPS lever.
   closed. The focused capture suite passes 35/35, and symbol-only validation of
   exact ELF `5afbc752...3065f0` selects 104/40. The failed JSON remains the
   disposition of the first pre-Ymir attempt, not target runtime evidence.
-  No rebuild, Ymir launch, capture retry, or FPS result was produced.
+  Scoped repair/docs/evidence commit: `39b99c21`. No rebuild, Ymir launch,
+  capture retry, or FPS result was produced.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

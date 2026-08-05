@@ -2275,4 +2275,5 @@ attempt: status `failed`, stage `symbol-resolution`, protocol `ready=false`, no
 notifications, and no Ymir startup. It provides no FPS, phase, P2 placement, or
 margin evidence. Independent review must approve this source-only observer
 repair before retrying the capture. No target rebuild, Ymir launch, capture
-retry, broad verify, or native-math census occurred.
+retry, broad verify, or native-math census occurred. Scoped
+repair/docs/evidence commit: `39b99c21`.
