@@ -25,6 +25,7 @@
 - 2026-08-05 residency audit: a complete sound-RAM clear is legal only during cold boot or explicit driver recovery. Scene/package preparation may write only validated unowned spans, must retain the active generation through commit, and may retire it only after the replacement generation is live.
 - 2026-08-05 transfer audit: CPU copy is the correctness baseline. SCU DMA to sound RAM is an optional later optimization and may be enabled only after target evidence proves the exact source/destination legality, cache/barrier ordering, and non-interference with renderer DMA ownership.
 - 2026-08-05 native-math review repair: BOB null-camera suppression is authorized only after the verifier hashes the supplied linked ELF and every reviewed source input, confirms the unchanged BOB route to the terminal return, and rejects every extra `levelNum` rewrite/use. Renderer callback facts come only from the table returned by the factory that the renderer initialization actually activates; lifecycle ownership is proven inside the extracted roots. This is source-complete under `f349fe9f..52c75422`; the prescribed Qt wrapper failure and the capped broad exact-ELF run remain open evidence, not green gates.
+- 2026-08-05 identity review correction: `effective_config_hash` and the compiled identity must include every compiler-affecting sourceboot wrapper value, not merely the release feature tuple. Archive validation must bind the accepted A9A artifact trio to the exact recorded capture cadence, target identity/size, real profile content, and successful launch evidence before copying anything; a conflicting manifest must fail before archive state changes.
 
 ## Prior art and reuse mode
 
@@ -108,7 +109,7 @@ task's implementation, reviews, evidence, and transition documentation are
 all complete.
 
 - [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
-- [ ] Task 2 — active — base `52e4ec9f`; archiving the accepted A9A trio and binding the full feature/config/package tuple to the compiled target identity
+- [ ] Task 2 — source-complete — commits `f5a0248d`, `8c97fd4e` (reports `264f3b4b`, `5008759e`); independent rereview PASS. Identity 9/9, sourceboot identity 5/5, capture 35/35, archive 12/12, and no-build baseline revalidation are green. Linked SH-2 symbol/layout, Ymir/manual, and Task 1 broad native-math gates remain open.
 - [ ] Task 3 — generate the transitive BOB closure
 - [ ] Task 4 — compile the generic S64P schema and provisional fixtures
 - [ ] Task 5 — validate and retain scene-package residency
@@ -234,22 +235,22 @@ Add validated `0|1` make variables `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION`, `S
 
 Before generating any replacement, archive the already accepted A9A artifacts without rebuilding them. Source the exact paths from `docs/saturn/evidence/reports/a9a-step11-overlap-throughput-repaired-2026-08-05.json`, copy the matching trio into `build/saturn/baselines/a9a-2026-08-05/`, and refuse any input whose hashes differ from ELF `1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2`, ISO `1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96`, or CUE `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`. The tracked baseline manifest records original/archive paths and hashes, capture/profile/config evidence, measured 5.294 FPS mean, and ancestry checks for `27cebc7e`, `d5f70887`, and `d7b04d61`. This is the immutable historical rollback; later feature-off rebuilds are comparative descendants, not replacements.
 
-- [ ] Write archive RED tests for a wrong ELF/CUE/ISO hash, a CUE naming a different ISO, missing capture/config/profile evidence, overwrite of a different archive, and failed preserved-commit ancestry. Run the RED command before implementation:
+- [x] Write archive RED tests for a wrong ELF/CUE/ISO hash, a CUE naming a different ISO, missing capture/config/profile evidence, overwrite of a different archive, and failed preserved-commit ancestry. Run the RED command before implementation:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_archive_a9a_baseline.py
   ```
 
-- [ ] Archive and hash-verify the accepted A9A trio, write the tracked manifest, and run `git merge-base --is-ancestor` for all three preserved commits. Never regenerate an artifact to satisfy this step.
-- [ ] Write identity tests rejecting invalid values, missing/stale package hashes, absent ELF identity, label/compiled-feature drift, and capture/loaded-ELF tuple mismatch. The mutation table is exhaustive: independently mutate magic, version, size, every reserved-zero field, renderer pipeline, level ID, area ID, route ID, replay flag, live-input flag, bootstrap count, camera route, camera variant, diagnostic mode, cart size, cart staging count, hot-promotion flag, near-clip flag, BSP flag, polygon/LOD tier, fragmentation mode, each individual feature bit, source hash, effective-config hash, route artifact hash, input artifact hash, camera artifact hash, cart-profile hash, S64P root hash, S64P dependency-set hash, aggregate actor payload hash, animation payload hash, and audio payload hash. Also test every valid replay/live-input combination and reject non-boolean encodings. Every mutation must make generation or capture validation fail; run RED:
+- [x] Archive and hash-verify the accepted A9A trio, write the tracked manifest, and run `git merge-base --is-ancestor` for all three preserved commits. Never regenerate an artifact to satisfy this step. The revalidation binds exact recorded cadence/target/profile/launch evidence and fails before copies on a manifest conflict.
+- [x] Write identity tests rejecting invalid values, missing/stale package hashes, absent ELF identity, label/compiled-feature drift, and capture/loaded-ELF tuple mismatch. The mutation table is exhaustive: independently mutate magic, version, size, every reserved-zero field, renderer pipeline, level ID, area ID, route ID, replay flag, live-input flag, bootstrap count, camera route, camera variant, diagnostic mode, cart size, cart staging count, hot-promotion flag, near-clip flag, BSP flag, polygon/LOD tier, fragmentation mode, each individual feature bit, source hash, effective-config hash, route artifact hash, input artifact hash, camera artifact hash, cart-profile hash, S64P root hash, S64P dependency-set hash, aggregate actor payload hash, animation payload hash, and audio payload hash. Also test every valid replay/live-input combination and reject non-boolean encodings. Every mutation must make generation or capture validation fail; compiler-affecting ATAN2/demo/view/slave/camera-probe/BSP-flat/trace controls are now individually represented and mutated. Run RED:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_feature_identity.py
   ```
 
-- [ ] Generate a fixed-width versioned identity and teach the capture path to resolve and hash-check it before accepting telemetry.
-- [ ] Run GREEN plus capture regressions:
+- [x] Generate a fixed-width versioned identity and teach the capture path to resolve and hash-check it before accepting telemetry.
+- [x] Run GREEN plus capture regressions:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py
@@ -258,7 +259,7 @@ Before generating any replacement, archive the already accepted A9A artifacts wi
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_archive_a9a_baseline.py
   ```
 
-- [ ] Commit as `feat(saturn): bind feature tuple to target identity`; review identity/version/endianness and all label mutations.
+- [x] Commit as `feat(saturn): bind feature tuple to target identity`; review identity/version/endianness and all label mutations. Repair rereview PASS; required linked-target and Ymir/manual evidence remain unchecked.
 
 ### Task 3: Generate the transitive BOB closure
 
