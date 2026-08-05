@@ -116,10 +116,14 @@ runtime fallback into the source camera.
 
 ## Required next action
 
-Finish written review of the 2026-07-31 fixed-camera design, then write a new
-implementation plan from that spec. The new plan begins with the Phase A
-attribution triplet and incorporates the useful additive transport/probe work
-already present; it must not resume the superseded camera-Q plan as written.
+This handoff's camera-planning action has been superseded by
+`docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
+A8 deferred VDP1 transport is source- and target-complete with independent
+PASS/APPROVED rereview. The exact Pipe4 ELF is
+`5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
+Run automatic Ymir queue/presentation capture and a manual FPS comparison next;
+if runtime-safe, proceed to A9 true frame overlap. BOB remains only the current
+demonstrator and every transport/ownership interface must serve the full game.
 
 ## Environment facts
 

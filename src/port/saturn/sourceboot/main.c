@@ -903,7 +903,7 @@ int main(void) {
         }
         sourceboot_vdp1_transfer_targets =
             (sm64_saturn_vdp1_transfer_targets_t){
-                .command_vram = VDP1_VRAM(0),
+                .command_vram = (void *)(uintptr_t)VDP1_VRAM(0),
                 .gouraud_vram = partitions.gouraud_base,
                 .command_capacity_bytes =
                     SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t),

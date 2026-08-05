@@ -178,6 +178,14 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
             "an already-retired transfer is not a queue-start stall",
         )
 
+    def test_target_vdp1_address_is_explicitly_converted_to_pointer(self) -> None:
+        """Yaul exposes VDP1_VRAM as an integer address on the SH-2 target."""
+        self.assertIn(
+            ".command_vram = (void *)(uintptr_t)VDP1_VRAM(0),",
+            self.main,
+            "the transfer descriptor must compile under the target's integer-address macro",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

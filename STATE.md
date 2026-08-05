@@ -42,9 +42,8 @@ The exact audited Route0/live-input/Pipe4 `make -B -j1` exits zero in 336.9
 seconds. A8 deferred transfer is now active next; no A8 behavior, Ymir result,
 or FPS evidence is claimed.
 
-A8's independent review returned NO-GO and its source repairs are committed at
-`8b037a7d`, focused-host-green, and pending rereview plus one later serialized
-target build.
+A8's first independent review returned NO-GO; its source repairs are committed
+at `8b037a7d`, and the contract and quality rereviews are now PASS/APPROVED.
 Both renderer paths stop after command/Gouraud construction. Queue-owned
 CPU-DMAC channel 0 uses public config/start plus a completion IHR because
 pinned Yaul busy status can report false idle. Sourceboot services the serial
@@ -53,7 +52,14 @@ VDP1 destinations are partial, and permanently fails closed after any partial
 resident-write failure. Published banks carry their immutable VDP2 camera and
 snapshot generation. The ordinary path explicitly reports zero at nonexistent
 transport/terminal waits. CPU-DMAC and SCU-DMA remain serial by design. This
-state claims no target boot, Ymir result, or FPS improvement.
+The first target attempt exposed a host-mock blind spot: Yaul's target
+`VDP1_VRAM(0)` is an integer address, not a pointer. The explicit
+`(void *)(uintptr_t)` conversion and a source regression contract repair that
+compile failure. The exact incremental Route0/live-input/Pipe4 target build
+then exits zero and produces ELF SHA-256
+`5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
+A8 is source- and target-complete; no Ymir result or FPS improvement is yet
+claimed.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

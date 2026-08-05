@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Fixed A8's target-only VDP1 transfer-descriptor initialization by explicitly
+  converting Yaul's integer VRAM address to the descriptor pointer type. Host
+  mocks exposed the address as a pointer and therefore missed the SH-2 compile
+  failure; a source contract now guards the target-safe conversion.
+
 - Replaced sourceboot's per-emitter blocking Gouraud transfer and CPU command
   upload with an A8 two-phase frame-bank transport. After the prior VDP1 list
   is overwrite-safe, command and Gouraud descriptors commit atomically to one

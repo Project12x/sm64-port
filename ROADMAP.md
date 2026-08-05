@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — review and target-validate A8 deferred VDP1 transfer
+## Now — runtime-validate A8 deferred VDP1 transfer
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
@@ -43,10 +43,12 @@ native-math census repair are closed by independent PASS/APPROVED rereview and
 the exact audited exit-zero Pipe4 rebuild. Because A7 still uses the
 synchronous completion adapter around today's blocking renderer, visible FPS
 uplift is expected from A8/A9 rather than from this ownership-only slice. A8 is
-source-integrated with focused host gates green. Its serial CPU-DMAC/SCU-DMA
-lane carries transfer ownership across fields and removes the accepted path's
-immediate transport wait. Independent review, one serialized target build,
-and later Ymir/manual FPS evidence remain open.
+source- and target-complete with focused host gates green and independent
+PASS/APPROVED rereview. Its serial CPU-DMAC/SCU-DMA lane carries transfer
+ownership across fields and removes the accepted path's immediate transport
+wait. The exact Pipe4 target rebuild exits zero and produces ELF SHA-256
+`5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
+Automatic Ymir queue/presentation and manual FPS evidence remain open.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

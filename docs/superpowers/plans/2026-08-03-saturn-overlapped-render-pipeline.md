@@ -317,9 +317,11 @@ and the evidence report before starting another task.
   audited Route0/live-input/Pipe4 `make -B -j1` exits zero with ELF
   `1eba8888...e99267c`. No Ymir, hardware, asynchronous-transfer, or FPS
   evidence is claimed by A7.
-- [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** repair
-  committed at `8b037a7d` and focused-host-green; independent rereview and its
-  authorized serialized target gate remain open.
+- [x] **Task 8 / A8 — deferred transfers and true wait telemetry:** source and
+  target complete. Repair `8b037a7d` is focused-host-green, both independent
+  rereviews are PASS/APPROVED, and the exact target ELF is
+  `5926ff27...17d9cab5`. Automatic Ymir/FPS acceptance remains explicitly
+  open before A9 runtime activation.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
@@ -1516,11 +1518,12 @@ yet.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
-**Status:** independent review NO-GO repairs are committed at `8b037a7d` and
-focused-host-green. No target build is authorized until the repaired
-CPU-DMAC completion, stale-loop service, coherent VDP2 snapshot,
-partial-write failure, telemetry, and destination-range contracts pass focused
-rereview. No Ymir/FPS claim.
+**Status:** source- and target-complete; runtime evidence pending. Repairs are
+committed at `8b037a7d`; independent contract and quality rereviews are
+PASS/APPROVED. The exact Route0/live-input/Pipe4 build exits zero after the
+target-only Yaul integer-address conversion repair and produces ELF SHA-256
+`5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
+Automatic Ymir queue/presentation and manual FPS evidence remain unchecked.
 
 **A8 design correction (2026-08-05):** the final command and Gouraud
 destinations remain single VDP1-VRAM ranges in A8, so no transfer may begin
@@ -1647,21 +1650,28 @@ shared bank transport owns every frame upload.
   VDP1/VDP2 camera-generation snapshot; truthful wait/QNS telemetry; full
   command/Gouraud capacity bounds and 8-byte Gouraud destination alignment.
 
-- [ ] **Step 8: Run DMA, transfer, bank, VDP2, memory-map, and runtime gates**
+- [x] **Step 8: Run DMA, transfer, bank, VDP2, memory-map, and runtime gates**
   — repaired strict DMA, transfer, bank, VDP2, runtime-contract, presentation,
   memory-map (10/10), and profile layout/decode (21 tests, one historical
-  capture skip) gates are green. The serialized target build remains open and
-  is blocked on focused rereview.
+  capture skip) gates are green. The first target attempt correctly failed at
+  `main.c:906` because host mocks represented `VDP1_VRAM(0)` as a pointer while
+  pinned Yaul exposes an integer address. A RED-then-green source contract now
+  requires the explicit `(void *)(uintptr_t)` conversion. The exact serialized
+  incremental Pipe4 target build exits zero; ELF SHA-256 is
+  `5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
 
   Expected: all PASS; submit-before-wait ordering and transport selection are
   enforced by mutation tests.
 
-- [ ] **Step 9: Update provenance/live documents, commit, and review**
+- [x] **Step 9: Update provenance/live documents, commit, and review**
 
   Correct `SLAVEDRIVER_ADAPTATION.md` to state that upstream active DMA is
   serial and this asynchronous lifecycle is project hardening. Initial commit
   `862c7f7c` received NO-GO; callback/fail-closed repair commit `8b037a7d` is
-  complete. Focused rereview remains open.
+  complete. Independent contract rereview is PASS/APPROVED. Independent
+  quality rereview is PASS/APPROVED after `bf160e53` corrected the interrupt
+  ownership text. Runtime Ymir/FPS evidence is deliberately a separate,
+  still-open acceptance gate rather than part of source review.
 
 ### Task 9: Overlap snapshot rendering with simulation and bound catch-up
 
