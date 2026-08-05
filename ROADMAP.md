@@ -67,6 +67,17 @@ each outer iteration, allowing six ticks before one presentation and dropping
 credit is bounded per presentation generation. Worker-materialized terrain
 commands remain a source-backed later reduction, not the current dominant
 lever.
+The pure presentation-scoped scheduler model reached first source-complete with
+normal, four-tick, repeated-credit, and incomplete-publication coverage.
+Independent review returned NO-GO: wrapped generation zero aliases unset
+sentinels, publish can reopen SERVICE/POLL during the same field, and the new
+gate is not yet in `verify-all`. Publication must also be an intent followed by
+exact-generation success acknowledgement because the target arm/publish path
+is fallible. Those repairs are now source-complete with independent rereview
+GO, while the adapter's seven source-contract tests are RED against the legacy
+loop. Step 5 is active; the compatibility adapter does not own sourceboot sequencing yet;
+the existing renderer and A8 transport remain unchanged for that first
+visible-uplift experiment.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

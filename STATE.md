@@ -89,6 +89,21 @@ per presented frame and 222 additional credits are dropped. The root cause is
 now concrete: the two-tick catch-up bound resets per outer iteration, so three
 iterations repeat it before one presentation. Task 9 Step 1 is active to make
 that budget presentation-generation scoped.
+Task 9 Steps 1--4 reached first source-complete: a hardware-free scheduler keeps the
+two-tick budget across previous-frame reuse and resets it only after complete
+publication, carries queued N+1 work into the next budget, bounds service/poll
+to once per VBlank, and rejects stale/incomplete completion. Direct normal and
+three mutation executables pass, but independent review is NO-GO before Step
+5: wrapped generation zero aliases unset sentinels, same-field publish can
+reopen SERVICE/POLL for a promoted generation, and the gate is absent from
+`verify-all`. The integration seam also proves publication must be two-phase:
+the scheduler cannot claim a displayed generation until the fallible target
+publish sequence acknowledges exact-generation success. Wrap-safe validity,
+field-scoped epochs, publish acknowledgement, and regression coverage are now
+source-complete. Fresh direct nominal and three mutation runs pass their exact
+contracts, and the gate is now in `verify-all`; independent rereview is GO.
+Step 5 is active with its adapter contract independently RED 7/7 against the
+legacy loop.
 The post-repair direct host fixtures for render-job runtime, actor meshlets,
 DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
 did not execute them because the known MSYS-to-Windows path conversion defect

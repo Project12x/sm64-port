@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added the hardware-free A9 frame scheduler model with a presentation-scoped
+  two-tick simulation budget, explicit generation-matched render/transfer
+  completion, wrap-safe generation validity, bounded once-per-field
+  service/poll actions, two-phase target publication acknowledgement,
+  previous-frame reuse, and dropped-credit telemetry. Mutation gates reject
+  four-tick catch-up, repeated-observation credit, and incomplete publication.
+
 - Added a 60-byte cache-through A9 cadence trace and exact-capture decoding for
   wrap-safe VBlank crossings in simulation, synchronous frame construction,
   and transport/presentation. This replaces misleading absolute claims from the

@@ -1811,34 +1811,73 @@ shared bank transport owns every frame upload.
   (`WALLS.C:1240-1408,1803-1950`); no upstream code is copied. Do not combine
   this bounded experiment with direct alternating-bank writes.
 
-- [ ] **Step 1: Write a deterministic scheduler model test — ACTIVE**
+- [x] **Step 1: Write a deterministic scheduler model test — COMPLETE;
+  REREVIEW GO**
 
   Feed synthetic VBlank/render/transfer completion events. Assert snapshot N
   presentation while simulation is N+1, no mixed generations, useful job
   service before terminal wait, previous-frame reuse on missed deadline, and
   no four-tick burst after a slow render.
 
-- [ ] **Step 2: Add mutation coverage for the death spiral**
+- [x] **Step 2: Add mutation coverage for the death spiral — SOURCE COMPLETE;
+  REVIEWED FOR ORDINARY GENERATIONS**
 
   Reject `SOURCEBOOT_MAX_SIM_CATCHUP 4U`, catch-up loops that add VBlank credit
   while executing a tick, and publication of non-complete banks.
 
-- [ ] **Step 3: Add `verify-frame-pipeline` and record red evidence**
+- [x] **Step 3: Add `verify-frame-pipeline` and record red evidence — COMPLETE;
+  REREVIEW GO**
 
   Expected: missing scheduler and existing catch-up mutation failure.
 
-- [ ] **Step 4: Implement the pure scheduler first**
+- [x] **Step 4: Implement the pure scheduler first — COMPLETE; REREVIEW GO**
 
   Keep it hardware-free and drive all state transitions through explicit
   events. Increment dropped-credit and previous-frame-reuse counters rather
   than silently hiding overload.
 
-- [ ] **Step 5: Integrate the outer sourceboot loop**
+  RED began with the missing module, then caught repeated reuse reopening the
+  two-tick budget, same-field post-reuse service loops, and a queued N+1
+  snapshot not being charged to the next lifetime. GREEN keeps the budget
+  across reuse, resets it only on complete publication, carries an already
+  consumed queued tick, and permits at most one SERVICE/POLL opportunity per
+  observed VBlank. The normal fixture passes; four-tick, repeated-credit, and
+  incomplete-publication mutants are rejected. The aggregate native Make run
+  compiled successfully but its `/usr/bin/sh` executable handoff hit the known
+  quoting defect; the four produced executables were run directly and passed
+  their expected normal/failure contracts. Independent review is NO-GO before
+  Step 5: generation `UINT32_MAX -> 0` collides with zero-valued unset
+  sentinels and can make incomplete work publishable, while publish/promote
+  currently resets generation-local SERVICE/POLL flags and permits more work
+  in the same VBlank. Adapter design also found that `PUBLISH_FRAME` currently
+  commits scheduler state before the fallible runtime arm/publish/retire/VDP
+  sequence succeeds. The repair must add wrap-safe validity state,
+  field-scoped service/poll epochs, and exact-generation publish completion
+  acknowledgement; cover all three defects in RED/GREEN tests; and include
+  `verify-frame-pipeline` in `verify-all`.
+
+  Repair RED/GREEN now covers active and queued generation-zero wrap, forbids
+  same-field SERVICE/POLL after publish/promote, and makes `PUBLISH_FRAME` an
+  intent whose exact generation must be acknowledged success or failure.
+  Failed or absent acknowledgement retains the prior display and cadence
+  budget. Fresh direct compilation/run is GREEN for the nominal fixture and
+  catches all three mutations; `verify-all` now includes the gate. The native
+  Make recipe still hits the known `/usr/bin/sh` quoted-Windows-executable
+  handoff on this host after compilation, so direct executable evidence is
+  retained and the wrapper issue is not misreported as a model failure.
+
+- [ ] **Step 5: Integrate the outer sourceboot loop — ACTIVE; RED 7/7**
 
   Advance authoritative simulation, publish immutable snapshot, notify the
   persistent slave, let the master claim work after its sim phase, poll DMA,
   and publish only complete frame banks. Replace the current catch-up loop and
   direct same-iteration render call.
+
+  A new RED-only integration contract currently fails 7/7 against the legacy
+  loop. It requires one six-action dispatcher; exact-generation tick, render,
+  transfer, and publish helpers; publish acknowledgement only after target
+  bank publication; immutable previous-frame reuse; WAIT-only VBlank blocking;
+  and scheduler-owned dropped-credit telemetry.
 
 - [ ] **Step 6: Verify generation-coherent VDP2 composition**
 

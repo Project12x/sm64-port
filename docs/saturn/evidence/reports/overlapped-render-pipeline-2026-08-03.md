@@ -1816,3 +1816,45 @@ interval executes six simulation ticks and the nine intervals drop 222 more
 VBlank credits. Thus the current per-outer-iteration two-tick catch-up limit
 repeats three times before one frame publishes. Task 9 Step 1 must make normal
 plus recovery work presentation-generation scoped.
+
+### A9 Steps 1--4 scheduler-model review (2026-08-05)
+
+The first hardware-free model passes its nominal fixture and rejects the
+four-tick, repeated-credit, and incomplete-publication mutations. Independent
+review is nevertheless **NO-GO** for runtime integration. Generation wrap from
+`UINT32_MAX` to zero aliases zero-valued unset completion and queued-snapshot
+sentinels, which can make incomplete generation zero publishable. Publication
+also resets generation-local SERVICE/POLL flags, permitting more work for a
+promoted generation during the same observed VBlank. Finally,
+`verify-frame-pipeline` is not yet part of `verify-all`.
+
+The Step 5 integration map found a third contract defect: the model advances
+displayed generation and resets cadence when it returns `PUBLISH_FRAME`, before
+the target's fallible arm-resident-list, bank publication, retirement, and VDP
+commit sequence succeeds. Publication must be an intent followed by an
+exact-generation success acknowledgement; failure must retain the prior
+displayed generation and must not reopen cadence credit.
+
+Step 5 remains blocked. Required evidence is RED/GREEN wrap coverage including
+a queued generation zero, a same-field post-publication service/poll rejection,
+publish failure/acknowledgement coverage, aggregate-gate inclusion, fresh
+nominal and mutation runs, and independent rereview. No target build, runtime
+behavior, or FPS uplift is claimed.
+
+The repair is now source-complete and awaiting independent rereview. Explicit
+validity preserves active and queued generation zero; field-global epochs keep
+SERVICE/POLL bounded across publish/promote; and target publication must
+acknowledge the exact generation before scheduler display/cadence state commits.
+Fresh directly compiled nominal coverage passes and all three mutation
+executables are caught. `verify-frame-pipeline` is included in `verify-all`.
+The host's native Make recipe still compiles then fails at the known MSYS
+quoted-Windows-executable handoff, so the direct results are the product-test
+evidence. Separately, the Step 5 source contract is RED 7/7 against the legacy
+loop. No target build or uplift is claimed.
+
+Independent rereview is **GO** for the scheduler layer. The reviewer reproduced
+nominal PASS and mutation rejection, confirmed wrap-zero validity, global
+per-field work epochs, exact two-phase publication acknowledgement, and
+fail-closed null/wrong-generation handling. Steps 1--4 are complete; Step 5 is
+active from the intentional 7/7 RED source contract. This is not yet runtime or
+FPS evidence.
