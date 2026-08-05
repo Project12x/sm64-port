@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Bound every S64P residency reference to a bounded, nonzero lease token
+  instead of trusting an aggregate consumer count. Duplicate acquisition,
+  duplicate/stale release, and token-table exhaustion now fail closed without
+  changing another snapshot, VDP1 frame-bank, actor-bank, or audio-voice
+  lease, preventing an old generation from being unloaded while a legitimate
+  consumer still owns it.
+
 - Hardened S64P residency after independent review.  Malicious resealed roots
   can no longer drive an unsigned offset underflow and out-of-bounds scan.
   Residency now copies roots and feature-active payloads into explicit,

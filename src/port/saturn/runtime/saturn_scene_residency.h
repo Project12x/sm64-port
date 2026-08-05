@@ -17,6 +17,7 @@ enum {
     SM64_SATURN_SCENE_RETIRE_RENDER = 1U << 0,
     SM64_SATURN_SCENE_RETIRE_BANK = 1U << 1,
     SM64_SATURN_SCENE_RETIRE_VOICE = 1U << 2,
+    SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES = 8U,
 };
 
 typedef struct sm64_saturn_scene_payload_source {
@@ -33,6 +34,7 @@ typedef struct sm64_saturn_scene_resident_identity {
     uint32_t consumer_open_mask;
     uint16_t consumer_reference_count[3];
     uint16_t reserved_consumer;
+    uint32_t consumer_reference_token[3][SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES];
     uint32_t root_storage_offset;
     uint32_t root_byte_count;
     uint32_t destination_base[SM64_SATURN_SCENE_DESTINATION_COUNT];
@@ -83,12 +85,17 @@ bool sm64_saturn_scene_residency_load_section(sm64_saturn_scene_residency_t *sta
                                               uint16_t section_index);
 bool sm64_saturn_scene_residency_commit(sm64_saturn_scene_residency_t *state,
                                         uint32_t generation);
+/*
+ * reference_token is a nonzero lease identity. It must be unique among live
+ * leases for the same consumer and remain bound to that lease until its one
+ * successful release. Duplicate acquire/release and unknown tokens fail closed.
+ */
 bool sm64_saturn_scene_residency_consumer_acquire(
     sm64_saturn_scene_residency_t *state, uint32_t generation,
-    uint32_t consumer);
+    uint32_t consumer, uint32_t reference_token);
 bool sm64_saturn_scene_residency_consumer_release(
     sm64_saturn_scene_residency_t *state, uint32_t generation,
-    uint32_t consumer);
+    uint32_t consumer, uint32_t reference_token);
 bool sm64_saturn_scene_residency_render_snapshot_acquire(
     sm64_saturn_scene_residency_t *state,
     const struct sm64_saturn_render_snapshot *snapshot);
@@ -101,14 +108,23 @@ bool sm64_saturn_scene_residency_vdp1_frame_bank_acquire(
 bool sm64_saturn_scene_residency_vdp1_frame_bank_release(
     sm64_saturn_scene_residency_t *state,
     const struct sm64_saturn_vdp1_frame_bank *bank);
+/*
+ * Actor-bank and audio-voice callers supply the lease token described above.
+ * Actor-bank tokens are limited to 1..0x7fffffff; VDP1 frame handles occupy
+ * the disjoint high-bit namespace of the shared bank-consumer token set.
+ */
 bool sm64_saturn_scene_residency_actor_bank_acquire(
-    sm64_saturn_scene_residency_t *state, uint32_t generation);
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t bank_token);
 bool sm64_saturn_scene_residency_actor_bank_release(
-    sm64_saturn_scene_residency_t *state, uint32_t generation);
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t bank_token);
 bool sm64_saturn_scene_residency_audio_voice_acquire(
-    sm64_saturn_scene_residency_t *state, uint32_t generation);
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t voice_token);
 bool sm64_saturn_scene_residency_audio_voice_release(
-    sm64_saturn_scene_residency_t *state, uint32_t generation);
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t voice_token);
 bool sm64_saturn_scene_residency_unload(sm64_saturn_scene_residency_t *state,
                                         uint32_t generation);
 const sm64_saturn_scene_resident_identity_t *

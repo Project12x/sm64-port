@@ -93,7 +93,7 @@ static void test_root_capacity_and_overlapping_storage_fail_closed(void)
 static void test_commit_snapshot_retention_and_exact_retirement(void)
 {
     test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view; sm64_saturn_scene_residency_t state;
-    sm64_saturn_render_snapshot_t snapshot={0}; sm64_saturn_vdp1_frame_bank_t frame_bank={0};
+    sm64_saturn_render_snapshot_t snapshot={0}, second_snapshot={0}; sm64_saturn_vdp1_frame_bank_t frame_bank={0};
     const sm64_saturn_scene_resident_identity_t *active;
     prepare(&fixture,&view,&state,7U); assert(sm64_saturn_scene_residency_begin(&state,&view,10U)); load_all(&state);
     assert(sm64_saturn_scene_residency_commit(&state,10U)); assert(!sm64_saturn_scene_residency_commit(&state,10U));
@@ -102,22 +102,33 @@ static void test_commit_snapshot_retention_and_exact_retirement(void)
     assert(snapshot.scene_package_id==active->scene_package_id && snapshot.active_feature_mask==7U);
     assert(memcmp(snapshot.audio_bank_identity,active->audio_bank_identity,32U)==0);
     assert(sm64_saturn_scene_residency_render_snapshot_acquire(&state,&snapshot));
+    second_snapshot.generation=10U;
+    assert(sm64_saturn_scene_residency_snapshot_apply(&state,10U,&second_snapshot));
+    assert(sm64_saturn_scene_residency_render_snapshot_acquire(&state,&second_snapshot));
+    assert(!sm64_saturn_scene_residency_render_snapshot_acquire(&state,&snapshot));
     frame_bank.snapshot_generation=10U;
     assert(sm64_saturn_scene_residency_vdp1_frame_bank_acquire(&state,&frame_bank));
-    assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,10U));
-    assert(sm64_saturn_scene_residency_audio_voice_acquire(&state,10U));
+    assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA001U));
+    assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA002U));
+    assert(sm64_saturn_scene_residency_audio_voice_acquire(&state,10U,0xB001U));
     assert(sm64_saturn_scene_residency_begin(&state,&view,11U)); load_all(&state); assert(sm64_saturn_scene_residency_commit(&state,11U));
     assert(!sm64_saturn_scene_residency_begin(&state,&view,11U));
-    assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,10U));
+    assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,10U,0xA003U));
     assert(!sm64_saturn_scene_residency_unload(&state,10U));
-    assert(!sm64_saturn_scene_residency_consumer_release(&state,9U,SM64_SATURN_SCENE_RETIRE_RENDER));
+    assert(!sm64_saturn_scene_residency_consumer_release(&state,9U,SM64_SATURN_SCENE_RETIRE_RENDER,1U));
     assert(sm64_saturn_scene_residency_render_snapshot_release(&state,&snapshot));
+    assert(!sm64_saturn_scene_residency_render_snapshot_release(&state,&snapshot));
     assert(!sm64_saturn_scene_residency_unload(&state,10U));
+    assert(sm64_saturn_scene_residency_render_snapshot_release(&state,&second_snapshot));
     assert(sm64_saturn_scene_residency_vdp1_frame_bank_release(&state,&frame_bank));
-    assert(sm64_saturn_scene_residency_actor_bank_release(&state,10U));
-    assert(sm64_saturn_scene_residency_audio_voice_release(&state,10U));
-    assert(!sm64_saturn_scene_residency_audio_voice_release(&state,10U));
+    assert(sm64_saturn_scene_residency_actor_bank_release(&state,10U,0xA001U));
+    assert(!sm64_saturn_scene_residency_actor_bank_release(&state,10U,0xA001U));
+    assert(!sm64_saturn_scene_residency_unload(&state,10U));
+    assert(sm64_saturn_scene_residency_actor_bank_release(&state,10U,0xA002U));
+    assert(sm64_saturn_scene_residency_audio_voice_release(&state,10U,0xB001U));
+    assert(!sm64_saturn_scene_residency_audio_voice_release(&state,10U,0xB001U));
     assert(sm64_saturn_scene_residency_unload(&state,10U));
+    assert(!sm64_saturn_scene_residency_render_snapshot_release(&state,&snapshot));
 }
 
 static void test_inactive_payloads_validate_without_residency(void)
@@ -127,9 +138,28 @@ static void test_inactive_payloads_validate_without_residency(void)
     assert(sm64_saturn_scene_residency_commit(&state,20U));
     assert(sm64_saturn_scene_residency_active(&state)->destination_bytes[SM64_SATURN_SCENE_DESTINATION_CART]==0U);
     assert(sm64_saturn_scene_residency_active(&state)->destination_bytes[SM64_SATURN_SCENE_DESTINATION_SOUND_RAM]==0U);
-    assert(!sm64_saturn_scene_residency_audio_voice_acquire(&state,20U));
+    assert(!sm64_saturn_scene_residency_audio_voice_acquire(&state,20U,0xB002U));
     prepare(&fixture,&view,&state,0U); fixture.audio[0]^=1U;
     assert(!sm64_saturn_scene_residency_begin(&state,&view,21U));
+}
+
+static void test_consumer_lease_tokens_are_bounded(void)
+{
+    test_scene_fixture_t fixture; sm64_saturn_scene_package_view_t view; sm64_saturn_scene_residency_t state;
+    uint32_t token;
+    prepare(&fixture,&view,&state,7U); assert(sm64_saturn_scene_residency_begin(&state,&view,25U)); load_all(&state);
+    assert(sm64_saturn_scene_residency_commit(&state,25U));
+    assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,25U,0U));
+    assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,25U,0x80000000U));
+    for(token=1U;token<=SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES;token++)
+        assert(sm64_saturn_scene_residency_actor_bank_acquire(&state,25U,token));
+    assert(!sm64_saturn_scene_residency_actor_bank_acquire(&state,25U,1U));
+    assert(!sm64_saturn_scene_residency_actor_bank_acquire(
+        &state,25U,SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES+1U));
+    assert(sm64_saturn_scene_residency_active(&state)->consumer_reference_count[1]==
+        SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES);
+    for(token=1U;token<=SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES;token++)
+        assert(sm64_saturn_scene_residency_actor_bank_release(&state,25U,token));
 }
 
 static void test_failed_replacement_preserves_active_generation(void)
@@ -216,6 +246,7 @@ int main(void) { test_dependency_order_and_atomic_rollback(); test_section_depen
     test_payload_hash_generation_and_capacity_fail_closed();
     test_root_capacity_and_overlapping_storage_fail_closed();
     test_commit_snapshot_retention_and_exact_retirement(); test_inactive_payloads_validate_without_residency();
+    test_consumer_lease_tokens_are_bounded();
     test_failed_replacement_preserves_active_generation(); test_zero_section_package_commits();
     test_committed_bytes_are_owned_and_rehashed();
     test_sound_scratch_exact_fit_and_cross_generation_alignment();

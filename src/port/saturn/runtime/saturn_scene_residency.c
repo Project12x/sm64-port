@@ -464,28 +464,58 @@ static int consumer_index(uint32_t consumer)
     return -1;
 }
 
+static uint32_t reference_token_from_handle(const void *handle,
+                                            uint32_t token_namespace)
+{
+    const uint8_t *bytes = (const uint8_t *)&handle;
+    uint32_t hash = 2166136261U;
+    uint32_t index;
+    for (index = 0U; index < sizeof(handle); index++) {
+        hash ^= bytes[index];
+        hash *= 16777619U;
+    }
+    hash &= 0x7FFFFFFFU;
+    if (hash == 0U) hash = 1U;
+    return hash | token_namespace;
+}
+
 bool sm64_saturn_scene_residency_consumer_acquire(
     sm64_saturn_scene_residency_t *state, uint32_t generation,
-    uint32_t consumer)
+    uint32_t consumer, uint32_t reference_token)
 {
     sm64_saturn_scene_resident_identity_t *identity = find_resident(state, generation);
     int index = consumer_index(consumer);
+    uint32_t slot, available = SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES;
     if (identity == NULL || index < 0 || generation != state->active_generation ||
         (identity->consumer_open_mask & consumer) == 0U ||
-        identity->consumer_reference_count[index] == UINT16_MAX) return false;
+        reference_token == 0U) return false;
+    for (slot = 0U; slot < SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES; slot++) {
+        if (identity->consumer_reference_token[index][slot] == reference_token) return false;
+        if (identity->consumer_reference_token[index][slot] == 0U &&
+            available == SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES) available = slot;
+    }
+    if (available == SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES) return false;
+    identity->consumer_reference_token[index][available] = reference_token;
     identity->consumer_reference_count[index]++;
     return true;
 }
 
 bool sm64_saturn_scene_residency_consumer_release(
     sm64_saturn_scene_residency_t *state, uint32_t generation,
-    uint32_t consumer)
+    uint32_t consumer, uint32_t reference_token)
 {
     sm64_saturn_scene_resident_identity_t *identity = find_resident(state, generation);
     int index = consumer_index(consumer);
-    if (identity == NULL || index < 0 || identity->consumer_reference_count[index] == 0U) return false;
-    identity->consumer_reference_count[index]--;
-    return true;
+    uint32_t slot;
+    if (identity == NULL || index < 0 || reference_token == 0U ||
+        identity->consumer_reference_count[index] == 0U) return false;
+    for (slot = 0U; slot < SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES; slot++)
+        if (identity->consumer_reference_token[index][slot] == reference_token) {
+            identity->consumer_reference_token[index][slot] = 0U;
+            identity->consumer_reference_count[index]--;
+            return true;
+        }
+    return false;
 }
 
 static bool snapshot_matches(const sm64_saturn_scene_resident_identity_t *identity,
@@ -504,7 +534,8 @@ bool sm64_saturn_scene_residency_render_snapshot_acquire(
     sm64_saturn_scene_resident_identity_t *identity =
         find_resident(state, snapshot == NULL ? 0U : snapshot->generation);
     return snapshot_matches(identity, snapshot) && sm64_saturn_scene_residency_consumer_acquire(
-        state, snapshot->generation, SM64_SATURN_SCENE_RETIRE_RENDER);
+        state, snapshot->generation, SM64_SATURN_SCENE_RETIRE_RENDER,
+        reference_token_from_handle(snapshot, 0U));
 }
 
 bool sm64_saturn_scene_residency_render_snapshot_release(
@@ -514,7 +545,8 @@ bool sm64_saturn_scene_residency_render_snapshot_release(
     sm64_saturn_scene_resident_identity_t *identity =
         find_resident(state, snapshot == NULL ? 0U : snapshot->generation);
     return snapshot_matches(identity, snapshot) && sm64_saturn_scene_residency_consumer_release(
-        state, snapshot->generation, SM64_SATURN_SCENE_RETIRE_RENDER);
+        state, snapshot->generation, SM64_SATURN_SCENE_RETIRE_RENDER,
+        reference_token_from_handle(snapshot, 0U));
 }
 
 bool sm64_saturn_scene_residency_vdp1_frame_bank_acquire(
@@ -522,7 +554,8 @@ bool sm64_saturn_scene_residency_vdp1_frame_bank_acquire(
     const struct sm64_saturn_vdp1_frame_bank *bank)
 {
     return bank != NULL && sm64_saturn_scene_residency_consumer_acquire(
-        state, bank->snapshot_generation, SM64_SATURN_SCENE_RETIRE_BANK);
+        state, bank->snapshot_generation, SM64_SATURN_SCENE_RETIRE_BANK,
+        reference_token_from_handle(bank, 0x80000000U));
 }
 
 bool sm64_saturn_scene_residency_vdp1_frame_bank_release(
@@ -530,35 +563,42 @@ bool sm64_saturn_scene_residency_vdp1_frame_bank_release(
     const struct sm64_saturn_vdp1_frame_bank *bank)
 {
     return bank != NULL && sm64_saturn_scene_residency_consumer_release(
-        state, bank->snapshot_generation, SM64_SATURN_SCENE_RETIRE_BANK);
+        state, bank->snapshot_generation, SM64_SATURN_SCENE_RETIRE_BANK,
+        reference_token_from_handle(bank, 0x80000000U));
 }
 
 bool sm64_saturn_scene_residency_actor_bank_acquire(
-    sm64_saturn_scene_residency_t *state, uint32_t generation)
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t bank_token)
 {
+    if (bank_token > 0x7FFFFFFFU) return false;
     return sm64_saturn_scene_residency_consumer_acquire(
-        state, generation, SM64_SATURN_SCENE_RETIRE_BANK);
+        state, generation, SM64_SATURN_SCENE_RETIRE_BANK, bank_token);
 }
 
 bool sm64_saturn_scene_residency_actor_bank_release(
-    sm64_saturn_scene_residency_t *state, uint32_t generation)
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t bank_token)
 {
+    if (bank_token > 0x7FFFFFFFU) return false;
     return sm64_saturn_scene_residency_consumer_release(
-        state, generation, SM64_SATURN_SCENE_RETIRE_BANK);
+        state, generation, SM64_SATURN_SCENE_RETIRE_BANK, bank_token);
 }
 
 bool sm64_saturn_scene_residency_audio_voice_acquire(
-    sm64_saturn_scene_residency_t *state, uint32_t generation)
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t voice_token)
 {
     return sm64_saturn_scene_residency_consumer_acquire(
-        state, generation, SM64_SATURN_SCENE_RETIRE_VOICE);
+        state, generation, SM64_SATURN_SCENE_RETIRE_VOICE, voice_token);
 }
 
 bool sm64_saturn_scene_residency_audio_voice_release(
-    sm64_saturn_scene_residency_t *state, uint32_t generation)
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t voice_token)
 {
     return sm64_saturn_scene_residency_consumer_release(
-        state, generation, SM64_SATURN_SCENE_RETIRE_VOICE);
+        state, generation, SM64_SATURN_SCENE_RETIRE_VOICE, voice_token);
 }
 
 bool sm64_saturn_scene_residency_unload(sm64_saturn_scene_residency_t *state,
@@ -569,7 +609,12 @@ bool sm64_saturn_scene_residency_unload(sm64_saturn_scene_residency_t *state,
     if (state == NULL || generation == 0U || generation == state->active_generation) return false;
     identity = find_resident(state, generation);
     if (identity == NULL || identity->consumer_open_mask != 0U) return false;
-    for (index = 0U; index < 3U; index++) if (identity->consumer_reference_count[index] != 0U) return false;
+    for (index = 0U; index < 3U; index++) {
+        uint32_t token;
+        if (identity->consumer_reference_count[index] != 0U) return false;
+        for (token = 0U; token < SM64_SATURN_SCENE_MAX_CONSUMER_REFERENCES; token++)
+            if (identity->consumer_reference_token[index][token] != 0U) return false;
+    }
     clear_identity_storage(state, identity);
     memset(identity, 0, sizeof(*identity));
     return true;

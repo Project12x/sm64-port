@@ -21,9 +21,14 @@ Ymir, FPS, final-root, broad native-math, and manual gates remain open.
   closed. A new generation does not expose or evict the old generation.
 - Render snapshot, VDP1 frame-bank, actor/animation bank, and (when present)
   audio voice ownership use exact-generation acquisition/release adapters with
-  bounded reference counts. Once a replacement commits, the old generation is
-  closed to later acquisition and cannot unload until existing references
-  retire. Duplicate/stale release cannot clear another reference.
+  bounded per-consumer lease-token sets. Snapshot and VDP1 adapters derive the
+  token from the concrete handle; actor/audio callers provide a nonzero token
+  that is unique among their live leases. Once a replacement commits, the old
+  generation is closed to later acquisition and cannot unload until existing
+  references retire. Duplicate acquire, duplicate/stale release, and bounded
+  token-table exhaustion fail closed without changing another lease.
+  VDP1 handles and explicit actor-bank tokens use disjoint high/low-bit token
+  namespaces because they share the bank-consumer set.
 - Immutable render snapshots now carry a scalar package ID, active-feature
   mask, root/dependency-set hashes, and actor/animation/audio bank identity
   hashes. No package or payload pointer crosses the peer-visible snapshot.
@@ -45,7 +50,9 @@ The first review returned SPEC/QUALITY FAIL. The focused repair adds:
 - owned root/payload copies with post-copy and commit-time hashes, rollback
   clearing, immutable accessors, and source-mutation/corrupt-owned-byte tests;
 - absolute two-generation placement including alignment and scratch;
-- reference-counted render/VDP1/actor/audio lifecycle adapters;
+- token-bound render/VDP1/actor/audio lifecycle adapters, including two-live-
+  handle regressions proving duplicate release of one lease cannot retire the
+  other;
 - an aligned post-`SOURCE.DAT` CART span and a real optional-root boot caller;
 - UTF-8 stable-ID validation and ABI-legal generation-zero/zero-byte payloads;
 - defined SHA behavior: `NULL, 0` is empty, while `NULL` with nonzero length is
@@ -83,6 +90,10 @@ snapshot publication, zero-section commit, malicious root offsets, owned-byte
 mutation isolation, commit-time corruption detection, storage-span overlap,
 root capacity, SOUND-RAM/scratch exact fit, cross-generation absolute
 alignment, UTF-8 stable IDs, generation zero, and zero-byte payloads.
+The retirement regression holds two render handles and two actor-bank tokens
+simultaneously, rejects duplicate acquire/release, proves token A cannot retire
+token B, rejects a stale-generation handle after unload, and permits unload
+only after every legitimate release succeeds.
 
 Snapshot compatibility check:
 
