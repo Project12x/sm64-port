@@ -132,7 +132,9 @@ SECTIONS
    * src/port/saturn/gfx/saturn_fast3d_frontend.h -- not to weaken this
    * assert. */
   PROVIDE (__sourceboot_required_hwram_margin = 0x1B00);
-  ASSERT (0x06100000 - ___end >= __sourceboot_required_hwram_margin,
+  ASSERT (___end <= ORIGIN (ram) + LENGTH (ram),
+          "HWRAM sections extend past the physical top of work RAM. Move bulk CPU-only state to LWRAM before evaluating the required heap margin.")
+  ASSERT (ORIGIN (ram) + LENGTH (ram) - ___end >= __sourceboot_required_hwram_margin,
           "HWRAM margin below libyaul's TLSF control-block floor: the heap libyaul builds at ___end would overrun the top of HWRAM and mirror into low memory. Shrink a static HWRAM consumer.")
 
   /* VDP1 command staging array (vdp1_cmdt_t[]), resident in LWRAM rather
@@ -180,8 +182,9 @@ SECTIONS
   ASSERT (SIZEOF(.lwram_camera_capture) == 0 ||
           SIZEOF(.lwram_camera_capture) == 0x2F7C0,
           "SCC1 capture must be absent or exactly 0x2F7C0 bytes")
-  ASSERT (SIZEOF(.lwram_camera_capture) == 0 ||
-          ORIGIN(lwram) + LENGTH(lwram) -
-              __lwram_camera_capture_end >= 0x4000,
-          "SCC1 leaves less than the measured LWRAM margin")
+  PROVIDE (__sourceboot_required_lwram_margin = 0x4000);
+  ASSERT (__lwram_camera_capture_end <= ORIGIN (lwram) + LENGTH (lwram),
+          "LWRAM sections extend past the physical top of work RAM")
+  ASSERT (ORIGIN (lwram) + LENGTH (lwram) - __lwram_camera_capture_end >= __sourceboot_required_lwram_margin,
+          "LWRAM leaves less than the measured final margin")
 }

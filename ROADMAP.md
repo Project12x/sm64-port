@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — build and capture reviewed A9A true frame-lifetime overlap
+## Now — review and rebuild the A9A HWRAM boot repair
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -14,18 +14,26 @@ all A9 cadence/publication laws, and previous-complete-frame reuse are retained.
 Failure quarantines `N` without replay. Focused lifecycle/source/transfer tests
 and the version-2 cadence decoder are green. Independent review then found an
 active-generation LOD race plus phase, quarantine, and production-harness gaps.
-Fix Round 2 additionally places the complete worker-visible LOD lifetime behind
-the target's P2 `.uncached` boundary, stamps phase events at runtime release
-markers, and combines deferred scene transition with terminal quarantine and
-nonzero `QQ` in the production-linked executable. Focused host/source gates are
-green. Scoped specification and quality rereview is PASS with no findings and
-authorizes exactly one serialized target build/capture.
+Fix Round 2 additionally placed the complete worker-visible LOD lifetime behind
+the target's P2 `.uncached` boundary. The resulting reviewed target built, but
+the repaired observer could not obtain target identity after either 600 or
+4,096 startup VBlanks. Exact ELF inspection found `___end=0x061040D0`,
+`0x40D0` bytes past physical HWRAM: the bulk tier/cluster arrays enlarged
+`.uncached`, while the linker's margin subtraction underflowed and passed.
 
-Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
-two-stage review, then exactly one serialized DLL-safe target build and exact-
-identity capture splitting source tick, overlapping slave work, and complete
-construction with master finalization as a subset. No target build may run in
-parallel, and none was run for either fix round.
+Fix Round 4 keeps the small lifetime record uncached, moves the bulk tier and
+cluster arrays into one LWRAM object, and gives both SH-2s one canonical P2
+accessor. The linker and ELF verifier now check HWRAM/LWRAM upper bounds before
+margin subtraction and enforce the route-0 `0x4000` LWRAM floor. Focused
+source/layout and production-linked mutation gates are green. This is not
+target proof; projected HWRAM and LWRAM margins must be replaced by values from
+a reviewed fresh ELF.
+
+Gate: independent specification and quality review of Fix Round 4, then one
+serialized DLL-safe target build. Record exact P2 placement and both margins,
+prove repaired-image boot/identity, and only then run the bounded overlap/FPS
+capture. No target build, Ymir launch, or capture is authorized from the
+unreviewed repair.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 

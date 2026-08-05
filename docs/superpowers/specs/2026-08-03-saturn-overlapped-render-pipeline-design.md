@@ -359,12 +359,20 @@ each task back here.
   queued source tick for `N+1`. Exactly one render generation remains active;
   snapshot, descriptor payloads, and BUILDING bank remain owned until terminal
   merge/lowering or quarantine. The queued snapshot cannot render before `N`
-  retires and publishes.
+  retires and publishes. Fix Round 4 keeps the small generation/lifetime record
+  P2-uncached but places bulk tier/cluster state in CPU-only LWRAM behind one
+  canonical P2 accessor. Explicit physical-upper-bound checks precede HWRAM
+  and LWRAM margin subtraction. Source repair is green; rereview, rebuilt map,
+  boot, capture, and FPS evidence remain open.
 - [ ] **A10 — full-game hardening:** prove arbitrary scene/actor banks,
   preserve gameplay/camera parity, run strict native-math/publication gates,
   and test on retail hardware when available.
 
 ## Live decision and deviation ledger
+
+| Date | Decision or deviation | Status / evidence |
+| --- | --- | --- |
+| 2026-08-05 | Keep A9A control publication uncached, but move bulk LOD state to one canonical-P2 LWRAM owner and check WRAM tops before margins. | The reviewed Step 11 ELF placed P2 `.uncached` at `0x260FD7D0+0x6900` and `___end` at `0x061040D0`, `0x40D0` beyond physical HWRAM. A subtract-first linker assertion wrapped and passed; identity retries at 600 and 4,096 startup VBlanks never reached target identity. Primitive tiers and cluster LOD state now share one `.lwram_bss` object accessed through one cache-through P2 alias by either SH-2, while the small exact-generation record remains `.uncached`. Linker and ELF validation reject HWRAM/LWRAM upper-bound overflow before enforcing the `0x1B00`/`0x4000` floors. No upstream source was copied; this applies existing project P2/LWRAM patterns. Focused host/source gates are green, but rebuilt placement, repaired-image boot, and performance are unproven pending rereview. |
 | 2026-08-05 | Put A9A worker-visible lifetime and phase publication behind target-coherent release boundaries. | Review of Fix Round 1 proved that host-coherent globals and lifecycle callbacks were insufficient target evidence. Primitive LOD tiers, cluster LOD state, and the exact-generation lifetime now use the linker-owned P2 `.uncached` partition. Sourceboot's VBlank clock and overlap record are likewise uncached. Runtime marker callbacks carry timestamps captured adjacent to notify and positive-retirement release; the phase record is committed before slave wake or retirement visibility. A source/layout contract plus production-linked wrong-generation, late-marker, deferred-scene/quarantine, and `QQ` mutations pins the correction. This remains source-only pending rereview and target evidence. |
 | 2026-08-05 | Insert A9A true frame-lifetime overlap before A10 hardening/publication. | Exact A9 evidence removes the catch-up death spiral but the accepted adapter still blocks inside `sm64_saturn_demo_render_frame()`. A9A introduces start and poll/finalize phases: start publishes immutable generation `N` jobs and returns; poll remains PENDING until positive slave retirement, then the master drains remaining work, validates/merges, lowers once, and retires `N`. FAILED quarantines without full-frame replay. Master-only simulation/input/state/allocation/final order/VDP1/presentation, one active render generation, A9 cadence/publication rules, and A8 transport ownership remain invariant. Pinned SlaveDriver/Z-Treme/Yaul/Jo Engine/PS1 sources retain their recorded pattern/dependency/behavior-study modes; no new source is copied. Task 10 remains hardening/publication, not the next expected FPS lever. |
 | 2026-08-05 | VDP2 composes only a bank-owned camera plus explicit generation metadata. | A9 Step 6 makes the terminal VDP2 input a geometry-free `(displayed, rendered, simulation)` tuple. Displayed/rendered must equal the immutable camera bank generation; simulation names the scheduler's actual authoritative generation, including bounded recovery lead while an old completed frame is reused. A mismatch fails closed before sky/HUD/layer/commit callbacks. This is an internal contract repair with no external adaptation: the existing pinned A9 scheduler and bank interfaces already define the ownership model. Focused host VDP2/runtime and source-boundary mutation tests are green; target/manual/native-math gates remain open. |

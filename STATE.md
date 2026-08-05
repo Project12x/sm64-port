@@ -2,44 +2,41 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Task 9A/A9A Fix Round 2 closes the remaining source findings from review of
-`d45c0a41..420b6ce8`: worker-visible LOD lifetime/tier/cluster state and the
-sourceboot phase clock/record now live behind the target-coherent P2 boundary;
-runtime marker hooks capture notification and positive retirement at their
-actual release sites; and the production-linked integration fixture combines
-deferred scene reset with failure quarantine and nonzero `QQ`. The normal path
-and all six mutations are focused-host/source-green. Scoped rereview of
-`420b6ce8..050aa3bc` is specification PASS and code-quality PASS with no
-findings, authorizing exactly one serialized target build/capture. The sole
-target build described below now exists; no successful capture or FPS result
-exists yet. The accepted demo renderer now exposes
-`start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
-the slave once, and returns. Poll remains PENDING until positive slave
-retirement, then the master drains remaining READY work, validates/merges,
-performs Gouraud/VDP1 lowering exactly once, and retires `N`. FAILED
-quarantines without full-frame replay. Snapshot `N`, descriptor payloads, and
-its BUILDING source bank remain owned while pending; the single queued snapshot
-`N+1` may receive its master-owned source tick but cannot become an active
-render until `N` retires and publishes.
+Task 9A/A9A is **source-repaired in Fix Round 4 and awaiting independent
+review**. The accepted renderer still exposes exact-generation
+`start_frame(N)` and `poll_frame(N)`: start publishes immutable jobs and
+returns after one slave notification; poll waits for positive retirement,
+then drains, merges, lowers once, and retires. Failure quarantines without
+full-frame replay, and snapshot `N`, descriptor payloads, and its BUILDING bank
+remain owned while the one queued master source tick advances `N+1`.
 
-Step 11's sole forced target build passes in 334.1 seconds with ELF
-`5afbc752...3065f0`, ISO `1d5f55f2...ab5411`, and unchanged CUE identity
-`cdbf0bfa...f46dba7`. The first automatic capture failed closed before Ymir
-startup because its observer still required the pre-marker 92-byte `s_runtime`
-symbol while the reviewed target links 104 bytes. Capture/FPS, linked P2
-addresses, and memory margins remain open pending a TDD observer-contract
-repair and independent review; no second target build is authorized.
+Step 11's sole forced target build passed in 334.1 seconds with ELF
+`5afbc752...3065f0`, ISO `1d5f55f2...ab5411`, and CUE
+`cdbf0bfa...f46dba7`. Fix Round 3 repaired the initial observer-layout defect
+without rebuilding. Retries against that unchanged exact target then failed
+identity after both 600 and 4,096 one-VBlank startup attempts. Both logs reach
+disc authentication and load `A.BIN`, then produce no target identity. No FPS,
+runtime phase, or target acceptance is credited.
 
-Fix Round 3 repairs that observer contract without rebuilding or launching
-Ymir. A watched 104-byte fixture proves the marker-enabled telemetry begins at
-offset 40 rather than legacy offset 28; symbol resolution accepts only the
-source-validated 92/104-byte layouts, and observation reads the exact resolved
-size. The focused capture suite passes 35/35, and direct resolution of exact
-ELF `5afbc752...3065f0` selects size 104/offset 40. Capture retry, FPS, P2
-addresses, and margins remain open. Scoped Fix Round 3 review is specification
-PASS and code-quality PASS with one non-blocking documentation Minor, now
-corrected here; retry is authorized only against the unchanged exact ELF/CUE.
-Scoped repair/docs/evidence commit: `39b99c21`.
+Read-only inspection of that exact ELF identifies the boot defect:
+`.uncached` begins at P2 `0x260FD7D0`, has size `0x6900`, and drives
+`___end=0x061040D0`, which is `0x40D0` bytes past physical HWRAM. The previous
+linker expression subtracted `___end` before checking the upper bound, so the
+unsigned underflow satisfied the margin assertion. This diagnosis is strongly
+consistent with the startup failures, but repaired-image boot remains an open
+target gate.
+
+Fix Round 4 moves only the bulk primitive-tier/cluster-LOD storage into one
+`.lwram_bss` object and makes one cache-through accessor the canonical P2
+address used by either SH-2. The small lifetime/generation record remains P2
+`.uncached`. Linker and ELF verification now reject HWRAM overflow before
+margin subtraction, require the P2 `.uncached` physical end to equal
+`___end`, and enforce the final `0x4000` LWRAM margin for route 0 as well as
+capture routes. Focused source/layout tests and the real production-linked
+integration are green, including all six mutations. No target build, Ymir
+launch, or capture was run for this repair. Rebuilt HWRAM/LWRAM margins are
+projections only until independent review authorizes one fresh serialized
+build.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

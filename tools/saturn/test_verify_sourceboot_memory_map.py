@@ -12,8 +12,13 @@ import verify_sourceboot_memory_map as verify
 
 
 def image(name: str, *, end: int, stage: int, scc: bool,
-          camera_variant: int = 1) -> verify.ElfLayout:
+          camera_variant: int = 1,
+          uncached_start: int = 0x060F8000) -> verify.ElfLayout:
     sections = {
+        ".uncached": verify.Section(
+            ".uncached", 0x20000000 | uncached_start,
+            max(0, end - uncached_start), "NOBITS"
+        ),
         ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x20000, "NOBITS"),
         ".lwram_bss": verify.Section(".lwram_bss", 0x00240000, 0x8BB20, "NOBITS"),
     }
@@ -118,6 +123,40 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
                                    required_final_margin=0x1B00)["hwram_margin"],
             0x7000,
         )
+
+    def test_rejects_uncached_end_above_hwram_before_margin_subtraction(self) -> None:
+        overflow = image(
+            "overflow", end=0x061040D0, stage=8, scc=False,
+            uncached_start=0x060FD7D0,
+        )
+        self.assertEqual(overflow.sections[".uncached"].size, 0x6900)
+        with self.assertRaisesRegex(ValueError, "past HWRAM top"):
+            verify.validate_layout(
+                overflow, route=0, stage_sectors=8,
+                required_final_margin=0x1B00,
+            )
+
+    def test_rejects_uncached_section_that_disagrees_with_cached_end(self) -> None:
+        layout = image("uncached-mismatch", end=0x060F9000, stage=8, scc=False)
+        layout.sections[".uncached"] = verify.Section(
+            ".uncached", 0x260F8000, 0x0F00, "NOBITS"
+        )
+        with self.assertRaisesRegex(ValueError, "uncached section end"):
+            verify.validate_layout(
+                layout, route=0, stage_sectors=8,
+                required_final_margin=0x1B00,
+            )
+
+    def test_rejects_route0_lwram_bulk_storage_below_final_margin(self) -> None:
+        layout = image("low-lwram", end=0x060F9000, stage=8, scc=False)
+        layout.sections[".lwram_bss"] = verify.Section(
+            ".lwram_bss", 0x002F0000, 0xD000, "NOBITS"
+        )
+        with self.assertRaisesRegex(ValueError, "LWRAM margin"):
+            verify.validate_layout(
+                layout, route=0, stage_sectors=8,
+                required_final_margin=0x1B00,
+            )
 
     def test_rejects_wrong_command_bank_and_gouraud_regions(self) -> None:
         mutations = []

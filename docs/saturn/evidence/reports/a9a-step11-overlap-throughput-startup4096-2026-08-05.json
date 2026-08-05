@@ -25,10 +25,10 @@
       "size": 3255296
     }
   },
-  "created_utc": "2026-08-05T10:18:11.297497+00:00",
+  "created_utc": "2026-08-05T10:18:51.539824+00:00",
   "evidence_kind": "ymir-sourceboot-queue-throughput",
   "failure": {
-    "message": "target identity did not match after 600 one-VBlank startup attempts",
+    "message": "target identity did not match after 4096 one-VBlank startup attempts",
     "stage": "target-identity",
     "type": "ValueError"
   },
@@ -44,636 +44,9 @@
         "method": "instance.stopped",
         "params": {
           "instance_id": "local-001",
-          "pc": 100672502,
-          "reason": "frame_limit",
-          "sequence": 545,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100672496,
-          "reason": "frame_limit",
-          "sequence": 546,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 6696,
-          "reason": "frame_limit",
-          "sequence": 547,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 548,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 549,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9522,
-          "reason": "frame_limit",
-          "sequence": 550,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8118,
-          "reason": "frame_limit",
-          "sequence": 551,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9054,
-          "reason": "frame_limit",
-          "sequence": 552,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9526,
-          "reason": "frame_limit",
-          "sequence": 553,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8146,
-          "reason": "frame_limit",
-          "sequence": 554,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 555,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8160,
-          "reason": "frame_limit",
-          "sequence": 556,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 557,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8184,
-          "reason": "frame_limit",
-          "sequence": 558,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9054,
-          "reason": "frame_limit",
-          "sequence": 559,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8272,
-          "reason": "frame_limit",
-          "sequence": 560,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8292,
-          "reason": "frame_limit",
-          "sequence": 561,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9066,
-          "reason": "frame_limit",
-          "sequence": 562,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 563,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9046,
-          "reason": "frame_limit",
-          "sequence": 564,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8382,
-          "reason": "frame_limit",
-          "sequence": 565,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9062,
-          "reason": "frame_limit",
-          "sequence": 566,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9056,
-          "reason": "frame_limit",
-          "sequence": 567,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8112,
-          "reason": "frame_limit",
-          "sequence": 568,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8386,
-          "reason": "frame_limit",
-          "sequence": 569,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9066,
-          "reason": "frame_limit",
-          "sequence": 570,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9528,
-          "reason": "frame_limit",
-          "sequence": 571,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9518,
-          "reason": "frame_limit",
-          "sequence": 572,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8426,
-          "reason": "frame_limit",
-          "sequence": 573,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8280,
-          "reason": "frame_limit",
-          "sequence": 574,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 9066,
-          "reason": "frame_limit",
-          "sequence": 575,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8414,
-          "reason": "frame_limit",
-          "sequence": 576,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 8180,
-          "reason": "frame_limit",
-          "sequence": 577,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100834978,
-          "reason": "frame_limit",
-          "sequence": 578,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100827936,
-          "reason": "frame_limit",
-          "sequence": 579,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871370,
-          "reason": "frame_limit",
-          "sequence": 580,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100827970,
-          "reason": "frame_limit",
-          "sequence": 581,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871370,
-          "reason": "frame_limit",
-          "sequence": 582,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100983062,
-          "reason": "frame_limit",
-          "sequence": 583,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100966946,
-          "reason": "frame_limit",
-          "sequence": 584,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100834946,
-          "reason": "frame_limit",
-          "sequence": 585,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100834954,
-          "reason": "frame_limit",
-          "sequence": 586,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
           "pc": 100871374,
           "reason": "frame_limit",
-          "sequence": 587,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 101127162,
-          "reason": "frame_limit",
-          "sequence": 588,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 101127160,
-          "reason": "frame_limit",
-          "sequence": 589,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100834948,
-          "reason": "frame_limit",
-          "sequence": 590,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100884716,
-          "reason": "frame_limit",
-          "sequence": 591,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100874140,
-          "reason": "frame_limit",
-          "sequence": 592,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871374,
-          "reason": "frame_limit",
-          "sequence": 593,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871374,
-          "reason": "frame_limit",
-          "sequence": 594,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100883304,
-          "reason": "frame_limit",
-          "sequence": 595,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871370,
-          "reason": "frame_limit",
-          "sequence": 596,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871372,
-          "reason": "frame_limit",
-          "sequence": 597,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 17142,
-          "reason": "frame_limit",
-          "sequence": 598,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 15390,
-          "reason": "frame_limit",
-          "sequence": 599,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100887852,
-          "reason": "frame_limit",
-          "sequence": 600,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871370,
-          "reason": "frame_limit",
-          "sequence": 601,
-          "target": "sh2.master"
-        }
-      },
-      {
-        "jsonrpc": "2.0",
-        "method": "instance.stopped",
-        "params": {
-          "instance_id": "local-001",
-          "pc": 100871374,
-          "reason": "frame_limit",
-          "sequence": 602,
+          "sequence": 4041,
           "target": "sh2.master"
         }
       },
@@ -684,7 +57,29 @@
           "instance_id": "local-001",
           "pc": 100884562,
           "reason": "frame_limit",
-          "sequence": 603,
+          "sequence": 4042,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871372,
+          "reason": "frame_limit",
+          "sequence": 4043,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834940,
+          "reason": "frame_limit",
+          "sequence": 4044,
           "target": "sh2.master"
         }
       },
@@ -695,7 +90,62 @@
           "instance_id": "local-001",
           "pc": 100871370,
           "reason": "frame_limit",
-          "sequence": 604,
+          "sequence": 4045,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100982758,
+          "reason": "frame_limit",
+          "sequence": 4046,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4047,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834950,
+          "reason": "frame_limit",
+          "sequence": 4048,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4049,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100947838,
+          "reason": "frame_limit",
+          "sequence": 4050,
           "target": "sh2.master"
         }
       },
@@ -706,7 +156,7 @@
           "instance_id": "local-001",
           "pc": 100871370,
           "reason": "frame_limit",
-          "sequence": 605,
+          "sequence": 4051,
           "target": "sh2.master"
         }
       },
@@ -715,9 +165,53 @@
         "method": "instance.stopped",
         "params": {
           "instance_id": "local-001",
-          "pc": 100884554,
+          "pc": 100955276,
           "reason": "frame_limit",
-          "sequence": 606,
+          "sequence": 4052,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4053,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875824,
+          "reason": "frame_limit",
+          "sequence": 4054,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4055,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955368,
+          "reason": "frame_limit",
+          "sequence": 4056,
           "target": "sh2.master"
         }
       },
@@ -728,7 +222,18 @@
           "instance_id": "local-001",
           "pc": 100871374,
           "reason": "frame_limit",
-          "sequence": 607,
+          "sequence": 4057,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875768,
+          "reason": "frame_limit",
+          "sequence": 4058,
           "target": "sh2.master"
         }
       },
@@ -739,17 +244,512 @@
           "instance_id": "local-001",
           "pc": 100871374,
           "reason": "frame_limit",
-          "sequence": 608,
+          "sequence": 4059,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100982728,
+          "reason": "frame_limit",
+          "sequence": 4060,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4061,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834952,
+          "reason": "frame_limit",
+          "sequence": 4062,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4063,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875818,
+          "reason": "frame_limit",
+          "sequence": 4064,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4065,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100951212,
+          "reason": "frame_limit",
+          "sequence": 4066,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4067,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955376,
+          "reason": "frame_limit",
+          "sequence": 4068,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4069,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834954,
+          "reason": "frame_limit",
+          "sequence": 4070,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4071,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100948764,
+          "reason": "frame_limit",
+          "sequence": 4072,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4073,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100949250,
+          "reason": "frame_limit",
+          "sequence": 4074,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4075,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955406,
+          "reason": "frame_limit",
+          "sequence": 4076,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4077,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834956,
+          "reason": "frame_limit",
+          "sequence": 4078,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4079,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875794,
+          "reason": "frame_limit",
+          "sequence": 4080,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4081,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875860,
+          "reason": "frame_limit",
+          "sequence": 4082,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4083,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875542,
+          "reason": "frame_limit",
+          "sequence": 4084,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4085,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834950,
+          "reason": "frame_limit",
+          "sequence": 4086,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4087,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100834962,
+          "reason": "frame_limit",
+          "sequence": 4088,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4089,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100949202,
+          "reason": "frame_limit",
+          "sequence": 4090,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871372,
+          "reason": "frame_limit",
+          "sequence": 4091,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955384,
+          "reason": "frame_limit",
+          "sequence": 4092,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4093,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100949188,
+          "reason": "frame_limit",
+          "sequence": 4094,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4095,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955406,
+          "reason": "frame_limit",
+          "sequence": 4096,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871370,
+          "reason": "frame_limit",
+          "sequence": 4097,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100982726,
+          "reason": "frame_limit",
+          "sequence": 4098,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871372,
+          "reason": "frame_limit",
+          "sequence": 4099,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100875686,
+          "reason": "frame_limit",
+          "sequence": 4100,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871374,
+          "reason": "frame_limit",
+          "sequence": 4101,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100955398,
+          "reason": "frame_limit",
+          "sequence": 4102,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100871372,
+          "reason": "frame_limit",
+          "sequence": 4103,
+          "target": "sh2.master"
+        }
+      },
+      {
+        "jsonrpc": "2.0",
+        "method": "instance.stopped",
+        "params": {
+          "instance_id": "local-001",
+          "pc": 100884556,
+          "reason": "frame_limit",
+          "sequence": 4104,
           "target": "sh2.master"
         }
       }
     ],
-    "notifications_original_bytes": 95561,
-    "notifications_original_count": 609,
+    "notifications_original_bytes": 647530,
+    "notifications_original_count": 4105,
     "notifications_truncated": true,
     "ready": true,
-    "stderr": "ymir-headless: ignoring unknown config key 'ConfigVersion'\nymir-headless: ipl: D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile\\roms\\ipl\\Sega Saturn BIOS (USA).bin\nymir-headless: game: D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue\nymir-headless: slave: enabled\ninfo  | VDP-Config       | Switched to Software VDP renderer\ndebug | SWRender-VDP1    | Enabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Enabling threaded VDP2 rendering\ninfo  | CDDev-Image      | Filesystem built successfully\ndebug | SMPC             | Setting area code to 1\ninfo  | VDP-Config       | Switched to Software VDP renderer\ndebug | SWRender-VDP1    | Enabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Enabling threaded VDP2 rendering\ndebug | SWRender-VDP1    | Disabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Disabling threaded VDP2 rendering\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SNDOFF\ndebug | SMPC             | Processing SNDON\ninfo  | SCSP             | MC68EC00 processor enabled\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SETSMEM 00 00 00 00\ndebug | SMPC             | Processing SETTIME\ndebug | SMPC             | Setting time to 2026/08/05 06:18:00\ndebug | RTC              | Setting host time offset to 3576 seconds\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SETSMEM 00 00 00 00\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SNDOFF\ninfo  | SCSP             | MC68EC00 processor disabled\ndebug | SMPC             | Processing SNDON\ninfo  | SCSP             | MC68EC00 processor enabled\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Performing CD authentication\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 23\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800096 end=800010 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000096 to 0000A5\ndebug | CDBlock-PlayInit | Reset playback position to 000096\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 0\ndebug | CDBlock-PlayInit | Read file A.BIN (ID 2), offset 0, filter 0, frame addresses 0000B7 to 0002B7\ndebug | CDBlock-Transfer | Starting file info transfer - file ID 2\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Performing CD authentication\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 23\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800096 end=800010 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000096 to 0000A5\ndebug | CDBlock-PlayInit | Reset playback position to 000096\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\n",
-    "stderr_original_bytes": 6735,
+    "stderr": "ymir-headless: ignoring unknown config key 'ConfigVersion'\nymir-headless: ipl: D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile\\roms\\ipl\\Sega Saturn BIOS (USA).bin\nymir-headless: game: D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue\nymir-headless: slave: enabled\ninfo  | VDP-Config       | Switched to Software VDP renderer\ndebug | SWRender-VDP1    | Enabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Enabling threaded VDP2 rendering\ninfo  | CDDev-Image      | Filesystem built successfully\ndebug | SMPC             | Setting area code to 1\ninfo  | VDP-Config       | Switched to Software VDP renderer\ndebug | SWRender-VDP1    | Enabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Enabling threaded VDP2 rendering\ndebug | SWRender-VDP1    | Disabling threaded VDP1 rendering\ndebug | SWRender-VDP2    | Disabling threaded VDP2 rendering\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SNDOFF\ndebug | SMPC             | Processing SNDON\ninfo  | SCSP             | MC68EC00 processor enabled\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SETSMEM 00 00 00 00\ndebug | SMPC             | Processing SETTIME\ndebug | SMPC             | Setting time to 2026/08/05 06:19:00\ndebug | RTC              | Setting host time offset to 3596 seconds\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SETSMEM 00 00 00 00\ndebug | SMPC             | Processing RESDISA\ndebug | SMPC             | Processing RESENAB\ndebug | SMPC             | Processing SNDOFF\ninfo  | SCSP             | MC68EC00 processor disabled\ndebug | SMPC             | Processing SNDON\ninfo  | SCSP             | MC68EC00 processor enabled\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Performing CD authentication\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 23\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800096 end=800010 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000096 to 0000A5\ndebug | CDBlock-PlayInit | Reset playback position to 000096\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 0\ndebug | CDBlock-PlayInit | Read file A.BIN (ID 2), offset 0, filter 0, frame addresses 0000B7 to 0002B7\ndebug | CDBlock-Transfer | Starting file info transfer - file ID 2\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Performing CD authentication\ndebug | CDBlock          | Changed directory to / (file ID FFFFFF) using filter 23\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | CD device connected to filter 0\ndebug | CDBlock          | Play parameters: start=800096 end=800010 repeat=0\ndebug | CDBlock-PlayInit | FAD range 000096 to 0000A5\ndebug | CDBlock-PlayInit | Reset playback position to 000096\ndebug | CDBlock-PlayInit | Track:Index 01:01 ctl/ADR=41\ndebug | CDBlock-Play     | Playback ended\ndebug | CDBlock-Play     | Playback end HIRQ triggered\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Aborting transfer\ndebug | CDBlock          | Clearing all buffer partitions\ndebug | CDBlock          | Clearing all partition output connectors\ndebug | CDBlock          | Clearing all filter conditions\ndebug | CDBlock          | Clearing all filter input connectors\ndebug | CDBlock          | Clearing all filter pass output connectors\ndebug | CDBlock          | Clearing all filter fail output connectors\ndebug | CDBlock          | Sector lengths: get=2048 put=2048\ndebug | CDBlock          | Aborting transfer\ninfo  | CDBlock          | Read speed set to 2x\ndebug | CDBlock          | Stopped\n",
+    "stderr_original_bytes": 7502,
     "stderr_truncated": false
   },
   "schema": "sm64-saturn-sourceboot-throughput-v1",

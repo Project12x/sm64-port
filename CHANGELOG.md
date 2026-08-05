@@ -4,15 +4,30 @@
 
 ### Changed
 
+- Repaired the A9A target's HWRAM boot boundary after retries against the
+  unchanged reviewed ELF failed target identity at both 600 and 4,096 startup
+  VBlanks. Its exact map placed `___end` at `0x061040D0`, `0x40D0` bytes past
+  physical HWRAM, because the bulk primitive-tier and cluster-LOD arrays had
+  been moved into P2 `.uncached`; the linker margin subtraction wrapped and
+  did not reject the image. Those arrays now share one CPU-only LWRAM object
+  reached through one canonical P2 alias on both SH-2s, while the small
+  exact-generation lifetime record remains uncached. Linker and ELF gates now
+  reject HWRAM/LWRAM upper-bound overflow before subtracting their required
+  margins, including the route-0 LWRAM floor. This is a source repair only:
+  independent review, a fresh serialized target build, repaired-image boot,
+  P2/map evidence, capture, and FPS remain open.
+
 - Repaired the A9A Step 11 throughput observer after the sole target build
   exposed an intentional runtime-layout evolution. The capture now recognizes
   exactly two source-validated SH-2 layouts: the reachable 92-byte legacy
   runtime with telemetry at byte 28 and the reviewed 104-byte marker-enabled
   runtime with telemetry at byte 40. It reads the resolved symbol size and
   decodes every sequence/counter relative to that layout; nearby or unknown
-  sizes still fail closed. The first failed report remains evidence only of a
-  pre-Ymir observer-contract mismatch. No target rebuild, Ymir launch, capture
-  retry, or FPS claim accompanies this repair.
+  sizes still fail closed. Git history retains the initial pre-Ymir observer-
+  contract failure; the canonical report path was later updated by the
+  authorized unchanged-target identity retry documented above. No target
+  rebuild, Ymir launch, capture retry, or FPS claim accompanied the observer
+  repair itself.
 
 - Closed the second A9A review-fix source round by moving every LOD lifetime
   object read by either SH-2 into the linker-owned P2 `.uncached` partition.

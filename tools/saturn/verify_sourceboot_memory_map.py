@@ -22,6 +22,9 @@ LWRAM_BASE = 0x00200000
 VDP1_COMMAND_BANK_BYTES = 2 * 2048 * 32
 GOURAUD_STAGING_BYTES = 2 * 1536 * 8
 MINIMUM_FINAL_MARGIN = 0x1B00
+MINIMUM_LWRAM_MARGIN = 0x4000
+SH2_P2_BASE = 0x20000000
+SH2_PARTITION_MASK = 0xE0000000
 SCC_START = 0x002CBB20
 SCC_SIZE = 0x2F7C0
 SCC_END = 0x002FB2E0
@@ -146,8 +149,19 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
     end = layout.symbols.get("___end")
     if end is None:
         raise ValueError("ELF lacks ___end")
+    if end.address > HWRAM_TOP:
+        raise ValueError("ELF end is past HWRAM top")
     if HWRAM_TOP - end.address < required_final_margin:
         raise ValueError("ELF HWRAM margin is below required final floor")
+    uncached = layout.sections.get(".uncached")
+    if uncached is None or uncached.kind != "NOBITS" or \
+            uncached.address & SH2_PARTITION_MASK != SH2_P2_BASE:
+        raise ValueError("ELF uncached section is not the exact P2 NOBITS range")
+    uncached_physical_start = uncached.address & ~SH2_P2_BASE
+    uncached_physical_end = uncached_physical_start + uncached.size
+    if uncached_physical_start < HWRAM_BASE or \
+            uncached_physical_end != end.address:
+        raise ValueError("ELF uncached section end disagrees with ___end")
     stage = _c_symbol(layout, "s_source_cart_stage")
     if stage is None or stage.size != stage_sectors * 2048:
         raise ValueError("ELF cart-stage symbol size is wrong")
@@ -164,6 +178,11 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
             command_banks.address < LWRAM_BASE or \
             command_banks.address + command_banks.size > LWRAM_TOP:
         raise ValueError("ELF command banks are not the exact aligned LWRAM range")
+    lwram_bulk = layout.sections.get(".lwram_bss")
+    if lwram_bulk is None or lwram_bulk.kind != "NOBITS" or \
+            lwram_bulk.address < LWRAM_BASE or \
+            lwram_bulk.address + lwram_bulk.size > LWRAM_TOP:
+        raise ValueError("ELF LWRAM bulk section is outside physical LWRAM")
     gouraud = _c_symbol(layout, "sourceboot_gouraud_staging")
     if gouraud is None or gouraud.size != GOURAUD_STAGING_BYTES or \
             gouraud.address % 8 != 0 or gouraud.address < HWRAM_BASE or \
@@ -193,6 +212,13 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
                 raise ValueError(f"SCC1 overlaps {name}")
         if LWRAM_TOP - SCC_END < 0x4000:
             raise ValueError("SCC1 leaves less than the LWRAM floor")
+    lwram_end = max(
+        command_banks.address + command_banks.size,
+        lwram_bulk.address + lwram_bulk.size,
+        capture.address + capture.size if capture is not None else LWRAM_BASE,
+    )
+    if LWRAM_TOP - lwram_end < MINIMUM_LWRAM_MARGIN:
+        raise ValueError("ELF LWRAM margin is below required final floor")
     return {
         "path": str(layout.path), "elf_sha256": layout.sha256,
         "end": end.address, "hwram_margin": HWRAM_TOP - end.address,
@@ -203,6 +229,10 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
         "command_bank_size": command_banks.size,
         "gouraud_staging_address": gouraud.address,
         "gouraud_staging_size": gouraud.size,
+        "uncached_address": uncached.address,
+        "uncached_size": uncached.size,
+        "lwram_end": lwram_end,
+        "lwram_margin": LWRAM_TOP - lwram_end,
     }
 
 

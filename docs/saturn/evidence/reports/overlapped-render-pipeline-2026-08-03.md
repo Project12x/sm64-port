@@ -2244,10 +2244,12 @@ artifacts are ELF `5afbc752...3065f0` (8,745,796 bytes), ISO
 `cdbf0bfa...f46dba7` (88 bytes). The first bounded capture fails closed at
 symbol resolution before Ymir starts: reviewed runtime-marker fields increase
 `s_runtime` from 92 to 104 bytes, but the observer still requires 92. The
-failed JSON report is `a9a-step11-overlap-throughput-2026-08-05.json`. No FPS,
-runtime phase, linked P2 placement, or memory-margin claim is credited. Repair
-and independently review the observer contract against this exact ELF; do not
-rebuild the target.
+failed JSON report path is
+`a9a-step11-overlap-throughput-2026-08-05.json`. Git history retains that
+symbol-resolution result; the working-tree path now records the later
+authorized unchanged-target retry. No FPS, runtime phase, linked P2 placement,
+or memory-margin claim is credited. Repair and independently review the
+observer contract against this exact ELF; do not rebuild the target.
 
 ### Step 11 capture observer Fix Round 3
 
@@ -2270,13 +2272,108 @@ against ELF SHA-256
 `5afbc7527bf470e9c9b099d5874f13030f4a4406dc93d9a751b057584c3065f0`
 resolves `s_runtime` as 104 bytes and selects telemetry offset 40.
 
-The failed JSON is retained and committed as the disposition of the first
-attempt: status `failed`, stage `symbol-resolution`, protocol `ready=false`, no
-notifications, and no Ymir startup. It provides no FPS, phase, P2 placement, or
-margin evidence. Scoped review is specification PASS and code-quality PASS;
+Git history retains the first attempt's `symbol-resolution`, `ready=false`, no-
+notification, pre-Ymir disposition. The canonical path was subsequently
+updated by the authorized unchanged-target retry below. The initial attempt
+provides no FPS, phase, P2 placement, or margin evidence. Scoped review is
+specification PASS and code-quality PASS;
 the 92/28 and 104/40 ABI map, exact live read, fail-closed unknown sizes,
 behavioral tests, and retained artifact hashes verify. Retry is authorized only
 against unchanged ELF `5afbc752...3065f0` / CUE `cdbf0bfa...f46dba7`, with no
 rebuild. One non-blocking stale STATE sentence is corrected in the next docs
 transition. No target rebuild, successful capture, broad verify, or native-
 math census occurred. Scoped repair/docs/evidence commit: `39b99c21`.
+
+## Task 9A Fix Round 4 — HWRAM boot-boundary repair (2026-08-05)
+
+**Status: source/layout GREEN; fresh independent review required.** The Fix
+Round 3 observer was retried only against the unchanged reviewed artifacts.
+The canonical report failed target identity after 600 one-VBlank startup
+attempts; a diagnostic extension failed the same stage after 4,096 attempts.
+Both logs authenticate the disc and load `A.BIN`, then stop before target
+identity. Exact failed reports:
+
+- `docs/saturn/evidence/reports/a9a-step11-overlap-throughput-2026-08-05.json`
+- `docs/saturn/evidence/reports/a9a-step11-overlap-throughput-startup4096-2026-08-05.json`
+
+Both bind ELF SHA-256
+`5afbc7527bf470e9c9b099d5874f13030f4a4406dc93d9a751b057584c3065f0`,
+ISO `1d5f55f2...ab5411`, and CUE `cdbf0bfa...f46dba7`. They are failed boot/
+identity evidence, not FPS, phase, P2-placement, or runtime acceptance.
+
+### Root cause and map evidence
+
+Read-only inspection of that exact ELF reports:
+
+- `___bss_end=0x060FD7D0`;
+- P2 `.uncached=0x260FD7D0+0x6900`;
+- `___end=0x061040D0`, which is `0x40D0` bytes beyond HWRAM top
+  `0x06100000`;
+- `s_render_cluster_lod` accounts for about `0x5ED4` bytes and the primitive
+  tier array for another `0x364` bytes of the bulk LOD allocation.
+
+Fix Round 2 had placed both bulk arrays in `.uncached`. The linker asserted
+`0x06100000 - ___end >= 0x1B00` without first proving `___end` was in HWRAM;
+unsigned subtraction wrapped and accepted an invalid image. The hardened
+Python verifier now stops this exact ELF with `ELF end is past HWRAM top`.
+This is a root-cause inference for the observed non-boot until a repaired image
+boots; it is not retrospective target proof.
+
+### Watched RED and implementation
+
+The new contracts were observed RED before production edits:
+
+- `test_a9_overlap_target_coherency.py`: 3 failures / 2 passes. It found no
+  combined LWRAM LOD owner, no single P2 accessor shared by both CPU paths, and
+  no ordered linker upper-bound assertions.
+- `test_verify_sourceboot_memory_map.py`: 3 failures / 10 passes. The verifier
+  accepted route-0 LWRAM with only `0x3000` free, accepted the exact HWRAM
+  overflow via only a generic margin failure, and accepted a `.uncached` end
+  inconsistent with `___end`.
+
+GREEN changes:
+
+- `demo_lod_storage_t` combines primitive tiers and cluster LOD state in one
+  `.lwram_bss` object. `demo_lod_storage_cache_through()` is the only storage
+  accessor and returns the same P2 alias for master admission/lifetime setup
+  and whichever CPU claims WORLD_LOWER. No cached P1 access or purge protocol
+  remains. The small `s_lod_lifetime` publication record stays `.uncached`.
+- `sourceboot-cart.x` rejects HWRAM and LWRAM physical-top overflow before
+  subtracting the `0x1B00` and `0x4000` floors. The final LWRAM floor applies
+  to route 0 as well as the optional SCC1 route.
+- `verify_sourceboot_memory_map.py` checks HWRAM overflow first, requires P2
+  `.uncached` NOBITS to terminate physically at `___end`, validates LWRAM bulk
+  bounds, and reports/enforces the final LWRAM margin.
+- The real production-linked integration fixture passes one shared LOD storage
+  pointer through master and worker paths while retaining exact-generation,
+  deferred-scene, terminal-quarantine, and nonzero-`QQ` coverage.
+
+Focused GREEN actually run, serially:
+
+- `.venv-saturn-tools\Scripts\python.exe tools\saturn\test_a9_overlap_target_coherency.py`:
+  5/5 PASS.
+- `.venv-saturn-tools\Scripts\python.exe tools\saturn\test_verify_sourceboot_memory_map.py`:
+  13/13 PASS.
+- `mingw32-make -f Makefile.saturn.mk verify-render-overlap-integration`:
+  production integration PASS; all six active-reset, omitted-start,
+  late-notify, late-retire, ignored-generation, and skipped-quarantine-refresh
+  mutations rejected.
+- The changed cluster-storage test passes. Running its full seven-test file
+  also exposed one unrelated pre-existing assertion for the absent
+  `sm64_mario_render_cluster_lod_vertex_offsets` reference-stream symbol; no
+  unrelated production or verifier file was changed for that failure.
+
+No target build, Ymir launch, capture, broad verify, or native-math census was
+run. Based only on the old map and exact symbol sizes, the projected repaired
+end is about `0x060FDE98` (roughly `0x2168` HWRAM free) and projected LWRAM
+free is about `0x74E0`. The HWRAM estimate is only `0x668` above the required
+floor, so both values must be replaced by reviewed rebuilt-ELF/map evidence.
+Canonical P2 cluster access may also affect performance and must be remeasured.
+
+Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
+and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
+modes. This repair applies existing project `.lwram_bss`, dual-frame cache-
+through, and canonical-P2 snapshot patterns; no upstream source was copied or
+closely ported. Scoped implementation/docs commit is recorded in the Task 9A
+Fix Round 4 SDD report. Fresh specification and code-quality review are the
+next gate; only a GO may authorize one serialized repaired target build.

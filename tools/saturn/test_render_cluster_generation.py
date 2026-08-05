@@ -61,13 +61,22 @@ class RenderClusterGenerationTest(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         source = (root / "src/port/saturn/gfx/saturn_demo_render.c").read_text()
 
-        for name in ("s_render_cluster_lod", "s_admitted_cluster_results"):
+        for name in ("s_lod_storage", "s_admitted_cluster_results"):
             with self.subTest(name=name):
                 match = re.search(rf"static[^;]*\b{name}\b[^;]*;", source,
                                   flags=re.DOTALL)
                 self.assertIsNotNone(match)
                 declaration = match.group(0)
                 self.assertIn('__attribute__((section(".lwram_bss")))', declaration)
+        storage = re.search(
+            r"typedef\s+struct\s+demo_lod_storage\s*\{(?P<body>.*?)\}\s*"
+            r"demo_lod_storage_t\s*;",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(storage)
+        self.assertIn("primitive_tiers", storage.group("body"))
+        self.assertIn("cluster_lod", storage.group("body"))
 
     def test_renderer_normalizes_one_generation_before_admission(self) -> None:
         """A3 must not tag admission zero when transform wrap publishes one."""

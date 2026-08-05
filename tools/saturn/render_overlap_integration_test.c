@@ -2,12 +2,18 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "saturn_dual_frame_bank.h"
 #include "saturn_frame_pipeline.h"
 #include "saturn_lod_lifetime.h"
 #include "saturn_render_job_graph.h"
 #include "saturn_render_job_runtime.h"
 #include "saturn_render_lifecycle.h"
 #include "saturn_render_overlap_phase.h"
+
+typedef struct integration_lod_storage {
+    uint8_t tiers[1];
+    uint8_t cluster_lod[4];
+} integration_lod_storage_t;
 
 typedef struct integration_context {
     sm64_saturn_render_job_queue_t queue;
@@ -16,8 +22,9 @@ typedef struct integration_context {
     sm64_saturn_render_overlap_phase_t phase;
     sm64_saturn_lod_lifetime_t lod;
     sm64_saturn_render_job_runtime_telemetry_t telemetry;
-    uint8_t tiers[1];
-    uint8_t cluster_lod[4];
+    integration_lod_storage_t lod_storage;
+    integration_lod_storage_t *master_lod_storage;
+    integration_lod_storage_t *worker_lod_storage;
     uint32_t clock;
     uint32_t generation;
     uint32_t notify_boundary;
@@ -27,6 +34,13 @@ typedef struct integration_context {
     bool fail_admit;
     bool phase_ok;
 } integration_context_t;
+
+static integration_lod_storage_t *integration_lod_storage_cache_through(
+    integration_context_t *context)
+{
+    return context == NULL ? NULL : (integration_lod_storage_t *)
+        sm64_saturn_dual_frame_cache_through(&context->lod_storage);
+}
 
 static const int s_snapshot_identity;
 static const int s_bank_identity;
@@ -42,6 +56,13 @@ static bool integration_job(
     if (job->type == SM64_SATURN_RENDER_JOB_WORLD_ADMIT)
         return !context->fail_admit;
     if (job->type != SM64_SATURN_RENDER_JOB_WORLD_LOWER)
+        return false;
+    context->worker_lod_storage =
+        integration_lod_storage_cache_through(context);
+    if (context->worker_lod_storage == NULL ||
+        context->worker_lod_storage != context->master_lod_storage ||
+        context->lod.tiers != context->worker_lod_storage->tiers ||
+        context->lod.cluster_lod != context->worker_lod_storage->cluster_lod)
         return false;
     uint8_t transition = 0U;
     const saturn_lod_thresholds_t thresholds =
@@ -176,6 +197,9 @@ static bool begin_generation(integration_context_t *context,
     context->notify_boundary = notify_boundary;
     context->phase_ok = true;
     context->marker_clock_reads = 0U;
+    context->master_lod_storage =
+        integration_lod_storage_cache_through(context);
+    if (context->master_lod_storage == NULL) return false;
     return sm64_saturn_render_overlap_phase_begin(
                &context->phase, generation, construction_begin) &&
         sm64_saturn_render_overlap_phase_bind(
@@ -208,13 +232,13 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
         sm64_saturn_frame_pipeline_action_generation(&pipeline) != 8U)
         return 14;
 
-    context->tiers[0] = SATURN_LOD_FAR;
-    context->cluster_lod[0] = 0x7FU;
+    context->master_lod_storage->tiers[0] = SATURN_LOD_FAR;
+    context->master_lod_storage->cluster_lod[0] = 0x7FU;
     if (sm64_saturn_lod_lifetime_observe_scene(
             &context->lod, true, 2, 1))
         return 15;
-    if (context->tiers[0] != SATURN_LOD_FAR ||
-        context->cluster_lod[0] != 0x7FU)
+    if (context->master_lod_storage->tiers[0] != SATURN_LOD_FAR ||
+        context->master_lod_storage->cluster_lod[0] != 0x7FU)
         return 16;
     uint8_t wrong_generation_tier = 0xA5U;
     uint8_t wrong_generation_transition = 0x5AU;
@@ -223,7 +247,7 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
     if (sm64_saturn_lod_lifetime_select(
             &context->lod, 8U, 0U, 6500, 45U, &thresholds,
             &wrong_generation_tier, &wrong_generation_transition) ||
-        context->tiers[0] != SATURN_LOD_FAR ||
+        context->master_lod_storage->tiers[0] != SATURN_LOD_FAR ||
         wrong_generation_tier != 0xA5U ||
         wrong_generation_transition != 0x5AU)
         return 26;
@@ -248,8 +272,9 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
         return 20;
     if (!sm64_saturn_lod_lifetime_finish(&context->lod, 7U)) return 21;
     if (context->worker_lod != SATURN_LOD_FAR) return 22;
-    if (context->tiers[0] != SATURN_LOD_NEAR ||
-        context->cluster_lod[0] != 0U)
+    if (context->master_lod_storage->tiers[0] != SATURN_LOD_NEAR ||
+        context->master_lod_storage->cluster_lod[0] != 0U ||
+        context->worker_lod_storage != context->master_lod_storage)
         return 23;
     if (context->phase.construction_vblank_crossings != 4U ||
         context->phase.construction_count != 1U ||
@@ -280,12 +305,12 @@ static int test_failed_generation_publishes_nonzero_quarantine(
 {
     context->fail_admit = true;
     if (!begin_generation(context, 8U, 20U, 21U)) return 30;
-    context->tiers[0] = SATURN_LOD_FAR;
-    context->cluster_lod[0] = 0x55U;
+    context->master_lod_storage->tiers[0] = SATURN_LOD_FAR;
+    context->master_lod_storage->cluster_lod[0] = 0x55U;
     if (sm64_saturn_lod_lifetime_observe_scene(
             &context->lod, true, 3, 1) ||
-        context->tiers[0] != SATURN_LOD_FAR ||
-        context->cluster_lod[0] != 0x55U)
+        context->master_lod_storage->tiers[0] != SATURN_LOD_FAR ||
+        context->master_lod_storage->cluster_lod[0] != 0x55U)
         return 35;
     context->clock = 22U;
     if (sm64_saturn_render_job_runtime_poll_slave() != 1U) return 31;
@@ -295,8 +320,8 @@ static int test_failed_generation_publishes_nonzero_quarantine(
             &context->lifecycle, &s_lifecycle_ops, context, 8U) !=
             SM64_SATURN_RENDER_LIFECYCLE_FAILED)
         return 32;
-    if (context->tiers[0] != SATURN_LOD_FAR ||
-        context->cluster_lod[0] != 0x55U)
+    if (context->master_lod_storage->tiers[0] != SATURN_LOD_FAR ||
+        context->master_lod_storage->cluster_lod[0] != 0x55U)
         return 36;
     if (!context->phase_ok ||
         !sm64_saturn_render_overlap_phase_terminal(
@@ -306,8 +331,8 @@ static int test_failed_generation_publishes_nonzero_quarantine(
         return 33;
     if (context->telemetry.slave_failures != 1U ||
         context->telemetry.quarantined != 1U ||
-        context->tiers[0] != SATURN_LOD_NEAR ||
-        context->cluster_lod[0] != 0U)
+        context->master_lod_storage->tiers[0] != SATURN_LOD_NEAR ||
+        context->master_lod_storage->cluster_lod[0] != 0U)
         return 34;
     return 0;
 }
@@ -318,9 +343,11 @@ int main(void)
     sm64_saturn_render_job_queue_init(&context.queue);
     sm64_saturn_render_job_graph_init(&context.graph, &context.queue);
     sm64_saturn_render_overlap_phase_init(&context.phase);
+    integration_lod_storage_t *const lod_storage =
+        integration_lod_storage_cache_through(&context);
     sm64_saturn_lod_lifetime_init(
-        &context.lod, context.tiers, sizeof(context.tiers),
-        context.cluster_lod, sizeof(context.cluster_lod));
+        &context.lod, lod_storage->tiers, sizeof(lod_storage->tiers),
+        lod_storage->cluster_lod, sizeof(lod_storage->cluster_lod));
     if (!sm64_saturn_render_job_runtime_activate_graph(
             &context.graph, &s_callbacks, &context))
         return 2;

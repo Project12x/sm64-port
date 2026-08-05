@@ -198,7 +198,7 @@ and zero fields were unattributed. Nine intervals also dropped 222 credits.
 Scheduler budgets therefore reset only after a new complete frame is
 presented, never merely because the outer loop observes another VBlank.
 
-**A9A lifetime correction — source-implemented through Step 9, 2026-08-05.**
+**A9A lifetime correction — Fix Round 4 source-repaired, 2026-08-05.**
 The accepted A9 adapter formerly constructed one frame synchronously. A9A
 splits generation `N` into a
 notify-only start and a positive-retirement poll/finalize. While `N` is
@@ -221,16 +221,21 @@ versioned-cadence tests are green; review and target evidence remain open.
 Independent A9A review exposed one exception to that immutable-lifetime claim:
 the N+1 source tick could reset the global LOD tier/cluster state while N's
 slave lower job still used it. The renderer now defers those scene resets in a
-generation gate and applies them only after exact N retirement. The gate,
-primitive tiers, and cluster LOD state are linker-owned P2 `.uncached` objects,
-so the slave never consumes an ordinary cached master static. A shared scene-
+generation gate and applies them only after exact N retirement.
+The small generation gate is a linker-owned P2 `.uncached` object. The bulk
+primitive-tier and cluster-LOD arrays share one `.lwram_bss` object; both SH-2s
+use the same cache-through P2 accessor, so the slave never consumes an ordinary
+cached master static. Keeping those bulk arrays uncached had pushed the exact
+reviewed ELF `0x40D0` bytes beyond physical HWRAM while the old linker margin
+subtraction underflowed. The linker and ELF verifier now reject HWRAM/LWRAM
+upper-bound overflow before applying their margin floors. A shared scene-
 neutral overlap controller is stamped at the runtime notify and positive-
 retirement release sites; its phase record is published before slave wake or
 retirement visibility. Terminal telemetry scans quarantine state before queue
 reset. A production-linked fixture combines active deferred scene state with
 failure quarantine, proves reset ordering and nonzero `QQ`, and catches late-
-marker plus wrong-generation mutations. Fresh source rereview remains required
-before target evidence.
+marker plus wrong-generation mutations. Fresh source rereview and a repaired
+target build remain required before placement, boot, or performance evidence.
 
 At that terminal boundary, VDP2 composes only the immutable sky camera carried
 by the displayed VDP1 bank and a small displayed/rendered/simulation generation

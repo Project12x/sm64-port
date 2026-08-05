@@ -331,11 +331,17 @@ and the evidence report before starting another task.
   six-tick catch-up death spiral while deliberately retaining synchronous
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
-- [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--10 are
-  source-complete. Fix Round 2 closes the review findings and scoped rereview
-  of `420b6ce8..050aa3bc` is specification PASS, code-quality PASS, with no
-  findings and GO for exactly one serialized target build/capture. No target/
-  FPS claim exists yet. The accepted
+- [ ] **Task 9A / A9A — true frame-lifetime overlap:** active. Steps 1--9
+  remain source-complete through the previously reviewed overlap
+  implementation; Fix Round 4 is source-repaired and reopens Step 10 for fresh
+  independent review. The sole
+  target build linked `___end=0x061040D0`, `0x40D0` past HWRAM, after bulk LOD
+  arrays moved into `.uncached`; the old margin subtraction underflowed. Both
+  retries against that unchanged ELF failed target identity after 600 and
+  4,096 startup VBlanks. The bulk arrays now share one LWRAM object and one P2
+  accessor while the small lifetime record remains uncached; HWRAM/LWRAM
+  bounds fail before margin subtraction. No repaired target/FPS claim exists.
+  The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
   the master may execute the one queued source tick for `N+1`. Exactly one
@@ -2324,7 +2330,7 @@ expected FPS lever.
   marker timing, and I3 production-path assurance are closed. Step 11 target/
   capture, manual Ymir, broad verify, and native-math remain unchecked.
 
-- [x] **Step 10: Complete two-stage source review before any target build — PASS / GO**
+- [ ] **Step 10: Complete two-stage source review before any target build — PREVIOUS PASS; FIX ROUND 4 REREVIEW REQUIRED**
 
   Request specification review against this Task 9A contract, then quality
   review across the exact scoped diff. Required verdict is GO/PASS from both.
@@ -2338,8 +2344,11 @@ expected FPS lever.
   code-quality PASS with no Critical, Important, or Minor findings. The
   reviewer explicitly authorizes exactly one serialized Step 11 build/capture;
   actual ELF/map P2 addresses, memory margins, and runtime uplift remain open.
+  That authorization was consumed by the sole build. Fix Round 4 changes
+  storage ownership and linker/verifier acceptance, so specification and
+  code-quality review are reopened before any fresh target build.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — BUILD PASS; CAPTURE CONTRACT BLOCKED**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — BUILD PASS; IDENTITY RETRIES FAILED; BOOT REPAIR AWAITS REVIEW**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2357,7 +2366,10 @@ expected FPS lever.
   `cdbf0bfa...f46dba7` (88 bytes). The first bounded capture failed closed at
   symbol resolution before Ymir startup because the production runtime grew
   from 92 to 104 bytes for exact marker ownership while the observer still
-  required 92. Failed report: `a9a-step11-overlap-throughput-2026-08-05.json`.
+  required 92. At that transition the failed report path was
+  `a9a-step11-overlap-throughput-2026-08-05.json`; Git history retains that
+  symbol-resolution result, while the working-tree report now records the
+  later authorized unchanged-target retry.
   Capture/FPS, linked P2 addresses, and memory margins remain unchecked while
   the observer layout contract is repaired and reviewed; do not rebuild.
 
@@ -2370,11 +2382,44 @@ expected FPS lever.
   The observer now selects only those two explicit layouts from the resolved
   ELF symbol size and reads that exact byte count; unknown sizes still fail
   closed. The focused capture suite passes 35/35, and symbol-only validation of
-  exact ELF `5afbc752...3065f0` selects 104/40. The failed JSON remains the
-  disposition of the first pre-Ymir attempt, not target runtime evidence.
+  exact ELF `5afbc752...3065f0` selects 104/40. Git history retains the first
+  pre-Ymir disposition; the canonical JSON was subsequently updated by the
+  authorized unchanged-target retry recorded below.
   Scoped repair/docs/evidence commit: `39b99c21`. Review found one non-blocking
   stale STATE sentence, corrected in this transition. No rebuild or FPS result
   was produced.
+
+  The reviewed observer then ran against the unchanged exact ELF/CUE. The
+  canonical report failed target identity after 600 one-VBlank startup
+  attempts; a bounded diagnostic extension failed the same stage after 4,096.
+  Both logs authenticate the disc and load `A.BIN`, then stop before target
+  identity. Reports:
+  `a9a-step11-overlap-throughput-2026-08-05.json` and
+  `a9a-step11-overlap-throughput-startup4096-2026-08-05.json`. They share ELF
+  SHA-256 `5afbc752...3065f0`, ISO `1d5f55f2...ab5411`, and CUE
+  `cdbf0bfa...f46dba7`. Neither is FPS or runtime-phase evidence.
+
+  Fix Round 4 exact-map diagnosis finds P2 `.uncached` at
+  `0x260FD7D0+0x6900` and `___end=0x061040D0`, `0x40D0` beyond physical
+  HWRAM. The old linker assertion evaluated `0x06100000 - ___end` without a
+  prior upper-bound check, so unsigned wrap admitted the image. Watched RED
+  covered four missing contracts: reject HWRAM overflow before subtraction,
+  move bulk LOD state out of HWRAM, forbid ordinary cached-P1 storage access,
+  and enforce the final route-0 LWRAM floor. GREEN combines primitive tiers
+  and cluster LOD state in one `.lwram_bss` object reached through one P2
+  cache-through accessor by both CPUs; the small lifetime record remains
+  `.uncached`. Linker assertions and the ELF verifier check both WRAM upper
+  bounds before margin subtraction and require `.uncached`'s physical end to
+  equal `___end`.
+
+  Focused GREEN: target-coherency source contract 5/5; sourceboot memory-map
+  verifier 13/13; production-linked render-overlap integration PASS with all
+  six mutations rejected. Read-only validation of the failed exact ELF now
+  stops with `ELF end is past HWRAM top`. No target build, Ymir launch,
+  capture, or FPS measurement was run for Fix Round 4. Projected margins
+  (`~0x2168` HWRAM and `~0x74E0` LWRAM) are planning estimates, not target
+  evidence; replace them with reviewed rebuilt-ELF/map values. Fresh two-stage
+  review is the next gate.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

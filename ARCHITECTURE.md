@@ -121,9 +121,12 @@ frame overlap.
 
 Task 9A adds the missing CPU lifetime overlap without changing those owners.
 After independent review remediation, the renderer owns an exact-generation
-LOD lifetime entirely in the target's linker-owned P2 `.uncached` partition:
-an N+1 source scene transition updates only pending master state while N is
-active, and tier/cluster reset is applied only after N's terminal lifecycle.
+LOD lifetime with a small control record in the target's linker-owned P2
+`.uncached` partition and one bulk tier/cluster object in `.lwram_bss`. Both
+SH-2s reach that LWRAM object through the same cache-through P2 accessor, so
+neither side leaves or consumes a cached P1 alias. An N+1 source scene
+transition updates only pending master state while N is active, and
+tier/cluster reset is applied only after N's terminal lifecycle.
 Runtime notify and positive-retirement release sites stamp one scene-neutral
 phase controller. The controller record is published before slave wake or
 retirement release, so the peer cannot observe a half-published phase edge;
@@ -131,8 +134,11 @@ construction includes first-service preparation plus terminal lowering and
 master finalization remains its explicit subset.
 Terminal queue telemetry is refreshed before retirement reset. The repaired
 boundary is focused-host/source-green, including generation, late-marker,
-deferred-reset, and quarantine mutations, and remains a source candidate
-pending fresh two-stage review, with target timing deliberately unmeasured.
+deferred-reset, quarantine, HWRAM-upper-bound, and route-0 LWRAM-margin
+mutations. Link-time assertions check physical WRAM tops before margin
+subtraction. The repair remains a source candidate pending fresh two-stage
+review, with rebuilt placement, boot, and target timing deliberately
+unmeasured.
 For generation `N`, renderer start may publish only immutable descriptor
 contexts and notify the slave, then must return before master drain, queue
 retirement, Gouraud reservation, VDP1 begin/lowering, or transfer. Sourceboot

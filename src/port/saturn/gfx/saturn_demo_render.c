@@ -191,15 +191,30 @@ static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_recovery[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_corner_count[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_lod_tier[SM64_SATURN_BOB_PRIMITIVE_COUNT]
-    DEMO_CROSS_CPU_SHARED;
+/* Tier and cluster hysteresis are bulk CPU-only work state. Keep one physical
+ * LWRAM owner and make both SH-2s use its P2 cache-through alias; retaining a
+ * cached P1 owner beside that alias would make scene reset/select incoherent.
+ * The small exact-generation publication record remains in HWRAM `.uncached`.
+ */
+typedef struct demo_lod_storage {
+    uint8_t primitive_tiers[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+    sm64_saturn_render_lod_state_t cluster_lod[
+        SM64_SATURN_BOB_CLUSTER_COUNT];
+} demo_lod_storage_t;
+static demo_lod_storage_t s_lod_storage
+    __attribute__((section(".lwram_bss")));
+
+static demo_lod_storage_t *demo_lod_storage_cache_through(void)
+{
+    return (demo_lod_storage_t *)
+        sm64_saturn_dual_frame_cache_through(&s_lod_storage);
+}
+
 static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_pretransform_lod_tier;
-static sm64_saturn_render_lod_state_t s_render_cluster_lod[
-    SM64_SATURN_BOB_CLUSTER_COUNT] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_cluster_result_t s_admitted_cluster_results[
     SM64_SATURN_BOB_CLUSTER_COUNT] __attribute__((section(".lwram_bss")));
 static uint16_t s_admitted_cluster_count;
@@ -709,6 +724,8 @@ static void demo_prepare_render_work_order(
     const sm64_saturn_camera_transform_t *camera,
     sm64_saturn_fast3d_profile_t *profile, uint32_t transform_generation)
 {
+    demo_lod_storage_t *const lod_storage =
+        demo_lod_storage_cache_through();
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
     /* BSP traversal has already appended the bounded work list. */
 #else
@@ -735,7 +752,7 @@ static void demo_prepare_render_work_order(
             continue;
         }
         sm64_saturn_render_lod_state_t *const lod =
-            &s_render_cluster_lod[primitive];
+            &lod_storage->cluster_lod[primitive];
         if (lod->thresholds.mid_enter_depth == 0 &&
             lod->thresholds.far_enter_depth == 0)
             lod->thresholds = saturn_lod_default_thresholds();
@@ -1364,6 +1381,8 @@ static void demo_build_primitive_work_metadata(void)
 
 void sm64_saturn_demo_render_init(void)
 {
+    demo_lod_storage_t *const lod_storage =
+        demo_lod_storage_cache_through();
     sm64_saturn_render_job_queue_init(&s_render_job_queue);
     sm64_saturn_render_callback_context_bank_init(
         &s_render_callback_contexts);
@@ -1390,9 +1409,9 @@ void sm64_saturn_demo_render_init(void)
         s_actor_queue_ref_slave, sizeof(s_actor_queue_ref_master[0]),
         DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY);
     sm64_saturn_lod_lifetime_init(
-        &s_lod_lifetime, s_primitive_lod_tier,
-        sizeof(s_primitive_lod_tier), s_render_cluster_lod,
-        sizeof(s_render_cluster_lod));
+        &s_lod_lifetime, lod_storage->primitive_tiers,
+        sizeof(lod_storage->primitive_tiers), lod_storage->cluster_lod,
+        sizeof(lod_storage->cluster_lod));
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
     memset(s_primitive_lod_suppressed, 0,
