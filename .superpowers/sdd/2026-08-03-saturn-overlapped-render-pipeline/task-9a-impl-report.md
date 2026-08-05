@@ -6,6 +6,8 @@ Base: `0350a473`
 
 RED checkpoint: `ec81ddc6`
 
+Implementation: `0f5ccd65`
+
 Status: Steps 1--9 source-implemented and focused-host-green; Steps 10--12 not
 started. This is not a review, target-build, runtime-capture, or FPS claim.
 
@@ -67,7 +69,8 @@ upstream source was copied or closely ported.
 - `verify-demo-render-overlap`: missing production lifecycle module.
 - Capture decoder: absent v2/76-byte record and overlap-window phase.
 
-The RED checkpoint is `ec81ddc6`. Plain `python` and `make` were unavailable;
+The RED checkpoint is `ec81ddc6`; the implementation is `0f5ccd65`. Plain
+`python` and `make` were unavailable;
 reruns used the repository venv and native `mingw32-make`. No MSYS/SH command
 was invoked.
 

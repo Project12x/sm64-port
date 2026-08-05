@@ -1990,7 +1990,8 @@ shared bank transport owns every frame upload.
 
 **Status:** Steps 1--9 source-implemented and focused-host-green; specification
 and quality review are next. No target build, capture, or FPS evidence exists
-yet, and Task 9A is not source-complete before those reviews.
+yet, and Task 9A is not source-complete before those reviews. RED is
+`ec81ddc6`; the scoped implementation is `0f5ccd65`.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
 
@@ -2273,6 +2274,10 @@ expected FPS lever.
   keeps the slave lifetime outside additive attribution, and reports master
   finalization separately. Capture tests pass 31/31 and cadence source tests
   pass 3/3, including torn/version/size/wrap/overlap mutations.
+
+  Steps 1--9 are checkpointed by `ec81ddc6..0f5ccd65`. Independent review,
+  target build/capture, broad verify, native-math, and manual Ymir remain
+  unchecked.
 
 - [ ] **Step 10: Complete two-stage source review before any target build**
 

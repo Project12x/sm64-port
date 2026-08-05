@@ -4,7 +4,8 @@ See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
 Task 9A/A9A Steps 1--9 are source-implemented and focused-host-green; two-stage
 source review is next, so the task is not yet source-complete and no target
-build, capture, or FPS result exists. The accepted demo renderer now exposes
+build, capture, or FPS result exists. RED is `ec81ddc6`; the scoped Steps 1--9
+implementation is `0f5ccd65`. The accepted demo renderer now exposes
 `start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
 the slave once, and returns. Poll remains PENDING until positive slave
 retirement, then the master drains remaining READY work, validates/merges,

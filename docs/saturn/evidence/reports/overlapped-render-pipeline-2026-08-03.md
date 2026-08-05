@@ -2096,7 +2096,7 @@ work. Reuse mode remains dependency/API use for Yaul and project-owned
 pattern-only lifetime code for SlaveDriver, Sonic Z-Treme, and Jo Engine;
 sm64-psx remains behavior-study only. No new upstream source was copied.
 
-RED checkpoint is `ec81ddc6`. The implementation commit is recorded by the
-subsequent reconciliation entry. Independent specification/quality review,
+RED checkpoint is `ec81ddc6`; scoped implementation is `0f5ccd65`. Independent
+specification/quality review,
 the serialized target build, exact-identity cadence capture, manual Ymir, broad
 verify, and native-math census remain unchecked.
