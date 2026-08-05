@@ -253,5 +253,5 @@ Self-review verdict: PASS for this bounded host-source contract.  Independent
 rereview is pending the controller; target/Ymir/FPS, package-link/seal, broad
 native-math, and manual gates remain explicitly open and were not run.  The
 controller-owned active plan and progress ledger were preserved and unstaged.
-Implementation is recorded by this repair commit (`fix(saturn): close native
-scene graph gaps`).
+Implementation commit: `32937067ffc6a8c96ba13289c746481438a1a649`
+(`fix(saturn): close native scene graph gaps`).
