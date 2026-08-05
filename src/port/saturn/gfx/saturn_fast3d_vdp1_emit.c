@@ -2,13 +2,6 @@
 
 #include "saturn_gouraud.h"
 #include "saturn_gouraud_bank.h"
-#include "saturn_gouraud_transfer.h"
-#include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of gfx/ under
-                                           * src/port/saturn/; no -I path
-                                           * exposes gpl/ by bare name, so
-                                           * this matches hwtest's existing
-                                           * "../gpl/..." include style
-                                           * rather than a bare filename. */
 
 _Static_assert(sizeof(sm64_saturn_gouraud_table_t) ==
                sizeof(vdp1_gouraud_table_t),
@@ -102,24 +95,6 @@ bool sm64_saturn_fast3d_vdp1_emit(sm64_saturn_fast3d_frontend_t *frontend,
         }
     }
 
-    saturn_dma_queue_sequence_t gouraud_sequence;
-    bool gouraud_retried;
-    if (!sm64_saturn_gouraud_transfer_submit(
-            gouraud_bank, &gouraud_sequence, &gouraud_retried)) {
-        profile->pipeline_faults++;
-        return false;
-    }
-    if (gouraud_retried)
-        profile->pipeline_faults++;
     sm64_saturn_vdp1_backend_finish(backend);
-    if (gouraud_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
-        /* This is the single VRAM dependency boundary. Construction above
-         * overlapped the previous plot; only now, just before the next list
-         * is made drawable, may we overwrite its Gouraud partition. */
-        vdp1_sync_wait();
-        saturn_dma_queue_kick();
-        saturn_dma_queue_wait(gouraud_sequence);
-    }
-    sm64_saturn_vdp1_backend_upload(backend);
     return true;
 }

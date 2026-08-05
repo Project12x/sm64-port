@@ -2053,11 +2053,22 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
             "render_job_master_wait_iterations",
             "render_job_failures",
             "render_job_quarantined",
+            "command_cpu_dmac_wait_ticks_last",
+            "command_cpu_dmac_wait_ticks_accum",
+            "gouraud_scu_dma_wait_ticks_last",
+            "gouraud_scu_dma_wait_ticks_accum",
+            "vdp1_overwrite_wait_ticks_last",
+            "vdp1_overwrite_wait_ticks_accum",
+            "vdp1_bank_unavailable_skips",
+            "vdp1_terminal_fence_wait_ticks_last",
+            "vdp1_terminal_fence_wait_ticks_accum",
+            "vdp1_transfer_faults",
+            "vdp1_transfer_queued_not_started",
         )
-        self.assertEqual(tuple(field.name for field in layout.fields[-39:]), appended)
+        self.assertEqual(tuple(field.name for field in layout.fields[-50:]), appended)
         self.assertEqual(
             layout.field("master_worker_started").offset,
-            layout.fields[-40].end,
+            layout.fields[-51].end,
         )
 
         data = bytearray(layout.size)
@@ -2264,6 +2275,17 @@ class Fast3dProfileDecodeTests(unittest.TestCase):
                 "render_job_master_wait_iterations",
                 "render_job_failures",
                 "render_job_quarantined",
+                "command_cpu_dmac_wait_ticks_last",
+                "command_cpu_dmac_wait_ticks_accum",
+                "gouraud_scu_dma_wait_ticks_last",
+                "gouraud_scu_dma_wait_ticks_accum",
+                "vdp1_overwrite_wait_ticks_last",
+                "vdp1_overwrite_wait_ticks_accum",
+                "vdp1_bank_unavailable_skips",
+                "vdp1_terminal_fence_wait_ticks_last",
+                "vdp1_terminal_fence_wait_ticks_accum",
+                "vdp1_transfer_faults",
+                "vdp1_transfer_queued_not_started",
             ],
         )
         # Fields the older build did have still read correctly.

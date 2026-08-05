@@ -1514,7 +1514,31 @@ yet.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
-**Status:** active next task; no A8 behavior is complete yet.
+**Status:** source-integrated and focused-host-green; independent review and
+serialized target validation remain open. No Ymir/FPS claim.
+
+**A8 design correction (2026-08-05):** the final command and Gouraud
+destinations remain single VDP1-VRAM ranges in A8, so no transfer may begin
+until the previous displayed/plotting list has crossed `vdp1_sync_wait()`.
+A8 therefore overlaps source-bank construction with the prior VDP1 plot and
+makes both post-boundary submissions wait-free; it does not claim that the
+VRAM writes themselves overlap the prior plot. True frame-over-frame transfer
+overlap requires destination ownership/banking and remains A9 scope.
+`cpu_dmac_transfer()` is accepted only after a same-channel idle poll because
+the pinned public Yaul helper contains an internal channel wait; this is a
+proved-zero precondition, not an assertion that the helper is intrinsically
+nonblocking.
+The frame queue exclusively owns CPU-DMAC channel 0 after
+`saturn_dma_queue_init()`; all boot-time channel-0 work must finish before that
+handoff, and source gates reject other frame-loop owners. The overwrite-safe
+gate is explicit and precedes submission, not publication, because submission
+is the first VRAM mutation. Command and Gouraud descriptors are reserved and
+committed atomically so a failed second descriptor cannot leave the first
+queued against a quarantined/reusable bank. A8 intentionally retains
+SlaveDriver's serial bounded FIFO—CPU-DMAC command retirement can be observed
+before SCU-DMA Gouraud retirement, but the transports do not run concurrently.
+The demo and normal/full-game emitters both become construction-only; the
+shared bank transport owns every frame upload.
 
 **Files:**
 - Modify: `src/port/saturn/gpl/slavedriver_dma_queue.h`
@@ -1523,10 +1547,16 @@ yet.
 - Modify: `src/port/saturn/gfx/saturn_vdp1_frame_bank.h`
 - Modify: `src/port/saturn/gfx/saturn_vdp1_frame_bank.c`
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c`
+- Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`
+- Modify: `src/port/saturn/gfx/saturn_gouraud_transfer.c`
+- Modify: `src/port/saturn/gfx/saturn_fast3d_frontend.h`
 - Modify: `src/port/saturn/sourceboot/main.c`
 - Modify: `src/port/saturn/gfx/saturn_vdp2_frame.c`
 - Modify: `tools/saturn/dma_queue_test.c`
 - Create: `tools/saturn/vdp1_transfer_pipeline_test.c`
+- Create: `tools/saturn/test_vdp1_transfer_pipeline_source.py`
+- Modify: `tools/saturn/fast3d_profile_decode.py`
+- Modify: `tools/saturn/test_tools.py`
 - Modify: `Makefile.saturn.mk`
 - Modify: `docs/saturn/SLAVEDRIVER_ADAPTATION.md`
 - Modify: architecture spec, this plan, and evidence report
@@ -1550,23 +1580,23 @@ yet.
       sm64_saturn_vdp1_wait_stats_t *waits);
   ```
 
-- [ ] **Step 1: Write red transfer-selection tests**
+- [x] **Step 1: Write red transfer-selection tests**
 
   Mock CPU-DMAC and SCU DMA separately. Assert LWRAM commands select CPU-DMAC,
   HWRAM Gouraud selects SCU DMA, LWRAM+SCU is rejected, both tickets are needed
   before publication, and submit performs zero waits.
 
-- [ ] **Step 2: Add source anti-pattern checks**
+- [x] **Step 2: Add source anti-pattern checks**
 
   Reject `vdp1_sync_wait(); saturn_dma_queue_kick();
   saturn_dma_queue_wait(...)` inside `sm64_saturn_demo_render_frame()` and
   reject direct `sm64_saturn_vdp1_backend_upload()` in its accepted pipeline.
 
-- [ ] **Step 3: Add `verify-vdp1-transfer-pipeline` and record red evidence**
+- [x] **Step 3: Add `verify-vdp1-transfer-pipeline` and record red evidence**
 
   Expected: current immediate-wait sequence and CPU-copy upload are detected.
 
-- [ ] **Step 4: Add CPU-DMAC queue transport using pinned Yaul APIs**
+- [x] **Step 4: Add CPU-DMAC queue transport using pinned Yaul APIs**
 
   Adapt the public `cpu_dmac_transfer(0, dst, src, size)` lifecycle from pinned
   Yaul `libyaul/scu/bus/cpu/cpu_dmac.c`. Do not copy internal implementation.
@@ -1574,25 +1604,27 @@ yet.
   `cpu_dmac_transfer_wait(0)` only at bank reuse/publication when polling has
   not already observed retirement.
 
-- [ ] **Step 5: Submit both transfers after bank construction**
+- [x] **Step 5: Submit both transfers after bank construction**
 
   Finish command links, publish CPU cache writes, submit command CPU-DMAC and
   Gouraud SCU DMA, return from render construction, and poll tickets from the
   main loop. Remove the disabled `#if 0 && ...` upload branch.
 
-- [ ] **Step 6: Publish only after transfer and VDP1 list safety**
+- [x] **Step 6: Publish only after transfer and VDP1 list safety**
 
   Wait for old VDP1 list ownership only at the actual VRAM overwrite/publish
   boundary. Never overwrite the displayed/plotting list. Coalesce VDP2 state at
   the same VBlank-owned transition.
 
-- [ ] **Step 7: Measure the real waits**
+- [x] **Step 7: Measure the real waits**
 
   Add distinct counters for command CPU-DMAC wait, Gouraud SCU-DMA wait,
   VDP1-list overwrite wait, bank-reuse wait, and terminal fence. Update HUD and
   decoder so `VDP1W` no longer samples only later nonblocking calls.
 
 - [ ] **Step 8: Run DMA, transfer, bank, VDP2, memory-map, and runtime gates**
+  — focused host gates are green; presentation/runtime/memory-map and one
+  serialized target build remain open until source review readiness.
 
   Expected: all PASS; submit-before-wait ordering and transport selection are
   enforced by mutation tests.

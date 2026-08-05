@@ -3,6 +3,37 @@
 
 #include "saturn_gouraud_bank.h"
 #include "saturn_vdp1_frame_bank.h"
+#include "slavedriver_dma_queue.h"
+
+int saturn_dma_queue_submit_pair(
+    void *first_dst, const void *first_src, size_t first_len,
+    saturn_dma_queue_mode_t first_mode,
+    void *second_dst, const void *second_src, size_t second_len,
+    saturn_dma_queue_mode_t second_mode,
+    saturn_dma_queue_sequence_t *first_sequence,
+    saturn_dma_queue_sequence_t *second_sequence)
+{
+    (void)first_dst; (void)first_src; (void)first_len; (void)first_mode;
+    (void)second_dst; (void)second_src; (void)second_len; (void)second_mode;
+    (void)first_sequence; (void)second_sequence;
+    return 0;
+}
+saturn_dma_queue_sequence_t saturn_dma_queue_submit(
+    void *dst, const void *src, size_t len, saturn_dma_queue_mode_t mode)
+{
+    (void)dst; (void)src; (void)len; (void)mode;
+    return SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+}
+void saturn_dma_queue_poll(void) {}
+void saturn_dma_queue_kick(void) {}
+int saturn_dma_queue_sequence_failed(saturn_dma_queue_sequence_t sequence)
+{ (void)sequence; return 0; }
+int saturn_dma_queue_sequence_retired(saturn_dma_queue_sequence_t sequence)
+{ (void)sequence; return 0; }
+int saturn_dma_queue_sequence_started(saturn_dma_queue_sequence_t sequence)
+{ (void)sequence; return 0; }
+int saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
+{ (void)sequence; return 0; }
 
 static void test_region_contract(void)
 {
@@ -70,6 +101,9 @@ static void test_lifecycle_and_ticket_retirement(void)
     assert(!sm64_saturn_vdp1_frame_bank_publish(&set, first));
     assert(sm64_saturn_vdp1_frame_bank_record_transfers_retired(
         first, 200U, 201U));
+    assert(!sm64_saturn_vdp1_frame_bank_publish(&set, first));
+    assert(sm64_saturn_vdp1_frame_bank_arm_resident_list(first));
+    assert(!sm64_saturn_vdp1_frame_bank_arm_resident_list(first));
     assert(sm64_saturn_vdp1_frame_bank_publish(&set, first));
     assert(first->state == SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED);
     assert(set.published == first);

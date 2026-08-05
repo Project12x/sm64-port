@@ -1722,3 +1722,22 @@ Fresh ELF:
 SHA-256 `1eba88885b611f0c99dea3971dda871fcc30fdb8ac21c4fcfc5e051f0e99267c`.
 A7 is complete. A8 is active next but has no behavior-complete claim; A7 adds
 no Ymir, hardware, asynchronous-transfer, or FPS result.
+
+### A8 deferred-transfer source integration (2026-08-05)
+
+A8 removes both accepted emitters' blocking transfer/upload tails. Sourceboot
+now crosses the single-destination VDP1 overwrite fence, atomically enqueues
+the LWRAM command prefix as CPU-DMAC and the HWRAM Gouraud prefix as SCU-DMA,
+kicks once, and returns without waiting. A later field polls exact descriptor
+status; both retirements are required before the master consumes a one-shot
+resident-list arm, publishes the bank, and presents that bank's snapshot
+generation. A first-descriptor failure keeps the sibling draining before the
+bank becomes QUARANTINED, so queued work cannot outlive reusable source data.
+
+Focused host evidence is green: strict DMA queue, A7 frame-bank, A8 transfer
+pipeline, VDP2 HUD, and profile layout/decode fixtures, plus the source
+anti-pattern/state-machine checks. These prove serial transport selection,
+zero submit waits, busy-channel guards, exact destination/capacity rules,
+atomic pair failure, staggered retirement, durable exact failure status, and
+exactly-once arm. Independent review and target compilation remain open. No
+target boot, Ymir capture, hardware result, or FPS improvement is claimed.

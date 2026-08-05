@@ -96,7 +96,14 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("a stale VBlank generation must reuse the completed VDP1 list")
     stale_wait = "sm64_saturn_source_runtime_wait_vblank();"
     stale_wait_index = loop.index(stale_wait)
-    presentation_call = "sourceboot_present_generation(scheduler_now);"
+    presentation_call = "sourceboot_present_generation(presentation_generation);"
+    if re.search(
+        r"presentation_generation\s*=\s*"
+        r"sourceboot_vdp1_frame_banks\.published[^;]*snapshot_generation",
+        loop,
+        re.S,
+    ) is None:
+        raise AssertionError("presentation must use the published bank generation")
     if "continue;" not in loop[stale_wait_index : loop.index(presentation_call)]:
         raise AssertionError("stale VBlank generation must wait instead of rebuilding")
     if "catchup < SOURCEBOOT_MAX_SIM_CATCHUP" not in loop:
@@ -239,16 +246,16 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
     def test_rejects_terminal_boundary_escape_mutations(self) -> None:
         source = self.source_with_bootstrap_vdp2_retirement()
         escaped_vdp1 = source.replace(
-            "    sourceboot_present_generation(scheduler_now);",
-            "    sourceboot_present_generation(scheduler_now);\n    vdp1_sync_render();",
+            "            sourceboot_present_generation(presentation_generation);",
+            "            sourceboot_present_generation(presentation_generation);\n    vdp1_sync_render();",
             1,
         )
         with self.assertRaisesRegex(AssertionError, "VDP1 submission escapes"):
             assert_presentation_boundary(escaped_vdp1)
 
         escaped_vdp2 = source.replace(
-            "    sourceboot_present_generation(scheduler_now);",
-            "    sourceboot_present_generation(scheduler_now);\n    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,\n                                      &sourceboot_vdp2_backend);",
+            "            sourceboot_present_generation(presentation_generation);",
+            "            sourceboot_present_generation(presentation_generation);\n    sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,\n                                      &sourceboot_vdp2_backend);",
             1,
         )
         with self.assertRaisesRegex(AssertionError, "VDP2 commit escapes"):
@@ -256,7 +263,7 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
 
     def test_rejects_duplicate_terminal_presentation_mutation(self) -> None:
         source = self.source_with_bootstrap_vdp2_retirement()
-        call = "    sourceboot_present_generation(scheduler_now);"
+        call = "            sourceboot_present_generation(presentation_generation);"
         mutated = source.replace(call, f"{call}\n{call}", 1)
         with self.assertRaisesRegex(AssertionError, "exactly one presentation"):
             assert_presentation_boundary(mutated)

@@ -472,6 +472,20 @@ typedef struct sm64_saturn_fast3d_profile {
     uint32_t render_job_master_wait_iterations;
     uint32_t render_job_failures;
     uint32_t render_job_quarantined;
+    /* A8 transfer-pipeline diagnostics. The two transport waits remain zero
+     * on the ordinary deferred path; overwrite and terminal fences are timed
+     * separately so VDP1W no longer conflates unrelated boundaries. */
+    uint32_t command_cpu_dmac_wait_ticks_last;
+    uint32_t command_cpu_dmac_wait_ticks_accum;
+    uint32_t gouraud_scu_dma_wait_ticks_last;
+    uint32_t gouraud_scu_dma_wait_ticks_accum;
+    uint32_t vdp1_overwrite_wait_ticks_last;
+    uint32_t vdp1_overwrite_wait_ticks_accum;
+    uint32_t vdp1_bank_unavailable_skips;
+    uint32_t vdp1_terminal_fence_wait_ticks_last;
+    uint32_t vdp1_terminal_fence_wait_ticks_accum;
+    uint32_t vdp1_transfer_faults;
+    uint32_t vdp1_transfer_queued_not_started;
 } sm64_saturn_fast3d_profile_t;
 
 /* Screen-space position + per-corner color for one already-transformed,

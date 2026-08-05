@@ -21,7 +21,6 @@
 #define SATURN_DMA_QUEUE_CPU_PHYSICAL_MASK UINT32_C(0x0FFFFFFF)
 #define SATURN_DMA_QUEUE_LWRAM_BASE UINT32_C(0x00200000)
 #define SATURN_DMA_QUEUE_LWRAM_SIZE UINT32_C(0x00100000)
-#define SATURN_DMA_QUEUE_SEQUENCE_HALF_RANGE UINT32_C(0x80000000)
 
 typedef struct saturn_dma_request {
         void *dst;
@@ -35,8 +34,19 @@ static size_t _head;
 static size_t _tail;
 static bool _active;
 static saturn_dma_queue_sequence_t _next_sequence;
-static saturn_dma_queue_sequence_t _retired_sequence;
 static uint32_t _wait_ticks;
+
+typedef enum saturn_dma_completion_status {
+        SATURN_DMA_COMPLETION_NONE = 0,
+        SATURN_DMA_COMPLETION_RETIRED,
+        SATURN_DMA_COMPLETION_FAILED,
+} saturn_dma_completion_status_t;
+typedef struct saturn_dma_completion {
+        saturn_dma_queue_sequence_t sequence;
+        saturn_dma_completion_status_t status;
+} saturn_dma_completion_t;
+static saturn_dma_completion_t _completions[SATURN_DMA_QUEUE_CAPACITY];
+static size_t _completion_head;
 
 static size_t
 _next_index(size_t index)
@@ -62,8 +72,12 @@ _request_valid(void *dst, const void *src, size_t len,
         if (dst == NULL || src == NULL || len == 0U) {
                 return false;
         }
-        if (mode != SATURN_DMA_QUEUE_CPU && mode != SATURN_DMA_QUEUE_SCU) {
+        if (mode != SATURN_DMA_QUEUE_CPU && mode != SATURN_DMA_QUEUE_SCU &&
+            mode != SATURN_DMA_QUEUE_CPU_DMAC) {
                 return false;
+        }
+        if (mode == SATURN_DMA_QUEUE_CPU_DMAC) {
+                return ((((uintptr_t)dst | (uintptr_t)src | len) & 3U) == 0U);
         }
         if (mode != SATURN_DMA_QUEUE_SCU) {
                 return true;
@@ -75,12 +89,25 @@ _request_valid(void *dst, const void *src, size_t len,
             !_scu_range_intersects_lwram(src, len);
 }
 
-static bool
-_sequence_retired_through(saturn_dma_queue_sequence_t sequence)
+static saturn_dma_completion_status_t
+_completion_status(saturn_dma_queue_sequence_t sequence)
 {
-        return _retired_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID &&
-            (uint32_t)(_retired_sequence - sequence) <
-                SATURN_DMA_QUEUE_SEQUENCE_HALF_RANGE;
+        for (size_t index = 0U; index < SATURN_DMA_QUEUE_CAPACITY; index++) {
+                if (_completions[index].sequence == sequence) {
+                        return _completions[index].status;
+                }
+        }
+        return SATURN_DMA_COMPLETION_NONE;
+}
+
+static void
+_completion_record(saturn_dma_queue_sequence_t sequence,
+    saturn_dma_completion_status_t status)
+{
+        _completions[_completion_head] = (saturn_dma_completion_t){
+            sequence, status
+        };
+        _completion_head = _next_index(_completion_head);
 }
 
 static bool
@@ -105,7 +132,8 @@ saturn_dma_queue_init(void)
         if (_next_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
                 _next_sequence = 1U;
         }
-        _retired_sequence = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+        memset(_completions, 0, sizeof(_completions));
+        _completion_head = 0U;
         _wait_ticks = 0U;
 }
 
@@ -129,6 +157,45 @@ saturn_dma_queue_submit(void *dst, const void *src, size_t len,
         return sequence;
 }
 
+int
+saturn_dma_queue_submit_pair(
+    void *first_dst, const void *first_src, size_t first_len,
+    saturn_dma_queue_mode_t first_mode,
+    void *second_dst, const void *second_src, size_t second_len,
+    saturn_dma_queue_mode_t second_mode,
+    saturn_dma_queue_sequence_t *first_sequence,
+    saturn_dma_queue_sequence_t *second_sequence)
+{
+        if (first_sequence == NULL || second_sequence == NULL) {
+                return 0;
+        }
+        *first_sequence = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+        *second_sequence = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+        if (!_request_valid(first_dst, first_src, first_len, first_mode) ||
+            !_request_valid(second_dst, second_src, second_len, second_mode)) {
+                return 0;
+        }
+        const size_t after_first = _next_index(_head);
+        const size_t after_second = _next_index(after_first);
+        if (after_first == _tail || after_second == _tail) {
+                return 0;
+        }
+        if (_next_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+                _next_sequence = 1U;
+        }
+        *first_sequence = _next_sequence++;
+        if (_next_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
+                _next_sequence = 1U;
+        }
+        *second_sequence = _next_sequence++;
+        _queue[_head] = (saturn_dma_request_t){ first_dst, first_src,
+            first_len, first_mode, *first_sequence };
+        _queue[after_first] = (saturn_dma_request_t){ second_dst, second_src,
+            second_len, second_mode, *second_sequence };
+        _head = after_second;
+        return 1;
+}
+
 void
 saturn_dma_queue_kick(void)
 {
@@ -136,12 +203,29 @@ saturn_dma_queue_kick(void)
                 return;
         }
         const saturn_dma_request_t *request = &_queue[_tail];
+        if (request->mode == SATURN_DMA_QUEUE_CPU_DMAC) {
+                cpu_dmac_status_t status;
+                cpu_dmac_status_get(&status);
+                /* The pinned public helper waits before programming channel
+                 * 0. Enter it only after the same public status API proves
+                 * that wait is zero; this queue is channel 0's frame owner. */
+                if ((status.channel_busy & 1U) != 0U) {
+                        return;
+                }
+        }
+        if (request->mode == SATURN_DMA_QUEUE_SCU &&
+            scu_dma_level_busy(0) != 0U) {
+                return;
+        }
         _active = true;
         if (request->mode == SATURN_DMA_QUEUE_SCU) {
                 if (request->len != 0U) {
                         scu_dma_transfer(0, request->dst, request->src,
                                          request->len);
                 }
+        } else if (request->mode == SATURN_DMA_QUEUE_CPU_DMAC) {
+                cpu_dmac_transfer(0, request->dst, request->src,
+                                  request->len);
         } else {
                 if (request->len != 0U) {
                         memcpy(request->dst, request->src, request->len);
@@ -169,9 +253,45 @@ saturn_dma_queue_poll(void)
             scu_dma_level_busy(0) != 0U) {
                 return;
         }
-        _retired_sequence = request->sequence;
+        if (request->mode == SATURN_DMA_QUEUE_CPU_DMAC &&
+            request->len != 0U) {
+                cpu_dmac_status_t status;
+                cpu_dmac_status_get(&status);
+                if (status.address_error != 0U || status.nmi_interrupt != 0U) {
+                        _completion_record(request->sequence,
+                                           SATURN_DMA_COMPLETION_FAILED);
+                        _tail = _next_index(_tail);
+                        _active = false;
+                        return;
+                }
+                if ((status.channel_busy & 1U) != 0U) {
+                        return;
+                }
+        }
+        _completion_record(request->sequence, SATURN_DMA_COMPLETION_RETIRED);
         _tail = _next_index(_tail);
         _active = false;
+}
+
+int
+saturn_dma_queue_sequence_retired(saturn_dma_queue_sequence_t sequence)
+{
+        return sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID &&
+            _completion_status(sequence) == SATURN_DMA_COMPLETION_RETIRED;
+}
+
+int
+saturn_dma_queue_sequence_failed(saturn_dma_queue_sequence_t sequence)
+{
+        return sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID &&
+            _completion_status(sequence) == SATURN_DMA_COMPLETION_FAILED;
+}
+
+int
+saturn_dma_queue_sequence_started(saturn_dma_queue_sequence_t sequence)
+{
+        return sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID && _active &&
+            _tail != _head && _queue[_tail].sequence == sequence;
 }
 
 int
@@ -180,10 +300,13 @@ saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
         if (sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
                 return 0;
         }
+        if (saturn_dma_queue_sequence_failed(sequence)) {
+                return 0;
+        }
         /* A caller may recheck a completed fence. Modular subtraction keeps
          * this correct across UINT32_MAX -> 1 while the fixed FIFO bounds the
          * live sequence distance to fewer than 16 descriptors. */
-        if (_sequence_retired_through(sequence)) {
+        if (saturn_dma_queue_sequence_retired(sequence)) {
                 return 1;
         }
         if (!_sequence_outstanding(sequence)) {
@@ -195,9 +318,12 @@ saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence)
 #if !defined(SATURN_DMA_QUEUE_HOST_TEST)
         const uint16_t wait_start = cpu_frt_count_get();
 #endif
-        while (!_sequence_retired_through(sequence)) {
+        while (!saturn_dma_queue_sequence_retired(sequence)) {
                 saturn_dma_queue_kick();
                 saturn_dma_queue_poll();
+                if (saturn_dma_queue_sequence_failed(sequence)) {
+                        return 0;
+                }
         }
 #if !defined(SATURN_DMA_QUEUE_HOST_TEST)
         _wait_ticks += (uint16_t)(cpu_frt_count_get() - wait_start);

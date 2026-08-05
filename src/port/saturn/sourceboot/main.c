@@ -115,6 +115,9 @@ static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
 static uint32_t sourceboot_vdp1_bank_late_dma;
 static uint32_t sourceboot_dma_wait_ticks_accum;
 static uint32_t sourceboot_vdp1_wait_ticks_accum;
+static uint32_t sourceboot_vdp1_overwrite_wait_ticks_accum;
+static uint32_t sourceboot_vdp1_transfer_faults;
+static uint32_t sourceboot_vdp1_transfer_queued_not_started;
 static uint32_t sourceboot_trace_scheduler_credit;
 static uint32_t sourceboot_trace_vdp1_presentation_generation;
 static uint32_t sourceboot_trace_vdp2_presentation_generation;
@@ -458,6 +461,8 @@ static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __attribute__((section(".lwram_cmdts")));
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
+static sm64_saturn_vdp1_transfer_targets_t sourceboot_vdp1_transfer_targets;
+static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_transfer_pending;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
@@ -638,6 +643,10 @@ static void sourceboot_present_generation(uint32_t presentation_generation)
     sourceboot_vdp1_wait_ticks_accum +=
         sourceboot_fast3d.profile.vdp1_wait_ticks_last;
     sourceboot_fast3d.profile.vdp1_wait_ticks_accum =
+        sourceboot_vdp1_wait_ticks_accum;
+    sourceboot_fast3d.profile.vdp1_terminal_fence_wait_ticks_last =
+        sourceboot_fast3d.profile.vdp1_wait_ticks_last;
+    sourceboot_fast3d.profile.vdp1_terminal_fence_wait_ticks_accum =
         sourceboot_vdp1_wait_ticks_accum;
     const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
         sourceboot_vdp2_camera_snapshot();
@@ -822,7 +831,6 @@ int main(void) {
                                  SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES,
                                  SOURCEBOOT_BOB_CLUT_COUNT);
 
-        saturn_dma_queue_init();
         vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_PATH
         sm64_saturn_demo_render_init();
@@ -897,6 +905,18 @@ int main(void) {
             dbgio_flush();
             for (;;) {}
         }
+        sourceboot_vdp1_transfer_targets =
+            (sm64_saturn_vdp1_transfer_targets_t){
+                .command_vram = VDP1_VRAM(0),
+                .gouraud_vram = partitions.gouraud_base,
+                .command_capacity_bytes =
+                    SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t),
+                .gouraud_capacity_bytes =
+                    (size_t)capacity * sizeof(sm64_saturn_gouraud_table_t),
+            };
+        /* Exclusive frame-transport handoff: every boot-time SCU/CPU DMA
+         * above is complete before the serial queue owns both channel 0s. */
+        saturn_dma_queue_init();
     }
 
     main_pool_init(sourceboot_main_pool,
@@ -946,6 +966,42 @@ int main(void) {
             continue;
         }
         sourceboot_presentation_generation = scheduler_now;
+        bool published_transfer_this_field = false;
+        if (sourceboot_vdp1_transfer_pending != NULL) {
+            sm64_saturn_vdp1_frame_bank_t *const transfer_bank =
+                sourceboot_vdp1_transfer_pending;
+            sm64_saturn_vdp1_frame_bank_t *const previous_published =
+                sourceboot_vdp1_frame_banks.published;
+            if (sm64_saturn_vdp1_frame_bank_poll_transfers(transfer_bank)) {
+                if (sm64_saturn_vdp1_frame_bank_arm_resident_list(
+                        transfer_bank)) {
+                    vdp1_sync_force_put();
+                    if (sm64_saturn_vdp1_frame_bank_publish(
+                            &sourceboot_vdp1_frame_banks, transfer_bank)) {
+                        sourceboot_vdp1_bank_submitted =
+                            transfer_bank->snapshot_generation;
+                        if (previous_published != NULL &&
+                            !sm64_saturn_vdp1_frame_bank_retire(
+                                &sourceboot_vdp1_frame_banks,
+                                previous_published->snapshot_generation))
+                            sourceboot_fast3d.profile.pipeline_faults++;
+                        published_transfer_this_field = true;
+                    } else {
+                        sourceboot_fast3d.profile.pipeline_faults++;
+                        sourceboot_vdp1_transfer_faults++;
+                    }
+                } else {
+                    sourceboot_fast3d.profile.pipeline_faults++;
+                    sourceboot_vdp1_transfer_faults++;
+                }
+                sourceboot_vdp1_transfer_pending = NULL;
+            } else if (transfer_bank->state ==
+                       SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED) {
+                sourceboot_fast3d.profile.pipeline_faults++;
+                sourceboot_vdp1_transfer_faults++;
+                sourceboot_vdp1_transfer_pending = NULL;
+            }
+        }
         for (uint8_t catchup = 0U;
              sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
              catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
@@ -1014,10 +1070,11 @@ int main(void) {
         if (vdp1_was_busy)
             sourceboot_vdp1_bank_late_dma++;
         sm64_saturn_vdp1_frame_bank_t *build_bank = NULL;
-        sm64_saturn_vdp1_frame_bank_t *const previous_published =
-            sourceboot_vdp1_frame_banks.published;
-        bool render_complete = sm64_saturn_vdp1_frame_bank_begin_build(
-            &sourceboot_vdp1_frame_banks, scheduler_now, &build_bank);
+        const bool build_attempted = !published_transfer_this_field &&
+            sourceboot_vdp1_transfer_pending == NULL;
+        bool render_complete = build_attempted &&
+            sm64_saturn_vdp1_frame_bank_begin_build(
+                &sourceboot_vdp1_frame_banks, scheduler_now, &build_bank);
         if (render_complete) {
             sourceboot_vdp1_bank_generation = build_bank->snapshot_generation;
             sm64_saturn_vdp1_backend_bind_frame_bank(
@@ -1032,33 +1089,49 @@ int main(void) {
                 &sourceboot_fast3d, &sourceboot_vdp1_backend,
                 build_bank->gouraud_bank);
 #endif
-        } else {
+        } else if (build_attempted) {
             /* Both non-FREE banks remain owned by a displayed, transferring,
              * or quarantined generation. Do not bind or render into either. */
             sourceboot_vdp1_bank_overwrite_attempts++;
         }
-        /* Both emit paths wait for their just-submitted Gouraud sequence and
-         * then upload the final command list. Only that explicit success may
-         * become READY. A7 records today's synchronous completion honestly;
-         * A8 replaces this adapter with real asynchronous transfer tickets. */
+        /* Both emitters are construction-only. The master crosses the one
+         * destination-overwrite boundary before any queued transport starts,
+         * then arms Yaul exactly once after both resident ranges retire. */
         if (render_complete) {
             render_complete = sm64_saturn_vdp1_frame_bank_ready(
                 build_bank, sourceboot_vdp1_backend.list.count,
                 build_bank->gouraud_bank->used,
-                build_bank->snapshot_generation) &&
-                sm64_saturn_vdp1_frame_bank_record_synchronous_complete(
-                    build_bank) &&
-                sm64_saturn_vdp1_frame_bank_publish(
-                    &sourceboot_vdp1_frame_banks, build_bank);
+                build_bank->snapshot_generation);
+        }
+        if (render_complete) {
+            const bool overwrite_waited = vdp1_sync_busy();
+            const uint16_t overwrite_wait_start = cpu_frt_count_get();
+            if (overwrite_waited)
+                vdp1_sync_wait();
+            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
+                overwrite_waited
+                    ? sourceboot_frt_delta(overwrite_wait_start,
+                                           cpu_frt_count_get())
+                    : 0U;
+            sourceboot_vdp1_overwrite_wait_ticks_accum +=
+                sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
+            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
+                sourceboot_vdp1_overwrite_wait_ticks_accum;
+            render_complete =
+                sm64_saturn_vdp1_frame_bank_submit_transfers(
+                    build_bank, &sourceboot_vdp1_transfer_targets);
             if (render_complete) {
-                sourceboot_vdp1_bank_submitted =
-                    build_bank->snapshot_generation;
-                if (previous_published != NULL &&
-                    !sm64_saturn_vdp1_frame_bank_retire(
-                        &sourceboot_vdp1_frame_banks,
-                        previous_published->snapshot_generation)) {
-                    sourceboot_fast3d.profile.pipeline_faults++;
-                }
+                sourceboot_vdp1_transfer_pending = build_bank;
+                sourceboot_vdp1_transfer_queued_not_started++;
+                /* Safe boundary was crossed above. This first poll only
+                 * starts the serial transport lane; publication is deferred
+                 * to a later field and never waits here. */
+                (void)sm64_saturn_vdp1_frame_bank_poll_transfers(build_bank);
+                if (!saturn_dma_queue_sequence_started(
+                        build_bank->command_transfer_ticket) &&
+                    !saturn_dma_queue_sequence_retired(
+                        build_bank->command_transfer_ticket))
+                    sourceboot_vdp1_transfer_queued_not_started++;
             }
         }
         if (!render_complete && build_bank != NULL &&
@@ -1079,6 +1152,12 @@ int main(void) {
             sourceboot_fast3d.profile.vdp1_commands_last;
         sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
             sourceboot_vdp1_bank_overwrite_attempts;
+        sourceboot_fast3d.profile.vdp1_bank_unavailable_skips =
+            sourceboot_vdp1_bank_overwrite_attempts;
+        sourceboot_fast3d.profile.vdp1_transfer_faults =
+            sourceboot_vdp1_transfer_faults;
+        sourceboot_fast3d.profile.vdp1_transfer_queued_not_started =
+            sourceboot_vdp1_transfer_queued_not_started;
         sourceboot_fast3d.profile.vdp1_bank_late_dma =
             sourceboot_vdp1_bank_late_dma;
         sourceboot_fast3d.profile.ordering_count =
@@ -1115,7 +1194,13 @@ int main(void) {
     sourceboot_capture_route_checkpoint();
 #endif
 
-        sourceboot_present_generation(scheduler_now);
+        const uint32_t presentation_generation =
+            sourceboot_vdp1_frame_banks.published != NULL
+                ? sourceboot_vdp1_frame_banks.published->snapshot_generation
+                : 0U;
+        if (presentation_generation != 0U &&
+            sourceboot_vdp1_transfer_pending == NULL)
+            sourceboot_present_generation(presentation_generation);
         if (sourceboot_vdp1_frame_banks.published != NULL)
             sourceboot_vdp1_bank_displayed =
                 sourceboot_vdp1_frame_banks.published->snapshot_generation;

@@ -15,20 +15,23 @@ class Vdp1FrameBankSourceTests(unittest.TestCase):
         self.assertLess(stale, quarantine)
         self.assertLess(quarantine, assign)
 
-    def test_both_emitters_fail_closed_and_main_propagates_normal_result(self) -> None:
+    def test_both_emitters_are_construction_only_and_main_owns_transport(self) -> None:
         demo = (ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text()
         normal = (ROOT / "src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c").read_text()
         header = (ROOT / "src/port/saturn/gfx/saturn_fast3d_vdp1_emit.h").read_text()
         main = (ROOT / "src/port/saturn/sourceboot/main.c").read_text()
         for source in (demo, normal):
-            self.assertIn("!sm64_saturn_gouraud_transfer_submit(", source)
-            failure = source.index("!sm64_saturn_gouraud_transfer_submit(")
-            upload = source.index("sm64_saturn_vdp1_backend_upload", failure)
-            self.assertIn("return false;", source[failure:upload])
+            self.assertNotIn("sm64_saturn_gouraud_transfer_submit(", source)
+            self.assertNotIn("sm64_saturn_vdp1_backend_upload", source)
+            self.assertIn("sm64_saturn_vdp1_backend_finish(backend);", source)
         self.assertIn("bool sm64_saturn_fast3d_vdp1_emit(", header)
         self.assertIn(
             "render_complete = sm64_saturn_fast3d_vdp1_emit(", main
         )
+        self.assertEqual(
+            main.count("sm64_saturn_vdp1_frame_bank_submit_transfers("), 1
+        )
+        self.assertEqual(main.count("vdp1_sync_force_put();"), 1)
 
 
 if __name__ == "__main__":

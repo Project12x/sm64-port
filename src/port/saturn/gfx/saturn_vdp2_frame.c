@@ -86,6 +86,26 @@ static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
     out = vdp2_frame_append_u32(out, end, profile->render_job_failures);
     out = vdp2_frame_append_text(out, end, " QQ ");
     out = vdp2_frame_append_u32(out, end, profile->render_job_quarantined);
+    out = vdp2_frame_append_text(out, end, "\nCDW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->command_cpu_dmac_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, " GDW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->gouraud_scu_dma_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, " OW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->vdp1_overwrite_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, " BW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->vdp1_bank_unavailable_skips);
+    out = vdp2_frame_append_text(out, end, " TW ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->vdp1_terminal_fence_wait_ticks_last);
+    out = vdp2_frame_append_text(out, end, " TF ");
+    out = vdp2_frame_append_u32(out, end, profile->vdp1_transfer_faults);
+    out = vdp2_frame_append_text(out, end, " QNS ");
+    out = vdp2_frame_append_u32(out, end,
+        profile->vdp1_transfer_queued_not_started);
     *out = '\0';
 }
 

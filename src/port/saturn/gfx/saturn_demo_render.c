@@ -12,7 +12,6 @@
 #include "saturn_dual_frame_bank.h"
 #include "saturn_actor_meshlets.h"
 #include "saturn_gouraud.h"
-#include "saturn_gouraud_transfer.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
 #include "saturn_matrix_kernels.h"
@@ -68,7 +67,6 @@
 #if defined(SATURN_DEMO_MARIO_TEXTURES)
 #include "mario_eye_uv_tiles.h"
 #endif
-#include "../gpl/slavedriver_dma_queue.h"
 #include "../gpl/slavedriver_dual_worker.h"
 #include "../gpl/slavedriver_terrain_clip.h"
 #include "../gpl/slavedriver_terrain_result.h"
@@ -3890,36 +3888,7 @@ bool sm64_saturn_demo_render_frame(
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is
      * reserved for SCSP/audio service rather than geometry dispatch. */
     demo_emit_mario(snapshot, pose, backend, &partitions, profile);
-    saturn_dma_queue_sequence_t gouraud_sequence;
-    bool gouraud_retried;
-    if (!sm64_saturn_gouraud_transfer_submit(
-            gouraud_bank, &gouraud_sequence, &gouraud_retried)) {
-        profile->pipeline_faults++;
-        return false;
-    }
-    if (gouraud_retried)
-        profile->pipeline_faults++;
     sm64_saturn_vdp1_backend_finish(backend);
-    if (gouraud_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
-        /* Final VDP1 ordering and presentation remain master-owned. The
-         * VDP1/Gouraud VRAM range is shared, so the prior plot must retire
-         * before DMA starts; queueing and all CPU construction happened
-         * earlier in this frame. */
-        vdp1_sync_wait();
-        saturn_dma_queue_kick();
-        saturn_dma_queue_wait(gouraud_sequence);
-    }
-#if 0 && SATURN_SLAVE_RENDER && defined(SM64_SATURN_VDP1_LWRAM_STAGING) && \
-    defined(SATURN_SLAVE_VDP1_UPLOAD) && SATURN_SLAVE_VDP1_UPLOAD
-    sm64_saturn_dual_worker_stats_t upload_stats;
-    demo_upload_vdp1_dual(backend, &upload_stats);
-    profile->slave_jobs_completed += upload_stats.slave_jobs_completed;
-    profile->slave_busy_ticks += upload_stats.slave_busy_ticks;
-    profile->master_wait_ticks += upload_stats.master_wait_ticks;
-    profile->slave_timeouts += upload_stats.slave_timeouts;
-#else
-    sm64_saturn_vdp1_backend_upload(backend);
-#endif
     /* Published profile diagnostics: never read to choose an allocation,
      * scheduling, LOD, or promotion decision. */
     profile->gouraud_tables_saved += gouraud_bank->saved_tables;

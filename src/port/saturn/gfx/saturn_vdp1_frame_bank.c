@@ -1,6 +1,7 @@
 #include "saturn_vdp1_frame_bank.h"
 
 #include "saturn_gouraud_bank.h"
+#include "../gpl/slavedriver_dma_queue.h"
 
 #define SM64_SATURN_LWRAM_BASE 0x00200000U
 #define SM64_SATURN_LWRAM_TOP  0x00300000U
@@ -9,6 +10,27 @@
 #define SM64_SATURN_ADDRESS_MASK 0x0FFFFFFFU
 #define SM64_SATURN_VDP1_COMMAND_BYTES 32U
 #define SM64_SATURN_VDP1_SETUP_COMMANDS 3U
+#define SM64_SATURN_VDP1_VRAM_BASE 0x05C00000U
+#define SM64_SATURN_VDP1_VRAM_TOP  0x05C80000U
+
+static void record_one_transfer(sm64_saturn_vdp1_frame_bank_t *bank,
+                                bool command, bool failed)
+{
+    sm64_saturn_vdp1_transfer_obligation_t *const obligation = command
+        ? &bank->command_transfer_obligation
+        : &bank->gouraud_transfer_obligation;
+    if (*obligation == SM64_SATURN_VDP1_TRANSFER_PENDING)
+        *obligation = failed ? SM64_SATURN_VDP1_TRANSFER_FAILED
+                             : SM64_SATURN_VDP1_TRANSFER_RETIRED;
+}
+
+static bool transfer_obligation_terminal(
+    sm64_saturn_vdp1_transfer_obligation_t obligation)
+{
+    return obligation == SM64_SATURN_VDP1_TRANSFER_RETIRED ||
+        obligation == SM64_SATURN_VDP1_TRANSFER_NOOP ||
+        obligation == SM64_SATURN_VDP1_TRANSFER_FAILED;
+}
 
 static bool range_in_region(const void *source, size_t bytes,
                             uintptr_t region_base, uintptr_t region_top)
@@ -147,6 +169,7 @@ bool sm64_saturn_vdp1_frame_bank_begin_build(
             SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID;
         bank->command_transfer_obligation = SM64_SATURN_VDP1_TRANSFER_INVALID;
         bank->gouraud_transfer_obligation = SM64_SATURN_VDP1_TRANSFER_INVALID;
+        bank->resident_list_armed = false;
         bank->state = SM64_SATURN_VDP1_FRAME_BANK_BUILDING;
         banks->latest_build_generation = generation;
         banks->has_build_generation = true;
@@ -194,6 +217,137 @@ bool sm64_saturn_vdp1_frame_bank_begin_transfers(
     return true;
 }
 
+bool sm64_saturn_vdp1_frame_bank_submit_transfers(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    const sm64_saturn_vdp1_transfer_targets_t *targets)
+{
+    const size_t command_bytes = bank != NULL
+        ? (size_t)bank->command_count * SM64_SATURN_VDP1_COMMAND_BYTES : 0U;
+    const size_t gouraud_bytes = bank != NULL
+        ? (size_t)bank->gouraud_count * sizeof(sm64_saturn_gouraud_table_t) : 0U;
+    if (bank == NULL || targets == NULL || bank->gouraud_bank == NULL ||
+        bank->state != SM64_SATURN_VDP1_FRAME_BANK_READY ||
+        targets->command_vram == NULL ||
+        normalized_address(targets->command_vram) !=
+            SM64_SATURN_VDP1_VRAM_BASE ||
+        normalized_address(targets->command_vram) %
+            SM64_SATURN_VDP1_COMMAND_BYTES != 0U ||
+        !range_in_region(targets->command_vram, command_bytes,
+                         SM64_SATURN_VDP1_VRAM_BASE,
+                         SM64_SATURN_VDP1_VRAM_TOP) ||
+        targets->command_capacity_bytes !=
+            (size_t)bank->command_capacity * SM64_SATURN_VDP1_COMMAND_BYTES ||
+        !sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
+            bank->command_storage, command_bytes) ||
+        (bank->gouraud_count > 0U &&
+         (targets->gouraud_vram == NULL ||
+          normalized_address(targets->gouraud_vram) !=
+              normalized_address((void *)bank->gouraud_bank->vram_base) ||
+          !range_in_region(targets->gouraud_vram, gouraud_bytes,
+                           SM64_SATURN_VDP1_VRAM_BASE,
+                           SM64_SATURN_VDP1_VRAM_TOP) ||
+          targets->gouraud_capacity_bytes !=
+              (size_t)bank->gouraud_bank->capacity *
+                  sizeof(sm64_saturn_gouraud_table_t) ||
+          ranges_overlap(targets->command_vram,
+                         targets->command_capacity_bytes,
+                         targets->gouraud_vram,
+                         targets->gouraud_capacity_bytes) ||
+          !sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
+              bank->gouraud_storage, gouraud_bytes))))
+        return false;
+
+    saturn_dma_queue_sequence_t command_ticket =
+        SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+    saturn_dma_queue_sequence_t gouraud_ticket =
+        SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+    if (bank->gouraud_count > 0U) {
+        if (!saturn_dma_queue_submit_pair(
+                targets->command_vram, bank->command_storage, command_bytes,
+                SATURN_DMA_QUEUE_CPU_DMAC,
+                targets->gouraud_vram, bank->gouraud_storage,
+                (size_t)bank->gouraud_count *
+                    sizeof(sm64_saturn_gouraud_table_t),
+                SATURN_DMA_QUEUE_SCU, &command_ticket, &gouraud_ticket))
+            return false;
+    } else {
+        command_ticket = saturn_dma_queue_submit(
+            targets->command_vram, bank->command_storage, command_bytes,
+            SATURN_DMA_QUEUE_CPU_DMAC);
+        if (command_ticket == SATURN_DMA_QUEUE_SEQUENCE_INVALID)
+            return false;
+    }
+    return sm64_saturn_vdp1_frame_bank_begin_transfers(
+        bank, command_ticket, gouraud_ticket);
+}
+
+bool sm64_saturn_vdp1_frame_bank_poll_transfers(
+    sm64_saturn_vdp1_frame_bank_t *bank)
+{
+    if (bank == NULL || bank->state != SM64_SATURN_VDP1_FRAME_BANK_TRANSFERRING)
+        return false;
+    saturn_dma_queue_poll();
+    if (saturn_dma_queue_sequence_failed(bank->command_transfer_ticket))
+        record_one_transfer(bank, true, true);
+    else if (saturn_dma_queue_sequence_retired(bank->command_transfer_ticket))
+        record_one_transfer(bank, true, false);
+    if (bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_PENDING) {
+        if (saturn_dma_queue_sequence_failed(bank->gouraud_transfer_ticket))
+            record_one_transfer(bank, false, true);
+        else if (saturn_dma_queue_sequence_retired(bank->gouraud_transfer_ticket))
+            record_one_transfer(bank, false, false);
+    }
+    saturn_dma_queue_kick();
+    if (transfer_obligation_terminal(bank->command_transfer_obligation) &&
+        transfer_obligation_terminal(bank->gouraud_transfer_obligation) &&
+        (bank->command_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_FAILED ||
+         bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_FAILED)) {
+        bank->state = SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED;
+        return false;
+    }
+    return bank->command_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_RETIRED &&
+        (bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_RETIRED ||
+         bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_NOOP);
+}
+
+bool sm64_saturn_vdp1_frame_bank_wait_for_publish(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    sm64_saturn_vdp1_wait_stats_t *waits)
+{
+    if (bank == NULL || waits == NULL ||
+        bank->state != SM64_SATURN_VDP1_FRAME_BANK_TRANSFERRING)
+        return false;
+    (void)sm64_saturn_vdp1_frame_bank_poll_transfers(bank);
+    if (bank->state == SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED)
+        return false;
+    bool failed = bank->command_transfer_obligation ==
+            SM64_SATURN_VDP1_TRANSFER_FAILED ||
+        bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_FAILED;
+    if (bank->command_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_PENDING) {
+        waits->command_cpu_dmac_waits++;
+        if (!saturn_dma_queue_wait(bank->command_transfer_ticket)) {
+            record_one_transfer(bank, true, true);
+            failed = true;
+        } else {
+            record_one_transfer(bank, true, false);
+        }
+    }
+    if (bank->gouraud_transfer_obligation == SM64_SATURN_VDP1_TRANSFER_PENDING) {
+        waits->gouraud_scu_dma_waits++;
+        if (!saturn_dma_queue_wait(bank->gouraud_transfer_ticket)) {
+            record_one_transfer(bank, false, true);
+            failed = true;
+        } else {
+            record_one_transfer(bank, false, false);
+        }
+    }
+    if (failed) {
+        bank->state = SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED;
+        return false;
+    }
+    return true;
+}
+
 bool sm64_saturn_vdp1_frame_bank_record_transfers_retired(
     sm64_saturn_vdp1_frame_bank_t *bank, uint32_t command_ticket,
     uint32_t gouraud_ticket)
@@ -223,7 +377,21 @@ bool sm64_saturn_vdp1_frame_bank_record_synchronous_complete(
     bank->command_transfer_obligation = SM64_SATURN_VDP1_TRANSFER_RETIRED;
     bank->gouraud_transfer_obligation = bank->gouraud_count > 0U
         ? SM64_SATURN_VDP1_TRANSFER_RETIRED : SM64_SATURN_VDP1_TRANSFER_NOOP;
+    bank->resident_list_armed = true;
     bank->state = SM64_SATURN_VDP1_FRAME_BANK_TRANSFERRING;
+    return true;
+}
+
+bool sm64_saturn_vdp1_frame_bank_arm_resident_list(
+    sm64_saturn_vdp1_frame_bank_t *bank)
+{
+    if (bank == NULL || bank->state != SM64_SATURN_VDP1_FRAME_BANK_TRANSFERRING ||
+        bank->resident_list_armed ||
+        bank->command_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_RETIRED ||
+        (bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_RETIRED &&
+         bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_NOOP))
+        return false;
+    bank->resident_list_armed = true;
     return true;
 }
 
@@ -239,6 +407,7 @@ bool sm64_saturn_vdp1_frame_bank_publish(
 {
     if (banks == NULL || bank == NULL || !belongs_to_set(banks, bank) ||
         bank->state != SM64_SATURN_VDP1_FRAME_BANK_TRANSFERRING ||
+        !bank->resident_list_armed ||
         bank->command_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_RETIRED ||
         (bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_RETIRED &&
          bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_NOOP))

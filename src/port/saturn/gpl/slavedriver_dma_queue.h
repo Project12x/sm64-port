@@ -18,14 +18,27 @@ typedef uint32_t saturn_dma_queue_sequence_t;
 
 typedef enum saturn_dma_queue_mode {
         SATURN_DMA_QUEUE_CPU,
-        SATURN_DMA_QUEUE_SCU
+        SATURN_DMA_QUEUE_SCU,
+        SATURN_DMA_QUEUE_CPU_DMAC
 } saturn_dma_queue_mode_t;
 
+/* Called after all boot DMA has retired. From this handoff until shutdown the
+ * queue exclusively owns master-CPU DMAC channel 0 and SCU-DMA level 0. */
 void saturn_dma_queue_init(void);
 saturn_dma_queue_sequence_t saturn_dma_queue_submit(
     void *dst, const void *src, size_t len, saturn_dma_queue_mode_t mode);
+int saturn_dma_queue_submit_pair(
+    void *first_dst, const void *first_src, size_t first_len,
+    saturn_dma_queue_mode_t first_mode,
+    void *second_dst, const void *second_src, size_t second_len,
+    saturn_dma_queue_mode_t second_mode,
+    saturn_dma_queue_sequence_t *first_sequence,
+    saturn_dma_queue_sequence_t *second_sequence);
 void saturn_dma_queue_kick(void);
 void saturn_dma_queue_poll(void);
+int saturn_dma_queue_sequence_retired(saturn_dma_queue_sequence_t sequence);
+int saturn_dma_queue_sequence_failed(saturn_dma_queue_sequence_t sequence);
+int saturn_dma_queue_sequence_started(saturn_dma_queue_sequence_t sequence);
 /* Returns nonzero if sequence is already retired or was retired by this call.
  * Returns zero for an invalid or non-outstanding future sequence. */
 int saturn_dma_queue_wait(saturn_dma_queue_sequence_t sequence);

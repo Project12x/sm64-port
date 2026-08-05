@@ -96,10 +96,18 @@ normalizes Saturn aliases and rejects physical command/Gouraud overlap,
 misalignment, or duplicate bank objects.
 
 Build/snapshot, published/submitted, and displayed generations are distinct.
-The A7 adapter records today's internally blocking uploads as synchronously
-retired after the renderer returns. It does not claim asynchronous transfer or
-frame overlap; A8 must replace that adapter with real CPU-DMAC/SCU-DMA
-submission and retirement polling.
-Both current emitters nevertheless expose a truthful synchronous result: if a
-Gouraud queue submission is still invalid after one drain/retry, they return
-failure before command upload and sourceboot quarantines that build.
+The A8 transport makes both emitters construction-only. The master waits for
+the single command/Gouraud VDP1 destination ranges to become overwrite-safe,
+atomically queues CPU-DMAC command and SCU-DMA Gouraud descriptors, starts the
+serial lane, and returns without a transport wait. Later fields poll exact
+per-ticket completion; only both retired obligations can consume the one-shot
+resident-list arm, call Yaul's `vdp1_sync_force_put()`, publish, and present.
+While either VRAM range is partial, sourceboot presents neither the old nor new
+list. A failed ticket keeps its sibling draining before permanent quarantine,
+and the prior published bank remains the fallback.
+
+The frame queue exclusively owns master CPU-DMAC channel 0 and SCU-DMA level 0
+after all boot uploads retire. Pinned Yaul's `cpu_dmac_transfer()` contains an
+internal wait, so the queue first proves channel idle; SCU entry has the same
+busy guard. This is one master-mainline serial lane, not an interrupt-safe or
+parallel-transport scheduler. A9 retains true destination-banked frame overlap.

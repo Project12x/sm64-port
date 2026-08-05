@@ -17,6 +17,12 @@ static mock_scu_transfer_t s_active_transfer;
 static uint32_t s_transfer_starts;
 static int s_busy;
 static int s_complete_on_poll;
+static mock_scu_transfer_t s_active_cpu_transfer;
+static uint32_t s_cpu_transfer_starts;
+static uint32_t s_cpu_waits;
+static int s_cpu_busy;
+static int s_cpu_complete_on_poll;
+static int s_cpu_address_error;
 
 void
 scu_dma_transfer(scu_dma_level_t level, void *dst, const void *src, size_t len)
@@ -48,6 +54,40 @@ scu_dma_transfer_wait(scu_dma_level_t level)
     }
 }
 
+void cpu_dmac_status_get(cpu_dmac_status_t *status)
+{
+    assert(status != NULL);
+    if (s_cpu_busy && s_cpu_complete_on_poll) {
+        memcpy(s_active_cpu_transfer.dst, s_active_cpu_transfer.src,
+               s_active_cpu_transfer.len);
+        s_cpu_busy = 0;
+    }
+    *status = (cpu_dmac_status_t){ .enabled = 1U,
+                                  .address_error = (unsigned)s_cpu_address_error,
+                                  .channel_busy = (unsigned)s_cpu_busy };
+}
+
+void cpu_dmac_transfer(cpu_dmac_channel_t channel, void *dst,
+                       const void *src, size_t len)
+{
+    assert(channel == 0U);
+    assert(!s_cpu_busy);
+    s_active_cpu_transfer = (mock_scu_transfer_t){ dst, src, len, channel };
+    s_cpu_transfer_starts++;
+    s_cpu_busy = 1;
+}
+
+void cpu_dmac_transfer_wait(cpu_dmac_channel_t channel)
+{
+    assert(channel == 0U);
+    s_cpu_waits++;
+    if (s_cpu_busy) {
+        memcpy(s_active_cpu_transfer.dst, s_active_cpu_transfer.src,
+               s_active_cpu_transfer.len);
+        s_cpu_busy = 0;
+    }
+}
+
 static void
 mock_scu_complete(void)
 {
@@ -63,7 +103,123 @@ reset_mock(void)
     s_transfer_starts = 0U;
     s_busy = 0;
     s_complete_on_poll = 0;
+    memset(&s_active_cpu_transfer, 0, sizeof(s_active_cpu_transfer));
+    s_cpu_transfer_starts = 0U;
+    s_cpu_waits = 0U;
+    s_cpu_busy = 0;
+    s_cpu_complete_on_poll = 0;
+    s_cpu_address_error = 0;
     saturn_dma_queue_init();
+}
+
+static void test_cpu_dmac_error_is_failure_not_retirement(void)
+{
+    uint32_t source = UINT32_C(0x11223344);
+    uint32_t destination = 0U;
+
+    reset_mock();
+    const saturn_dma_queue_sequence_t sequence = saturn_dma_queue_submit(
+        &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU_DMAC);
+    saturn_dma_queue_kick();
+    s_cpu_address_error = 1;
+    s_cpu_busy = 0;
+    saturn_dma_queue_poll();
+    assert(!saturn_dma_queue_sequence_retired(sequence));
+    assert(saturn_dma_queue_sequence_failed(sequence));
+    assert(!saturn_dma_queue_wait(sequence));
+}
+
+static void test_cpu_dmac_submit_is_wait_free_and_poll_driven(void)
+{
+    uint32_t source = UINT32_C(0x12345678);
+    uint32_t destination = 0U;
+
+    reset_mock();
+    const saturn_dma_queue_sequence_t sequence = saturn_dma_queue_submit(
+        &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU_DMAC);
+    assert(sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(s_cpu_transfer_starts == 0U);
+    assert(s_cpu_waits == 0U);
+    assert(!saturn_dma_queue_sequence_started(sequence));
+
+    saturn_dma_queue_kick();
+    assert(s_cpu_transfer_starts == 1U);
+    assert(saturn_dma_queue_sequence_started(sequence));
+    assert(s_cpu_waits == 0U);
+    assert(destination == 0U);
+    saturn_dma_queue_poll();
+    assert(!saturn_dma_queue_sequence_retired(sequence));
+
+    s_cpu_complete_on_poll = 1;
+    saturn_dma_queue_poll();
+    assert(destination == source);
+    assert(saturn_dma_queue_sequence_retired(sequence));
+    assert(s_cpu_waits == 0U);
+}
+
+static void test_cpu_dmac_kick_does_not_enter_yaul_while_channel_busy(void)
+{
+    uint32_t source = UINT32_C(0xA5A55A5A);
+    uint32_t destination = 0U;
+
+    reset_mock();
+    s_cpu_busy = 1;
+    const saturn_dma_queue_sequence_t sequence = saturn_dma_queue_submit(
+        &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU_DMAC);
+    assert(sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    saturn_dma_queue_kick();
+    assert(s_cpu_transfer_starts == 0U);
+    assert(!saturn_dma_queue_sequence_started(sequence));
+    assert(!saturn_dma_queue_sequence_retired(sequence));
+
+    s_cpu_busy = 0;
+    saturn_dma_queue_kick();
+    assert(s_cpu_transfer_starts == 1U);
+    s_cpu_complete_on_poll = 1;
+    saturn_dma_queue_poll();
+    assert(saturn_dma_queue_sequence_retired(sequence));
+}
+
+static void test_scu_kick_does_not_enter_yaul_while_level_busy(void)
+{
+    uint8_t source = 0x5AU;
+    uint8_t destination = 0U;
+
+    reset_mock();
+    s_busy = 1;
+    assert(saturn_dma_queue_submit(&destination, &source, sizeof(source),
+                                   SATURN_DMA_QUEUE_SCU) !=
+           SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    saturn_dma_queue_kick();
+    assert(s_transfer_starts == 0U);
+    s_busy = 0;
+    saturn_dma_queue_kick();
+    assert(s_transfer_starts == 1U);
+}
+
+static void test_pair_submission_is_atomic_when_only_one_slot_remains(void)
+{
+    uint8_t source[SATURN_DMA_QUEUE_CAPACITY] = { 0U };
+    uint8_t destination[SATURN_DMA_QUEUE_CAPACITY] = { 0U };
+    saturn_dma_queue_sequence_t first = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+    saturn_dma_queue_sequence_t second = SATURN_DMA_QUEUE_SEQUENCE_INVALID;
+
+    reset_mock();
+    for (uint32_t index = 0U; index < SATURN_DMA_QUEUE_CAPACITY - 2U; index++) {
+        assert(saturn_dma_queue_submit(&destination[index], &source[index], 1U,
+                                       SATURN_DMA_QUEUE_CPU) !=
+               SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    }
+    assert(!saturn_dma_queue_submit_pair(
+        &destination[14], &source[14], 1U, SATURN_DMA_QUEUE_CPU,
+        &destination[15], &source[15], 1U, SATURN_DMA_QUEUE_CPU,
+        &first, &second));
+    assert(first == SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    assert(second == SATURN_DMA_QUEUE_SEQUENCE_INVALID);
+    /* A single descriptor still fits. If the failed pair partially committed,
+     * this submit would fail or skip the next sequence. */
+    assert(saturn_dma_queue_submit(&destination[14], &source[14], 1U,
+                                   SATURN_DMA_QUEUE_CPU) == 13U);
 }
 
 static void
@@ -246,5 +402,10 @@ main(void)
     test_bounded_wrap_and_wait_drain();
     test_wait_accepts_retired_and_rejects_non_outstanding();
     test_submit_rejects_illegal_requests_without_fifo_mutation();
+    test_cpu_dmac_submit_is_wait_free_and_poll_driven();
+    test_cpu_dmac_kick_does_not_enter_yaul_while_channel_busy();
+    test_scu_kick_does_not_enter_yaul_while_level_busy();
+    test_pair_submission_is_atomic_when_only_one_slot_remains();
+    test_cpu_dmac_error_is_failure_not_retirement();
     return 0;
 }

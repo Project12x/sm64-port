@@ -79,6 +79,20 @@ VDP2_FRAME_COUNTERS = (
     "vdp1_wait_ticks_accum",
 )
 
+VDP1_TRANSFER_COUNTERS = (
+    "command_cpu_dmac_wait_ticks_last",
+    "command_cpu_dmac_wait_ticks_accum",
+    "gouraud_scu_dma_wait_ticks_last",
+    "gouraud_scu_dma_wait_ticks_accum",
+    "vdp1_overwrite_wait_ticks_last",
+    "vdp1_overwrite_wait_ticks_accum",
+    "vdp1_bank_unavailable_skips",
+    "vdp1_terminal_fence_wait_ticks_last",
+    "vdp1_terminal_fence_wait_ticks_accum",
+    "vdp1_transfer_faults",
+    "vdp1_transfer_queued_not_started",
+)
+
 SOURCE_RENDER_COUNTERS = (
     "scene_graph_walks",
     "scene_graph_walks_suppressed",

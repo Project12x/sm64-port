@@ -44,17 +44,26 @@ The isolated adapter now lives in `src/port/saturn/gpl/` and is linked into the
 hardware-test image. It replaces the cart-to-WRAM, WRAM-to-VDP1, texture, and
 Gouraud upload calls with the bounded queue and Yaul-backed transfer/wait path.
 The host tool tests pass and the image builds with the pinned SH-2 toolchain.
-The queue is intentionally drained synchronously for this bring-up; the
-renderer can later submit work across a frame boundary without changing the
-source-level contract.
+Boot and compatibility clients may still drain synchronously. A8's accepted
+sourceboot frame path instead carries a TRANSFERRING bank across fields. It
+adapts SlaveDriver's bounded serial-ring shape as a **close-port**, but departs
+from upstream by atomically pairing two VDP1 destinations, tracking exact
+per-ticket completion/failure, and delaying bank publication until both retire.
+Upstream active DMA is serial; this project does not claim concurrent CPU-DMAC
+and SCU-DMA lanes.
 
-The E2 sourceboot target now links the same adapter too (Gouraud-shading
-cycle, 2026-07-24): `saturn_dma_queue_transfer_wait()` uploads each frame's
-used-prefix of Gouraud tables from a CPU-staged HWRAM array to VDP1 VRAM,
-after the sourceboot Fast3D emit pass fills them
-(`src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`) and before the VDP1 backend
-uploads the command list that references them. Same synchronous-drain
-bring-up posture as the hardware-test image above.
+The E2 sourceboot target links that adapter for the A8 frame path. Both the
+demo and normal/full-game emitters now only construct source banks. After the
+old list is overwrite-safe, the shared manager queues LWRAM commands through
+CPU-DMAC and HWRAM Gouraud tables through SCU-DMA, then returns. A later field
+polls, arms, and publishes the resident list. Yaul commit
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT), file
+`libyaul/scu/bus/cpu/cpu_dmac.c`, was inspected and used **pattern-only**:
+the public helper is called only after its internally waiting channel is
+proved idle; no Yaul implementation was copied. Z-Treme commit
+`cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0) remains
+**pattern-only** for double-buffered build/present ownership; A8 deliberately
+does not copy its renderer or claim destination-banked overlap.
 
 Task 1 also adds the isolated `slavedriver_projection.sx/.h` close-port. It
 owns only Q16 DIVU start/collect transport (not a SlaveDriver wall renderer),

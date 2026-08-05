@@ -25,7 +25,20 @@ typedef enum sm64_saturn_vdp1_transfer_obligation {
     SM64_SATURN_VDP1_TRANSFER_PENDING,
     SM64_SATURN_VDP1_TRANSFER_RETIRED,
     SM64_SATURN_VDP1_TRANSFER_NOOP,
+    SM64_SATURN_VDP1_TRANSFER_FAILED,
 } sm64_saturn_vdp1_transfer_obligation_t;
+
+typedef struct sm64_saturn_vdp1_transfer_targets {
+    void *command_vram;
+    void *gouraud_vram;
+    size_t command_capacity_bytes;
+    size_t gouraud_capacity_bytes;
+} sm64_saturn_vdp1_transfer_targets_t;
+
+typedef struct sm64_saturn_vdp1_wait_stats {
+    uint32_t command_cpu_dmac_waits;
+    uint32_t gouraud_scu_dma_waits;
+} sm64_saturn_vdp1_wait_stats_t;
 
 typedef struct sm64_saturn_vdp1_frame_bank {
     void *command_storage;
@@ -40,6 +53,7 @@ typedef struct sm64_saturn_vdp1_frame_bank {
     uint32_t gouraud_transfer_ticket;
     sm64_saturn_vdp1_transfer_obligation_t command_transfer_obligation;
     sm64_saturn_vdp1_transfer_obligation_t gouraud_transfer_obligation;
+    bool resident_list_armed;
     sm64_saturn_vdp1_frame_bank_state_t state;
 } sm64_saturn_vdp1_frame_bank_t;
 
@@ -68,6 +82,16 @@ bool sm64_saturn_vdp1_frame_bank_ready(
 bool sm64_saturn_vdp1_frame_bank_begin_transfers(
     sm64_saturn_vdp1_frame_bank_t *bank, uint32_t command_ticket,
     uint32_t gouraud_ticket);
+bool sm64_saturn_vdp1_frame_bank_submit_transfers(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    const sm64_saturn_vdp1_transfer_targets_t *targets);
+bool sm64_saturn_vdp1_frame_bank_poll_transfers(
+    sm64_saturn_vdp1_frame_bank_t *bank);
+bool sm64_saturn_vdp1_frame_bank_wait_for_publish(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    sm64_saturn_vdp1_wait_stats_t *waits);
+bool sm64_saturn_vdp1_frame_bank_arm_resident_list(
+    sm64_saturn_vdp1_frame_bank_t *bank);
 bool sm64_saturn_vdp1_frame_bank_record_transfers_retired(
     sm64_saturn_vdp1_frame_bank_t *bank, uint32_t command_ticket,
     uint32_t gouraud_ticket);
