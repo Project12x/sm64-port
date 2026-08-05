@@ -640,7 +640,7 @@ def _reachable_native_regions(root: Path, source: str, entry: str) -> list[tuple
                 continue  # Audio-engine sinks do not create scene objects or own caller SFX IDs.
             elif len(definitions) == 1:
                 pending.append((definitions[0][0], symbol))
-            elif len(definitions) > 1 and any(re.search(r"\b" + re.escape(symbol) + r"\s*\(", region) for _ in [0]):
+            elif len(definitions) > 1:
                 raise ClosureError(f"ambiguous cross-file native symbol {symbol} from {current_source}:{name}")
     return reachable
 
@@ -663,39 +663,133 @@ def _sound_declarations(root: Path) -> tuple[dict[str, list[str]], str]:
     return declarations, relative
 
 
-def _call_site_sound_ids(text: str) -> set[str]:
-    """Collect concrete SOUND_* values supplied by this source region."""
-    clean = _comment_free(text)
-    sounds: set[str] = set()
-    assignments: dict[str, tuple[set[str], set[str]]] = {}
-    for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?<![+*/%&|^!<>-])=(?!=)\s*([^;]+);", clean):
-        value = match.group(2)
-        assignments[match.group(1)] = (
-            set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", value)),
-            set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", value)),
-        )
-    resolved = {name: set(direct) for name, (direct, _) in assignments.items()}
-    for _ in range(len(assignments)):
+_AUDIO_SINK_ARGUMENTS = {
+    "play_sound": (0,),
+    "play_sound_with_freq_scale": (0,),
+    "cur_obj_play_sound_1": (0,),
+    "cur_obj_play_sound_2": (0,),
+    "cur_obj_play_sound_at_anim_range": (2,),
+    "create_sound_spawner": (0,),
+}
+
+
+def _function_parameters(region: str, symbol: str) -> dict[str, int]:
+    match = re.search(r"\b" + re.escape(symbol) + r"\s*\(([^)]*)\)\s*\{", region, re.S)
+    if not match:
+        return {}
+    parameters: dict[str, int] = {}
+    for index, declaration in enumerate(_arguments(match.group(1))):
+        names = re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", declaration)
+        if names and names[-1] != "void":
+            parameters[names[-1]] = index
+    return parameters
+
+
+def _region_assignments(region: str) -> dict[str, list[str]]:
+    assignments: dict[str, list[str]] = defaultdict(list)
+    for match in re.finditer(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?<![+*/%&|^!<>-])=(?!=)\s*([^;]+);", region):
+        assignments[match.group(1)].append(match.group(2))
+    return assignments
+
+
+def _native_audio_sound_ids(root: Path, regions: list[tuple[str, str, str]]) -> set[str]:
+    """Trace concrete sound values only through proven sink argument paths."""
+    index = _native_symbol_index(root)
+    region_map = {(source, symbol): region for source, symbol, region in regions}
+    function_regions = {
+        key: region for key, region in region_map.items() if _function_body(region, key[1])
+    }
+    data_regions = set(region_map) - set(function_regions)
+    facts: dict[tuple[str, str], tuple[set[str], set[int]]] = {
+        key: (set(), set()) for key in function_regions
+    }
+
+    def target_key(current_source: str, symbol: str) -> tuple[str, str] | None:
+        definitions = index.get(symbol, [])
+        local = [item for item in definitions if item[0] == current_source]
+        if local:
+            return current_source, symbol
+        if len(definitions) == 1:
+            return definitions[0][0], symbol
+        return None
+
+    def expression_flow(
+        expression: str,
+        current_source: str,
+        assignments: dict[str, list[str]],
+        parameters: dict[str, int],
+        seen: frozenset[tuple[str, str, str]],
+    ) -> tuple[set[str], set[int]]:
+        sounds = set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", expression))
+        parameter_indexes: set[int] = set()
+        for name in set(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", expression)):
+            if name in parameters:
+                parameter_indexes.add(parameters[name])
+                continue
+            variable_key = ("variable", current_source, name)
+            if name in assignments and variable_key not in seen:
+                if len(seen) >= 1024:
+                    raise ClosureError("native audio value-flow limit exceeded")
+                for value in assignments[name]:
+                    nested_sounds, nested_parameters = expression_flow(
+                        value, current_source, assignments, parameters, seen | {variable_key}
+                    )
+                    sounds.update(nested_sounds)
+                    parameter_indexes.update(nested_parameters)
+                continue
+            data_key = target_key(current_source, name)
+            data_seen_key = ("data", *(data_key or (current_source, name)))
+            if data_key in data_regions and data_seen_key not in seen:
+                if len(seen) >= 1024:
+                    raise ClosureError("native audio value-flow limit exceeded")
+                nested_sounds, nested_parameters = expression_flow(
+                    region_map[data_key], data_key[0], {}, {}, seen | {data_seen_key}
+                )
+                sounds.update(nested_sounds)
+                parameter_indexes.update(nested_parameters)
+        return sounds, parameter_indexes
+
+    for iteration in range(len(function_regions) + 1):
         changed = False
-        for name, (_, dependencies) in assignments.items():
-            combined = resolved[name] | set().union(*(resolved.get(dependency, set()) for dependency in dependencies))
-            if combined != resolved[name]:
-                resolved[name] = combined
+        for key, region in function_regions.items():
+            source, symbol = key
+            clean = _comment_free(region)
+            parameters = _function_parameters(clean, symbol)
+            assignments = _region_assignments(clean)
+            body_start = clean.find("{")
+            sounds, parameter_indexes = (set(facts[key][0]), set(facts[key][1]))
+            controls = {"if", "for", "while", "switch", "sizeof"}
+            call_names = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", clean)) - controls
+            for callee in call_names:
+                if callee in _AUDIO_SINK_ARGUMENTS:
+                    sound_arguments = _AUDIO_SINK_ARGUMENTS[callee]
+                else:
+                    callee_key = target_key(source, callee)
+                    sound_arguments = tuple(sorted(facts.get(callee_key, (set(), set()))[1]))
+                for arguments, call_start in _extract_call_sites(clean, callee):
+                    if call_start < body_start:
+                        continue
+                    args = _arguments(arguments)
+                    for argument_index in sound_arguments:
+                        if argument_index >= len(args):
+                            raise ClosureError(f"malformed audio call {callee}: {source}:{symbol}")
+                        nested_sounds, nested_parameters = expression_flow(
+                            args[argument_index], source, assignments, parameters, frozenset()
+                        )
+                        sounds.update(nested_sounds)
+                        parameter_indexes.update(nested_parameters)
+            if sounds != facts[key][0] or parameter_indexes != facts[key][1]:
+                facts[key] = sounds, parameter_indexes
                 changed = True
         if not changed:
             break
-    controls = {"if", "for", "while", "switch", "sizeof"}
-    call_names = set(re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", clean)) - controls
-    for name in call_names:
-        for arguments, _ in _extract_call_sites(clean, name):
-            sounds.update(re.findall(r"\bSOUND_[A-Z0-9_]+\b", arguments))
-            for argument_name in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", arguments):
-                sounds.update(resolved.get(argument_name, set()))
-    return sounds
+    else:
+        raise ClosureError("native audio forwarding analysis did not converge")
+    return set().union(*(sounds for sounds, _ in facts.values())) if facts else set()
 
 
 def _behavior_sounds(root: Path, block: str, native_sources: dict[str, set[str]]) -> tuple[list[str], list[str], set[str]]:
-    sounds = set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", _comment_free(block)))
+    sounds: set[str] = set()
     reached_sources: set[str] = set()
     for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", block):
         definitions = native_sources.get(native, set())
@@ -706,11 +800,7 @@ def _behavior_sounds(root: Path, block: str, native_sources: dict[str, set[str]]
         for source in definitions:
             reached_sources.add(source)
             regions = _reachable_native_regions(root, source, native)
-            for _, symbol, region in regions:
-                if _function_body(region, symbol):
-                    sounds.update(_call_site_sound_ids(region))
-                else:
-                    sounds.update(re.findall(r"\bSOUND_[A-Z0-9_]+\b", _comment_free(region)))
+            sounds.update(_native_audio_sound_ids(root, regions))
             reached_sources.update(region_source for region_source, _, _ in regions)
     sounds = sorted(sounds)
     if not sounds:

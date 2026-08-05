@@ -178,6 +178,34 @@ class SceneClosureTest(unittest.TestCase):
         self.assertIn("bhvChild", parent["spawned_children"])
         self.assertIn("src/game/create_child.c", {source["path"] for source in parent["sources"]})
 
+    def test_reachable_ambiguous_data_and_function_pointer_symbols_fail_closed(self) -> None:
+        fixtures = [
+            (
+                "ambiguous action table",
+                "void bhv_parent_loop(void) { ambiguous_actions[o->oAction](); }\n",
+                "void (*ambiguous_actions[])(void) = { action_handler };\n",
+                "void (*ambiguous_actions[])(void) = { action_handler };\n",
+                "ambiguous cross-file native symbol ambiguous_actions",
+            ),
+            (
+                "ambiguous function pointer",
+                "void bhv_parent_loop(void) { parent_actions[o->oAction](); }\n"
+                "void (*parent_actions[])(void) = { action_handler };\n",
+                "void action_handler(void) {}\n",
+                "void action_handler(void) {}\n",
+                "ambiguous cross-file native symbol action_handler",
+            ),
+        ]
+        for name, owner, first, second, message in fixtures:
+            with self.subTest(name=name):
+                root = self.native_rule_fixture()
+                write(root / "src/game/behaviors/parent.inc.c", owner)
+                write(root / "src/game/action_first.c", first)
+                write(root / "src/game/action_second.c", second)
+                write(root / "rules.json", json.dumps({"schema": "sm64-saturn-behavior-spawn-rules-v2", "rules": []}))
+                with self.assertRaisesRegex(ClosureError, message):
+                    self.collect(root)
+
     def test_repository_wide_callback_definition_is_used_and_missing_definition_fails(self) -> None:
         root = self.native_rule_fixture()
         write(root / "src/game/behaviors/parent.inc.c", "/* callback is defined by another repository source */\n")
@@ -292,6 +320,33 @@ class SceneClosureTest(unittest.TestCase):
         closure = self.collect(root)
         parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
         self.assertEqual(parent["sfx_ids"], ["SOUND_OBJ_SECOND_USED_BY_PARENT", "SOUND_OBJ_USED_BY_PARENT"])
+        self.assertEqual(parent["sfx_banks"], ["obj"])
+
+    def test_audio_ignores_non_audio_calls_and_preserves_direct_sinks_and_forwarders(self) -> None:
+        root = self.native_rule_fixture()
+        write(root / "src/game/behaviors/parent.inc.c", """
+            static void consume_configuration(u32 value) {
+                value += 1;
+            }
+            static void forward_sound(u32 sound) {
+                u32 selected = sound;
+                cur_obj_play_sound_2(selected);
+            }
+            void bhv_parent_loop(void) {
+                consume_configuration(SOUND_GENERAL_MUST_NOT_LEAK);
+                forward_sound(SOUND_OBJ_FORWARDED_BY_PARENT);
+                cur_obj_play_sound_at_anim_range(2, 17, SOUND_OBJ_DIRECT_BY_PARENT);
+                spawn_object(o, MODEL_CHILD, bhvChild);
+            }
+        """)
+        write(root / "include/sounds.h", """
+            #define SOUND_OBJ_FORWARDED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 1, 2, 3)
+            #define SOUND_OBJ_DIRECT_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 4, 5, 6)
+            #define SOUND_GENERAL_MUST_NOT_LEAK SOUND_ARG_LOAD(SOUND_BANK_GENERAL, 7, 8, 9)
+        """)
+        closure = self.collect(root)
+        parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+        self.assertEqual(parent["sfx_ids"], ["SOUND_OBJ_DIRECT_BY_PARENT", "SOUND_OBJ_FORWARDED_BY_PARENT"])
         self.assertEqual(parent["sfx_banks"], ["obj"])
 
     def test_audio_rejects_missing_and_ambiguous_sound_bank_declarations(self) -> None:

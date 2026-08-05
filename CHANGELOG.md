@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Closed the last Task 3 fail-open scanner paths after final rereview.  Every
+  indexed symbol reached through native functions, data, action tables, or
+  function-pointer tables must now resolve uniquely, rather than applying the
+  ambiguity check only to direct-call syntax.  Behavior audio now follows a
+  bounded, sink-directed value flow through direct sound APIs, local aliases,
+  forwarding-wrapper parameters, and reached sound tables; passing a
+  `SOUND_*` value to an unrelated call no longer invents an SFX dependency.
+  This preserves the 86-record / 133-source BOB closure while narrowing its
+  audio union to the 54 source-proven IDs actually capable of reaching a sink.
+
 - Closed the final Task 3 scene-closure provenance bypasses.  The bounded
   native index now resolves callbacks and reachable helpers across canonical
   repository `src` definitions (while excluding mutually exclusive port
