@@ -2361,8 +2361,9 @@ expected FPS lever.
   Capture/FPS, linked P2 addresses, and memory margins remain unchecked while
   the observer layout contract is repaired and reviewed; do not rebuild.
 
-  Fix Round 3 is source-repaired and focused-green, but capture retry remains
-  unauthorized pending independent review. The watched fixture models the
+  Fix Round 3 is source-repaired, focused-green, and independently reviewed
+  specification PASS / code-quality PASS. Capture retry is authorized only
+  against the unchanged exact ELF/CUE. The watched fixture models the
   exact source evolution: legacy `s_runtime` is 92 bytes with telemetry at
   offset 28; the reviewed marker-enabled runtime adds three 32-bit owner
   pointers before `active`, is 104 bytes, and places telemetry at offset 40.
@@ -2371,8 +2372,9 @@ expected FPS lever.
   closed. The focused capture suite passes 35/35, and symbol-only validation of
   exact ELF `5afbc752...3065f0` selects 104/40. The failed JSON remains the
   disposition of the first pre-Ymir attempt, not target runtime evidence.
-  Scoped repair/docs/evidence commit: `39b99c21`. No rebuild, Ymir launch,
-  capture retry, or FPS result was produced.
+  Scoped repair/docs/evidence commit: `39b99c21`. Review found one non-blocking
+  stale STATE sentence, corrected in this transition. No rebuild or FPS result
+  was produced.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

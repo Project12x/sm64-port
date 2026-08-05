@@ -10,8 +10,9 @@ actual release sites; and the production-linked integration fixture combines
 deferred scene reset with failure quarantine and nonzero `QQ`. The normal path
 and all six mutations are focused-host/source-green. Scoped rereview of
 `420b6ce8..050aa3bc` is specification PASS and code-quality PASS with no
-findings, authorizing exactly one serialized target build/capture. No target
-build, capture, or FPS result exists yet. The accepted demo renderer now exposes
+findings, authorizing exactly one serialized target build/capture. The sole
+target build described below now exists; no successful capture or FPS result
+exists yet. The accepted demo renderer now exposes
 `start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
 the slave once, and returns. Poll remains PENDING until positive slave
 retirement, then the master drains remaining READY work, validates/merges,
@@ -35,8 +36,10 @@ offset 40 rather than legacy offset 28; symbol resolution accepts only the
 source-validated 92/104-byte layouts, and observation reads the exact resolved
 size. The focused capture suite passes 35/35, and direct resolution of exact
 ELF `5afbc752...3065f0` selects size 104/offset 40. Capture retry, FPS, P2
-addresses, and margins remain blocked pending independent review. Scoped
-repair/docs/evidence commit: `39b99c21`.
+addresses, and margins remain open. Scoped Fix Round 3 review is specification
+PASS and code-quality PASS with one non-blocking documentation Minor, now
+corrected here; retry is authorized only against the unchanged exact ELF/CUE.
+Scoped repair/docs/evidence commit: `39b99c21`.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

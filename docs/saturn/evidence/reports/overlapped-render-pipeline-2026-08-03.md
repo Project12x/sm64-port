@@ -2273,7 +2273,10 @@ resolves `s_runtime` as 104 bytes and selects telemetry offset 40.
 The failed JSON is retained and committed as the disposition of the first
 attempt: status `failed`, stage `symbol-resolution`, protocol `ready=false`, no
 notifications, and no Ymir startup. It provides no FPS, phase, P2 placement, or
-margin evidence. Independent review must approve this source-only observer
-repair before retrying the capture. No target rebuild, Ymir launch, capture
-retry, broad verify, or native-math census occurred. Scoped
-repair/docs/evidence commit: `39b99c21`.
+margin evidence. Scoped review is specification PASS and code-quality PASS;
+the 92/28 and 104/40 ABI map, exact live read, fail-closed unknown sizes,
+behavioral tests, and retained artifact hashes verify. Retry is authorized only
+against unchanged ELF `5afbc752...3065f0` / CUE `cdbf0bfa...f46dba7`, with no
+rebuild. One non-blocking stale STATE sentence is corrected in the next docs
+transition. No target rebuild, successful capture, broad verify, or native-
+math census occurred. Scoped repair/docs/evidence commit: `39b99c21`.
