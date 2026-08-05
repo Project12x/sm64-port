@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added the generic, versioned, big-endian `S64P` scene-root compiler,
+  validator, and C ABI emitter.  Roots now bind all eight closed section kinds,
+  sorted content-addressed actor/animation/audio descriptors, package and
+  dependency-set hashes, lifetimes, destinations, dependency masks, alignment,
+  and scratch/budget claims.  The first BOB area-1 artifact is deliberately
+  marked provisional and rejected by normal validation, so it can exercise
+  deterministic world/collision/sky/BSP packing without inventing unfinished
+  feature payload hashes or being mistaken for Task 22's final root.
+
 - Closed the last Task 3 fail-open scanner paths after final rereview.  Every
   indexed symbol reached through native functions, data, action tables, or
   function-pointer tables must now resolve uniquely, rather than applying the

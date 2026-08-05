@@ -71,7 +71,7 @@ def _primitive_tile_allowed(scene: dict[str, object], primitive: dict[str, objec
     return k <= 16
 
 
-def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict[str, object], dict[str, object]]:
+def bake_scene_fragments(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict[str, object], dict[str, object]]:
     textures: dict[str, tuple[int, int, list[int], str, int]] = {}
     names = {
         str(scene["materials"][int(primitive["material"])] ["texture"])
@@ -175,6 +175,11 @@ def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict
         "bsp": _fragment_bsp(root, fragment_indices),
     }
     return bytes(bank), bytes(clut), manifest, scene_out
+
+
+def bake(scene: dict[str, object], asset_root: Path) -> tuple[bytes, bytes, dict[str, object], dict[str, object]]:
+    """Compatibility wrapper for the existing BOB sourceboot asset path."""
+    return bake_scene_fragments(scene, asset_root)
 
 
 def main() -> None:

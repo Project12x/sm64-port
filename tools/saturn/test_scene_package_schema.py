@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Mutation tests for the version-one, big-endian S64P package ABI."""
+from __future__ import annotations
+
+import hashlib
+import struct
+import unittest
+
+from compile_scene_package import (
+    HEADER_SIZE,
+    DependencyInput,
+    SectionInput,
+    compile_package,
+    parse_package,
+)
+from validate_scene_package import PackageValidationError, validate_scene_package
+from emit_scene_package_header import emit_header
+
+
+def fixture(*, provisional: bool = False) -> tuple[bytes, dict[str, tuple[bytes, int]]]:
+    payloads = {
+        "goomba": (b"actor-goomba-v1", 7),
+        "mario-walk": (b"animation-walk-v1", 7),
+        "bob-music": (b"audio-bob-v1", 7),
+    }
+    sections = [
+        SectionInput("WORLD_STATIC", b"world", alignment=16, destination_class="LWRAM"),
+        SectionInput("COLLISION", b"collision", alignment=4, destination_class="HWRAM"),
+        SectionInput("SKY_BACKGROUND", b"sky", alignment=8, destination_class="VRAM"),
+        SectionInput("BSP_PORTAL", b"bsp", alignment=4, destination_class="HWRAM",
+                     dependency_mask=1 << 0),
+    ]
+    dependencies = [
+        DependencyInput("ACTOR_DEPENDENCIES", "goomba", payloads["goomba"][0],
+                        destination_class="CART", lifetime="AREA", generation=7),
+        DependencyInput("ANIMATION_DEPENDENCIES", "mario-walk", payloads["mario-walk"][0],
+                        destination_class="CART", lifetime="SCENE", generation=7),
+        DependencyInput("AUDIO_DEPENDENCIES", "bob-music", payloads["bob-music"][0],
+                        destination_class="SOUND_RAM", lifetime="SCENE", generation=7),
+    ]
+    return compile_package(9, 1, sections, dependencies, provisional=provisional), payloads
+
+
+class ScenePackageSchemaTest(unittest.TestCase):
+    def test_bob_header_is_big_endian_and_has_exact_fields(self) -> None:
+        package, payloads = fixture(provisional=True)
+        parsed = validate_scene_package(package, payloads, allow_provisional=True)
+        fields = struct.unpack_from(">IHHIHHHH32s32s", package)
+        self.assertEqual(fields[:8], (0x53363450, 1, HEADER_SIZE, len(package), 9, 1, 8, 1))
+        self.assertEqual(fields[8].hex(), parsed["package_sha256"])
+        self.assertEqual(fields[9].hex(), parsed["dependency_set_sha256"])
+        self.assertEqual([section["kind"] for section in parsed["sections"]], [
+            "WORLD_STATIC", "COLLISION", "SKY_BACKGROUND", "BSP_PORTAL",
+            "ACTOR_DEPENDENCIES", "ANIMATION_DEPENDENCIES",
+            "AUDIO_DEPENDENCIES", "RESIDENCY_PLAN",
+        ])
+
+    def test_rejects_wrong_magic_version_root_and_dependency_set_hash(self) -> None:
+        package, payloads = fixture()
+        mutations = [(0, b"BAD!", "magic"), (5, b"\x02", "version"),
+                     (20, bytes([package[20] ^ 1]), "package SHA-256"),
+                     (52, bytes([package[52] ^ 1]), "dependency-set SHA-256")]
+        for offset, replacement, message in mutations:
+            with self.subTest(message=message):
+                damaged = bytearray(package)
+                damaged[offset:offset + len(replacement)] = replacement
+                with self.assertRaisesRegex(PackageValidationError, message):
+                    validate_scene_package(bytes(damaged), payloads)
+
+    def test_rejects_missing_extra_wrong_generation_and_wrong_hash_payloads(self) -> None:
+        package, payloads = fixture()
+        cases = [
+            ({key: value for key, value in payloads.items() if key != "goomba"}, "missing payload"),
+            ({**payloads, "extra": (b"extra", 7)}, "extra payload"),
+            ({**payloads, "goomba": (payloads["goomba"][0], 8)}, "generation"),
+            ({**payloads, "goomba": (b"wrong", 7)}, "payload hash"),
+        ]
+        for evidence, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(PackageValidationError, message):
+                    validate_scene_package(package, evidence)
+
+    def test_rejects_unknown_kind_lifetime_destination_and_flags(self) -> None:
+        package, payloads = fixture()
+        parsed = parse_package(package)
+        descriptor = parsed["sections"][0]["descriptor_offset"]
+        mutations = [
+            (descriptor, struct.pack(">H", 99), "section kind"),
+            (descriptor + 2, b"\x7f", "destination"),
+            (descriptor + 3, b"\x7f", "lifetime"),
+            (18, struct.pack(">H", 0x8000), "flags"),
+        ]
+        for offset, replacement, message in mutations:
+            damaged = bytearray(package)
+            damaged[offset:offset + len(replacement)] = replacement
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(PackageValidationError, message):
+                    validate_scene_package(bytes(damaged), payloads)
+
+    def test_rejects_overlap_out_of_order_bad_alignment_and_dependency_cycle(self) -> None:
+        package, payloads = fixture()
+        parsed = parse_package(package)
+        first = parsed["sections"][0]
+        second = parsed["sections"][1]
+        cases: list[tuple[bytes, str]] = []
+        damaged = bytearray(package)
+        struct.pack_into(">I", damaged, second["descriptor_offset"] + 8, first["offset"])
+        cases.append((bytes(damaged), "overlap|order"))
+        damaged = bytearray(package)
+        struct.pack_into(">I", damaged, first["descriptor_offset"] + 16, 3)
+        cases.append((bytes(damaged), "alignment"))
+        damaged = bytearray(package)
+        struct.pack_into(">I", damaged, first["descriptor_offset"] + 20, 1 << 3)
+        struct.pack_into(">I", damaged, parsed["sections"][3]["descriptor_offset"] + 20, 1 << 0)
+        cases.append((bytes(damaged), "cycle"))
+        for blob, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(PackageValidationError, message):
+                    validate_scene_package(blob, payloads)
+
+    def test_rejects_budget_overflow_and_provisional_target_use(self) -> None:
+        package, payloads = fixture()
+        with self.assertRaisesRegex(PackageValidationError, "budget"):
+            validate_scene_package(package, payloads, budgets={"HWRAM": 1})
+        provisional, provisional_payloads = fixture(provisional=True)
+        with self.assertRaisesRegex(PackageValidationError, "provisional"):
+            validate_scene_package(provisional, provisional_payloads)
+
+    def test_dependency_set_is_bound_to_sorted_payload_hashes(self) -> None:
+        package, payloads = fixture()
+        parsed = validate_scene_package(package, payloads)
+        self.assertNotEqual(parsed["dependency_set_sha256"], hashlib.sha256(b"").hexdigest())
+
+    def test_emitted_header_freezes_the_binary_abi_and_package_identity(self) -> None:
+        package, payloads = fixture(provisional=True)
+        parsed = validate_scene_package(package, payloads, allow_provisional=True)
+        header = emit_header(package, "bob_area1")
+        self.assertIn("#define BOB_AREA1_S64P_HEADER_SIZE 84U", header)
+        self.assertIn("#define BOB_AREA1_S64P_SECTION_DESCRIPTOR_SIZE 64U", header)
+        self.assertIn("#define BOB_AREA1_S64P_DEPENDENCY_DESCRIPTOR_SIZE 96U", header)
+        self.assertIn(parsed["package_sha256"], header)
+        self.assertIn("SM64_SATURN_S64P_WORLD_STATIC = 1", header)
+
+
+if __name__ == "__main__":
+    unittest.main()

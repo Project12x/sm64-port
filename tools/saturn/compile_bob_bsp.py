@@ -139,6 +139,13 @@ def compile_bsp(scene: dict[str, object], candidate_limit: int = 32,
     return report
 
 
+def compile_bob_bsp(scene: dict[str, object], candidate_limit: int = 32,
+                    split_weight: int = 8,
+                    manifest: dict[str, object] | None = None) -> dict[str, object]:
+    """Compatibility wrapper; package callers should use ``compile_bsp``."""
+    return compile_bsp(scene, candidate_limit, split_weight, manifest)
+
+
 def _node_metrics(node: Node | None) -> tuple[tuple[Fraction, Fraction, Fraction],
                                                 tuple[Fraction, Fraction, Fraction],
                                                 int, int, int, int]:

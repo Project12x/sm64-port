@@ -50,8 +50,8 @@ def build_render_clusters(mesh: dict[str, object],
     return clusters
 
 
-def emit(mesh: dict[str, object], manifest: dict[str, object],
-         bsp: dict[str, object]) -> str:
+def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
+               bsp: dict[str, object]) -> str:
     entries = {int(entry["source_triangle"]): entry for entry in manifest["entries"]}
     # VDP1 textured triangle tiles use the shared castleviewer A/B/C/C
     # lowering. The offline affine companion is not a runtime vertex.
@@ -201,6 +201,12 @@ def emit(mesh: dict[str, object], manifest: dict[str, object],
     lines.extend(c_array(lod_far, width=24))
     lines += ["};", "#endif", ""]
     return "\n".join(lines)
+
+
+def emit(mesh: dict[str, object], manifest: dict[str, object],
+         bsp: dict[str, object]) -> str:
+    """Compatibility wrapper for the existing BOB generated-header path."""
+    return emit_scene(mesh, manifest, bsp)
 
 
 def main() -> None:

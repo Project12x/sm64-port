@@ -33,7 +33,8 @@ def root_display_lists(geo_source: str) -> list[dict[str, str]]:
     return roots
 
 
-def intake(area: Path) -> dict[str, Any]:
+def extract_area(area: Path, level_name: str, area_id: int) -> dict[str, Any]:
+    """Extract one static area through the shared Fast3D intake path."""
     models = sorted(area.glob("*/model.inc.c"), key=lambda path: int(path.parent.name))
     if not models:
         raise ValueError(f"no BOB model files below {area}")
@@ -53,8 +54,8 @@ def intake(area: Path) -> dict[str, Any]:
     return {
         "schema": "sm64-saturn-static-scene-intake",
         "version": 3,
-        "name": "bob_area_1_root",
-        "source": "levels/bob/areas/1",
+        "name": f"{level_name}_area_{area_id}_root",
+        "source": f"levels/{level_name}/areas/{area_id}",
         "roots": roots,
         "model_files": [path.as_posix() for path in models],
         "triangle_count": len(triangles),
@@ -70,6 +71,11 @@ def intake(area: Path) -> dict[str, Any]:
             "Texture bytes are produced by Task 3",
         ],
     }
+
+
+def intake(area: Path) -> dict[str, Any]:
+    """Compatibility wrapper for existing BOB sourceboot consumers."""
+    return extract_area(area, "bob", 1)
 
 
 def mesh_ir(document: dict[str, Any]) -> dict[str, Any]:
