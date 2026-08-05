@@ -33,6 +33,7 @@
 - 2026-08-05 closure review round-five correction: every reachable symbol reference—direct call, data, or function-pointer/table dispatch—must resolve uniquely or reject the closure. A `SOUND_*` token becomes an audio fact only where bounded call-site dataflow proves the invoked callee is an audio sink or forwarding wrapper; arbitrary non-audio calls never contribute SFX.
 - 2026-08-05 S64P review correction: dependency references are stable-ID based at the compiler boundary and lower only after global canonical ordering; the packed mask is limited to 32 canonical payload ordinals and unknown/duplicate/cyclic/absent-bit references fail closed. Header emission accepts an explicit payload manifest for dependency-bearing roots. ABI structs/enums are emitted once in a shared guarded header; per-scene headers contain constants only. Provisional inline sections use `NONE` destinations and zero residency accounting by design, and their reports must label those budgets as non-residency evidence until Tasks 5/7/11/12/22 provide final placement.
 - 2026-08-05 residency review correction: a validated S64P view is never a residency lease. Task 5 copies the root and feature-active payload bytes into bounded owned spans, rehashes those spans at commit, and stages exactly two generations using absolute aligned high-water accounting after the immutable SOURCE.DAT prefix. Render, VDP1, actor/animation, and audio consumers hold one-shot generation-scoped lease tokens; duplicate or stale release fails closed. Sourceboot rejects provisional roots through the linked-root caller while preserving the caller's output view on failure. The snapshot Make quoting defect remains an explicit open gate.
+- 2026-08-05 PCM v2 correction: the sound mailbox keeps byte-addressed big-endian records and separates an eight-entry control ring from a 24-entry SFX ring. Two-lap cursors make every physical slot usable while preserving empty/full distinction; producer bytes/telemetry publish before ownership cursors, and the MC68000 validates both ring snapshots then drains control before SFX within its bounded poll budget. The v1 wire proof remains historical and is never silently reinterpreted as v2.
 
 ## Prior art and reuse mode
 
@@ -120,7 +121,7 @@ all complete.
 - [ ] Task 3 — source-complete — final rereview SPEC/QUALITY PASS. Generic 19/19, real BOB 1/1, inventory 1/1, and serial closure compilation are green. BOB is 86 records, 133 source hashes, 54 proven SFX IDs/8 banks; target/Ymir/FPS/package/native-math/manual gates remain open.
 - [x] Task 4 — source-complete — implementation `ba40126c`, repair `a3e22842`; independent rereview SPEC/QUALITY PASS with no findings. Schema 12/12, determinism 3/3, `py_compile`, and serial DLL-preflight provisional-package gate are green; provisional SHA was stable (`84A1716C32A1563443EF00DECEF2BEEBC3C7581F113D56298F9D862522BF1F6E`). Final BOB/WF reseal, target boot, Ymir/FPS, native-math, and manual gates remain deferred to their owning tasks.
 - [x] Task 5 — source-complete — implementation `422096a1`, ownership/source-cart repair `c7d6e148`, declaration follow-up `eb99c47c`, lease-token repair `26986d94`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Serial C runtime/residency gates and neutrality/sourceboot 6/6 are green. Snapshot Make quoting, target link/memory inspection, final BOB/WF roots, Ymir/FPS, native-math, and manual gates remain deferred.
-- [ ] Task 6 — evolve PCM protocol v2 with protected control capacity
+- [x] Task 6 — source-complete — implementation `7bb8f87f`; independent review SPEC/QUALITY PASS, C0/I0/M0. V1/v2 ABI, transport/publication, 68K control-first model, heartbeat, soundtest migration, linked image/zero-map, and PCM mutations 12/12 are green. The exact Qt wrapper EOF and broad test-tools timeout remain explicitly open; no target/Ymir/audible claim.
 - [ ] Task 7 — generate the complete Mario animation bank
 - [ ] Task 8 — prove a state-only source-geo seam differentially
 - [ ] Task 9 — preserve source music/SFX policy and spatial semantics
@@ -417,15 +418,15 @@ bool sm64_saturn_audio_sfx_enqueue(sm64_saturn_pcm_transport_t *transport,
                                    const uint16_t words[7]);
 ```
 
-- [ ] Add RED tests for both ring layouts/wrap, big-endian words, producer-last publication, corrupt indices, v1/v2 mismatch, SFX saturation with successful control enqueue, control saturation telemetry, and control-first consumption.
-- [ ] Implement v2 without weakening the historical v1 proof. Migrate soundtest only after v2 host gates pass; preserve its owner-confirmed evidence as history.
-- [ ] Run GREEN serially:
+- [x] Add RED tests for both ring layouts/wrap, big-endian words, producer-last publication, corrupt indices, v1/v2 mismatch, SFX saturation with successful control enqueue, control saturation telemetry, and control-first consumption. The final model/image mutation class is 12/12.
+- [x] Implement v2 without weakening the historical v1 proof. Migrate soundtest only after v2 host gates pass; preserve its owner-confirmed evidence as history. The MC68000 consumes control before SFX and reports separate saturation/consumption counters.
+- [x] Run GREEN serially: DLL-preflight/MSYS make equivalents and linked-image gates pass. The exact Qt `mingw32-make` spelling remains open only for the inherited unmatched-quote `.exe` launch; broad `test_tools.py` timed out after early/BOB passes and was not substituted by the focused rerun.
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-audio-protocol-v2 verify-pcm-transport verify-pcm68k-model verify-pcm68k-image
   ```
 
-- [ ] Commit as `feat(saturn): reserve semantic audio control transport`; review offsets, publication order, starvation policy, and 68K image/stack bounds.
+- [x] Commit as `feat(saturn): reserve semantic audio control transport`; `7bb8f87f`; independent review pass covered offsets, publication order, starvation/control priority, v1 preservation, and 68K image/stack/work bounds.
 
 ### Task 7: Generate the complete compact Mario animation bank
 
