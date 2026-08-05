@@ -26,6 +26,11 @@
 - 2026-08-05 transfer audit: CPU copy is the correctness baseline. SCU DMA to sound RAM is an optional later optimization and may be enabled only after target evidence proves the exact source/destination legality, cache/barrier ordering, and non-interference with renderer DMA ownership.
 - 2026-08-05 native-math review repair: BOB null-camera suppression is authorized only after the verifier hashes the supplied linked ELF and every reviewed source input, confirms the unchanged BOB route to the terminal return, and rejects every extra `levelNum` rewrite/use. Renderer callback facts come only from the table returned by the factory that the renderer initialization actually activates; lifecycle ownership is proven inside the extracted roots. This is source-complete under `f349fe9f..52c75422`; the prescribed Qt wrapper failure and the capped broad exact-ELF run remain open evidence, not green gates.
 - 2026-08-05 identity review correction: `effective_config_hash` and the compiled identity must include every compiler-affecting sourceboot wrapper value, not merely the release feature tuple. Archive validation must bind the accepted A9A artifact trio to the exact recorded capture cadence, target identity/size, real profile content, and successful launch evidence before copying anything; a conflicting manifest must fail before archive state changes.
+- 2026-08-05 closure review correction: deterministic output is insufficient. The scene collector must enumerate and verify every reachable native computed spawn/effect edge or fail closed; `LOAD_MODEL_FROM_GEO`, geo provenance, cycles, act-scoped instance maxima, schema-complete records, source-derived audio declarations, and byte-stable checkout-independent serialization are part of the closure contract.
+- 2026-08-05 closure review round-two correction: native closure must conservatively traverse reachable helper/action/respawner/particle dispatch and recognized computed behavior tables, then reject unknown dynamic forms. Every rules-file path and edge/count/capacity claim must be source-attested and repository-hashed. Inline LevelScript parsing is area-scoped, while audio facts are function/behavior-scoped and bind the declared `SOUND_ARG_LOAD` bank rather than token prefixes.
+- 2026-08-05 closure review round-three correction: native indexing/traversal is repository-wide over the bounded source closure, not behavior-directory-local. Every resolved model/geo/animation root requires hashed provenance; nested area links and area-local music are fail-closed. Schema validates referential/aggregate integrity. A `maximum_live_instances` value is a source-attested live bound (spawn cadence plus child lifetime/explicit cap), never a one-time spawn factor; any unprovable continuous emitter fails generation.
+- 2026-08-05 closure review round-four correction: the bounded source index includes every repository source location reachable from a generated callback, and absent definitions are errors. One behavior may carry several concrete model/geo variants with provenance for every variant. Audio follows call-site arguments/semantic parameter flow, never all tokens inside a generic helper. Schema validates provenance symbols and complete typed classification. BehaviorScript bounds are evaluated at each spawn site; exception bounds require source-attested deletion/state proofs. Entry-script `JUMP_LINK` expansion and comment stripping precede area/music parsing.
+- 2026-08-05 closure review round-five correction: every reachable symbol reference—direct call, data, or function-pointer/table dispatch—must resolve uniquely or reject the closure. A `SOUND_*` token becomes an audio fact only where bounded call-site dataflow proves the invoked callee is an audio sink or forwarding wrapper; arbitrary non-audio calls never contribute SFX.
 
 ## Prior art and reuse mode
 
@@ -110,7 +115,7 @@ all complete.
 
 - [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
 - [ ] Task 2 — source-complete — commits `f5a0248d`, `8c97fd4e` (reports `264f3b4b`, `5008759e`); independent rereview PASS. Identity 9/9, sourceboot identity 5/5, capture 35/35, archive 12/12, and no-build baseline revalidation are green. Linked SH-2 symbol/layout, Ymir/manual, and Task 1 broad native-math gates remain open.
-- [ ] Task 3 — active — base `ce9f7ef3`; generating deterministic BOB closure records from LevelScript/behavior source and reviewed computed-spawn rules
+- [ ] Task 3 — source-complete — final rereview SPEC/QUALITY PASS. Generic 19/19, real BOB 1/1, inventory 1/1, and serial closure compilation are green. BOB is 86 records, 133 source hashes, 54 proven SFX IDs/8 banks; target/Ymir/FPS/package/native-math/manual gates remain open.
 - [ ] Task 4 — compile the generic S64P schema and provisional fixtures
 - [ ] Task 5 — validate and retain scene-package residency
 - [ ] Task 6 — evolve PCM protocol v2 with protected control capacity
@@ -277,16 +282,16 @@ Before generating any replacement, archive the already accepted A9A artifacts wi
 
 **Output:** `build/saturn/packages/bob/1/closure.json`, schema `sm64-saturn-scene-closure-v1`. Every record names source path/hash and declares level/area, act mask, object/model/behavior/geo roots, recursively spawned children/rewards/projectiles/effects, animation table, material feature bits, maximum live instances, music sequence IDs, and SFX banks/IDs.
 
-- [ ] Build fixtures for LevelScript `OBJECT*`, macro presets, `LOAD_MODEL_FROM_GEO`, behavior `spawn_object*`/reward edges, acts, model-less controllers, and cycles. Add mutations for an undeclared child, missing model/geo root, stale source hash, duplicate stable ID, and a hand-written BOB-only schema field; run RED:
+- [x] Build fixtures for LevelScript `OBJECT*`, macro presets, `LOAD_MODEL_FROM_GEO`, behavior `spawn_object*`/reward edges, acts, model-less controllers, and cycles. Add mutations for an undeclared child, missing model/geo root, stale source hash, duplicate stable ID, and a hand-written BOB-only schema field; run RED:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_closure.py
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_scene_closure.py
   ```
 
-- [ ] Implement deterministic parsing plus explicit reviewed spawn rules for computed spawn sites that static syntax cannot resolve. Every manual rule names the exact behavior source and reason; unknown edges fail closed.
-- [ ] Generate BOB twice and prove byte-identical JSON and complete source-hash coverage. The former Goomba 11-instance assertion becomes one generated closure fact, not the scope boundary.
-- [ ] Run GREEN and target creation:
+- [x] Implement deterministic parsing plus explicit reviewed spawn rules for computed spawn sites that static syntax cannot resolve. Every manual rule names the exact behavior source and reason; unknown edges fail closed.
+- [x] Generate BOB twice and prove byte-identical JSON and complete source-hash coverage. The former Goomba 11-instance assertion becomes one generated closure fact, not the scope boundary.
+- [x] Run GREEN and target creation:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_closure.py
@@ -294,7 +299,7 @@ Before generating any replacement, archive the already accepted A9A artifacts wi
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 compile-scene-closure SCENE_LEVEL=bob SCENE_AREA=1
   ```
 
-- [ ] Commit as `feat(saturn): derive transitive scene dependency closure`; review every manual spawn rule and confirm no dynamic family was omitted merely because it is model-less at declaration.
+- [x] Commit as `feat(saturn): derive transitive scene dependency closure`; final fifth-round rereview PASS; target/Ymir/FPS/package/native-math/manual evidence remains unchecked.
 
 ### Task 4: Compile the generic S64P schema and provisional fixtures
 
