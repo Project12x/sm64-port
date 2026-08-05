@@ -184,3 +184,74 @@ remain open; this remains host-tooling source completion, not target evidence.
 Implementation commit: `15b502650c536c87abc0e4cb3858db0e4a4611a0`
 (`fix(saturn): harden scene closure provenance`).  Independent rereview of this
 round remains an open controller gate.
+
+## Rereview repair round 3
+
+The round-2 rereview's 76-record / 78-hash output is superseded.  RED first
+reproduced all remaining contracts: a helper defined outside
+`src/game/behaviors` was invisible, an unknown cross-file model/behavior pair
+was accepted, nested area music leaked, animation definitions were optional,
+recurrent callbacks had no maximum-live proof, schema validation accepted bad
+child/type/scope/audio/provenance relationships, and real BOB omitted
+`bhvRespawner` and the mist-created `bhvWhitePuffExplosion`.
+
+The repair builds a bounded repository-wide native symbol graph rooted at each
+reachable `CALL_NATIVE`.  It includes helper/data regions across `src/game`,
+resolves concrete spawn APIs plus source-owned respawner, particle,
+sound-spawner, triangle, and loot-coin wrappers, hashes every reached file, and
+rejects ambiguous symbols or unresolved dynamic creation.  Context-sensitive
+attack dispatch is constrained by the caller source's handler-table tokens, so
+Goomba cannot inherit Koopa's shell-loss branch.  The same graph extends exact
+behavior-local audio collection instead of reverting to file-wide token scans.
+
+LevelScript evaluation now recursively expands local and `levels/scripts.c`
+`JUMP_LINK` roots.  Only the requested area's expanded text contributes
+objects and music; the entry prelude contributes global model loads.  Both
+`LOAD_MODEL_FROM_GEO` and `LOAD_MODEL_FROM_DL` override stale model-comment
+hints.  Every non-model-less geo/display-list root and every animation table
+must resolve to exactly one definition and be hash-covered.  Each record emits
+`root_provenance`, and schema validation enforces child existence, typed-list
+agreement, record level/area, exact audio unions, sorted typed fields, and
+behavior/model/geo/animation provenance membership.
+
+Native rules still attest the burst syntax, but recurrent callbacks no longer
+multiply that burst as though it were a lifetime total.  BOB's Goomba triplet
+retains the source-proven three-member active-set bound.  One-shot callbacks
+retain their attested burst.  Recurrent native or BehaviorScript creation with
+no tighter cadence/lifetime proof uses the repository's literal
+`OBJECT_POOL_CAPACITY` (240) as an explicit maximum-live ceiling and hashes
+`src/game/object_list_processor.h`; generation fails if that cap is absent or
+non-literal.  Respawner edges are represented as replacement cycles rather
+than recursively multiplied, yielding 14 live respawners for BOB's 12 Bob-ombs
+and two small breakable boxes.  No tighter lifetime rule was invented.
+
+The real BOB closure is now 86 records / 127 complete source hashes, canonical
+file SHA-256 `84fadd65f66a4c5a1aaa5057441eb4c93adf2000026c208c323529819a92d4d5`.
+It contains `bhvRespawner` with contextual Bob-omb/breakable-box return edges,
+`bhvWhitePuffExplosion` at the proven pool ceiling, generic water-death,
+triangle, sound-spawner, orange-number, and coin effects, corrected
+`chain_chomp_geo`, and hash-covered Chain Chomp animation provenance.  Area 1
+music is exactly `SEQ_LEVEL_GRASS`.
+
+Fresh serial host evidence before commit:
+
+```text
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_closure.py
+Ran 13 tests ... OK
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_scene_closure.py
+Ran 1 test ... OK (46.806s)
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_actor_generalization_inventory.py
+Ran 1 test ... OK (45.545s)
+
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 compile-scene-closure SCENE_LEVEL=bob SCENE_AREA=1
+exit 0; generated 86-record / 127-hash closure.json
+```
+
+Self-review verdict: PASS for this bounded host-source contract.  Independent
+rereview is pending the controller; target/Ymir/FPS, package-link/seal, broad
+native-math, and manual gates remain explicitly open and were not run.  The
+controller-owned active plan and progress ledger were preserved and unstaged.
+Implementation is recorded by this repair commit (`fix(saturn): close native
+scene graph gaps`).

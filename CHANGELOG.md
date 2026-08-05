@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Repaired the scene-closure collector's repository boundary: native callback,
+  helper, respawner, particle, sound-spawner, and loot/triangle-effect routes
+  are now walked across bounded `src/game` sources, with every reached source
+  hashed and every unresolved dynamic creation rejected.  Recursive
+  `JUMP_LINK` evaluation now separates area-local objects/music from global
+  model loads, resolves both geo and display-list model roots plus animation
+  tables, and records schema-checked root provenance.  Live counts no longer
+  treat a recurrent spawn burst as total capacity: tighter source-proven
+  active-set/one-shot bounds are retained (including BOB's 11 Goombas), while
+  recurrent paths without a provable cadence/lifetime use the explicit
+  `OBJECT_POOL_CAPACITY` ceiling and fail if that source cap is unavailable.
+  This closes omitted BOB respawner and mist/white-puff paths and expands the
+  authoritative host closure from 76/78 to 86 records / 127 source hashes.
+
 - Closed the remaining scene-closure rereview gaps by making behavior-spawn
   rules repository-relative, hash-covered source attestations of their native
   owners, exact model/behavior sites, and bounded capacity expressions.  Rule

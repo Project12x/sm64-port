@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from collect_scene_closure import ClosureError, _native_spawn_edges, _rules, collect_scene_closure
+from collect_scene_closure import ClosureError, _file_source_regions, _native_discovery, _native_spawn_edges, _native_symbol_index, _reachable_native_regions, _rules, collect_scene_closure
 from scene_package_schema import validate_scene_closure
 
 
@@ -27,11 +27,18 @@ class SceneClosureTest(unittest.TestCase):
         write(root / "levels/test/script.c", """
             LOAD_MODEL_FROM_GEO(MODEL_PARENT, parent_geo),
             LOAD_MODEL_FROM_GEO(MODEL_CHILD, child_geo),
+            static const LevelScript script_func_nested[] = {
+                SET_BACKGROUND_MUSIC(0, SEQ_LEVEL_TEST),
+                RETURN(),
+            };
             AREA(1, test_area_geo),
             OBJECT_WITH_ACTS(MODEL_PARENT, 0, 0, 0, 0, 0, 0, 0, bhvParent, ACT_1 | ACT_3),
             OBJECT(MODEL_NONE, 0, 0, 0, 0, 0, 0, 0, bhvController),
             MACRO_OBJECTS(test_macro_objs),
-            SET_BACKGROUND_MUSIC(0, SEQ_LEVEL_TEST),
+            JUMP_LINK(script_func_nested),
+            END_AREA(),
+            AREA(2, test_area_2_geo),
+            SET_BACKGROUND_MUSIC(0, SEQ_LEVEL_MUST_NOT_LEAK),
             END_AREA(),
         """)
         write(root / "levels/test/areas/1/macro.inc.c", """
@@ -53,8 +60,11 @@ class SceneClosureTest(unittest.TestCase):
             const BehaviorScript bhvEffect[] = {};
         """)
         write(root / "actors/parent/geo.inc.c", "const GeoLayout parent_geo[] = { GEO_ANIMATED_PART(0, 0, 0, 0, parent_dl), GEO_SHADOW(1, 2, 3) };\n")
+        write(root / "actors/parent/anims/table.inc.c", "const struct Animation *const parent_anims[] = { 0 };\n")
         write(root / "actors/child/geo.inc.c", "const GeoLayout child_geo[] = { GEO_BILLBOARD(), GEO_DISPLAY_LIST(LAYER_ALPHA, child_dl) };\n")
-        write(root / "include/model_ids.h", "#define MODEL_PARENT 1 // parent_geo\n#define MODEL_CHILD 2 // child_geo\n#define MODEL_YELLOW_COIN 3 // yellow_coin_geo\n#define MODEL_WATER_BOMB 4 // water_bomb_geo\n#define MODEL_SMOKE 5 // smoke_geo\n")
+        write(root / "actors/fixture_roots/geo.inc.c", "const GeoLayout yellow_coin_geo[] = { 0 };\nconst GeoLayout water_bomb_geo[] = { 0 };\nconst GeoLayout smoke_geo[] = { 0 };\n")
+        write(root / "include/model_ids.h", "#define MODEL_NONE 0\n#define MODEL_PARENT 1 // parent_geo\n#define MODEL_CHILD 2 // child_geo\n#define MODEL_YELLOW_COIN 3 // yellow_coin_geo\n#define MODEL_WATER_BOMB 4 // water_bomb_geo\n#define MODEL_SMOKE 5 // smoke_geo\n")
+        write(root / "src/game/object_list_processor.h", "#define OBJECT_POOL_CAPACITY 240\n")
         return root
 
     def collect(self, root: Path) -> dict:
@@ -118,6 +128,8 @@ class SceneClosureTest(unittest.TestCase):
         self.assertIn("billboard", records["bhvChild"]["material_feature_bits"])
         self.assertEqual(first["music_sequence_ids"], ["SEQ_LEVEL_TEST"])
         self.assertTrue(all(record["sources"] for record in first["records"]))
+        self.assertEqual(records["bhvParent"]["root_provenance"]["animation"]["parent_anims"], "actors/parent/anims/table.inc.c")
+        self.assertEqual(records["bhvParent"]["root_provenance"]["geo"], "actors/parent/geo.inc.c")
 
     def test_rejects_undeclared_child_and_missing_model_geo(self) -> None:
         root = self.fixture()
@@ -147,6 +159,34 @@ class SceneClosureTest(unittest.TestCase):
     def test_rejects_unknown_computed_native_spawn_arguments(self) -> None:
         with self.assertRaisesRegex(ClosureError, "unrecognized dynamic native spawn form"):
             _native_spawn_edges("spawn_object(o, model_from_table, behavior_from_table);")
+
+    def test_cross_file_helper_creation_is_discovered_hashed_and_unknown_rejected(self) -> None:
+        root = self.native_rule_fixture()
+        write(root / "src/game/behaviors/parent.inc.c", "void bhv_parent_loop(void) { create_child(); }\n")
+        write(root / "src/game/create_child.c", "void create_child(void) { spawn_object(o, model_from_table, behavior_from_table); }\n")
+        write(root / "rules.json", json.dumps({"schema": "sm64-saturn-behavior-spawn-rules-v2", "rules": []}))
+        with self.assertRaisesRegex(ClosureError, "unrecognized dynamic native spawn form"):
+            self.collect(root)
+        write(root / "src/game/create_child.c", "void create_child(void) { spawn_object(o, MODEL_CHILD, bhvChild); }\n")
+        _file_source_regions.cache_clear()
+        _native_symbol_index.cache_clear()
+        _reachable_native_regions.cache_clear()
+        _native_discovery.cache_clear()
+        closure = self.collect(root)
+        parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+        self.assertIn("bhvChild", parent["spawned_children"])
+        self.assertIn("src/game/create_child.c", {source["path"] for source in parent["sources"]})
+
+    def test_recurring_native_creation_requires_a_source_attested_live_bound(self) -> None:
+        root = self.native_rule_fixture()
+        behavior = (root / "data/behavior_data.c").read_text(encoding="utf-8")
+        write(root / "data/behavior_data.c", behavior.replace(
+            "const BehaviorScript bhvParent[] = { CALL_NATIVE(bhv_parent_loop) };",
+            "const BehaviorScript bhvParent[] = { BEGIN_LOOP(), CALL_NATIVE(bhv_parent_loop), END_LOOP() };",
+        ))
+        (root / "src/game/object_list_processor.h").unlink()
+        with self.assertRaisesRegex(ClosureError, "no source-attested maximum-live bound"):
+            self.collect(root)
 
     def test_rules_are_repo_relative_hash_covered_and_source_attested(self) -> None:
         root = self.native_rule_fixture()
@@ -243,6 +283,27 @@ class SceneClosureTest(unittest.TestCase):
         del closure["records"][0]["effects"]
         with self.assertRaisesRegex(ValueError, "missing record field"):
             validate_scene_closure(closure)
+
+    def test_schema_enforces_references_typed_lists_scope_audio_and_provenance(self) -> None:
+        mutations = [
+            (lambda closure: closure["records"][0]["spawned_children"].append("bhvMissing"), "unknown child reference"),
+            (lambda closure: closure["records"][0]["effects"].append("bhvChild"), "typed child lists disagree"),
+            (lambda closure: closure["records"][0].update(level="other"), "record level/area mismatch"),
+            (lambda closure: closure.update(sfx_ids=["SOUND_MISSING"]), "audio union mismatch"),
+            (lambda closure: closure["records"][0].update(root_provenance={"behavior": "actors/parent/geo.inc.c", "model": "include/model_ids.h", "geo": None, "animation": {}}), "invalid root provenance"),
+        ]
+        for mutate, message in mutations:
+            with self.subTest(message=message):
+                closure = self.collect(self.fixture())
+                mutate(closure)
+                with self.assertRaisesRegex(ValueError, message):
+                    validate_scene_closure(closure)
+
+    def test_missing_animation_definition_fails_closed(self) -> None:
+        root = self.fixture()
+        (root / "actors/parent/anims/table.inc.c").unlink()
+        with self.assertRaisesRegex(ClosureError, "unresolved animation root parent_anims"):
+            self.collect(root)
 
 
 if __name__ == "__main__":
