@@ -2489,17 +2489,15 @@ expected FPS lever.
   `qw=0`, `qq=0`, and zero master/slave failures. This is automated Ymir
   throughput evidence, not manual visual/controls acceptance.
 
-- [ ] **Step 12: Reconcile, commit, and review the completed transition**
+- [x] **Step 12: Reconcile, commit, and review the completed transition**
 
-  Mark Task 9A `source-complete` only after focused tests and two-stage review;
-  mark target evidence complete only after Step 11. Update every active doc in
-  the Files list with actual commands/results/hashes and keep manual Ymir,
-  broad native-math, and any failed gate unchecked. Append the mixed progress
-  ledger without staging unrelated content. Commit the scoped implementation
-  and same-commit changelog/docs as
-  `perf(saturn): overlap render work with next source tick`, then request final
-  scoped rereview. Do not start Task 10 until plan, ledger, evidence, and Git
-  head agree.
+  Focused tests, two-stage review, exact-map validation, and Step 11 target
+  evidence are complete and reconciled across the plan, ledger, STATE, ROADMAP,
+  and aggregate report. The mixed progress ledger remains unstaged alongside
+  unrelated work by design. Scoped implementation/changelog commit is
+  `cfb07a7d`; scoped evidence/docs commit is `88fd3c07`. Manual Ymir,
+  broad native-math, and any failed gate remain explicitly open. Do not start
+  Task 10 until the next transition updates those gates in the same way.
 
 ### Task 10: Prove scene-neutral behavior and publish the hardened candidate
 
