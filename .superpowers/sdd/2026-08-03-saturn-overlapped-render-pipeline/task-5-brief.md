@@ -290,7 +290,13 @@ yet.
   allocated `SHT_PROGBITS` bytes contained in `PT_LOAD`, and diagnostics cap
   notification count and serialized bytes independently of the Ymir client.
   Twelve focused capture tests and sixteen boot-trace tests are host-green;
-  no target evidence exists and this step remains unchecked.
+  no target evidence exists and this step remains unchecked. **Review repair
+  2/5 (2026-08-05):** identity proof now additionally requires the exact
+  affine `PT_LOAD` mapping (`section.address - segment.vaddr ==
+  section.offset - segment.offset`), rejecting a malformed section whose
+  independent ranges fit but whose file bytes map elsewhere. Thirteen capture
+  tests and sixteen boot-trace tests are host-green; fresh review and valid
+  live evidence remain open.
 ## Controller amendment — execute only A5.9 automatic queue observation
 
 This dispatch does **not** reopen the completed A5 queue/cutover work below.

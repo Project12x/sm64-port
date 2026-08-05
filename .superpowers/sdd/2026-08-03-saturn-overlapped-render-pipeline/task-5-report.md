@@ -129,3 +129,44 @@ and `test_protocol_diagnostics_bounds_many_and_oversized_notifications`.
 
 No target build or Ymir run occurred. The live queue-observation and review
 gates remain open.
+
+## Review repair 2/5 (2026-08-05)
+
+### Finding addressed
+
+- **Rereview blocker:** a candidate identity section could fit both the file
+  and virtual ranges of a `PT_LOAD` while its section-relative file and target
+  addresses differed. `build_elf_identity_probe()` now accepts a candidate only
+  when `section.address - segment.address == section.offset - segment.offset`
+  for that same load segment, so the hashed ELF bytes are exactly those mapped
+  at the probed target address.
+
+### Watched RED
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+Ran 13 tests ... FAILED
+FAIL: test_identity_probe_rejects_offset_mapped_to_a_different_pt_load_address
+AssertionError: ValueError not raised
+```
+
+### GREEN verification
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+.............
+Ran 13 tests ... OK
+
+python tools\saturn\test_capture_sourceboot_boot_trace.py
+................
+Ran 16 tests ... OK
+
+python -m py_compile tools\saturn\capture_sourceboot_throughput.py tools\saturn\test_capture_sourceboot_throughput.py
+git diff --check
+```
+
+Covering test:
+`test_identity_probe_rejects_offset_mapped_to_a_different_pt_load_address`.
+The root plan's prior blocker note is reconciled: this closes the source
+defect, not the required fresh review or valid live queue-observation gate.
+No target build or Ymir launch occurred.

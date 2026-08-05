@@ -46,6 +46,11 @@
   changes preserve the fail-closed observation contract without touching the
   target or scheduler.
 
+- Tightened that A5.9 ELF identity proof to require the section's virtual and
+  file offsets to share the same affine mapping inside the selected `PT_LOAD`.
+  Separate range containment could otherwise hash bytes at one file offset
+  while probing a different loaded address; malformed inputs now fail closed.
+
 - Restored the desktop launcher to the proven `ymir-agent/build-agent`
   executable and explicit `--profile`/`--disc` arguments. The prior default
   had drifted to `build-agent2`, which could launch without the intended disc

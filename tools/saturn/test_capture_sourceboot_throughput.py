@@ -205,6 +205,24 @@ class ThroughputCaptureTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "loadable"):
                     capture.build_elf_identity_probe(elf)
 
+    def test_identity_probe_rejects_offset_mapped_to_a_different_pt_load_address(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            elf = Path(directory) / "game.elf"
+            elf32_with_symbols(elf, [
+                ("sourceboot_boot_trace", BOOT_ADDRESS, 32),
+                ("s_runtime", RUNTIME_ADDRESS, 92),
+                ("s_render_job_queue", QUEUE_ADDRESS, 232),
+            ])
+            image = bytearray(elf.read_bytes())
+            # The section's virtual and file ranges each fit the same PT_LOAD,
+            # but their offsets within that segment deliberately disagree.
+            image[52 + 40 + 12 : 52 + 40 + 16] = (BOOT_ADDRESS + 16).to_bytes(4, "big")
+            image[0xE0 + 16 : 0xE0 + 20] = (64).to_bytes(4, "big")
+            image[0xE0 + 20 : 0xE0 + 24] = (64).to_bytes(4, "big")
+            elf.write_bytes(image)
+            with self.assertRaisesRegex(ValueError, "loadable"):
+                capture.build_elf_identity_probe(elf)
+
     def test_decodes_every_big_endian_offset_and_phase_order(self) -> None:
         self.assertEqual(capture.decode_boot_trace(trace(0xFFFFFFFE, 7)), {"observed_vblank_generation": 0xFFFFFFFE, "vdp2_presentation_generation": 7})
         decoded = capture.decode_runtime(runtime(qn=13, qr=14, notify=15, retired=16))

@@ -1258,6 +1258,14 @@ yet.
   in-process, and accepts P2 samples only after coherent retirement while
   advancing one VBlank at a time. This is not target evidence: no valid live
   report has been captured, so the step and queue gate remain unchecked.
+  First review's four findings and the scoped rereview's remaining identity
+  defect are now repaired. The identity probe requires each candidate section
+  to share the selected `PT_LOAD`'s exact affine file-to-memory mapping
+  (`section.address - segment.vaddr == section.offset - segment.offset`),
+  pinned by a malformed-ELF regression fixture whose ranges otherwise fit.
+  Thirteen capture tests and sixteen boot-trace tests are host-green. This
+  closes only the source defect: fresh review and a valid live report remain
+  required, so the step and queue evidence gate stay unchecked.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

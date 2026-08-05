@@ -1542,3 +1542,16 @@ open.
 - Focused capture tests: 12/12 PASS; existing boot-trace tests: 16/16 PASS;
   both modules compile. No target build, Ymir capture, or target conclusion
   occurred. The queue gate remains unchecked.
+
+### A5.9 queue-observation review repair 2/5 (2026-08-05)
+
+- A malformed identity section can fit one `PT_LOAD` file range and virtual
+  range while mapping those ranges with different offsets. The probe now
+  requires exact affine equality before hashing file bytes for a target
+  address; the malformed fixture is rejected.
+- Watched RED: the new offset-mismatch test failed because the old validator
+  accepted that ELF. GREEN: capture tests are 13/13 and boot-trace tests are
+  16/16, both modules compile, and whitespace verification passes.
+- No target build, Ymir invocation, live queue observation, or scheduler/FPS
+  conclusion occurred. The correction is source-only; fresh review and a valid
+  matching live capture remain open.

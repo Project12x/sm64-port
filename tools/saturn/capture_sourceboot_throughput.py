@@ -166,6 +166,8 @@ def build_elf_identity_probe(elf: Path) -> dict[str, Any]:
             and section_end <= segment["address"] + segment["file_size"]
             and segment["offset"] <= section["offset"]
             and file_end <= segment["offset"] + segment["file_size"]
+            and section["address"] - segment["address"]
+            == section["offset"] - segment["offset"]
             for segment in load_segments
         ):
             continue
