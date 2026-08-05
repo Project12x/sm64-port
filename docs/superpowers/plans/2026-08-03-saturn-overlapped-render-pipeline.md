@@ -2356,7 +2356,7 @@ expected FPS lever.
   reviewer authorizes exactly one fresh serialized repaired build followed by
   fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — PRIOR BUILD PASS/INVALID MAP; REPAIRED REBUILD AUTHORIZED**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD PASS; VERIFIER TYPE CONTRACT BLOCKS CAPTURE**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2431,6 +2431,19 @@ expected FPS lever.
   quality review are PASS, with no Critical or Important findings and one
   corrected documentation-only Minor. The next gate is exactly one serialized
   repaired build, then fail-closed map validation before any capture.
+
+  The authorized forced `-j1` rebuild passed in 331.4 seconds. Exact artifacts:
+  ELF SHA-256 `1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2`,
+  ISO `1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96`,
+  CUE `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`.
+  The rebuilt map has `___bss_end=0x060FD810`, P2
+  `.uncached=0x260FD810+0x6C8`, `___end=0x060FDED8`, HWRAM margin `0x2128`,
+  `.lwram_bss=0x00220000+0xD8B10`, and LWRAM margin `0x74F0`. The verifier
+  stopped before capture because `.uncached` is `PROGBITS`, not its asserted
+  `NOBITS`; the map shows the section legitimately contains Yaul
+  `.uncached.function` cache-helper code. This type-contract mismatch requires
+  watched test repair and independent review. The exact image has not been run
+  in Ymir and no FPS evidence is credited.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — rebuild and capture the reviewed A9A HWRAM boot repair
+## Now — repair the A9A exact-ELF verifier, then capture
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -29,11 +29,14 @@ source/layout and production-linked mutation gates are green. This is not
 target proof; projected HWRAM and LWRAM margins must be replaced by values from
 a reviewed fresh ELF.
 
-Gate: Fix Round 4 independent specification and quality reviews are PASS with
-no Critical or Important findings; one stale-status Minor is corrected in the
-same documentation transition. Run exactly one serialized DLL-safe target
-build, validate the exact map fail-closed, record P2 placement and both margins,
-then prove repaired-image boot/identity and run the bounded overlap/FPS capture.
+The authorized serialized rebuild passed in 331.4 seconds. Exact ELF
+`1905ec8d...fc2e2` now leaves `0x2128` HWRAM and `0x74F0` LWRAM, and its P2
+`.uncached` physical end equals `___end`. Capture is blocked because the
+verifier demands `NOBITS`, while the real linker necessarily emits `PROGBITS`
+for the section containing Yaul's `.uncached.function` cache helpers. Audit and
+repair that fail-closed type contract, independently review it, validate this
+same hash-bound ELF, then run boot/identity and bounded overlap/FPS capture
+without another rebuild.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 

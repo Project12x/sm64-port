@@ -2,11 +2,10 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Task 9A/A9A is **source-repaired and independently approved for one serialized
-repaired rebuild**. Fix Round 4 specification and quality reviews are PASS
-with no Critical or Important findings; the sole documentation-only Minor was
-a stale plan status corrected in the same transition. The accepted renderer
-still exposes exact-generation
+Task 9A/A9A is **rebuilt with valid physical WRAM margins, but blocked at an
+over-strict verifier section-type contract before capture**. Fix Round 4
+specification and quality reviews were PASS with no Critical or Important
+findings. The accepted renderer still exposes exact-generation
 `start_frame(N)` and `poll_frame(N)`: start publishes immutable jobs and
 returns after one slave notification; poll waits for positive retirement,
 then drains, merges, lowers once, and retires. Failure quarantines without
@@ -36,10 +35,13 @@ address used by either SH-2. The small lifetime/generation record remains P2
 margin subtraction, require the P2 `.uncached` physical end to equal
 `___end`, and enforce the final `0x4000` LWRAM margin for route 0 as well as
 capture routes. Focused source/layout tests and the real production-linked
-integration are green, including all six mutations. No target build, Ymir
-launch, or capture was run for this repair. Rebuilt HWRAM/LWRAM margins remain
-projections until the now-authorized single serialized build is validated
-fail-closed from its exact map and ELF.
+integration are green, including all six mutations. The authorized forced
+`-j1` rebuild passed in 331.4 seconds. Exact ELF `1905ec8d...fc2e2` ends at
+`0x060FDED8`, leaving `0x2128` HWRAM; `.lwram_bss` ends at `0x002F8B10`,
+leaving `0x74F0` LWRAM. P2 `.uncached=0x260FD810+0x6C8` maps exactly to
+`___end`, but is correctly emitted as `PROGBITS` because it includes Yaul's
+`.uncached.function` cache helpers. The verifier currently requires `NOBITS`
+and therefore failed before capture. No Ymir run or FPS claim is credited.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

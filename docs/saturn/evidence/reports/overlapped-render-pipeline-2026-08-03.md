@@ -2371,6 +2371,24 @@ free is about `0x74E0`. The HWRAM estimate is only `0x668` above the required
 floor, so both values must be replaced by reviewed rebuilt-ELF/map evidence.
 Canonical P2 cluster access may also affect performance and must be remeasured.
 
+### Authorized repaired rebuild and verifier stop
+
+The one authorized forced `-j1` rebuild passed in 331.4 seconds without a DLL
+failure. Exact hashes are ELF `1905ec8d...fc2e2`, ISO
+`1ccaef4f...cfaf96`, and CUE `cdbf0bfa...f46dba7`. The rebuilt map reports
+`___bss_end=0x060FD810`, P2 `.uncached=0x260FD810+0x6C8`,
+`___end=0x060FDED8`, HWRAM margin `0x2128`, `.lwram_bss` ending at
+`0x002F8B10`, and LWRAM margin `0x74F0`. Thus both physical WRAM floors and the
+P2-to-physical end identity are satisfied.
+
+The hardened verifier nevertheless stopped before capture because it requires
+`.uncached` to be `NOBITS`; the exact ELF emits `PROGBITS`. The map shows why:
+the output section includes Yaul's `.uncached.function` cache-helper code in
+addition to project shared data. This is a verifier-contract mismatch, not an
+accepted target result. No Ymir process or capture was started. A watched
+fail-closed correction and fresh independent review are required before this
+same hash-bound artifact may proceed to boot/identity capture.
+
 Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-
