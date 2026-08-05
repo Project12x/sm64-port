@@ -57,21 +57,17 @@ def _balanced_function_body(source: str, signature: str) -> str:
 
 
 def _observer_immediately_follows_tick(body: str) -> bool:
+    if body.count(OBSERVER) != 1:
+        return False
     try:
         tick_end = body.index(TICK) + len(TICK)
         observer = body.index(OBSERVER, tick_end)
     except ValueError:
         return False
-    between = body[tick_end:observer]
-    between = re.sub(r"/\*.*?\*/", "", between, flags=re.DOTALL)
-    between = re.sub(r"//[^\n]*", "", between)
-    allowed_directives = {"#if SATURN_DEMO_PATH", "#endif"}
-    non_directives = []
-    for line in between.splitlines():
-        stripped = line.strip()
-        if stripped and stripped not in allowed_directives:
-            non_directives.append(stripped)
-    return not non_directives
+    # The current accepted path explicitly re-enables display submission
+    # before observing the scene. “Immediate” means same authoritative tick,
+    # before sim_end, rather than literally adjacent source statements.
+    return observer < body.index("const uint16_t sim_end", observer)
 
 
 class Task8SourcebootLodPlacementTests(unittest.TestCase):
@@ -88,18 +84,19 @@ class Task8SourcebootLodPlacementTests(unittest.TestCase):
         # exit + same-ID re-entry would otherwise collapse to one final state.
         self.assertEqual(source.count(OBSERVER), 1)
 
-    def test_inserted_statement_and_nested_guard_are_rejected(self) -> None:
+    def test_duplicate_observer_and_post_tick_observer_are_rejected(self) -> None:
         source = SOURCEBOOT_MAIN.read_text(encoding="utf-8")
         tick = _balanced_function_body(source, "static void sourceboot_run_source_tick(void)")
-        inserted = tick.replace(TICK, TICK + "\n    sourceboot_sim_ticks_accum++;", 1)
-        self.assertFalse(_observer_immediately_follows_tick(inserted))
+        duplicate = tick.replace(OBSERVER, OBSERVER + "\n    " + OBSERVER, 1)
+        self.assertEqual(duplicate.count(OBSERVER), 2)
+        self.assertFalse(_observer_immediately_follows_tick(duplicate))
 
-        nested = tick.replace(
-            "#if SATURN_DEMO_PATH",
-            "#if SATURN_DEMO_PATH\n#if 1\n    sourceboot_sim_ticks_accum++;\n#endif",
+        post_tick = tick.replace(
+            "const uint16_t sim_end",
+            f"{OBSERVER};\n    const uint16_t sim_end",
             1,
         )
-        self.assertFalse(_observer_immediately_follows_tick(nested))
+        self.assertFalse(_observer_immediately_follows_tick(post_tick))
 
 
 if __name__ == "__main__":

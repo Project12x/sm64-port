@@ -15,9 +15,11 @@ class RenderJobGraphSourceTests(unittest.TestCase):
         self.assertIn("validate_terrain_merge", source)
         self.assertIn("propagate_failures", source)
 
-    def test_live_cutover_stays_unbound_until_payload_conversion(self):
+    def test_live_cutover_binds_the_reviewed_graph_runtime(self):
         source = RENDERER.read_text(encoding="utf-8")
-        self.assertNotIn('#include "saturn_render_job_graph.h"', source)
+        self.assertIn('#include "saturn_render_job_graph.h"', source)
+        self.assertIn("sm64_saturn_render_job_graph_publish(", source)
+        self.assertIn("sm64_saturn_render_job_graph_validate_", source)
 
 
 if __name__ == "__main__":
