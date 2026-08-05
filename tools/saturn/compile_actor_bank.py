@@ -50,6 +50,27 @@ MATERIAL_RECORD_STRUCT = struct.Struct(">BBBB")
 MESHLET_RECORD_STRUCT = struct.Struct(">HHBB6h12I")
 PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
 
+PINNED_MARIO_ANIMATION_SOURCE_ROOT = "assets/anims"
+PINNED_MARIO_ANIMATION_SOURCE_COUNT = 193
+PINNED_MARIO_ANIMATION_PATH_CANONICALIZATION = (
+    "SHA-256 of S64B-ANIMATION-PATHS\\0\\1 followed by sorted "
+    "repository-relative UTF-8 paths, each NUL-terminated"
+)
+PINNED_MARIO_ANIMATION_PATHS_SHA256 = (
+    "2d7c66e966281974652ab0581f8522c6e9b115c5ddca7fd43fe8ae74201c67e1"
+)
+PINNED_MARIO_ANIMATION_SOURCE_COMMIT = "68f9dd10"
+
+
+def _pinned_animation_source_inventory() -> dict[str, object]:
+    return {
+        "root": PINNED_MARIO_ANIMATION_SOURCE_ROOT,
+        "file_count": PINNED_MARIO_ANIMATION_SOURCE_COUNT,
+        "canonicalization": PINNED_MARIO_ANIMATION_PATH_CANONICALIZATION,
+        "paths_sha256": PINNED_MARIO_ANIMATION_PATHS_SHA256,
+        "repository_commit": PINNED_MARIO_ANIMATION_SOURCE_COMMIT,
+    }
+
 
 def _align(data: bytearray, alignment: int = 4) -> int:
     while len(data) % alignment:
@@ -72,6 +93,14 @@ def _source_digest(sources: Iterable[dict[str, object]]) -> bytes:
         for item in sources
     )
     return hashlib.sha256(canonical).digest()
+
+
+def _animation_source_path_digest(paths: Iterable[str]) -> str:
+    """Hash the sorted repository-relative UTF-8 path set, including boundaries."""
+    canonical = b"S64B-ANIMATION-PATHS\x00\x01" + b"".join(
+        path.encode("utf-8") + b"\x00" for path in sorted(paths)
+    )
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _joint_owners(geo_source: str, part_names: list[str]) -> list[int]:
@@ -246,6 +275,12 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
     root = root.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     inventory = load_animation_inventory(root)
+    source_inventory_pin = manifest.get("animation_source_inventory")
+    if source_inventory_pin != _pinned_animation_source_inventory():
+        raise ValueError("Mario animation source manifest does not match repository pin")
+    inventory_paths = [item.path for item in inventory.source_files]
+    if _animation_source_path_digest(inventory_paths) != PINNED_MARIO_ANIMATION_PATHS_SHA256:
+        raise ValueError("repository-pinned animation source set mismatch")
     geometry = _compile_geometry(root, manifest)
     joint_counts = {record.joint_count for record in inventory.records}
     if joint_counts != {20}:
@@ -350,6 +385,7 @@ def compile_mario_actor_bank(root: Path, manifest_path: Path) -> tuple[dict[str,
         "max_instances": int(manifest["max_instances"]), "feature_mask": FEATURE_MASK,
         "source_sha256": source_digest.hex(), "max_scratch": max_scratch,
         "geometry_scope": manifest["geometry_scope"],
+        "animation_source_inventory": source_inventory_pin,
         "switch_variant_geometry_complete": False,
         "switch_variant_runtime_owner": "Task 10",
         "sources": source_entries, "animations": animation_documents,
@@ -407,6 +443,8 @@ def validate_actor_bank_document(document: dict[str, object], payload: bytes) ->
         raise ValueError("complete animation ID set is required")
     if document.get("source_file_count") != 193:
         raise ValueError("actor bank requires exactly 193 animation source files")
+    if document.get("animation_source_inventory") != _pinned_animation_source_inventory():
+        raise ValueError("repository-pinned animation source metadata mismatch")
     animation_paths = {str(item.get("source_path", "")) for item in animations}
     fixed_paths = {"include/mario_animation_ids.h", "actors/mario/geo.inc.c",
                    "actors/mario/model.inc.c"}
@@ -431,6 +469,9 @@ def validate_actor_bank_document(document: dict[str, object], payload: bytes) ->
                       if item["source_path"] == source_path}
         if actual_ids != expected_ids:
             raise ValueError("animation source filename membership mismatch")
+    if (_animation_source_path_digest(animation_paths) !=
+            PINNED_MARIO_ANIMATION_PATHS_SHA256):
+        raise ValueError("repository-pinned animation source set mismatch")
     source_digest = _source_digest(sources)
     document_digest = document.get("source_sha256")
     if (not isinstance(document_digest, str) or

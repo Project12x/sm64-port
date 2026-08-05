@@ -6,6 +6,13 @@
   "max_instances": 1,
   "animation_ids": "include/mario_animation_ids.h",
   "animation_root": "assets/anims",
+  "animation_source_inventory": {
+    "root": "assets/anims",
+    "file_count": 193,
+    "canonicalization": "SHA-256 of S64B-ANIMATION-PATHS\\0\\1 followed by sorted repository-relative UTF-8 paths, each NUL-terminated",
+    "paths_sha256": "2d7c66e966281974652ab0581f8522c6e9b115c5ddca7fd43fe8ae74201c67e1",
+    "repository_commit": "68f9dd10"
+  },
   "model": "actors/mario/model.inc.c",
   "geo": "actors/mario/geo.inc.c",
   "geometry_scope": "legacy-selected normal-cap front-eye open-hand compatibility mesh",

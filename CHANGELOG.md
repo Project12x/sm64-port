@@ -6,17 +6,18 @@
 
 - Hardened the compact Mario actor bank after independent review.  The target
   decoder now proves every packed GEO1 table boundary and count, joint/branch
-  ownership, RGB555 material, meshlet bounds/tier span, primitive and meshlet
-  reference, and the compiler-derived minimum scratch requirement before
-  exposing a bank.  Callers may bind validation to the expected eight-word
-  source identity, so a nonzero but wrong source digest also fails closed.
-  Host validation now requires the exact 193 canonical animation filenames,
-  unique provenance paths, lowercase hexadecimal hashes, per-animation
-  path/hash membership, a recomputed source-set digest, and equality with the
-  digest stored in payload bytes 26–57.  This prevents a resealed report or a
-  structurally bounded but internally inconsistent geometry bank from being
-  accepted; the JSON schema is explicitly advisory while the executable
-  validator owns semantic authority.
+  ownership and node ordering, RGB555 material, meshlet bounds/tier spans,
+  source-ordinal ownership, exact tier primitive/vertex relationships,
+  primitive material/vertex ownership, and the compiler-derived minimum
+  scratch requirement before exposing a bank.  Callers may bind validation to
+  the expected eight-word source identity, so a nonzero but wrong source digest
+  also fails closed.  Host validation pins the repository's actual 193-path
+  animation inventory at commit `68f9dd10` via canonical path-set SHA-256
+  `2d7c66e9…c67e1`, in addition to unique provenance paths, lowercase hashes,
+  per-animation membership, and payload digest binding.  This rejects both
+  in-range internally inconsistent GEO1 payloads and self-consistent resealed
+  filename repartitions; the JSON schema is advisory while executable
+  validation owns semantic authority.
 
 - Added a deterministic, content-addressed, big-endian `S64B` Mario actor
   bank that retains all 209 source animation IDs from all 193 animation files

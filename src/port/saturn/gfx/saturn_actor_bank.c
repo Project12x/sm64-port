@@ -30,6 +30,59 @@ static bool span(uint32_t offset, uint32_t size, size_t byte_count)
     return offset <= byte_count && size <= byte_count - offset;
 }
 
+static bool validate_meshlet_tier(const uint8_t *geometry,
+                                  uint32_t primitive_offset,
+                                  uint32_t primitive_ref_offset,
+                                  uint32_t vertex_ref_offset,
+                                  uint32_t tier_primitive_offset,
+                                  uint32_t tier_primitive_count,
+                                  uint32_t tier_vertex_offset,
+                                  uint32_t tier_vertex_count,
+                                  uint16_t meshlet_material)
+{
+    uint32_t emitted_vertices = 0U;
+    for (uint32_t local_primitive = 0U;
+         local_primitive < tier_primitive_count; local_primitive++) {
+        uint16_t primitive = read_be16(
+            geometry + primitive_ref_offset +
+            (tier_primitive_offset + local_primitive) * 2U);
+        const uint8_t *primitive_record =
+            geometry + primitive_offset + (uint32_t)primitive * PRIMITIVE_RECORD_SIZE;
+        if (read_be16(primitive_record) != meshlet_material)
+            return false;
+        for (uint32_t corner = 0U; corner < 4U; corner++) {
+            uint16_t vertex = read_be16(primitive_record + 2U + corner * 2U);
+            bool seen = false;
+            for (uint32_t prior_primitive = 0U;
+                 prior_primitive <= local_primitive && !seen; prior_primitive++) {
+                uint16_t prior = read_be16(
+                    geometry + primitive_ref_offset +
+                    (tier_primitive_offset + prior_primitive) * 2U);
+                const uint8_t *prior_record =
+                    geometry + primitive_offset +
+                    (uint32_t)prior * PRIMITIVE_RECORD_SIZE;
+                uint32_t prior_corner_limit =
+                    prior_primitive == local_primitive ? corner : 4U;
+                for (uint32_t prior_corner = 0U;
+                     prior_corner < prior_corner_limit; prior_corner++) {
+                    if (read_be16(prior_record + 2U + prior_corner * 2U) == vertex) {
+                        seen = true;
+                        break;
+                    }
+                }
+            }
+            if (!seen) {
+                if (emitted_vertices >= tier_vertex_count ||
+                    read_be16(geometry + vertex_ref_offset +
+                              (tier_vertex_offset + emitted_vertices) * 2U) != vertex)
+                    return false;
+                emitted_vertices++;
+            }
+        }
+    }
+    return emitted_vertices == tier_vertex_count;
+}
+
 bool sm64_saturn_actor_bank_animation(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
     sm64_saturn_actor_animation_record_t *record)
@@ -64,6 +117,7 @@ bool sm64_saturn_actor_bank_validate_expected(
     uint32_t geometry_primitive_ref_offset, geometry_vertex_ref_offset;
     uint32_t primitive_cursor = 0U, vertex_cursor = 0U;
     uint32_t minimum_scratch;
+    int16_t previous_node = -1;
     bool hash_nonzero = false;
     if (bytes == NULL || view == NULL || byte_count < SM64_SATURN_ACTOR_BANK_HEADER_SIZE)
         return false;
@@ -166,9 +220,14 @@ bool sm64_saturn_actor_bank_validate_expected(
         const uint8_t *record = bytes + parsed.meshlets_offset + geometry_joint_offset +
                                 (uint32_t)joint * 12U;
         int16_t parent = read_be_s16(record);
+        int16_t node = read_be_s16(record + 8U);
+        uint16_t branch = read_be16(record + 10U);
         if ((joint == 0U && parent != -1) ||
-            (joint != 0U && (parent < 0 || parent >= (int16_t)joint)))
+            (joint != 0U && (parent < 0 || parent >= (int16_t)joint)) ||
+            node < 0 || (joint != 0U && node <= previous_node) ||
+            (branch != 0xFFFFU && branch != (uint16_t)node))
             return false;
+        previous_node = node;
     }
     for (uint16_t part = 0U; part < geometry_part_count; part++) {
         const uint8_t *record = bytes + parsed.meshlets_offset + geometry_part_offset +
@@ -213,11 +272,17 @@ bool sm64_saturn_actor_bank_validate_expected(
     for (uint16_t primitive = 0U; primitive < geometry_primitive_count; primitive++) {
         const uint8_t *record = bytes + parsed.meshlets_offset + geometry_primitive_offset +
                                 (uint32_t)primitive * PRIMITIVE_RECORD_SIZE;
+        uint16_t a = read_be16(record + 2U);
+        uint16_t b = read_be16(record + 4U);
+        uint16_t c = read_be16(record + 6U);
+        uint16_t d = read_be16(record + 8U);
         if (read_be16(record) >= geometry_material_count)
             return false;
         for (uint16_t corner = 0U; corner < 4U; corner++)
             if (read_be16(record + 2U + corner * 2U) >= parsed.bank.vertex_count)
                 return false;
+        if (d != c && (a == b || a == c || a == d || b == c || b == d || c == d))
+            return false;
     }
     for (uint16_t reference = 0U; reference < primitive_ref_count; reference++)
         if (read_be16(bytes + parsed.meshlets_offset + geometry_primitive_ref_offset +
@@ -227,6 +292,70 @@ bool sm64_saturn_actor_bank_validate_expected(
         if (read_be16(bytes + parsed.meshlets_offset + geometry_vertex_ref_offset +
                       (uint32_t)reference * 2U) >= parsed.bank.vertex_count)
             return false;
+    for (uint16_t meshlet = 0U; meshlet < geometry_meshlet_count; meshlet++) {
+        const uint8_t *geometry = bytes + parsed.meshlets_offset;
+        const uint8_t *record = geometry + geometry_meshlet_offset +
+                                (uint32_t)meshlet * MESHLET_RECORD_SIZE;
+        uint16_t material = read_be16(record);
+        uint16_t source_ordinal = read_be16(record + 2U);
+        uint32_t primitive_offsets[3], primitive_counts[3];
+        uint32_t vertex_offsets[3], vertex_counts[3];
+        for (uint16_t tier = 0U; tier < 3U; tier++) {
+            const uint8_t *fields = record + 18U + (uint32_t)tier * 16U;
+            primitive_offsets[tier] = read_be32(fields);
+            primitive_counts[tier] = read_be32(fields + 4U);
+            vertex_offsets[tier] = read_be32(fields + 8U);
+            vertex_counts[tier] = read_be32(fields + 12U);
+        }
+        if (primitive_counts[0] == 0U || primitive_counts[1] == 0U ||
+            primitive_counts[0] != primitive_counts[1] ||
+            vertex_counts[0] != vertex_counts[1] ||
+            read_be16(geometry + geometry_primitive_ref_offset +
+                      primitive_offsets[0] * 2U) != source_ordinal)
+            return false;
+        for (uint32_t local = 0U; local < primitive_counts[0]; local++) {
+            uint16_t tier0 = read_be16(
+                geometry + geometry_primitive_ref_offset +
+                (primitive_offsets[0] + local) * 2U);
+            uint16_t tier1 = read_be16(
+                geometry + geometry_primitive_ref_offset +
+                (primitive_offsets[1] + local) * 2U);
+            if ((uint32_t)tier0 != (uint32_t)source_ordinal + local || tier1 != tier0)
+                return false;
+        }
+        for (uint32_t local = 0U; local < vertex_counts[0]; local++) {
+            if (read_be16(geometry + geometry_vertex_ref_offset +
+                          (vertex_offsets[0] + local) * 2U) !=
+                read_be16(geometry + geometry_vertex_ref_offset +
+                          (vertex_offsets[1] + local) * 2U))
+                return false;
+        }
+        {
+            uint32_t expected_tier2 = 0U;
+            for (uint32_t local = 0U; local < primitive_counts[0]; local++) {
+                uint16_t primitive = read_be16(
+                    geometry + geometry_primitive_ref_offset +
+                    (primitive_offsets[0] + local) * 2U);
+                if (primitive % 8U == 1U) {
+                    if (expected_tier2 >= primitive_counts[2] ||
+                        read_be16(geometry + geometry_primitive_ref_offset +
+                                  (primitive_offsets[2] + expected_tier2) * 2U) != primitive)
+                        return false;
+                    expected_tier2++;
+                }
+            }
+            if (expected_tier2 != primitive_counts[2])
+                return false;
+        }
+        for (uint16_t tier = 0U; tier < 3U; tier++) {
+            if (!validate_meshlet_tier(
+                    geometry, geometry_primitive_offset,
+                    geometry_primitive_ref_offset, geometry_vertex_ref_offset,
+                    primitive_offsets[tier], primitive_counts[tier],
+                    vertex_offsets[tier], vertex_counts[tier], material))
+                return false;
+        }
+    }
     for (uint16_t animation = 0U; animation < parsed.bank.animation_count; animation++) {
         sm64_saturn_actor_animation_record_t record;
         uint32_t index_words, value_words;

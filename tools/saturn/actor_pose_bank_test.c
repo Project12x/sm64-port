@@ -112,8 +112,11 @@ int main(int argc, char **argv)
     sm64_saturn_actor_bank_view_t view;
     sm64_saturn_actor_animation_record_t first, shared_a, shared_b;
     int16_t sample;
-    uint32_t geometry, part_offset, material_offset, meshlet_offset;
+    uint32_t geometry, joint_offset, part_offset, material_offset, meshlet_offset;
     uint32_t primitive_offset, primitive_ref_offset, vertex_ref_offset;
+    uint32_t tier1_primitive_ref, tier1_vertex_ref, tier2_primitive_ref;
+    uint16_t material_count, primitive_count, vertex_count;
+    uint16_t first_material, first_source, first_primitive, first_vertex;
     uint32_t expected_source_hash[8];
     if (argc != 2 || (bytes = read_file(argv[1], &size)) == NULL) {
         fprintf(stderr, "usage: actor-pose-bank-test actor-bank.s64b\n");
@@ -153,12 +156,26 @@ int main(int argc, char **argv)
         free(copy);
     }
     geometry = view.meshlets_offset;
+    joint_offset = geometry + read_be32(bytes + geometry + 18U);
     part_offset = geometry + read_be32(bytes + geometry + 22U);
     material_offset = geometry + read_be32(bytes + geometry + 26U);
     meshlet_offset = geometry + read_be32(bytes + geometry + 30U);
     primitive_offset = geometry + read_be32(bytes + geometry + 34U);
     primitive_ref_offset = geometry + read_be32(bytes + geometry + 38U);
     vertex_ref_offset = geometry + read_be32(bytes + geometry + 42U);
+    material_count = read_be16(bytes + geometry + 8U);
+    primitive_count = read_be16(bytes + geometry + 12U);
+    vertex_count = view.bank.vertex_count;
+    first_material = read_be16(bytes + meshlet_offset);
+    first_source = read_be16(bytes + meshlet_offset + 2U);
+    first_primitive = read_be16(bytes + primitive_ref_offset);
+    first_vertex = read_be16(bytes + vertex_ref_offset);
+    tier1_primitive_ref = primitive_ref_offset +
+                          read_be32(bytes + meshlet_offset + 34U) * 2U;
+    tier1_vertex_ref = vertex_ref_offset +
+                       read_be32(bytes + meshlet_offset + 42U) * 2U;
+    tier2_primitive_ref = primitive_ref_offset +
+                          read_be32(bytes + meshlet_offset + 50U) * 2U;
     if (reject_u32_mutation(bytes, size, geometry + 26U,
                             read_be32(bytes + geometry + 26U) + 1U,
                             "noncanonical material span") ||
@@ -213,6 +230,49 @@ int main(int argc, char **argv)
         reject_u16_mutation(bytes, size, vertex_ref_offset,
                             view.bank.vertex_count,
                             "meshlet vertex reference overflow") ||
+        reject_u16_mutation(bytes, size, meshlet_offset,
+                            (uint16_t)((first_material + 1U) % material_count),
+                            "in-range meshlet material mismatch") ||
+        reject_u16_mutation(bytes, size, meshlet_offset + 2U,
+                            (uint16_t)((first_source + 1U) % primitive_count),
+                            "in-range meshlet source ownership mismatch") ||
+        reject_u16_mutation(bytes, size, primitive_ref_offset,
+                            (uint16_t)((first_primitive + 1U) % primitive_count),
+                            "in-range tier primitive-list mismatch") ||
+        reject_u16_mutation(bytes, size, vertex_ref_offset,
+                            (uint16_t)((first_vertex + 1U) % vertex_count),
+                            "in-range tier vertex-list mismatch") ||
+        reject_u16_mutation(bytes, size, tier1_primitive_ref,
+                            (uint16_t)((read_be16(bytes + tier1_primitive_ref) + 1U) %
+                                       primitive_count),
+                            "in-range tier-one primitive-list mismatch") ||
+        reject_u16_mutation(bytes, size, tier1_vertex_ref,
+                            (uint16_t)((read_be16(bytes + tier1_vertex_ref) + 1U) %
+                                       vertex_count),
+                            "in-range tier-one vertex-list mismatch") ||
+        reject_u16_mutation(bytes, size, tier2_primitive_ref,
+                            (uint16_t)((read_be16(bytes + tier2_primitive_ref) + 1U) %
+                                       primitive_count),
+                            "in-range tier-two primitive-subset mismatch") ||
+        reject_u16_mutation(bytes, size,
+                            primitive_offset + (uint32_t)first_primitive * 10U,
+                            (uint16_t)((first_material + 1U) % material_count),
+                            "in-range primitive material mismatch") ||
+        reject_u16_mutation(bytes, size,
+                            primitive_offset + (uint32_t)first_primitive * 10U + 2U,
+                            (uint16_t)((read_be16(bytes + primitive_offset +
+                                                (uint32_t)first_primitive * 10U + 2U) + 1U) %
+                                       vertex_count),
+                            "in-range primitive vertex mismatch") ||
+        reject_u16_mutation(bytes, size, joint_offset + 12U + 8U,
+                            read_be16(bytes + joint_offset + 8U),
+                            "in-range duplicate joint node ordinal") ||
+        reject_u16_mutation(bytes, size, joint_offset + 7U * 12U + 10U, 0U,
+                            "in-range joint branch metadata mismatch") ||
+        reject_u16_mutation(bytes, size, part_offset,
+                            (uint16_t)((read_be16(bytes + part_offset) + 1U) %
+                                       view.bank.joint_count),
+                            "in-range part joint ownership mismatch") ||
         reject_u32_mutation(bytes, size, 98U, view.max_scratch - 1U,
                             "undersized actor scratch claim")) {
         free(bytes);

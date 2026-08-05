@@ -136,6 +136,11 @@ class ActorBankTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "193 animation source files"):
             validate_actor_bank_document(bad_count, payload)
 
+        bad_inventory_pin = copy.deepcopy(document)
+        bad_inventory_pin["animation_source_inventory"]["paths_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "repository-pinned animation source metadata"):
+            validate_actor_bank_document(bad_inventory_pin, payload)
+
         bad_document_digest = copy.deepcopy(document)
         bad_document_digest["source_sha256"] = "0" * 64
         with self.assertRaisesRegex(ValueError, "source-set digest"):
@@ -161,6 +166,35 @@ class ActorBankTest(unittest.TestCase):
         renamed["payload_sha256"] = hashlib.sha256(renamed_payload).hexdigest()
         with self.assertRaisesRegex(ValueError, "animation source filename"):
             validate_actor_bank_document(renamed, bytes(renamed_payload))
+
+    def test_resealed_valid_repartition_of_animation_filenames_is_rejected(self) -> None:
+        document, payload = self.compiled
+        repartitioned = copy.deepcopy(document)
+        old_pair = "assets/anims/anim_01_02.inc.c"
+        old_single = "assets/anims/anim_03.inc.c"
+        new_single = "assets/anims/anim_01.inc.c"
+        new_pair = "assets/anims/anim_02_03.inc.c"
+        source_by_path = {item["path"]: item for item in repartitioned["sources"]}
+        pair_hash = source_by_path[old_pair]["sha256"]
+        single_hash = source_by_path[old_single]["sha256"]
+        source_by_path[old_pair]["path"] = new_single
+        source_by_path[old_single]["path"] = new_pair
+        for animation in repartitioned["animations"]:
+            if animation["animation_id"] == 1:
+                animation["source_path"] = new_single
+                animation["source_sha256"] = pair_hash
+            elif animation["animation_id"] in (2, 3):
+                animation["source_path"] = new_pair
+                animation["source_sha256"] = single_hash
+        repartitioned["sources"].sort(key=lambda item: item["path"])
+        source_digest = _source_digest(repartitioned["sources"])
+        repartitioned["source_sha256"] = source_digest.hex()
+        repartitioned_payload = bytearray(payload)
+        repartitioned_payload[26:58] = source_digest
+        repartitioned["payload_sha256"] = hashlib.sha256(repartitioned_payload).hexdigest()
+
+        with self.assertRaisesRegex(ValueError, "repository-pinned animation source set"):
+            validate_actor_bank_document(repartitioned, bytes(repartitioned_payload))
 
 
 if __name__ == "__main__":
