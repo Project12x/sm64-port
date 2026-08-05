@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from collect_scene_closure import collect_scene_closure, write_closure
+from collect_scene_closure import collect_scene_closure, find_unruled_native_spawn_sites, write_closure
 from scene_package_schema import validate_scene_closure
 
 
@@ -22,10 +22,14 @@ class BobSceneClosureTest(unittest.TestCase):
             second_path = Path(temp) / "second.json"
             first = collect_scene_closure(ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
             second = collect_scene_closure(ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
-            write_closure(first_path, first)
-            write_closure(second_path, second)
+            first_hash = write_closure(first_path, first)
+            second_hash = write_closure(second_path, second)
             self.assertEqual(first_path.read_bytes(), second_path.read_bytes())
+            self.assertEqual(first_hash, hashlib.sha256(first_path.read_bytes()).hexdigest())
+            self.assertEqual(second_hash, hashlib.sha256(second_path.read_bytes()).hexdigest())
             validate_scene_closure(first)
+            self.assertEqual(len(first["records"]), 64)
+            self.assertEqual(len(first["source_hashes"]), 66)
             records = {record["stable_id"]: record for record in first["records"]}
             self.assertEqual(records["bhvGoomba"]["maximum_live_instances"], 11)
             self.assertIn("bhvGoomba", records["bhvGoombaTripletSpawner"]["spawned_children"])
@@ -34,6 +38,12 @@ class BobSceneClosureTest(unittest.TestCase):
             self.assertIn("bhvBowlingBall", records["bhvBobBowlingBallSpawner"]["spawned_children"])
             self.assertIn("bhvBowlingBall", records["bhvTtmBowlingBallSpawner"]["spawned_children"])
             self.assertIn("bhvStar", records["bhvKingBobomb"]["spawned_children"])
+            self.assertEqual(records["bhvCheckerboardElevatorGroup"]["spawned_children"], ["bhvCheckerboardPlatformSub"])
+            self.assertEqual(records["bhvOpenableGrill"]["spawned_children"], ["bhvOpenableCageDoor"])
+            self.assertIn("bhvCannon", records["bhvCannonClosed"]["spawned_children"])
+            self.assertEqual(set(records["bhvHidden1upInPoleSpawner"]["spawned_children"]), {"bhvHidden1upInPole", "bhvHidden1upInPoleTrigger"})
+            self.assertIn("bhvBobombExplosionBubble", records["bhvExplosion"]["effects"])
+            self.assertEqual(find_unruled_native_spawn_sites(ROOT, first), [])
             self.assertTrue(first["source_hashes"])
             self.assertEqual(set(first["source_hashes"]), {source["path"] for record in first["records"] for source in record["sources"]} | set(first["scene_sources"]))
 

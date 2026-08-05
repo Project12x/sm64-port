@@ -11,6 +11,9 @@ RECORD_FIELDS = {"stable_id", "level", "area", "act_mask", "object_roots", "mode
 
 
 def validate_scene_closure(document: dict) -> None:
+    missing = TOP_FIELDS - set(document)
+    if missing:
+        raise ValueError(f"missing closure field: {sorted(missing)[0]}")
     unknown = set(document) - TOP_FIELDS
     if unknown:
         raise ValueError(f"unknown field: {sorted(unknown)[0]}")
@@ -24,6 +27,9 @@ def validate_scene_closure(document: dict) -> None:
     if not isinstance(source_hashes, dict):
         raise ValueError("source_hashes must be an object")
     for record in document["records"]:
+        missing = RECORD_FIELDS - set(record)
+        if missing:
+            raise ValueError(f"missing record field: {sorted(missing)[0]}")
         unknown = set(record) - RECORD_FIELDS
         if unknown:
             raise ValueError(f"unknown record field: {sorted(unknown)[0]}")

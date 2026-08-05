@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Hardened scene-closure derivation after review: every reachable native
+  `spawn_object*` edge now requires a source-attested, unique reviewed rule or
+  generation fails. The BOB closure consequently includes model-less
+  controller products (checkerboard platforms, grill halves, cannon opening,
+  hidden pole 1-Up triggers) and transitive explosion/sparkle effects that the
+  initial inventory omitted. Capacity is now evaluated per compatible act,
+  reachable spawn cycles fail explicitly, and SFX banks derive from source
+  identifiers rather than a blanket `general` label.
+
 - Added a deterministic, generic scene-closure generator and its versioned
   schema. It follows LevelScript declarations, macro presets, model/geo
   bindings, BehaviorScript children, and explicitly reviewed native computed

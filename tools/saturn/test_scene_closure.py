@@ -22,7 +22,7 @@ def write(path: Path, text: str) -> None:
 
 
 class SceneClosureTest(unittest.TestCase):
-    def fixture(self) -> Path:
+    def fixture(self, with_cycle: bool = False) -> Path:
         root = Path(tempfile.mkdtemp(prefix="scene-closure-"))
         write(root / "levels/test/script.c", """
             LOAD_MODEL_FROM_GEO(MODEL_PARENT, parent_geo),
@@ -36,7 +36,7 @@ class SceneClosureTest(unittest.TestCase):
         """)
         write(root / "levels/test/areas/1/macro.inc.c", """
             MACRO_OBJECT(macro_child, 0, 0, 0, 0),
-            MACRO_OBJECT(macro_cycle, 0, 0, 0, 0),
+            """ + ("MACRO_OBJECT(macro_cycle, 0, 0, 0, 0)," if with_cycle else "") + """
             MACRO_OBJECT_END(),
         """)
         write(root / "include/macro_presets.h", """
@@ -46,7 +46,7 @@ class SceneClosureTest(unittest.TestCase):
         write(root / "data/behavior_data.c", """
             const BehaviorScript bhvParent[] = { LOAD_ANIMATIONS(a, parent_anims), SPAWN_CHILD(MODEL_CHILD, bhvChild), SPAWN_CHILD(MODEL_YELLOW_COIN, bhvReward), SPAWN_OBJ(MODEL_WATER_BOMB, bhvProjectile), SPAWN_CHILD(MODEL_SMOKE, bhvEffect) };
             const BehaviorScript bhvChild[] = { BILLBOARD(), SPAWN_CHILD(MODEL_NONE, bhvController) };
-            const BehaviorScript bhvController[] = { SPAWN_CHILD(MODEL_PARENT, bhvParent) };
+            const BehaviorScript bhvController[] = {""" + (" SPAWN_CHILD(MODEL_PARENT, bhvParent) " if with_cycle else "") + """};
             const BehaviorScript bhvCycle[] = { SPAWN_CHILD(MODEL_NONE, bhvCycle) };
             const BehaviorScript bhvReward[] = {};
             const BehaviorScript bhvProjectile[] = {};
@@ -94,9 +94,16 @@ class SceneClosureTest(unittest.TestCase):
         with self.assertRaisesRegex(ClosureError, "undeclared behavior bhvMissing"):
             self.collect(root)
         root = self.fixture()
-        write(root / "include/model_ids.h", "#define MODEL_PARENT 1 // parent_geo\n")
+        script = (root / "levels/test/script.c").read_text(encoding="utf-8")
+        write(root / "levels/test/script.c", script.replace("LOAD_MODEL_FROM_GEO(MODEL_CHILD, child_geo),", ""))
+        model_ids = (root / "include/model_ids.h").read_text(encoding="utf-8")
+        write(root / "include/model_ids.h", model_ids.replace("#define MODEL_CHILD 2 // child_geo\n", ""))
         with self.assertRaisesRegex(ClosureError, "no geo root for MODEL_CHILD"):
             self.collect(root)
+
+    def test_rejects_reachable_behavior_cycles(self) -> None:
+        with self.assertRaisesRegex(ClosureError, "behavior spawn cycle"):
+            self.collect(self.fixture(with_cycle=True))
 
     def test_schema_rejects_stale_hash_duplicate_id_and_bob_only_field(self) -> None:
         closure = self.collect(self.fixture())
@@ -110,6 +117,10 @@ class SceneClosureTest(unittest.TestCase):
         closure = self.collect(self.fixture())
         closure["bob_only_special_case"] = True
         with self.assertRaisesRegex(ValueError, "unknown field"):
+            validate_scene_closure(closure)
+        closure = self.collect(self.fixture())
+        del closure["records"][0]["effects"]
+        with self.assertRaisesRegex(ValueError, "missing record field"):
             validate_scene_closure(closure)
 
 

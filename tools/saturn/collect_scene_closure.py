@@ -117,6 +117,20 @@ def _object_roots(level_text: str, macro_text: str, presets: dict[str, tuple[str
     return roots
 
 
+def _load_model_from_geo(root: Path, level_text: str, model_geos: dict[str, str]) -> set[str]:
+    sources: set[str] = set()
+    for call in _extract_calls(level_text, "LOAD_MODEL_FROM_GEO"):
+        args = _arguments(call)
+        if len(args) != 2 or not re.fullmatch(r"MODEL_[A-Z0-9_]+", args[0]):
+            raise ClosureError("malformed LOAD_MODEL_FROM_GEO")
+        model_geos[args[0]] = args[1]
+        source = _geo_source(root, args[1])
+        if not source:
+            raise ClosureError(f"missing geo source for LOAD_MODEL_FROM_GEO {args[0]} {args[1]}")
+        sources.add(source)
+    return sources
+
+
 def _geo_source(root: Path, geo_root: str) -> str | None:
     if geo_root == "none": return None
     for path in sorted(root.glob("actors/**/geo.inc.c")) + sorted(root.glob("levels/**/geo*.c")):
@@ -140,8 +154,22 @@ def _rules(root: Path, rules_path: Path) -> list[dict]:
     for rule in payload["rules"]:
         if set(rule) != {"behavior", "source", "reason", "children"} or not rule["reason"]:
             raise ClosureError("manual spawn rule must name behavior, exact source, and reason")
-        if not (root / rule["source"]).is_file():
+        try:
+            source = (root / rule["source"]).resolve()
+            source.relative_to(root.resolve())
+        except ValueError as error:
+            raise ClosureError(f"manual spawn rule source outside repository: {rule['source']}") from error
+        if not source.is_file():
             raise ClosureError(f"manual spawn rule source missing: {rule['source']}")
+        children = rule["children"]
+        seen: set[tuple[str, str]] = set()
+        for child in children:
+            if set(child) != {"model", "behavior", "maximum_instances"} or int(child["maximum_instances"]) < 1:
+                raise ClosureError("manual spawn rule child must name model, behavior, and positive count")
+            edge = (child["model"], child["behavior"])
+            if edge in seen:
+                raise ClosureError(f"duplicate manual rule child {edge[0]} {edge[1]}")
+            seen.add(edge)
     return payload["rules"]
 
 
@@ -165,12 +193,58 @@ def _edge_kind(model: str, behavior: str) -> str:
     return "child"
 
 
+def _acts(expression: str) -> frozenset[str]:
+    tokens = set(re.findall(r"ACT_[1-6]", expression))
+    return frozenset(tokens or {f"ACT_{index}" for index in range(1, 7)})
+
+
+def _function_body(text: str, name: str) -> str:
+    match = re.search(r"\b" + re.escape(name) + r"\s*\([^)]*\)\s*\{", text)
+    if not match:
+        return ""
+    depth, cursor = 1, match.end()
+    while cursor < len(text) and depth:
+        depth += (text[cursor] == "{") - (text[cursor] == "}")
+        cursor += 1
+    return text[match.start():cursor]
+
+
+def _native_spawn_edges(text: str) -> set[tuple[str, str]]:
+    edges: set[tuple[str, str]] = set()
+    for name in ("spawn_object", "spawn_object_relative", "spawn_object_abs_with_rot", "spawn_object_with_scale", "try_to_spawn_object"):
+        for call in _extract_calls(text, name):
+            args = _arguments(call)
+            model = next((arg for arg in args if re.fullmatch(r"MODEL_[A-Z0-9_]+", arg)), None)
+            behavior = next((arg for arg in args if re.fullmatch(r"bhv[A-Za-z0-9_]+", arg)), None)
+            if model and behavior:
+                edges.add((model, behavior))
+    return edges
+
+
+def find_unruled_native_spawn_sites(root: Path, document: dict, rules_path: Path | None = None) -> list[str]:
+    root = root.resolve()
+    rules = _rules(root, rules_path or root / "tools/saturn/behavior_spawn_rules.json")
+    declared = {(rule["behavior"], rule["source"], child["model"], child["behavior"])
+                for rule in rules for child in rule["children"]}
+    blocks = _behavior_blocks(_read(root, "data/behavior_data.c"))
+    native_sources = _native_behavior_sources(root)
+    sites: list[str] = []
+    for record in document["records"]:
+        for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", blocks[record["stable_id"]]):
+            for source in native_sources.get(native, set()):
+                for model, child in _native_spawn_edges(_function_body(_read(root, source), native)):
+                    if (record["stable_id"], source, model, child) not in declared:
+                        sites.append(f"{record['stable_id']}:{source}:{model}:{child}")
+    return sorted(set(sites))
+
+
 def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -> dict:
     root = root.resolve()
     script_path = f"levels/{level}/script.c"
     macro_path = f"levels/{level}/areas/{area}/macro.inc.c"
     level_text, macro_text = _read(root, script_path), _read(root, macro_path)
     model_geos, model_ids_path = _model_geos(root)
+    loaded_geo_sources = _load_model_from_geo(root, level_text, model_geos)
     presets, presets_path = _macro_presets(root)
     behavior_path = "data/behavior_data.c"
     behavior_text = _read(root, behavior_path)
@@ -188,18 +262,18 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     for rule in manual_rules:
         for child in rule["children"]:
             static_edges[rule["behavior"]].append((child["model"], child["behavior"], int(child.get("maximum_instances", 1)), rule["source"]))
-    occurrence = Counter()
+    occurrence: dict[str, Counter[str]] = defaultdict(Counter)
     acts: dict[str, set[str]] = defaultdict(set)
     root_names: dict[str, list[str]] = defaultdict(list)
     declared_model: dict[str, str] = {}
     queue = deque()
     for model, behavior, act, count in roots:
-        queue.append((model, behavior, act, count, "level", frozenset()))
+        queue.append((model, behavior, _acts(act), count, "level", frozenset()))
     child_map: dict[str, set[str]] = defaultdict(set)
     typed_children: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     used_sources: dict[str, set[str]] = defaultdict(set)
     while queue:
-        model, behavior, act, count, source_kind, ancestors = queue.popleft()
+        model, behavior, active_acts, count, source_kind, ancestors = queue.popleft()
         if behavior not in blocks:
             raise ClosureError(f"undeclared behavior {behavior}")
         if model != "MODEL_NONE" and model not in model_geos:
@@ -208,8 +282,9 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             declared_model[behavior] = model
         elif declared_model[behavior] == "MODEL_NONE" and model != "MODEL_NONE":
             declared_model[behavior] = model
-        occurrence[behavior] += count
-        acts[behavior].add(act)
+        for act in active_acts:
+            occurrence[behavior][act] += count
+        acts[behavior].update(active_acts)
         root_names[behavior].append(source_kind)
         used_sources[behavior].add(behavior_path)
         for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", blocks[behavior]):
@@ -221,8 +296,8 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
             typed_children[behavior][_edge_kind(child_model, child)].add(child)
             used_sources[behavior].add(source)
             if child in ancestors or child == behavior:
-                continue
-            queue.append((child_model, child, act, count * factor, f"spawn:{behavior}", ancestors | {behavior}))
+                raise ClosureError(f"behavior spawn cycle: {behavior} -> {child}")
+            queue.append((child_model, child, active_acts, count * factor, f"spawn:{behavior}", ancestors | {behavior}))
     records = []
     for behavior in sorted(occurrence):
         model = declared_model[behavior]
@@ -234,8 +309,9 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
         animations = sorted(set(re.findall(r"LOAD_ANIMATIONS\s*\(\s*[^,]+,\s*([A-Za-z0-9_]+)", block)))
         source_items = [_source(root, path) for path in sorted(sources)]
         sounds = sorted(set(re.findall(r"\bSOUND_[A-Z0-9_]+\b", "\n".join(_read(root, path) for path in sources))))
-        records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": _features(root, geo_source), "maximum_live_instances": occurrence[behavior], "music_sequence_ids": [], "sfx_banks": ["general"] if sounds else [], "sfx_ids": sounds, "sources": source_items})
-    scene_sources = [script_path, macro_path, presets_path]
+        banks = sorted({sound.split("_")[1].lower() for sound in sounds if len(sound.split("_")) > 1})
+        records.append({"stable_id": behavior, "level": level, "area": area, "act_mask": " | ".join(sorted(acts[behavior])), "object_roots": sorted(set(root_names[behavior])), "model": model, "geo_root": geo_root, "behavior_root": behavior, "spawned_children": sorted(child_map[behavior]), "rewards": sorted(typed_children[behavior]["reward"]), "projectiles": sorted(typed_children[behavior]["projectile"]), "effects": sorted(typed_children[behavior]["effect"]), "animation_table": animations, "material_feature_bits": _features(root, geo_source), "maximum_live_instances": max(occurrence[behavior].values()), "music_sequence_ids": [], "sfx_banks": banks, "sfx_ids": sounds, "sources": source_items})
+    scene_sources = [script_path, macro_path, presets_path, *loaded_geo_sources]
     if rules_path.is_file():
         try:
             scene_sources.append(_relative(root, rules_path))
@@ -244,13 +320,20 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     source_paths = set(scene_sources)
     source_paths.update(source["path"] for record in records for source in record["sources"])
     document = {"schema": SCHEMA, "source_root": str(root), "level": level, "area": area, "records": records, "scene_sources": sorted(source_paths - {source["path"] for record in records for source in record["sources"]}), "source_hashes": {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in sorted(source_paths)}, "music_sequence_ids": sorted(set(re.findall(r"\bSEQ_[A-Z0-9_]+\b", level_text))), "sfx_banks": sorted({bank for record in records for bank in record["sfx_banks"]}), "sfx_ids": sorted({sfx for record in records for sfx in record["sfx_ids"]})}
+    unruled = find_unruled_native_spawn_sites(root, document, rules_path)
+    if unruled:
+        raise ClosureError("unruled reachable native spawn sites: " + ", ".join(unruled))
     validate_scene_closure(document)
     return document
 
 
-def write_closure(path: Path, document: dict) -> None:
+def write_closure(path: Path, document: dict) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    canonical = dict(document)
+    canonical["source_root"] = "."
+    payload = (json.dumps(canonical, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    path.write_bytes(payload)
+    return hashlib.sha256(payload).hexdigest()
 
 
 def main() -> None:
