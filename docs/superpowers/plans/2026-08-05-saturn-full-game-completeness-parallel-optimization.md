@@ -34,6 +34,7 @@
 - 2026-08-05 S64P review correction: dependency references are stable-ID based at the compiler boundary and lower only after global canonical ordering; the packed mask is limited to 32 canonical payload ordinals and unknown/duplicate/cyclic/absent-bit references fail closed. Header emission accepts an explicit payload manifest for dependency-bearing roots. ABI structs/enums are emitted once in a shared guarded header; per-scene headers contain constants only. Provisional inline sections use `NONE` destinations and zero residency accounting by design, and their reports must label those budgets as non-residency evidence until Tasks 5/7/11/12/22 provide final placement.
 - 2026-08-05 residency review correction: a validated S64P view is never a residency lease. Task 5 copies the root and feature-active payload bytes into bounded owned spans, rehashes those spans at commit, and stages exactly two generations using absolute aligned high-water accounting after the immutable SOURCE.DAT prefix. Render, VDP1, actor/animation, and audio consumers hold one-shot generation-scoped lease tokens; duplicate or stale release fails closed. Sourceboot rejects provisional roots through the linked-root caller while preserving the caller's output view on failure. The snapshot Make quoting defect remains an explicit open gate.
 - 2026-08-05 PCM v2 correction: the sound mailbox keeps byte-addressed big-endian records and separates an eight-entry control ring from a 24-entry SFX ring. Two-lap cursors make every physical slot usable while preserving empty/full distinction; producer bytes/telemetry publish before ownership cursors, and the MC68000 validates both ring snapshots then drains control before SFX within its bounded poll budget. The v1 wire proof remains historical and is never silently reinterpreted as v2.
+- 2026-08-05 animation-bank correction: the compact 209-ID bank is source-complete and differentially proven, but its mesh tables intentionally remain the legacy normal-cap/front-eye/open-hand compatibility selection. Executable C validation binds the repository-pinned 193-file inventory, exact GEO1 relationships, global gap-free tier-0 primitive ownership, and scratch bounds; the advisory JSON schema never substitutes for that validator. Full switch-variant geometry and runtime branch/state cutover remain Task 10 responsibilities.
 
 ## Prior art and reuse mode
 
@@ -122,7 +123,7 @@ all complete.
 - [x] Task 4 — source-complete — implementation `ba40126c`, repair `a3e22842`; independent rereview SPEC/QUALITY PASS with no findings. Schema 12/12, determinism 3/3, `py_compile`, and serial DLL-preflight provisional-package gate are green; provisional SHA was stable (`84A1716C32A1563443EF00DECEF2BEEBC3C7581F113D56298F9D862522BF1F6E`). Final BOB/WF reseal, target boot, Ymir/FPS, native-math, and manual gates remain deferred to their owning tasks.
 - [x] Task 5 — source-complete — implementation `422096a1`, ownership/source-cart repair `c7d6e148`, declaration follow-up `eb99c47c`, lease-token repair `26986d94`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Serial C runtime/residency gates and neutrality/sourceboot 6/6 are green. Snapshot Make quoting, target link/memory inspection, final BOB/WF roots, Ymir/FPS, native-math, and manual gates remain deferred.
 - [x] Task 6 — source-complete — implementation `7bb8f87f`; independent review SPEC/QUALITY PASS, C0/I0/M0. V1/v2 ABI, transport/publication, 68K control-first model, heartbeat, soundtest migration, linked image/zero-map, and PCM mutations 12/12 are green. The exact Qt wrapper EOF and broad test-tools timeout remain explicitly open; no target/Ymir/audible claim.
-- [ ] Task 7 — generate the complete Mario animation bank
+- [x] Task 7 — source-complete — implementation `902ada8a`, repairs `68f9dd10`, `9ae757d5`, `b573b6bb`, final review record `8929b2c9`; independent rereview SPEC/QUALITY PASS, C0/I0. Actor source 8/8, actor bank 8/8, Mario pose 17/17; native-path DLL-preflight C11/Werror and actor-pose fixture pass. Make path-conversion caveat, switch-variant/runtime cutover, target/Ymir/manual/FPS/final-package gates remain deferred.
 - [ ] Task 8 — prove a state-only source-geo seam differentially
 - [ ] Task 9 — preserve source music/SFX policy and spatial semantics
 - [ ] Task 10 — activate source-selected complete Mario poses
@@ -463,10 +464,10 @@ typedef struct sm64_saturn_actor_bank {
 } sm64_saturn_actor_bank_t;
 ```
 
-- [ ] Extract shared parsing helpers while requiring byte-identical output from the legacy Mario generator. Add RED mutations for missing ID, duplicate ID, corrupt frame/index span, bad joint ordinal, missing hash, unsupported geo node, and nondeterministic order.
-- [ ] Require exactly 209 records matching `include/mario_animation_ids.h` and all 193 `assets/anims/*.inc.c` source files. Every record must be reachable by stable animation ID; no BOB/reachable whitelist.
-- [ ] Differentially evaluate every legacy neutral/walking frame through compact channels and require exact posed vertices/light inputs before retaining compatibility. Do not delete `saturn_mario_actor_mesh.h` in this task.
-- [ ] Run GREEN:
+- [x] Extract shared parsing helpers while requiring byte-identical output from the legacy Mario generator. RED mutations covered missing/duplicate IDs, corrupt frame/index spans, bad joint ordinals, missing hashes, unsupported geo nodes, nondeterministic order, in-range relationship corruption, global primitive gaps/duplicates, and distinctness.
+- [x] Require exactly 209 records matching `include/mario_animation_ids.h` and the repository-pinned canonical 193-file `assets/anims/*.inc.c` inventory (inventory digest `2d7c66e9…`). Every record is reachable by stable animation ID; no BOB/reachable whitelist.
+- [x] Differentially evaluate every legacy neutral/walking frame through compact channels and require exact posed vertices/light inputs before retaining compatibility. Do not delete `saturn_mario_actor_mesh.h`; switch-variant geometry remains explicitly deferred to Task 10.
+- [x] Run GREEN: actor source 8/8, actor bank 8/8, MarioActorPoseTests 17/17, native-path DLL-preflight C11/Werror actor-pose fixture pass. The combined Make command remains unclaimed only for path-conversion/inherited meshlet executable launch issues.
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_actor_source.py
@@ -474,7 +475,7 @@ typedef struct sm64_saturn_actor_bank {
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-pose-bank verify-actor-meshlets
   ```
 
-- [ ] Commit as `feat(saturn): compile complete compact Mario animations`; review source ordering, channel semantics, joint mapping, bounds, and legacy differential.
+- [x] Commit as `feat(saturn): compile complete compact Mario animations`; implementation/repair commits `902ada8a`, `68f9dd10`, `9ae757d5`, `b573b6bb`, final rereview `8929b2c9`; source ordering, channel semantics, joint mapping, executable bounds, global mesh ownership, and legacy differential were independently reviewed.
 
 ### Task 8: Prove a state-only source-geo seam differentially
 
