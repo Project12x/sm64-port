@@ -31,6 +31,7 @@
 - 2026-08-05 closure review round-three correction: native indexing/traversal is repository-wide over the bounded source closure, not behavior-directory-local. Every resolved model/geo/animation root requires hashed provenance; nested area links and area-local music are fail-closed. Schema validates referential/aggregate integrity. A `maximum_live_instances` value is a source-attested live bound (spawn cadence plus child lifetime/explicit cap), never a one-time spawn factor; any unprovable continuous emitter fails generation.
 - 2026-08-05 closure review round-four correction: the bounded source index includes every repository source location reachable from a generated callback, and absent definitions are errors. One behavior may carry several concrete model/geo variants with provenance for every variant. Audio follows call-site arguments/semantic parameter flow, never all tokens inside a generic helper. Schema validates provenance symbols and complete typed classification. BehaviorScript bounds are evaluated at each spawn site; exception bounds require source-attested deletion/state proofs. Entry-script `JUMP_LINK` expansion and comment stripping precede area/music parsing.
 - 2026-08-05 closure review round-five correction: every reachable symbol reference—direct call, data, or function-pointer/table dispatch—must resolve uniquely or reject the closure. A `SOUND_*` token becomes an audio fact only where bounded call-site dataflow proves the invoked callee is an audio sink or forwarding wrapper; arbitrary non-audio calls never contribute SFX.
+- 2026-08-05 S64P review correction: dependency references are stable-ID based at the compiler boundary and lower only after global canonical ordering; the packed mask is limited to 32 canonical payload ordinals and unknown/duplicate/cyclic/absent-bit references fail closed. Header emission accepts an explicit payload manifest for dependency-bearing roots. ABI structs/enums are emitted once in a shared guarded header; per-scene headers contain constants only. Provisional inline sections use `NONE` destinations and zero residency accounting by design, and their reports must label those budgets as non-residency evidence until Tasks 5/7/11/12/22 provide final placement.
 
 ## Prior art and reuse mode
 
@@ -116,7 +117,7 @@ all complete.
 - [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
 - [ ] Task 2 — source-complete — commits `f5a0248d`, `8c97fd4e` (reports `264f3b4b`, `5008759e`); independent rereview PASS. Identity 9/9, sourceboot identity 5/5, capture 35/35, archive 12/12, and no-build baseline revalidation are green. Linked SH-2 symbol/layout, Ymir/manual, and Task 1 broad native-math gates remain open.
 - [ ] Task 3 — source-complete — final rereview SPEC/QUALITY PASS. Generic 19/19, real BOB 1/1, inventory 1/1, and serial closure compilation are green. BOB is 86 records, 133 source hashes, 54 proven SFX IDs/8 banks; target/Ymir/FPS/package/native-math/manual gates remain open.
-- [ ] Task 4 — active — compiling the generic S64P schema and provisional fixtures from the now source-complete scene closure
+- [x] Task 4 — source-complete — implementation `ba40126c`, repair `a3e22842`; independent rereview SPEC/QUALITY PASS with no findings. Schema 12/12, determinism 3/3, `py_compile`, and serial DLL-preflight provisional-package gate are green; provisional SHA was stable (`84A1716C32A1563443EF00DECEF2BEEBC3C7581F113D56298F9D862522BF1F6E`). Final BOB/WF reseal, target boot, Ymir/FPS, native-math, and manual gates remain deferred to their owning tasks.
 - [ ] Task 5 — validate and retain scene-package residency
 - [ ] Task 6 — evolve PCM protocol v2 with protected control capacity
 - [ ] Task 7 — generate the complete Mario animation bank
@@ -330,14 +331,14 @@ typedef struct sm64_saturn_scene_package_header {
 
 `S64P` is the single atomic root of a scene generation, not a promise that every multi-megabyte asset is embedded in one resident blob. Its closed section-kind enum is: `WORLD_STATIC`, `COLLISION`, `SKY_BACKGROUND`, `BSP_PORTAL`, `ACTOR_DEPENDENCIES`, `ANIMATION_DEPENDENCIES`, `AUDIO_DEPENDENCIES`, and `RESIDENCY_PLAN`. Inline world/collision/sky/BSP records live in the root. Each dependency section contains sorted content-addressed descriptors for external actor/animation/audio payloads: payload kind/stable ID, byte count, SHA-256, destination class, lifetime, dependency mask, and maximum scratch. The root hash covers every descriptor, and the dependency-set hash covers the sorted payload hashes, so a root plus the wrong payload cannot validate. Each ordinary section descriptor records kind, offset, byte size, power-of-two alignment, destination class, lifetime, dependency mask, content hash, and maximum runtime scratch. Task 4 outputs schema fixtures plus a provisional world-only BOB root under `build/saturn/packages/bob/1/provisional/`. Payload-producing Tasks 7, 11, and 12 emit content-addressed dependencies; Task 22 is the sole final BOB link/reseal owner and writes `build/saturn/packages/bob/1/final/`. Task 27 does the same for WF. A provisional root cannot enter a target artifact or satisfy any closure gate.
 
-- [ ] Add RED tests for wrong magic/version/root/dependency-set/payload hash, overlapping/out-of-order sections, bad alignment, dependency cycles, missing/extra/wrong-generation actor/animation/audio payload, unknown section/lifetime/destination, budget overflow, nondeterministic descriptor ordering, and BOB-specific binary fields. Run them before implementation and record their expected missing-schema/compiler failures:
+- [x] Add RED tests for wrong magic/version/root/dependency-set/payload hash, overlapping/out-of-order sections, bad alignment, dependency cycles, missing/extra/wrong-generation actor/animation/audio payload, unknown section/lifetime/destination, budget overflow, nondeterministic descriptor ordering, and BOB-specific binary fields. Run them before implementation and record their expected missing-schema/compiler failures. Repair coverage additionally mutates payload cycles, absent dependency-mask bits, descriptor metadata, cross-kind IDs, and nonzero-mask shuffled inputs. Focused schema 12/12 and determinism 3/3 are green:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_package_schema.py
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_package_determinism.py
   ```
-- [ ] Implement schema/packing and retain the existing BOB tools as thin callers of generic functions until their consumers migrate. Link deterministic synthetic payload fixtures and a clearly tagged provisional BOB world root; do not invent future actor/animation/audio hashes.
-- [ ] Run twice and compare hashes:
+- [x] Implement schema/packing and retain the existing BOB tools as thin callers of generic functions until their consumers migrate. Link deterministic synthetic payload fixtures and a clearly tagged provisional BOB world root; do not invent future actor/animation/audio hashes. Stable-ID lowering, global uniqueness, payload-manifest validation, and one shared generated ABI header were added in repair `a3e22842`.
+- [x] Run twice and compare hashes. The serial DLL-preflight `compile-provisional-scene-package -j1` gate passed three times; two-run whole-file SHA matched `84A1716C32A1563443EF00DECEF2BEEBC3C7581F113D56298F9D862522BF1F6E`:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_package_schema.py
@@ -345,7 +346,7 @@ typedef struct sm64_saturn_scene_package_header {
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 compile-provisional-scene-package SCENE_LEVEL=bob SCENE_AREA=1
   ```
 
-- [ ] Commit as `feat(saturn): compile versioned scene packages`; review packing overflow, endianness, deterministic hashes, and compatibility-wrapper equivalence.
+- [x] Commit as `feat(saturn): compile versioned scene packages`; implementation `ba40126c`, repair `a3e22842`; independent review and rereview both examined packing overflow, endianness, deterministic hashes, payload manifests, shared ABI emission, and compatibility-wrapper equivalence. Optional broad BobMeshIR coverage timed out under the CPU guard after two passing tests and remains non-gating.
 
 ### Task 5: Validate and retain scene-package residency
 
