@@ -160,15 +160,17 @@ static int renderer_uses_bounded_meshlet_order(void)
     char *const dispatch = strstr(text, "static void demo_dispatch_mario_transform");
     char *const dispatch_end = dispatch == NULL ? NULL :
         strstr(dispatch, "static uint16_t demo_prepare_mario");
-    char *const frame = strstr(text, "void sm64_saturn_demo_render_frame");
+    char *const frame = strstr(text, "bool sm64_saturn_demo_render_frame");
     char *const prepare_call = frame == NULL ? NULL :
         strstr(frame, "demo_prepare_mario(");
+    char *const queue_merge = frame == NULL ? NULL :
+        strstr(frame, "demo_actor_queue_assemble_done(");
     char *const dispatch_call = frame == NULL ? NULL :
         strstr(frame, "demo_dispatch_mario_transform(");
     const int valid = prepare != NULL && reserve != NULL && dispatch != NULL &&
         dispatch_end != NULL &&
-        prepare_call != NULL && dispatch_call != NULL &&
-        prepare_call < dispatch_call &&
+        prepare_call != NULL && queue_merge != NULL &&
+        prepare_call < queue_merge && dispatch_call == NULL &&
         strstr(prepare, "sm64_saturn_actor_meshlets_prepare(") != NULL &&
         text_range_contains(prepare, reserve,
                             ".positions = s_actor_transform_refs") &&

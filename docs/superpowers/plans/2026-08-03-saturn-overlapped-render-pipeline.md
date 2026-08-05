@@ -307,11 +307,16 @@ and the evidence report before starting another task.
   CPU-DUAL live cutover were bound by the later reviewed A5.8 activation. The
   A3+A4 3–4 FPS candidate remains the rollback baseline.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
-- [ ] **Task 7 / A7 — alternating source-bank ownership:** active. The A5.9
+- [ ] **Task 7 / A7 — alternating source-bank ownership:** source-complete,
+  independent review pending. The A5.9
   live capture proved both SH-2s claimed useful work with no recorded queue
   retirement wait in the observed frame. A7 now makes command/Gouraud source
   ownership explicit so A8 can defer the remaining master-owned transfers
   without overwriting a building, transferring, or displayed bank.
+  The lifecycle, sourceboot integration, exact memory-map checks, and focused
+  host gates are green. The SH-2 image compiles and links; the broad verifier
+  remains open on an unrelated pre-existing native-math oracle edge. No Ymir,
+  hardware, asynchronous-transfer, or FPS evidence is claimed by A7.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
@@ -1379,10 +1384,17 @@ yet.
 - Create: `src/port/saturn/gfx/saturn_vdp1_frame_bank.c`
 - Modify: `src/port/saturn/gfx/saturn_vdp1_backend.h`
 - Modify: `src/port/saturn/gfx/saturn_gouraud_bank.h`
+- Modify: `src/port/saturn/gfx/saturn_demo_render.h`
+- Modify: `src/port/saturn/gfx/saturn_demo_render.c`
 - Modify: `src/port/saturn/sourceboot/main.c`
+- Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: `src/port/saturn/sourceboot/sourceboot-cart.x`
 - Create: `tools/saturn/vdp1_frame_bank_test.c`
 - Modify: `tools/saturn/test_verify_sourceboot_memory_map.py`
+- Modify: `tools/saturn/dual_actor_worker_test.c`
+- Modify: `tools/saturn/render_job_live_cutover_source_test.c`
+- Modify: `tools/saturn/test_render_cluster_generation.py`
+- Modify: `tools/saturn/test_sourceboot_presentation_boundary.py`
 - Modify: `Makefile.saturn.mk`
 - Modify: architecture spec, this plan, and evidence report
 
@@ -1408,39 +1420,66 @@ yet.
       sm64_saturn_vdp1_frame_bank_set_t *banks, uint32_t generation);
   ```
 
-- [ ] **Step 1: Write bank lifecycle and wrong-region tests**
+  **A7/A8 interface correction (2026-08-05):** the four original functions
+  cannot truthfully express `TRANSFERRING` or transfer retirement because the
+  current emitters wait internally and return `void`. A7 therefore also adds
+  explicit begin/retire transfer metadata plus a synchronous-complete adapter
+  called only after today's renderer returns. A zero-count Gouraud prefix is a
+  satisfied `NOOP` obligation, not an invalid/missing ticket. A7 does not move
+  submission or polling out of the emitters; A8 replaces the synchronous
+  adapter with real asynchronous queue tickets and polling.
+
+  **Render-outcome correction (2026-08-05):** the demo renderer's former
+  `void` boundary has pre-emission failure returns. It now returns an explicit
+  success outcome. Sourceboot may call `ready` only after success; failure
+  quarantines the incomplete build and preserves the previously published
+  bank. Profile serial counters are diagnostics and never substitute for this
+  outcome.
+
+- [x] **Step 1: Write bank lifecycle and wrong-region tests** — red
 
   Assert build/ready/transfer/publish/reuse order, ticket retirement, stale
   generation rejection, command-source LWRAM classification, Gouraud-source
   HWRAM classification, and quarantine exclusion.
 
-- [ ] **Step 2: Strengthen the memory-map test**
+- [x] **Step 2: Strengthen the memory-map test** — red
 
   Require `.lwram_cmdts` size exactly
   `2 * 2048 * sizeof(vdp1_cmdt_t)`, 32-byte alignment, command banks outside
   HWRAM, Gouraud staging inside HWRAM, and linker margin at least `0x1B00`.
 
-- [ ] **Step 3: Add `verify-vdp1-frame-bank` and record red evidence**
+- [x] **Step 3: Add `verify-vdp1-frame-bank` and record red evidence** — red
 
   Expected: missing bank manager and ownership metadata.
 
-- [ ] **Step 4: Implement the state/ticket manager**
+- [x] **Step 4: Implement the state/ticket manager** — host-green
 
   Bind the existing backend and Gouraud structures through one bank object.
   `begin_build` succeeds only for `FREE`; `publish` succeeds only after worker
-  and both non-invalid transfer tickets retire.
+  and both transfer obligations retire, including the explicit zero-Gouraud
+  `NOOP` state described above.
 
-- [ ] **Step 5: Replace ad-hoc XOR and misleading generation variables**
+- [x] **Step 5: Replace ad-hoc XOR and misleading generation variables** — source-complete
 
   Remove `sourceboot_vdp1_cmdts_bank ^= 1U` as the ownership decision. Select a
   bank through `begin_build`, retain the previous published bank when none is
   free, and expose accurate build/published/displayed framebuffer generations.
 
-- [ ] **Step 6: Run bank, memory-map, DMA queue, command-template, and runtime gates**
+- [x] **Step 6: Run bank, memory-map, DMA queue, command-template, and runtime gates** — focused-green; broad census open
 
-  Expected: all PASS and no command-bank migration into HWRAM.
+  `verify-vdp1-frame-bank`, the 10 memory-map tests, DMA queue, terrain command
+  template, runtime contracts, presentation-boundary, and live-cutover focused
+  gates pass. The linked ELF proves `.lwram_cmdts` is a `0x20000`-byte NOBITS
+  section at `0x00200000`, Gouraud staging is exactly `0x6000` bytes at
+  `0x060D8FB8`, and `___end=0x060FC86C` leaves `0x3794` HWRAM bytes. The broad
+  `make verify` remains unchecked because the pre-existing native-math census
+  rejects `_play_cutscene -> _cutscene_bbh_death`; this is not substituted by
+  the green focused gates. The updated dual-actor structural gate still stops
+  earlier on its pre-existing live-pointer helper, and the full cluster suite
+  still requires absent generated Mario LOD symbols; the A7-specific live
+  renderer signature/merge and generation-slice checks pass independently.
 
-- [ ] **Step 7: Update documents, commit, and complete two-stage review**
+- [ ] **Step 7: Update documents, commit, and complete two-stage review** — active
 
   Commit with `feat(saturn): track VDP1 source-bank lifetimes`.
 

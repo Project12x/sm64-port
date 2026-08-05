@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — A7 bank lifetime prerequisite to A8 deferred VDP1 transfer
+## Now — review A7, then implement A8 deferred VDP1 transfer
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
@@ -34,6 +34,14 @@ bottleneck, so no speculative queue reschedule is authorized. The next FPS
 slice should reduce geometry/command volume before final lowering and move
 VDP1 command transfer behind an explicit deferred/double-buffered boundary,
 then use A9 frame overlap once bank lifetime is proven.
+The A7 source slice is complete: command/Gouraud banks now have explicit
+build, transfer, publication, quarantine, and retirement states; renderer
+failure retains the previous publication; and build/published/displayed
+generations are separate. Its SH-2 image compiles and links with the exact
+bank memory-map contract. Independent review and the unrelated strict
+native-math census repair remain open. Because A7 still uses the synchronous
+completion adapter around today's blocking renderer, visible FPS uplift is
+expected from A8/A9 rather than from this ownership-only slice.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

@@ -19,6 +19,7 @@
 #include "saturn_source_runtime.h"
 #include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
+#include "saturn_vdp1_frame_bank.h"
 #include "saturn_vdp2_frame.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
@@ -456,7 +457,7 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __attribute__((section(".lwram_cmdts")));
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
-static uint8_t sourceboot_vdp1_cmdts_bank;
+static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
@@ -652,10 +653,6 @@ static void sourceboot_present_generation(uint32_t presentation_generation)
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_AFTER,
         presentation_generation);
-    sourceboot_vdp1_bank_generation = presentation_generation;
-    sourceboot_vdp1_bank_submitted = presentation_generation;
-    sourceboot_fast3d.profile.vdp1_bank_generation = presentation_generation;
-    sourceboot_fast3d.profile.vdp1_bank_submitted = presentation_generation;
     sourceboot_fast3d.profile.vblank_presentation_generation =
         presentation_generation;
     sourceboot_fast3d.profile.sim_vblank_credit_dropped =
@@ -771,6 +768,17 @@ int main(void) {
             dbgio_flush();
             for (;;) {}
         }
+        /* Both scene paths can acquire either source bank. Initialize bank 1's
+         * fixed system/local/END prefix unconditionally; binding storage does
+         * not synthesize those commands. */
+        sm64_saturn_vdp1_backend_t spare_backend;
+        if (!sm64_saturn_vdp1_backend_init_with_storage(
+                &spare_backend, sourceboot_vdp1_cmdts[1],
+                SOURCEBOOT_VDP1_COMMAND_CAPACITY, clip, local)) {
+            dbgio_puts("sourceboot: spare VDP1 backend init failed\n");
+            dbgio_flush();
+            for (;;) {}
+        }
     }
 
     {
@@ -831,19 +839,6 @@ int main(void) {
             dbgio_puts("sourceboot: BOB texture residency failed\n");
             for (;;) {}
         }
-        /* Initialize the second bank's fixed system/local commands without
-         * making it the active list yet. Both banks are independently valid
-         * VDP1 lists before the first frame swap. */
-        sm64_saturn_vdp1_backend_t spare_backend;
-        const int16_vec2_t spare_clip = INT16_VEC2_INITIALIZER(319, 223);
-        const int16_vec2_t spare_local = INT16_VEC2_INITIALIZER(0, 0);
-        if (!sm64_saturn_vdp1_backend_init_with_storage(
-                &spare_backend, sourceboot_vdp1_cmdts[1],
-                SOURCEBOOT_VDP1_COMMAND_CAPACITY, spare_clip, spare_local)) {
-            dbgio_puts("sourceboot: spare VDP1 backend init failed\n");
-            dbgio_flush();
-            for (;;) {}
-        }
         if (!sm64_saturn_texture_residency_upload(
                 &demo_texture_residency, SOURCEBOOT_BOB_TEXTURE_BYTES,
                 sm64_mario_texture_uv_tiles,
@@ -891,6 +886,16 @@ int main(void) {
                 &sourceboot_gouraud_banks[bank],
                 sourceboot_gouraud_staging[bank], capacity,
                 (uintptr_t)partitions.gouraud_base);
+        }
+        if (!sm64_saturn_vdp1_frame_bank_set_init(
+                &sourceboot_vdp1_frame_banks,
+                sourceboot_vdp1_cmdts[0], sourceboot_vdp1_cmdts[1],
+                SOURCEBOOT_VDP1_COMMAND_CAPACITY,
+                &sourceboot_gouraud_banks[0],
+                &sourceboot_gouraud_banks[1])) {
+            dbgio_puts("sourceboot: VDP1 frame-bank init failed\n");
+            dbgio_flush();
+            for (;;) {}
         }
     }
 
@@ -1008,29 +1013,59 @@ int main(void) {
         const bool vdp1_was_busy = vdp1_sync_busy();
         if (vdp1_was_busy)
             sourceboot_vdp1_bank_late_dma++;
-        sourceboot_vdp1_cmdts_bank ^= 1U;
-        sm64_saturn_vdp1_backend_bind_storage(
-            &sourceboot_vdp1_backend,
-            sourceboot_vdp1_cmdts[sourceboot_vdp1_cmdts_bank],
-            SOURCEBOOT_VDP1_COMMAND_CAPACITY);
+        sm64_saturn_vdp1_frame_bank_t *build_bank = NULL;
+        sm64_saturn_vdp1_frame_bank_t *const previous_published =
+            sourceboot_vdp1_frame_banks.published;
+        bool render_complete = sm64_saturn_vdp1_frame_bank_begin_build(
+            &sourceboot_vdp1_frame_banks, scheduler_now, &build_bank);
+        if (render_complete) {
+            sourceboot_vdp1_bank_generation = build_bank->snapshot_generation;
+            sm64_saturn_vdp1_backend_bind_frame_bank(
+                &sourceboot_vdp1_backend, build_bank);
 #if SATURN_DEMO_PATH
-        sm64_saturn_demo_render_frame(&sourceboot_vdp1_backend,
-                                      &sourceboot_gouraud_banks[
-                                          sourceboot_vdp1_cmdts_bank],
-                                      &sourceboot_fast3d.profile,
-                                      &sourceboot_mario_snapshot,
-                                      &sourceboot_mario_pose);
+            render_complete = sm64_saturn_demo_render_frame(
+                &sourceboot_vdp1_backend, build_bank->gouraud_bank,
+                &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
+                &sourceboot_mario_pose);
 #else
-        sm64_saturn_fast3d_vdp1_emit(&sourceboot_fast3d,
-                                     &sourceboot_vdp1_backend,
-                                     &sourceboot_gouraud_banks[
-                                         sourceboot_vdp1_cmdts_bank]);
+            sm64_saturn_fast3d_vdp1_emit(
+                &sourceboot_fast3d, &sourceboot_vdp1_backend,
+                build_bank->gouraud_bank);
 #endif
+        } else {
+            /* Both non-FREE banks remain owned by a displayed, transferring,
+             * or quarantined generation. Do not bind or render into either. */
+            sourceboot_vdp1_bank_overwrite_attempts++;
+        }
         /* Both emit paths wait for their just-submitted Gouraud sequence and
-         * then upload the final command list. Returning here proves the old
-         * list has retired before the corresponding single VDP1 VRAM ranges
-         * were overwritten. */
-        sourceboot_vdp1_bank_displayed = sourceboot_vdp1_bank_submitted;
+         * then upload the final command list. Only that explicit success may
+         * become READY. A7 records today's synchronous completion honestly;
+         * A8 replaces this adapter with real asynchronous transfer tickets. */
+        if (render_complete) {
+            render_complete = sm64_saturn_vdp1_frame_bank_ready(
+                build_bank, sourceboot_vdp1_backend.list.count,
+                build_bank->gouraud_bank->used,
+                build_bank->snapshot_generation) &&
+                sm64_saturn_vdp1_frame_bank_record_synchronous_complete(
+                    build_bank) &&
+                sm64_saturn_vdp1_frame_bank_publish(
+                    &sourceboot_vdp1_frame_banks, build_bank);
+            if (render_complete) {
+                sourceboot_vdp1_bank_submitted =
+                    build_bank->snapshot_generation;
+                if (previous_published != NULL &&
+                    !sm64_saturn_vdp1_frame_bank_retire(
+                        &sourceboot_vdp1_frame_banks,
+                        previous_published->snapshot_generation)) {
+                    sourceboot_fast3d.profile.pipeline_faults++;
+                }
+            }
+        }
+        if (!render_complete && build_bank != NULL &&
+            build_bank->state != SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED) {
+            (void)sm64_saturn_vdp1_frame_bank_quarantine(build_bank);
+            sourceboot_fast3d.profile.pipeline_faults++;
+        }
         sourceboot_fast3d.profile.render_frt_ticks_last =
             sourceboot_frt_delta(render_start, cpu_frt_count_get());
         sourceboot_render_ticks_accum +=
@@ -1038,11 +1073,10 @@ int main(void) {
         sourceboot_fast3d.profile.render_frt_ticks_accum =
             sourceboot_render_ticks_accum;
         sourceboot_fast3d.profile.vdp1_commands_last =
-            sourceboot_vdp1_backend.list.count;
+            sourceboot_vdp1_frame_banks.published != NULL
+            ? sourceboot_vdp1_frame_banks.published->command_count : 0U;
         sourceboot_fast3d.profile.vdp1_commands =
-            sourceboot_vdp1_backend.list.count;
-        sourceboot_fast3d.profile.vdp1_bank_displayed =
-            sourceboot_vdp1_bank_displayed;
+            sourceboot_fast3d.profile.vdp1_commands_last;
         sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
             sourceboot_vdp1_bank_overwrite_attempts;
         sourceboot_fast3d.profile.vdp1_bank_late_dma =
@@ -1060,9 +1094,8 @@ int main(void) {
             sourceboot_fast3d.profile.vdp1_command_highwater =
                 sourceboot_fast3d.profile.vdp1_commands_last;
         const uint32_t gouraud_highwater =
-            sm64_saturn_gouraud_bank_used_bytes(
-                &sourceboot_gouraud_banks[sourceboot_vdp1_cmdts_bank]) /
-            sizeof(sm64_saturn_gouraud_table_t);
+            sourceboot_vdp1_frame_banks.published != NULL
+            ? sourceboot_vdp1_frame_banks.published->gouraud_count : 0U;
         if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
             sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;
         sourceboot_fast3d.profile.demo_lod_resident_bytes =
@@ -1083,6 +1116,15 @@ int main(void) {
 #endif
 
         sourceboot_present_generation(scheduler_now);
+        if (sourceboot_vdp1_frame_banks.published != NULL)
+            sourceboot_vdp1_bank_displayed =
+                sourceboot_vdp1_frame_banks.published->snapshot_generation;
+        sourceboot_fast3d.profile.vdp1_bank_generation =
+            sourceboot_vdp1_bank_generation;
+        sourceboot_fast3d.profile.vdp1_bank_submitted =
+            sourceboot_vdp1_bank_submitted;
+        sourceboot_fast3d.profile.vdp1_bank_displayed =
+            sourceboot_vdp1_bank_displayed;
         if (sourceboot_active_render_snapshot != NULL) {
             (void)sm64_saturn_render_snapshot_complete(
                 &sourceboot_render_snapshots, sourceboot_active_render_snapshot);

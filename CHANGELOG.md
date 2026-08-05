@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Replaced sourceboot's ad-hoc VDP1 bank XOR with an explicit two-bank
+  lifecycle covering construction, transfer obligations, publication,
+  quarantine, and retirement. Only a renderer-confirmed complete frame may
+  publish; failure retains the previous complete bank, and build, published,
+  and displayed generations are tracked separately. This closes the stale or
+  overwritten source-bank hazard required before deferred DMA. Transfers still
+  complete synchronously in this slice, so it intentionally claims no FPS
+  improvement; A8 will introduce asynchronous submission and polling.
+
 - Added a bounded sourceboot throughput capture for the remaining A5.9 queue
   observation gate. It binds an explicit CUE/ELF/Ymir triple by hash, verifies
   a linked immutable ELF code window in the running target before sampling,

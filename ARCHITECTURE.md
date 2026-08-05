@@ -79,3 +79,19 @@ caller-local classify view and do not retain the legacy stack classify/spans
 pointers. One preparation boundary snapshots and publishes all four phases
 before the active scheduler permits either SH-2 to claim work. The master
 retains final deterministic assembly and VDP1 lowering after retirement.
+
+VDP1 command and Gouraud staging now cross an explicit A7 source-bank lifetime
+boundary. Each of two banks advances only through
+`FREE -> BUILDING -> READY -> TRANSFERRING -> PUBLISHED`; failed construction
+enters `QUARANTINED`. A bank cannot publish until its worker ticket and both
+transfer obligations are satisfied, with a zero-length Gouraud transfer
+represented as an explicit satisfied `NOOP`. Publication installs the new
+complete bank before the prior published fallback may retire, and retirement
+refuses the current fallback. Renderer failure quarantines only the incomplete
+building bank and retains the last complete publication.
+
+Build/snapshot, published/submitted, and displayed generations are distinct.
+The A7 adapter records today's internally blocking uploads as synchronously
+retired after the renderer returns. It does not claim asynchronous transfer or
+frame overlap; A8 must replace that adapter with real CPU-DMAC/SCU-DMA
+submission and retirement polling.

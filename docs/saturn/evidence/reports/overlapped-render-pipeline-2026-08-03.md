@@ -1594,3 +1594,80 @@ open.
   observation gate is closed. The result does not prove equal per-job cost;
   final merge, VDP1 lowering/transfer, and total admitted geometry remain the
   next bottleneck candidates.
+
+## 2026-08-05 — A7 source-bank ownership begins
+
+Task 5/A5.9 is closed with exact-image queue evidence. Task 7/A7 is active at
+the test-first lifecycle and memory-region contract. This transition adds no
+target, Ymir, hardware, or FPS evidence; it prepares the lifetime boundary
+needed by Task 8's deferred command/Gouraud transfers.
+
+Design correction: the original four-function sketch could not represent the
+`TRANSFERRING` state or prove retirement because both live emitters currently
+wait internally and return `void`. A7 will expose transfer-obligation metadata
+and a synchronous-complete adapter invoked only after that return. A frame with
+zero Gouraud tables records an explicit satisfied no-op obligation. Actual
+queue submission and polling remain deferred to A8.
+
+The demo renderer also needs an explicit outcome: its pre-emission early
+returns formerly left `main` unable to distinguish a complete upload from an
+unchanged/stale backend prefix. A7 changes that boundary to return success;
+only success may become `READY`, while failure quarantines the building bank
+and preserves the previous publication. The profile frame serial remains
+diagnostic-only.
+
+Step 1 RED evidence: the new host fixture covers lifecycle ordering, exact
+ticket retirement, zero-Gouraud no-op completion, stale generations, LWRAM vs
+HWRAM source classification, and quarantine retention. Its direct host compile
+fails because `saturn_vdp1_frame_bank.h/.c` do not yet exist, which is the
+intended missing-manager failure.
+
+Steps 2–3 RED evidence: the strengthened memory-map fixture rejects wrong
+command-section size/alignment/region, wrong or missing Gouraud range, and a
+configured HWRAM floor below `0x1B00`; six mutations fail against the old
+verifier. The new aggregate `verify-vdp1-frame-bank` target also fails on the
+missing manager sources, as intended.
+
+Step 4 host evidence: `verify-vdp1-frame-bank` passes with explicit
+FREE/BUILDING/READY/TRANSFERRING/PUBLISHED/QUARANTINED transitions, bounded
+counts, exact ticket retirement, synchronous completion, zero-Gouraud no-op,
+generation wrap, publish-before-retire fallback retention, and no-free refusal.
+This is host lifecycle evidence only.
+
+### A7 source completion and target-link evidence (2026-08-05)
+
+Steps 5–6 are source-complete. Sourceboot now acquires a FREE bank through the
+manager instead of XOR selection, binds the renderer only after acquisition,
+publishes only an explicit successful render after synchronous obligation
+completion, and quarantines failure while retaining the prior publication.
+Build, published, and displayed generations are independent. Both VDP1 command
+prefixes are initialized unconditionally.
+
+Focused evidence is green: `verify-vdp1-frame-bank`; 10/10 sourceboot memory
+map tests; `verify-dma-queue`; `verify-terrain-command-template`;
+`verify-runtime-contracts`; 6/6 presentation-boundary tests; and the focused
+live-cutover source gate. A serialized SH-2 sourceboot build compiled, linked,
+and produced ELF SHA-256
+`45387e5210a6966fc3ebf615c2973e9c46faea8ce85cfb6bb0c565f40cf6867b`.
+Its `.lwram_cmdts` is NOBITS at `0x00200000`, size `0x20000`; Gouraud staging
+is at `0x060D8FB8`, size `0x6000`; and `___end=0x060FC86C` leaves `0x3794`
+bytes above the HWRAM top, exceeding the required `0x1B00` floor. The full
+target verifier remains open because the unrelated strict native-math census
+reports an unreachable oracle dispatcher
+`_play_cutscene -> _cutscene_bbh_death`. No Ymir, hardware, deferred-transfer,
+or FPS evidence is credited to A7.
+
+Two broader host collections remain honestly open outside the A7 assertions:
+the dual-actor binary stops at its existing "live game or VDP state" context
+check, and the complete render-cluster Python suite expects generated Mario
+LOD symbols absent from this tree. The A7-updated live renderer signature,
+queue-merge, presentation, and one-generation-before-admission assertions pass
+when run at their focused boundaries.
+
+Provenance is pattern-only: SlaveDriver commit
+`a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later, `WALLS.C`),
+Z-Treme commit `cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0,
+`ZT_GAME.c`), and Yaul commit
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT, `cpu_dmac.c`) were inspected.
+No upstream code was copied. Yaul's convenience call waits before starting a
+channel, so A8 must not treat it as a zero-wait submission primitive.

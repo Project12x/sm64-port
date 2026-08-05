@@ -14,12 +14,15 @@ import verify_sourceboot_memory_map as verify
 def image(name: str, *, end: int, stage: int, scc: bool,
           camera_variant: int = 1) -> verify.ElfLayout:
     sections = {
-        ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x4000, "NOBITS"),
+        ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x20000, "NOBITS"),
         ".lwram_bss": verify.Section(".lwram_bss", 0x00240000, 0x8BB20, "NOBITS"),
     }
     symbols = {
         "___end": verify.Symbol("___end", end, 0),
         "s_source_cart_stage": verify.Symbol("s_source_cart_stage", 0x06080000, stage * 2048),
+        "sourceboot_gouraud_staging": verify.Symbol(
+            "sourceboot_gouraud_staging", 0x06070000, 2 * 1536 * 8
+        ),
         "sm64_saturn_camera_variant_marker": verify.Symbol(
             "sm64_saturn_camera_variant_marker", camera_variant, 0
         ),
@@ -115,6 +118,59 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
                                    required_final_margin=0x1B00)["hwram_margin"],
             0x7000,
         )
+
+    def test_rejects_wrong_command_bank_and_gouraud_regions(self) -> None:
+        mutations = []
+        wrong_size = image("wrong-command-size", end=0x060F9000, stage=8, scc=True)
+        wrong_size.sections[".lwram_cmdts"] = verify.Section(
+            ".lwram_cmdts", 0x00200000, 0x1FFE0, "NOBITS"
+        )
+        mutations.append(wrong_size)
+        unaligned = image("unaligned-command", end=0x060F9000, stage=8, scc=True)
+        unaligned.sections[".lwram_cmdts"] = verify.Section(
+            ".lwram_cmdts", 0x00200010, 0x20000, "NOBITS"
+        )
+        mutations.append(unaligned)
+        command_in_hwram = image("command-in-hwram", end=0x060F9000, stage=8, scc=True)
+        command_in_hwram.sections[".lwram_cmdts"] = verify.Section(
+            ".lwram_cmdts", 0x06020000, 0x20000, "NOBITS"
+        )
+        mutations.append(command_in_hwram)
+        gouraud_in_lwram = image("gouraud-in-lwram", end=0x060F9000, stage=8, scc=True)
+        gouraud_in_lwram.symbols["sourceboot_gouraud_staging"] = verify.Symbol(
+            "sourceboot_gouraud_staging", 0x00220000, 2 * 1536 * 8
+        )
+        mutations.append(gouraud_in_lwram)
+        wrong_gouraud_size = image("wrong-gouraud-size", end=0x060F9000, stage=8, scc=True)
+        wrong_gouraud_size.symbols["sourceboot_gouraud_staging"] = verify.Symbol(
+            "sourceboot_gouraud_staging", 0x06070000, 2 * 1536 * 8 - 8
+        )
+        mutations.append(wrong_gouraud_size)
+        missing_gouraud = image("missing-gouraud", end=0x060F9000, stage=8, scc=True)
+        del missing_gouraud.symbols["sourceboot_gouraud_staging"]
+        mutations.append(missing_gouraud)
+        for layout in mutations:
+            with self.subTest(layout=layout.path.name), self.assertRaises(ValueError):
+                verify.validate_layout(layout, route=1, stage_sectors=8,
+                                       required_final_margin=0x1B00)
+
+    def test_rejects_a_configured_final_margin_below_a7_floor(self) -> None:
+        layout = image("low-configured-floor", end=0x060F9000, stage=8, scc=True)
+        with self.assertRaisesRegex(ValueError, "required final floor"):
+            verify.validate_layout(layout, route=1, stage_sectors=8,
+                                   required_final_margin=0x1000)
+
+    def test_accepts_sh_abi_leading_underscore_on_c_symbols(self) -> None:
+        layout = image("sh-abi", end=0x060F9000, stage=8, scc=True)
+        for name in ("s_source_cart_stage", "sourceboot_gouraud_staging",
+                     "sourceboot_camera_idle_capture"):
+            symbol = layout.symbols.pop(name)
+            layout.symbols[f"_{name}"] = verify.Symbol(
+                f"_{name}", symbol.address, symbol.size
+            )
+        result = verify.validate_layout(layout, route=1, stage_sectors=8,
+                                        required_final_margin=0x1B00)
+        self.assertEqual(result["gouraud_staging_size"], 0x6000)
 
     def test_check_phase_requires_forward_chain_stage_and_recorded_delta(self) -> None:
         prior = {

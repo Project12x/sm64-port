@@ -65,7 +65,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-dual-actor-worker verify-actor-meshlets verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-vdp1-frame-bank verify-dual-actor-worker verify-actor-meshlets verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -558,6 +558,15 @@ verify-dma-queue:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/dma-queue-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/dma-queue-test$(HOST_EXEEXT)"
 
+verify-vdp1-frame-bank:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/vdp1_frame_bank_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_vdp1_frame_bank.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-frame-bank-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/vdp1-frame-bank-test$(HOST_EXEEXT)"
+
 # Task 1 shared transform contract. This intentionally links the actual
 # extracted module, rather than reproducing its math in a test-only helper;
 # the same immutable job record is therefore checked independently of either
@@ -949,7 +958,7 @@ compile-castle-collision: check-host-tools
 	  --output "build/saturn/castlearea/generated/castle_collision.h" \
 	  --report "docs/saturn/evidence/reports/castle-area1-collision-bank-2026-07-19.json"
 
-verify-all: verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion classify-source verify-hello verify-hwtest
+verify-all: verify-tools verify-runtime-contracts verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-vdp1-frame-bank verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion classify-source verify-hello verify-hwtest
 
 clean: check-sdk
 	$(MAKE) -C "$(HELLO_DIR)" clean

@@ -120,8 +120,23 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("fresh generation must make exactly one presentation attempt")
     if stale_wait_index >= loop.index(presentation_call):
         raise AssertionError("stale VBlank wait/continue must precede presentation")
-    if "sourceboot_vdp1_bank_generation = presentation_generation;" not in terminal:
-        raise AssertionError("VDP1 ownership must be keyed to the presentation generation")
+    if "sourceboot_vdp1_bank_generation = presentation_generation;" in terminal:
+        raise AssertionError("build ownership must not be overwritten by presentation cadence")
+    if re.search(
+        r"sourceboot_vdp1_bank_displayed\s*=\s*"
+        r"sourceboot_vdp1_frame_banks\.published->snapshot_generation;",
+        loop,
+    ) is None:
+        raise AssertionError("display generation must come from the published frame bank")
+    init_region = loop[loop.index("const int16_vec2_t clip"):
+                       loop.index("vdp1_vram_partitions_set")]
+    if init_region.count("sm64_saturn_vdp1_backend_init_with_storage(") != 2:
+        raise AssertionError("both command banks need unconditional setup prefixes")
+    begin = loop.index("sm64_saturn_vdp1_frame_bank_begin_build(")
+    bind = loop.index("sm64_saturn_vdp1_backend_bind_frame_bank(")
+    quarantine = loop.index("sm64_saturn_vdp1_frame_bank_quarantine(build_bank)")
+    if not begin < bind < quarantine:
+        raise AssertionError("bank acquisition must precede binding and failure quarantine")
 
 
 class SourcebootPresentationBoundaryTests(unittest.TestCase):

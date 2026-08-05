@@ -2,9 +2,11 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Current active source slice: Task 5/A5.9 has completed the atomic cutover from
-fixed terrain/Mario workers to one dependency-aware descriptor queue and has
-now observed that queue on the exact target image. The accepted frame publishes
+Task 5/A5.9 is closed after completing the atomic cutover from fixed
+terrain/Mario workers to one dependency-aware descriptor queue and observing
+that queue on the exact target image. Task 7/A7 is source-complete and awaits
+independent review: the two VDP1 command/Gouraud source-bank lifetimes are now
+explicit before A8 defers their transfers. The accepted A5 frame publishes
 four coarse admit/lower jobs, publishes self-contained callback contexts before
 notification, lets both SH-2s claim work, requires terminal descriptors plus
 positive slave retirement, then performs final assembly and VDP1 lowering on
@@ -14,6 +16,19 @@ record splits the four jobs two-and-two across master and slave with no wait,
 failure, or quarantine, while cadence remains 4.8 FPS mean (4.87 median).
 Therefore the next optimization attacks admitted work volume and the
 master-only final merge/VDP1 transfer path rather than assuming an idle slave.
+
+A7 replaces the frame-local XOR selector with a two-bank lifecycle manager.
+Only an explicitly successful render may become READY; transfer obligations
+must retire before publication; zero Gouraud work is an explicit NOOP; and a
+failed build is quarantined while the previous complete publication remains
+available. Build, published, and displayed generations are no longer aliases.
+The linked SH-2 image places `.lwram_cmdts` at `0x00200000` as a `0x20000`-byte
+NOBITS section and `sourceboot_gouraud_staging` at `0x060D8FB8` with exact size
+`0x6000`; `___end=0x060FC86C` leaves `0x3794` HWRAM bytes, above the required
+`0x1B00` floor. A7 does not defer the renderer's waits and therefore makes no
+FPS claim. The broad target verifier remains open on the pre-existing
+native-math oracle error `_play_cutscene -> _cutscene_bbh_death`; A7 itself
+compiled, linked, and passed its memory-map checks.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

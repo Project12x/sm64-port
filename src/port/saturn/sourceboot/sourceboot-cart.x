@@ -124,14 +124,14 @@ SECTIONS
    * main.c: an SH-2 exception cascade before main(), diagnosed only
    * after the fact).
    *
-   * 4 KiB is a deliberate over-estimate of the measured ~3,188-byte
+   * 0x1B00 bytes is a deliberate over-estimate of the measured ~3,188-byte
    * control block, leaving room for TLSF's own alignment padding. Raise
    * it, don't lower it. If this fires, the fix is to shrink a static
    * HWRAM consumer -- see the budget comment on
    * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES in
    * src/port/saturn/gfx/saturn_fast3d_frontend.h -- not to weaken this
    * assert. */
-  PROVIDE (__sourceboot_required_hwram_margin = 0x1000);
+  PROVIDE (__sourceboot_required_hwram_margin = 0x1B00);
   ASSERT (0x06100000 - ___end >= __sourceboot_required_hwram_margin,
           "HWRAM margin below libyaul's TLSF control-block floor: the heap libyaul builds at ___end would overrun the top of HWRAM and mirror into low memory. Shrink a static HWRAM consumer.")
 

@@ -44,7 +44,7 @@ static const char *function_end(const char *start)
 
 static int frame_contains(const char *source, const char *needle)
 {
-    const char *frame = strstr(source, "void sm64_saturn_demo_render_frame(");
+    const char *frame = strstr(source, "bool sm64_saturn_demo_render_frame(");
     const char *end = frame == NULL ? NULL : function_end(frame);
     const char *found = frame == NULL ? NULL : strstr(frame, needle);
     return found != NULL && end != NULL && found < end;
@@ -52,7 +52,7 @@ static int frame_contains(const char *source, const char *needle)
 
 static unsigned frame_count(const char *source, const char *needle)
 {
-    const char *frame = strstr(source, "void sm64_saturn_demo_render_frame(");
+    const char *frame = strstr(source, "bool sm64_saturn_demo_render_frame(");
     const char *end = frame == NULL ? NULL : function_end(frame);
     unsigned count = 0U;
     if (frame == NULL || end == NULL) return 0U;

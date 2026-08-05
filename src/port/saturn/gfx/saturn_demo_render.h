@@ -21,7 +21,10 @@ void sm64_saturn_demo_render_init(void);
 void sm64_saturn_demo_render_scene_observe(bool active, int16_t level,
                                            int16_t area);
 
-void sm64_saturn_demo_render_frame(
+/* True only after a complete command/Gouraud upload. A false outcome leaves
+ * the previously published VDP1 VRAM list intact and must quarantine the
+ * caller's incomplete source bank. */
+bool sm64_saturn_demo_render_frame(
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
     sm64_saturn_fast3d_profile_t *profile,

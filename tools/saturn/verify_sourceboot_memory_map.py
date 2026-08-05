@@ -16,7 +16,12 @@ YAUL_BIN = Path("D:/Code/RetroDev/sm64-saturn-port/work/yaul-install/bin")
 READELF = YAUL_BIN / "sh-elf-readelf.exe"
 NM = YAUL_BIN / "sh-elf-nm.exe"
 HWRAM_TOP = 0x06100000
+HWRAM_BASE = 0x06000000
 LWRAM_TOP = 0x00300000
+LWRAM_BASE = 0x00200000
+VDP1_COMMAND_BANK_BYTES = 2 * 2048 * 32
+GOURAUD_STAGING_BYTES = 2 * 1536 * 8
+MINIMUM_FINAL_MARGIN = 0x1B00
 SCC_START = 0x002CBB20
 SCC_SIZE = 0x2F7C0
 SCC_END = 0x002FB2E0
@@ -128,25 +133,44 @@ def _tag_gate(layout: ElfLayout, route: int, stage_sectors: int) -> None:
             raise ValueError(f"ELF path lacks role tag {tag}")
 
 
+def _c_symbol(layout: ElfLayout, name: str) -> Symbol | None:
+    """Resolve host-mock spelling or SH-ELF's leading-underscore C ABI."""
+    return layout.symbols.get(name) or layout.symbols.get(f"_{name}")
+
+
 def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
                     required_final_margin: int) -> dict[str, Any]:
     _tag_gate(layout, route, stage_sectors)
+    if required_final_margin < MINIMUM_FINAL_MARGIN:
+        raise ValueError("required final floor is below the A7 linker minimum")
     end = layout.symbols.get("___end")
     if end is None:
         raise ValueError("ELF lacks ___end")
     if HWRAM_TOP - end.address < required_final_margin:
         raise ValueError("ELF HWRAM margin is below required final floor")
-    stage = layout.symbols.get("s_source_cart_stage")
+    stage = _c_symbol(layout, "s_source_cart_stage")
     if stage is None or stage.size != stage_sectors * 2048:
         raise ValueError("ELF cart-stage symbol size is wrong")
-    route_marker = layout.symbols.get("sm64_saturn_camera_route_marker")
-    variant_marker = layout.symbols.get("sm64_saturn_camera_variant_marker")
+    route_marker = _c_symbol(layout, "sm64_saturn_camera_route_marker")
+    variant_marker = _c_symbol(layout, "sm64_saturn_camera_variant_marker")
     if route_marker is None or route_marker.address != route:
         raise ValueError("ELF camera route marker is wrong")
     if variant_marker is None or variant_marker.address not in CAMERA_VARIANT_ROLES:
         raise ValueError("ELF camera variant marker is not a Phase A camera role")
+    command_banks = layout.sections.get(".lwram_cmdts")
+    if command_banks is None or command_banks.kind != "NOBITS" or \
+            command_banks.size != VDP1_COMMAND_BANK_BYTES or \
+            command_banks.address % 32 != 0 or \
+            command_banks.address < LWRAM_BASE or \
+            command_banks.address + command_banks.size > LWRAM_TOP:
+        raise ValueError("ELF command banks are not the exact aligned LWRAM range")
+    gouraud = _c_symbol(layout, "sourceboot_gouraud_staging")
+    if gouraud is None or gouraud.size != GOURAUD_STAGING_BYTES or \
+            gouraud.address % 8 != 0 or gouraud.address < HWRAM_BASE or \
+            gouraud.address + gouraud.size > HWRAM_TOP:
+        raise ValueError("ELF Gouraud staging is not the exact aligned HWRAM range")
     capture = layout.sections.get(".lwram_camera_capture")
-    capture_symbol = layout.symbols.get("sourceboot_camera_idle_capture")
+    capture_symbol = _c_symbol(layout, "sourceboot_camera_idle_capture")
     if route == 0:
         if capture is not None and capture.size != 0:
             raise ValueError("route 0 contains SCC1 capture storage")
@@ -175,6 +199,10 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
         "stage_bytes": stage.size,
         "capture_address": capture.address if capture else None,
         "capture_size": capture.size if capture else 0,
+        "command_bank_address": command_banks.address,
+        "command_bank_size": command_banks.size,
+        "gouraud_staging_address": gouraud.address,
+        "gouraud_staging_size": gouraud.size,
     }
 
 

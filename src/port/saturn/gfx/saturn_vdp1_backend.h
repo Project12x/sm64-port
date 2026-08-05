@@ -7,6 +7,7 @@
 #include <yaul.h>
 
 #include "saturn_command_arena.h"
+#include "saturn_vdp1_frame_bank.h"
 
 /* Shared Yaul VDP1 list lifetime for all Saturn renderer clients.
  *
@@ -29,6 +30,15 @@ sm64_saturn_vdp1_backend_bind_storage(sm64_saturn_vdp1_backend_t *backend,
     backend->list.cmdts = cmdts;
     backend->list.count = 3U;
     sm64_saturn_command_arena_init(&backend->commands, capacity, 2U);
+}
+
+static inline void sm64_saturn_vdp1_backend_bind_frame_bank(
+    sm64_saturn_vdp1_backend_t *backend,
+    const sm64_saturn_vdp1_frame_bank_t *bank)
+{
+    sm64_saturn_vdp1_backend_bind_storage(
+        backend, (vdp1_cmdt_t *)bank->command_storage,
+        bank->command_capacity);
 }
 
 static inline bool

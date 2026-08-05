@@ -3634,14 +3634,14 @@ static void demo_emit_mario(
     }
 }
 
-void sm64_saturn_demo_render_frame(
+bool sm64_saturn_demo_render_frame(
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
     sm64_saturn_fast3d_profile_t *profile,
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose)
 {
-    if (!s_bob_resident_ready) return;
+    if (!s_bob_resident_ready) return false;
     const sm64_saturn_ir_transform_job_t terrain_job = {
         .camera = demo_camera(snapshot),
         .focal_length = DEMO_FOCAL_LENGTH,
@@ -3765,7 +3765,7 @@ void sm64_saturn_demo_render_frame(
                     &s_render_job_queue, transform_generation);
         }
         profile->pipeline_faults++;
-        return;
+        return false;
     }
 
     profile->master_worker_started++;
@@ -3840,7 +3840,7 @@ void sm64_saturn_demo_render_frame(
         /* No serial replay: backend_begin() has not run, so the previously
          * complete VDP1 frame remains the only presentable command list. */
         profile->pipeline_faults++;
-        return;
+        return false;
     }
     profile->slave_jobs_completed +=
         (uint32_t)(4U - (master_jobs > 4U ? 4U : master_jobs));
@@ -3933,4 +3933,5 @@ void sm64_saturn_demo_render_frame(
     profile->gouraud_tables_saved += gouraud_bank->saved_tables;
     profile->gouraud_bytes_saved += gouraud_bank->saved_bytes;
     profile->frame_serial++;
+    return true;
 }

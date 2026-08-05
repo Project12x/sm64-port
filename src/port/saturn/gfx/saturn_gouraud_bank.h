@@ -13,8 +13,10 @@
  * The Yaul-side owner (sourceboot) provides the staging array (which
  * MUST live in HWRAM, never .lwram_bss -- the SCU-DMA-from-LWRAM
  * lockup class documented in the VDP1 backend applies to this upload
- * path too) and the device base address (partitions.gouraud_base),
- * and performs the actual used-prefix upload after emission. Layout
+ * path too) and the device base address (partitions.gouraud_base). A7's
+ * frame-bank manager binds this complete object to the matching command
+ * source bank; callers no longer select the two arrays independently and
+ * perform the actual used-prefix upload after emission. Layout
  * matches Yaul's vdp1_gouraud_table_t (4 x RGB1555, 8 bytes,
  * libyaul .../vdp1/vram.h:32-34) -- static-asserted at the emit TU,
  * which sees both types.
