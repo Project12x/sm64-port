@@ -4,6 +4,21 @@
 
 ### Changed
 
+- Added a deterministic, content-addressed, big-endian `S64B` Mario actor
+  bank that retains all 209 source animation IDs from all 193 animation files
+  as deduplicated, length-prefixed index/value channels instead of expanding
+  8,140 frames into roughly 24.16 MiB of posed vertices and light inputs.  The
+  596-KiB payload carries checkout-stable source hashes, the 20-joint source
+  hierarchy, joint-local vertex ownership, branch/node ordinals, materials,
+  primitives, meshlets, a 3,928-byte scratch bound, and an S64P dependency
+  descriptor.  A bounded C decoder rejects malformed stream spans, hashes,
+  skeletons, and ownership; differential generation proves every frame of the
+  legacy idle and walking fixtures produces exact vertices and light inputs.
+  The old Mario animation-object converter and 1.32-MiB compatibility mesh
+  remain byte-identical.  That compatibility mesh still represents only the
+  normal-cap/front-eye/open-hand selection; source switch-variant geometry and
+  production frame/action cutover remain explicitly owned by Task 10.
+
 - Replaced the single PCM proof command ring with pointer-free, big-endian
   semantic-audio protocol v2 rings: eight protected control records at
   `0x04040` and twenty-four SFX records at `0x040C0`.  Two-lap cursors retain

@@ -1,0 +1,18 @@
+{
+  "schema": "sm64-saturn-actor-source-v1",
+  "version": 1,
+  "family_id": 1,
+  "model_id": 1,
+  "max_instances": 1,
+  "animation_ids": "include/mario_animation_ids.h",
+  "animation_root": "assets/anims",
+  "model": "actors/mario/model.inc.c",
+  "geo": "actors/mario/geo.inc.c",
+  "geometry_scope": "legacy-selected normal-cap front-eye open-hand compatibility mesh",
+  "legacy_validation": {
+    "idle_animation_id": 197,
+    "idle_source": "assets/anims/anim_C5.inc.c",
+    "walking_animation_id": 72,
+    "walking_source": "assets/anims/anim_48.inc.c"
+  }
+}

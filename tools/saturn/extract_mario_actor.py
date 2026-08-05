@@ -18,6 +18,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
+from actor_source import parse_animation_file_text
 from quad_pairing import RenderPrimitive
 from saturn_mesh_ir import compile_mesh_ir
 
@@ -92,17 +93,8 @@ def matrix_apply(matrix: Matrix, point: tuple[int, int, int]) -> tuple[int, int,
     return tuple(round(sum(point[axis] * matrix[axis * 3 + col] for axis in range(3)) + matrix[9 + col]) for col in range(3))
 
 def animation_streams(source: str) -> tuple[list[int], list[int]]:
-    name = re.search(r"struct Animation (anim_\w+)\[\]", source)
-    if name is None:
-        raise ValueError("missing source Animation header")
-    stem = name.group(1)
-    def values(suffix: str) -> list[int]:
-        body = re.search(rf"{stem}_{suffix}\[\]\s*=\s*\{{(.*?)\}};", source, re.DOTALL)
-        if body is None:
-            raise ValueError(f"missing {stem}_{suffix}")
-        raw = [int(value, 0) for value in re.findall(r"(?:0x[0-9A-Fa-f]+|-?\d+)", body.group(1))]
-        return [value - 0x10000 if suffix == "values" and value & 0x8000 else value for value in raw]
-    return values("indices"), values("values")
+    record = parse_animation_file_text("<Mario animation source>", source)[0]
+    return list(record.indices), list(record.values)
 
 
 def animation_translation(source: str, frame: int) -> tuple[int, int, int]:
@@ -133,13 +125,7 @@ def animation_rotations(source: str, frame: int) -> list[tuple[int, int, int]]:
 
 def animation_frame_count(source: str) -> int:
     """Return the source Animation frame count from its header."""
-    header = re.search(r"struct Animation anim_\w+\[\]\s*=\s*\{(.*?)\};", source, re.DOTALL)
-    if header is None:
-        raise ValueError("missing source Animation header")
-    fields = [field.strip() for field in header.group(1).split(",")]
-    if len(fields) < 5:
-        raise ValueError("incomplete source Animation header")
-    return int(fields[4], 0)
+    return parse_animation_file_text("<Mario animation source>", source)[0].frame_count
 
 def geo_layout_parts(geo_source: str, rotations: list[tuple[int, int, int]], root_translation: tuple[int, int, int] = (0, 0, 0)) -> list[tuple[str, Matrix, str]]:
     """Evaluate the neutral mario_geo_body hierarchy from the original source.
@@ -285,7 +271,8 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
             out: list[dict[str, object]], texture: str | None = None,
             combine_mode: str | None = None,
             cull_back: bool = True,
-            stack: tuple[str, ...] = ()) -> tuple[str, str | None, str | None, bool]:
+            stack: tuple[str, ...] = (), *, capture_local_positions: bool = False,
+            branch_ordinal: int | None = None) -> tuple[str, str | None, str | None, bool]:
     if name in stack:
         raise ValueError(f"recursive display list: {' -> '.join(stack + (name,))}")
     body = display_lists.get(name)
@@ -339,11 +326,17 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                     list(matrix_apply(matrix, tuple(cache[index][0:3])))
                     for index in triangle
                 ]
-                out.append({"rgb": LIGHTS[current_light], "positions": positions,
-                            "uv": [[cache[index][3], cache[index][4]] for index in triangle],
-                            "display_list": name, "texture": current_texture,
-                            "combine_mode": current_combine_mode,
-                            "cull_back": current_cull_back})
+                emitted = {"rgb": LIGHTS[current_light], "positions": positions,
+                           "uv": [[cache[index][3], cache[index][4]] for index in triangle],
+                           "display_list": name, "texture": current_texture,
+                           "combine_mode": current_combine_mode,
+                           "cull_back": current_cull_back}
+                if capture_local_positions:
+                    emitted["local_positions"] = [
+                        list(cache[index][0:3]) for index in triangle
+                    ]
+                    emitted["branch_ordinal"] = branch_ordinal
+                out.append(emitted)
         elif macro == "gsSPDisplayList":
             child = re.match(r"\s*(\w+)", args)
             if child:
@@ -351,7 +344,9 @@ def flatten(display_lists: dict[str, str], vertices: dict[str, list[tuple[int, i
                  current_cull_back) = flatten(
                     display_lists, vertices, child.group(1), matrix, current_light,
                     out, current_texture, current_combine_mode,
-                    current_cull_back, stack + (name,)
+                    current_cull_back, stack + (name,),
+                    capture_local_positions=capture_local_positions,
+                    branch_ordinal=branch_ordinal,
                 )
     return current_light, current_texture, current_combine_mode, current_cull_back
 
