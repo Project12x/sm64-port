@@ -108,7 +108,7 @@ task's implementation, reviews, evidence, and transition documentation are
 all complete.
 
 - [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
-- [ ] Task 2 — add authoritative feature and package identity
+- [ ] Task 2 — active — base `52e4ec9f`; archiving the accepted A9A trio and binding the full feature/config/package tuple to the compiled target identity
 - [ ] Task 3 — generate the transitive BOB closure
 - [ ] Task 4 — compile the generic S64P schema and provisional fixtures
 - [ ] Task 5 — validate and retain scene-package residency
