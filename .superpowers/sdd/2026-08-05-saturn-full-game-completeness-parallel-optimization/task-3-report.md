@@ -333,3 +333,60 @@ attribution applies.  Independent rereview remains a controller gate.  Target,
 Ymir, FPS, package-link/seal, broad native-math, and manual evidence gates were
 not run and remain open.  The controller-owned active plan and execution
 ledger were preserved and unstaged.
+
+## Final rereview repair round 5
+
+Status remains **source-complete (host tooling)**.  Implementation commit:
+`ed863d03` (`fix(saturn): fail closed on scene audio routing`).  The controller-
+owned active plan and execution ledger were preserved and remain unstaged.
+
+RED independently reproduced both final rereview defects before production
+changes.  The generic suite failed to reject two definitions of a reached
+action table and two handler definitions reached through a unique function-
+pointer table.  A separate audio fixture showed that an unrelated call taking
+`SOUND_GENERAL_MUST_NOT_LEAK` incorrectly added that ID and its bank even
+though the same fixture's direct three-argument audio sink and forwarding
+wrapper were real sound paths.
+
+The native walk now rejects every multiply defined indexed symbol reached
+through a function or data region; the former direct-call-text exception is
+gone.  Audio extraction is a bounded sink-directed analysis.  It starts from
+the exact sound argument positions of canonical audio APIs, resolves local
+assignments and aliases, propagates callee parameter positions through
+forwarding wrappers to a fixed point, and reads reached sound-table data only
+when that data flows into a sink.  Arbitrary non-audio call arguments and
+comparison-only constants cannot create sound facts.  Analysis retains the
+existing 256-region graph bound, adds a 1,024-node value-flow bound, and fails
+if forwarding does not converge within the reachable function count.
+
+Fresh serial host evidence:
+
+```text
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_closure.py
+Ran 19 tests in 1.364s ... OK
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_scene_closure.py
+Ran 1 test in 52.203s ... OK
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_actor_generalization_inventory.py
+Ran 1 test in 49.003s ... OK
+
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 compile-scene-closure SCENE_LEVEL=bob SCENE_AREA=1
+exit 0; generated build/saturn/packages/bob/1/closure.json
+```
+
+The generated BOB artifact remains 86 records / 133 complete source hashes
+with exact area music `SEQ_LEVEL_GRASS`.  Its sink-proven audio union contains
+54 IDs across 8 banks, and its canonical SHA-256 is
+`1d85578ec9656997e0d6edac6feb471c8b54474b68ece70baf4757718d9e7b37`.
+
+Self-review verdict: **PASS** for both final defects and the real BOB closure.
+The ambiguity probes would fail if either the data/table reference or its
+function-pointer initializer were skipped; the audio probe separately guards
+non-audio rejection, direct-sink argument position, alias flow, forwarding,
+and bank derivation.  `git diff --check` is clean for all Task 3 files.  No
+external implementation was copied or adapted; this remains a clean-room
+parser over hash-covered in-tree source, so no new third-party attribution
+applies.  Independent final rereview is still a controller gate.  Target,
+Ymir, FPS, package-link/seal, broad native-math, and manual evidence gates were
+not run and remain open.
