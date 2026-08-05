@@ -1947,5 +1947,7 @@ records Step 6 at a complete ledger boundary. The direct VDP2 fixture now uses
 `snapshot == displayed == rendered == 0` with nonzero simulation, so removing
 the explicit displayed-zero guard makes that case fail; its independent
 simulation-zero case remains otherwise coherent. The direct C11/Werror fixture
-passes. Focused rereview is pending; no target, Ymir, manual, or native-math
-gate is claimed.
+passes. Scoped Fix Round 2 rereview is **PASS / APPROVED**: the Task 5.7 prose
+is contiguous, Step 6 begins at a valid ledger boundary, and the displayed-zero
+fixture now isolates the explicit reserved-zero guard. Step 6 closes as source-
+complete. No target, Ymir, manual, or native-math gate is claimed.

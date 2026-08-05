@@ -263,6 +263,8 @@ camera from the displayed VDP1 bank with its displayed/rendered/simulation
 metadata, labels the tuple, and rejects mismatched or zero ownership. The
 initial independent review was **NO-GO** solely for missing governing-plan and
 execution-ledger records, with code **APPROVED WITH MINOR FOLLOW-UP**. Fix
-Round 1 reconciles those records and adds direct zero-generation coverage;
-focused rereview, target evidence, manual Ymir, and broad native-math remain
-open.
+Round 1 reconciled those records and added direct zero-generation coverage.
+Fix Round 2 (`7ec933a3`) restored the surgically staged ledger boundary and
+isolated the displayed-zero guard. Scoped rereview is **PASS / APPROVED** with
+all prior findings addressed. Target evidence, manual Ymir, and broad native-
+math remain open.

@@ -1921,9 +1921,10 @@ shared bank transport owns every frame upload.
   sourceboot boundary mutations passed. Fix Round 2 restores the ledger at a
   paragraph boundary and makes the displayed-zero fixture otherwise coherent
   (`snapshot == displayed == rendered == 0`), isolating the reserved-zero
-  guard; simulation-zero remains isolated. The latest scoped rereview remains
-  **NO-GO** pending verification of these two repairs; target capture, manual
-  Ymir, and the broad native-math gate remain explicitly unchecked.
+  guard; simulation-zero remains isolated. Scoped Fix Round 2 rereview is
+  **PASS / APPROVED** with every prior finding addressed, so Step 6 closes as
+  source-complete. Target capture, manual Ymir, and the broad native-math gate
+  remain explicitly unchecked.
 
 - [ ] **Step 7: Run frame-pipeline, snapshot, queue, recovery, transfer, VDP2, runtime, and replay-host gates — ACTIVE (TARGET BUILD FIRST)**
 
