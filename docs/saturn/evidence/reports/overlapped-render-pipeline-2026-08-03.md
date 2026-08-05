@@ -1912,3 +1912,8 @@ report, cadence/event generations 1--10 agree, ISR stamps sum to 121 fields
 across nine intervals, and all queue generations retire without waits/faults.
 Explicit negative unit cases pass for mixed-clock and generation-mismatch
 branches; manual Ymir remains open.
+
+Implementation and evidence are checkpointed at `36f4fe58`. Independent
+scheduler, adapter, combined-tree, and measurement rereviews are all GO. The
+manual desktop Ymir observation remains open, as does the unrelated broad
+native-math census gate.

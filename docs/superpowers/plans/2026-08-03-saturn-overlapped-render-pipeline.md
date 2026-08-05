@@ -1943,9 +1943,15 @@ shared bank transport owns every frame upload.
   4.4628-FPS mean, and legacy fallback remains intact. Explicit mixed-clock and
   cadence/event-mismatch negative tests pass.
 
-- [ ] **Step 8: Update documents, commit, and complete two-stage review — CHECKPOINT ACTIVE**
+- [x] **Step 8: Update documents, commit, and complete two-stage review — COMPLETE**
 
   Commit with `perf(saturn): overlap render snapshots with simulation`.
+
+  Landed as `36f4fe58` (`perf(saturn): bound simulation per presented frame`)
+  after scheduler, adapter, combined-tree, and measurement rereviews all GO.
+  The implementation deliberately remains a synchronous-render compatibility
+  adapter; full construction overlap is deferred. Broad native-math census and
+  manual Ymir gates remain explicitly unchecked.
 
 - [ ] **Step 9: Build one serial integrated experimental CUE and manually test — BUILD/CAPTURE GREEN; MANUAL YMIR TEST NEXT**
 

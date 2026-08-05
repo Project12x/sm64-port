@@ -101,6 +101,7 @@ presentation intervals from 36--38 to 12--14 fields: 4.463 FPS mean and 4.286
 median/1%-low, 2.752x / +175% over baseline. The summarizer's stale clock
 assumption is repaired with 29/29 tests and measurement rereview is GO. Commit
 the checkpoint, then run manual Ymir confirmation.
+Checkpoint `36f4fe58` is landed; manual desktop Ymir confirmation is active.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

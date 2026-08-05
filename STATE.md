@@ -142,6 +142,9 @@ The summarizer's decoupled-clock regression is fixed with 29/29 tests and
 measurement rereview is GO with exact artifact identity and coherent 10-edge
 evidence. Mixed-clock and cadence/event-mismatch negative cases pass. The
 checkpoint is active; manual Ymir remains next.
+Checkpoint `36f4fe58` lands the reviewed A9 adapter and exact 2.752x evidence.
+Desktop Ymir manual confirmation is the active A9 gate; the unrelated native-
+math census failure remains separately unchecked.
 The post-repair direct host fixtures for render-job runtime, actor meshlets,
 DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
 did not execute them because the known MSYS-to-Windows path conversion defect
