@@ -2443,3 +2443,14 @@ retirement 10; notify/retire counts were 10/10, queue waits `qw=0`, queue
 failures `qq=0`, and master/slave failures were both zero. This establishes a
 real automated runtime result and a visible improvement over the earlier
 single-digit capture range, but it is not yet manual visual/controls acceptance.
+
+### Desktop manual-launch handoff (2026-08-05)
+
+The exact repaired CUE was launched through
+`tools/saturn/launch_ymir_desktop.py` with the project `.ymir-profile` and
+explicit build-agent2 `ymir-sdl3.exe`. Launch evidence is
+`build/saturn/ymir-desktop-launches/a9a-repaired-manual-20260805.json`; the
+process remained alive and responding after the bounded 20-second monitor
+(PID 12148 at handoff). The plan records the CUE/ISO hashes and profile-managed
+32-Mbit DRAM cart. This is a launch handoff only; controls, visual stability,
+camera feel, and owner-observed speed remain unchecked pending manual input.
