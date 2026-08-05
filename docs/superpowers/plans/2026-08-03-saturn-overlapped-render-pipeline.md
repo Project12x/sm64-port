@@ -307,7 +307,11 @@ and the evidence report before starting another task.
   CPU-DUAL live cutover were bound by the later reviewed A5.8 activation. The
   A3+A4 3–4 FPS candidate remains the rollback baseline.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
-- [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
+- [ ] **Task 7 / A7 — alternating source-bank ownership:** active. The A5.9
+  live capture proved both SH-2s claimed useful work with no recorded queue
+  retirement wait in the observed frame. A7 now makes command/Gouraud source
+  ownership explicit so A8 can defer the remaining master-owned transfers
+  without overwriting a building, transferring, or displayed bank.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
