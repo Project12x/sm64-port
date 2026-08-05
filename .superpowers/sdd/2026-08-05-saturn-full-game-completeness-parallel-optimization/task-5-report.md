@@ -48,9 +48,10 @@ The first review returned SPEC/QUALITY FAIL. The focused repair adds:
 - reference-counted render/VDP1/actor/audio lifecycle adapters;
 - an aligned post-`SOURCE.DAT` CART span and a real optional-root boot caller;
 - UTF-8 stable-ID validation and ABI-legal generation-zero/zero-byte payloads;
-  and
 - defined SHA behavior: `NULL, 0` is empty, while `NULL` with nonzero length is
-  rejected.
+  rejected; and
+- an explicit `<string.h>` declaration for sourceboot's output-view clearing,
+  avoiding an implicit freestanding target prototype.
 
 ## Test evidence
 

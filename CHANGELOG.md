@@ -15,7 +15,8 @@
   now exposes only the aligned CART range above `SOURCE.DAT` and strictly
   rejects an optional linked provisional root before entering the game loop.
   Runtime stable-ID, zero-generation, and zero-byte rules now match the Python
-  S64P validator.
+  S64P validator, and the target cart boundary explicitly declares its
+  freestanding memory primitive rather than relying on an implicit prototype.
 
 - Added bytewise big-endian target validation and exact-generation residency
   for version-one `S64P` roots.  Root, section, canonical dependency-set, and
