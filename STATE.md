@@ -7,7 +7,7 @@ terrain/Mario workers to one dependency-aware descriptor queue and observing
 that queue on the exact target image. Task 7/A7 is source-complete and awaits
 repair rereview after consolidated review found and repaired stale publication,
 untruthful emitter completion, and storage-alias gaps. The original lifetime
-boundary landed at `650b911a`; the repair commit is pending. The two VDP1
+boundary landed at `650b911a`; the repair landed at `41a4ce7e`. The two VDP1
 command/Gouraud source-bank lifetimes are now explicit before A8 defers their
 transfers. The accepted A5 frame publishes
 four coarse admit/lower jobs, publishes self-contained callback contexts before

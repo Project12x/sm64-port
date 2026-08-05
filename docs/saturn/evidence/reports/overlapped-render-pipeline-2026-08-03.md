@@ -1708,4 +1708,6 @@ _cutscene_bbh_death`. No second target build was run. The live-cutover source
 binary also passes after the repair. A final host-green strengthening rejects
 overlapping or misaligned Gouraud manager objects before dereference; it was
 not target-rebuilt because the review task allowed at most one serialized
-target validation. Independent rereview remains open.
+target validation. Repair commit `41a4ce7e` contains the production, tests,
+build integration, and synchronized behavior documents. Independent rereview
+remains open.

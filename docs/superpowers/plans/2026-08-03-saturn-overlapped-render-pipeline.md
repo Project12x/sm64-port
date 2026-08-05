@@ -1505,6 +1505,8 @@ yet.
   The final object-pointer overlap/alignment strengthening was host-compiled
   after that single target run; it was not target-rebuilt because the task cap
   permits at most one serialized target validation.
+  Consolidated repair commit: `41a4ce7e`
+  (`fix(saturn): fail closed on stale VDP1 banks`).
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
