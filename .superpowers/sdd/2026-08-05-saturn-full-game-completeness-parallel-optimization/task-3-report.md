@@ -180,3 +180,7 @@ Self-review: PASS for the source-closure contract.  The controller-owned plan
 and execution ledger remain preserved and unstaged.  Target/Ymir/FPS,
 package-link/seal, broad native-math, and manual evidence gates were not run and
 remain open; this remains host-tooling source completion, not target evidence.
+
+Implementation commit: `15b502650c536c87abc0e4cb3858db0e4a4611a0`
+(`fix(saturn): harden scene closure provenance`).  Independent rereview of this
+round remains an open controller gate.
