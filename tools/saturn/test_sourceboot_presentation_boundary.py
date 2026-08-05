@@ -61,7 +61,7 @@ def bootstrap_vdp2_retirement(text: str) -> tuple[str, str]:
     commit = main.index(BOOTSTRAP_VDP2_COMMIT, begin)
     wait = main.index("vdp2_sync_wait();", commit)
     frontend_init = main.index("sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);")
-    scheduler_init = main.index("uint32_t scheduler_vblank_clock =")
+    scheduler_init = main.index("sm64_saturn_frame_pipeline_init(")
     if not begin < commit < wait < frontend_init < scheduler_init:
         raise AssertionError("bootstrap VDP2 retirement must precede frontend and scheduler initialization")
 
@@ -83,39 +83,23 @@ def bootstrap_vdp2_retirement(text: str) -> tuple[str, str]:
 
 
 def assert_presentation_boundary(text: str) -> None:
-    if "#define SOURCEBOOT_MAX_SIM_CATCHUP 2U" not in text:
-        raise AssertionError("scheduler must allow one normal and one recovery tick")
     if "sourceboot_sim_vblank_credit_dropped" not in text:
         raise AssertionError("dropped eligible VBlank credit must be counted")
 
     loop, bootstrap = bootstrap_vdp2_retirement(text)
-    credit_sample = "sim_vblank_credit += scheduler_now - scheduler_vblank_clock;"
-    if loop.count(credit_sample) != 1:
-        raise AssertionError("VBlank credit must be sampled exactly once per outer loop")
-    if "if (scheduler_now == sourceboot_presentation_generation)" not in loop:
-        raise AssertionError("a stale VBlank generation must reuse the completed VDP1 list")
-    stale_wait = "sm64_saturn_source_runtime_wait_vblank();"
-    stale_wait_index = loop.index(stale_wait)
-    presentation_call = (
-        "sourceboot_present_generation(\n"
-        "                sourceboot_vdp1_frame_banks.published);"
-    )
-    if re.search(
-        r"presentation_generation\s*=\s*"
-        r"sourceboot_vdp1_frame_banks\.published[^;]*snapshot_generation",
-        loop,
-        re.S,
-    ) is None:
-        raise AssertionError("presentation must use the published bank generation")
-    if "continue;" not in loop[stale_wait_index : loop.index(presentation_call)]:
-        raise AssertionError("stale VBlank generation must wait instead of rebuilding")
-    if "catchup < SOURCEBOOT_MAX_SIM_CATCHUP" not in loop:
-        raise AssertionError("recovery tick cap must guard source ticks")
-    if re.search(
-        r"sourceboot_sim_vblank_credit_dropped\s*\+=\s*dropped_vblank_credit;",
-        loop,
-    ) is None:
-        raise AssertionError("eligible overrun credit must be dropped and accumulated")
+    for call in (
+        "sm64_saturn_frame_pipeline_init(",
+        "sm64_saturn_frame_pipeline_step(",
+        "sm64_saturn_frame_pipeline_action_generation(",
+        "sourceboot_frame_pipeline_dispatch(",
+    ):
+        if call not in loop:
+            raise AssertionError(f"pure scheduler dispatch missing {call}")
+    for legacy in ("SOURCEBOOT_MAX_SIM_CATCHUP", "sim_vblank_credit", "catchup <"):
+        if legacy in loop:
+            raise AssertionError(f"legacy catch-up scheduler remains: {legacy}")
+    if "sourceboot_run_source_tick();" in loop:
+        raise AssertionError("source tick escapes RUN_SIM_TICK action helper")
 
     terminal = presentation_function(text)
     for call in ("vdp1_sync_render();", "vdp1_sync();", "sm64_saturn_vdp2_frame_commit("):
@@ -126,25 +110,26 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("VDP1 submission escapes the terminal boundary")
     if "sm64_saturn_vdp2_frame_commit(" in without_terminal:
         raise AssertionError("VDP2 commit escapes the terminal VDP1 boundary")
-    if loop.count(presentation_call) != 1:
-        raise AssertionError("fresh generation must make exactly one presentation attempt")
-    if stale_wait_index >= loop.index(presentation_call):
-        raise AssertionError("stale VBlank wait/continue must precede presentation")
     if "sourceboot_vdp1_bank_generation = presentation_generation;" in terminal:
         raise AssertionError("build ownership must not be overwritten by presentation cadence")
-    if re.search(
-        r"sourceboot_vdp1_bank_displayed\s*=\s*"
-        r"sourceboot_vdp1_frame_banks\.published->snapshot_generation;",
-        loop,
-    ) is None:
-        raise AssertionError("display generation must come from the published frame bank")
+    publish = extract_c_function(text, "sourceboot_frame_publish")
+    reuse = extract_c_function(text, "sourceboot_frame_reuse_previous")
+    if publish.count("sourceboot_present_generation(") != 1:
+        raise AssertionError("fresh publish must make exactly one presentation attempt")
+    if reuse.count("sourceboot_present_generation(") != 1:
+        raise AssertionError("reuse must redraw exactly one completed presentation")
+    if "sourceboot_cadence_trace_append(" in reuse:
+        raise AssertionError("reuse must not manufacture a fresh cadence edge")
+    if "!sourceboot_vdp1_destination_poisoned" not in reuse:
+        raise AssertionError("reuse must remain fail-closed after destination poison")
     init_region = loop[loop.index("const int16_vec2_t clip"):
                        loop.index("vdp1_vram_partitions_set")]
     if init_region.count("sm64_saturn_vdp1_backend_init_with_storage(") != 2:
         raise AssertionError("both command banks need unconditional setup prefixes")
-    begin = loop.index("sm64_saturn_vdp1_frame_bank_begin_build(")
-    bind = loop.index("sm64_saturn_vdp1_backend_bind_frame_bank(")
-    quarantine = loop.index("sm64_saturn_vdp1_frame_bank_quarantine(build_bank)")
+    render = extract_c_function(text, "sourceboot_frame_service_render")
+    begin = render.index("sm64_saturn_vdp1_frame_bank_begin_build(")
+    bind = render.index("sm64_saturn_vdp1_backend_bind_frame_bank(")
+    quarantine = render.index("sm64_saturn_vdp1_frame_bank_quarantine(build_bank)")
     if not begin < bind < quarantine:
         raise AssertionError("bank acquisition must precede binding and failure quarantine")
 
@@ -225,33 +210,30 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "must not perform sourceboot_run_source_tick"):
             assert_presentation_boundary(simulation_work)
 
-    def test_rejects_four_tick_catchup_mutation(self) -> None:
+    def test_rejects_direct_source_tick_escape_mutation(self) -> None:
         mutated = self.source_with_bootstrap_vdp2_retirement().replace(
-            "#define SOURCEBOOT_MAX_SIM_CATCHUP 2U",
-            "#define SOURCEBOOT_MAX_SIM_CATCHUP 4U",
-        )
-        with self.assertRaisesRegex(AssertionError, "one normal and one recovery"):
-            assert_presentation_boundary(mutated)
-
-    def test_rejects_credit_refill_inside_tick_mutation(self) -> None:
-        source = self.source_with_bootstrap_vdp2_retirement()
-        needle = "            sourceboot_run_source_tick();"
-        mutated = source.replace(
-            needle,
-            needle
-            + "\n            scheduler_now = sourceboot_vblank_out_count;"
-            + "\n            sim_vblank_credit += scheduler_now - scheduler_vblank_clock;",
+            "        sourceboot_frame_pipeline_dispatch(action, generation);",
+            "        sourceboot_run_source_tick();\n"
+            "        sourceboot_frame_pipeline_dispatch(action, generation);",
             1,
         )
-        with self.assertRaisesRegex(AssertionError, "sampled exactly once"):
+        with self.assertRaisesRegex(AssertionError, "escapes RUN_SIM_TICK"):
+            assert_presentation_boundary(mutated)
+
+    def test_rejects_legacy_credit_reintroduction_mutation(self) -> None:
+        source = self.source_with_bootstrap_vdp2_retirement()
+        needle = "        sourceboot_frame_pipeline_dispatch(action, generation);"
+        mutated = source.replace(
+            needle,
+            "        sim_vblank_credit += sourceboot_vblank_out_count;\n" + needle,
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "legacy catch-up"):
             assert_presentation_boundary(mutated)
 
     def test_rejects_terminal_boundary_escape_mutations(self) -> None:
         source = self.source_with_bootstrap_vdp2_retirement()
-        call = (
-            "            sourceboot_present_generation(\n"
-            "                sourceboot_vdp1_frame_banks.published);"
-        )
+        call = "        sourceboot_present_generation(bank);"
         escaped_vdp1 = source.replace(
             call,
             call + "\n    vdp1_sync_render();",
@@ -270,10 +252,7 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
 
     def test_rejects_duplicate_terminal_presentation_mutation(self) -> None:
         source = self.source_with_bootstrap_vdp2_retirement()
-        call = (
-            "            sourceboot_present_generation(\n"
-            "                sourceboot_vdp1_frame_banks.published);"
-        )
+        call = "        sourceboot_present_generation(bank);"
         mutated = source.replace(call, f"{call}\n{call}", 1)
         with self.assertRaisesRegex(AssertionError, "exactly one presentation"):
             assert_presentation_boundary(mutated)

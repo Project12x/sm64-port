@@ -529,6 +529,91 @@ class ThroughputCaptureTests(unittest.TestCase):
         self.assertEqual(summary["guest_fps_1pct_low"], 7.5)
         self.assertEqual([interval["vblank_delta"] for interval in summary["intervals"]], [3, 8])
 
+    def test_cadence_fps_uses_isr_fields_not_decoupled_source_generation(self) -> None:
+        previous = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        previous.update({
+            "observed_vblank_generation": 1000,
+            "frame_generation": 41,
+            "build_generation": 41,
+            "presentation_generation": 41,
+        })
+        current.update({
+            "observed_vblank_generation": 1013,
+            "frame_generation": 42,
+            "build_generation": 42,
+            "presentation_generation": 42,
+        })
+        events = [
+            {
+                # The boot trace now names the source presentation generation;
+                # it remains useful for edge/coherence checks, not elapsed time.
+                "vblank_generation": 41,
+                "presentation_generation": 41,
+                "cadence": previous,
+            },
+            {
+                "vblank_generation": 42,
+                "presentation_generation": 42,
+                "cadence": current,
+            },
+        ]
+
+        summary = capture.summarize_cadence(events, nominal_refresh_hz=60.0)
+
+        self.assertEqual(summary["intervals"][0]["vblank_delta"], 13)
+        self.assertAlmostEqual(summary["guest_fps_mean"], 60.0 / 13.0)
+        self.assertEqual(
+            summary["intervals"][0]["presentation_generation_delta"], 1
+        )
+
+    def test_cadence_summary_rejects_adjacent_mixed_clock_sources(self) -> None:
+        cadence = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        cadence.update({
+            "observed_vblank_generation": 13,
+            "presentation_generation": 2,
+        })
+        events = [
+            {"vblank_generation": 1, "presentation_generation": 1},
+            {
+                "vblank_generation": 2,
+                "presentation_generation": 2,
+                "cadence": cadence,
+            },
+        ]
+
+        with self.assertRaisesRegex(ValueError, "mix cadence clock sources"):
+            capture.summarize_cadence(events)
+
+    def test_cadence_summary_rejects_presentation_generation_mismatch(self) -> None:
+        previous = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        previous.update({
+            "observed_vblank_generation": 20,
+            "presentation_generation": 7,
+        })
+        current.update({
+            "observed_vblank_generation": 33,
+            "presentation_generation": 99,
+        })
+        events = [
+            {
+                "vblank_generation": 7,
+                "presentation_generation": 7,
+                "cadence": previous,
+            },
+            {
+                "vblank_generation": 8,
+                "presentation_generation": 8,
+                "cadence": current,
+            },
+        ]
+
+        with self.assertRaisesRegex(
+            ValueError, "cadence trace does not match presentation event"
+        ):
+            capture.summarize_cadence(events)
+
     def test_rejects_fewer_than_two_presentation_events(self) -> None:
         with self.assertRaisesRegex(ValueError, "at least two"):
             capture.summarize_cadence([{"vblank_generation": 1, "presentation_generation": 1}])

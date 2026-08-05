@@ -391,20 +391,57 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
 
 
 def summarize_cadence(events: list[dict[str, Any]], *, nominal_refresh_hz: float = 60.0) -> dict[str, Any]:
-    """Derive cadence from adjacent target generation edges, including wrap."""
+    """Derive cadence from adjacent target presentation edges, including wrap.
+
+    New captures carry the real ISR field clock in the coherent cadence trace.
+    The boot trace's top-level generation remains an edge identifier and may
+    advance once per source presentation. Legacy reports without cadence data
+    retain their historical top-level-clock fallback.
+    """
     if len(events) < 2:
         raise ValueError("at least two presentation events are required")
     if nominal_refresh_hz <= 0:
         raise ValueError("nominal refresh rate must be positive")
     intervals: list[dict[str, Any]] = []
     for previous, current in zip(events, events[1:]):
+        previous_has_cadence = "cadence" in previous
+        current_has_cadence = "cadence" in current
+        if previous_has_cadence != current_has_cadence:
+            raise ValueError("adjacent presentation events mix cadence clock sources")
+        if previous_has_cadence:
+            previous_cadence = previous["cadence"]
+            current_cadence = current["cadence"]
+            for event, cadence in (
+                (previous, previous_cadence),
+                (current, current_cadence),
+            ):
+                if int(cadence["presentation_generation"]) != int(
+                    event["presentation_generation"]
+                ):
+                    raise ValueError(
+                        "cadence trace does not match presentation event"
+                    )
+            previous_clock = int(
+                previous_cadence["observed_vblank_generation"]
+            )
+            current_clock = int(current_cadence["observed_vblank_generation"])
+        else:
+            previous_clock = int(previous["vblank_generation"])
+            current_clock = int(current["vblank_generation"])
         delta = _unsigned_delta(
-            int(previous["vblank_generation"]), int(current["vblank_generation"])
+            previous_clock, current_clock
         )
         if delta == 0:
             raise ValueError("adjacent presentation events have no VBlank progress")
+        presentation_delta = _unsigned_delta(
+            int(previous["presentation_generation"]),
+            int(current["presentation_generation"]),
+        )
+        if presentation_delta == 0:
+            raise ValueError("adjacent presentation events have no generation progress")
         interval: dict[str, Any] = {
             "vblank_delta": delta,
+            "presentation_generation_delta": presentation_delta,
             "guest_fps": nominal_refresh_hz / delta,
         }
         if "cadence" in previous and "cadence" in current:

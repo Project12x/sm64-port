@@ -20,16 +20,63 @@ static int expect_action(sm64_saturn_frame_pipeline_t *pipeline,
     return 0;
 }
 
+static int test_two_fields_produce_one_sim_tick(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, 100U, 0U);
+    failure = expect_action(&pipeline, 101U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 95);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 101U,
+                            SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 96);
+    if (failure != 0) return failure;
+    /* The odd field remainder survives the missed presentation edge. */
+    failure = expect_action(&pipeline, 102U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 97);
+    if (failure != 0) return failure;
+    if (pipeline.simulation_generation != 1U) return 98;
+    return 0;
+}
+
+static int test_vblank_delta_wrap_preserves_half_rate_remainder(void)
+{
+    sm64_saturn_frame_pipeline_t pipeline;
+    int failure;
+
+    sm64_saturn_frame_pipeline_init(&pipeline, UINT32_MAX, 0U);
+    failure = expect_action(&pipeline, 0U,
+                            SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 99);
+    if (failure != 0) return failure;
+    failure = expect_action(&pipeline, 1U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 100);
+    if (failure != 0) return failure;
+    return 0;
+}
+
+static int test_nonzero_generation_successor_contract(void)
+{
+    /* Sourceboot's authoritative sourceboot_sim_tick_count must use this
+     * same helper before publishing its render snapshot; a raw ++ would
+     * diverge from the scheduler at wrap and publish forbidden generation 0. */
+    if (sm64_saturn_frame_pipeline_next_generation(0U) != 1U) return 101;
+    if (sm64_saturn_frame_pipeline_next_generation(1U) != 2U) return 102;
+    if (sm64_saturn_frame_pipeline_next_generation(UINT32_MAX) != 1U)
+        return 103;
+    return 0;
+}
+
 static int test_complete_frame_is_generation_coherent(void)
 {
     sm64_saturn_frame_pipeline_t pipeline;
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 100U, 0U);
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 1);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 2);
     if (failure != 0) return failure;
     if (sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 3;
@@ -37,15 +84,15 @@ static int test_complete_frame_is_generation_coherent(void)
 
     /* The bounded recovery tick advances authoritative state while snapshot
      * generation 1 remains the immutable render/transfer generation. */
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 5);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 6);
     if (failure != 0) return failure;
     if (sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 2U)) return 7;
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 8;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 9);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != 0U) return 10;
@@ -59,69 +106,69 @@ static int test_complete_frame_is_generation_coherent(void)
     }
 
     /* Publication cannot reopen the field's already-consumed service slot. */
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 13);
     if (failure != 0) return failure;
     /* The next observed field opens one service opportunity for snapshot 2. */
-    failure = expect_action(&pipeline, 103U,
+    failure = expect_action(&pipeline, 105U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 14);
     if (failure != 0) return failure;
     return 0;
 }
 
-static int test_generation_zero_is_valid_after_wrap(void)
+static int test_generation_wrap_skips_zero(void)
 {
     sm64_saturn_frame_pipeline_t pipeline;
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 10U, UINT32_MAX);
-    failure = expect_action(&pipeline, 11U,
-                            SM64_SATURN_FRAME_RUN_SIM_TICK, 0U, 13);
+    failure = expect_action(&pipeline, 12U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 13);
     if (failure != 0) return failure;
-    /* Zero is a wrapped generation, not an implicit completion sentinel. */
-    failure = expect_action(&pipeline, 11U,
-                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 0U, 14);
+    /* Downstream snapshot and VDP1 bank contracts reserve generation zero. */
+    failure = expect_action(&pipeline, 12U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 14);
     if (failure != 0) return failure;
-    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 0U)) return 15;
-    failure = expect_action(&pipeline, 11U,
-                            SM64_SATURN_FRAME_POLL_TRANSFERS, 0U, 16);
+    if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 15;
+    failure = expect_action(&pipeline, 12U,
+                            SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 16);
     if (failure != 0) return failure;
-    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 0U)) return 17;
-    failure = expect_action(&pipeline, 11U,
-                            SM64_SATURN_FRAME_PUBLISH_FRAME, 0U, 18);
+    if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 17;
+    failure = expect_action(&pipeline, 12U,
+                            SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 18);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != UINT32_MAX) return 19;
-    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 0U, true))
+    if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
         return 27;
-    if (pipeline.displayed_generation != 0U) return 28;
+    if (pipeline.displayed_generation != 1U) return 28;
     return 0;
 }
 
-static int test_queued_generation_zero_survives_wrap(void)
+static int test_queued_generation_wrap_skips_zero(void)
 {
     sm64_saturn_frame_pipeline_t pipeline;
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 30U, UINT32_MAX - 1U);
-    failure = expect_action(&pipeline, 32U,
+    failure = expect_action(&pipeline, 34U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, UINT32_MAX, 70);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 32U,
+    failure = expect_action(&pipeline, 34U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS,
                             UINT32_MAX, 71);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, UINT32_MAX))
         return 72;
-    failure = expect_action(&pipeline, 32U,
-                            SM64_SATURN_FRAME_RUN_SIM_TICK, 0U, 73);
+    failure = expect_action(&pipeline, 34U,
+                            SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 73);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 32U,
+    failure = expect_action(&pipeline, 34U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS,
                             UINT32_MAX, 74);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, UINT32_MAX))
         return 75;
-    failure = expect_action(&pipeline, 32U,
+    failure = expect_action(&pipeline, 34U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME,
                             UINT32_MAX, 76);
     if (failure != 0) return failure;
@@ -130,14 +177,14 @@ static int test_queued_generation_zero_survives_wrap(void)
             &pipeline, UINT32_MAX, true)) {
         return 80;
     }
-    /* The wrapped queued snapshot is real, but cannot consume a second
-     * SERVICE slot in field 32 after publication promoted it. */
-    failure = expect_action(&pipeline, 32U,
+    /* The wrapped nonzero queued snapshot cannot consume a second
+     * SERVICE slot in field 34 after publication promoted it. */
+    failure = expect_action(&pipeline, 34U,
                             SM64_SATURN_FRAME_WAIT_VBLANK,
                             UINT32_MAX, 77);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 33U,
-                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 0U, 78);
+    failure = expect_action(&pipeline, 35U,
+                            SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 78);
     if (failure != 0) return failure;
     return 0;
 }
@@ -153,7 +200,7 @@ static int test_slow_generation_has_one_normal_and_one_recovery_tick(void)
     for (uint32_t outer_iteration = 0U; outer_iteration < 12U;
          outer_iteration++) {
         const sm64_saturn_frame_action_t action =
-            sm64_saturn_frame_pipeline_step(&pipeline, 44U);
+            sm64_saturn_frame_pipeline_step(&pipeline, 48U);
         if (action == SM64_SATURN_FRAME_RUN_SIM_TICK) sim_actions++;
         if (action == SM64_SATURN_FRAME_SERVICE_RENDER_JOBS)
             service_actions++;
@@ -169,10 +216,11 @@ static int test_slow_generation_has_one_normal_and_one_recovery_tick(void)
         pipeline.previous_frame_reuse_count != 1U) {
         return 23;
     }
-    /* Four elapsed ticks minus the presentation-scoped two-tick budget. */
-    if (pipeline.dropped_sim_credit != 2U) return 24;
+    /* Eight elapsed fields produce four tick credits; two exceed the
+     * presentation-scoped normal+recovery budget. */
+    if (pipeline.dropped_sim_tick_credits != 2U) return 24;
 
-    if (sm64_saturn_frame_pipeline_step(&pipeline, 44U) !=
+    if (sm64_saturn_frame_pipeline_step(&pipeline, 48U) !=
         SM64_SATURN_FRAME_WAIT_VBLANK) {
         return 26;
     }
@@ -181,7 +229,7 @@ static int test_slow_generation_has_one_normal_and_one_recovery_tick(void)
      * recreate a simulation budget. */
     for (uint32_t outer_iteration = 0U; outer_iteration < 8U;
          outer_iteration++) {
-        if (sm64_saturn_frame_pipeline_step(&pipeline, 44U) ==
+        if (sm64_saturn_frame_pipeline_step(&pipeline, 48U) ==
             SM64_SATURN_FRAME_RUN_SIM_TICK) {
             return 25;
         }
@@ -195,19 +243,19 @@ static int test_incomplete_bank_is_reused_never_published(void)
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 7U, 3U);
-    failure = expect_action(&pipeline, 8U,
+    failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 4U, 30);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 8U,
+    failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 4U, 31);
     if (failure != 0) return failure;
 
     /* A render completion is not a transferable/publishable bank. */
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 4U)) return 32;
-    failure = expect_action(&pipeline, 8U,
+    failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 4U, 33);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 8U,
+    failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 3U, 34);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != 3U ||
@@ -218,10 +266,10 @@ static int test_incomplete_bank_is_reused_never_published(void)
     /* Completion after the missed boundary is retained and published at the
      * next observed presentation boundary, with the exact same generation. */
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 4U)) return 36;
-    failure = expect_action(&pipeline, 8U,
+    failure = expect_action(&pipeline, 9U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 3U, 37);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 9U,
+    failure = expect_action(&pipeline, 10U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 4U, 38);
     if (failure != 0) return failure;
     if (pipeline.displayed_generation != 3U) return 39;
@@ -237,7 +285,7 @@ static int test_reuse_does_not_reopen_budget_before_publication(void)
     uint32_t sim_actions = 0U;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 60U, 0U);
-    for (uint32_t vblank = 61U; vblank <= 65U; vblank++) {
+    for (uint32_t vblank = 61U; vblank <= 66U; vblank++) {
         bool reused = false;
         for (uint32_t outer_iteration = 0U; outer_iteration < 8U;
              outer_iteration++) {
@@ -256,7 +304,7 @@ static int test_reuse_does_not_reopen_budget_before_publication(void)
      * normal+recovery budget while generation 1 remains incomplete. */
     if (sim_actions > 2U) return 47;
     if (pipeline.simulation_generation > 2U) return 48;
-    if (pipeline.dropped_sim_credit < 3U) return 49;
+    if (pipeline.dropped_sim_tick_credits < 1U) return 49;
     return 0;
 }
 
@@ -266,20 +314,20 @@ static int test_transfer_service_precedes_terminal_wait(void)
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 20U, 0U);
-    failure = expect_action(&pipeline, 21U,
+    failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 40);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 21U,
+    failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 41);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 42;
-    failure = expect_action(&pipeline, 21U,
+    failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 43);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 21U,
+    failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME, 0U, 44);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 21U,
+    failure = expect_action(&pipeline, 22U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 45);
     if (failure != 0) return failure;
     return 0;
@@ -291,18 +339,18 @@ static int test_publish_requires_exact_success_acknowledgement(void)
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 80U, 0U);
-    failure = expect_action(&pipeline, 81U,
+    failure = expect_action(&pipeline, 82U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 81);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 81U,
+    failure = expect_action(&pipeline, 82U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 82);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 83;
-    failure = expect_action(&pipeline, 81U,
+    failure = expect_action(&pipeline, 82U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 84);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 85;
-    failure = expect_action(&pipeline, 81U,
+    failure = expect_action(&pipeline, 82U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 86);
     if (failure != 0) return failure;
 
@@ -312,7 +360,7 @@ static int test_publish_requires_exact_success_acknowledgement(void)
     }
     if (sm64_saturn_frame_pipeline_publish_complete(&pipeline, 2U, true))
         return 88;
-    failure = expect_action(&pipeline, 81U,
+    failure = expect_action(&pipeline, 82U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 0U, 89);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, false))
@@ -322,7 +370,7 @@ static int test_publish_requires_exact_success_acknowledgement(void)
         pipeline.previous_frame_reuse_count != 1U) {
         return 91;
     }
-    failure = expect_action(&pipeline, 82U,
+    failure = expect_action(&pipeline, 83U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 92);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
@@ -337,44 +385,44 @@ static int test_queued_snapshot_counts_against_next_generation_budget(void)
     int failure;
 
     sm64_saturn_frame_pipeline_init(&pipeline, 100U, 0U);
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 1U, 50);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 1U, 51);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 1U)) return 52;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 2U, 53);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 1U, 54);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 1U)) return 55;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 1U, 56);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 1U, true))
         return 65;
-    failure = expect_action(&pipeline, 102U,
+    failure = expect_action(&pipeline, 104U,
                             SM64_SATURN_FRAME_WAIT_VBLANK, 1U, 57);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 104U,
+    failure = expect_action(&pipeline, 108U,
                             SM64_SATURN_FRAME_SERVICE_RENDER_JOBS, 2U, 66);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 2U)) return 58;
 
     /* Snapshot 2 was produced by the prior recovery tick. It consumes the
      * normal slot of generation 2's budget, leaving exactly one recovery
-     * tick even when two more fields elapsed before render completion. */
-    failure = expect_action(&pipeline, 104U,
+     * tick even when four more fields elapsed before render completion. */
+    failure = expect_action(&pipeline, 108U,
                             SM64_SATURN_FRAME_RUN_SIM_TICK, 3U, 59);
     if (failure != 0) return failure;
-    failure = expect_action(&pipeline, 104U,
+    failure = expect_action(&pipeline, 108U,
                             SM64_SATURN_FRAME_POLL_TRANSFERS, 2U, 60);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_transfer_complete(&pipeline, 2U)) return 61;
-    failure = expect_action(&pipeline, 104U,
+    failure = expect_action(&pipeline, 108U,
                             SM64_SATURN_FRAME_PUBLISH_FRAME, 2U, 62);
     if (failure != 0) return failure;
     if (!sm64_saturn_frame_pipeline_publish_complete(&pipeline, 2U, true))
@@ -388,11 +436,17 @@ static int test_queued_snapshot_counts_against_next_generation_budget(void)
 
 int main(void)
 {
-    int failure = test_complete_frame_is_generation_coherent();
+    int failure = test_two_fields_produce_one_sim_tick();
     if (failure != 0) return failure;
-    failure = test_generation_zero_is_valid_after_wrap();
+    failure = test_vblank_delta_wrap_preserves_half_rate_remainder();
     if (failure != 0) return failure;
-    failure = test_queued_generation_zero_survives_wrap();
+    failure = test_nonzero_generation_successor_contract();
+    if (failure != 0) return failure;
+    failure = test_complete_frame_is_generation_coherent();
+    if (failure != 0) return failure;
+    failure = test_generation_wrap_skips_zero();
+    if (failure != 0) return failure;
+    failure = test_queued_generation_wrap_skips_zero();
     if (failure != 0) return failure;
     failure = test_slow_generation_has_one_normal_and_one_recovery_tick();
     if (failure != 0) return failure;

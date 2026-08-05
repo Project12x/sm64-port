@@ -17,6 +17,7 @@
 #include "saturn_math_route_capture.h"
 #include "saturn_texture_residency.h"
 #include "saturn_source_runtime.h"
+#include "saturn_frame_pipeline.h"
 #include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
 #include "saturn_vdp1_frame_bank.h"
@@ -50,8 +51,6 @@
 #define SATURN_SOURCEBOOT_LIVE_INPUT 0
 #endif
 
-#define SOURCEBOOT_SIM_VBLANK_DIVISOR 2U
-#define SOURCEBOOT_MAX_SIM_CATCHUP 2U
 #define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
 #define SOURCEBOOT_BOOT_TRACE_VERSION 1U
 #define SOURCEBOOT_CADENCE_TRACE_MAGIC 0x53394354U
@@ -158,6 +157,7 @@ static uint32_t sourceboot_construction_vblank_crossings;
 static uint32_t sourceboot_construction_count;
 static uint32_t sourceboot_transport_presentation_vblank_crossings;
 static uint32_t sourceboot_transport_presentation_count;
+static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
@@ -332,7 +332,8 @@ static void sourceboot_run_source_tick(void)
         sourceboot_frt_delta(sim_start, sim_end);
     sourceboot_sim_ticks_accum +=
         sourceboot_fast3d.profile.sim_frt_ticks_last;
-    sourceboot_sim_tick_count++;
+    sourceboot_sim_tick_count =
+        sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count);
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
     sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
@@ -541,6 +542,7 @@ static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
 static sm64_saturn_vdp1_transfer_targets_t sourceboot_vdp1_transfer_targets;
+static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_render_ready;
 static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_transfer_pending;
 static bool sourceboot_vdp1_destination_poisoned;
 
@@ -741,6 +743,361 @@ static void sourceboot_present_generation(
         presentation_generation;
     sourceboot_fast3d.profile.sim_vblank_credit_dropped =
         sourceboot_sim_vblank_credit_dropped;
+}
+
+static void sourceboot_frame_run_sim_tick(uint32_t generation)
+{
+    const uint32_t simulation_vblank_start = sourceboot_vblank_out_count;
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE,
+                                generation);
+    sourceboot_run_source_tick();
+    if (sourceboot_sim_tick_count != generation)
+        sourceboot_fast3d.profile.pipeline_faults++;
+    sourceboot_phase_accumulate(simulation_vblank_start,
+                                sourceboot_vblank_out_count,
+                                &sourceboot_simulation_vblank_crossings,
+                                &sourceboot_simulation_count);
+    sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER,
+                                generation);
+}
+
+static void sourceboot_frame_service_render(uint32_t generation)
+{
+    const uint32_t construction_vblank_start = sourceboot_vblank_out_count;
+    const uint16_t render_start = cpu_frt_count_get();
+    sm64_saturn_vdp1_frame_bank_t *build_bank = NULL;
+    bool render_complete = false;
+
+    if (sourceboot_active_render_snapshot == NULL) {
+        sourceboot_active_render_snapshot =
+            sm64_saturn_render_snapshot_acquire_ready(
+                &sourceboot_render_snapshots, generation);
+    }
+    if (sourceboot_active_render_snapshot == NULL ||
+        sourceboot_active_render_snapshot->generation != generation) {
+        sourceboot_fast3d.profile.pipeline_faults++;
+        goto finish;
+    }
+
+    sourceboot_mario_snapshot = sourceboot_active_render_snapshot->mario;
+    (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
+                                       &sourceboot_mario_pose);
+    sourceboot_fast3d.profile.demo_actor_snapshot_valid =
+        sourceboot_mario_snapshot.valid;
+    sourceboot_fast3d.profile.demo_actor_pose_vertices =
+        sourceboot_mario_pose.vertex_count;
+
+    if (vdp1_sync_busy()) sourceboot_vdp1_bank_late_dma++;
+    render_complete = sm64_saturn_vdp1_frame_bank_begin_build(
+        &sourceboot_vdp1_frame_banks, generation, &build_bank);
+    if (!render_complete) {
+        sourceboot_vdp1_bank_overwrite_attempts++;
+        goto finish;
+    }
+
+    const sm64_saturn_vdp2_camera_snapshot_t camera_snapshot = {
+        .yaw = sourceboot_mario_snapshot.camera_yaw,
+        .pitch = sourceboot_mario_snapshot.camera_pitch,
+        .valid = sourceboot_mario_snapshot.valid,
+    };
+    render_complete = sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
+        build_bank, &camera_snapshot);
+    if (render_complete) {
+        sm64_saturn_vdp1_backend_bind_frame_bank(&sourceboot_vdp1_backend,
+                                                 build_bank);
+#if SATURN_DEMO_PATH
+        render_complete = sm64_saturn_demo_render_frame(
+            &sourceboot_vdp1_backend, build_bank->gouraud_bank,
+            &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
+            &sourceboot_mario_pose);
+#else
+        render_complete = sm64_saturn_fast3d_vdp1_emit(
+            &sourceboot_fast3d, &sourceboot_vdp1_backend,
+            build_bank->gouraud_bank);
+#endif
+    }
+    if (render_complete) {
+        render_complete = sm64_saturn_vdp1_frame_bank_ready(
+            build_bank, sourceboot_vdp1_backend.list.count,
+            build_bank->gouraud_bank->used, generation);
+    }
+    if (render_complete) {
+        sourceboot_vdp1_bank_generation = generation;
+        sourceboot_vdp1_render_ready = build_bank;
+        render_complete = sm64_saturn_frame_pipeline_render_complete(
+            &sourceboot_frame_pipeline, generation);
+    }
+    if (!render_complete) {
+        if (build_bank != NULL &&
+            build_bank->state != SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED) {
+            (void)sm64_saturn_vdp1_frame_bank_quarantine(build_bank);
+        }
+        (void)sm64_saturn_render_snapshot_quarantine(
+            &sourceboot_render_snapshots, generation);
+        sourceboot_active_render_snapshot = NULL;
+        sourceboot_vdp1_render_ready = NULL;
+        sourceboot_fast3d.profile.pipeline_faults++;
+        goto finish;
+    }
+
+    if (!sm64_saturn_render_snapshot_complete(
+            &sourceboot_render_snapshots, sourceboot_active_render_snapshot) ||
+        !sm64_saturn_render_snapshot_retire(
+            &sourceboot_render_snapshots, sourceboot_active_render_snapshot)) {
+        sourceboot_fast3d.profile.pipeline_faults++;
+    }
+    sourceboot_active_render_snapshot = NULL;
+
+finish:
+    sourceboot_fast3d.profile.render_frt_ticks_last =
+        sourceboot_frt_delta(render_start, cpu_frt_count_get());
+    sourceboot_render_ticks_accum +=
+        sourceboot_fast3d.profile.render_frt_ticks_last;
+    sourceboot_fast3d.profile.render_frt_ticks_accum =
+        sourceboot_render_ticks_accum;
+    sourceboot_phase_accumulate(construction_vblank_start,
+                                sourceboot_vblank_out_count,
+                                &sourceboot_construction_vblank_crossings,
+                                &sourceboot_construction_count);
+}
+
+static void sourceboot_frame_poll_transfers(uint32_t generation)
+{
+    const uint32_t transport_vblank_start = sourceboot_vblank_out_count;
+    sm64_saturn_vdp1_frame_bank_t *bank = sourceboot_vdp1_transfer_pending;
+
+    if (bank == NULL) {
+        bank = sourceboot_vdp1_render_ready;
+        if (bank == NULL || bank->snapshot_generation != generation) {
+            sourceboot_fast3d.profile.pipeline_faults++;
+            goto finish;
+        }
+        const bool overwrite_waited = vdp1_sync_busy();
+        const uint16_t overwrite_wait_start = cpu_frt_count_get();
+        if (overwrite_waited) vdp1_sync_wait();
+        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
+            overwrite_waited
+                ? sourceboot_frt_delta(overwrite_wait_start,
+                                       cpu_frt_count_get())
+                : 0U;
+        sourceboot_vdp1_overwrite_wait_ticks_accum +=
+            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
+        sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
+            sourceboot_vdp1_overwrite_wait_ticks_accum;
+        if (!sm64_saturn_vdp1_frame_bank_submit_transfers(
+                bank, &sourceboot_vdp1_transfer_targets)) {
+            /* Submission can fail after queue ownership changes. Treat the
+             * shared resident destination as potentially partially written. */
+            sourceboot_vdp1_destination_poisoned = true;
+            (void)sm64_saturn_vdp1_frame_bank_quarantine(bank);
+            sourceboot_vdp1_render_ready = NULL;
+            sourceboot_fast3d.profile.pipeline_faults++;
+            sourceboot_vdp1_transfer_faults++;
+            goto finish;
+        }
+        sourceboot_vdp1_transfer_pending = bank;
+        sourceboot_vdp1_render_ready = NULL;
+        sourceboot_vdp1_bank_submitted = generation;
+        if (!saturn_dma_queue_sequence_started(bank->command_transfer_ticket) &&
+            !saturn_dma_queue_sequence_retired(bank->command_transfer_ticket))
+            sourceboot_vdp1_transfer_queued_not_started++;
+    }
+
+    if (bank->snapshot_generation != generation) {
+        sourceboot_vdp1_destination_poisoned = true;
+        (void)sm64_saturn_vdp1_frame_bank_quarantine(bank);
+        sourceboot_vdp1_transfer_pending = NULL;
+        sourceboot_vdp1_transfer_faults++;
+        sourceboot_fast3d.profile.pipeline_faults++;
+        goto finish;
+    }
+    if (sm64_saturn_vdp1_frame_bank_poll_transfers(bank)) {
+        if (!sm64_saturn_frame_pipeline_transfer_complete(
+                &sourceboot_frame_pipeline, generation))
+            sourceboot_fast3d.profile.pipeline_faults++;
+    } else if (bank->state == SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED) {
+        sourceboot_fast3d.profile.pipeline_faults++;
+        sourceboot_vdp1_transfer_faults++;
+        sourceboot_vdp1_destination_poisoned = true;
+        sourceboot_vdp1_transfer_pending = NULL;
+    }
+
+finish:
+    sourceboot_phase_accumulate(transport_vblank_start,
+                                sourceboot_vblank_out_count,
+                                &sourceboot_transport_presentation_vblank_crossings,
+                                &sourceboot_transport_presentation_count);
+}
+
+static void sourceboot_frame_update_telemetry(void);
+
+static void sourceboot_frame_publish(uint32_t generation)
+{
+    const uint32_t transport_vblank_start = sourceboot_vblank_out_count;
+    sm64_saturn_vdp1_frame_bank_t *const bank =
+        sourceboot_vdp1_transfer_pending;
+    sm64_saturn_vdp1_frame_bank_t *const previous =
+        sourceboot_vdp1_frame_banks.published;
+    bool published = bank != NULL &&
+        bank->snapshot_generation == generation &&
+        !sourceboot_vdp1_destination_poisoned;
+
+    if (published)
+        published = sm64_saturn_vdp1_frame_bank_arm_resident_list(bank);
+    if (published) {
+        vdp1_sync_force_put();
+        published = sm64_saturn_vdp1_frame_bank_publish(
+            &sourceboot_vdp1_frame_banks, bank);
+    }
+    if (published) {
+        sourceboot_vdp1_transfer_pending = NULL;
+        if (previous != NULL &&
+            !sm64_saturn_vdp1_frame_bank_retire(
+                &sourceboot_vdp1_frame_banks,
+                previous->snapshot_generation))
+            sourceboot_fast3d.profile.pipeline_faults++;
+    } else {
+        if (bank != NULL) {
+            (void)sm64_saturn_vdp1_frame_bank_quarantine(bank);
+            sourceboot_vdp1_transfer_pending = NULL;
+        }
+        sourceboot_vdp1_destination_poisoned = true;
+        sourceboot_vdp1_transfer_faults++;
+        sourceboot_fast3d.profile.pipeline_faults++;
+    }
+    const bool publish_acknowledged =
+        sm64_saturn_frame_pipeline_publish_complete(
+            &sourceboot_frame_pipeline, generation, published);
+    if (!publish_acknowledged) {
+        if (published) sourceboot_vdp1_destination_poisoned = true;
+        sourceboot_fast3d.profile.pipeline_faults++;
+    }
+    if (published && publish_acknowledged)
+        sourceboot_vdp1_bank_displayed = generation;
+    sourceboot_frame_update_telemetry();
+    if (published && publish_acknowledged) {
+        sourceboot_present_generation(bank);
+        sourceboot_cadence_trace_append(sourceboot_sim_tick_count,
+                                        sourceboot_vdp1_bank_generation,
+                                        generation);
+    }
+    sourceboot_phase_accumulate(transport_vblank_start,
+                                sourceboot_vblank_out_count,
+                                &sourceboot_transport_presentation_vblank_crossings,
+                                &sourceboot_transport_presentation_count);
+}
+
+static void sourceboot_frame_reuse_previous(uint32_t generation)
+{
+    if (sourceboot_vdp1_frame_banks.published != NULL &&
+        !sourceboot_vdp1_destination_poisoned &&
+        sourceboot_vdp1_frame_banks.published->snapshot_generation == generation) {
+        sourceboot_present_generation(sourceboot_vdp1_frame_banks.published);
+    }
+}
+
+static void sourceboot_frame_update_telemetry(void)
+{
+    sourceboot_sim_vblank_credit_dropped =
+        sourceboot_frame_pipeline.dropped_sim_tick_credits;
+    sourceboot_trace_scheduler_credit =
+        sourceboot_frame_pipeline.available_sim_credit;
+    sourceboot_fast3d.profile.sim_vblank_credit_dropped =
+        sourceboot_sim_vblank_credit_dropped;
+    sourceboot_fast3d.profile.vdp1_commands_last =
+        sourceboot_vdp1_frame_banks.published != NULL
+            ? sourceboot_vdp1_frame_banks.published->command_count : 0U;
+    sourceboot_fast3d.profile.vdp1_commands =
+        sourceboot_fast3d.profile.vdp1_commands_last;
+    sourceboot_fast3d.profile.vdp1_bank_generation =
+        sourceboot_vdp1_bank_generation;
+    sourceboot_fast3d.profile.vdp1_bank_submitted =
+        sourceboot_vdp1_bank_submitted;
+    sourceboot_fast3d.profile.vdp1_bank_displayed =
+        sourceboot_vdp1_bank_displayed;
+    sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
+        sourceboot_vdp1_bank_overwrite_attempts;
+    sourceboot_fast3d.profile.vdp1_bank_unavailable_skips =
+        sourceboot_vdp1_bank_overwrite_attempts;
+    sourceboot_fast3d.profile.vdp1_transfer_faults =
+        sourceboot_vdp1_transfer_faults;
+    sourceboot_fast3d.profile.vdp1_transfer_queued_not_started =
+        sourceboot_vdp1_transfer_queued_not_started;
+    sourceboot_fast3d.profile.vdp1_bank_late_dma =
+        sourceboot_vdp1_bank_late_dma;
+    sourceboot_fast3d.profile.ordering_count =
+        sourceboot_fast3d.profile.vdp1_commands_last;
+    sourceboot_fast3d.profile.dma_wait_ticks_last =
+        saturn_dma_queue_wait_ticks_take();
+    sourceboot_dma_wait_ticks_accum +=
+        sourceboot_fast3d.profile.dma_wait_ticks_last;
+    sourceboot_fast3d.profile.dma_wait_ticks_accum =
+        sourceboot_dma_wait_ticks_accum;
+    sourceboot_fast3d.profile.command_cpu_dmac_wait_ticks_last = 0U;
+    sourceboot_fast3d.profile.command_cpu_dmac_wait_ticks_accum = 0U;
+    sourceboot_fast3d.profile.gouraud_scu_dma_wait_ticks_last = 0U;
+    sourceboot_fast3d.profile.gouraud_scu_dma_wait_ticks_accum = 0U;
+    if (sourceboot_fast3d.profile.vdp1_commands_last >
+        sourceboot_fast3d.profile.vdp1_command_highwater)
+        sourceboot_fast3d.profile.vdp1_command_highwater =
+            sourceboot_fast3d.profile.vdp1_commands_last;
+    const uint32_t gouraud_highwater =
+        sourceboot_vdp1_frame_banks.published != NULL
+            ? sourceboot_vdp1_frame_banks.published->gouraud_count : 0U;
+    if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
+        sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;
+    sourceboot_fast3d.profile.demo_lod_resident_bytes =
+        SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES;
+    sourceboot_fast3d.profile.vdp1_vram_bytes =
+        (SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t)) +
+        SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
+        (SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES *
+         sizeof(vdp1_gouraud_table_t));
+    sourceboot_fast3d.profile.vdp2_display_mask =
+        SOURCEBOOT_VDP2_DISPLAY_MASK;
+    sourceboot_fast3d.profile.vdp2_active_layers =
+        SOURCEBOOT_VDP2_DISPLAY_MASK;
+    sourceboot_fast3d.profile.vdp2_vram_bytes = SOURCEBOOT_VDP2_VRAM_BYTES;
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT
+    sourceboot_capture_route_checkpoint();
+#endif
+}
+
+static void sourceboot_frame_pipeline_dispatch(
+    sm64_saturn_frame_action_t action, uint32_t generation)
+{
+    /* step() has already consumed this observation. Publish scheduler-owned
+     * credit before action traces/cadence samples, then refresh all profile
+     * mirrors again after the action mutates runtime state. */
+    sourceboot_sim_vblank_credit_dropped =
+        sourceboot_frame_pipeline.dropped_sim_tick_credits;
+    sourceboot_trace_scheduler_credit =
+        sourceboot_frame_pipeline.available_sim_credit;
+    switch (action) {
+        case SM64_SATURN_FRAME_RUN_SIM_TICK:
+            sourceboot_frame_run_sim_tick(generation);
+            break;
+        case SM64_SATURN_FRAME_SERVICE_RENDER_JOBS:
+            sourceboot_frame_service_render(generation);
+            break;
+        case SM64_SATURN_FRAME_POLL_TRANSFERS:
+            sourceboot_frame_poll_transfers(generation);
+            break;
+        case SM64_SATURN_FRAME_PUBLISH_FRAME:
+            sourceboot_frame_publish(generation);
+            break;
+        case SM64_SATURN_FRAME_REUSE_PREVIOUS_FRAME:
+            sourceboot_frame_reuse_previous(generation);
+            break;
+        case SM64_SATURN_FRAME_WAIT_VBLANK:
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE, generation);
+            sm64_saturn_source_runtime_wait_vblank();
+            sourceboot_boot_trace_write(
+                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER, generation);
+            break;
+    }
+    sourceboot_frame_update_telemetry();
 }
 
 void user_init(void) {
@@ -1011,366 +1368,17 @@ int main(void) {
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_BEFORE,
                                 sourceboot_vblank_out_count);
     thread5_game_loop(NULL);
-    uint32_t scheduler_vblank_clock = sourceboot_vblank_out_count;
-    uint32_t sourceboot_presentation_generation = scheduler_vblank_clock;
-    uint32_t sim_vblank_credit = SOURCEBOOT_SIM_VBLANK_DIVISOR;
-    sourceboot_trace_scheduler_credit = sim_vblank_credit;
+    sm64_saturn_frame_pipeline_init(&sourceboot_frame_pipeline,
+                                     sourceboot_vblank_out_count, 0U);
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_THREAD5_AFTER,
-                                scheduler_vblank_clock);
+                                sourceboot_vblank_out_count);
     for (;;) {
-        /* Sample the ISR-owned VBlank clock exactly once before any source
-         * tick.  A tick can take longer than a field, but it cannot refill
-         * this generation's credit or trigger a second presentation. */
-#if SATURN_DEMO_PATH
-        bool simulation_ran = false;
-#endif
-        uint32_t scheduler_now = sourceboot_vblank_out_count;
-        sim_vblank_credit += scheduler_now - scheduler_vblank_clock;
-        scheduler_vblank_clock = scheduler_now;
-        sourceboot_trace_scheduler_credit = sim_vblank_credit;
-        bool transfer_ready_before_field = false;
-        if (sourceboot_vdp1_transfer_pending != NULL) {
-            const uint32_t transport_presentation_vblank_start =
-                sourceboot_vblank_out_count;
-            sm64_saturn_vdp1_frame_bank_t *const transfer_bank =
-                sourceboot_vdp1_transfer_pending;
-            transfer_ready_before_field =
-                sm64_saturn_vdp1_frame_bank_poll_transfers(transfer_bank);
-            if (!transfer_ready_before_field && transfer_bank->state ==
-                    SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED) {
-                /* Either destination may already contain part of the failed
-                 * generation. Old metadata is no longer safe against that
-                 * resident VRAM, so remain fail-closed until a future restore
-                 * policy can rewrite both ranges atomically. */
-                sourceboot_fast3d.profile.pipeline_faults++;
-                sourceboot_vdp1_transfer_faults++;
-                sourceboot_vdp1_destination_poisoned = true;
-                sourceboot_vdp1_transfer_pending = NULL;
-            }
-            sourceboot_phase_accumulate(transport_presentation_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_transport_presentation_vblank_crossings,
-                                        &sourceboot_transport_presentation_count);
-        }
-        if (scheduler_now == sourceboot_presentation_generation) {
-            /* Service the serial CPU-DMAC then SCU-DMA lane as quickly as the
-             * hardware completes it. Do not quantize each stage to VBlank;
-             * only publication/presentation below remains field-owned. */
-            if (sourceboot_vdp1_transfer_pending != NULL &&
-                !transfer_ready_before_field)
-                continue;
-            /* No completed fresh field: retain the previously completed
-             * VDP1 list and wait rather than rebuilding/uploading/syncing. */
-            sourceboot_boot_trace_write(
-                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE,
-                scheduler_now);
-            sm64_saturn_source_runtime_wait_vblank();
-            sourceboot_boot_trace_write(
-                SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER,
-                scheduler_now);
-            continue;
-        }
-        sourceboot_presentation_generation = scheduler_now;
-        bool published_transfer_this_field = false;
-        if (sourceboot_vdp1_transfer_pending != NULL &&
-            transfer_ready_before_field) {
-            const uint32_t transport_presentation_vblank_start =
-                sourceboot_vblank_out_count;
-            sm64_saturn_vdp1_frame_bank_t *const transfer_bank =
-                sourceboot_vdp1_transfer_pending;
-            sm64_saturn_vdp1_frame_bank_t *const previous_published =
-                sourceboot_vdp1_frame_banks.published;
-            if (sm64_saturn_vdp1_frame_bank_arm_resident_list(transfer_bank)) {
-                vdp1_sync_force_put();
-                if (sm64_saturn_vdp1_frame_bank_publish(
-                        &sourceboot_vdp1_frame_banks, transfer_bank)) {
-                    sourceboot_vdp1_bank_submitted =
-                        transfer_bank->snapshot_generation;
-                    if (previous_published != NULL &&
-                        !sm64_saturn_vdp1_frame_bank_retire(
-                            &sourceboot_vdp1_frame_banks,
-                            previous_published->snapshot_generation))
-                        sourceboot_fast3d.profile.pipeline_faults++;
-                    published_transfer_this_field = true;
-                } else {
-                    sourceboot_fast3d.profile.pipeline_faults++;
-                    sourceboot_vdp1_transfer_faults++;
-                    sourceboot_vdp1_destination_poisoned = true;
-                }
-            } else {
-                sourceboot_fast3d.profile.pipeline_faults++;
-                sourceboot_vdp1_transfer_faults++;
-                sourceboot_vdp1_destination_poisoned = true;
-            }
-            sourceboot_vdp1_transfer_pending = NULL;
-            sourceboot_phase_accumulate(transport_presentation_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_transport_presentation_vblank_crossings,
-                                        &sourceboot_transport_presentation_count);
-        }
-        for (uint8_t catchup = 0U;
-             sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
-             catchup < SOURCEBOOT_MAX_SIM_CATCHUP; catchup++) {
-            sim_vblank_credit -= SOURCEBOOT_SIM_VBLANK_DIVISOR;
-            sourceboot_trace_scheduler_credit = sim_vblank_credit;
-            sourceboot_boot_trace_write(
-                SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE,
-                scheduler_now);
-            const uint32_t simulation_vblank_start =
-                sourceboot_vblank_out_count;
-            sourceboot_run_source_tick();
-            sourceboot_phase_accumulate(simulation_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_simulation_vblank_crossings,
-                                        &sourceboot_simulation_count);
-            sourceboot_boot_trace_write(
-                SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER,
-                scheduler_now);
-#if SATURN_DEMO_PATH
-            simulation_ran = true;
-#endif
-        }
-        /* The first tick is normal; the second is bounded recovery. Preserve
-         * a fractional VBlank remainder but discard every additional eligible
-         * tick so a slow render cannot create a feedback backlog. */
-        if (sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR) {
-            const uint32_t dropped_vblank_credit =
-                sim_vblank_credit -
-                (sim_vblank_credit % SOURCEBOOT_SIM_VBLANK_DIVISOR);
-            sourceboot_sim_vblank_credit_dropped +=
-                dropped_vblank_credit;
-            sim_vblank_credit -= dropped_vblank_credit;
-        }
-        sourceboot_trace_scheduler_credit = sim_vblank_credit;
-
-        const uint32_t construction_vblank_start =
-            sourceboot_vblank_out_count;
-
-        /* Current sourceboot renders only the latest completed fixed-step
-         * state. A bounded recovery tick can leave one older READY snapshot;
-         * consume and retire that intentionally skipped record before taking
-         * the newest generation. A later overlapped worker replaces this
-         * master-only catch-up retirement with its own terminal join. */
-        if (sourceboot_sim_tick_count > 1U) {
-            const sm64_saturn_render_snapshot_t *const skipped_snapshot =
-                sm64_saturn_render_snapshot_acquire_ready(
-                    &sourceboot_render_snapshots, sourceboot_sim_tick_count - 1U);
-            if (skipped_snapshot != NULL) {
-                (void)sm64_saturn_render_snapshot_complete(
-                    &sourceboot_render_snapshots, skipped_snapshot);
-                (void)sm64_saturn_render_snapshot_retire(
-                    &sourceboot_render_snapshots, skipped_snapshot);
-            }
-        }
-        sourceboot_active_render_snapshot =
-            sm64_saturn_render_snapshot_acquire_ready(
-                &sourceboot_render_snapshots, sourceboot_sim_tick_count);
-        if (sourceboot_active_render_snapshot != NULL) {
-            sourceboot_mario_snapshot = sourceboot_active_render_snapshot->mario;
-            (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
-                                               &sourceboot_mario_pose);
-        }
-        sourceboot_fast3d.profile.demo_actor_snapshot_valid =
-            sourceboot_mario_snapshot.valid;
-        sourceboot_fast3d.profile.demo_actor_pose_vertices =
-            sourceboot_mario_pose.vertex_count;
-
-        const uint16_t render_start = cpu_frt_count_get();
-        /* SlaveDriver and Z-Treme both rebuild a staging bank while VDP1
-         * consumes the other frame. Command/Gouraud staging is double
-         * buffered here, while VDP1's final VRAM ranges deliberately stay
-         * master-owned and single. The renderer waits only at that VRAM
-         * overwrite/draw-dependency boundary after CPU construction. */
-        const bool vdp1_was_busy = vdp1_sync_busy();
-        if (vdp1_was_busy)
-            sourceboot_vdp1_bank_late_dma++;
-        sm64_saturn_vdp1_frame_bank_t *build_bank = NULL;
-        const bool build_attempted = !published_transfer_this_field &&
-            sourceboot_vdp1_transfer_pending == NULL;
-        bool render_complete = build_attempted &&
-            sm64_saturn_vdp1_frame_bank_begin_build(
-                &sourceboot_vdp1_frame_banks, scheduler_now, &build_bank);
-        if (render_complete) {
-            const sm64_saturn_vdp2_camera_snapshot_t camera_snapshot = {
-                .yaw = sourceboot_mario_snapshot.camera_yaw,
-                .pitch = sourceboot_mario_snapshot.camera_pitch,
-                .valid = sourceboot_mario_snapshot.valid,
-            };
-            render_complete =
-                sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
-                    build_bank, &camera_snapshot);
-        }
-        if (render_complete) {
-            sourceboot_vdp1_bank_generation = build_bank->snapshot_generation;
-            sm64_saturn_vdp1_backend_bind_frame_bank(
-                &sourceboot_vdp1_backend, build_bank);
-#if SATURN_DEMO_PATH
-            render_complete = sm64_saturn_demo_render_frame(
-                &sourceboot_vdp1_backend, build_bank->gouraud_bank,
-                &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
-                &sourceboot_mario_pose);
-#else
-            render_complete = sm64_saturn_fast3d_vdp1_emit(
-                &sourceboot_fast3d, &sourceboot_vdp1_backend,
-                build_bank->gouraud_bank);
-#endif
-        } else if (build_attempted) {
-            /* Both non-FREE banks remain owned by a displayed, transferring,
-             * or quarantined generation. Do not bind or render into either. */
-            sourceboot_vdp1_bank_overwrite_attempts++;
-        }
-        /* Both emitters are construction-only. The master crosses the one
-         * destination-overwrite boundary before any queued transport starts,
-         * then arms Yaul exactly once after both resident ranges retire. */
-        if (render_complete) {
-            render_complete = sm64_saturn_vdp1_frame_bank_ready(
-                build_bank, sourceboot_vdp1_backend.list.count,
-                build_bank->gouraud_bank->used,
-                build_bank->snapshot_generation);
-        }
-        if (build_attempted) {
-            sourceboot_phase_accumulate(construction_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_construction_vblank_crossings,
-                                        &sourceboot_construction_count);
-        }
-        if (render_complete) {
-            const uint32_t transport_presentation_vblank_start =
-                sourceboot_vblank_out_count;
-            const bool overwrite_waited = vdp1_sync_busy();
-            const uint16_t overwrite_wait_start = cpu_frt_count_get();
-            if (overwrite_waited)
-                vdp1_sync_wait();
-            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last =
-                overwrite_waited
-                    ? sourceboot_frt_delta(overwrite_wait_start,
-                                           cpu_frt_count_get())
-                    : 0U;
-            sourceboot_vdp1_overwrite_wait_ticks_accum +=
-                sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_last;
-            sourceboot_fast3d.profile.vdp1_overwrite_wait_ticks_accum =
-                sourceboot_vdp1_overwrite_wait_ticks_accum;
-            render_complete =
-                sm64_saturn_vdp1_frame_bank_submit_transfers(
-                    build_bank, &sourceboot_vdp1_transfer_targets);
-            if (render_complete) {
-                sourceboot_vdp1_transfer_pending = build_bank;
-                /* Safe boundary was crossed above. This first poll only
-                 * starts the serial transport lane; publication is deferred
-                 * to a later field and never waits here. */
-                (void)sm64_saturn_vdp1_frame_bank_poll_transfers(build_bank);
-                if (!saturn_dma_queue_sequence_started(
-                        build_bank->command_transfer_ticket) &&
-                    !saturn_dma_queue_sequence_retired(
-                        build_bank->command_transfer_ticket))
-                    sourceboot_vdp1_transfer_queued_not_started++;
-            }
-            sourceboot_phase_accumulate(transport_presentation_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_transport_presentation_vblank_crossings,
-                                        &sourceboot_transport_presentation_count);
-        }
-        if (!render_complete && build_bank != NULL &&
-            build_bank->state != SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED) {
-            (void)sm64_saturn_vdp1_frame_bank_quarantine(build_bank);
-            sourceboot_fast3d.profile.pipeline_faults++;
-        }
-        sourceboot_fast3d.profile.render_frt_ticks_last =
-            sourceboot_frt_delta(render_start, cpu_frt_count_get());
-        sourceboot_render_ticks_accum +=
-            sourceboot_fast3d.profile.render_frt_ticks_last;
-        sourceboot_fast3d.profile.render_frt_ticks_accum =
-            sourceboot_render_ticks_accum;
-        sourceboot_fast3d.profile.vdp1_commands_last =
-            sourceboot_vdp1_frame_banks.published != NULL
-            ? sourceboot_vdp1_frame_banks.published->command_count : 0U;
-        sourceboot_fast3d.profile.vdp1_commands =
-            sourceboot_fast3d.profile.vdp1_commands_last;
-        sourceboot_fast3d.profile.vdp1_bank_overwrite_attempts =
-            sourceboot_vdp1_bank_overwrite_attempts;
-        sourceboot_fast3d.profile.vdp1_bank_unavailable_skips =
-            sourceboot_vdp1_bank_overwrite_attempts;
-        sourceboot_fast3d.profile.vdp1_transfer_faults =
-            sourceboot_vdp1_transfer_faults;
-        sourceboot_fast3d.profile.vdp1_transfer_queued_not_started =
-            sourceboot_vdp1_transfer_queued_not_started;
-        sourceboot_fast3d.profile.vdp1_bank_late_dma =
-            sourceboot_vdp1_bank_late_dma;
-        sourceboot_fast3d.profile.ordering_count =
-            sourceboot_fast3d.profile.vdp1_commands_last;
-        sourceboot_fast3d.profile.dma_wait_ticks_last =
-            saturn_dma_queue_wait_ticks_take();
-        sourceboot_dma_wait_ticks_accum +=
-            sourceboot_fast3d.profile.dma_wait_ticks_last;
-        sourceboot_fast3d.profile.dma_wait_ticks_accum =
-            sourceboot_dma_wait_ticks_accum;
-        /* The accepted deferred path never blocks on either transport. Keep
-         * these split wait channels explicitly zero; queue-delay events are
-         * reported separately by QNS. */
-        sourceboot_fast3d.profile.command_cpu_dmac_wait_ticks_last = 0U;
-        sourceboot_fast3d.profile.command_cpu_dmac_wait_ticks_accum = 0U;
-        sourceboot_fast3d.profile.gouraud_scu_dma_wait_ticks_last = 0U;
-        sourceboot_fast3d.profile.gouraud_scu_dma_wait_ticks_accum = 0U;
-        if (sourceboot_fast3d.profile.vdp1_commands_last >
-            sourceboot_fast3d.profile.vdp1_command_highwater)
-            sourceboot_fast3d.profile.vdp1_command_highwater =
-                sourceboot_fast3d.profile.vdp1_commands_last;
-        const uint32_t gouraud_highwater =
-            sourceboot_vdp1_frame_banks.published != NULL
-            ? sourceboot_vdp1_frame_banks.published->gouraud_count : 0U;
-        if (gouraud_highwater > sourceboot_fast3d.profile.vdp1_gouraud_highwater)
-            sourceboot_fast3d.profile.vdp1_gouraud_highwater = gouraud_highwater;
-        sourceboot_fast3d.profile.demo_lod_resident_bytes =
-            SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES;
-        sourceboot_fast3d.profile.vdp1_vram_bytes =
-            (SOURCEBOOT_VDP1_COMMAND_CAPACITY * sizeof(vdp1_cmdt_t)) +
-            SOURCEBOOT_TEXTURE_BYTES + SOURCEBOOT_BOB_CLUT_BYTES +
-            (SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES *
-             sizeof(vdp1_gouraud_table_t));
-        sourceboot_fast3d.profile.vdp2_display_mask =
-            SOURCEBOOT_VDP2_DISPLAY_MASK;
-        sourceboot_fast3d.profile.vdp2_active_layers =
-            SOURCEBOOT_VDP2_DISPLAY_MASK;
-        sourceboot_fast3d.profile.vdp2_vram_bytes =
-            SOURCEBOOT_VDP2_VRAM_BYTES;
-#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT
-    sourceboot_capture_route_checkpoint();
-#endif
-
-        const uint32_t presentation_generation =
-            sourceboot_vdp1_frame_banks.published != NULL
-                ? sourceboot_vdp1_frame_banks.published->snapshot_generation
-                : 0U;
-        if (presentation_generation != 0U &&
-            sourceboot_vdp1_transfer_pending == NULL &&
-            !sourceboot_vdp1_destination_poisoned) {
-            const uint32_t transport_presentation_vblank_start =
-                sourceboot_vblank_out_count;
-            sourceboot_present_generation(
-                sourceboot_vdp1_frame_banks.published);
-            sourceboot_phase_accumulate(transport_presentation_vblank_start,
-                                        sourceboot_vblank_out_count,
-                                        &sourceboot_transport_presentation_vblank_crossings,
-                                        &sourceboot_transport_presentation_count);
-            sourceboot_cadence_trace_append(sourceboot_sim_tick_count,
-                                            sourceboot_vdp1_bank_generation,
-                                            presentation_generation);
-        }
-        if (sourceboot_vdp1_frame_banks.published != NULL)
-            sourceboot_vdp1_bank_displayed =
-                sourceboot_vdp1_frame_banks.published->snapshot_generation;
-        sourceboot_fast3d.profile.vdp1_bank_generation =
-            sourceboot_vdp1_bank_generation;
-        sourceboot_fast3d.profile.vdp1_bank_submitted =
-            sourceboot_vdp1_bank_submitted;
-        sourceboot_fast3d.profile.vdp1_bank_displayed =
-            sourceboot_vdp1_bank_displayed;
-        if (sourceboot_active_render_snapshot != NULL) {
-            (void)sm64_saturn_render_snapshot_complete(
-                &sourceboot_render_snapshots, sourceboot_active_render_snapshot);
-            (void)sm64_saturn_render_snapshot_retire(
-                &sourceboot_render_snapshots, sourceboot_active_render_snapshot);
-            sourceboot_active_render_snapshot = NULL;
-        }
+        const sm64_saturn_frame_action_t action =
+            sm64_saturn_frame_pipeline_step(
+                &sourceboot_frame_pipeline, sourceboot_vblank_out_count);
+        const uint32_t generation =
+            sm64_saturn_frame_pipeline_action_generation(
+                &sourceboot_frame_pipeline);
+        sourceboot_frame_pipeline_dispatch(action, generation);
     }
 }

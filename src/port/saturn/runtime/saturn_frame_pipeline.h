@@ -25,10 +25,13 @@ typedef struct sm64_saturn_frame_pipeline {
     uint32_t action_generation;
     uint32_t render_service_vblank;
     uint32_t transfer_poll_vblank;
-    uint32_t dropped_sim_credit;
+    /* Whole 30 Hz simulation-tick credits discarded after the normal plus
+     * recovery budget is exhausted. This counter is not measured in fields. */
+    uint32_t dropped_sim_tick_credits;
     uint32_t previous_frame_reuse_count;
     uint8_t available_sim_credit;
     uint8_t sim_ticks_this_presentation;
+    uint8_t sim_vblank_remainder;
     bool presentation_pending;
     bool render_active;
     bool queued_snapshot_valid;
@@ -41,6 +44,10 @@ typedef struct sm64_saturn_frame_pipeline {
     bool transfer_poll_vblank_valid;
     uint32_t publish_generation;
 } sm64_saturn_frame_pipeline_t;
+
+/* Shared by the scheduler and authoritative source-tick owner. Generation 0
+ * is reserved by render-snapshot and VDP1 frame-bank contracts. */
+uint32_t sm64_saturn_frame_pipeline_next_generation(uint32_t generation);
 
 void sm64_saturn_frame_pipeline_init(sm64_saturn_frame_pipeline_t *pipeline,
                                      uint32_t vblank_count,

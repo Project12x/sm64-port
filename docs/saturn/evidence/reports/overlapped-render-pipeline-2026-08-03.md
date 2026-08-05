@@ -1858,3 +1858,57 @@ per-field work epochs, exact two-phase publication acknowledgement, and
 fail-closed null/wrong-generation handling. Steps 1--4 are complete; Step 5 is
 active from the intentional 7/7 RED source contract. This is not yet runtime or
 FPS evidence.
+
+The reviewed scheduler/model and Step 5 RED contract are checkpointed in
+`d49b8677`. Runtime integration remains active and unproven.
+
+The Step 5 compatibility adapter is source-GREEN across 29 focused tests, but a
+pre-target cadence audit is NO-GO: the model currently converts VBlank fields
+to simulation credits 1:1, doubling healthy source logic from 30 Hz to 60 Hz.
+Target build is intentionally withheld pending a wrap-safe two-field fractional
+accumulator and rereview. Field-rate SERVICE/POLL/presentation behavior must
+remain unchanged. No FPS evidence is claimed.
+
+Combined review confirms the 30 Hz accumulator but remains **NO-GO** for target
+build. The adapter must acknowledge exact successful publication before
+refreshing telemetry, committing VDP2, and appending cadence evidence. The
+scheduler must also skip wrapped generation zero consistently with downstream
+snapshot/frame-bank ownership, which reserves zero as invalid. Both repairs
+are active; prior source-green results do not satisfy these gates.
+
+Both repairs are now source-complete and awaiting final rereview. The shared
+successor skips reserved zero in scheduler and sourceboot. Exact publish ack now
+precedes telemetry, presentation, and cadence evidence; failure cannot emit a
+presentation edge. Focused source tests pass 30/30, the scheduler nominal test
+passes, and all three mutations are rejected. Target evidence remains absent.
+
+Final combined rereview is **GO** for a serial target build. Legacy telemetry
+identifiers containing `vblank_credit` remain unchanged for compatibility, but
+new A9 values represent discarded whole 30 Hz simulation-tick credits rather
+than raw fields. Any comparison with earlier field-unit captures must convert
+units explicitly. No target or FPS result has yet been recorded.
+
+The forced serial target build exits zero after 331 seconds through the
+DLL-safe wrapper. Exact artifacts are ELF SHA-256
+`6685d058d876119118b2a5a65a5a682111a29596aff4ce24901954ee6073f689`
+(8,694,212 bytes), ISO `7fbb642744a36efafc772c79148839009fe95729afd3ad11d0fca4ee8ab1834b`,
+and CUE `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`.
+The broad verifier separately exits on the retained native-math census error
+`_play_cutscene -> _cutscene_bbh_death`; it remains unchecked. Exact-ELF
+cadence capture is the next gate.
+
+The corrected exact capture completes at
+`docs/saturn/evidence/reports/a9-step5-frame-adapter-throughput-2026-08-05.json`.
+All ten queue generations retire (`QN=QR=10`, `QW=QF=QQ=0`) and every interval
+executes one simulation tick rather than six. The trace's real observed-field
+deltas are `13,12,13,13,14,14,14,14,14`: 4.463 FPS mean and 4.286
+median/1%-low, 2.752x / +175% over the 1.622-FPS Step 0 mean. The summarizer now
+uses coherent `cadence.observed_vblank_generation` for ISR-field time and keeps
+source presentation-generation deltas separate; legacy no-cadence captures
+retain their fallback. Focused measurement tests pass 29/29 and independent
+measurement rereview is GO. Manual Ymir remains open.
+Independent measurement rereview is **GO**. On-disk artifact hashes match the
+report, cadence/event generations 1--10 agree, ISR stamps sum to 121 fields
+across nine intervals, and all queue generations retire without waits/faults.
+Explicit negative unit cases pass for mixed-clock and generation-mismatch
+branches; manual Ymir remains open.

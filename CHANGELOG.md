@@ -10,6 +10,17 @@
   service/poll actions, two-phase target publication acknowledgement,
   previous-frame reuse, and dropped-credit telemetry. Mutation gates reject
   four-tick catch-up, repeated-observation credit, and incomplete publication.
+- Replaced sourceboot's per-outer-loop simulation catch-up with the reviewed
+  six-action frame adapter. Authoritative game logic remains 30 Hz, useful
+  render/transfer/presentation service remains field-rate, successful hardware
+  publication is acknowledged before VDP2/cadence evidence, and generation
+  zero stays reserved across scheduler, snapshots, and VDP1 banks. Existing
+  `vblank_credit` telemetry names remain stable, but now report discarded whole
+  30 Hz tick credits rather than raw fields.
+- Corrected throughput reporting to derive FPS from the cadence trace's real
+  ISR VBlank clock after simulation and presentation generations were
+  decoupled. This prevents a false 60-FPS report; the exact A9 adapter capture
+  measures 4.463 FPS mean, a 2.752x improvement over its pinned baseline.
 
 - Added a 60-byte cache-through A9 cadence trace and exact-capture decoding for
   wrap-safe VBlank crossings in simulation, synchronous frame construction,

@@ -42,33 +42,21 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
         self.frame_bank_header = FRAME_BANK_H.read_text(encoding="utf-8")
         self.main = extract_c_function(self.source, "main")
 
-    def test_stale_iterations_progress_pending_transfers_before_vblank_wait(self) -> None:
-        """A serial CPU-DMAC/SCU-DMA pair must not advance only once per field."""
-        loop_start = self.main.index("for (;;)")
-        stale_if = self.main.index(
-            "if (scheduler_now == sourceboot_presentation_generation)", loop_start
+    def test_scheduler_poll_action_services_once_before_wait(self) -> None:
+        """Transfer service is bounded to one nonblocking opportunity per field."""
+        poll = extract_c_function(self.source, "sourceboot_frame_poll_transfers")
+        dispatch = extract_c_function(
+            self.source, "sourceboot_frame_pipeline_dispatch"
         )
-        stale_wait = self.main.index(
-            "sm64_saturn_source_runtime_wait_vblank();", stale_if
+        self.assertEqual(
+            poll.count("sm64_saturn_vdp1_frame_bank_poll_transfers("), 1
         )
-        before_stale_wait = self.main[loop_start:stale_wait]
-        stale_branch_before_wait = self.main[stale_if:stale_wait]
-
-        self.assertIn(
-            "sm64_saturn_vdp1_frame_bank_poll_transfers(",
-            before_stale_wait,
-            "pending transfers must be polled before the stale-field VBlank wait",
-        )
-        self.assertIn(
-            "sourceboot_vdp1_transfer_pending",
-            stale_branch_before_wait,
-            "the stale path must distinguish an in-flight transfer from idle",
-        )
-        self.assertIn(
-            "continue;",
-            stale_branch_before_wait,
-            "an incomplete transfer must re-enter the loop for another poll before VBlank",
-        )
+        self.assertNotRegex(poll, r"\b(?:for|while)\s*\(")
+        poll_case = dispatch.index("case SM64_SATURN_FRAME_POLL_TRANSFERS:")
+        wait_case = dispatch.index("case SM64_SATURN_FRAME_WAIT_VBLANK:")
+        self.assertLess(poll_case, wait_case)
+        self.assertIn("sm64_saturn_source_runtime_wait_vblank();",
+                      dispatch[wait_case:])
 
     def test_partial_destination_failure_poison_blocks_old_bank_presentation(self) -> None:
         """Old metadata must never plot over a partially overwritten VDP1 bank."""
@@ -78,23 +66,22 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
             "sourceboot needs a persistent fail-closed destination-poison state",
         )
 
-        quarantine = self.main.index(
-            "SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED"
-        )
-        quarantine_exit = self.main.index(
+        poll = extract_c_function(self.source, "sourceboot_frame_poll_transfers")
+        quarantine = poll.index("SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED")
+        quarantine_exit = poll.index(
             "sourceboot_vdp1_transfer_pending = NULL;", quarantine
         )
         self.assertIn(
             "sourceboot_vdp1_destination_poisoned = true;",
-            self.main[quarantine:quarantine_exit],
+            poll[quarantine:quarantine_exit],
             "a failed transfer must poison the shared resident destination before clearing ownership",
         )
 
-        presentation = self.main.index("const uint32_t presentation_generation =")
-        presentation_call = self.main.index("sourceboot_present_generation(", presentation)
+        reuse = extract_c_function(self.source, "sourceboot_frame_reuse_previous")
+        presentation_call = reuse.index("sourceboot_present_generation(")
         self.assertIn(
             "!sourceboot_vdp1_destination_poisoned",
-            self.main[presentation:presentation_call],
+            reuse[:presentation_call],
             "presentation must remain disabled after any partial resident-bank write",
         )
 
@@ -147,6 +134,9 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
                 f"{field} must be explicitly zero when the terminal boundary does not wait",
             )
 
+        telemetry = extract_c_function(
+            self.source, "sourceboot_frame_update_telemetry"
+        )
         for field in (
             "command_cpu_dmac_wait_ticks_last",
             "command_cpu_dmac_wait_ticks_accum",
@@ -154,19 +144,20 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
             "gouraud_scu_dma_wait_ticks_accum",
         ):
             self.assertRegex(
-                self.main,
+                telemetry,
                 rf"{field}\s*=\s*0U\s*;",
                 f"{field} must be explicitly zero on the ordinary nonblocking path",
             )
 
         increment = "sourceboot_vdp1_transfer_queued_not_started++;"
+        poll = extract_c_function(self.source, "sourceboot_frame_poll_transfers")
         self.assertEqual(
-            self.main.count(increment),
+            poll.count(increment),
             1,
             "one submitted transfer may contribute at most one queue-not-started event",
         )
-        increment_at = self.main.index(increment)
-        guard_window = self.main[max(0, increment_at - 500) : increment_at]
+        increment_at = poll.index(increment)
+        guard_window = poll[max(0, increment_at - 500) : increment_at]
         self.assertIn(
             "!saturn_dma_queue_sequence_started(",
             guard_window,

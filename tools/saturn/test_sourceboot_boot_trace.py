@@ -154,15 +154,17 @@ def assert_boot_trace_contract(text: str) -> None:
     if not thread_before < thread_handoff < thread_after:
         raise AssertionError("thread5 trace must bracket the handoff")
 
-    stale_before = main.index("SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE")
-    stale_wait = main.index("sm64_saturn_source_runtime_wait_vblank();", stale_before)
-    stale_after = main.index("SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER", stale_wait)
+    dispatch = extract_c_function(text, "sourceboot_frame_pipeline_dispatch")
+    stale_before = dispatch.index("SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_BEFORE")
+    stale_wait = dispatch.index("sm64_saturn_source_runtime_wait_vblank();", stale_before)
+    stale_after = dispatch.index("SOURCEBOOT_BOOT_TRACE_STAGE_STALE_WAIT_AFTER", stale_wait)
     if not stale_before < stale_wait < stale_after:
         raise AssertionError("stale trace must bracket the VBlank wait")
 
-    source_before = main.index("SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE")
-    source_tick = main.index("sourceboot_run_source_tick();", source_before)
-    source_after = main.index("SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER", source_tick)
+    run_tick = extract_c_function(text, "sourceboot_frame_run_sim_tick")
+    source_before = run_tick.index("SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE")
+    source_tick = run_tick.index("sourceboot_run_source_tick();", source_before)
+    source_after = run_tick.index("SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER", source_tick)
     if not source_before < source_tick < source_after:
         raise AssertionError("source tick trace must bracket the source tick")
 

@@ -104,6 +104,44 @@ source-complete. Fresh direct nominal and three mutation runs pass their exact
 contracts, and the gate is now in `verify-all`; independent rereview is GO.
 Step 5 is active with its adapter contract independently RED 7/7 against the
 legacy loop.
+
+Step 5's source adapter now passes 29/29 focused contracts, but pre-target
+review reopened the scheduler: elapsed VBlanks currently become simulation
+credits 1:1, making healthy source logic 60 Hz rather than 30 Hz. A two-field
+fractional accumulator is active repair scope. No target build or FPS claim is
+permitted until it and rereview pass.
+
+The 30 Hz accumulator now passes review. Combined review still blocks target
+build because presentation telemetry is emitted before scheduler publication
+acknowledgement and because scheduler generation zero conflicts with downstream
+snapshot/frame-bank rejection. Ack-before-evidence ordering and a consistent
+skip-zero generation policy are active parallel repairs.
+
+Both combined-review repairs are source-complete: scheduler and sourceboot use
+the same nonzero successor, and publish acknowledgement now precedes telemetry,
+presentation, and cadence evidence. The focused adapter/source sweep is GREEN
+30/30; scheduler nominal and mutation contracts remain GREEN. Final rereview is
+active before target compilation.
+
+Final combined rereview is GO. Steps 1--5 are source-complete and the first
+serial target build is active. Legacy `vblank_credit` field names are retained,
+but their A9 values now mean discarded whole 30 Hz simulation-tick credits, not
+raw VBlank fields; captures must not compare those units without conversion.
+
+The first serialized Step 5 target build passes in 331 seconds. Exact ELF is
+`6685d058...6073f689` (8,694,212 bytes), ISO `7fbb6427...ab1834b`, and CUE
+`cdbf0bfa...f46dba7`. The broader verifier remains red only at the retained
+native-math census error for `_play_cutscene -> _cutscene_bbh_death`; its broad
+gate stays unchecked. Exact-ELF cadence capture is active.
+
+The corrected exact capture proves the death spiral is gone: each of nine
+intervals has one simulation tick instead of six, field deltas are 12--14, and
+all ten queue generations retire without waits/faults. FPS is 4.463 mean and
+4.286 median/1%-low, 2.752x / +175% over the exact 1.622-FPS Step 0 baseline.
+The summarizer's decoupled-clock regression is fixed with 29/29 tests and
+measurement rereview is GO with exact artifact identity and coherent 10-edge
+evidence. Mixed-clock and cadence/event-mismatch negative cases pass. The
+checkpoint is active; manual Ymir remains next.
 The post-repair direct host fixtures for render-job runtime, actor meshlets,
 DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
 did not execute them because the known MSYS-to-Windows path conversion defect

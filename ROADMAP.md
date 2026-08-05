@@ -78,6 +78,29 @@ GO, while the adapter's seven source-contract tests are RED against the legacy
 loop. Step 5 is active; the compatibility adapter does not own sourceboot sequencing yet;
 the existing renderer and A8 transport remain unchanged for that first
 visible-uplift experiment.
+The Step 5 adapter is source-GREEN across 29 focused contracts, but target
+build is blocked by a newly exposed cadence defect: scheduler simulation credit
+is presently field-rate rather than the source game's 30 Hz two-field rate.
+Repair the model accumulator without slowing field-rate service/poll/present,
+then rereview before target evidence.
+The half-rate accumulator is now healthy; two integration repairs remain:
+acknowledge successful publication before VDP2/cadence evidence, and align all
+layers on a nonzero generation policy because existing snapshot/frame-bank
+ownership reserves zero as invalid.
+Both repairs are source-complete with 30/30 focused source tests; final
+rereview precedes the first serial target compile.
+Final rereview is GO; the serial target compile is now the active gate. Legacy
+credit telemetry names remain ABI-stable but A9 interprets their values as
+whole discarded 30 Hz tick credits rather than fields.
+
+The first serial target compile is GREEN at ELF `6685d058...6073f689`; exact
+cadence capture is next. The broader verifier remains separately blocked by the
+pre-existing native-math census dispatcher error and is not treated as green.
+The corrected exact A9 capture removes the six-tick death spiral and reduces
+presentation intervals from 36--38 to 12--14 fields: 4.463 FPS mean and 4.286
+median/1%-low, 2.752x / +175% over baseline. The summarizer's stale clock
+assumption is repaired with 29/29 tests and measurement rereview is GO. Commit
+the checkpoint, then run manual Ymir confirmation.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

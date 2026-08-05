@@ -1812,7 +1812,7 @@ shared bank transport owns every frame upload.
   this bounded experiment with direct alternating-bank writes.
 
 - [x] **Step 1: Write a deterministic scheduler model test — COMPLETE;
-  REREVIEW GO**
+  FINAL REREVIEW GO**
 
   Feed synthetic VBlank/render/transfer completion events. Assert snapshot N
   presentation while simulation is N+1, no mixed generations, useful job
@@ -1830,7 +1830,8 @@ shared bank transport owns every frame upload.
 
   Expected: missing scheduler and existing catch-up mutation failure.
 
-- [x] **Step 4: Implement the pure scheduler first — COMPLETE; REREVIEW GO**
+- [x] **Step 4: Implement the pure scheduler first — COMPLETE; FINAL REREVIEW
+  GO**
 
   Keep it hardware-free and drive all state transitions through explicit
   events. Increment dropped-credit and previous-frame-reuse counters rather
@@ -1866,7 +1867,8 @@ shared bank transport owns every frame upload.
   handoff on this host after compilation, so direct executable evidence is
   retained and the wrapper issue is not misreported as a model failure.
 
-- [ ] **Step 5: Integrate the outer sourceboot loop — ACTIVE; RED 7/7**
+- [x] **Step 5: Integrate the outer sourceboot loop — SOURCE COMPLETE;
+  30/30 GREEN; FINAL REREVIEW GO**
 
   Advance authoritative simulation, publish immutable snapshot, notify the
   persistent slave, let the master claim work after its sim phase, poll DMA,
@@ -1879,20 +1881,73 @@ shared bank transport owns every frame upload.
   bank publication; immutable previous-frame reuse; WAIT-only VBlank blocking;
   and scheduler-owned dropped-credit telemetry.
 
+  Steps 1--4 and the Step 5 RED contract are checkpointed at `d49b8677` after
+  independent rereview GO. The Step 5 compatibility adapter is now delegated
+  for GREEN implementation; target build and uplift evidence remain unchecked.
+
+  The compatibility adapter and reconciled A8/presentation/cadence/boot/source
+  contracts are now GREEN 29/29. Pre-target review then found the pure model
+  converts every elapsed VBlank directly into simulation credit, which would
+  run healthy SM64 logic at 60 Hz instead of the required one tick per two
+  fields. Target build is blocked while a fractional two-field accumulator is
+  added inside the scheduler; SERVICE/POLL/presentation must remain field-rate.
+
+  The 30 Hz repair is healthy, but combined review remains NO-GO on two focused
+  seams. Successful target publication currently commits VDP2/cadence evidence
+  before scheduler acknowledgement refreshes displayed generation and credit
+  state; required order is target publish, exact success acknowledgement,
+  telemetry refresh/presentation, then cadence append. The scheduler also
+  admits wrapped generation zero while render snapshots and VDP1 banks reject
+  zero. Repair uses one documented nonzero generation policy across scheduler
+  and sourceboot rather than widening every downstream ownership API.
+
+  Both repairs are source-complete. Scheduler and sourceboot now share one
+  `UINT32_MAX -> 1` successor helper, keeping zero reserved. Successful publish
+  order is target bank publish, exact acknowledgement with the actual result,
+  telemetry refresh, terminal presentation, then cadence append; failure
+  refreshes telemetry but cannot present or append. The combined focused suite
+  is GREEN 30/30 plus nominal scheduler PASS and three caught mutations.
+  Final combined rereview is GO for the planned serial target build. Legacy
+  `vblank_credit` telemetry identifiers are retained for compatibility, but A9
+  values now count whole discarded 30 Hz simulation-tick credits rather than
+  raw fields; capture comparisons must use that documented unit change.
+
 - [ ] **Step 6: Verify generation-coherent VDP2 composition**
 
   Sky camera and HUD metrics must name the same displayed/rendered/simulation
   generations. VDP2 remains geometry-free.
 
-- [ ] **Step 7: Run frame-pipeline, snapshot, queue, recovery, transfer, VDP2, runtime, and replay-host gates**
+- [ ] **Step 7: Run frame-pipeline, snapshot, queue, recovery, transfer, VDP2, runtime, and replay-host gates — ACTIVE (TARGET BUILD FIRST)**
 
   Expected: all PASS with explicit one-generation presentation lag.
 
-- [ ] **Step 8: Update documents, commit, and complete two-stage review**
+  The serialized forced target build passes in 331 seconds through
+  `with-msys-toolchain.ps1`, producing exact ELF
+  `6685d058...6073f689` (8,694,212 bytes), ISO
+  `7fbb6427...ab1834b`, and CUE `cdbf0bfa...f46dba7`. The broader `make verify`
+  rebuild reaches and passes its narrow source tests but remains unchecked: it
+  exits on the pre-existing native-math census error `INDIRECT_EDGE has
+  unreachable dispatcher: _play_cutscene -> _cutscene_bbh_death`. Do not
+  substitute the target compile for that broader gate. Automated cadence
+  capture is active against the exact ELF.
+
+  The exact corrected capture completes ten edges with no queue wait/fault
+  (`QN=QR=10`, `QW=QF=QQ=0`) and one simulation tick per edge. Field deltas are
+  `13,12,13,13,14,14,14,14,14`: 4.463 FPS mean and 4.286 median/1%-low versus
+  Step 0's 1.622 mean, a 2.752x / +175% uplift. The capture summarizer now uses
+  coherent cadence `observed_vblank_generation` for ISR-field time while
+  retaining source presentation-generation coherence separately; 29/29 tests
+  pass. Independent measurement rereview is GO.
+  Independent measurement rereview is GO: report identity/hashes match disk,
+  all ten events are generation-coherent, the 121 total fields yield the stated
+  4.4628-FPS mean, and legacy fallback remains intact. Explicit mixed-clock and
+  cadence/event-mismatch negative tests pass.
+
+- [ ] **Step 8: Update documents, commit, and complete two-stage review — CHECKPOINT ACTIVE**
 
   Commit with `perf(saturn): overlap render snapshots with simulation`.
 
-- [ ] **Step 9: Build one serial integrated experimental CUE and manually test**
+- [ ] **Step 9: Build one serial integrated experimental CUE and manually test — BUILD/CAPTURE GREEN; MANUAL YMIR TEST NEXT**
 
   Use the same BOB/live-input/Q16-camera role as Task 1. Record hashes,
   controls, visible geometry, fault counters, displayed/rendered/simulation

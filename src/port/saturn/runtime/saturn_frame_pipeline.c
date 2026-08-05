@@ -8,10 +8,14 @@
 #define SM64_SATURN_FRAME_MAX_SIM_TICKS 2U
 #endif
 
+#define SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR 2U
+
 static void pipeline_observe_vblank(sm64_saturn_frame_pipeline_t *pipeline,
                                     uint32_t vblank_count)
 {
     const uint32_t elapsed = vblank_count - pipeline->last_vblank_count;
+    uint32_t tick_credits;
+    uint32_t fractional_fields;
     uint32_t capacity;
     uint32_t accepted;
 
@@ -19,6 +23,16 @@ static void pipeline_observe_vblank(sm64_saturn_frame_pipeline_t *pipeline,
 #if !defined(SM64_SATURN_FRAME_PIPELINE_TEST_READD_CREDIT)
     pipeline->last_vblank_count = vblank_count;
 #endif
+    /* Presentation observes every field, while authoritative SM64 simulation
+     * remains 30 Hz. Split the quotient/remainder calculation so the
+     * wrap-safe uint32_t field delta never overflows when the carried odd
+     * field is added. */
+    tick_credits = elapsed / SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR;
+    fractional_fields = pipeline->sim_vblank_remainder +
+                        (elapsed % SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR);
+    tick_credits += fractional_fields / SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR;
+    pipeline->sim_vblank_remainder =
+        (uint8_t)(fractional_fields % SM64_SATURN_FRAME_SIM_VBLANK_DIVISOR);
     if (!pipeline->presentation_pending) {
         pipeline->presentation_pending = true;
     }
@@ -29,16 +43,16 @@ static void pipeline_observe_vblank(sm64_saturn_frame_pipeline_t *pipeline,
         capacity -= pipeline->available_sim_credit;
     else
         capacity = 0U;
-    accepted = elapsed < capacity ? elapsed : capacity;
+    accepted = tick_credits < capacity ? tick_credits : capacity;
     pipeline->available_sim_credit =
         (uint8_t)(pipeline->available_sim_credit + accepted);
-    pipeline->dropped_sim_credit += elapsed - accepted;
+    pipeline->dropped_sim_tick_credits += tick_credits - accepted;
 }
 
 static void pipeline_finish_presentation(
     sm64_saturn_frame_pipeline_t *pipeline)
 {
-    pipeline->dropped_sim_credit += pipeline->available_sim_credit;
+    pipeline->dropped_sim_tick_credits += pipeline->available_sim_credit;
     pipeline->available_sim_credit = 0U;
     pipeline->presentation_pending = false;
 }
@@ -68,12 +82,20 @@ void sm64_saturn_frame_pipeline_init(sm64_saturn_frame_pipeline_t *pipeline,
     pipeline->action_generation = displayed_generation;
 }
 
+uint32_t sm64_saturn_frame_pipeline_next_generation(uint32_t generation)
+{
+    const uint32_t next = generation + 1U;
+    return next != 0U ? next : 1U;
+}
+
 static sm64_saturn_frame_action_t pipeline_run_sim_tick(
     sm64_saturn_frame_pipeline_t *pipeline)
 {
     pipeline->available_sim_credit--;
     pipeline->sim_ticks_this_presentation++;
-    pipeline->simulation_generation++;
+    pipeline->simulation_generation =
+        sm64_saturn_frame_pipeline_next_generation(
+            pipeline->simulation_generation);
     pipeline->action_generation = pipeline->simulation_generation;
     if (!pipeline->render_active) {
         pipeline->render_active = true;

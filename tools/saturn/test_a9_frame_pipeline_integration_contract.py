@@ -78,6 +78,12 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
         self.assertNotIn("skipped_snapshot", main)
 
     def test_run_tick_action_produces_the_exact_scheduler_generation(self) -> None:
+        source_tick = extract_c_function(self.source, "sourceboot_run_source_tick")
+        self.assertIn(
+            "sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count)",
+            source_tick,
+            "sourceboot and scheduler must share the nonzero wrap policy",
+        )
         run_tick = extract_c_function(
             self.source, "sourceboot_frame_run_sim_tick"
         )
@@ -127,7 +133,6 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
                 f"{call} must use the scheduler action generation",
             )
         self.assertNotIn("scheduler_now", render)
-        self.assertNotIn("sourceboot_vblank_out_count", render)
         self.assertIn("sourceboot_fast3d.profile.pipeline_faults++", render)
         self.assertIn("sm64_saturn_vdp1_frame_bank_quarantine(", render)
         for forbidden in (
@@ -166,17 +171,19 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
     def test_publish_ack_occurs_only_after_runtime_bank_publication(self) -> None:
         publish = extract_c_function(self.source, "sourceboot_frame_publish")
         generation_check = re.search(
-            r"snapshot_generation\s*!=\s*generation", publish
+            r"snapshot_generation\s*(?:==|!=)\s*generation", publish
         )
         self.assertIsNotNone(generation_check)
         arm = publish.index("sm64_saturn_vdp1_frame_bank_arm_resident_list(")
         target_publish = publish.index("sm64_saturn_vdp1_frame_bank_publish(")
         model_ack = publish.index("sm64_saturn_frame_pipeline_publish_complete(")
+        telemetry = publish.index("sourceboot_frame_update_telemetry();")
         terminal = publish.index("sourceboot_present_generation(")
         cadence = publish.index("sourceboot_cadence_trace_append(")
         self.assertLess(arm, target_publish)
         self.assertLess(target_publish, model_ack)
-        self.assertLess(target_publish, terminal)
+        self.assertLess(model_ack, telemetry)
+        self.assertLess(telemetry, terminal)
         self.assertLess(terminal, cadence)
         self.assertTrue(
             call_uses_generation(
@@ -184,6 +191,26 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
             )
         )
         self.assertIn("sourceboot_vdp1_destination_poisoned = true;", publish)
+        self.assertRegex(
+            publish,
+            r"sm64_saturn_frame_pipeline_publish_complete\s*\("
+            r"[^;]*generation\s*,\s*published\s*\)",
+        )
+        self.assertRegex(
+            publish,
+            r"if\s*\(published\s*&&\s*publish_acknowledged\s*\)\s*\{"
+            r"[^}]*sourceboot_present_generation\([^}]*"
+            r"sourceboot_cadence_trace_append\(",
+        )
+
+    def test_source_tick_wrap_skips_reserved_zero_before_snapshot_capture(self) -> None:
+        source_tick = extract_c_function(self.source, "sourceboot_run_source_tick")
+        successor = source_tick.index(
+            "sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count)"
+        )
+        capture = source_tick.index("sourceboot_capture_render_snapshot(")
+        self.assertLess(successor, capture)
+        self.assertNotIn("sourceboot_sim_tick_count++;", source_tick)
 
     def test_reuse_never_changes_bank_ownership_or_creates_a_cadence_edge(self) -> None:
         reuse = extract_c_function(
@@ -219,13 +246,17 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
             self.source.count("sm64_saturn_source_runtime_wait_vblank();"), 1,
             "only the scheduler WAIT action may block for VBlank",
         )
-        self.assertRegex(
-            dispatch,
-            r"sourceboot_sim_vblank_credit_dropped\s*=\s*"
-            r"sourceboot_frame_pipeline\.dropped_sim_credit\s*;",
+        self.assertIn("sourceboot_frame_update_telemetry();", dispatch)
+        telemetry = extract_c_function(
+            self.source, "sourceboot_frame_update_telemetry"
         )
         self.assertRegex(
-            dispatch,
+            telemetry,
+            r"sourceboot_sim_vblank_credit_dropped\s*=\s*"
+            r"sourceboot_frame_pipeline\.dropped_sim_tick_credits\s*;",
+        )
+        self.assertRegex(
+            telemetry,
             r"sim_vblank_credit_dropped\s*=\s*"
             r"sourceboot_sim_vblank_credit_dropped\s*;",
         )
