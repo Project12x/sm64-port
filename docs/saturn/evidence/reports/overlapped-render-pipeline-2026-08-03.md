@@ -2462,3 +2462,17 @@ automated 5.294 FPS measurement. Controls, BOB traversal, and camera feel have
 Owner subsequently confirmed controls and camera are normal. Manual Step 6 is
 therefore complete for the current BOB demonstration; full-game/non-BOB
 coverage and broad native-math verification remain separate open gates.
+
+### Native-math blocker reconciliation handoff (2026-08-05)
+
+The successor sprint's Task 1 repaired the inherited renderer-oracle source
+failure in `f349fe9f` and then repaired review-found identity/ownership gaps in
+`52c75422`. A fresh independent rereview is PASS: suppression now binds to the
+actual supplied ELF digest and reviewed source hashes, rejects a BOB-to-CCM
+route rewrite, derives callback facts only from the factory-returned table
+activated by renderer initialization, and body-scopes lifecycle roots. Focused
+unit evidence is `222/222` green; the mutation gate and an equivalent MSYS
+normal host gate are green. This does not close the broad native-math gate:
+the prescribed Qt wrapper retains its documented unmatched-quote failure and
+the previous exact-ELF verifier run reached its `600.7s` cap. No target,
+Ymir, hardware, or manual evidence is attributed to this reconciliation.

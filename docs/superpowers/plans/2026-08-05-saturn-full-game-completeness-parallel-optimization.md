@@ -24,6 +24,7 @@
 - 2026-08-05 audio-scheduling audit: retain semantic, pointer-free SH-2 commands. Sequence/layer/note timing, ADSR, allocation, desired-voice construction, slot-shadow comparison, and SCSP register writes all remain MC68000 work; a native cross-CPU `SaturnVoiceState` table is explicitly rejected.
 - 2026-08-05 residency audit: a complete sound-RAM clear is legal only during cold boot or explicit driver recovery. Scene/package preparation may write only validated unowned spans, must retain the active generation through commit, and may retire it only after the replacement generation is live.
 - 2026-08-05 transfer audit: CPU copy is the correctness baseline. SCU DMA to sound RAM is an optional later optimization and may be enabled only after target evidence proves the exact source/destination legality, cache/barrier ordering, and non-interference with renderer DMA ownership.
+- 2026-08-05 native-math review repair: BOB null-camera suppression is authorized only after the verifier hashes the supplied linked ELF and every reviewed source input, confirms the unchanged BOB route to the terminal return, and rejects every extra `levelNum` rewrite/use. Renderer callback facts come only from the table returned by the factory that the renderer initialization actually activates; lifecycle ownership is proven inside the extracted roots. This is source-complete under `f349fe9f..52c75422`; the prescribed Qt wrapper failure and the capped broad exact-ELF run remain open evidence, not green gates.
 
 ## Prior art and reuse mode
 
@@ -106,7 +107,7 @@ required target/Ymir/manual gate for that task is complete. Checked means the
 task's implementation, reviews, evidence, and transition documentation are
 all complete.
 
-- [ ] Task 1 — reconcile the inherited native-math publication blocker
+- [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
 - [ ] Task 2 — add authoritative feature and package identity
 - [ ] Task 3 — generate the transitive BOB closure
 - [ ] Task 4 — compile the generic S64P schema and provisional fixtures
@@ -146,12 +147,19 @@ all complete.
 
 - Modify: `tools/saturn/verify_sh2_native_math.py`
 - Modify: `tools/saturn/test_verify_sh2_native_math.py`
+- Modify: `tools/saturn/sh2_native_math_route_oracle_v1.txt`
 - Modify: `CHANGELOG.md`
 - Reconcile after review: this plan, new SDD ledger, old Task 10 plan/evidence status only; preserve unrelated dirty ledger work.
 
 **Contract:** The verifier may remove only the two exact unreachable BOB null-camera-trigger indirect calls proven by the pinned route. It must fail closed for a non-BOB route, non-null BOB camera table, changed guard/branch shape, a third reachable indirect call, or a missing owned disassembly block. It may not fabricate calls or static facts.
 
-- [ ] Add/confirm all five mutations in `test_verify_sh2_native_math.py` and run RED:
+**Design correction (2026-08-05):** The inherited route oracle still names
+pre-descriptor-queue worker symbols that the exact ELF no longer contains.
+Task 1 updates the checked route-oracle text and any directly coupled tracked
+digest fixture as source-of-truth inputs; it must not conceal those stale names
+by filtering them only in Python.
+
+- [x] Add/confirm all five mutations in `test_verify_sh2_native_math.py` and run RED:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_verify_sh2_native_math.py
@@ -159,8 +167,8 @@ all complete.
 
   Expected pre-fix result: the checked-in renderer oracle test errors with `expected one terrain_worker definition, got 0`; mutations must not be accidentally green through permissive parsing.
 
-- [ ] Repair the parser/oracle against the actual descriptor-queue source shape; keep the proof pinned to the source and ELF identities.
-- [ ] Run focused GREEN and the two mutation gates serially:
+- [x] Repair the parser/oracle against the actual descriptor-queue source shape; keep the proof pinned to the source and ELF identities.
+- [ ] Run focused GREEN and the two mutation gates serially — source suite (`222/222`), prescribed mutation gate, and equivalent MSYS normal host gate passed; the exact Qt `mingw32-make` wrapper command remains unchecked because `/usr/bin/sh` ends with the documented unmatched-quote error:
 
   ```powershell
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_verify_sh2_native_math.py
@@ -168,8 +176,8 @@ all complete.
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-render-native-math-mutation
   ```
 
-- [ ] Commit independently as `fix(saturn): reconcile descriptor native-math oracle` with changelog reasoning; do not mix scene/audio/renderer features.
-- [ ] Obtain clean task review, then record whether the full Task 10 host gate is now runnable; do not mark linked target evidence green from host tests.
+- [x] Commit independently as `fix(saturn): reconcile descriptor native-math oracle` with changelog reasoning; do not mix scene/audio/renderer features. Follow-up identity hardening is `52c75422`.
+- [x] Obtain clean task review, then record whether the full Task 10 host gate is now runnable; do not mark linked target evidence green from host tests. Rereview PASS: the broad gate is runnable, but its existing exact-ELF run timed out at `600.7s` and is still unchecked.
 
 ### Task 2: Add authoritative feature and package identity
 

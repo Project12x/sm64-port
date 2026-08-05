@@ -2542,11 +2542,14 @@ expected FPS lever.
   catch-up, and verify `SATURN_RENDERER_PIPELINE` is an actual validated
   compile-time feature rather than an output-directory label.
 
-- [ ] **Step 2: Run the complete host gate serially** — active; source slice
-  is green, but the dirty native-math verifier currently errors while deriving
-  the renderer oracle (`expected one terrain_worker definition, got 0`). The
-  remaining runtime/generator/native-math gates stay unchecked until that
-  unrelated census state is reconciled.
+- [ ] **Step 2: Run the complete host gate serially** — active; the inherited
+  native-math source/oracle blocker is source-complete under `f349fe9f` and
+  `52c75422`, with a clean independent rereview. Its focused suite (`222/222`),
+  mutation gate, and equivalent MSYS normal host gate are green. This complete
+  host gate remains unchecked: the prescribed Qt `mingw32-make` wrapper still
+  reaches the documented MSYS unmatched-quote failure, and the prior broad
+  exact-ELF verifier run timed out after `600.7s`. Neither open item is
+  substituted with the narrow results or treated as target evidence.
 
   Run the focused targets from Tasks 1–9, `verify-tools`,
   `verify-runtime-contracts`, `verify-dual-frame-bank` (which invokes
