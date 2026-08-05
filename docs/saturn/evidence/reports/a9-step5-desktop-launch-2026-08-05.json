@@ -1,0 +1,39 @@
+{
+  "created_utc": "2026-08-05T06:46:13.861425+00:00",
+  "execution": {
+    "alive_after_monitor": true,
+    "exit_code": null,
+    "monitor_seconds": 20.0,
+    "pid": 34856,
+    "requested": true,
+    "started_utc": "2026-08-05T06:46:13.861425+00:00",
+    "stderr_log": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\docs\\saturn\\evidence\\reports\\a9-step5-desktop-launch-2026-08-05.stderr.log",
+    "stdout_log": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\docs\\saturn\\evidence\\reports\\a9-step5-desktop-launch-2026-08-05.stdout.log"
+  },
+  "plan": {
+    "command": [
+      "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent\\apps\\ymir-sdl3\\Release\\ymir-sdl3.exe",
+      "--profile",
+      "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+      "--disc",
+      "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue"
+    ],
+    "cue": {
+      "bytes": 88,
+      "modified_utc": "2026-08-05T06:26:33.844579+00:00",
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7"
+    },
+    "gui_stdout_limit": "Ymir SDL3 is interactive. The helper captures only output emitted during its bounded monitor window; after it returns, a still-live GUI process has no attached report writer for later output or exit.",
+    "iso": {
+      "bytes": 4651008,
+      "modified_utc": "2026-08-05T06:26:32.651468+00:00",
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "7fbb642744a36efafc772c79148839009fe95729afd3ad11d0fca4ee8ab1834b"
+    },
+    "launcher": "desktop-ymir-profile",
+    "profile": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+    "ram_cart": "profile-managed-32-mbit-dram",
+    "working_directory": "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent\\apps\\ymir-sdl3\\Release"
+  }
+}

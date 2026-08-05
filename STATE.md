@@ -145,6 +145,9 @@ checkpoint is active; manual Ymir remains next.
 Checkpoint `36f4fe58` lands the reviewed A9 adapter and exact 2.752x evidence.
 Desktop Ymir manual confirmation is the active A9 gate; the unrelated native-
 math census failure remains separately unchecked.
+Desktop Ymir PID 34856 is live/responding with the exact A9 CUE and the verified
+profile-managed 32-Mbit DRAM cart. Manual speed, controls, and geometry results
+await the owner; no observation is inferred from process survival.
 The post-repair direct host fixtures for render-job runtime, actor meshlets,
 DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
 did not execute them because the known MSYS-to-Windows path conversion defect

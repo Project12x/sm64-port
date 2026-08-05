@@ -1917,3 +1917,9 @@ Implementation and evidence are checkpointed at `36f4fe58`. Independent
 scheduler, adapter, combined-tree, and measurement rereviews are all GO. The
 manual desktop Ymir observation remains open, as does the unrelated broad
 native-math census gate.
+
+The profile-backed desktop helper launched the exact A9 CUE with the project's
+32-Mbit DRAM configuration. PID 34856 remained live/responding after the
+20-second monitor; details are in
+`a9-step5-desktop-launch-2026-08-05.json`. This proves only launch configuration
+and survival. Owner-visible speed, controls, and geometry remain unchecked.

@@ -1960,6 +1960,13 @@ shared bank transport owns every frame upload.
   generations, and qualitative speed. This experimental CUE still does not
   require strict native-math closure.
 
+  Desktop Ymir launch is active at PID 34856 through the profile-backed helper.
+  The exact CUE/ISO identities match the capture, the project profile declares
+  a 32-Mbit DRAM cart, and the GUI remained live/responding after the bounded
+  20-second monitor. Launch report:
+  `docs/saturn/evidence/reports/a9-step5-desktop-launch-2026-08-05.json`.
+  Owner-visible speed/controls/geometry observations remain unchecked.
+
 ### Task 10: Prove scene-neutral behavior and publish the hardened candidate
 
 **Files:**
