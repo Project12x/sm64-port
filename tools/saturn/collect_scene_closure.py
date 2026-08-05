@@ -131,6 +131,23 @@ def _load_model_from_geo(root: Path, level_text: str, model_geos: dict[str, str]
     return sources
 
 
+def _area_levelscript(level_text: str, area: int) -> str:
+    clean = _comment_free(level_text)
+    for match in re.finditer(r"\bAREA\s*\(([^)]*)\)(.*?)\bEND_AREA\s*\(\)", clean, re.S):
+        args = _arguments(match.group(1))
+        if args and re.fullmatch(r"(?:0x)?%X" % area, args[0], re.I):
+            selected = match.group(0)
+            for name in re.findall(r"JUMP_LINK\s*\(\s*(script_func_[A-Za-z0-9_]+)\s*\)", selected):
+                match = re.search(r"static\s+const\s+LevelScript\s+" + re.escape(name) + r"\s*\[\]\s*=\s*\{", level_text)
+                if match:
+                    depth, cursor = 1, match.end()
+                    while cursor < len(level_text) and depth:
+                        depth += (level_text[cursor] == "{") - (level_text[cursor] == "}"); cursor += 1
+                    selected += level_text[match.start():cursor]
+            return selected
+    raise ClosureError(f"AREA {area} not found")
+
+
 def _geo_source(root: Path, geo_root: str) -> str | None:
     if geo_root == "none": return None
     for path in sorted(root.glob("actors/**/geo.inc.c")) + sorted(root.glob("levels/**/geo*.c")):
@@ -148,6 +165,10 @@ def _features(root: Path, geo_source: str | None) -> list[str]:
 
 def _rules(root: Path, rules_path: Path) -> list[dict]:
     if not rules_path.exists(): return []
+    try:
+        rules_path.resolve().relative_to(root.resolve())
+    except ValueError as error:
+        raise ClosureError(f"rule file outside repository: {rules_path}") from error
     payload = json.loads(rules_path.read_text(encoding="utf-8"))
     if set(payload) != {"schema", "rules"} or payload["schema"] != "sm64-saturn-behavior-spawn-rules-v1":
         raise ClosureError("invalid behavior spawn rules schema")
@@ -250,7 +271,7 @@ def collect_scene_closure(root: Path, level: str, area: int, rules_path: Path) -
     behavior_text = _read(root, behavior_path)
     blocks = _behavior_blocks(behavior_text)
     native_sources = _native_behavior_sources(root)
-    roots = _object_roots(level_text, macro_text, presets)
+    roots = _object_roots(_area_levelscript(level_text, area), macro_text, presets)
     manual_rules = _rules(root, rules_path)
     static_edges: dict[str, list[tuple[str, str, int, str]]] = defaultdict(list)
     for behavior, block in blocks.items():

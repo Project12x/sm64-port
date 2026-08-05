@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Scope LevelScript inline object discovery to the requested `AREA`, while
+  retaining only that area's linked local scripts, so objects from another
+  area cannot inflate a scene package's dependency or capacity closure.
+
 - Extended BOB's reviewed native closure to include Koopa-shell wave, droplet,
   flame, and sparkle chains plus exclamation-box computed cap/star/marker
   contents. This prevents those visible effects and rewards from being omitted
