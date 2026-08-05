@@ -2429,3 +2429,17 @@ closely ported. Scoped implementation/tests/docs/evidence commit: `d8dfe35f`.
 The repaired build has already been consumed and exact-map validated. Do not
 rebuild it. The completed reviews authorize only identity/Ymir capture of the
 same hash-bound ELF/CUE, with no rebuild or test rerun.
+
+### Exact-artifact runtime capture (2026-08-05)
+
+The approved capture completed against the recorded ELF/CUE without rebuilding.
+Target identity matched after 540 startup VBlanks. The report is
+`docs/saturn/evidence/reports/a9a-step11-overlap-throughput-repaired-2026-08-05.json`;
+its ELF SHA is `1905ec8d...fc2e2` and CUE SHA is `cdbf0bfa...f46dba7`.
+
+Nine measurement intervals produced guest FPS mean `5.2941176471`, median
+`5.0`, and 1% low `5.0`. The latest coherent queue reached sequence 10 and
+retirement 10; notify/retire counts were 10/10, queue waits `qw=0`, queue
+failures `qq=0`, and master/slave failures were both zero. This establishes a
+real automated runtime result and a visible improvement over the earlier
+single-digit capture range, but it is not yet manual visual/controls acceptance.

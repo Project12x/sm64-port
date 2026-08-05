@@ -2,8 +2,8 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Task 9A/A9A is **rebuilt, exact-map green, independently reviewed, and ready for
-same-artifact capture**. Specification is PASS; code-quality review found no
+Task 9A/A9A is **rebuilt, exact-map green, independently reviewed, and captured
+at runtime**. Specification is PASS; code-quality review found no
 implementation defect. Its sole documentation-only Important—stale guidance
 that could replace the hash-bound artifact with another rebuild—is corrected.
 The accepted renderer still exposes exact-generation
@@ -43,9 +43,11 @@ leaving `0x74F0` LWRAM. P2 `.uncached=0x260FD810+0x6C8` maps exactly to
 `___end`, and is correctly emitted as `PROGBITS` because it includes Yaul's
 `.uncached.function` cache helpers and initialized slave entry. Commit
 `cfb07a7d` corrects the verifier to require `PROGBITS` exactly; 15/15 focused
-tests and the exact hash-bound ELF now pass. No Ymir run or FPS claim is
-credited. The next action is capture of the existing recorded ELF/CUE only;
-no rebuild or test rerun is authorized.
+tests and the exact hash-bound ELF now pass. The automated capture reports
+5.294 FPS mean, 5.0 median/1% low,
+identity match after 540 VBlanks, ten queue retirements, and zero queue or
+worker failures. Manual visual/controls acceptance remains open; no rebuild is
+authorized for that acceptance.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

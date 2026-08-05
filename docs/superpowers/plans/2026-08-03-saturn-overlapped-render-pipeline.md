@@ -341,8 +341,10 @@ and the evidence report before starting another task.
   retries against that unchanged ELF failed target identity after 600 and
   4,096 startup VBlanks. The bulk arrays now share one LWRAM object and one P2
   accessor while the small lifetime record remains uncached; HWRAM/LWRAM
-  bounds fail before margin subtraction. The repaired target build and exact
-  map now pass; runtime identity/capture and FPS evidence do not yet exist.
+  bounds fail before margin subtraction. The repaired target build, exact map,
+  target identity, and bounded capture now pass; runtime measurement is 5.294
+  FPS mean (median/1% low 5.0) with ten generations retired and no queue
+  failures.
   The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
@@ -2002,15 +2004,17 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** Steps 1--10 are source-complete and independently PASS/APPROVED.
+**Status:** Steps 1--11 are source-complete, independently PASS/APPROVED, and
+the exact repaired artifact has passed target identity and bounded capture.
 The first target build passed but produced an ELF `0x40D0` beyond HWRAM; both
 identity captures against that exact image therefore failed before target
 identity. Fix Round 4 (`d8dfe35f`, evidence `1e1fbe92`) repairs the storage and
 fail-closed link/map contracts. Its independent specification and quality
 review are PASS with no Critical or Important findings and one stale-status
 Minor corrected in this transition. One serialized repaired rebuild, exact map
-validation, and exact-artifact boot/capture are authorized next. No successful
-repaired capture or new FPS evidence exists yet.
+validation, and exact-artifact boot/capture were authorized and are now
+complete. The capture report records the first runtime result for this image;
+manual owner-visible Ymir acceptance remains separate.
 The original RED/implementation checkpoints are `ec81ddc6` and `0f5ccd65`.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
@@ -2357,7 +2361,7 @@ expected FPS lever.
   reviewer authorizes exactly one fresh serialized repaired build followed by
   fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP/REVIEWS PASS; EXACT-ARTIFACT CAPTURE READY**
+- [x] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP/REVIEWS/CAPTURE PASS**
 
   The one repaired build has already been consumed and is exact-map green. Do
   **not** rebuild: another `make -B -j1` would replace the hash-bound artifact.
@@ -2462,8 +2466,8 @@ expected FPS lever.
   and passes 15/15 focused tests. The same exact ELF now passes with HWRAM
   margin 8,488 (`0x2128`) and LWRAM margin 29,936 (`0x74F0`); evidence is
   `docs/saturn/evidence/reports/a9a-step11-repaired-memory-map-2026-08-05.json`.
-  Fresh independent review of `cfb07a7d` is required before Ymir; no rebuild is
-  needed or authorized for that capture.
+  Fresh independent review of `cfb07a7d` authorized Ymir; no rebuild was
+  needed or performed for that capture.
 
   Independent specification review is PASS/GO with no Critical or Important
   findings. It confirms strict `PROGBITS`, all retained fail-closed predicates,
@@ -2476,6 +2480,14 @@ expected FPS lever.
   instruction above and matching aggregate-report text; both are corrected in
   this transition. The resulting GO authorizes only same-artifact identity/
   Ymir capture, with no rebuild or test rerun.
+
+  Capture completed against the exact hash-bound artifact:
+  `docs/saturn/evidence/reports/a9a-step11-overlap-throughput-repaired-2026-08-05.json`.
+  Target identity matched after 540 startup VBlanks. Nine measurement intervals
+  report guest FPS mean `5.2941176471`, median `5.0`, and 1% low `5.0`.
+  Sequence/retirement reached `10/10`; queue notify/retire were `10/10`, with
+  `qw=0`, `qq=0`, and zero master/slave failures. This is automated Ymir
+  throughput evidence, not manual visual/controls acceptance.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 
