@@ -9,13 +9,13 @@ compact position union to transforms. The master keeps
 the final opaque order, stable translucent depth bins, Gouraud/texture state,
 terrain-relative insertion, VDP1 ownership, and presentation.
 
-The dormant A5 queue uses one P2-visible descriptor-keyed release record per
+The active A5 queue uses one P2-visible descriptor-keyed release record per
 terrain phase. WORLD_ADMIT publishes transformed-position completion after its
 payload writes; WORLD_LOWER publishes the resulting record count, sequence,
 claimant state, and writer lane before graph runtime can expose DONE. A merge
 therefore reads its exact descriptor metadata and output lane rather than a
-fixed CPU split or caller-provided count. This remains unactivated until the
-matching Mario route is complete and reviewed.
+fixed CPU split or caller-provided count. Terrain and Mario now use this route
+in the accepted atomic-cutover renderer.
 
 WORLD_LOWER also independently revalidates its graph edge before consuming
 that transform payload: it accepts exactly one completed WORLD_ADMIT
@@ -23,7 +23,7 @@ predecessor, rejects an unready or wrong-type descriptor, and then checks the
 predecessor's P2 metadata against output-bank ownership. Scheduler eligibility
 alone is not treated as permission to consume a payload.
 
-Mario follows the same dormant producer/consumer law. A master snapshot first
+Mario follows the same active producer/consumer law. A master snapshot first
 copies the source-owned fully posed vertex bank, per-vertex lighting, animation
 frame/bank metadata, actor transform, and compact meshlet vertex references.
 ACTOR_ADMIT transforms that immutable snapshot into a descriptor-owned dense
@@ -33,8 +33,8 @@ lookup, and publishes descriptor-owned primitive classification records. The
 master consumes every DONE lower descriptor in descriptor/local order,
 validates complete primitive coverage and all payload identities before any
 renderer mutation, then copies results into the existing master-owned banks.
-Thus the eventual scheduler cutover changes SH-2 work ownership without
-changing the Castle-proven animation or final VDP1 emission path.
+Thus the scheduler cutover changes SH-2 work ownership without changing the
+Castle-proven animation or final VDP1 emission path.
 
 Queue output offsets are local to four existing physical payload kinds:
 WORLD_ADMIT transformed positions, WORLD_LOWER records/commands, ACTOR_ADMIT
@@ -43,8 +43,8 @@ derives the kind from the immutable type/callback pair, rejects an unknown or
 mismatched pair, and requires spans to be disjoint only among descriptors that
 write the same kind. This matches the bounded physical arrays without wasting
 memory on a synthetic global arena and preserves the pointer-free 16-byte
-descriptor ABI. This source contract remains dormant until the single atomic
-CPU-DUAL cutover and target/cache validation.
+descriptor ABI. The single atomic CPU-DUAL cutover is live and target-link
+green; live claim ownership and terminal waits remain the A5.9 evidence gate.
 
 Callback contexts use a separate pointer-free P2 release record. The record
 binds one immutable queue descriptor generation/index/phase to a nonzero
@@ -54,7 +54,7 @@ claim before opening its statically allocated terrain or Mario snapshot, and a
 peer claimant receives only the cache-through alias. Likewise, the master-only
 terrain order stream retains the exact descriptor-local command image beside
 each result during sorting, so final VDP1 lowering never guesses a command
-bank from a logical work range. Both contracts remain dormant until cutover.
+bank from a logical work range. Both contracts are live after cutover.
 
 The payload behind that release must also be self-contained. Mario therefore
 copies the frame-varying compact vertex-reference list into its snapshot and
@@ -62,4 +62,5 @@ resolves generated immutable banks by local symbols. Terrain copies the exact
 transform job and bounded work-order stream; queue callbacks reconstruct a
 caller-local classify view and do not retain the legacy stack classify/spans
 pointers. One preparation boundary snapshots and publishes all four phases
-before the future scheduler permits either SH-2 to claim work.
+before the active scheduler permits either SH-2 to claim work. The master
+retains final deterministic assembly and VDP1 lowering after retirement.

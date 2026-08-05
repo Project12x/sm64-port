@@ -1128,7 +1128,8 @@ types, ownership rules, or production fallbacks.
 
 **Status:** source-complete atomic cutover, host-green and scoped re-review GO
 at audit `1819f2b4`; target link/section proof is green after the reviewed
-memory-fit repair, and desktop Ymir is the next gate. Audit `8e64b482`
+memory-fit repair. Desktop Ymir boots the cutover but automatic measurement
+confirms no uplift: sustained 3--4 VDP1 FPS. Audit `8e64b482`
 rejected the first cutover because its
 single WORLD_ADMIT waited for a nonexistent peer and cross-lane lower could
 read stale owner bytes. The repair makes queue transform explicitly
@@ -1147,8 +1148,8 @@ post-review rebuild exits 0 and packages a fresh CUE. Linked HWRAM margin is
 `0x3f14` (16,148 bytes), LWRAM margin is `0x7850` (30,800 bytes), all four
 callbacks plus master/slave graph drains are live, and exactly one non-null
 application CPU-DUAL registration targets `render_job_slave_entry`. Target
-compile/link/section evidence is complete; desktop Ymir, observed target
-cache behavior, and FPS remain unchecked.
+compile/link/section evidence and desktop FPS observation are complete;
+per-phase claim ownership and terminal waits remain unchecked.
 
 **Manual cutover result (2026-08-04):** the owner launched the fresh reviewed
 atomic-cutover CUE in desktop Ymir and still observed roughly 3–4 FPS, with no
@@ -1245,7 +1246,7 @@ yet.
   Automatic FPS half complete: 14 focused host tests and module compilation
   pass. The exact desktop command captured ten running-counter snapshots after warmup:
   VDP2 median 60 FPS and VDP1 median 4 FPS (range 3--4), with the emulator left
-  alive. Queue values and independent review remain unchecked. First review
+  alive. Queue values remain unchecked. First review
   was NO-GO on evidence semantics and failure durability. The repair timestamps
   snapshots without claiming distinct rollovers, preserves fractional medians,
   writes structured failure JSON, checks process liveness, and pins the Win32

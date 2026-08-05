@@ -21,8 +21,10 @@ only the two master-owned 13,872-byte final terrain merge streams into
 `b997fea1`, and the sole post-review serialized rebuild
 now links and packages with 16,148 bytes HWRAM and 30,800 bytes LWRAM margin,
 zero unresolved symbols, live graph callbacks/drains, and one non-null
-CPU-DUAL application registration. A fresh post-cutover CUE exists; desktop
-Ymir, observed cache behavior, and FPS remain open.
+CPU-DUAL application registration. Desktop Ymir now confirms the exact
+post-cutover candidate remains at sustained 3--4 VDP1 FPS while VDP2 holds
+roughly 60 FPS. Automatic FPS observation is closed; live queue ownership and
+wait telemetry remain open.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact
@@ -105,7 +107,7 @@ The final repaired collector then attached to the same running desktop process
 for five more snapshots: VDP2 median 60 FPS and VDP1 median 3 FPS, range 3--4.
 The combined automatic evidence therefore confirms sustained 3--4 VDP1 FPS.
 
-The isolated audio lane now has a standalone soundtest CUE candidate. Its
+The isolated audio lane now has an accepted standalone soundtest proof. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated
 CC0 proof bank contains three sounds in 4,408 bytes. Host register, pitch,
 endianness, loop/stop, bank, boot-order, bounds, timeout, and ring tests pass.
@@ -113,4 +115,5 @@ It is not linked into sourceboot. Independent rereview is GO for the source
 and standalone build. On 2026-08-04 the owner manually confirmed audible
 A/B/C playback and that X stops playback in desktop Ymir. The supplied screen
 also showed READY, an advancing heartbeat, consumed commands, a started voice,
-and zero drops. Automated telemetry and transport-cost gates remain open.
+and zero drops. Sourceboot/game integration, automated telemetry, and
+transport-cost gates remain open.

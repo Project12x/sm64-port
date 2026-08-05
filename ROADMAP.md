@@ -42,8 +42,8 @@ when level evidence proves the coarse path is insufficient.
 
 ## Parallel prototype — Saturn PCM audio
 
-Review and manually prove the standalone PCM68K soundtest before any game
-integration. The promotion gate requires a live heartbeat, consumed commands,
-audible generated PCM, zero drops, and explicit owner approval. Sourceboot
-sound effects, positional audio, sample extraction, music, and sequencing stay
-deferred until that isolated proof is accepted.
+The standalone PCM68K soundtest is independently reviewed and owner-accepted:
+heartbeat advances, commands are consumed, A/B/C are audible, X stops, and
+drops remain zero. The next audio boundary is an explicitly approved
+sourceboot integration slice with measured transport cost. Positional audio,
+sample extraction, music, and sequencing remain later work.
