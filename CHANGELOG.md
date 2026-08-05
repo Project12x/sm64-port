@@ -11,7 +11,11 @@
   and scratch/budget claims.  The first BOB area-1 artifact is deliberately
   marked provisional and rejected by normal validation, so it can exercise
   deterministic world/collision/sky/BSP packing without inventing unfinished
-  feature payload hashes or being mistaken for Task 22's final root.
+  feature payload hashes or being mistaken for Task 22's final root.  External
+  dependency edges are expressed as stable-ID references and normalized to
+  canonical descriptor ordinals, preventing shuffled compiler inputs from
+  silently changing masks; generated scenes include one shared guarded ABI
+  header rather than redeclaring package types per root.
 
 - Closed the last Task 3 fail-open scanner paths after final rereview.  Every
   indexed symbol reached through native functions, data, action tables, or

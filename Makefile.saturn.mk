@@ -55,6 +55,7 @@ SCENE_PACKAGE_PROVISIONAL_ROOT ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene.s64p
 SCENE_PACKAGE_PROVISIONAL_REPORT ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene-package-report.json
 SCENE_PACKAGE_PROVISIONAL_VALIDATION ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene-package-validation.json
 SCENE_PACKAGE_PROVISIONAL_HEADER ?= $(SCENE_PACKAGE_PROVISIONAL_DIR)/scene_package.h
+SCENE_PACKAGE_ABI_HEADER ?= $(SATURN_REPO_ROOT)/build/saturn/packages/saturn_scene_package_abi.h
 SCENE_PACKAGE_WORLD_STATIC ?= $(BOB_MESH_GENERATED)/bob_area1_compiled.json
 SCENE_PACKAGE_COLLISION ?= $(SATURN_REPO_ROOT)/levels/$(SCENE_LEVEL)/areas/$(SCENE_AREA)/collision.inc.c
 SCENE_PACKAGE_SKY_BACKGROUND ?= $(BOB_SKY_OUTPUT)
@@ -863,6 +864,7 @@ compile-provisional-scene-package: compile-bob-area compile-bob-bsp compile-bob-
 	  --report "$(SCENE_PACKAGE_PROVISIONAL_VALIDATION)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/emit_scene_package_header.py" \
 	  --input "$(SCENE_PACKAGE_PROVISIONAL_ROOT)" --allow-provisional \
+	  --abi-output "$(SCENE_PACKAGE_ABI_HEADER)" \
 	  --symbol-prefix "$(SCENE_LEVEL)_area$(SCENE_AREA)" \
 	  --output "$(SCENE_PACKAGE_PROVISIONAL_HEADER)"
 

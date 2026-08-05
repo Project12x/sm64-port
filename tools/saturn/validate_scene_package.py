@@ -193,6 +193,8 @@ def validate_scene_package(package: bytes,
             _fail("dependency descriptor order is not canonical")
 
     identities = [dependency["stable_id"] for dependency in dependencies]
+    if len(dependencies) > 32:
+        _fail("S64P supports at most 32 external dependencies")
     if len(identities) != len(set(identities)):
         _fail("duplicate dependency stable ID")
     _acyclic([int(dependency["dependency_mask"]) for dependency in dependencies], "payload")
@@ -243,7 +245,7 @@ def validate_scene_package(package: bytes,
     }
 
 
-def _load_payloads(path: Path | None) -> dict[str, tuple[bytes, int]]:
+def load_payloads(path: Path | None) -> dict[str, tuple[bytes, int]]:
     if path is None:
         return {}
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -255,7 +257,10 @@ def _load_payloads(path: Path | None) -> dict[str, tuple[bytes, int]]:
         stable_id = entry["stable_id"]
         if stable_id in result:
             _fail(f"duplicate payload manifest ID: {stable_id}")
-        result[stable_id] = (Path(entry["path"]).read_bytes(), int(entry["generation"]))
+        payload_path = Path(entry["path"])
+        if not payload_path.is_absolute():
+            payload_path = path.parent / payload_path
+        result[stable_id] = (payload_path.read_bytes(), int(entry["generation"]))
     return result
 
 
@@ -267,7 +272,7 @@ def main() -> None:
     parser.add_argument("--report", type=Path)
     args = parser.parse_args()
     report = validate_scene_package(args.input.read_bytes(),
-                                    _load_payloads(args.payload_manifest),
+                                    load_payloads(args.payload_manifest),
                                     allow_provisional=args.allow_provisional)
     if args.report is not None:
         args.report.parent.mkdir(parents=True, exist_ok=True)

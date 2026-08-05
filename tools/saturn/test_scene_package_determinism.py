@@ -19,9 +19,12 @@ class ScenePackageDeterminismTest(unittest.TestCase):
         ]
         dependencies = [
             DependencyInput("AUDIO_DEPENDENCIES", "z-audio", b"z"),
-            DependencyInput("ACTOR_DEPENDENCIES", "b-actor", b"b"),
-            DependencyInput("ACTOR_DEPENDENCIES", "a-actor", b"a"),
-            DependencyInput("ANIMATION_DEPENDENCIES", "walk", b"walk"),
+            DependencyInput("ACTOR_DEPENDENCIES", "b-actor", b"b",
+                            dependencies=("z-audio",)),
+            DependencyInput("ACTOR_DEPENDENCIES", "a-actor", b"a",
+                            dependencies=("walk",)),
+            DependencyInput("ANIMATION_DEPENDENCIES", "walk", b"walk",
+                            dependencies=("z-audio",)),
         ]
         expected = compile_package(9, 1, sections, dependencies, provisional=True)
         random.Random(42).shuffle(sections)
@@ -50,6 +53,11 @@ class ScenePackageDeterminismTest(unittest.TestCase):
             compile_package(9, 1, [], [
                 DependencyInput("ACTOR_DEPENDENCIES", "same", b"a"),
                 DependencyInput("ACTOR_DEPENDENCIES", "same", b"b"),
+            ])
+        with self.assertRaisesRegex(ValueError, "duplicate dependency"):
+            compile_package(9, 1, [], [
+                DependencyInput("ACTOR_DEPENDENCIES", "same", b"a"),
+                DependencyInput("AUDIO_DEPENDENCIES", "same", b"b"),
             ])
 
 

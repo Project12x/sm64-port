@@ -67,7 +67,9 @@ class DependencyInput:
     data: bytes
     destination_class: str = "CART"
     lifetime: str = "SCENE"
-    dependency_mask: int = 0
+    # Stable IDs, never caller-order bit positions. Bit N in the packed ABI is
+    # assigned only after all descriptors reach canonical global order.
+    dependencies: tuple[str, ...] = ()
     max_scratch: int = 0
     generation: int = 1
     alignment: int = 4
@@ -116,7 +118,59 @@ def dependency_set_canonical_bytes(dependencies: Iterable[DependencyInput]) -> b
         for kind, stable_id, generation, digest in records)
 
 
-def _dependency_section(kind: str, dependencies: list[DependencyInput]) -> bytes:
+def _canonical_dependencies(dependencies: Iterable[DependencyInput]) -> list[DependencyInput]:
+    return sorted(dependencies, key=lambda item: (
+        _enum(SECTION_KINDS, item.kind, "dependency kind"),
+        _stable_id_bytes(item.stable_id), hashlib.sha256(bytes(item.data)).digest()))
+
+
+def canonical_dependency_masks(dependencies: Iterable[DependencyInput]) -> dict[str, int]:
+    """Resolve stable-ID references into the ABI's canonical ordinal bitset."""
+    ordered = _canonical_dependencies(dependencies)
+    if len(ordered) > 32:
+        raise ValueError("S64P supports at most 32 external dependencies")
+    indices: dict[str, int] = {}
+    for index, dependency in enumerate(ordered):
+        if dependency.kind not in DEPENDENCY_KINDS:
+            raise ValueError(f"unknown dependency kind: {dependency.kind}")
+        _stable_id_bytes(dependency.stable_id)
+        if dependency.stable_id in indices:
+            raise ValueError(f"duplicate dependency stable ID: {dependency.stable_id}")
+        indices[dependency.stable_id] = index
+    masks: dict[str, int] = {}
+    for dependency in ordered:
+        mask = 0
+        if len(dependency.dependencies) != len(set(dependency.dependencies)):
+            raise ValueError(f"duplicate dependency reference: {dependency.stable_id}")
+        for stable_id in dependency.dependencies:
+            if stable_id not in indices:
+                raise ValueError(
+                    f"unknown dependency reference: {dependency.stable_id} -> {stable_id}")
+            mask |= 1 << indices[stable_id]
+        masks[dependency.stable_id] = mask
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(stable_id: str) -> None:
+        if stable_id in visiting:
+            raise ValueError("payload dependency cycle")
+        if stable_id in visited:
+            return
+        visiting.add(stable_id)
+        dependency = ordered[indices[stable_id]]
+        for referenced in dependency.dependencies:
+            visit(referenced)
+        visiting.remove(stable_id)
+        visited.add(stable_id)
+
+    for stable_id in indices:
+        visit(stable_id)
+    return masks
+
+
+def _dependency_section(kind: str, dependencies: list[DependencyInput],
+                        masks: Mapping[str, int]) -> bytes:
     ordered = sorted(dependencies, key=lambda item: (
         item.stable_id.encode("utf-8"), hashlib.sha256(bytes(item.data)).digest()))
     records = []
@@ -132,7 +186,7 @@ def _dependency_section(kind: str, dependencies: list[DependencyInput]) -> bytes
             _stable_id_bytes(dependency.stable_id),
             _u32(len(dependency.data), "dependency byte count"),
             _alignment(dependency.alignment),
-            _u32(dependency.dependency_mask, "dependency mask"),
+            masks[dependency.stable_id],
             _u32(dependency.max_scratch, "maximum scratch"),
             hashlib.sha256(bytes(dependency.data)).digest(),
             _u32(dependency.generation, "generation"), 0, 0))
@@ -156,21 +210,15 @@ def compile_package(level_id: int, area_id: int,
         supplied[section.kind] = section
 
     dependency_list = list(dependencies)
-    seen_dependencies: set[tuple[str, str]] = set()
+    masks = canonical_dependency_masks(dependency_list)
     grouped = {kind: [] for kind in DEPENDENCY_KINDS}
     for dependency in dependency_list:
-        if dependency.kind not in DEPENDENCY_KINDS:
-            raise ValueError(f"unknown dependency kind: {dependency.kind}")
-        identity = (dependency.kind, dependency.stable_id)
-        if identity in seen_dependencies:
-            raise ValueError(f"duplicate dependency: {dependency.kind}/{dependency.stable_id}")
-        seen_dependencies.add(identity)
         grouped[dependency.kind].append(dependency)
 
     normalized: list[SectionInput] = []
     for kind in SECTION_KINDS:
         if kind in DEPENDENCY_KINDS:
-            normalized.append(SectionInput(kind, _dependency_section(kind, grouped[kind]),
+            normalized.append(SectionInput(kind, _dependency_section(kind, grouped[kind], masks),
                                            alignment=16))
         else:
             normalized.append(supplied.get(kind, SectionInput(kind, b"", alignment=4)))

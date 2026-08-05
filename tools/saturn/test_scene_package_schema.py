@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import struct
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 from compile_scene_package import (
     HEADER_SIZE,
     DependencyInput,
     SectionInput,
+    canonical_dependency_masks,
     compile_package,
     parse_package,
 )
 from validate_scene_package import PackageValidationError, validate_scene_package
-from emit_scene_package_header import emit_header
+from emit_scene_package_header import emit_abi_header, emit_header
 
 
 def fixture(*, provisional: bool = False) -> tuple[bytes, dict[str, tuple[bytes, int]]]:
@@ -39,6 +45,29 @@ def fixture(*, provisional: bool = False) -> tuple[bytes, dict[str, tuple[bytes,
                         destination_class="SOUND_RAM", lifetime="SCENE", generation=7),
     ]
     return compile_package(9, 1, sections, dependencies, provisional=provisional), payloads
+
+
+def mutate_dependencies(package: bytes,
+                        changes: list[tuple[str, int, bytes]]) -> bytes:
+    """Mutate dependency bytes and reseal their containing sections/root."""
+    damaged = bytearray(package)
+    parsed = parse_package(package)
+    by_kind = {section["kind"]: section for section in parsed["sections"]}
+    changed_kinds: set[str] = set()
+    for kind, relative_offset, replacement in changes:
+        section = by_kind[kind]
+        offset = section["offset"] + 4 + relative_offset
+        damaged[offset:offset + len(replacement)] = replacement
+        changed_kinds.add(kind)
+    for kind in changed_kinds:
+        section = by_kind[kind]
+        content = damaged[section["offset"]:section["offset"] + section["size"]]
+        digest = hashlib.sha256(content).digest()
+        descriptor_hash = section["descriptor_offset"] + 28
+        damaged[descriptor_hash:descriptor_hash + 32] = digest
+    damaged[20:52] = bytes(32)
+    damaged[20:52] = hashlib.sha256(damaged).digest()
+    return bytes(damaged)
 
 
 class ScenePackageSchemaTest(unittest.TestCase):
@@ -69,12 +98,13 @@ class ScenePackageSchemaTest(unittest.TestCase):
 
     def test_rejects_missing_extra_wrong_generation_and_wrong_hash_payloads(self) -> None:
         package, payloads = fixture()
-        cases = [
+        cases: list[tuple[dict[str, tuple[bytes, int]], str]] = [
             ({key: value for key, value in payloads.items() if key != "goomba"}, "missing payload"),
             ({**payloads, "extra": (b"extra", 7)}, "extra payload"),
-            ({**payloads, "goomba": (payloads["goomba"][0], 8)}, "generation"),
-            ({**payloads, "goomba": (b"wrong", 7)}, "payload hash"),
         ]
+        for stable_id in ("goomba", "mario-walk", "bob-music"):
+            cases.append(({**payloads, stable_id: (payloads[stable_id][0], 8)}, "generation"))
+            cases.append(({**payloads, stable_id: (b"wrong", 7)}, "payload hash"))
         for evidence, message in cases:
             with self.subTest(message=message):
                 with self.assertRaisesRegex(PackageValidationError, message):
@@ -131,6 +161,56 @@ class ScenePackageSchemaTest(unittest.TestCase):
         parsed = validate_scene_package(package, payloads)
         self.assertNotEqual(parsed["dependency_set_sha256"], hashlib.sha256(b"").hexdigest())
 
+    def test_dependency_masks_use_canonical_stable_id_references(self) -> None:
+        dependencies = [
+            DependencyInput("AUDIO_DEPENDENCIES", "audio", b"audio"),
+            DependencyInput("ACTOR_DEPENDENCIES", "actor", b"actor",
+                            dependencies=("audio",)),
+            DependencyInput("ANIMATION_DEPENDENCIES", "animation", b"animation",
+                            dependencies=("actor",)),
+        ]
+        masks = canonical_dependency_masks(dependencies)
+        self.assertEqual(masks, {"actor": 1 << 2, "animation": 1 << 0, "audio": 0})
+        package = compile_package(9, 1, [], dependencies)
+        payloads = {item.stable_id: (item.data, 1) for item in dependencies}
+        report = validate_scene_package(package, payloads)
+        self.assertEqual({item["stable_id"]: item["dependency_mask"]
+                          for item in report["dependencies"]}, masks)
+
+    def test_compiler_rejects_absent_cycles_and_more_than_32_dependencies(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown dependency reference"):
+            compile_package(9, 1, [], [
+                DependencyInput("ACTOR_DEPENDENCIES", "actor", b"actor",
+                                dependencies=("absent",))])
+        with self.assertRaisesRegex(ValueError, "dependency cycle"):
+            compile_package(9, 1, [], [
+                DependencyInput("ACTOR_DEPENDENCIES", "actor", b"actor",
+                                dependencies=("audio",)),
+                DependencyInput("AUDIO_DEPENDENCIES", "audio", b"audio",
+                                dependencies=("actor",)),
+            ])
+        with self.assertRaisesRegex(ValueError, "at most 32"):
+            compile_package(9, 1, [], [
+                DependencyInput("ACTOR_DEPENDENCIES", f"actor-{index}", bytes([index]))
+                for index in range(33)])
+
+    def test_rejects_mutated_payload_cycles_absent_bits_and_descriptor_enums(self) -> None:
+        package, payloads = fixture()
+        cases = [
+            ([("ACTOR_DEPENDENCIES", 44, struct.pack(">I", 1 << 1)),
+              ("ANIMATION_DEPENDENCIES", 44, struct.pack(">I", 1 << 0))], "payload dependency cycle"),
+            ([("ACTOR_DEPENDENCIES", 44, struct.pack(">I", 1 << 31))], "absent record"),
+            ([("ACTOR_DEPENDENCIES", 0, struct.pack(">H", 99))], "payload kind"),
+            ([("ACTOR_DEPENDENCIES", 2, b"\x7f")], "destination"),
+            ([("ACTOR_DEPENDENCIES", 3, b"\x7f")], "lifetime"),
+            ([("ACTOR_DEPENDENCIES", 40, struct.pack(">I", 3))], "alignment"),
+            ([("ACTOR_DEPENDENCIES", 88, struct.pack(">I", 1))], "metadata"),
+        ]
+        for changes, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(PackageValidationError, message):
+                    validate_scene_package(mutate_dependencies(package, changes), payloads)
+
     def test_emitted_header_freezes_the_binary_abi_and_package_identity(self) -> None:
         package, payloads = fixture(provisional=True)
         parsed = validate_scene_package(package, payloads, allow_provisional=True)
@@ -139,7 +219,38 @@ class ScenePackageSchemaTest(unittest.TestCase):
         self.assertIn("#define BOB_AREA1_S64P_SECTION_DESCRIPTOR_SIZE 64U", header)
         self.assertIn("#define BOB_AREA1_S64P_DEPENDENCY_DESCRIPTOR_SIZE 96U", header)
         self.assertIn(parsed["package_sha256"], header)
-        self.assertIn("SM64_SATURN_S64P_WORLD_STATIC = 1", header)
+        self.assertIn('#include "saturn_scene_package_abi.h"', header)
+        self.assertNotIn("typedef struct", header)
+        abi = emit_abi_header()
+        self.assertIn("SM64_SATURN_S64P_WORLD_STATIC = 1", abi)
+        self.assertIn("typedef struct sm64_saturn_scene_package_header", abi)
+
+    def test_dependency_bearing_header_cli_validates_three_payloads(self) -> None:
+        package, payloads = fixture()
+        with tempfile.TemporaryDirectory(prefix="s64p-header-") as temporary:
+            root = Path(temporary)
+            package_path = root / "scene.s64p"
+            package_path.write_bytes(package)
+            entries = []
+            for stable_id, (data, generation) in payloads.items():
+                payload_path = root / f"{stable_id}.bin"
+                payload_path.write_bytes(data)
+                entries.append({"stable_id": stable_id,
+                                "path": payload_path.name,
+                                "generation": generation})
+            manifest = root / "payloads.json"
+            manifest.write_text(json.dumps({"payloads": entries}), encoding="utf-8")
+            result = subprocess.run([
+                sys.executable, str(Path(__file__).with_name("emit_scene_package_header.py")),
+                "--input", str(package_path), "--output", str(root / "scene.h"),
+                "--abi-output", str(root / "saturn_scene_package_abi.h"),
+                "--payload-manifest", str(manifest), "--symbol-prefix", "fixture",
+            ], text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("FIXTURE_S64P_PACKAGE_SHA256",
+                          (root / "scene.h").read_text(encoding="utf-8"))
+            self.assertIn("sm64_saturn_scene_dependency_descriptor",
+                          (root / "saturn_scene_package_abi.h").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
