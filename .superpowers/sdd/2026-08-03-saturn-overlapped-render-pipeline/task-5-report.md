@@ -170,3 +170,53 @@ Covering test:
 The root plan's prior blocker note is reconciled: this closes the source
 defect, not the required fresh review or valid live queue-observation gate.
 No target build or Ymir launch occurred.
+
+## Startup repair 3/5 (2026-08-05)
+
+### Root cause and correction
+
+- The first live attempt used a 120-byte historical blob as IPL and is
+  discarded. With the established 524,288-byte USA IPL, Ymir reached BIOS
+  handoff but the old immediate identity probe ran before the CUE's sourceboot
+  payload loaded. The bounded boot-trace diagnostic records `main` bytes false
+  through post-BIOS +540, true at +570, and sourceboot trace magic at +600.
+- `wait_for_target_identity()` now advances exactly one guest VBlank then
+  probes exact ELF bytes, within an independent `--startup-vblanks` bound
+  (default 600; 1..4096). It returns the original identity proof plus
+  `startup_vblanks_waited` and `startup_identity_attempts`. Its timeout is a
+  bounded `target-identity` failure; no telemetry read or cadence budget is
+  consumed before a match.
+
+### Watched RED
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+Ran 17 tests ... FAILED
+ERROR: test_startup_identity_timeout_fails_at_exact_bound
+ERROR: test_startup_identity_waits_one_vblank_per_mismatch_then_returns_bounded_evidence
+ERROR: test_startup_wait_precedes_real_telemetry_observation
+ERROR: test_validates_startup_vblank_bound
+```
+
+### GREEN verification
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+.................
+Ran 17 tests ... OK
+
+python tools\saturn\test_capture_sourceboot_boot_trace.py
+................
+Ran 16 tests ... OK
+
+python -m py_compile tools\saturn\capture_sourceboot_throughput.py tools\saturn\test_capture_sourceboot_throughput.py
+git diff --check
+```
+
+Covering tests: `test_startup_identity_waits_one_vblank_per_mismatch_then_returns_bounded_evidence`,
+`test_startup_identity_timeout_fails_at_exact_bound`,
+`test_startup_wait_precedes_real_telemetry_observation`, and
+`test_validates_startup_vblank_bound`.
+
+No target build or Ymir launch occurred in this implementer lane. A valid live
+queue report and any further review remain open.

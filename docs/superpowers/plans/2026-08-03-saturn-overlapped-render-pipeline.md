@@ -1263,9 +1263,20 @@ yet.
   to share the selected `PT_LOAD`'s exact affine file-to-memory mapping
   (`section.address - segment.vaddr == section.offset - segment.offset`),
   pinned by a malformed-ELF regression fixture whose ranges otherwise fit.
-  Thirteen capture tests and sixteen boot-trace tests are host-green. This
-  closes only the source defect: fresh review and a valid live report remain
-  required, so the step and queue evidence gate stay unchecked.
+  Thirteen capture tests and sixteen boot-trace tests are host-green. Scoped
+  rereview is spec PASS / quality APPROVED and independently repeats those
+  tests plus module compilation. Source and review are complete; a valid live
+  report remains required, so the step and queue evidence gate stay unchecked.
+  The first live attempt used a 120-byte evidence blob instead of a 512-KiB
+  IPL and is discarded. With the correct established IPL, the capture reached
+  the target-identity gate before sourceboot had loaded. A bounded boot-trace
+  diagnostic proves exact ELF `main` bytes first appear at post-BIOS +570
+  VBlanks and sourceboot trace magic at +600. The collector now waits for
+  identity one VBlank at a time within separate `--startup-vblanks` bound
+  (default 600), reports its exact wait/attempt count, and fails closed without
+  a telemetry read if identity never appears. Seventeen capture tests and
+  sixteen boot-trace tests are host-green. This resolves only startup timing;
+  valid live observation remains the Step 6/queue-evidence gate.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

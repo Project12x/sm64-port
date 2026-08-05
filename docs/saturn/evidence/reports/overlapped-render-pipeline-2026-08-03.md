@@ -1555,3 +1555,17 @@ open.
 - No target build, Ymir invocation, live queue observation, or scheduler/FPS
   conclusion occurred. The correction is source-only; fresh review and a valid
   matching live capture remain open.
+
+### A5.9 queue-observation startup repair 3/5 (2026-08-05)
+
+- The first live attempt's 120-byte historical blob is discarded as a wrong
+  IPL. With the established 524,288-byte USA IPL, a diagnostic proves that the
+  existing BIOS macro ends before sourceboot code is loaded: exact `main`
+  bytes appear at post-BIOS +570 VBlanks and trace magic at +600.
+- The collector now starts a separate bounded one-VBlank identity loop after
+  BIOS handoff and before all telemetry reads. On success it reports
+  `startup_vblanks_waited` and `startup_identity_attempts`; on exhaustion it
+  fails at `target-identity` without consuming `--max-vblanks`.
+- Focused capture tests: 17/17 PASS; boot-trace tests: 16/16 PASS; modules
+  compile and diff-check is clean. No target build, Ymir launch, or new live
+  observation is credited by this source repair.

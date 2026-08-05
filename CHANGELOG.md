@@ -51,6 +51,13 @@
   Separate range containment could otherwise hash bytes at one file offset
   while probing a different loaded address; malformed inputs now fail closed.
 
+- Added a separate bounded A5.9 sourceboot-load window before queue telemetry
+  observation. After BIOS handoff the collector advances exactly one VBlank
+  per identity retry and records its wait/attempt count, so a real CUE whose
+  disc payload has not yet loaded does not consume the cadence budget or get
+  mistaken for a wrong ELF. A never-matching image remains a failed
+  target-identity report and no telemetry is read first.
+
 - Restored the desktop launcher to the proven `ymir-agent/build-agent`
   executable and explicit `--profile`/`--disc` arguments. The prior default
   had drifted to `build-agent2`, which could launch without the intended disc

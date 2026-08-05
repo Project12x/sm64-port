@@ -296,7 +296,12 @@ yet.
   section.offset - segment.offset`), rejecting a malformed section whose
   independent ranges fit but whose file bytes map elsewhere. Thirteen capture
   tests and sixteen boot-trace tests are host-green; fresh review and valid
-  live evidence remain open.
+  live evidence remain open. **Startup repair 3/5 (2026-08-05):** after BIOS
+  handoff the collector uses an independent `--startup-vblanks` window
+  (default 600) to retry exact identity one guest VBlank at a time before any
+  telemetry read. It records bounded wait/attempt evidence and fails at the
+  exact bound when the ELF never appears. Seventeen capture tests and sixteen
+  boot-trace tests are host-green; no new target/Ymir result is claimed.
 ## Controller amendment — execute only A5.9 automatic queue observation
 
 This dispatch does **not** reopen the completed A5 queue/cutover work below.

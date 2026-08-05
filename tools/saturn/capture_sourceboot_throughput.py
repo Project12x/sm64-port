@@ -33,6 +33,7 @@ MAX_VBLANKS = 4096
 P2_ALIAS_BIT = 0x20000000
 MAX_DIAGNOSTIC_NOTIFICATIONS = 64
 MAX_DIAGNOSTIC_NOTIFICATION_BYTES = 64 * 1024
+IDENTITY_MISMATCH_MESSAGE = "running target does not contain immutable bytes from the matching ELF"
 REQUIRED_SYMBOLS = {
     "sourceboot_boot_trace": BOOT_TRACE_BYTES,
     "s_runtime": RUNTIME_BYTES,
@@ -200,7 +201,7 @@ def prove_target_identity(client: Any, probe: dict[str, Any]) -> dict[str, Any]:
     observed = read_exact(client, int(probe["address"]), int(probe["size"]))
     expected = bytes(probe["expected_bytes"])
     if observed != expected:
-        raise ValueError("running target does not contain immutable bytes from the matching ELF")
+        raise ValueError(IDENTITY_MISMATCH_MESSAGE)
     return {
         "address": int(probe["address"]),
         "size": int(probe["size"]),
@@ -208,6 +209,36 @@ def prove_target_identity(client: Any, probe: dict[str, Any]) -> dict[str, Any]:
         "observed_sha256": hashlib.sha256(observed).hexdigest(),
         "match": True,
     }
+
+
+def validate_startup_vblanks(startup_vblanks: int) -> int:
+    """Keep the sourceboot-load wait separate from observation cadence."""
+    if not 1 <= startup_vblanks <= MAX_VBLANKS:
+        raise ValueError(f"startup VBlanks must be between 1 and {MAX_VBLANKS}")
+    return startup_vblanks
+
+
+def wait_for_target_identity(
+    client: Any, probe: dict[str, Any], *, startup_vblanks: int
+) -> dict[str, Any]:
+    """Advance one VBlank at a time until exact ELF bytes are actually loaded."""
+    startup_vblanks = validate_startup_vblanks(startup_vblanks)
+    for attempt in range(1, startup_vblanks + 1):
+        client.call("exec.run_for", {"frames": 1})
+        try:
+            identity = prove_target_identity(client, probe)
+        except ValueError as error:
+            if str(error) != IDENTITY_MISMATCH_MESSAGE:
+                raise
+            continue
+        return {
+            **identity,
+            "startup_vblanks_waited": attempt,
+            "startup_identity_attempts": attempt,
+        }
+    raise ValueError(
+        f"target identity did not match after {startup_vblanks} one-VBlank startup attempts"
+    )
 
 
 def _be32(raw: bytes, offset: int) -> int:
@@ -359,6 +390,30 @@ def observe_target(
     }
 
 
+def capture_after_bios(
+    client: Any,
+    symbols: dict[str, dict[str, int]],
+    identity_probe: dict[str, Any],
+    *,
+    startup_vblanks: int,
+    max_vblanks: int,
+    nominal_refresh_hz: float,
+) -> dict[str, Any]:
+    """Prove loaded identity before reading one telemetry byte."""
+    identity = wait_for_target_identity(
+        client, identity_probe, startup_vblanks=startup_vblanks
+    )
+    return {
+        "target_identity": identity,
+        "observation": observe_target(
+            client,
+            symbols,
+            max_vblanks=max_vblanks,
+            nominal_refresh_hz=nominal_refresh_hz,
+        ),
+    }
+
+
 def _bounded_notifications(notifications: list[dict[str, Any]]) -> dict[str, Any]:
     """Retain only a byte- and count-bounded tail of JSON-RPC notifications."""
     original_bytes = 0
@@ -410,6 +465,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--game", type=Path, required=True, help="exact matching sourceboot CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching sourceboot ELF")
     parser.add_argument("--output", type=Path, required=True, help="structured JSON evidence report")
+    parser.add_argument(
+        "--startup-vblanks",
+        type=int,
+        default=600,
+        help="separate identity-load wait bound (1..4096)",
+    )
     parser.add_argument("--max-vblanks", type=int, default=600, help="observation bound (1..4096)")
     parser.add_argument("--nominal-refresh-hz", type=float, default=60.0)
     parser.add_argument("--timeout", type=float, default=180.0)
@@ -427,6 +488,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("timeout must be positive")
         if not 1 <= args.max_vblanks <= MAX_VBLANKS:
             raise ValueError(f"max VBlanks must be between 1 and {MAX_VBLANKS}")
+        args.startup_vblanks = validate_startup_vblanks(args.startup_vblanks)
         if args.nominal_refresh_hz <= 0:
             raise ValueError("nominal refresh rate must be positive")
         for label, path in (("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
@@ -449,10 +511,15 @@ def main(argv: list[str] | None = None) -> int:
         stage = "bios-handoff"
         run_bios_handoff(client, lambda frames: client.call("exec.run_for", {"frames": frames}), lambda _label: None)
         stage = "target-identity"
-        report["target_identity"] = prove_target_identity(client, identity_probe)
+        report["target_identity"] = wait_for_target_identity(
+            client, identity_probe, startup_vblanks=args.startup_vblanks
+        )
         stage = "observation"
         report["observation"] = observe_target(
-            client, symbols, max_vblanks=args.max_vblanks, nominal_refresh_hz=args.nominal_refresh_hz
+            client,
+            symbols,
+            max_vblanks=args.max_vblanks,
+            nominal_refresh_hz=args.nominal_refresh_hz,
         )
         client.shutdown()
         report["status"] = "complete"

@@ -188,6 +188,90 @@ class ThroughputCaptureTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not contain"):
                 capture.prove_target_identity(type("Bad", (), {"call": lambda *_: {"data": [0] * 16}})(), probe)
 
+    def test_startup_identity_waits_one_vblank_per_mismatch_then_returns_bounded_evidence(self) -> None:
+        probe = {"address": BOOT_ADDRESS, "size": 4, "expected_bytes": [1, 2, 3, 4], "expected_sha256": "expected"}
+
+        class Client:
+            def __init__(self) -> None:
+                self.frames: list[int] = []
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.frames.append(params["frames"])
+                    return {}
+                return {"data": [0, 0, 0, 0] if len(self.frames) < 3 else [1, 2, 3, 4]}
+
+        client = Client()
+        identity = capture.wait_for_target_identity(client, probe, startup_vblanks=5)
+        self.assertEqual(client.frames, [1, 1, 1])
+        self.assertEqual(identity["startup_vblanks_waited"], 3)
+        self.assertEqual(identity["startup_identity_attempts"], 3)
+        self.assertTrue(identity["match"])
+
+    def test_startup_identity_timeout_fails_at_exact_bound(self) -> None:
+        probe = {"address": BOOT_ADDRESS, "size": 4, "expected_bytes": [1, 2, 3, 4], "expected_sha256": "expected"}
+
+        class Client:
+            def __init__(self) -> None:
+                self.frames = 0
+
+            def call(self, method: str, _params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.frames += 1
+                    return {}
+                return {"data": [0, 0, 0, 0]}
+
+        client = Client()
+        with self.assertRaisesRegex(ValueError, "after 3 one-VBlank startup attempts"):
+            capture.wait_for_target_identity(client, probe, startup_vblanks=3)
+        self.assertEqual(client.frames, 3)
+
+    def test_startup_wait_precedes_real_telemetry_observation(self) -> None:
+        probe = {"address": BOOT_ADDRESS, "size": 4, "expected_bytes": [1, 2, 3, 4], "expected_sha256": "expected"}
+        trace_address = BOOT_ADDRESS + 0x300
+        symbols = {
+            "sourceboot_boot_trace": {"address": trace_address, "size": 32},
+            "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+            "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+        }
+
+        class Client:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    if params != {"frames": 1}:
+                        raise AssertionError(params)
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": [0, 0, 0, 0] if self.tick < 2 else [1, 2, 3, 4]}
+                if self.tick < 2:
+                    raise AssertionError("telemetry read before exact identity")
+                if address == trace_address:
+                    return {"data": list(trace(self.tick, self.tick))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        result = capture.capture_after_bios(
+            Client(), symbols, probe, startup_vblanks=3, max_vblanks=3, nominal_refresh_hz=60.0
+        )
+        self.assertEqual(result["target_identity"]["startup_vblanks_waited"], 2)
+        self.assertEqual(len(result["observation"]["presentation_events"]), 2)
+
+    def test_validates_startup_vblank_bound(self) -> None:
+        self.assertEqual(capture.validate_startup_vblanks(1), 1)
+        self.assertEqual(capture.validate_startup_vblanks(600), 600)
+        with self.assertRaisesRegex(ValueError, "between 1 and"):
+            capture.validate_startup_vblanks(0)
+        with self.assertRaisesRegex(ValueError, "between 1 and"):
+            capture.validate_startup_vblanks(capture.MAX_VBLANKS + 1)
+
     def test_identity_probe_rejects_non_alloc_non_progbits_or_unloaded_executable_sections(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             elf = Path(directory) / "game.elf"
