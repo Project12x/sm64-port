@@ -102,7 +102,7 @@ and the evidence report before starting another task.
   additional work is coverage: extracting arbitrary object-family
   model/animation banks, bridging their live source pose and visibility state,
   and preserving each family's special rendering features.
-- [ ] **Task 5 / A5 — shared opportunistic SH-2 queue:** active. The
+- [x] **Task 5 / A5 — shared opportunistic SH-2 queue:** complete. The
   immutable, cache-through queue contract, host exact-once fixture, and
   coherency mutation gate are source-complete. Descriptor kind now selects a
   terrain or actor output bank, and the CPU that actually claims the descriptor
@@ -121,6 +121,8 @@ and the evidence report before starting another task.
   dispatch; no partial queue bind is permitted. The accepted 3–4 FPS A3+A4
   CUE remains the rollback baseline. Those A5.6 gates were subsequently closed
   by the A5.8 atomic cutover, target build, reviews, and A5.9 live observation.
+  The dated A5.8 notes below preserve each increment's at-the-time dormant/open
+  status; they are history, not the current task state.
   **A5.8 terrain migration milestone (2026-08-04):** the live-cutover source
   gate is now a host-compiled C executable because the configured `py -3`
   launcher is unavailable. Its expected RED result proves the default frame
@@ -278,17 +280,15 @@ and the evidence report before starting another task.
   deliberately compiles no CPU-DUAL registration or notification while the
   legacy worker is linked; only the atomic live cutover may
   bind it after removing all legacy dispatches. It is not
-  bound to the renderer yet: live activation may begin only after the bridge
-  review and a renderer conversion makes every producer and consumer use this
-  route. Target cache/ordering/FPS evidence remains open.
-- [ ] **Task 5.7 / A5.7 — queue job graph and phase barriers:** active.
+  now bound to the accepted renderer through the reviewed atomic cutover. Live
+  target cache/ordering and automatic FPS/queue evidence are complete.
+- [x] **Task 5.7 / A5.7 — queue job graph and phase barriers:** complete.
   Independent descriptors cannot safely replace terrain's transform→classify→
   multi-result merge or Mario's transform→classify chains. This foundation
   adds P2-visible dependency masks, exact result identities, consumer
   eligibility only after producer `DONE`, and failed-predecessor quarantine.
-  It deliberately does not bind the renderer or alter its sole legacy
-  CPU-DUAL owner; the live-cutover source gate remains RED until one atomic
-  conversion.
+  It was introduced without binding the renderer or altering its sole legacy
+  CPU-DUAL owner; A5.8 subsequently completed that one atomic conversion.
   **Review correction:** the graph rejects cyclic/self dependencies before queue
   publication and propagates a failed predecessor to every reverse-chain
   ready dependent before terminal merge/reset; independent READY jobs remain
@@ -304,8 +304,8 @@ and the evidence report before starting another task.
   revalidates the exact claimant state; raw cached queue descriptor reads are
   mutation-tested forbidden. This is a scheduler prerequisite only:
   physical terrain/actor payload arrays, renderer readers, and the sole
-  CPU-DUAL live cutover remain unbound; the A3+A4 3–4 FPS candidate remains
-  rollback baseline.
+  CPU-DUAL live cutover were bound by the later reviewed A5.8 activation. The
+  A3+A4 3–4 FPS candidate remains the rollback baseline.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
 - [ ] **Task 7 / A7 — alternating source-bank ownership:** pending.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.

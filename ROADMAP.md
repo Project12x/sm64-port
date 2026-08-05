@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — A8 reduce and overlap the master-only VDP1 path
+## Now — A7 bank lifetime prerequisite to A8 deferred VDP1 transfer
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
