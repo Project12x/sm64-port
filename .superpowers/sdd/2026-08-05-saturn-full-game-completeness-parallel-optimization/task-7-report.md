@@ -146,3 +146,9 @@ and all four quad vertices to be distinct.  Fresh DLL-preflight native-path
 C11/Werror compile and the actor-pose fixture pass with the coordinated
 duplicate/gap mutation rejected.  This fix changes no Task 10, target, Ymir,
 manual, package, or FPS claim.
+
+Final scoped rereview of `9ae757d5..b573b6bb`: SPEC PASS / QUALITY PASS,
+C0/I0.  The reviewer confirmed the global tier-0 cursor and final coverage,
+the coordinated duplicate/gap regression, and triangle/quad distinctness;
+the repository-pinned 193-path finding remained addressed.  No new Critical
+or Important issue was found.
