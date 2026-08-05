@@ -41,6 +41,14 @@ REQUIRED_SYMBOLS = {
 }
 
 
+class ObservationError(ValueError):
+    """Fail-closed observation error with a fixed-size final target snapshot."""
+
+    def __init__(self, message: str, diagnostics: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.diagnostics = diagnostics
+
+
 def _elf32_sections(data: bytes) -> tuple[str, list[dict[str, int]]]:
     """Return ELF32 section metadata without calling an inherited toolchain."""
     if data[:4] != b"\x7fELF" or len(data) < 52 or data[4] != 1:
@@ -344,14 +352,20 @@ def observe_target(
     *,
     max_vblanks: int,
     nominal_refresh_hz: float,
+    presentation_events: int = 2,
 ) -> dict[str, Any]:
     """Advance one VBlank at a time and preserve only coherent queue records."""
     if not 1 <= max_vblanks <= MAX_VBLANKS:
         raise ValueError(f"max VBlanks must be between 1 and {MAX_VBLANKS}")
+    if not 2 <= presentation_events <= MAX_VBLANKS:
+        raise ValueError(f"presentation events must be between 2 and {MAX_VBLANKS}")
     events: list[dict[str, Any]] = []
     used_sequences: set[int] = set()
     last_presentation: int | None = None
     latest_queue: dict[str, Any] | None = None
+    last_trace: dict[str, int] | None = None
+    last_runtime: dict[str, Any] | None = None
+    last_queue_generation: int | None = None
     for sample_index in range(max_vblanks):
         client.call("exec.run_for", {"frames": 1})
         trace = decode_boot_trace(read_exact(client, _p2(symbols["sourceboot_boot_trace"]["address"]), BOOT_TRACE_BYTES))
@@ -359,6 +373,9 @@ def observe_target(
         queue_generation = decode_queue_generation(
             read_exact(client, _p2(symbols["s_render_job_queue"]["address"]), RENDER_JOB_QUEUE_BYTES)
         )
+        last_trace = trace
+        last_runtime = runtime
+        last_queue_generation = queue_generation
         coherent = accept_coherent_queue(runtime, queue_generation)
         if coherent is not None:
             latest_queue = coherent
@@ -377,11 +394,27 @@ def observe_target(
             attach_queue_record(event, coherent, used_sequences)
         events.append(event)
         last_presentation = presentation
-        if len(events) >= 2 and latest_queue is not None:
+        if len(events) >= presentation_events and latest_queue is not None:
             break
-    measurement = summarize_cadence(events, nominal_refresh_hz=nominal_refresh_hz)
+    diagnostics = {
+        "vblanks_advanced": sample_index + 1,
+        "presentation_events_observed": len(events),
+        "presentation_events_required": presentation_events,
+        "last_trace": last_trace,
+        "last_runtime": last_runtime,
+        "last_queue_generation": last_queue_generation,
+    }
+    if len(events) < presentation_events:
+        raise ObservationError(
+            f"observed {len(events)} of {presentation_events} required presentation events",
+            diagnostics,
+        )
+    try:
+        measurement = summarize_cadence(events, nominal_refresh_hz=nominal_refresh_hz)
+    except ValueError as error:
+        raise ObservationError(str(error), diagnostics) from error
     if latest_queue is None:
-        raise ValueError("no coherent terminal queue record was observed")
+        raise ObservationError("no coherent terminal queue record was observed", diagnostics)
     return {
         "vblanks_advanced": sample_index + 1,
         "measurement": measurement,
@@ -398,6 +431,7 @@ def capture_after_bios(
     startup_vblanks: int,
     max_vblanks: int,
     nominal_refresh_hz: float,
+    presentation_events: int = 2,
 ) -> dict[str, Any]:
     """Prove loaded identity before reading one telemetry byte."""
     identity = wait_for_target_identity(
@@ -410,6 +444,7 @@ def capture_after_bios(
             symbols,
             max_vblanks=max_vblanks,
             nominal_refresh_hz=nominal_refresh_hz,
+            presentation_events=presentation_events,
         ),
     }
 
@@ -472,6 +507,12 @@ def main(argv: list[str] | None = None) -> int:
         help="separate identity-load wait bound (1..4096)",
     )
     parser.add_argument("--max-vblanks", type=int, default=600, help="observation bound (1..4096)")
+    parser.add_argument(
+        "--presentation-events",
+        type=int,
+        default=2,
+        help="presentation edges required before cadence is accepted (2..4096)",
+    )
     parser.add_argument("--nominal-refresh-hz", type=float, default=60.0)
     parser.add_argument("--timeout", type=float, default=180.0)
     args = parser.parse_args(argv)
@@ -488,6 +529,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError("timeout must be positive")
         if not 1 <= args.max_vblanks <= MAX_VBLANKS:
             raise ValueError(f"max VBlanks must be between 1 and {MAX_VBLANKS}")
+        if not 2 <= args.presentation_events <= MAX_VBLANKS:
+            raise ValueError(f"presentation events must be between 2 and {MAX_VBLANKS}")
         args.startup_vblanks = validate_startup_vblanks(args.startup_vblanks)
         if args.nominal_refresh_hz <= 0:
             raise ValueError("nominal refresh rate must be positive")
@@ -520,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
             symbols,
             max_vblanks=args.max_vblanks,
             nominal_refresh_hz=args.nominal_refresh_hz,
+            presentation_events=args.presentation_events,
         )
         client.shutdown()
         report["status"] = "complete"
@@ -527,6 +571,8 @@ def main(argv: list[str] | None = None) -> int:
         if client is not None:
             client.abort()
         report["failure"] = {"stage": stage, "type": type(error).__name__, "message": str(error)}
+        if isinstance(error, ObservationError):
+            report["observation_diagnostics"] = error.diagnostics
     report["protocol"] = _protocol_diagnostics(client)
     _write_report(args.output, report)
     print(json.dumps(report, indent=2, sort_keys=True))

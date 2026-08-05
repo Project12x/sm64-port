@@ -51,15 +51,34 @@ CPU/SCU lane during stale iterations, suppresses presentation while the single
 VDP1 destinations are partial, and permanently fails closed after any partial
 resident-write failure. Published banks carry their immutable VDP2 camera and
 snapshot generation. The ordinary path explicitly reports zero at nonexistent
-transport/terminal waits. CPU-DMAC and SCU-DMA remain serial by design. This
-The first target attempt exposed a host-mock blind spot: Yaul's target
+transport/terminal waits. CPU-DMAC and SCU-DMA remain serial by design. The
+first target attempt exposed a host-mock blind spot: Yaul's target
 `VDP1_VRAM(0)` is an integer address, not a pointer. The explicit
 `(void *)(uintptr_t)` conversion and a source regression contract repair that
 compile failure. The exact incremental Route0/live-input/Pipe4 target build
 then exits zero and produces ELF SHA-256
 `5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
-A8 is source- and target-complete; no Ymir result or FPS improvement is yet
-claimed.
+A8's first automatic Ymir capture exposed a zero-actor runtime failure. The
+scene-neutral repair publishes a two-job terrain graph when actor meshlet
+admission is empty and retains the four-job graph when Mario is visible.
+Independent review then found that the old count return conflated successful
+culling with actor-preparation failure. The repaired boolean-success plus
+out-count contract retains fail-closed errors. The final target ELF SHA-256 is
+`10e92064175f1d277039322f6be874f646b71a486c7f18ccd8a2e9786df569ab`.
+The repeat exact capture is runtime-green: both queue shapes retire, VDP1/VDP2
+presentation advances, DMA is idle after retirement, and transfer faults,
+bank-unavailable skips, overwrite waits, transport waits, and terminal waits
+are all zero. A deeper exact capture records ten presentation events and nine
+stable 36--38-field intervals: 1.63 FPS mean, 1.62 median, and 1.58 1%-low.
+`QN=QR=10`, `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, and `QW=QF=QQ=0`. This is a
+measured regression from the 4.8-FPS A5.9 baseline, not an A8 uplift; the next
+investigation must split CPU construction/simulation cost because the
+deferred-transfer wait counters do not explain the 37-field cadence.
+The post-repair direct host fixtures for render-job runtime, actor meshlets,
+DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
+did not execute them because the known MSYS-to-Windows path conversion defect
+rewrote the worktree path; that wrapper failure is retained as infrastructure
+evidence and is not reported as a product-test failure.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

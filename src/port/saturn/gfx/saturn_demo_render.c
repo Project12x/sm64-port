@@ -1888,9 +1888,7 @@ static bool __attribute__((unused)) demo_render_queue_context_publish(
 static bool __attribute__((unused)) demo_render_queue_contexts_publish(void)
 {
     const uint32_t generation = s_render_job_graph.generation;
-    if (generation == 0U ||
-        s_terrain_queue_context.sequence == 0U ||
-        s_mario_transform_context.sequence == 0U)
+    if (generation == 0U || s_terrain_queue_context.sequence == 0U)
         return false;
     const sm64_saturn_render_job_queue_t *const queue =
         (const sm64_saturn_render_job_queue_t *)
@@ -1900,9 +1898,13 @@ static bool __attribute__((unused)) demo_render_queue_contexts_publish(void)
             sm64_saturn_render_job_queue_published_job(
                 &s_render_job_queue, generation, job_index);
         if (job == NULL) return false;
+        const bool world_job =
+            job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
+            job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER;
+        if (!world_job && s_mario_transform_context.sequence == 0U)
+            return false;
         const uint16_t bytes =
-            (job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT ||
-             job->callback_id == SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER)
+            world_job
                 ? (uint16_t)sizeof(s_terrain_queue_context)
                 : (uint16_t)sizeof(s_mario_transform_context);
         if (!demo_render_queue_context_publish(job_index, bytes)) return false;
@@ -3452,20 +3454,24 @@ static void demo_upload_vdp1_dual(sm64_saturn_vdp1_backend_t *backend,
 }
 #endif
 
-static uint16_t demo_prepare_mario(
+static bool demo_prepare_mario(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     const sm64_saturn_mario_actor_pose_t *pose,
     const sm64_saturn_ir_transform_job_t *job,
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile,
+    uint16_t *vertex_count_out)
 {
     s_actor_draw_count = 0U;
     s_actor_transform_ref_count = 0U;
     s_actor_texture_count = 0U;
     s_actor_command_count = 0U;
+    if (vertex_count_out == NULL)
+        return false;
+    *vertex_count_out = 0U;
     if (snapshot == NULL || pose == NULL || job == NULL || profile == NULL ||
         !snapshot->valid || pose->vertices == NULL ||
         pose->vertex_count != SM64_MARIO_VERTEX_COUNT)
-        return 0U;
+        return false;
 
     const uint32_t meshlet_generation = s_actor_publish_sequence == UINT32_MAX
         ? 1U : s_actor_publish_sequence + 1U;
@@ -3494,7 +3500,7 @@ static uint16_t demo_prepare_mario(
             &meshlet_snapshot, pose, &meshlet_view, &meshlet_output,
             SM64_MARIO_PRIMITIVE_COUNT, profile)) {
         profile->pipeline_faults++;
-        return 0U;
+        return false;
     }
     for (uint8_t pass = 0U; pass < 2U; pass++) {
         const sm64_saturn_actor_draw_ref_t *refs = pass == 0U
@@ -3503,12 +3509,13 @@ static uint16_t demo_prepare_mario(
                                             : meshlet_output.translucent_count;
         for (uint16_t i = 0U; i < count; i++) {
             const uint16_t primitive_id = refs[i].primitive_id;
-            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return 0U;
+            if (primitive_id >= SM64_MARIO_PRIMITIVE_COUNT) return false;
             s_actor_draw_order[s_actor_draw_count++] = primitive_id;
         }
     }
     s_actor_transform_ref_count = meshlet_output.position_count;
-    return s_actor_transform_ref_count;
+    *vertex_count_out = s_actor_transform_ref_count;
+    return true;
 }
 
 static uint16_t demo_finalize_mario_draws(void)
@@ -3699,21 +3706,35 @@ bool sm64_saturn_demo_render_frame(
 
     s_terrain_publish_sequence =
         sm64_saturn_render_generation_next(s_terrain_publish_sequence);
-    const uint16_t actor_vertex_count =
-        demo_prepare_mario(snapshot, pose, &actor_job, profile);
-    s_actor_publish_sequence =
-        sm64_saturn_render_generation_next(s_actor_publish_sequence);
-    bool queue_ok =
-        s_render_job_runtime_active != 0U && actor_vertex_count != 0U &&
-        demo_snapshot_mario_transform_context(
+    uint16_t actor_vertex_count = 0U;
+    const bool actor_prepare_ok =
+        demo_prepare_mario(snapshot, pose, &actor_job, profile,
+                           &actor_vertex_count);
+    if (actor_prepare_ok)
+        s_actor_publish_sequence =
+            sm64_saturn_render_generation_next(s_actor_publish_sequence);
+    bool queue_ok = s_render_job_runtime_active != 0U && actor_prepare_ok;
+    if (queue_ok && actor_vertex_count != 0U) {
+        queue_ok = demo_snapshot_mario_transform_context(
             &s_mario_transform_context, &actor_job, snapshot, pose);
-    if (queue_ok)
-        s_mario_transform_context.sequence = s_actor_publish_sequence;
+        if (queue_ok)
+            s_mario_transform_context.sequence = s_actor_publish_sequence;
+    }
     queue_ok = queue_ok && demo_render_queue_reset_frame_banks();
+    /* A fully culled/offscreen actor is an ordinary scene result. Keep the
+     * terrain chain contiguous so that generation can publish without
+     * manufacturing a zero-length actor descriptor (which the queue rejects
+     * by contract). Visible actors append their own admit/lower chain. */
     const sm64_saturn_render_job_t frame_jobs[] = {
         {
             .type = SM64_SATURN_RENDER_JOB_WORLD_ADMIT,
             .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_ADMIT,
+            .snapshot_generation = transform_generation,
+            .input_count = s_render_work_count,
+            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
+        }, {
+            .type = SM64_SATURN_RENDER_JOB_WORLD_LOWER,
+            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER,
             .snapshot_generation = transform_generation,
             .input_count = s_render_work_count,
             .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
@@ -3724,12 +3745,6 @@ bool sm64_saturn_demo_render_frame(
             .input_count = actor_vertex_count,
             .output_capacity = actor_vertex_count,
         }, {
-            .type = SM64_SATURN_RENDER_JOB_WORLD_LOWER,
-            .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_WORLD_LOWER,
-            .snapshot_generation = transform_generation,
-            .input_count = s_render_work_count,
-            .output_capacity = DEMO_TERRAIN_RESULT_CAPACITY,
-        }, {
             .type = SM64_SATURN_RENDER_JOB_ACTOR_LOWER,
             .callback_id = SM64_SATURN_RENDER_JOB_CALLBACK_ACTOR_LOWER,
             .snapshot_generation = transform_generation,
@@ -3738,12 +3753,12 @@ bool sm64_saturn_demo_render_frame(
         },
     };
     const uint8_t frame_dependencies[] = {
-        0U, 0U, (uint8_t)(1U << 0U), (uint8_t)(1U << 1U),
+        0U, (uint8_t)(1U << 0U), 0U, (uint8_t)(1U << 2U),
     };
+    const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;
     queue_ok = queue_ok && sm64_saturn_render_job_graph_publish(
         &s_render_job_graph, transform_generation, frame_jobs,
-        frame_dependencies,
-        (uint16_t)(sizeof(frame_jobs) / sizeof(frame_jobs[0])));
+        frame_dependencies, frame_job_count);
     queue_ok = queue_ok &&
         demo_render_queue_prepare_contexts(&classify,
                                            s_terrain_publish_sequence);
@@ -3818,9 +3833,10 @@ bool sm64_saturn_demo_render_frame(
         demo_terrain_queue_assemble_merge_spans(
             SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
             &s_terrain_queue_merge_spans) &&
-        demo_actor_queue_assemble_done(
-            SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
-            &s_mario_transform_context);
+        (actor_vertex_count == 0U ||
+         demo_actor_queue_assemble_done(
+             SM64_SATURN_RENDER_OUTPUT_LANE_MASTER,
+             &s_mario_transform_context));
     uint32_t terrain_results_by_lane[2] = {0U, 0U};
     if (queue_ok) {
         for (uint16_t job_index = 0U;
@@ -3841,8 +3857,9 @@ bool sm64_saturn_demo_render_frame(
         profile->pipeline_faults++;
         return false;
     }
-    profile->slave_jobs_completed +=
-        (uint32_t)(4U - (master_jobs > 4U ? 4U : master_jobs));
+    profile->slave_jobs_completed += (uint32_t)(
+        frame_job_count - (master_jobs > frame_job_count
+            ? frame_job_count : master_jobs));
     profile->triangles_transformed += required_positions;
     profile->demo_positions_transformed += required_positions;
     profile->demo_bob_results_master += terrain_results_by_lane[0];
@@ -3850,12 +3867,14 @@ bool sm64_saturn_demo_render_frame(
     profile->demo_bob_terrain_descriptor_bytes_read +=
         (uint32_t)s_terrain_emit_count *
         (uint32_t)sizeof(sm64_saturn_visible_terrain_t);
-    const uint16_t actor_command_count = demo_finalize_mario_draws();
+    const uint16_t actor_command_count = actor_vertex_count != 0U
+        ? demo_finalize_mario_draws() : 0U;
     sm64_saturn_gouraud_bank_begin(gouraud_bank);
     /* Essential actor shading is reserved before optional world shading.
      * Previously terrain consumed the Gouraud bank first, which made Mario
      * flat even on frames where his command batch happened to fit. */
-    demo_reserve_mario_gouraud(gouraud_bank, profile);
+    if (actor_vertex_count != 0U)
+        demo_reserve_mario_gouraud(gouraud_bank, profile);
     sm64_saturn_vdp1_backend_begin(backend);
     /* Preserve Mario's all-or-nothing textured tail batch, then retain the
      * nearest terrain results if the command arena is oversubscribed.
@@ -3887,7 +3906,8 @@ bool sm64_saturn_demo_render_frame(
      * material bindings, and per-vertex Gouraud data after terrain compaction.
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is
      * reserved for SCSP/audio service rather than geometry dispatch. */
-    demo_emit_mario(snapshot, pose, backend, &partitions, profile);
+    if (actor_vertex_count != 0U)
+        demo_emit_mario(snapshot, pose, backend, &partitions, profile);
     sm64_saturn_vdp1_backend_finish(backend);
     /* Published profile diagnostics: never read to choose an allocation,
      * scheduling, LOD, or promotion decision. */

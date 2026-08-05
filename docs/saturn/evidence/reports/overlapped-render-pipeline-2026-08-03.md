@@ -1772,3 +1772,25 @@ configured Windows host compiler/Python. The scoped repair landed as
 `8b037a7d` (`fix(saturn): harden deferred VDP1 completion`); independent
 rereview and any serialized target build remain open. No target/Ymir/FPS claim
 is made.
+
+### A8 final runtime and cadence closure (2026-08-05)
+
+The first exact A8 capture failed before DMA because a fully culled Mario
+produced zero admitted actor positions and the renderer quarantined the frame.
+The scene-neutral repair publishes a two-job terrain graph for successful zero
+admission and retains the four-job graph for visible actors. Independent review
+then found that the old count return also used zero for actual preparation
+errors. A watched RED/GREEN boolean-success plus output-count contract restores
+fail-closed behavior; independent rereview is PASS with no Important issue.
+
+Seven A8 source contracts and 22 configurable-depth capture tests pass. The
+serialized exact target build exits zero and produces ELF SHA-256
+`10e92064175f1d277039322f6be874f646b71a486c7f18ccd8a2e9786df569ab`.
+The exact report
+`docs/saturn/evidence/reports/a8-deferred-transfer-throughput-long-2026-08-05.json`
+matches that ELF and completes ten presentation events. Its nine intervals are
+36--38 fields: 1.63 FPS mean, 1.62 median, and 1.58 1%-low. All ten queue
+generations retire with `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, `QN=QR=10`, and
+`QW=QF=QQ=0`; worker failure counters are also zero. A8 closes the transfer
+lifetime prerequisite but provides no measured cadence uplift. The next task
+must split CPU construction and simulation timing before choosing A9 overlap.

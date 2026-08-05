@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from unittest import mock
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -398,6 +399,38 @@ class ThroughputCaptureTests(unittest.TestCase):
         self.assertEqual(observation["latest_coherent_queue"]["sequence"], 7)
         self.assertEqual(observation["measurement"]["guest_fps_mean"], 30.0)
 
+    def test_observation_waits_for_configured_presentation_event_count(self) -> None:
+        class FakeYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, self.tick))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        observation = capture.observe_target(
+            FakeYmir(),
+            {
+                "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+            },
+            max_vblanks=4,
+            nominal_refresh_hz=60.0,
+            presentation_events=3,
+        )
+        self.assertEqual(observation["vblanks_advanced"], 4)
+        self.assertEqual(observation["measurement"]["presentation_event_count"], 3)
+
     def test_repeated_coherent_sequence_fails_end_to_end_instead_of_being_silently_omitted(self) -> None:
         class FakeYmir:
             def __init__(self) -> None:
@@ -429,6 +462,84 @@ class ThroughputCaptureTests(unittest.TestCase):
                 nominal_refresh_hz=60.0,
             )
 
+    def test_failed_cadence_retains_bounded_last_target_state(self) -> None:
+        class ShortObservationYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, self.tick))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=4, qr=3, notify=9, retired=8))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(99))}
+                raise AssertionError(address)
+
+        with self.assertRaises(capture.ObservationError) as caught:
+            capture.observe_target(
+                ShortObservationYmir(),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=3,
+                nominal_refresh_hz=60.0,
+                presentation_events=3,
+            )
+        diagnostics = caught.exception.diagnostics
+        self.assertEqual(diagnostics["vblanks_advanced"], 3)
+        self.assertEqual(diagnostics["presentation_events_observed"], 2)
+        self.assertEqual(diagnostics["presentation_events_required"], 3)
+        self.assertEqual(diagnostics["last_trace"], {
+            "observed_vblank_generation": 3,
+            "vdp2_presentation_generation": 3,
+        })
+        self.assertEqual(diagnostics["last_runtime"]["qn"], 4)
+        self.assertEqual(diagnostics["last_runtime"]["qr"], 3)
+        self.assertEqual(diagnostics["last_queue_generation"], 99)
+
+    def test_invalid_cadence_math_retains_last_target_state(self) -> None:
+        class InvalidCadenceYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(1, self.tick))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        with self.assertRaises(capture.ObservationError) as caught:
+            capture.observe_target(
+                InvalidCadenceYmir(),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=4,
+                nominal_refresh_hz=60.0,
+                presentation_events=3,
+            )
+        self.assertIn("no VBlank progress", str(caught.exception))
+        self.assertEqual(caught.exception.diagnostics["last_trace"], {
+            "observed_vblank_generation": 1,
+            "vdp2_presentation_generation": 4,
+        })
+
     def test_protocol_diagnostics_bounds_many_and_oversized_notifications(self) -> None:
         oversized = {"method": "instance.note", "params": {"message": "x" * (128 * 1024)}}
         client = type("Client", (), {
@@ -459,6 +570,74 @@ class ThroughputCaptureTests(unittest.TestCase):
         self.assertEqual(report["status"], "failed")
         self.assertEqual(report["failure"]["stage"], "arguments")
         self.assertNotIn("observation", report)
+
+    def test_cli_rejects_presentation_event_count_below_two_in_failed_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "failed.json"
+            exit_code = capture.main([
+                "--ymir", str(Path(directory) / "missing-ymir"),
+                "--ipl", str(Path(directory) / "missing-ipl"),
+                "--game", str(Path(directory) / "missing.cue"),
+                "--elf", str(Path(directory) / "missing.elf"),
+                "--output", str(output),
+                "--presentation-events", "1",
+            ])
+            report = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["failure"]["stage"], "arguments")
+        self.assertIn("presentation events must be between 2 and", report["failure"]["message"])
+
+    def test_cli_failed_observation_report_retains_last_target_state(self) -> None:
+        diagnostics = {
+            "vblanks_advanced": 5,
+            "presentation_events_observed": 1,
+            "presentation_events_required": 10,
+            "last_trace": {"observed_vblank_generation": 5, "vdp2_presentation_generation": 8},
+            "last_runtime": {"qn": 4, "qr": 3},
+            "last_queue_generation": 99,
+        }
+
+        class FakeClient:
+            stderr = ""
+            notifications: list[dict[str, object]] = []
+
+            def abort(self) -> None:
+                pass
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = {name: root / name for name in ("ymir.exe", "ipl.bin", "game.cue", "game.elf")}
+            for path in paths.values():
+                path.write_bytes(b"fixture")
+            output = root / "failed.json"
+            with (
+                mock.patch.object(capture, "bind_capture_artifacts", return_value={"game": {}, "elf": {}}),
+                mock.patch.object(capture, "artifact_identity", return_value={"sha256": "ymir"}),
+                mock.patch.object(capture, "resolve_required_symbols", return_value={}),
+                mock.patch.object(capture, "build_elf_identity_probe", return_value={"expected_bytes": [1]}),
+                mock.patch.object(capture, "YmirClient", return_value=FakeClient()),
+                mock.patch.object(capture, "run_bios_handoff"),
+                mock.patch.object(capture, "wait_for_target_identity", return_value={"matched": True}),
+                mock.patch.object(
+                    capture,
+                    "observe_target",
+                    side_effect=capture.ObservationError("cadence incomplete", diagnostics),
+                ),
+            ):
+                exit_code = capture.main([
+                    "--ymir", str(paths["ymir.exe"]),
+                    "--ipl", str(paths["ipl.bin"]),
+                    "--game", str(paths["game.cue"]),
+                    "--elf", str(paths["game.elf"]),
+                    "--output", str(output),
+                    "--presentation-events", "10",
+                ])
+            report = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["failure"]["stage"], "observation")
+        self.assertEqual(report["observation_diagnostics"], diagnostics)
 
 
 if __name__ == "__main__":

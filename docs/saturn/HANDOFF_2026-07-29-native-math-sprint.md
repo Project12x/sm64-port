@@ -118,12 +118,15 @@ runtime fallback into the source camera.
 
 This handoff's camera-planning action has been superseded by
 `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
-A8 deferred VDP1 transport is source- and target-complete with independent
-PASS/APPROVED rereview. The exact Pipe4 ELF is
-`5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
-Run automatic Ymir queue/presentation capture and a manual FPS comparison next;
-if runtime-safe, proceed to A9 true frame overlap. BOB remains only the current
-demonstrator and every transport/ownership interface must serve the full game.
+A8 deferred VDP1 transport is source-, target-, and runtime-publication green.
+The fail-closed zero-admitted-actor repair produces exact Pipe4 ELF
+`10e92064175f1d277039322f6be874f646b71a486c7f18ccd8a2e9786df569ab`.
+Its ten-event automatic series is stable at 1.63 FPS mean / 1.62 median with
+all ten queue generations retired and no queue waits or failures. A8 is a
+necessary lifetime correction but not an FPS win. Split CPU construction from
+simulation timing next, then scope A9 overlap around the measured dominant
+work. BOB remains only the current demonstrator and every transport/ownership
+interface must serve the full game.
 
 ## Environment facts
 

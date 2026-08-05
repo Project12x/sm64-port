@@ -186,6 +186,55 @@ class A8DeferredTransferRuntimeContractTests(unittest.TestCase):
             "the transfer descriptor must compile under the target's integer-address macro",
         )
 
+    def test_fully_culled_actor_keeps_a_terrain_only_frame_valid(self) -> None:
+        """Zero admitted actor meshlets are an ordinary scene result, not a fault."""
+        render = extract_c_function(
+            (REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
+                encoding="utf-8"
+            ),
+            "sm64_saturn_demo_render_frame",
+        )
+        self.assertNotIn("actor_vertex_count != 0U &&", render)
+        self.assertIn(
+            "const uint16_t frame_job_count = actor_vertex_count != 0U ? 4U : 2U;",
+            render,
+        )
+        self.assertLess(render.index("SM64_SATURN_RENDER_JOB_WORLD_ADMIT"),
+                        render.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"))
+        self.assertLess(render.index("SM64_SATURN_RENDER_JOB_WORLD_LOWER"),
+                        render.index("SM64_SATURN_RENDER_JOB_ACTOR_ADMIT"))
+        self.assertIn("frame_dependencies, frame_job_count", render)
+        self.assertRegex(
+            render,
+            r"actor_vertex_count\s*==\s*0U\s*\|\|\s*\n?\s*demo_actor_queue_assemble_done",
+        )
+        contexts = extract_c_function(
+            (REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
+                encoding="utf-8"
+            ),
+            "demo_render_queue_contexts_publish",
+        )
+        self.assertIn(
+            "if (!world_job && s_mario_transform_context.sequence == 0U)",
+            contexts,
+        )
+
+    def test_actor_prepare_failure_is_distinct_from_successful_zero_admission(self) -> None:
+        """Only a successful zero-count prepare may publish terrain-only."""
+        source = (
+            REPO_ROOT / "src/port/saturn/gfx/saturn_demo_render.c"
+        ).read_text(encoding="utf-8")
+        prepare = extract_c_function(source, "demo_prepare_mario")
+        render = extract_c_function(source, "sm64_saturn_demo_render_frame")
+        self.assertIn("static bool demo_prepare_mario(", source)
+        self.assertIn("uint16_t *vertex_count_out", prepare)
+        self.assertIn("*vertex_count_out = 0U;", prepare)
+        self.assertIn("return false;", prepare)
+        self.assertIn("return true;", prepare)
+        self.assertIn("const bool actor_prepare_ok =", render)
+        self.assertIn("queue_ok = s_render_job_runtime_active != 0U && actor_prepare_ok;", render)
+        self.assertIn("if (actor_prepare_ok)", render)
+
 
 if __name__ == "__main__":
     unittest.main()

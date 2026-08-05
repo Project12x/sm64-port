@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Extended the exact-identity sourceboot throughput capture with a configurable
+  presentation-event depth and bounded final diagnostics on cadence failure.
+  This replaces one-interval A8 guesses with a repeatable multi-frame sample
+  while retaining queue/runtime evidence when a slow target misses the bound.
+
+- Fixed A8's first live publication failure when Mario is fully culled by
+  meshlet admission. Zero admitted actor positions now publish a terrain-only
+  two-job graph instead of manufacturing invalid zero-length actor jobs and
+  permanently quarantining both VDP1 source banks. Visible actors retain the
+  four-job terrain-plus-actor graph and the same dependency checks. Actor
+  preparation now reports success separately from its admitted count so an
+  invalid pose or meshlet failure still fails closed rather than masquerading
+  as successful culling.
+
 - Fixed A8's target-only VDP1 transfer-descriptor initialization by explicitly
   converting Yaul's integer VRAM address to the descriptor pointer type. Host
   mocks exposed the address as a pointer and therefore missed the SH-2 compile

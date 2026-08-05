@@ -317,11 +317,15 @@ and the evidence report before starting another task.
   audited Route0/live-input/Pipe4 `make -B -j1` exits zero with ELF
   `1eba8888...e99267c`. No Ymir, hardware, asynchronous-transfer, or FPS
   evidence is claimed by A7.
-- [x] **Task 8 / A8 — deferred transfers and true wait telemetry:** source and
-  target complete. Repair `8b037a7d` is focused-host-green, both independent
-  rereviews are PASS/APPROVED, and the exact target ELF is
-  `5926ff27...17d9cab5`. Automatic Ymir/FPS acceptance remains explicitly
-  open before A9 runtime activation.
+- [x] **Task 8 / A8 — deferred transfers and true wait telemetry:** complete.
+  Repair `8b037a7d` is
+  focused-host-green, both independent rereviews are PASS/APPROVED, and the
+  first exact target ELF was `5926ff27...17d9cab5`. Automatic Ymir exposed a
+  zero-admitted-actor publication failure before DMA. Its final fail-closed,
+  scene-neutral repair is independently approved and exact-target green at ELF
+  `10e92064...df569ab`. Ten-event evidence measures 1.63 FPS mean with every
+  queue generation retired and no queue wait/failure; A8 closes without an
+  uplift claim and hands measured CPU-cost isolation to A9.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
@@ -1518,12 +1522,16 @@ yet.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
-**Status:** source- and target-complete; runtime evidence pending. Repairs are
+**Status:** source-, target-, and runtime-publication complete; cadence active. Repairs are
 committed at `8b037a7d`; independent contract and quality rereviews are
 PASS/APPROVED. The exact Route0/live-input/Pipe4 build exits zero after the
 target-only Yaul integer-address conversion repair and produces ELF SHA-256
 `5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
-Automatic Ymir queue/presentation and manual FPS evidence remain unchecked.
+The failed first automatic run and green repaired run are both retained. The
+repair publishes terrain-only when actor admission is empty. It advances both
+VDP1/VDP2 generations with no transfer/bank faults or measured waits, but the
+first one-interval cadence is only 1.62 FPS; longer automatic and manual FPS
+evidence remain unchecked.
 
 **A8 design correction (2026-08-05):** the final command and Gouraud
 destinations remain single VDP1-VRAM ranges in A8, so no transfer may begin
@@ -1672,6 +1680,53 @@ shared bank transport owns every frame upload.
   quality rereview is PASS/APPROVED after `bf160e53` corrected the interrupt
   ownership text. Runtime Ymir/FPS evidence is deliberately a separate,
   still-open acceptance gate rather than part of source review.
+
+- [x] **Step 10: Pass automatic Ymir publication and cadence — COMPLETE;
+  NO A8 UPLIFT**
+
+  The first exact capture is retained at
+  `docs/saturn/evidence/reports/a8-deferred-transfer-throughput-2026-08-05.json`.
+  Target identity matches, but the observation fails closed with fewer than
+  two presentation events across 4,096 VBlanks. Direct P2 reads show BOB ready,
+  the render runtime active, a valid 424-vertex Mario pose, zero admitted actor
+  transform references, `frame_serial=0`, `pipeline_faults=4`, no DMA tickets
+  or transfer faults, and both source banks quarantined. Make zero visible
+  actor meshlets a valid scene-neutral terrain-only/no-op actor frame, retain
+  fail-closed behavior for actual errors, then repeat this exact capture.
+
+  The repair makes the terrain dependency chain the first two descriptors and
+  appends actor admit/lower only when actor positions exist. Its exact
+  incremental target build exits zero in 64.4 seconds; ELF SHA-256 is
+  `b246b39c1137a4374ced8ae7b3d276436f5633ae9194df390e1df2dde7a88bdd`.
+  The repeat capture at
+  `docs/saturn/evidence/reports/a8-deferred-transfer-throughput-repair-2026-08-05.json`
+  passes with two presentation events and no queue failures. It measures one
+  37-field interval (1.62 FPS). Direct profile reads after three rendered
+  frames show `pipeline_faults=0`, zero transfer/bank/wait counters, retired
+  DMA (`head=tail=6`), and submitted/displayed generation 1047 while build
+  generation 1084 is ready for the next transfer. Require a longer event series
+  before accepting or rejecting A8's cadence effect.
+
+  Post-repair direct executable fixtures are green for render-job runtime,
+  actor meshlets, DMA queue, and VDP1 transfer pipeline. The aggregate Make
+  wrapper remains red before test execution because MSYS rewrites the Windows
+  worktree path to `\\d\\Code\\...`; this is recorded as an infrastructure
+  gate failure, not substituted for or counted as a test result.
+
+  Independent review rejected the first terrain-only repair because the old
+  count return conflated successful zero admission with actor-preparation
+  failure. A watched RED/GREEN contract now requires boolean success plus an
+  output count; only success with count zero selects the two-job graph, while
+  invalid pose/meshlet preparation fails before graph publication. Independent
+  rereview is PASS with no Important issue. The exact serialized rebuild exits
+  zero with ELF SHA-256
+  `10e92064175f1d277039322f6be874f646b71a486c7f18ccd8a2e9786df569ab`.
+  The configurable-depth capture tool is 22/22 tests green. Its exact ten-event
+  report at
+  `docs/saturn/evidence/reports/a8-deferred-transfer-throughput-long-2026-08-05.json`
+  records nine 36--38-field intervals: 1.63 FPS mean, 1.62 median, 1.58 1%-low,
+  `QN=QR=10`, `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, and `QW=QF=QQ=0`. A8 has no
+  measured uplift; use construction/simulation timing to scope A9.
 
 ### Task 9: Overlap snapshot rendering with simulation and bound catch-up
 

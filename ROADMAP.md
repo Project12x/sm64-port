@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — runtime-validate A8 deferred VDP1 transfer
+## Now — isolate the post-A8 CPU frame cost
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
@@ -48,7 +48,16 @@ PASS/APPROVED rereview. Its serial CPU-DMAC/SCU-DMA lane carries transfer
 ownership across fields and removes the accepted path's immediate transport
 wait. The exact Pipe4 target rebuild exits zero and produces ELF SHA-256
 `5926ff276342694249a16b9007de2b2c9d3d241f8f456a9c0db50a8f17d9cab5`.
-Automatic Ymir queue/presentation and manual FPS evidence remain open.
+The first automatic Ymir run exposed and retained a runtime-red zero-actor
+publication failure. The scene-neutral repair now treats zero admitted Mario
+meshlets as a valid terrain-only two-job graph while actor-preparation errors
+remain fail-closed. The final exact ELF is `10e92064...df569ab`. A ten-event
+automatic run yields nine stable 36--38-field intervals: 1.63 FPS mean, 1.62
+median, and 1.58 1%-low. All ten queue generations retire with the same 2+2
+master/slave split and `QW=QF=QQ=0`. A8 therefore closes a correctness and
+lifetime prerequisite but does not improve cadence. Split CPU construction
+from simulation timing and use that result to scope A9 overlap; do not spend a
+manual-test cycle looking for an uplift the automatic evidence disproves.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the
