@@ -331,7 +331,7 @@ and the evidence report before starting another task.
   six-tick catch-up death spiral while deliberately retaining synchronous
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
-- [ ] **Task 9A / A9A — true frame-lifetime overlap:** active. Steps 1--10 are
+- [x] **Task 9A / A9A — true frame-lifetime overlap:** complete. Steps 1--12 are
   source-complete and independently reviewed. Fix Round 4 specification and
   quality reviews are PASS with no Critical or Important findings and one
   documentation-only Minor corrected here; the reviewer authorizes one fresh
@@ -344,14 +344,16 @@ and the evidence report before starting another task.
   bounds fail before margin subtraction. The repaired target build, exact map,
   target identity, and bounded capture now pass; runtime measurement is 5.294
   FPS mean (median/1% low 5.0) with ten generations retired and no queue
-  failures.
+  failures. Owner-visible BOB acceptance also passes: controls and camera are
+  normal, traversal/visual stability are acceptable, and the scene holds 4--6
+  FPS.
   The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
   the master may execute the one queued source tick for `N+1`. Exactly one
   render generation, the A8 transport owner, master-only final ordering/VDP1,
   and all A9 cadence/publication laws remain unchanged.
-- [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
+- [ ] **Task 10 / A10 — full-game hardening and publication:** active. This
   includes scene-neutral level extraction and validation, generalized dynamic
   actor/enemy banks using the same actor pipeline proven by Mario, and
   per-level coarse BSP/frustum/portal-window admission. It does **not** yet
@@ -2495,9 +2497,9 @@ expected FPS lever.
   evidence are complete and reconciled across the plan, ledger, STATE, ROADMAP,
   and aggregate report. The mixed progress ledger remains unstaged alongside
   unrelated work by design. Scoped implementation/changelog commit is
-  `cfb07a7d`; scoped evidence/docs commit is `88fd3c07`. Manual Ymir,
-  broad native-math, and any failed gate remain explicitly open. Do not start
-  Task 10 until the next transition updates those gates in the same way.
+  `cfb07a7d`; scoped evidence/docs commit is `88fd3c07`. Manual Ymir Step 6
+  is now complete from owner confirmation. Broad native-math and any failed
+  gate remain explicitly open; Task 10 is active at its source-contract step.
 
 ### Task 10: Prove scene-neutral behavior and publish the hardened candidate
 
@@ -2558,7 +2560,7 @@ expected FPS lever.
   Mario, zero overflow/corruption, no stale generation, and no quarantined bank
   in the ordinary route.
 
-- [ ] **Step 6: Run manual Ymir acceptance with DRAM cart — VISUAL/SPEED PASS; CONTROLS/CAMERA CHECKS OPEN**
+- [x] **Step 6: Run manual Ymir acceptance with DRAM cart — PASS**
 
   Confirm controls, BOB traversal, camera feel, geometry/material stability,
   and obvious speed relative to the Task 1 and pre-architecture CUEs. Record
@@ -2568,8 +2570,8 @@ expected FPS lever.
   process PID 29164 remained alive/responding with the title showing the loaded
   sourceboot disc. Owner observation reports the scene looks okay and runs at
   a consistent 4--6 FPS, visibly better than the prior 3--4 FPS range. This
-  closes the visual/speed portion only; controls, BOB traversal, and camera feel
-  still need explicit confirmation.
+  Owner subsequently confirmed controls and camera are normal. BOB traversal,
+  visual stability, and the 4--6 FPS owner-observed speed result are accepted.
 
 - [ ] **Step 7: Exercise a non-BOB generated fixture**
 

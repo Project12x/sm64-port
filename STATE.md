@@ -46,12 +46,15 @@ leaving `0x74F0` LWRAM. P2 `.uncached=0x260FD810+0x6C8` maps exactly to
 tests and the exact hash-bound ELF now pass. The automated capture reports
 5.294 FPS mean, 5.0 median/1% low,
 identity match after 540 VBlanks, ten queue retirements, and zero queue or
-worker failures. Manual visual/controls acceptance remains open; no rebuild is
-authorized for that acceptance. The exact CUE is now also launched in visible
+worker failures. Manual visual/controls acceptance is complete: owner confirms
+controls and camera are normal, BOB looks stable, and the visible result holds
+4--6 FPS. No rebuild is authorized for that acceptance. The exact CUE is now also launched in visible
 desktop Ymir with the profile-managed 32-Mbit DRAM cart; the window remains
 alive/responding. Owner reports the scene looks okay and holds 4--6 FPS,
-better than the prior 3--4 FPS range. Controls, traversal, and camera-feel
-confirmation remain open.
+better than the prior 3--4 FPS range.
+
+Task 10/A10 is now active at its source-contract hardening step. Broad
+native-math verification and non-BOB/full-game coverage remain open.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

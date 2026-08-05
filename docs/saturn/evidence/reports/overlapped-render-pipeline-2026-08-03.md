@@ -2459,4 +2459,6 @@ Owner follow-up confirms the visible scene looks okay and runs consistently at
 approximately 4--6 FPS, improving on the prior 3--4 FPS range. This is a manual
 visual/speed observation for the exact repaired CUE, not a replacement for the
 automated 5.294 FPS measurement. Controls, BOB traversal, and camera feel have
-not yet been explicitly confirmed, so the manual acceptance step remains open.
+Owner subsequently confirmed controls and camera are normal. Manual Step 6 is
+therefore complete for the current BOB demonstration; full-game/non-BOB
+coverage and broad native-math verification remain separate open gates.

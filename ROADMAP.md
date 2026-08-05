@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — manually accept the captured A9A artifact, then continue full-game work
+## Now — Task 10 source hardening and full-game publication
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -42,7 +42,9 @@ sole documentation-only Important removed contradictory rebuild instructions.
 Run boot/identity and bounded overlap/FPS capture against the existing exact
 ELF/CUE without rebuilding or rerunning tests. That capture now passes: mean
 `5.294` FPS, median/1% low `5.0`, identity match, ten retirements, and zero
-queue/worker failures. Manual visual/controls acceptance remains open.
+queue/worker failures. Owner-visible controls and camera are normal, and the
+scene holds 4--6 FPS. Task 10 hardening is now active; broad native-math and
+non-BOB/full-game gates remain open.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 
