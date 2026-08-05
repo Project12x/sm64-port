@@ -35,6 +35,7 @@
 - 2026-08-05 residency review correction: a validated S64P view is never a residency lease. Task 5 copies the root and feature-active payload bytes into bounded owned spans, rehashes those spans at commit, and stages exactly two generations using absolute aligned high-water accounting after the immutable SOURCE.DAT prefix. Render, VDP1, actor/animation, and audio consumers hold one-shot generation-scoped lease tokens; duplicate or stale release fails closed. Sourceboot rejects provisional roots through the linked-root caller while preserving the caller's output view on failure. The snapshot Make quoting defect remains an explicit open gate.
 - 2026-08-05 PCM v2 correction: the sound mailbox keeps byte-addressed big-endian records and separates an eight-entry control ring from a 24-entry SFX ring. Two-lap cursors make every physical slot usable while preserving empty/full distinction; producer bytes/telemetry publish before ownership cursors, and the MC68000 validates both ring snapshots then drains control before SFX within its bounded poll budget. The v1 wire proof remains historical and is never silently reinterpreted as v2.
 - 2026-08-05 animation-bank correction: the compact 209-ID bank is source-complete and differentially proven, but its mesh tables intentionally remain the legacy normal-cap/front-eye/open-hand compatibility selection. Executable C validation binds the repository-pinned 193-file inventory, exact GEO1 relationships, global gap-free tier-0 primitive ownership, and scratch bounds; the advisory JSON schema never substitutes for that validator. Full switch-variant geometry and runtime branch/state cutover remain Task 10 responsibilities.
+- 2026-08-05 source-geo seam correction: the state-only seam is not proven. The normal graph walk remains authoritative because the old root skip changes graph-owned state; Task 8's checked evidence is only a static source audit plus an illustrative digest model. No runtime caller or suppression is permitted until a future task executes the real normal/suppressed `geo_process_root()` paths and proves every required domain.
 
 ## Prior art and reuse mode
 
@@ -124,7 +125,7 @@ all complete.
 - [x] Task 5 — source-complete — implementation `422096a1`, ownership/source-cart repair `c7d6e148`, declaration follow-up `eb99c47c`, lease-token repair `26986d94`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Serial C runtime/residency gates and neutrality/sourceboot 6/6 are green. Snapshot Make quoting, target link/memory inspection, final BOB/WF roots, Ymir/FPS, native-math, and manual gates remain deferred.
 - [x] Task 6 — source-complete — implementation `7bb8f87f`; independent review SPEC/QUALITY PASS, C0/I0/M0. V1/v2 ABI, transport/publication, 68K control-first model, heartbeat, soundtest migration, linked image/zero-map, and PCM mutations 12/12 are green. The exact Qt wrapper EOF and broad test-tools timeout remain explicitly open; no target/Ymir/audible claim.
 - [x] Task 7 — source-complete — implementation `902ada8a`, repairs `68f9dd10`, `9ae757d5`, `b573b6bb`, final review record `8929b2c9`; independent rereview SPEC/QUALITY PASS, C0/I0. Actor source 8/8, actor bank 8/8, Mario pose 17/17; native-path DLL-preflight C11/Werror and actor-pose fixture pass. Make path-conversion caveat, switch-variant/runtime cutover, target/Ymir/manual/FPS/final-package gates remain deferred.
-- [ ] Task 8 — prove a state-only source-geo seam differentially
+- [ ] Task 8 — blocked/deferred — evidence-only commits `a9c3f9c5`, `3110c3de`; independent rereview SPEC/QUALITY PASS for claim qualification, but the real graph differential remains open and no seam is enabled.
 - [ ] Task 9 — preserve source music/SFX policy and spatial semantics
 - [ ] Task 10 — activate source-selected complete Mario poses
 - [ ] Task 11 — compile generic actor-family banks
@@ -501,15 +502,15 @@ bool sm64_saturn_source_geo_update_state(uint32_t generation,
 ```
 
 - [ ] RED must demonstrate the old `geo_process_root()` suppression changes at least animation, painting/warp, water/moving-texture, camera/matrix-derived object state, or lifecycle digest. A test that only compares draw output is insufficient.
-- [ ] Implement the narrowest state-only path by retaining original callbacks/state mutations and suppressing only proven display construction. If no bounded seam can produce exact digests, record Task 8 `blocked/deferred`, retain the full geo walk, and continue other lanes; do not force a speculative rewrite.
-- [ ] Run:
+- [x] Record the evidence-only deferral: no bounded seam currently produces exact real-graph digests, so the full geo walk remains authoritative and the reserved API is fail-closed/uncalled. No speculative renderer suppression was added.
+- [x] Run static/illustrative GREEN: `test_source_geo_state_contract.py` 8/8 and DLL-preflight serial C11/Werror contract execution pass. The real graph differential and combined render-policy Make gate remain explicitly open.
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-source-geo-state-diff verify-source-render-policy
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_source_geo_state_contract.py
   ```
 
-- [ ] Commit either the proven seam as `perf(saturn): separate geo state from display construction` or an evidence-only deferral as `test(saturn): bound source geo suppression`. Review must agree no source mutation moved into the renderer. No FPS threshold applies.
+- [x] Commit the evidence-only deferral as `test(saturn): bound source geo suppression` (`a9c3f9c5`) plus claim-qualification repair (`3110c3de`); independent rereview SPEC/QUALITY PASS, C0/I0/M0. Review confirms no source mutation moved into the renderer. No FPS threshold applies.
 
 ### Task 9: Preserve source music/SFX policy and spatial semantics
 
