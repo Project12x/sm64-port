@@ -16,16 +16,31 @@
 #define SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND 30U
 #define SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY 224U
 
+/* One terminal VDP1/VDP2 composition pins the displayed/rendered bank
+ * generation and names the current authoritative simulation generation. The
+ * VDP2 module receives only this metadata and the immutable camera snapshot:
+ * it remains independent of geometry, actors, VDP1 command data, and live
+ * game state. */
+typedef struct sm64_saturn_vdp2_generation_state {
+    uint32_t displayed_generation;
+    uint32_t rendered_generation;
+    uint32_t simulation_generation;
+} sm64_saturn_vdp2_generation_state_t;
+
 typedef struct sm64_saturn_vdp2_frame {
     int32_t sky_scroll_x;
     int32_t sky_scroll_y;
     uint32_t display_mask;
     uint32_t last_hud_source_tick;
+    uint32_t last_hud_displayed_generation;
+    uint32_t last_hud_rendered_generation;
+    uint32_t last_hud_simulation_generation;
     uint32_t fps_anchor_source_tick;
     uint32_t fps_presented_frames;
     uint32_t total_fps;
     uint32_t commits;
     uint8_t hud_dirty;
+    uint8_t prepared;
     char hud_text[SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY];
 } sm64_saturn_vdp2_frame_t;
 
@@ -43,6 +58,7 @@ void sm64_saturn_vdp2_frame_begin(
     sm64_saturn_vdp2_frame_t *frame,
     const sm64_saturn_vdp2_camera_snapshot_t *snapshot,
     const sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_vdp2_generation_state_t *generations,
     uint32_t source_tick);
 void sm64_saturn_vdp2_frame_commit(
     sm64_saturn_vdp2_frame_t *frame,

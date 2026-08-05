@@ -198,6 +198,15 @@ and zero fields were unattributed. Nine intervals also dropped 222 credits.
 Scheduler budgets therefore reset only after a new complete frame is
 presented, never merely because the outer loop observes another VBlank.
 
+At that terminal boundary, VDP2 composes only the immutable sky camera carried
+by the displayed VDP1 bank and a small displayed/rendered/simulation generation
+record. The HUD names those exact generations; camera/bank or
+displayed/rendered disagreement fails closed before VDP2 state changes. This
+keeps VDP2 geometry-free while making any bounded simulation lead visible
+rather than silently pairing new metrics with an older framebuffer. A changed
+generation record bypasses the HUD's normal metric refresh interval so the sky
+and its displayed tuple always change together.
+
 An optimization is portable only when it reduces a named shared stage—source
 update, geo/Fast3D front end, transform/clip, ordering, command build, transfer,
 VDP1 wait, or residency—and does not move game behavior into the renderer.

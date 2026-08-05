@@ -500,6 +500,12 @@ static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
         .yaw = 0x4000,
         .pitch = 0,
         .valid = 1U,
+        .generation = 27U,
+    };
+    const sm64_saturn_vdp2_generation_state_t generations = {
+        .displayed_generation = 27U,
+        .rendered_generation = 27U,
+        .simulation_generation = 28U,
     };
     const sm64_saturn_vdp2_frame_backend_t backend = {
         .sky_scroll_set = runtime_contract_vdp2_sky,
@@ -518,7 +524,8 @@ static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
     profile.vdp1_wait_ticks_last = 20U;
 
     sm64_saturn_vdp2_frame_init(&frame);
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 0U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, &generations,
+                                 0U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
 
     assert(observed.commits == 1U);
@@ -530,22 +537,24 @@ static void test_vdp2_frame_coalesces_sky_hud_and_layers(void)
     assert(observed.sky_x == 128 && observed.sky_y == 128);
     assert(strstr(observed.hud, "FPS ") != NULL);
     assert(strstr(observed.hud,
-                  "FPS 0 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+                  "FPS 0 GEN D 27 R 27 S 28 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
 
     /* A changed source-only camera snapshot changes sky scroll. HUD output
      * is rate limited: a second present at tick 31 commits layers/scroll but
      * does not rewrite tiles. */
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 15U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, &generations,
+                                 15U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 2U);
     assert(observed.sky_updates == 2U);
     assert(observed.hud_updates == 1U);
     assert(observed.layer_updates == 2U);
-    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, 30U);
+    sm64_saturn_vdp2_frame_begin(&frame, &camera, &profile, &generations,
+                                 30U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.hud_updates == 2U);
     assert(strstr(observed.hud,
-                  "FPS 3 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+                  "FPS 3 GEN D 27 R 27 S 28 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
 }
 
 static void test_default_camera_replay_keeps_the_2000_tick_boundary(void)

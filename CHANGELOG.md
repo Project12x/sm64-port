@@ -4,6 +4,14 @@
 
 ### Changed
 
+- VDP2 composition now consumes the immutable camera carried by the displayed
+  VDP1 bank together with explicit displayed/rendered/simulation generation
+  metadata. The HUD labels that tuple, and a mismatched camera or render bank
+  is rejected before VDP2 side effects; a tuple change also refreshes the HUD
+  immediately instead of waiting for the normal metric interval. Bounded
+  simulation lead therefore cannot silently mix sky or telemetry with an
+  older framebuffer.
+
 - Added the hardware-free A9 frame scheduler model with a presentation-scoped
   two-tick simulation budget, explicit generation-matched render/transfer
   completion, wrap-safe generation validity, bounded once-per-field

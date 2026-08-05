@@ -27,8 +27,10 @@ static char *vdp2_frame_append_u32(char *out, const char *end, uint32_t value)
     return out;
 }
 
-static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
-                                   const sm64_saturn_fast3d_profile_t *profile)
+static void vdp2_frame_hud_prepare(
+    sm64_saturn_vdp2_frame_t *frame,
+    const sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_vdp2_generation_state_t *generations)
 {
     char *out = frame->hud_text;
     char *const end = frame->hud_text + sizeof(frame->hud_text) - 1U;
@@ -39,6 +41,17 @@ static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
      * order count, and DMAW/VDP1W are time spent at their actual fences. */
     out = vdp2_frame_append_text(out, end, "FPS ");
     out = vdp2_frame_append_u32(out, end, frame->total_fps);
+    if (generations != NULL) {
+        out = vdp2_frame_append_text(out, end, " GEN D ");
+        out = vdp2_frame_append_u32(out, end,
+                                    generations->displayed_generation);
+        out = vdp2_frame_append_text(out, end, " R ");
+        out = vdp2_frame_append_u32(out, end,
+                                    generations->rendered_generation);
+        out = vdp2_frame_append_text(out, end, " S ");
+        out = vdp2_frame_append_u32(out, end,
+                                    generations->simulation_generation);
+    }
     out = vdp2_frame_append_text(out, end, " MT ");
     out = vdp2_frame_append_u32(out, end, profile->master_transform_count);
     out = vdp2_frame_append_text(out, end, " ST ");
@@ -109,6 +122,19 @@ static void vdp2_frame_hud_prepare(sm64_saturn_vdp2_frame_t *frame,
     *out = '\0';
 }
 
+static int vdp2_frame_generation_state_is_coherent(
+    const sm64_saturn_vdp2_camera_snapshot_t *snapshot,
+    const sm64_saturn_vdp2_generation_state_t *generations)
+{
+    if (snapshot == NULL || generations == NULL ||
+        generations->displayed_generation == 0U ||
+        generations->displayed_generation != generations->rendered_generation ||
+        snapshot->generation != generations->displayed_generation ||
+        generations->simulation_generation == 0U)
+        return 0;
+    return 1;
+}
+
 void sm64_saturn_vdp2_frame_init(sm64_saturn_vdp2_frame_t *frame)
 {
     if (frame == NULL)
@@ -116,6 +142,9 @@ void sm64_saturn_vdp2_frame_init(sm64_saturn_vdp2_frame_t *frame)
     (void)memset(frame, 0, sizeof(*frame));
     frame->display_mask = SM64_SATURN_VDP2_FRAME_DISPLAY_MASK;
     frame->last_hud_source_tick = UINT32_MAX;
+    frame->last_hud_displayed_generation = UINT32_MAX;
+    frame->last_hud_rendered_generation = UINT32_MAX;
+    frame->last_hud_simulation_generation = UINT32_MAX;
     frame->fps_anchor_source_tick = UINT32_MAX;
 }
 
@@ -123,9 +152,16 @@ void sm64_saturn_vdp2_frame_begin(
     sm64_saturn_vdp2_frame_t *frame,
     const sm64_saturn_vdp2_camera_snapshot_t *snapshot,
     const sm64_saturn_fast3d_profile_t *profile,
+    const sm64_saturn_vdp2_generation_state_t *generations,
     uint32_t source_tick)
 {
     if (frame == NULL || profile == NULL)
+        return;
+
+    frame->prepared = 0U;
+    if ((snapshot == NULL) != (generations == NULL) ||
+        (generations != NULL &&
+         !vdp2_frame_generation_state_is_coherent(snapshot, generations)))
         return;
 
     /* Only the copied camera values enter the scroll calculation. This
@@ -151,30 +187,49 @@ void sm64_saturn_vdp2_frame_begin(
         frame->fps_presented_frames++;
     }
 
-    if (frame->last_hud_source_tick == UINT32_MAX ||
+    const int metrics_due = frame->last_hud_source_tick == UINT32_MAX ||
         source_tick < frame->last_hud_source_tick ||
         source_tick - frame->last_hud_source_tick >=
-            SM64_SATURN_VDP2_FRAME_HUD_TICK_DIVISOR) {
-        const uint32_t elapsed_source_ticks =
-            source_tick - frame->fps_anchor_source_tick;
-        if (elapsed_source_ticks != 0U) {
-            frame->total_fps = (frame->fps_presented_frames *
-                SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND) /
-                elapsed_source_ticks;
-            frame->fps_anchor_source_tick = source_tick;
-            frame->fps_presented_frames = 0U;
+            SM64_SATURN_VDP2_FRAME_HUD_TICK_DIVISOR;
+    const int generations_changed = generations != NULL &&
+        (frame->last_hud_displayed_generation !=
+             generations->displayed_generation ||
+         frame->last_hud_rendered_generation !=
+             generations->rendered_generation ||
+         frame->last_hud_simulation_generation !=
+             generations->simulation_generation);
+    if (metrics_due || generations_changed) {
+        if (metrics_due) {
+            const uint32_t elapsed_source_ticks =
+                source_tick - frame->fps_anchor_source_tick;
+            if (elapsed_source_ticks != 0U) {
+                frame->total_fps = (frame->fps_presented_frames *
+                    SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND) /
+                    elapsed_source_ticks;
+                frame->fps_anchor_source_tick = source_tick;
+                frame->fps_presented_frames = 0U;
+            }
+            frame->last_hud_source_tick = source_tick;
         }
-        vdp2_frame_hud_prepare(frame, profile);
-        frame->last_hud_source_tick = source_tick;
+        vdp2_frame_hud_prepare(frame, profile, generations);
+        if (generations != NULL) {
+            frame->last_hud_displayed_generation =
+                generations->displayed_generation;
+            frame->last_hud_rendered_generation =
+                generations->rendered_generation;
+            frame->last_hud_simulation_generation =
+                generations->simulation_generation;
+        }
         frame->hud_dirty = 1U;
     }
+    frame->prepared = 1U;
 }
 
 void sm64_saturn_vdp2_frame_commit(
     sm64_saturn_vdp2_frame_t *frame,
     const sm64_saturn_vdp2_frame_backend_t *backend)
 {
-    if (frame == NULL || backend == NULL)
+    if (frame == NULL || backend == NULL || frame->prepared == 0U)
         return;
 
     if (backend->sky_scroll_set != NULL)
@@ -190,5 +245,6 @@ void sm64_saturn_vdp2_frame_commit(
         backend->vblank_commit(backend->work);
 
     frame->hud_dirty = 0U;
+    frame->prepared = 0U;
     frame->commits++;
 }

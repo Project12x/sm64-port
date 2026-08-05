@@ -225,8 +225,13 @@ be conflated. VRAM double-banking is an optional measured extension, not a
 prerequisite for removing immediate waits.
 
 VDP2 commits sky, background, HUD, and layer state during the same presentation
-boundary. HUD timing fields must measure the actual earlier worker, transfer,
-and VDP1-idle waits rather than only the later nonblocking sync calls.
+boundary. Its sky camera is the immutable copy owned by the displayed VDP1
+bank; HUD composition labels the exact displayed, rendered, and authoritative
+simulation generations from that boundary. A camera/bank generation mismatch
+is rejected before VDP2 side effects, and a tuple change forces a HUD refresh
+even between its normal metric-rate updates. HUD timing fields must measure the
+actual earlier worker, transfer, and VDP1-idle waits rather than only the later
+nonblocking sync calls.
 
 ## Cadence and overload behavior
 
@@ -353,6 +358,7 @@ each task back here.
   and test on retail hardware when available.
 
 ## Live decision and deviation ledger
+| 2026-08-05 | VDP2 composes only a bank-owned camera plus explicit generation metadata. | A9 Step 6 makes the terminal VDP2 input a geometry-free `(displayed, rendered, simulation)` tuple. Displayed/rendered must equal the immutable camera bank generation; simulation names the scheduler's actual authoritative generation, including bounded recovery lead while an old completed frame is reused. A mismatch fails closed before sky/HUD/layer/commit callbacks. This is an internal contract repair with no external adaptation: the existing pinned A9 scheduler and bank interfaces already define the ownership model. Focused host VDP2/runtime and source-boundary mutation tests are green; target/manual/native-math gates remain open. |
 | 2026-08-05 | Late completed A7 banks quarantine; failed Gouraud submission is not completion. | Review exposed that TRANSFERRING alone did not order publication and that both synchronous emitters treated a second invalid queue submission as success. Publication now uses wrap-safe newer-than-current ordering, init rejects physical aliases/overlap/misalignment, and both emitters return false before upload when bounded retry fails. The previous complete publication remains the fallback. |
 | 2026-08-05 | A7 owns source-bank truth but does not claim deferred transfer. | The old XOR selector could overwrite or mislabel a source bank, while the current upload APIs block internally and return no async ticket. A7 therefore adds FREE/BUILDING/READY/TRANSFERRING/PUBLISHED/QUARANTINED ownership, exact worker/transfer obligations, an explicit zero-Gouraud NOOP, a synchronous-complete adapter, failure quarantine, publish-new-before-retire-old fallback retention, and distinct build/published/displayed generations. A8 must replace the adapter with real submission/polling. |
 | 2026-08-05 | A7 uses original project code with pattern-only prior art. | Inspected SlaveDriver `a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later, `WALLS.C`), Z-Treme `cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0, `ZT_GAME.c`), and Yaul `6012f79f237773378c8014e70d8998ad95a38d98` (MIT, `cpu_dmac.c`). No upstream code was copied or close-ported. SlaveDriver/Z-Treme informed lifetime/synchronization shape; Yaul inspection records that its convenience transfer waits before start, a constraint for A8. |

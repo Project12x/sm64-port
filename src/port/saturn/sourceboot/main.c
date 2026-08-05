@@ -727,8 +727,14 @@ static void sourceboot_present_generation(
         0U;
     const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
         sourceboot_vdp2_camera_snapshot(bank);
+    const sm64_saturn_vdp2_generation_state_t vdp2_generations = {
+        .displayed_generation = presentation_generation,
+        .rendered_generation = presentation_generation,
+        .simulation_generation = sourceboot_frame_pipeline.simulation_generation,
+    };
     sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, &vdp2_camera,
                                  &sourceboot_fast3d.profile,
+                                 &vdp2_generations,
                                  sourceboot_sim_tick_count);
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_VDP2_COMMIT_BEFORE,
@@ -799,6 +805,7 @@ static void sourceboot_frame_service_render(uint32_t generation)
         .yaw = sourceboot_mario_snapshot.camera_yaw,
         .pitch = sourceboot_mario_snapshot.camera_pitch,
         .valid = sourceboot_mario_snapshot.valid,
+        .generation = generation,
     };
     render_complete = sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
         build_bank, &camera_snapshot);
@@ -1162,6 +1169,7 @@ int main(void) {
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE, 0U);
     sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
                                  &sourceboot_fast3d.profile,
+                                 NULL,
                                  sourceboot_sim_tick_count);
     sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
                                   &sourceboot_vdp2_backend);

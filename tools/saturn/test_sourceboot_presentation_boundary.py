@@ -40,6 +40,7 @@ def presentation_function(text: str) -> str:
 
 BOOTSTRAP_VDP2_BEGIN = """sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
                                  &sourceboot_fast3d.profile,
+                                 NULL,
                                  sourceboot_sim_tick_count);"""
 BOOTSTRAP_VDP2_COMMIT = """sm64_saturn_vdp2_frame_commit(&sourceboot_vdp2_frame,
                                   &sourceboot_vdp2_backend);"""
@@ -112,6 +113,19 @@ def assert_presentation_boundary(text: str) -> None:
         raise AssertionError("VDP2 commit escapes the terminal VDP1 boundary")
     if "sourceboot_vdp1_bank_generation = presentation_generation;" in terminal:
         raise AssertionError("build ownership must not be overwritten by presentation cadence")
+    required_generation_state = (
+        "const sm64_saturn_vdp2_generation_state_t vdp2_generations = {",
+        ".displayed_generation = presentation_generation,",
+        ".rendered_generation = presentation_generation,",
+        ".simulation_generation = sourceboot_frame_pipeline.simulation_generation,",
+        "&vdp2_generations,",
+    )
+    for state in required_generation_state:
+        if state not in terminal:
+            raise AssertionError(f"VDP2 composition must preserve {state}")
+    render = extract_c_function(text, "sourceboot_frame_service_render")
+    if ".generation = generation," not in render:
+        raise AssertionError("VDP2 camera generation must match its rendered bank")
     publish = extract_c_function(text, "sourceboot_frame_publish")
     reuse = extract_c_function(text, "sourceboot_frame_reuse_previous")
     if publish.count("sourceboot_present_generation(") != 1:
@@ -126,7 +140,6 @@ def assert_presentation_boundary(text: str) -> None:
                        loop.index("vdp1_vram_partitions_set")]
     if init_region.count("sm64_saturn_vdp1_backend_init_with_storage(") != 2:
         raise AssertionError("both command banks need unconditional setup prefixes")
-    render = extract_c_function(text, "sourceboot_frame_service_render")
     begin = render.index("sm64_saturn_vdp1_frame_bank_begin_build(")
     bind = render.index("sm64_saturn_vdp1_backend_bind_frame_bank(")
     quarantine = render.index("sm64_saturn_vdp1_frame_bank_quarantine(build_bank)")
@@ -256,6 +269,32 @@ class SourcebootPresentationBoundaryTests(unittest.TestCase):
         mutated = source.replace(call, f"{call}\n{call}", 1)
         with self.assertRaisesRegex(AssertionError, "exactly one presentation"):
             assert_presentation_boundary(mutated)
+
+    def test_rejects_mixed_generation_vdp2_composition_mutations(self) -> None:
+        source = self.source_with_bootstrap_vdp2_retirement()
+        stale_simulation = source.replace(
+            ".simulation_generation = sourceboot_frame_pipeline.simulation_generation,",
+            ".simulation_generation = sourceboot_sim_tick_count,",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "simulation_generation"):
+            assert_presentation_boundary(stale_simulation)
+
+        stale_render = source.replace(
+            ".rendered_generation = presentation_generation,",
+            ".rendered_generation = sourceboot_vdp1_bank_generation,",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "rendered_generation"):
+            assert_presentation_boundary(stale_render)
+
+        stale_camera = source.replace(
+            ".generation = generation,",
+            ".generation = 0U,",
+            1,
+        )
+        with self.assertRaisesRegex(AssertionError, "camera generation"):
+            assert_presentation_boundary(stale_camera)
 
 
 if __name__ == "__main__":

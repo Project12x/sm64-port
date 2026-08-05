@@ -51,7 +51,20 @@ int main(void)
     sm64_saturn_fast3d_profile_t profile;
     vdp2_contract_backend_t observed;
     const sm64_saturn_vdp2_camera_snapshot_t snapshot = {
-        .yaw = 0x4000, .pitch = 0, .valid = 1U,
+        .yaw = 0x4000, .pitch = 0, .valid = 1U, .generation = 27U,
+    };
+    const sm64_saturn_vdp2_generation_state_t generations = {
+        .displayed_generation = 27U,
+        .rendered_generation = 27U,
+        .simulation_generation = 28U,
+    };
+    const sm64_saturn_vdp2_camera_snapshot_t next_snapshot = {
+        .yaw = (int16_t)0x8000, .pitch = 0, .valid = 1U, .generation = 28U,
+    };
+    const sm64_saturn_vdp2_generation_state_t next_generations = {
+        .displayed_generation = 28U,
+        .rendered_generation = 28U,
+        .simulation_generation = 29U,
     };
     const sm64_saturn_vdp2_frame_backend_t backend = {
         .sky_scroll_set = sky, .hud_write = hud, .layers_set = layers,
@@ -80,7 +93,8 @@ int main(void)
     profile.render_job_quarantined = 12U;
 
     sm64_saturn_vdp2_frame_init(&frame);
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 0U);
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, &generations,
+                                 0U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 1U && observed.sky_updates == 1U);
     assert(observed.hud_updates == 1U && observed.layer_updates == 1U);
@@ -88,18 +102,35 @@ int main(void)
     assert(observed.vdp1_priority == 7U);
     assert(observed.sky_x == 128 && observed.sky_y == 128);
     assert(strstr(observed.hud,
-                  "FPS 0 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+                  "FPS 0 GEN D 27 R 27 S 28 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
     assert(strstr(observed.hud, "QM 1/2/3/4 QS 5/6/7/8") != NULL);
     assert(strstr(observed.hud, "QN 9 QR 9 QW 10 QF 11 QQ 12") != NULL);
 
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 15U);
+    /* New composition metadata cannot wait for the rate-limited performance
+     * counters: the sky and HUD must switch generations together. */
+    sm64_saturn_vdp2_frame_begin(&frame, &next_snapshot, &profile,
+                                 &next_generations, 15U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 2U && observed.sky_updates == 2U);
-    assert(observed.layer_updates == 2U && observed.hud_updates == 1U);
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, 30U);
+    assert(observed.sky_x == 256 && observed.sky_y == 128);
+    assert(observed.layer_updates == 2U && observed.hud_updates == 2U);
+    assert(strstr(observed.hud, "GEN D 28 R 28 S 29") != NULL);
+    sm64_saturn_vdp2_frame_begin(&frame, &next_snapshot, &profile,
+                                 &next_generations,
+                                 30U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
-    assert(observed.hud_updates == 2U);
+    assert(observed.hud_updates == 3U);
     assert(strstr(observed.hud,
-                  "FPS 3 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+                  "FPS 3 GEN D 28 R 28 S 29 MT 11 ST 12 ORD 13 DMAW 14 VDP1W 20") != NULL);
+
+    /* A VDP2 commit with a stale render generation must be rejected before
+     * either the sky or HUD can be mixed with the displayed VDP1 bank. */
+    sm64_saturn_vdp2_generation_state_t incoherent = generations;
+    incoherent.rendered_generation = 26U;
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile, &incoherent,
+                                 31U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+    assert(observed.commits == 3U && observed.sky_updates == 3U);
+    assert(observed.hud_updates == 3U && observed.layer_updates == 3U);
     return 0;
 }
