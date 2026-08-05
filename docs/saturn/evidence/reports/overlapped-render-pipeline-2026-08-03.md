@@ -1636,6 +1636,8 @@ This is host lifecycle evidence only.
 
 ### A7 source completion and target-link evidence (2026-08-05)
 
+Implementation and synchronized behavior documents are committed at
+`650b911a`; independent specification and quality reviews remain open.
 Steps 5–6 are source-complete. Sourceboot now acquires a FREE bank through the
 manager instead of XOR selection, binds the renderer only after acquisition,
 publishes only an explicit successful render after synchronous obligation

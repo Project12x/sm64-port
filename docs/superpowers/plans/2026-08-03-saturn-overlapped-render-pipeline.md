@@ -1481,7 +1481,9 @@ yet.
 
 - [ ] **Step 7: Update documents, commit, and complete two-stage review** — active
 
-  Commit with `feat(saturn): track VDP1 source-bank lifetimes`.
+  Implementation and synchronized behavior documents are committed at
+  `650b911a` (`feat(saturn): track VDP1 source-bank lifetimes`). Independent
+  specification and quality reviews remain open, so Task 7 is not complete.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 

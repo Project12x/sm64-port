@@ -5,7 +5,8 @@ See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 Task 5/A5.9 is closed after completing the atomic cutover from fixed
 terrain/Mario workers to one dependency-aware descriptor queue and observing
 that queue on the exact target image. Task 7/A7 is source-complete and awaits
-independent review: the two VDP1 command/Gouraud source-bank lifetimes are now
+independent review at implementation commit `650b911a`: the two VDP1
+command/Gouraud source-bank lifetimes are now
 explicit before A8 defers their transfers. The accepted A5 frame publishes
 four coarse admit/lower jobs, publishes self-contained callback contexts before
 notification, lets both SH-2s claim work, requires terminal descriptors plus
