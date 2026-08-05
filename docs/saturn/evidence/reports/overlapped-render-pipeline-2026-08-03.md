@@ -1768,5 +1768,7 @@ source/mutation tests pass. Memory-map unit coverage passes 10/10; profile
 layout/decode passes 21 tests with one historical-capture skip. The first
 aggregate MSYS `make` invocation was discarded because POSIX `realpath` was
 fed to Windows Python as `\d\...`; the same gates were run directly with the
-configured Windows host compiler/Python. Repair commit, independent rereview,
-and any serialized target build remain open. No target/Ymir/FPS claim is made.
+configured Windows host compiler/Python. The scoped repair landed as
+`8b037a7d` (`fix(saturn): harden deferred VDP1 completion`); independent
+rereview and any serialized target build remain open. No target/Ymir/FPS claim
+is made.

@@ -42,8 +42,9 @@ The exact audited Route0/live-input/Pipe4 `make -B -j1` exits zero in 336.9
 seconds. A8 deferred transfer is now active next; no A8 behavior, Ymir result,
 or FPS evidence is claimed.
 
-A8's independent review returned NO-GO and its source repairs are now
-focused-host-green pending rereview and one later serialized target build.
+A8's independent review returned NO-GO and its source repairs are committed at
+`8b037a7d`, focused-host-green, and pending rereview plus one later serialized
+target build.
 Both renderer paths stop after command/Gouraud construction. Queue-owned
 CPU-DMAC channel 0 uses public config/start plus a completion IHR because
 pinned Yaul busy status can report false idle. Sourceboot services the serial

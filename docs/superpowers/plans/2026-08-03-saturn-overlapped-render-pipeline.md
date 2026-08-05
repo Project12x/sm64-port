@@ -318,7 +318,7 @@ and the evidence report before starting another task.
   `1eba8888...e99267c`. No Ymir, hardware, asynchronous-transfer, or FPS
   evidence is claimed by A7.
 - [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** repair
-  source-complete and focused-host-green; independent rereview and its
+  committed at `8b037a7d` and focused-host-green; independent rereview and its
   authorized serialized target gate remain open.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
@@ -1516,7 +1516,7 @@ yet.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
-**Status:** independent review NO-GO repairs are source-complete and
+**Status:** independent review NO-GO repairs are committed at `8b037a7d` and
 focused-host-green. No target build is authorized until the repaired
 CPU-DMAC completion, stale-loop service, coherent VDP2 snapshot,
 partial-write failure, telemetry, and destination-range contracts pass focused
@@ -1660,8 +1660,8 @@ shared bank transport owns every frame upload.
 
   Correct `SLAVEDRIVER_ADAPTATION.md` to state that upstream active DMA is
   serial and this asynchronous lifecycle is project hardening. Initial commit
-  `862c7f7c` received NO-GO; live documents now record the callback/fail-closed
-  repair. Repair commit and focused rereview remain open.
+  `862c7f7c` received NO-GO; callback/fail-closed repair commit `8b037a7d` is
+  complete. Focused rereview remains open.
 
 ### Task 9: Overlap snapshot rendering with simulation and bound catch-up
 
