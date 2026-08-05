@@ -108,13 +108,15 @@ static void sha256_finish(sha256_state_t *state, uint8_t digest[32])
     for (index = 0U; index < 8U; index++) write_u32(digest + index*4U, state->word[index]);
 }
 
-void sm64_saturn_scene_package_sha256(const void *bytes, uint32_t byte_count,
+bool sm64_saturn_scene_package_sha256(const void *bytes, uint32_t byte_count,
                                       uint8_t digest[32])
 {
     sha256_state_t state;
+    if (digest == NULL || (bytes == NULL && byte_count != 0U)) return false;
     sha256_init(&state);
     if (byte_count != 0U && bytes != NULL) sha256_update(&state, bytes, byte_count);
     sha256_finish(&state, digest);
+    return true;
 }
 
 static bool digest_equal(const uint8_t a[32], const uint8_t b[32])
@@ -135,10 +137,28 @@ static bool valid_lifetime(uint8_t value) { return value >= 1U && value <= 5U; }
 
 static bool stable_id_valid(const uint8_t id[32])
 {
-    uint32_t index = 0U;
+    uint32_t index = 0U, cursor;
     while (index < 32U && id[index] != 0U) index++;
     if (index == 0U || index == 32U) return false;
-    for (; index < 32U; index++) if (id[index] != 0U) return false;
+    for (cursor = index; cursor < 32U; cursor++) if (id[cursor] != 0U) return false;
+    cursor = 0U;
+    while (cursor < index) {
+        uint8_t lead = id[cursor++];
+        uint32_t need, codepoint, minimum;
+        if (lead < 0x80U) continue;
+        if (lead >= 0xC2U && lead <= 0xDFU) { need=1U; codepoint=lead&0x1FU; minimum=0x80U; }
+        else if (lead >= 0xE0U && lead <= 0xEFU) { need=2U; codepoint=lead&0x0FU; minimum=0x800U; }
+        else if (lead >= 0xF0U && lead <= 0xF4U) { need=3U; codepoint=lead&0x07U; minimum=0x10000U; }
+        else return false;
+        if (need > index - cursor) return false;
+        while (need-- != 0U) {
+            uint8_t continuation=id[cursor++];
+            if ((continuation&0xC0U)!=0x80U) return false;
+            codepoint=(codepoint<<6)|(continuation&0x3FU);
+        }
+        if (codepoint<minimum || codepoint>0x10FFFFU ||
+            (codepoint>=0xD800U && codepoint<=0xDFFFU)) return false;
+    }
     return true;
 }
 
@@ -171,7 +191,7 @@ static bool parse_dependencies(const uint8_t *bytes,
             dependency->payload_kind > SM64_SATURN_SCENE_AUDIO_DEPENDENCIES ||
             dependency->destination_class == SM64_SATURN_SCENE_DESTINATION_NONE ||
             !valid_destination(dependency->destination_class) || !valid_lifetime(dependency->lifetime) ||
-            !stable_id_valid(dependency->stable_id) || dependency->generation == 0U ||
+            !stable_id_valid(dependency->stable_id) ||
             !power_of_two(dependency->alignment) || read_u32(raw + 88U) != 0U || read_u32(raw + 92U) != 0U) return false;
         for (earlier = 0U; earlier + 1U < view->dependency_count; earlier++)
             if (memcmp(view->dependencies[earlier].stable_id, dependency->stable_id, 32U) == 0) return false;
@@ -292,7 +312,9 @@ bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
         section->dependency_mask=read_u32(raw+20U); section->maximum_scratch=read_u32(raw+24U); memcpy(section->content_sha256,raw+28U,32U);
         if (section->kind != index+1U || read_u16(raw+4U)!=1U || read_u16(raw+6U)!=0U || read_u32(raw+60U)!=0U ||
             !valid_destination(section->destination_class) || !valid_lifetime(section->lifetime) || !power_of_two(section->alignment) ||
-            section->offset < previous_end || (section->offset & (section->alignment-1U)) != 0U || section->byte_size > byte_count-section->offset) return false;
+            section->offset < previous_end || section->offset > byte_count ||
+            (section->offset & (section->alignment-1U)) != 0U ||
+            section->byte_size > byte_count-section->offset) return false;
         end = section->offset + section->byte_size;
         for (gap = previous_end; gap < section->offset; gap++) if (bytes[gap] != 0U) return false;
         sm64_saturn_scene_package_sha256(bytes+section->offset,section->byte_size,digest);
@@ -310,6 +332,18 @@ bool sm64_saturn_scene_package_validate(const void *source, uint32_t byte_count,
 bool sm64_saturn_scene_package_is_provisional(const sm64_saturn_scene_package_view_t *view)
 {
     return view != NULL && (view->flags & SM64_SATURN_SCENE_PACKAGE_FLAG_PROVISIONAL) != 0U;
+}
+
+bool sm64_saturn_scene_package_validate_target(
+    const void *bytes, uint32_t byte_count,
+    sm64_saturn_scene_package_view_t *view)
+{
+    sm64_saturn_scene_package_view_t candidate;
+    if (view != NULL) memset(view, 0, sizeof(*view));
+    if (view == NULL || !sm64_saturn_scene_package_validate(bytes, byte_count, &candidate) ||
+        sm64_saturn_scene_package_is_provisional(&candidate)) return false;
+    *view = candidate;
+    return true;
 }
 
 bool sm64_saturn_scene_package_identity_for_kind(

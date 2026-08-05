@@ -7,6 +7,9 @@
 #include "saturn_scene_package.h"
 #include "../platform/saturn_build_identity.h"
 
+struct sm64_saturn_render_snapshot;
+struct sm64_saturn_vdp1_frame_bank;
+
 enum {
     SM64_SATURN_SCENE_FEATURE_COMPLETE_MARIO_ANIMATION = SM64_SATURN_FEATURE_COMPLETE_MARIO_ANIMATION,
     SM64_SATURN_SCENE_FEATURE_DYNAMIC_ACTOR_CLOSURE = SM64_SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE,
@@ -27,8 +30,15 @@ typedef struct sm64_saturn_scene_resident_identity {
     uint32_t generation;
     uint32_t scene_package_id;
     uint32_t active_feature_mask;
-    uint32_t retirement_pending;
+    uint32_t consumer_open_mask;
+    uint16_t consumer_reference_count[3];
+    uint16_t reserved_consumer;
+    uint32_t root_storage_offset;
+    uint32_t root_byte_count;
+    uint32_t destination_base[SM64_SATURN_SCENE_DESTINATION_COUNT];
     uint32_t destination_bytes[SM64_SATURN_SCENE_DESTINATION_COUNT];
+    uint32_t section_storage_offset[SM64_SATURN_SCENE_MAX_SECTIONS];
+    uint32_t dependency_storage_offset[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
     uint8_t package_sha256[32];
     uint8_t dependency_set_sha256[32];
     uint8_t actor_bank_identity[32];
@@ -42,6 +52,9 @@ typedef struct sm64_saturn_scene_residency {
     sm64_saturn_scene_package_view_t staging_view;
     sm64_saturn_scene_payload_source_t payloads[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
     sm64_saturn_scene_resident_identity_t slot[2];
+    uint8_t *root_storage;
+    uint32_t root_storage_capacity;
+    uint8_t *destination_storage[SM64_SATURN_SCENE_DESTINATION_COUNT];
     uint32_t capacity[SM64_SATURN_SCENE_DESTINATION_COUNT];
     uint32_t active_feature_mask;
     uint32_t active_generation;
@@ -59,6 +72,10 @@ void sm64_saturn_scene_residency_reset(
 bool sm64_saturn_scene_residency_bind_payloads(
     sm64_saturn_scene_residency_t *state,
     const sm64_saturn_scene_payload_source_t *payloads, uint16_t payload_count);
+bool sm64_saturn_scene_residency_bind_storage(
+    sm64_saturn_scene_residency_t *state, void *root_storage,
+    uint32_t root_storage_capacity,
+    void *const destination_storage[SM64_SATURN_SCENE_DESTINATION_COUNT]);
 bool sm64_saturn_scene_residency_begin(sm64_saturn_scene_residency_t *state,
                                        const sm64_saturn_scene_package_view_t *view,
                                        uint32_t generation);
@@ -66,16 +83,44 @@ bool sm64_saturn_scene_residency_load_section(sm64_saturn_scene_residency_t *sta
                                               uint16_t section_index);
 bool sm64_saturn_scene_residency_commit(sm64_saturn_scene_residency_t *state,
                                         uint32_t generation);
-bool sm64_saturn_scene_residency_mark_retired(
+bool sm64_saturn_scene_residency_consumer_acquire(
     sm64_saturn_scene_residency_t *state, uint32_t generation,
-    uint32_t consumer_mask);
+    uint32_t consumer);
+bool sm64_saturn_scene_residency_consumer_release(
+    sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t consumer);
+bool sm64_saturn_scene_residency_render_snapshot_acquire(
+    sm64_saturn_scene_residency_t *state,
+    const struct sm64_saturn_render_snapshot *snapshot);
+bool sm64_saturn_scene_residency_render_snapshot_release(
+    sm64_saturn_scene_residency_t *state,
+    const struct sm64_saturn_render_snapshot *snapshot);
+bool sm64_saturn_scene_residency_vdp1_frame_bank_acquire(
+    sm64_saturn_scene_residency_t *state,
+    const struct sm64_saturn_vdp1_frame_bank *bank);
+bool sm64_saturn_scene_residency_vdp1_frame_bank_release(
+    sm64_saturn_scene_residency_t *state,
+    const struct sm64_saturn_vdp1_frame_bank *bank);
+bool sm64_saturn_scene_residency_actor_bank_acquire(
+    sm64_saturn_scene_residency_t *state, uint32_t generation);
+bool sm64_saturn_scene_residency_actor_bank_release(
+    sm64_saturn_scene_residency_t *state, uint32_t generation);
+bool sm64_saturn_scene_residency_audio_voice_acquire(
+    sm64_saturn_scene_residency_t *state, uint32_t generation);
+bool sm64_saturn_scene_residency_audio_voice_release(
+    sm64_saturn_scene_residency_t *state, uint32_t generation);
 bool sm64_saturn_scene_residency_unload(sm64_saturn_scene_residency_t *state,
                                         uint32_t generation);
 const sm64_saturn_scene_resident_identity_t *
 sm64_saturn_scene_residency_active(const sm64_saturn_scene_residency_t *state);
-struct sm64_saturn_render_snapshot;
 bool sm64_saturn_scene_residency_snapshot_apply(
     const sm64_saturn_scene_residency_t *state, uint32_t generation,
     struct sm64_saturn_render_snapshot *snapshot);
+const uint8_t *sm64_saturn_scene_residency_root_bytes(
+    const sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint32_t *byte_count);
+const uint8_t *sm64_saturn_scene_residency_dependency_bytes(
+    const sm64_saturn_scene_residency_t *state, uint32_t generation,
+    uint16_t dependency_index, uint32_t *byte_count);
 
 #endif

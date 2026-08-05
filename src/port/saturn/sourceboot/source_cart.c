@@ -25,6 +25,10 @@ _Static_assert(SATURN_SOURCE_CART_STAGE_SECTORS == 4U ||
 
 extern const uint8_t __sourceboot_cart_rodata_start[];
 extern const uint8_t __sourceboot_cart_rodata_end[];
+extern const uint8_t sm64_saturn_sourceboot_scene_package_root[]
+    __attribute__((weak));
+extern const uint32_t sm64_saturn_sourceboot_scene_package_root_size
+    __attribute__((weak));
 
 static const char s_source_cart_name[] __attribute__((section(".bootdata"))) =
     "SOURCE.DAT";
@@ -172,6 +176,46 @@ void sm64_saturn_source_cart_report_failure(
 bool sm64_saturn_source_cart_scene_package_validate(
     const void *bytes, uint32_t byte_count,
     sm64_saturn_scene_package_view_t *view) {
-    return sm64_saturn_scene_package_validate(bytes, byte_count, view) &&
-        !sm64_saturn_scene_package_is_provisional(view);
+    return sm64_saturn_scene_package_validate_target(bytes, byte_count, view);
+}
+
+bool sm64_saturn_source_cart_residency_span(
+    uint32_t alignment, sm64_saturn_source_cart_residency_span_t *span) {
+    const uint32_t source_bytes = (uint32_t)(__sourceboot_cart_rodata_end -
+                                             __sourceboot_cart_rodata_start);
+    const uint32_t cart_bytes = (uint32_t)dram_cart_size_get();
+    uint32_t high_water;
+    uint8_t *base;
+
+    if (span != NULL) memset(span, 0, sizeof(*span));
+    if (span == NULL || alignment == 0U || alignment > 4096U ||
+        (alignment & (alignment - 1U)) != 0U ||
+        source_bytes > UINT32_MAX - (alignment - 1U)) return false;
+    high_water = (source_bytes + alignment - 1U) & ~(alignment - 1U);
+    if (dram_cart_id_get() != DRAM_CART_ID_4MIB || high_water > cart_bytes) return false;
+    base = (uint8_t *)dram_cart_area_get();
+    if (base == NULL) return false;
+    span->base = base + high_water;
+    span->source_prefix_bytes = high_water;
+    span->byte_count = cart_bytes - high_water;
+    return true;
+}
+
+sm64_saturn_source_cart_status_t
+sm64_saturn_source_cart_boot_scene_package_validate(
+    sm64_saturn_scene_package_view_t *view) {
+    sm64_saturn_scene_package_view_t candidate;
+    if (view != NULL) memset(view, 0, sizeof(*view));
+    if (view == NULL) return SM64_SATURN_SOURCE_CART_INVALID_SCENE_ROOT;
+    if ((uintptr_t)sm64_saturn_sourceboot_scene_package_root == 0U ||
+        (uintptr_t)&sm64_saturn_sourceboot_scene_package_root_size == 0U)
+        return SM64_SATURN_SOURCE_CART_OK;
+    if (!sm64_saturn_scene_package_validate(
+            sm64_saturn_sourceboot_scene_package_root,
+            sm64_saturn_sourceboot_scene_package_root_size, &candidate))
+        return SM64_SATURN_SOURCE_CART_INVALID_SCENE_ROOT;
+    if (sm64_saturn_scene_package_is_provisional(&candidate))
+        return SM64_SATURN_SOURCE_CART_PROVISIONAL_SCENE_ROOT;
+    *view = candidate;
+    return SM64_SATURN_SOURCE_CART_OK;
 }

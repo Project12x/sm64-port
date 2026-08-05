@@ -18,6 +18,7 @@ typedef struct test_scene_fixture {
 
 static void test_write_u16(uint8_t *p, uint16_t value) { p[0]=(uint8_t)(value>>8); p[1]=(uint8_t)value; }
 static void test_write_u32(uint8_t *p, uint32_t value) { p[0]=(uint8_t)(value>>24); p[1]=(uint8_t)(value>>16); p[2]=(uint8_t)(value>>8); p[3]=(uint8_t)value; }
+static uint32_t test_read_u32(const uint8_t *p) { return ((uint32_t)p[0]<<24)|((uint32_t)p[1]<<16)|((uint32_t)p[2]<<8)|p[3]; }
 static uint32_t test_align(uint32_t value, uint32_t alignment) { return (value+alignment-1U)&~(alignment-1U); }
 
 static void test_seal_root(test_scene_fixture_t *fixture)
@@ -26,6 +27,27 @@ static void test_seal_root(test_scene_fixture_t *fixture)
     memset(fixture->root+20U,0,32U);
     sm64_saturn_scene_package_sha256(fixture->root,fixture->root_size,digest);
     memcpy(fixture->root+20U,digest,32U);
+}
+
+static void test_reseal_package(test_scene_fixture_t *fixture)
+{
+    uint8_t canonical[11U+TEST_DEPENDENCY_COUNT*70U], digest[32];
+    uint32_t used=11U, section;
+    memcpy(canonical,"S64P-DEPS\0\1",11U);
+    for(section=0U;section<8U;section++) {
+        uint8_t *descriptor=fixture->root+84U+section*64U;
+        uint32_t offset=test_read_u32(descriptor+8U), size=test_read_u32(descriptor+12U);
+        sm64_saturn_scene_package_sha256(fixture->root+offset,size,digest);
+        memcpy(descriptor+28U,digest,32U);
+        if(section>=4U && section<=6U) {
+            const uint8_t *dependency=fixture->root+offset+4U;
+            memcpy(canonical+used,dependency,2U); memcpy(canonical+used+2U,dependency+4U,32U);
+            memcpy(canonical+used+34U,dependency+84U,4U); memcpy(canonical+used+38U,dependency+52U,32U);
+            used+=70U;
+        }
+    }
+    sm64_saturn_scene_package_sha256(canonical,used,digest); memcpy(fixture->root+52U,digest,32U);
+    test_seal_root(fixture);
 }
 
 static void test_dependency_record(uint8_t *raw, uint16_t kind, const char *stable_id,

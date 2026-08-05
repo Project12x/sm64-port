@@ -78,10 +78,13 @@ typedef struct sm64_saturn_scene_package_view {
     sm64_saturn_scene_dependency_view_t dependencies[SM64_SATURN_SCENE_MAX_DEPENDENCIES];
 } sm64_saturn_scene_package_view_t;
 
-void sm64_saturn_scene_package_sha256(const void *bytes, uint32_t byte_count,
+bool sm64_saturn_scene_package_sha256(const void *bytes, uint32_t byte_count,
                                       uint8_t digest[32]);
 bool sm64_saturn_scene_package_validate(const void *bytes, uint32_t byte_count,
                                         sm64_saturn_scene_package_view_t *view);
+bool sm64_saturn_scene_package_validate_target(
+    const void *bytes, uint32_t byte_count,
+    sm64_saturn_scene_package_view_t *view);
 bool sm64_saturn_scene_package_is_provisional(
     const sm64_saturn_scene_package_view_t *view);
 bool sm64_saturn_scene_package_identity_for_kind(

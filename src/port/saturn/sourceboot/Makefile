@@ -272,6 +272,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
   $(ROOT)/src/port/saturn/runtime/saturn_scene_package.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_scene_residency.c \
   $(ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c \
   $(ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c \
   $(ROOT)/src/port/saturn/runtime/saturn_camera_role.c \

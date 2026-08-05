@@ -11,6 +11,7 @@ RUNTIME = ROOT / "src/port/saturn/runtime"
 SNAPSHOT = ROOT / "src/port/saturn/gfx/saturn_render_snapshot.h"
 SOURCE_CART_C = ROOT / "src/port/saturn/sourceboot/source_cart.c"
 SOURCE_CART_MAKE = ROOT / "src/port/saturn/sourceboot/Makefile"
+SOURCEBOOT_MAIN = ROOT / "src/port/saturn/sourceboot/main.c"
 
 
 class SceneRuntimeNeutralityTest(unittest.TestCase):
@@ -35,8 +36,18 @@ class SceneRuntimeNeutralityTest(unittest.TestCase):
         function = re.search(r"bool sm64_saturn_source_cart_scene_package_validate\(.*?\n\}", text, re.DOTALL)
         self.assertIsNotNone(function)
         self.assertIn("sm64_saturn_scene_package_validate", function.group(0))
-        self.assertIn("!sm64_saturn_scene_package_is_provisional", function.group(0))
+        self.assertIn("sm64_saturn_scene_package_validate_target", function.group(0))
         self.assertIn("runtime/saturn_scene_package.c", SOURCE_CART_MAKE.read_text(encoding="utf-8"))
+        self.assertIn("runtime/saturn_scene_residency.c", SOURCE_CART_MAKE.read_text(encoding="utf-8"))
+        self.assertIn("sm64_saturn_source_cart_boot_scene_package_validate", SOURCEBOOT_MAIN.read_text(encoding="utf-8"))
+
+    def test_source_cart_exposes_only_aligned_post_source_capacity(self) -> None:
+        text = SOURCE_CART_C.read_text(encoding="utf-8")
+        function = re.search(r"bool sm64_saturn_source_cart_residency_span\(.*?\n\}", text, re.DOTALL)
+        self.assertIsNotNone(function)
+        self.assertIn("__sourceboot_cart_rodata_end", function.group(0))
+        self.assertIn("source_prefix_bytes", function.group(0))
+        self.assertIn("cart_bytes - high_water", function.group(0))
 
     def test_runtime_decodes_media_without_struct_casts(self) -> None:
         text = (RUNTIME / "saturn_scene_package.c").read_text(encoding="utf-8")

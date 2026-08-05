@@ -1,6 +1,6 @@
 # Task 5 implementation report — scene-package residency
 
-Status: implementation source-complete; independent review and all target,
+Status: review repair source-complete; independent rereview and all target,
 Ymir, FPS, final-root, broad native-math, and manual gates remain open.
 
 ## Result
@@ -10,25 +10,47 @@ Ymir, FPS, final-root, broad native-math, and manual gates remain open.
   zero-filled gaps, closed section ordering (plus the required zero-section
   fixture), section and payload dependency graphs, canonical dependency-set
   SHA-256, descriptor metadata, stable IDs, and payload ordering.
-- Added master-owned two-generation residency state. Every declared external
-  payload is hash/size/generation validated, including feature-inactive ones;
+- Added master-owned two-generation residency state backed by explicit,
+  non-overlapping caller-owned root/HWRAM/LWRAM/CART/VRAM/SOUND-RAM spans.
+  Root and feature-active payload bytes are copied into owned storage and
+  rehashed at commit. Every declared external payload is hash/size/generation
+  validated, including feature-inactive ones;
   only the feature-active transitive payload closure consumes capacity.
   Section/payload dependency order, aligned byte plus scratch budgets, partial
   commit rollback, duplicate generations/commits, and capacity exhaustion fail
   closed. A new generation does not expose or evict the old generation.
-- Render, bank, and (when present) voice retirement are exact-generation bits.
-  An active generation cannot be unloaded; a replaced generation cannot be
-  unloaded until every applicable consumer retires it.
+- Render snapshot, VDP1 frame-bank, actor/animation bank, and (when present)
+  audio voice ownership use exact-generation acquisition/release adapters with
+  bounded reference counts. Once a replacement commits, the old generation is
+  closed to later acquisition and cannot unload until existing references
+  retire. Duplicate/stale release cannot clear another reference.
 - Immutable render snapshots now carry a scalar package ID, active-feature
   mask, root/dependency-set hashes, and actor/animation/audio bank identity
   hashes. No package or payload pointer crosses the peer-visible snapshot.
-- Sourceboot has a strict future scene-root boundary that validates S64P and
-  rejects provisional roots. The Task 4 provisional root is not activated.
+- Sourceboot has a strict optional linked-root boot caller that validates S64P
+  and rejects provisional roots before entering the game loop. Failure leaves
+  the output view zeroed. The Task 4 provisional root is not activated.
 - CART capacity is caller-supplied available capacity. The runtime does not
   assume that the whole 4 MiB cart is free and does not write over the existing
-  native-pointer `SOURCE.DAT` prefix. Task 5 stages validated identities and
-  capacity claims only; concrete final destination movement remains owned by
-  the later actor/animation/audio producers and Task 22 final residency plan.
+  native-pointer `SOURCE.DAT` prefix. Its exported residency span begins at the
+  aligned linked-source high-water. Later producer tasks still own final
+  package content and Task 22 owns the final root seal.
+
+## Independent-review repair
+
+The first review returned SPEC/QUALITY FAIL. The focused repair adds:
+
+- early `offset > byte_count` rejection before subtraction, gap scan, or hash,
+  covered by a resealed `UINT32_MAX` descriptor regression;
+- owned root/payload copies with post-copy and commit-time hashes, rollback
+  clearing, immutable accessors, and source-mutation/corrupt-owned-byte tests;
+- absolute two-generation placement including alignment and scratch;
+- reference-counted render/VDP1/actor/audio lifecycle adapters;
+- an aligned post-`SOURCE.DAT` CART span and a real optional-root boot caller;
+- UTF-8 stable-ID validation and ABI-legal generation-zero/zero-byte payloads;
+  and
+- defined SHA behavior: `NULL, 0` is empty, while `NULL` with nonzero length is
+  rejected.
 
 ## Test evidence
 
@@ -50,13 +72,16 @@ powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mi
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_runtime_neutrality.py
 ```
 
-The two C executables passed; the neutrality/sourceboot boundary suite passed
-5/5. Coverage includes root/dependency/section hash failures, SHA-256 known
+The two C executables passed; the repaired neutrality/sourceboot boundary suite
+passed 6/6. Coverage includes root/dependency/section hash failures, SHA-256 known
 vector, section and payload dependency order/cycles, partial rollback with old
 active identity retained, actor/audio generation and payload mismatch, aligned
 HWRAM/CART/SOUND-RAM capacity, stale/exact retirement, active eviction refusal,
 double commit, inactive-feature validation without residency, pointer-free
-snapshot publication, and zero-section commit.
+snapshot publication, zero-section commit, malicious root offsets, owned-byte
+mutation isolation, commit-time corruption detection, storage-span overlap,
+root capacity, SOUND-RAM/scratch exact fit, cross-generation absolute
+alignment, UTF-8 stable IDs, generation zero, and zero-byte payloads.
 
 Snapshot compatibility check:
 
@@ -76,6 +101,8 @@ project-owned implementation of the standardized algorithm because the repo
 has no suitable target C hash utility and adding a hosted dependency would not
 fit the freestanding SH-2 runtime.
 
-Open: independent review; linked SH-2/sourceboot build and memory inspection;
+Open: independent rereview; linked SH-2/sourceboot build and memory inspection
+(both runtime sources are now in `SH_SRCS`, but no target build is claimed);
+the inherited snapshot Make quoted-executable defect;
 real final BOB/WF roots and destination placement; Ymir/FPS/manual evidence;
 package transitions; broad native-math evidence.

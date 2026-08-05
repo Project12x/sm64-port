@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Hardened S64P residency after independent review.  Malicious resealed roots
+  can no longer drive an unsigned offset underflow and out-of-bounds scan.
+  Residency now copies roots and feature-active payloads into explicit,
+  non-overlapping caller-owned spans and rehashes those owned bytes at atomic
+  commit, so later mutation of CD/cart staging input cannot alter a published
+  generation.  Absolute aligned placement retains old and new generations
+  without overlap; refcounted render-snapshot, VDP1-frame-bank,
+  actor/animation-bank, and audio-voice hooks prevent early reuse.  Sourceboot
+  now exposes only the aligned CART range above `SOURCE.DAT` and strictly
+  rejects an optional linked provisional root before entering the game loop.
+  Runtime stable-ID, zero-generation, and zero-byte rules now match the Python
+  S64P validator.
+
 - Added bytewise big-endian target validation and exact-generation residency
   for version-one `S64P` roots.  Root, section, canonical dependency-set, and
   external payload hashes now fail closed before placement; feature-inactive

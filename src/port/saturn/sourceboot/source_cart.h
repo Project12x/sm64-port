@@ -13,6 +13,7 @@ typedef enum sm64_saturn_source_cart_status {
     SM64_SATURN_SOURCE_CART_SIZE_MISMATCH,
     SM64_SATURN_SOURCE_CART_READ_FAILED,
     SM64_SATURN_SOURCE_CART_PROVISIONAL_SCENE_ROOT,
+    SM64_SATURN_SOURCE_CART_INVALID_SCENE_ROOT,
 } sm64_saturn_source_cart_status_t;
 
 /* Kept in work RAM so Ymir's debugger can prove early CD -> cart progress
@@ -26,6 +27,12 @@ typedef struct sm64_saturn_source_cart_probe {
     uint32_t cart_size;
     uint32_t status;
 } sm64_saturn_source_cart_probe_t;
+
+typedef struct sm64_saturn_source_cart_residency_span {
+    void *base;
+    uint32_t source_prefix_bytes;
+    uint32_t byte_count;
+} sm64_saturn_source_cart_residency_span_t;
 
 enum {
     SM64_SATURN_SOURCE_CART_PROBE_MAGIC = 0x53434152U, /* "SCAR" */
@@ -50,6 +57,11 @@ void sm64_saturn_source_cart_report_failure(sm64_saturn_source_cart_status_t sta
  * provisional fixtures are never accepted for boot. */
 bool sm64_saturn_source_cart_scene_package_validate(
     const void *bytes, uint32_t byte_count,
+    sm64_saturn_scene_package_view_t *view);
+bool sm64_saturn_source_cart_residency_span(
+    uint32_t alignment, sm64_saturn_source_cart_residency_span_t *span);
+sm64_saturn_source_cart_status_t
+sm64_saturn_source_cart_boot_scene_package_validate(
     sm64_saturn_scene_package_view_t *view);
 
 #endif

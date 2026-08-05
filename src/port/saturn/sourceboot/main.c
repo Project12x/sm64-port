@@ -1272,6 +1272,16 @@ int main(void) {
         sm64_saturn_source_cart_report_failure(cart_status);
         for (;;) {}
     }
+    {
+        sm64_saturn_scene_package_view_t scene_package_view;
+        const sm64_saturn_source_cart_status_t scene_status =
+            sm64_saturn_source_cart_boot_scene_package_validate(
+                &scene_package_view);
+        if (scene_status != SM64_SATURN_SOURCE_CART_OK) {
+            sm64_saturn_source_cart_report_failure(scene_status);
+            for (;;) {}
+        }
+    }
     /* The bitmap is linked in .cart_rodata and is not readable from its
      * final DRAM-cart address until source_cart_load() has completed. Keep
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
