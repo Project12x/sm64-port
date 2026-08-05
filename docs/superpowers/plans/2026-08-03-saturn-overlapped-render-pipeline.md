@@ -2318,6 +2318,7 @@ expected FPS lever.
   terminal quarantine and asserts no early reset, post-finish reset, one slave
   failure, and nonzero `QQ`. The normal integration and six mutations pass;
   `verify-render-job-runtime` and `verify-demo-render-overlap` also pass.
+  Fix Round 2 implementation and governing-doc transition is `162f2a7d`.
   Independent verdict remains FAIL/NO-GO for the reviewed base; Step 10 fresh
   rereview, Step 11 target/capture, manual Ymir, broad verify, and native-math
   remain unchecked.

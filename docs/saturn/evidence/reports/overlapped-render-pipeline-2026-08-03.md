@@ -2174,6 +2174,8 @@ stamps the true release sites, and strengthens the integrated failure case. It
 does not mark Step 10, target evidence, Ymir, broad verify, or native math
 complete.
 
+Implementation and governing-doc commit: `162f2a7d`.
+
 Watched RED:
 
 - `.venv-saturn-tools\Scripts\python.exe tools/saturn/test_a9_overlap_target_coherency.py`

@@ -4,6 +4,8 @@ Date: 2026-08-05
 
 Fix Round 2 base: `420b6ce8`
 
+Fix Round 2 implementation: `162f2a7d`
+
 Original RED checkpoint: `ec81ddc6`
 
 Original implementation: `0f5ccd65`
