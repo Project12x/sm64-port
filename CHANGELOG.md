@@ -10,7 +10,11 @@
   oracle identity must own an unambiguous linked disassembly block. Sourceboot
   may suppress only the two exact BOB camera-trigger calls proven unreachable
   through the null camera-table guard; route, table, control-flow, third-call,
-  or owned-block drift remains fail-closed.
+  or owned-block drift remains fail-closed. The proof is bound to the reviewed
+  source-file identities and exact linked-ELF SHA-256, rejects mutation of the
+  BOB level value before current-level publication, derives callbacks only from
+  the table returned into runtime activation, and validates start/poll ownership
+  inside those root function bodies rather than accepting unrelated decoys.
 
 - Hardened the Task 10 sourceboot pipeline selector: `SATURN_RENDERER_PIPELINE`
   now accepts only the reviewed `2`, `3`, and `4` variants and is passed into

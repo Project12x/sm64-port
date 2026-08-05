@@ -1451,15 +1451,31 @@ def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
         .read_text(encoding="utf-8")
     )
 
+    callback_factory = _single_braced_body(
+        renderer,
+        r"static\s+const\s+sm64_saturn_render_job_callback_table_t\s+"
+        r"\*\s*demo_render_job_callbacks\s*\(\s*void\s*\)\s*(?=\{)",
+        "descriptor callback factory",
+    )
+    returned_tables = re.findall(
+        r"\breturn\s+&([A-Za-z_]\w*)\s*;", callback_factory
+    )
+    if len(returned_tables) != 1:
+        raise ValueError(
+            "expected one returned callback table, got "
+            f"{returned_tables}"
+        )
+    returned_table = returned_tables[0]
     callback_tables = re.findall(
         r"static\s+const\s+sm64_saturn_render_job_callback_table_t\s+"
-        r"callbacks\s*=\s*\{\s*\{(.*?)\}\s*\}\s*;",
-        renderer,
+        + re.escape(returned_table)
+        + r"\s*=\s*\{\s*\{(.*?)\}\s*\}\s*;",
+        callback_factory,
         flags=re.DOTALL,
     )
     if len(callback_tables) != 1:
         raise ValueError(
-            "expected one descriptor callback table, got "
+            "expected one returned callback table definition, got "
             f"{len(callback_tables)}"
         )
     callbacks = tuple(
@@ -1479,6 +1495,20 @@ def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
             rf"static\s+bool(?:\s+__attribute__\s*\(\([^)]*\)\))?\s+"
             rf"{re.escape(callback)}\s*\(",
             callback,
+        )
+    init_body = _single_braced_body(
+        renderer,
+        r"void\s+sm64_saturn_demo_render_init\s*\(\s*void\s*\)",
+        "renderer initialization",
+    )
+    if len(re.findall(
+        r"\bsm64_saturn_render_job_runtime_activate_graph\s*\(\s*"
+        r"&s_render_job_graph\s*,\s*demo_render_job_callbacks\s*\(\s*\)\s*,"
+        r"\s*NULL\s*\)",
+        init_body,
+    )) != 1:
+        raise ValueError(
+            "descriptor callback factory no longer reaches runtime activation"
         )
 
     lifecycle_tables = re.findall(
@@ -1527,27 +1557,28 @@ def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
     }):
         raise ValueError(f"unexpected lifecycle-poll calls: {sorted(poll_fields)}")
 
-    for function in (
-        "sm64_saturn_demo_render_start_frame",
-        "sm64_saturn_demo_render_poll_frame",
-    ):
-        _single_braced_body(
-            renderer, rf"\b{function}\s*\(", function
-        )
+    start_root = "sm64_saturn_demo_render_start_frame"
+    poll_root = "sm64_saturn_demo_render_poll_frame"
+    start_root_body = _single_braced_body(
+        renderer, rf"\b{start_root}\s*\(", start_root
+    )
+    poll_root_body = _single_braced_body(
+        renderer, rf"\b{poll_root}\s*\(", poll_root
+    )
     if len(re.findall(
         r"\bsm64_saturn_render_lifecycle_start\s*\(\s*"
         r"&s_demo_render_transaction\.lifecycle\s*,\s*"
         r"&s_demo_render_lifecycle_ops\s*,",
-        renderer,
+        start_root_body,
     )) != 1:
-        raise ValueError("render start no longer owns the lifecycle table")
+        raise ValueError("render start root no longer owns the lifecycle table")
     if len(re.findall(
         r"\bsm64_saturn_render_lifecycle_poll\s*\(\s*"
         r"&s_demo_render_transaction\.lifecycle\s*,\s*"
         r"&s_demo_render_lifecycle_ops\s*,",
-        renderer,
+        poll_root_body,
     )) != 1:
-        raise ValueError("render poll no longer owns the lifecycle table")
+        raise ValueError("render poll root no longer owns the lifecycle table")
 
     for function in (
         "sm64_saturn_render_job_runtime_poll_slave",
@@ -1595,8 +1626,8 @@ def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
     return verifier.RouteOracle(
         1,
         frozenset({
-            "_sm64_saturn_demo_render_start_frame",
-            "_sm64_saturn_demo_render_poll_frame",
+            "_" + start_root,
+            "_" + poll_root,
             "_sm64_saturn_render_job_runtime_poll_slave",
         }),
         edges,
@@ -1607,6 +1638,11 @@ def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
 # Keep the source-derivation machinery at module scope without splitting the
 # one unittest fixture that owns the shared audit helpers above and below it.
 class NativeMathCensusTests(NativeMathCensusTests):
+
+    BOB_NULL_CAMERA_ELF_SHA256 = (
+        "1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ce"
+        "b67bcd5879e8e96acfc2e2"
+    )
 
     def test_checked_in_renderer_oracle_matches_live_descriptor_route(self) -> None:
         repo_root = Path(__file__).parents[2]
@@ -1623,6 +1659,98 @@ class NativeMathCensusTests(NativeMathCensusTests):
         self.assertNotIn("_sm64_saturn_demo_render_frame", linked_names)
         self.assertNotIn("_sm64_saturn_dual_worker_run", linked_names)
         self.assertNotIn("_demo_terrain_compact_range", linked_names)
+
+    @staticmethod
+    def _renderer_source_root(directory: str) -> Path:
+        repo_root = Path(__file__).parents[2]
+        fixture_root = Path(directory)
+        for relative in (
+            "src/port/saturn/gfx/saturn_demo_render.c",
+            "src/port/saturn/gfx/saturn_render_lifecycle.c",
+            "src/port/saturn/gfx/saturn_render_job_runtime.c",
+        ):
+            target = fixture_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                (repo_root / relative).read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+        return fixture_root
+
+    def test_renderer_oracle_rejects_callback_table_not_returned_to_activation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = self._renderer_source_root(directory)
+            renderer_path = (
+                source_root / "src/port/saturn/gfx/saturn_demo_render.c"
+            )
+            renderer = renderer_path.read_text(encoding="utf-8")
+            before = "    return &callbacks;"
+            after = (
+                "    static const sm64_saturn_render_job_callback_table_t "
+                "inactive_callbacks = {{0}};\n"
+                "    return &inactive_callbacks;"
+            )
+            self.assertEqual(renderer.count(before), 1)
+            renderer_path.write_text(
+                renderer.replace(before, after, 1), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                ValueError, "returned callback table|descriptor callbacks"
+            ):
+                _derive_renderer_route_oracle(source_root)
+
+    def test_renderer_oracle_rejects_callback_factory_detached_from_activation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = self._renderer_source_root(directory)
+            renderer_path = (
+                source_root / "src/port/saturn/gfx/saturn_demo_render.c"
+            )
+            renderer = renderer_path.read_text(encoding="utf-8")
+            before = (
+                "&s_render_job_graph, demo_render_job_callbacks(), NULL)"
+            )
+            self.assertEqual(renderer.count(before), 1)
+            renderer_path.write_text(
+                renderer.replace(
+                    before, "&s_render_job_graph, NULL, NULL)", 1
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "runtime activation"):
+                _derive_renderer_route_oracle(source_root)
+
+    def test_renderer_oracle_rejects_start_call_outside_start_root_body(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = self._renderer_source_root(directory)
+            renderer_path = (
+                source_root / "src/port/saturn/gfx/saturn_demo_render.c"
+            )
+            renderer = renderer_path.read_text(encoding="utf-8")
+            live_call = "if (!sm64_saturn_render_lifecycle_start("
+            self.assertEqual(renderer.count(live_call), 1)
+            renderer = renderer.replace(
+                live_call,
+                "if (!sm64_saturn_render_lifecycle_start_detached(",
+                1,
+            )
+            renderer += """
+static bool demo_detached_start_decoy(uint32_t generation)
+{
+    return sm64_saturn_render_lifecycle_start(
+        &s_demo_render_transaction.lifecycle,
+        &s_demo_render_lifecycle_ops, &s_demo_render_transaction,
+        generation);
+}
+"""
+            renderer_path.write_text(renderer, encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "start root"):
+                _derive_renderer_route_oracle(source_root)
 
     @staticmethod
     def _camera_trigger_source_root(
@@ -1650,6 +1778,13 @@ class NativeMathCensusTests(NativeMathCensusTests):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(source, encoding="utf-8")
         return fixture_root
+
+    @classmethod
+    def _prove_camera_trigger_source(cls, source_root: Path) -> bool:
+        return verifier.prove_sourceboot_bob_null_camera_triggers(
+            source_root,
+            linked_elf_sha256=cls.BOB_NULL_CAMERA_ELF_SHA256,
+        )
 
     @staticmethod
     def _camera_trigger_disassembly(*, first_call: str = "jsr", guard_gap: bool = False) -> str:
@@ -1730,7 +1865,7 @@ class NativeMathCensusTests(NativeMathCensusTests):
         with tempfile.TemporaryDirectory() as directory:
             source_root = self._camera_trigger_source_root(directory)
             self.assertTrue(
-                verifier.prove_sourceboot_bob_null_camera_triggers(source_root)
+                self._prove_camera_trigger_source(source_root)
             )
 
         instructions = parse_instructions(self._camera_trigger_disassembly())
@@ -1784,6 +1919,16 @@ class NativeMathCensusTests(NativeMathCensusTests):
                     "SET_REG(/* value */ LEVEL_BOB),\n    SLEEP(/* frames */ 1),\n    /* Before lvl_init_from_save_file",
                 ),
             ),
+            "init_rewrites_bob_to_ccm": (
+                "src/game/level_update.c",
+                (
+                    "    gCurrLevelNum = levelNum;\n"
+                    "    gCurrCourseNum = COURSE_NONE;",
+                    "    levelNum = LEVEL_CCM;\n"
+                    "    gCurrLevelNum = levelNum;\n"
+                    "    gCurrCourseNum = COURSE_NONE;",
+                ),
+            ),
         }
         for label, (relative, mutation) in mutations.items():
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
@@ -1791,8 +1936,19 @@ class NativeMathCensusTests(NativeMathCensusTests):
                     directory, {relative: mutation}
                 )
                 self.assertFalse(
-                    verifier.prove_sourceboot_bob_null_camera_triggers(source_root)
+                    self._prove_camera_trigger_source(source_root)
                 )
+
+    def test_camera_trigger_source_proof_rejects_other_elf_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = self._camera_trigger_source_root(directory)
+            self.assertIs(
+                verifier.prove_sourceboot_bob_null_camera_triggers(
+                    source_root, linked_elf_sha256="0" * 64
+                ),
+                False,
+                "source proof must reject an ELF outside the pinned identity",
+            )
 
     def test_camera_trigger_dead_transfer_shape_rejects_near_matches_and_unknown_route(self) -> None:
         owners = (FunctionOwner(

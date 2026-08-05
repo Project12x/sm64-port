@@ -1180,28 +1180,49 @@ def _source_braced_body(text: str, declaration: str) -> str | None:
     return None
 
 
-def prove_sourceboot_bob_null_camera_triggers(repo_root: Path) -> bool:
-    """Prove the checked sourceboot route selects BOB's null trigger table."""
+SOURCEBOOT_BOB_NULL_CAMERA_ELF_SHA256 = (
+    "1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ce"
+    "b67bcd5879e8e96acfc2e2"
+)
+SOURCEBOOT_BOB_NULL_CAMERA_SOURCE_SHA256 = {
+    "src/port/saturn/sourceboot/source_entry.c":
+        "8b0f5d06e0612bb2eac2af12fb198a94292910e7e5418457c965559bb4fda2aa",
+    "src/game/level_update.c":
+        "a0e8e29d1450aea2fa11ea0e8e0c54b543585050e2a624632043bb37f3a62001",
+    "src/game/camera.c":
+        "5a75df5936ea77c2ca7abcce446c42175d49b4110683d39c238dcafdce282c0a",
+    "levels/level_defines.h":
+        "9c2673d67e31ef313ac9980d1527ac9069a19aad39c86ac61112c78baa4b13cc",
+    "levels/bob/script.c":
+        "ec6e681d1e9f5fc6b1367c1dd92f9fb40700047b1241ec938b9647eef0f469fd",
+}
+
+
+def prove_sourceboot_bob_null_camera_triggers(
+    repo_root: Path, *, linked_elf_sha256: str,
+) -> bool:
+    """Prove the pinned linked image's source route selects BOB's null table."""
+    if linked_elf_sha256.lower() != SOURCEBOOT_BOB_NULL_CAMERA_ELF_SHA256:
+        return False
     try:
-        source_entry = _source_without_comments(
-            (repo_root / "src/port/saturn/sourceboot/source_entry.c").read_text(
-                encoding="utf-8"
-            )
-        )
-        level_update = _source_without_comments(
-            (repo_root / "src/game/level_update.c").read_text(encoding="utf-8")
-        )
-        bob_script = _source_without_comments(
-            (repo_root / "levels/bob/script.c").read_text(encoding="utf-8")
-        )
-        level_defines = _source_without_comments(
-            (repo_root / "levels/level_defines.h").read_text(encoding="utf-8")
-        )
-        camera_source = _source_without_comments(
-            (repo_root / "src/game/camera.c").read_text(encoding="utf-8")
-        )
+        sources = {
+            relative: (repo_root / relative).read_text(encoding="utf-8")
+            for relative in SOURCEBOOT_BOB_NULL_CAMERA_SOURCE_SHA256
+        }
     except (OSError, UnicodeError):
         return False
+    if any(
+        sha256(sources[relative].encode("utf-8")).hexdigest() != expected
+        for relative, expected in SOURCEBOOT_BOB_NULL_CAMERA_SOURCE_SHA256.items()
+    ):
+        return False
+    source_entry = _source_without_comments(
+        sources["src/port/saturn/sourceboot/source_entry.c"]
+    )
+    level_update = _source_without_comments(sources["src/game/level_update.c"])
+    bob_script = _source_without_comments(sources["levels/bob/script.c"])
+    level_defines = _source_without_comments(sources["levels/level_defines.h"])
+    camera_source = _source_without_comments(sources["src/game/camera.c"])
 
     loop = _source_braced_body(
         source_entry,
@@ -1245,8 +1266,9 @@ def prove_sourceboot_bob_null_camera_triggers(repo_root: Path) -> bool:
     if "save_file_set_flags(SAVE_FLAG_FILE_EXISTS);returnvalue;" \
             not in compact_marker:
         return False
-    if "gCurrLevelNum=levelNum;" not in compact_init \
-            or "returnlevelNum;" not in compact_init:
+    if compact_init.count("levelNum") != 2 \
+            or compact_init.count("gCurrLevelNum=levelNum;") != 1 \
+            or not compact_init.endswith("returnlevelNum;"):
         return False
     if "gCurrLevelNum=levelNum;" not in compact_set:
         return False
@@ -6089,7 +6111,8 @@ def main(argv: list[str] | None = None) -> int:
                 parsed_instructions, owners
             )
             bob_null_camera_triggers = prove_sourceboot_bob_null_camera_triggers(
-                Path(__file__).resolve().parents[2]
+                Path(__file__).resolve().parents[2],
+                linked_elf_sha256=file_digest(elf_path),
             )
             proven_dead_transfers = (
                 sourceboot_bob_null_camera_trigger_dead_transfers(
