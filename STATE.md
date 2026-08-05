@@ -2,6 +2,28 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
+The approved plan now inserts Task 9A/A9A, true frame-lifetime overlap, before
+Task 10. This is a plan-only transition: no implementation, test, review,
+target build, capture, or FPS result exists yet. A9A splits the accepted
+synchronous demo renderer into `start_frame(N)` and `poll_frame(N)`. Start
+publishes immutable jobs and returns; poll remains PENDING until positive slave
+retirement, then the master drains remaining work, validates/merges, performs
+Gouraud/VDP1 lowering exactly once, and retires `N`. FAILED quarantines without
+full-frame replay. Snapshot `N`, descriptor payloads, and its BUILDING source
+bank remain owned while pending; a queued snapshot `N+1` may receive its sole
+master-owned source tick but cannot become an active render until `N` retires
+and publishes.
+
+The unchanged invariants are master-only simulation/input/live state/
+allocation/final order/VDP1/presentation, one active render generation, A9's
+nonzero successor and 30 Hz remainder, one normal plus one recovery tick,
+per-field service/poll epochs, exact publish acknowledgement, previous-frame
+reuse, and A8's transfer ownership. Required source evidence covers lifecycle,
+wrap, missed deadline/reuse, failure/no replay, and absence of BOB dependencies
+from generic state. Only after two-stage review may one serialized DLL-safe
+target build/capture split source tick, slave overlap, and master finalization.
+Task 10 is hardening/publication, not the next expected FPS lever.
+
 Task 5/A5.9 is closed after completing the atomic cutover from fixed
 terrain/Mario workers to one dependency-aware descriptor queue and observing
 that queue on the exact target image. Task 7/A7 is complete after consolidated

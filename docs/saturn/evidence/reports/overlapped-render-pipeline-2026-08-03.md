@@ -1951,3 +1951,60 @@ passes. Scoped Fix Round 2 rereview is **PASS / APPROVED**: the Task 5.7 prose
 is contiguous, Step 6 begins at a valid ledger boundary, and the displayed-zero
 fixture now isolates the explicit reserved-zero guard. Step 6 closes as source-
 complete. No target, Ymir, manual, or native-math gate is claimed.
+
+## Task 9A plan transition — true frame-lifetime overlap (2026-08-05)
+
+**Status: active plan; implementation and all evidence gates unchecked.** The
+post-A9 bottleneck map proves that the accepted adapter still enters
+`sm64_saturn_demo_render_frame()` and cannot return to the scheduler while
+slave generation `N` is live. Task 9A is inserted before Task 10 to split that
+one synchronous completion boundary into notify-only start and positive-
+retirement poll/finalize phases. Task 10 remains hardening/publication and a
+scene-neutral coverage gate; it is not the next expected FPS lever.
+
+The planned transaction retains exactly one active render generation. Start
+publishes immutable jobs for nonzero `N` and returns without master drain,
+retirement wait/reset, final merge, Gouraud reservation, VDP1 lowering, or A8
+transfer. Pending `N` retains its render snapshot, descriptor payloads, and
+BUILDING source bank while the master may execute the one queued authoritative
+source tick for `N+1`. The queued snapshot cannot be acquired as an active
+render until `N` completes, transfers, receives exact publication
+acknowledgement, and retires. Poll remains PENDING until positive slave
+retirement; then the master drains remaining READY work, validates/merges,
+lowers once, and retires `N`. FAILED quarantines `N`, preserves the prior
+complete frame, and never replays a full frame.
+
+Unchanged contracts are master-only simulation, input, source state,
+allocation, final ordering, VDP1/VRAM, VDP2, and presentation; A9's nonzero
+`UINT32_MAX -> 1` successor, 30 Hz remainder, one-normal-plus-one-recovery
+budget, per-field service/poll epochs, exact publish acknowledgement, and
+previous-frame reuse; and A8's sole transfer/resident-list ownership. Required
+RED/GREEN evidence covers pending lifecycle, wrap, missed deadline/reuse,
+failure/no replay, one active generation, queued-snapshot exclusion, and no BOB
+symbol dependency in generic state. Target evidence must split source tick,
+overlapping slave work, and master finalization.
+
+Pinned prior art remains exactly as already recorded: SlaveDriver
+`a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later; existing close
+ports plus pattern-only lifetime split), Z-Treme
+`cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0; pattern-only), Yaul
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT; dependency/API use), Jo
+Engine `556d081146211b6a1cfa6591d70f9487d406758b` (MIT/BSD-style file notices;
+pattern-only), and sm64-psx `3073845688ea273da78d539b20c45110d8a868c3`
+(no repository-wide license; behavior-study only). No new upstream source is
+copied or close-ported by this plan transition.
+
+Unchecked implementation gates:
+
+- [ ] renderer lifecycle/source integration RED evidence;
+- [ ] lifecycle, wrap, deadline/reuse, failure, and scene-neutral GREEN tests;
+- [ ] specification review and quality review;
+- [ ] versioned target phase-trace RED/GREEN evidence;
+- [ ] one serialized DLL-safe `make -B -j1` build after both reviews;
+- [ ] exact-identity automatic capture with phase, queue, transfer, reuse, and
+  FPS data;
+- [ ] owner-visible Ymir acceptance; and
+- [ ] broad native-math publication census (retained pre-existing blocker).
+
+No tests, builds, captures, or reviews were run for this documentation-only
+transition.

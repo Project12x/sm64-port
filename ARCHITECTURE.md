@@ -118,3 +118,23 @@ SCU busy guarding, and polling remain master-mainline-owned; only the volatile
 CPU-DMAC completion flag crosses the interrupt boundary. The transports remain
 one serial lane, not a parallel scheduler. A9 retains true destination-banked
 frame overlap.
+
+Task 9A adds the missing CPU lifetime overlap without changing those owners.
+For generation `N`, renderer start may publish only immutable descriptor
+contexts and notify the slave, then must return before master drain, queue
+retirement, Gouraud reservation, VDP1 begin/lowering, or transfer. Sourceboot
+retains the exact render snapshot, descriptor payloads, and BUILDING command/
+Gouraud source bank while the master may execute the one queued authoritative
+source tick for `N+1`. That queued snapshot is not an active render and cannot
+be acquired for rendering until `N` completes, passes A8 transfer/publication,
+and retires.
+
+Poll/finalize for `N` remains PENDING until positive slave retirement. The
+master then drains only remaining READY work, validates terminal descriptor
+identity, performs the stable merge and VDP1 lowering exactly once, and retires
+the queue generation. Failure quarantines `N` and preserves the previous
+complete frame; it never replays a full terrain/actor frame. There is exactly
+one active render generation, and generic scheduler state remains scene-
+neutral. The existing nonzero wrap policy, 30 Hz fractional cadence, per-field
+service/poll epochs, bounded normal-plus-recovery budget, exact publish
+acknowledgement, VDP2 generation tuple, and A8 transfer owner remain unchanged.

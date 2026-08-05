@@ -198,6 +198,24 @@ and zero fields were unattributed. Nine intervals also dropped 222 credits.
 Scheduler budgets therefore reset only after a new complete frame is
 presented, never merely because the outer loop observes another VBlank.
 
+**A9A lifetime correction — planned 2026-08-05.** The accepted A9 adapter
+still constructs one frame synchronously. A9A splits generation `N` into a
+notify-only start and a positive-retirement poll/finalize. While `N` is
+PENDING, the renderer retains its immutable snapshot, descriptor payloads, and
+BUILDING command/Gouraud source bank; the master may run the one queued
+authoritative source tick for `N+1`, but `N+1` cannot become an active render
+until `N` retires and publishes. Exactly one render generation is active.
+
+Only after positive slave retirement may the master drain remaining work,
+validate and stably merge results, reserve Gouraud state, lower VDP1 commands
+once, and retire `N`. Failure quarantines `N` and preserves the previous
+complete frame without a full-frame replay. Simulation, input, live state,
+allocation, final ordering, VDP1/VRAM, VDP2, and presentation remain master-
+owned. A8 retains transfer ownership, and A9's nonzero wrap, two-field 30 Hz
+remainder, normal-plus-recovery budget, field epochs, previous-frame reuse,
+and exact publish acknowledgement are unchanged. Generic lifecycle state may
+not depend on BOB, Mario, Castle, or demo-renderer symbols.
+
 At that terminal boundary, VDP2 composes only the immutable sky camera carried
 by the displayed VDP1 bank and a small displayed/rendered/simulation generation
 record. The HUD names those exact generations; camera/bank or

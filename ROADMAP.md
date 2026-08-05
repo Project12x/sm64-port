@@ -1,6 +1,24 @@
 # Roadmap
 
-## Now — isolate the post-A8 CPU frame cost
+## Now — implement A9A true frame-lifetime overlap
+
+The A9 compatibility adapter is reviewed and exact-target green: it restores
+30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
+eliminating six source ticks per presented frame. It deliberately remains
+synchronous. The next measured CPU-lifetime slice is A9A: start immutable
+render generation `N`, return while its slave work remains live, permit the
+master-owned queued source tick for `N+1`, and finalize/merge/lower `N` only
+after positive slave retirement. Retain exactly one active render generation,
+the pending snapshot/descriptor payloads/BUILDING bank, A8 transport ownership,
+all A9 cadence/publication laws, and previous-complete-frame reuse. Failure
+quarantines `N` without replay.
+
+Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
+two-stage review, then exactly one serialized DLL-safe target build and exact-
+identity capture splitting source tick, overlapping slave work, and master
+finalization. No target build may run in parallel.
+
+## Completed diagnosis — post-A8 CPU frame cost
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
@@ -109,16 +127,18 @@ flat desktop result is retained as the A5.8 baseline.
 
 ## Next — A9 true frame lifetime overlap
 
-Complete A6 localized recovery around the now-closed A7 ownership contract and
-the A8 deferred-transfer seam, then allow frame N+1 production while frame N
-is presented. Gate: no partial-frame publication, measured terminal waits,
-and source/target contract evidence.
+This work is now the active A9A slice above. A6's broader recovery/generalized
+quarantine remains a separate pending hardening concern; A9A may use only the
+already-proven fail-closed quarantine/no-replay behavior needed by its one
+active generation.
 
 ## Then — full-game hardening
 
 Generalize generated scene banks, animated actor/enemy banks, and coarse
 BSP/frustum/portal-window admission beyond BOB. Add full occlusion/PVS only
 when level evidence proves the coarse path is insufficient.
+Task 10/A10 is this hardening/publication and scene-neutral coverage gate. It
+is not the next expected FPS lever for the exact BOB capture.
 
 ## Parallel prototype — Saturn PCM audio
 

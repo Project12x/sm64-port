@@ -350,14 +350,22 @@ each task back here.
   rereview; queue-owned CPU-DMAC completion, stale-loop service, immutable
   camera coalescing, and fail-closed resident-VRAM ownership remove immediate
   transport waits without inventing wait telemetry.
-- [ ] **A9 — frame overlap and cadence:** render snapshot `N` while fixed-step
-  simulation advances, enforce a bounded catch-up policy, and prevent partial
-  publication.
+- [x] **A9 — bounded cadence adapter:** the reviewed compatibility adapter
+  enforces 30 Hz remainder pacing, one normal plus one recovery tick per
+  presentation lifetime, nonzero generations, exact publish acknowledgement,
+  previous-frame reuse, and generation-coherent VDP2. It remains synchronous.
+- [ ] **A9A — true frame-lifetime overlap:** split renderer start from positive-
+  retirement finalization so immutable render `N` may overlap the master-owned
+  queued source tick for `N+1`. Exactly one render generation remains active;
+  snapshot, descriptor payloads, and BUILDING bank remain owned until terminal
+  merge/lowering or quarantine. The queued snapshot cannot render before `N`
+  retires and publishes.
 - [ ] **A10 — full-game hardening:** prove arbitrary scene/actor banks,
   preserve gameplay/camera parity, run strict native-math/publication gates,
   and test on retail hardware when available.
 
 ## Live decision and deviation ledger
+| 2026-08-05 | Insert A9A true frame-lifetime overlap before A10 hardening/publication. | Exact A9 evidence removes the catch-up death spiral but the accepted adapter still blocks inside `sm64_saturn_demo_render_frame()`. A9A introduces start and poll/finalize phases: start publishes immutable generation `N` jobs and returns; poll remains PENDING until positive slave retirement, then the master drains remaining work, validates/merges, lowers once, and retires `N`. FAILED quarantines without full-frame replay. Master-only simulation/input/state/allocation/final order/VDP1/presentation, one active render generation, A9 cadence/publication rules, and A8 transport ownership remain invariant. Pinned SlaveDriver/Z-Treme/Yaul/Jo Engine/PS1 sources retain their recorded pattern/dependency/behavior-study modes; no new source is copied. Task 10 remains hardening/publication, not the next expected FPS lever. |
 | 2026-08-05 | VDP2 composes only a bank-owned camera plus explicit generation metadata. | A9 Step 6 makes the terminal VDP2 input a geometry-free `(displayed, rendered, simulation)` tuple. Displayed/rendered must equal the immutable camera bank generation; simulation names the scheduler's actual authoritative generation, including bounded recovery lead while an old completed frame is reused. A mismatch fails closed before sky/HUD/layer/commit callbacks. This is an internal contract repair with no external adaptation: the existing pinned A9 scheduler and bank interfaces already define the ownership model. Focused host VDP2/runtime and source-boundary mutation tests are green; target/manual/native-math gates remain open. |
 | 2026-08-05 | Late completed A7 banks quarantine; failed Gouraud submission is not completion. | Review exposed that TRANSFERRING alone did not order publication and that both synchronous emitters treated a second invalid queue submission as success. Publication now uses wrap-safe newer-than-current ordering, init rejects physical aliases/overlap/misalignment, and both emitters return false before upload when bounded retry fails. The previous complete publication remains the fallback. |
 | 2026-08-05 | A7 owns source-bank truth but does not claim deferred transfer. | The old XOR selector could overwrite or mislabel a source bank, while the current upload APIs block internally and return no async ticket. A7 therefore adds FREE/BUILDING/READY/TRANSFERRING/PUBLISHED/QUARANTINED ownership, exact worker/transfer obligations, an explicit zero-Gouraud NOOP, a synchronous-complete adapter, failure quarantine, publish-new-before-retire-old fallback retention, and distinct build/published/displayed generations. A8 must replace the adapter with real submission/polling. |
