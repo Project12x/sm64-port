@@ -2558,16 +2558,18 @@ expected FPS lever.
   Mario, zero overflow/corruption, no stale generation, and no quarantined bank
   in the ordinary route.
 
-- [ ] **Step 6: Run manual Ymir acceptance with DRAM cart — GUI LAUNCHED; OWNER OBSERVATION PENDING**
+- [ ] **Step 6: Run manual Ymir acceptance with DRAM cart — VISUAL/SPEED PASS; CONTROLS/CAMERA CHECKS OPEN**
 
   Confirm controls, BOB traversal, camera feel, geometry/material stability,
   and obvious speed relative to the Task 1 and pre-architecture CUEs. Record
   observed limitations honestly; emulator timing is comparative, not retail
   hardware proof. The exact repaired CUE was launched through the profile-backed
   desktop helper at `build/saturn/ymir-desktop-launches/a9a-repaired-manual-20260805.json`;
-  process PID 12148 remained alive/responding after the 20-second monitor. This
-  proves launch configuration only; controls, visuals, and owner-observed speed
-  remain unchecked.
+  process PID 29164 remained alive/responding with the title showing the loaded
+  sourceboot disc. Owner observation reports the scene looks okay and runs at
+  a consistent 4--6 FPS, visibly better than the prior 3--4 FPS range. This
+  closes the visual/speed portion only; controls, BOB traversal, and camera feel
+  still need explicit confirmation.
 
 - [ ] **Step 7: Exercise a non-BOB generated fixture**
 

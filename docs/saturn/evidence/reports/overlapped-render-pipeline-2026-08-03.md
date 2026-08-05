@@ -2454,3 +2454,9 @@ process remained alive and responding after the bounded 20-second monitor
 (PID 12148 at handoff). The plan records the CUE/ISO hashes and profile-managed
 32-Mbit DRAM cart. This is a launch handoff only; controls, visual stability,
 camera feel, and owner-observed speed remain unchecked pending manual input.
+
+Owner follow-up confirms the visible scene looks okay and runs consistently at
+approximately 4--6 FPS, improving on the prior 3--4 FPS range. This is a manual
+visual/speed observation for the exact repaired CUE, not a replacement for the
+automated 5.294 FPS measurement. Controls, BOB traversal, and camera feel have
+not yet been explicitly confirmed, so the manual acceptance step remains open.

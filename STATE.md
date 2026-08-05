@@ -49,7 +49,9 @@ identity match after 540 VBlanks, ten queue retirements, and zero queue or
 worker failures. Manual visual/controls acceptance remains open; no rebuild is
 authorized for that acceptance. The exact CUE is now also launched in visible
 desktop Ymir with the profile-managed 32-Mbit DRAM cart; the window remains
-alive/responding, but owner observation is not yet credited.
+alive/responding. Owner reports the scene looks okay and holds 4--6 FPS,
+better than the prior 3--4 FPS range. Controls, traversal, and camera-feel
+confirmation remain open.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's
