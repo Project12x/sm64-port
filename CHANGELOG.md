@@ -4,6 +4,21 @@
 
 ### Changed
 
+- Closed the remaining scene-closure rereview gaps by making behavior-spawn
+  rules repository-relative, hash-covered source attestations of their native
+  owners, exact model/behavior sites, and bounded capacity expressions.  Rule
+  routes now traverse local helpers, action/data tables, and audited generic
+  dispatch bridges, rejecting duplicate owners/edges, unrelated sources,
+  nonexistent sites, and invented counts; this corrected stale water-bomb,
+  explosion, Koopa-shell, coin-helper, default-star, and wooden-post edges.
+  Audio dependency collection now follows only each behavior's reachable
+  native functions/data and resolves every reached `SOUND_*` identifier to one
+  declared `SOUND_ARG_LOAD(SOUND_BANK_*)` entry, hashing `include/sounds.h` and
+  failing on missing or ambiguous declarations.  The stricter BOB result is 76
+  records / 78 source hashes, preventing unrelated sounds from leaking out of
+  a shared source file while preserving fail-closed helper/area/geo/schema and
+  canonical-byte guarantees.
+
 - Scene closure now walks bounded source-defined native helper chains from
   BehaviorScript callbacks, rejecting unknown computed spawn arguments before
   output. Recognized grill-table expansion remains explicit, while newly

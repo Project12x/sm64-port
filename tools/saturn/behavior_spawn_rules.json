@@ -1,38 +1,1137 @@
 {
-  "schema": "sm64-saturn-behavior-spawn-rules-v1",
+  "schema": "sm64-saturn-behavior-spawn-rules-v2",
   "rules": [
-    {"behavior":"bhvGoombaTripletSpawner","source":"src/game/behaviors/goomba.inc.c","reason":"The bounded triplet count is computed from behavior parameters; BOB uses the default three.","children":[{"model":"MODEL_GOOMBA","behavior":"bhvGoomba","maximum_instances":3}]},
-    {"behavior":"bhvWaterBombSpawner","source":"src/game/behaviors/water_bomb.inc.c","reason":"The native spawner creates both a water bomb and its modelled shadow.","children":[{"model":"MODEL_WATER_BOMB","behavior":"bhvWaterBomb","maximum_instances":1},{"model":"MODEL_WATER_BOMB_SHADOW","behavior":"bhvWaterBombShadow","maximum_instances":1}]},
-    {"behavior":"bhvCannonBarrelBubbles","source":"src/game/behaviors/water_bomb_cannon.inc.c","reason":"The barrel-bubble native callback creates the emitted water bomb.","children":[{"model":"MODEL_WATER_BOMB","behavior":"bhvWaterBomb","maximum_instances":1}]},
-    {"behavior":"bhvCannonClosed","source":"src/game/behaviors/cannon_door.inc.c","reason":"The closed-cannon native transition materializes the open cannon.","children":[{"model":"MODEL_CANNON_BASE","behavior":"bhvCannon","maximum_instances":1}]},
-    {"behavior":"bhvCheckerboardElevatorGroup","source":"src/game/behaviors/checkerboard_platform.inc.c","reason":"The model-less group initializer creates two rendered platform subobjects.","children":[{"model":"MODEL_CHECKERBOARD_PLATFORM","behavior":"bhvCheckerboardPlatformSub","maximum_instances":2}]},
-    {"behavior":"bhvOpenableGrill","source":"src/game/behaviors/grill_door.inc.c","reason":"The model-less grill controller creates both animated cage-door halves.","children":[{"model":"MODEL_BOB_BARS_GRILLS","behavior":"bhvOpenableCageDoor","maximum_instances":2}]},
-    {"behavior":"bhvHidden1upInPoleSpawner","source":"src/game/behaviors/mushroom_1up.inc.c","reason":"The model-less pole controller emits its 1-Up and two collision triggers.","children":[{"model":"MODEL_1UP","behavior":"bhvHidden1upInPole","maximum_instances":1},{"model":"MODEL_NONE","behavior":"bhvHidden1upInPoleTrigger","maximum_instances":2}]},
-    {"behavior":"bhvHidden1up","source":"src/game/behaviors/mushroom_1up.inc.c","reason":"The hidden 1-Up native state creates its model-less sparkle controller.","children":[{"model":"MODEL_NONE","behavior":"bhvSparkleSpawn","maximum_instances":1}]},
-    {"behavior":"bhvExplosion","source":"src/game/behaviors/explosion.inc.c","reason":"The native explosion update creates smoke and white explosion-particle effects.","children":[{"model":"MODEL_SMOKE","behavior":"bhvBobombBullyDeathSmoke","maximum_instances":1},{"model":"MODEL_WHITE_PARTICLE_SMALL","behavior":"bhvBobombExplosionBubble","maximum_instances":4}]},
-    {"behavior":"bhvBobombExplosionBubble","source":"src/game/behaviors/corkbox.inc.c","reason":"The shared native bubble update creates its water-splash effect.","children":[{"model":"MODEL_SMALL_WATER_SPLASH","behavior":"bhvObjectWaterSplash","maximum_instances":1}]},
-    {"behavior":"bhvHidden1upInPole","source":"src/game/behaviors/mushroom_1up.inc.c","reason":"The pole 1-Up flight state creates its model-less sparkle controller.","children":[{"model":"MODEL_NONE","behavior":"bhvSparkleSpawn","maximum_instances":1}]},
-    {"behavior":"bhvSparkleSpawn","source":"src/game/behaviors/sparkle_spawn.inc.c","reason":"The sparkle controller's native callback creates the animated sparkle effect.","children":[{"model":"MODEL_SPARKLES_ANIMATION","behavior":"bhvSparkle","maximum_instances":1}]},
-    {"behavior":"bhvKoopaShell","source":"src/game/behaviors/koopa_shell.inc.c","reason":"Koopa-shell helper paths emit wave, droplet, flame, and sparkle effect controllers.","children":[{"model":"MODEL_WAVE_TRAIL","behavior":"bhvObjectWaveTrail","maximum_instances":1},{"model":"MODEL_WHITE_PARTICLE_SMALL","behavior":"bhvWaterDroplet","maximum_instances":1},{"model":"MODEL_RED_FLAME","behavior":"bhvKoopaShellFlame","maximum_instances":1},{"model":"MODEL_NONE","behavior":"bhvSparkleSpawn","maximum_instances":1}]},
-    {"behavior":"bhvExclamationBox","source":"src/game/behaviors/exclamation_box.inc.c","reason":"The computed contents table and box action helpers select BOB's cap/star contents and rotating marker.","children":[{"model":"MODEL_EXCLAMATION_POINT","behavior":"bhvRotatingExclamationMark","maximum_instances":1},{"model":"MODEL_MARIOS_WING_CAP","behavior":"bhvWingCap","maximum_instances":1},{"model":"MODEL_STAR","behavior":"bhvSpawnedStar","maximum_instances":1}]},
-    {"behavior":"bhvWaterDroplet","source":"src/game/behaviors/water_splashes_and_waves.inc.c","reason":"The native droplet callback creates a small water-splash child.","children":[{"model":"MODEL_SMALL_WATER_SPLASH","behavior":"bhvWaterDropletSplash","maximum_instances":1}]},
-    {"behavior":"bhvYellowCoin","source":"src/game/behaviors/coin.inc.c","reason":"The coin helper creates its golden sparkle effect.","children":[{"model":"MODEL_SPARKLES","behavior":"bhvGoldenCoinSparkles","maximum_instances":1}]},
-    {"behavior":"bhvCoinFormationSpawn","source":"src/game/behaviors/coin.inc.c","reason":"The formation child reaches the shared coin sparkle helper.","children":[{"model":"MODEL_SPARKLES","behavior":"bhvGoldenCoinSparkles","maximum_instances":1}]},
-    {"behavior":"bhvHiddenRedCoinStar","source":"src/game/behaviors/spawn_star.inc.c","reason":"The reachable star helper creates the coordinate star before normal star handoff.","children":[{"model":"MODEL_STAR","behavior":"bhvStarSpawnCoordinates","maximum_instances":1},{"model":"MODEL_TRANSPARENT_STAR","behavior":"bhvRedCoinStarMarker","maximum_instances":1}]},
-    {"behavior":"bhvGoldenCoinSparkles","source":"src/game/behaviors/coin.inc.c","reason":"The golden sparkle helper creates the shared coin sparkle effect.","children":[{"model":"MODEL_SPARKLES","behavior":"bhvCoinSparkles","maximum_instances":1}]},
-    {"behavior":"bhvStarSpawnCoordinates","source":"src/game/behaviors/spawn_star.inc.c","reason":"The coordinate-star helper creates a sparkle controller.","children":[{"model":"MODEL_NONE","behavior":"bhvSparkleSpawn","maximum_instances":1}]},
-    {"behavior":"bhvBobBowlingBallSpawner","source":"src/game/behaviors/bowling_ball.inc.c","reason":"The model-less BOB controller creates rolling balls in its native update loop.","children":[{"model":"MODEL_BOWLING_BALL","behavior":"bhvBowlingBall","maximum_instances":1}]},
-    {"behavior":"bhvTtmBowlingBallSpawner","source":"src/game/behaviors/bowling_ball.inc.c","reason":"The model-less alternate-act controller uses the same native rolling-ball spawn path.","children":[{"model":"MODEL_BOWLING_BALL","behavior":"bhvBowlingBall","maximum_instances":1}]},
-    {"behavior":"bhvWaterBomb","source":"src/game/behaviors/water_bomb.inc.c","reason":"The shadow is created by native water-bomb initialization.","children":[{"model":"MODEL_WATER_BOMB_SHADOW","behavior":"bhvWaterBombShadow","maximum_instances":1}]},
-    {"behavior":"bhvWaterBombCannon","source":"src/game/behaviors/water_bomb_cannon.inc.c","reason":"Native cannon state creates projectiles and barrel bubbles.","children":[{"model":"MODEL_WATER_BOMB","behavior":"bhvWaterBomb","maximum_instances":1},{"model":"MODEL_CANNON_BARREL","behavior":"bhvCannonBarrelBubbles","maximum_instances":1}]},
-    {"behavior":"bhvBobomb","source":"src/game/behaviors/bobomb.inc.c","reason":"Explosion, fuse smoke, and coin reward originate in native logic.","children":[{"model":"MODEL_EXPLOSION","behavior":"bhvExplosion","maximum_instances":1},{"model":"MODEL_SMOKE","behavior":"bhvBobombFuseSmoke","maximum_instances":1},{"model":"MODEL_YELLOW_COIN","behavior":"bhvYellowCoin","maximum_instances":1}]},
-    {"behavior":"bhvChainChomp","source":"src/game/behaviors/chain_chomp.inc.c","reason":"Native initialization makes chain parts and destruction produces the bounded coin reward.","children":[{"model":"MODEL_METALLIC_BALL","behavior":"bhvChainChompChainPart","maximum_instances":5},{"model":"MODEL_YELLOW_COIN","behavior":"bhvYellowCoin","maximum_instances":5}]},
-    {"behavior":"bhvKoopa","source":"src/game/behaviors/koopa.inc.c","reason":"Native Koopa transitions create shell, smoke, and race star objects.","children":[{"model":"MODEL_KOOPA_SHELL","behavior":"bhvKoopaShell","maximum_instances":1},{"model":"MODEL_SMOKE","behavior":"bhvWhitePuffSmoke2","maximum_instances":1},{"model":"MODEL_STAR","behavior":"bhvStar","maximum_instances":1}]},
-    {"behavior":"bhvKingBobomb","source":"src/game/behaviors/king_bobomb.inc.c","reason":"The victory star is emitted through native helper calls.","children":[{"model":"MODEL_STAR","behavior":"bhvStar","maximum_instances":1}]},
-    {"behavior":"bhvBreakableBoxSmall","source":"src/game/behaviors/breakable_box_small.inc.c","reason":"Native break handling emits smoke and reward coins.","children":[{"model":"MODEL_SMOKE","behavior":"bhvSmoke","maximum_instances":1},{"model":"MODEL_YELLOW_COIN","behavior":"bhvYellowCoin","maximum_instances":3}]},
-    {"behavior":"bhvBreakableBox","source":"src/game/behaviors/breakable_box.inc.c","reason":"Native break handling creates its configured coin reward.","children":[{"model":"MODEL_YELLOW_COIN","behavior":"bhvYellowCoin","maximum_instances":1}]},
-    {"behavior":"bhvCoinFormation","source":"src/game/behaviors/coin.inc.c","reason":"Formation layout is computed in native code and instantiates eight coin-forming children.","children":[{"model":"MODEL_YELLOW_COIN","behavior":"bhvCoinFormationSpawn","maximum_instances":8}]},
-    {"behavior":"bhvHiddenStar","source":"src/game/behaviors/hidden_star.inc.c","reason":"Native hidden-star completion creates a star outside the BehaviorScript.","children":[{"model":"MODEL_STAR","behavior":"bhvStar","maximum_instances":1}]},
-    {"behavior":"bhvHiddenRedCoinStar","source":"src/game/behaviors/spawn_star.inc.c","reason":"Native red-coin completion invokes spawn_red_coin_cutscene_star.","children":[{"model":"MODEL_STAR","behavior":"bhvStar","maximum_instances":1},{"model":"MODEL_TRANSPARENT_STAR","behavior":"bhvRedCoinStarMarker","maximum_instances":1}]}
+    {
+      "behavior": "bhvGoombaTripletSpawner",
+      "owner": "bhv_goomba_triplet_spawner_update",
+      "source": "src/game/behaviors/goomba.inc.c",
+      "reason": "The bounded triplet count is computed from behavior parameters; BOB uses the default three.",
+      "children": [
+        {
+          "model": "MODEL_GOOMBA",
+          "behavior": "bhvGoomba",
+          "maximum_instances": 3,
+          "edge": {
+            "source": "src/game/behaviors/goomba.inc.c",
+            "location": "bhv_goomba_triplet_spawner_update",
+            "expression": "dx, 0, dz, o, MODEL_GOOMBA, bhvGoomba)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/goomba.inc.c",
+            "location": "bhv_goomba_triplet_spawner_update",
+            "expression": "+ 3",
+            "kind": "literal"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvWaterBombSpawner",
+      "owner": "bhv_water_bomb_spawner_update",
+      "source": "src/game/behaviors/water_bomb.inc.c",
+      "reason": "The native spawner creates both a water bomb and its modelled shadow.",
+      "children": [
+        {
+          "model": "MODEL_WATER_BOMB",
+          "behavior": "bhvWaterBomb",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/water_bomb.inc.c",
+            "location": "bhv_water_bomb_spawner_update",
+            "expression": "spawn_object_relative(0, 0, 2000, 0, o, MODEL_WATER_BOMB, bhvWaterBomb)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/water_bomb.inc.c",
+            "location": "bhv_water_bomb_spawner_update",
+            "expression": "spawn_object_relative(0, 0, 2000, 0, o, MODEL_WATER_BOMB, bhvWaterBomb)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_WATER_BOMB_SHADOW",
+          "behavior": "bhvWaterBombShadow",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/water_bomb.inc.c",
+            "location": "bhv_water_bomb_spawner_update",
+            "expression": "spawn_object(waterBomb, MODEL_WATER_BOMB_SHADOW, bhvWaterBombShadow)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/water_bomb.inc.c",
+            "location": "bhv_water_bomb_spawner_update",
+            "expression": "spawn_object(waterBomb, MODEL_WATER_BOMB_SHADOW, bhvWaterBombShadow)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvCannonBarrelBubbles",
+      "owner": "bhv_bubble_cannon_barrel_loop",
+      "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+      "reason": "The barrel-bubble native callback creates the emitted water bomb.",
+      "children": [
+        {
+          "model": "MODEL_WATER_BOMB",
+          "behavior": "bhvWaterBomb",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+            "location": "bhv_bubble_cannon_barrel_loop",
+            "expression": "spawn_object(o, MODEL_WATER_BOMB, bhvWaterBomb)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+            "location": "bhv_bubble_cannon_barrel_loop",
+            "expression": "spawn_object(o, MODEL_WATER_BOMB, bhvWaterBomb)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvCannonClosed",
+      "owner": [
+        "bhv_cannon_closed_init",
+        "bhv_cannon_closed_loop"
+      ],
+      "source": "src/game/behaviors/cannon_door.inc.c",
+      "reason": "The closed-cannon native transition materializes the open cannon.",
+      "children": [
+        {
+          "model": "MODEL_CANNON_BASE",
+          "behavior": "bhvCannon",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/cannon_door.inc.c",
+            "location": "bhv_cannon_closed_init",
+            "expression": "spawn_object(o, MODEL_CANNON_BASE, bhvCannon)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/cannon_door.inc.c",
+            "location": "bhv_cannon_closed_init",
+            "expression": "spawn_object(o, MODEL_CANNON_BASE, bhvCannon)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvCheckerboardElevatorGroup",
+      "owner": "bhv_checkerboard_elevator_group_init",
+      "source": "src/game/behaviors/checkerboard_platform.inc.c",
+      "reason": "The model-less group initializer creates two rendered platform subobjects.",
+      "children": [
+        {
+          "model": "MODEL_CHECKERBOARD_PLATFORM",
+          "behavior": "bhvCheckerboardPlatformSub",
+          "maximum_instances": 2,
+          "edge": {
+            "source": "src/game/behaviors/checkerboard_platform.inc.c",
+            "location": "bhv_checkerboard_elevator_group_init",
+            "expression": "spawn_object_relative(i, 0, i * sp3C, sp38, o, MODEL_CHECKERBOARD_PLATFORM, bhvCheckerboardPlatformSub)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/checkerboard_platform.inc.c",
+            "location": "bhv_checkerboard_elevator_group_init",
+            "expression": "for (i = 0; i < 2; i++)",
+            "kind": "exclusive_loop"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvOpenableGrill",
+      "owner": "bhv_openable_grill_loop",
+      "source": "src/game/behaviors/grill_door.inc.c",
+      "reason": "The model-less grill controller creates both animated cage-door halves.",
+      "children": [
+        {
+          "model": "MODEL_BOB_BARS_GRILLS",
+          "behavior": "bhvOpenableCageDoor",
+          "maximum_instances": 2,
+          "edge": {
+            "source": "src/game/behaviors/grill_door.inc.c",
+            "location": "bhv_openable_grill_loop",
+            "expression": "bhvOpenableCageDoor",
+            "model_location": "gOpenableGrills",
+            "model_expression": "MODEL_BOB_BARS_GRILLS"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/grill_door.inc.c",
+            "location": "bhv_openable_grill_loop",
+            "expression": "bhvOpenableCageDoor",
+            "kind": "occurrences"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvHidden1upInPoleSpawner",
+      "owner": "bhv_1up_hidden_in_pole_spawner_loop",
+      "source": "src/game/behaviors/mushroom_1up.inc.c",
+      "reason": "The model-less pole controller emits its 1-Up and two collision triggers.",
+      "children": [
+        {
+          "model": "MODEL_1UP",
+          "behavior": "bhvHidden1upInPole",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_spawner_loop",
+            "expression": "spawn_object_relative(2, 0, 50, 0, o, MODEL_1UP, bhvHidden1upInPole)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_spawner_loop",
+            "expression": "spawn_object_relative(2, 0, 50, 0, o, MODEL_1UP, bhvHidden1upInPole)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvHidden1upInPoleTrigger",
+          "maximum_instances": 2,
+          "edge": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_spawner_loop",
+            "expression": "spawn_object_relative(0, 0, sp2F * -200, 0, o, MODEL_NONE, bhvHidden1upInPoleTrigger)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_spawner_loop",
+            "expression": "for (sp2F = 0; sp2F < 2; sp2F++)",
+            "kind": "exclusive_loop"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvHidden1up",
+      "owner": [
+        "bhv_1up_common_init",
+        "bhv_1up_hidden_loop"
+      ],
+      "source": "src/game/behaviors/mushroom_1up.inc.c",
+      "reason": "The hidden 1-Up native state creates its model-less sparkle controller.",
+      "children": [
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvSparkleSpawn",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvExplosion",
+      "owner": [
+        "bhv_explosion_init",
+        "bhv_explosion_loop"
+      ],
+      "source": "src/game/behaviors/explosion.inc.c",
+      "reason": "The native explosion update creates smoke and white explosion-particle effects.",
+      "children": [
+        {
+          "model": "MODEL_SMOKE",
+          "behavior": "bhvBobombBullyDeathSmoke",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/explosion.inc.c",
+            "location": "bhv_explosion_loop",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvBobombBullyDeathSmoke)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/explosion.inc.c",
+            "location": "bhv_explosion_loop",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvBobombBullyDeathSmoke)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_WHITE_PARTICLE_SMALL",
+          "behavior": "bhvBobombExplosionBubble",
+          "maximum_instances": 40,
+          "edge": {
+            "source": "src/game/behaviors/explosion.inc.c",
+            "location": "bhv_explosion_loop",
+            "expression": "spawn_object(o, MODEL_WHITE_PARTICLE_SMALL, bhvBobombExplosionBubble)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/explosion.inc.c",
+            "location": "bhv_explosion_loop",
+            "expression": "for (i = 0; i < 40; i++)",
+            "kind": "exclusive_loop"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvBobombExplosionBubble",
+      "owner": [
+        "bhv_bobomb_explosion_bubble_init",
+        "bhv_bobomb_explosion_bubble_loop"
+      ],
+      "source": "src/game/behaviors/corkbox.inc.c",
+      "reason": "The shared native bubble update creates its water-splash effect.",
+      "children": [
+        {
+          "model": "MODEL_SMALL_WATER_SPLASH",
+          "behavior": "bhvObjectWaterSplash",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/corkbox.inc.c",
+            "location": "bhv_bobomb_explosion_bubble_loop",
+            "expression": "spawn_object(o, MODEL_SMALL_WATER_SPLASH, bhvObjectWaterSplash)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/corkbox.inc.c",
+            "location": "bhv_bobomb_explosion_bubble_loop",
+            "expression": "spawn_object(o, MODEL_SMALL_WATER_SPLASH, bhvObjectWaterSplash)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvHidden1upInPole",
+      "owner": [
+        "bhv_1up_common_init",
+        "bhv_1up_hidden_in_pole_loop"
+      ],
+      "source": "src/game/behaviors/mushroom_1up.inc.c",
+      "reason": "The pole 1-Up flight state creates its model-less sparkle controller.",
+      "children": [
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvSparkleSpawn",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/mushroom_1up.inc.c",
+            "location": "bhv_1up_hidden_in_pole_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvSparkleSpawn",
+      "owner": "bhv_sparkle_spawn_loop",
+      "source": "src/game/behaviors/sparkle_spawn.inc.c",
+      "reason": "The sparkle controller's native callback creates the animated sparkle effect.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES_ANIMATION",
+          "behavior": "bhvSparkle",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/sparkle_spawn.inc.c",
+            "location": "bhv_sparkle_spawn_loop",
+            "expression": "try_to_spawn_object(0, 1.0f, o, MODEL_SPARKLES_ANIMATION, bhvSparkle)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/sparkle_spawn.inc.c",
+            "location": "bhv_sparkle_spawn_loop",
+            "expression": "try_to_spawn_object(0, 1.0f, o, MODEL_SPARKLES_ANIMATION, bhvSparkle)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvKoopaShell",
+      "owner": "bhv_koopa_shell_loop",
+      "source": "src/game/behaviors/koopa_shell.inc.c",
+      "reason": "Koopa-shell helper paths emit wave, droplet, flame, and sparkle effect controllers.",
+      "children": [
+        {
+          "model": "MODEL_WAVE_TRAIL",
+          "behavior": "bhvObjectWaveTrail",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_water_drop",
+            "expression": "spawn_object(o, MODEL_WAVE_TRAIL, bhvObjectWaveTrail)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_water_drop",
+            "expression": "spawn_object(o, MODEL_WAVE_TRAIL, bhvObjectWaveTrail)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_WHITE_PARTICLE_SMALL",
+          "behavior": "bhvWaterDroplet",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_water_drop",
+            "expression": "spawn_object_with_scale(o, MODEL_WHITE_PARTICLE_SMALL, bhvWaterDroplet, 1.5f)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_water_drop",
+            "expression": "spawn_object_with_scale(o, MODEL_WHITE_PARTICLE_SMALL, bhvWaterDroplet, 1.5f)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_RED_FLAME",
+          "behavior": "bhvKoopaShellFlame",
+          "maximum_instances": 2,
+          "edge": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "bhv_koopa_shell_flame_spawn",
+            "expression": "spawn_object(o, MODEL_RED_FLAME, bhvKoopaShellFlame)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "bhv_koopa_shell_flame_spawn",
+            "expression": "for (i = 0; i < 2; i++)",
+            "kind": "exclusive_loop"
+          }
+        },
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvSparkleSpawn",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_sparkles",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa_shell.inc.c",
+            "location": "koopa_shell_spawn_sparkles",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvExclamationBox",
+      "owner": "bhv_exclamation_box_loop",
+      "source": "src/game/behaviors/exclamation_box.inc.c",
+      "reason": "The computed contents table and box action helpers select BOB's cap/star contents and rotating marker.",
+      "children": [
+        {
+          "model": "MODEL_EXCLAMATION_POINT",
+          "behavior": "bhvRotatingExclamationMark",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "exclamation_box_act_1",
+            "expression": "spawn_object(o, MODEL_EXCLAMATION_POINT, bhvRotatingExclamationMark)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "exclamation_box_act_1",
+            "expression": "spawn_object(o, MODEL_EXCLAMATION_POINT, bhvRotatingExclamationMark)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_MARIOS_WING_CAP",
+          "behavior": "bhvWingCap",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "sExclamationBoxContents",
+            "expression": "sExclamationBoxContents[] = { { 0, 0, 0, MODEL_MARIOS_WING_CAP, bhvWingCap },"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "sExclamationBoxContents",
+            "expression": "sExclamationBoxContents[] = { { 0, 0, 0, MODEL_MARIOS_WING_CAP, bhvWingCap },",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvSpawnedStar",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "sExclamationBoxContents",
+            "expression": "{ 8, 0, 0, MODEL_STAR, bhvSpawnedStar },"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/exclamation_box.inc.c",
+            "location": "sExclamationBoxContents",
+            "expression": "{ 8, 0, 0, MODEL_STAR, bhvSpawnedStar },",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvWaterDroplet",
+      "owner": "bhv_water_droplet_loop",
+      "source": "src/game/behaviors/water_splashes_and_waves.inc.c",
+      "reason": "The native droplet callback creates a small water-splash child.",
+      "children": [
+        {
+          "model": "MODEL_SMALL_WATER_SPLASH",
+          "behavior": "bhvWaterDropletSplash",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/water_splashes_and_waves.inc.c",
+            "location": "bhv_water_droplet_loop",
+            "expression": "try_to_spawn_object(0, 1.0f, o, MODEL_SMALL_WATER_SPLASH, bhvWaterDropletSplash)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/water_splashes_and_waves.inc.c",
+            "location": "bhv_water_droplet_loop",
+            "expression": "try_to_spawn_object(0, 1.0f, o, MODEL_SMALL_WATER_SPLASH, bhvWaterDropletSplash)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvYellowCoin",
+      "owner": [
+        "bhv_yellow_coin_init",
+        "bhv_yellow_coin_loop"
+      ],
+      "source": "src/game/behaviors/coin.inc.c",
+      "reason": "The coin helper creates its golden sparkle effect.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES",
+          "behavior": "bhvGoldenCoinSparkles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvCoinFormationSpawn",
+      "owner": "bhv_coin_formation_spawn_loop",
+      "source": "src/game/behaviors/coin.inc.c",
+      "reason": "The formation child reaches the shared coin sparkle helper.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES",
+          "behavior": "bhvGoldenCoinSparkles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvHiddenRedCoinStar",
+      "owner": [
+        "bhv_hidden_red_coin_star_init",
+        "bhv_hidden_red_coin_star_loop"
+      ],
+      "source": "src/game/behaviors/spawn_star.inc.c",
+      "reason": "The reachable star helper creates the coordinate star before normal star handoff.",
+      "children": [
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvStarSpawnCoordinates",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_TRANSPARENT_STAR",
+          "behavior": "bhvRedCoinStarMarker",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_hidden_red_coin_star_init",
+            "expression": "spawn_object(o, MODEL_TRANSPARENT_STAR, bhvRedCoinStarMarker)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_hidden_red_coin_star_init",
+            "expression": "spawn_object(o, MODEL_TRANSPARENT_STAR, bhvRedCoinStarMarker)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvStar",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_hidden_red_coin_star_init",
+            "expression": "spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStar, o->oPosX, o->oPosY, o->oPosZ, 0, 0, 0)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_hidden_red_coin_star_init",
+            "expression": "spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStar, o->oPosX, o->oPosY, o->oPosZ, 0, 0, 0)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvGoldenCoinSparkles",
+      "owner": "bhv_golden_coin_sparkles_loop",
+      "source": "src/game/behaviors/coin.inc.c",
+      "reason": "The golden sparkle helper creates the shared coin sparkle effect.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES",
+          "behavior": "bhvCoinSparkles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_golden_coin_sparkles_loop",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvCoinSparkles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_golden_coin_sparkles_loop",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvCoinSparkles)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvStarSpawnCoordinates",
+      "owner": [
+        "bhv_collect_star_init",
+        "bhv_star_spawn_init",
+        "bhv_star_spawn_loop"
+      ],
+      "source": "src/game/behaviors/spawn_star.inc.c",
+      "reason": "The coordinate-star helper creates a sparkle controller.",
+      "children": [
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvSparkleSpawn",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_star_spawn_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "bhv_star_spawn_loop",
+            "expression": "spawn_object(o, MODEL_NONE, bhvSparkleSpawn)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvBobBowlingBallSpawner",
+      "owner": [
+        "bhv_generic_bowling_ball_spawner_init",
+        "bhv_generic_bowling_ball_spawner_loop"
+      ],
+      "source": "src/game/behaviors/bowling_ball.inc.c",
+      "reason": "The model-less BOB controller creates rolling balls in its native update loop.",
+      "children": [
+        {
+          "model": "MODEL_BOWLING_BALL",
+          "behavior": "bhvBowlingBall",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/bowling_ball.inc.c",
+            "location": "bhv_generic_bowling_ball_spawner_loop",
+            "expression": "spawn_object(o, MODEL_BOWLING_BALL, bhvBowlingBall)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/bowling_ball.inc.c",
+            "location": "bhv_generic_bowling_ball_spawner_loop",
+            "expression": "spawn_object(o, MODEL_BOWLING_BALL, bhvBowlingBall)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvTtmBowlingBallSpawner",
+      "owner": [
+        "bhv_generic_bowling_ball_spawner_init",
+        "bhv_generic_bowling_ball_spawner_loop"
+      ],
+      "source": "src/game/behaviors/bowling_ball.inc.c",
+      "reason": "The model-less alternate-act controller uses the same native rolling-ball spawn path.",
+      "children": [
+        {
+          "model": "MODEL_BOWLING_BALL",
+          "behavior": "bhvBowlingBall",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/bowling_ball.inc.c",
+            "location": "bhv_generic_bowling_ball_spawner_loop",
+            "expression": "spawn_object(o, MODEL_BOWLING_BALL, bhvBowlingBall)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/bowling_ball.inc.c",
+            "location": "bhv_generic_bowling_ball_spawner_loop",
+            "expression": "spawn_object(o, MODEL_BOWLING_BALL, bhvBowlingBall)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvWaterBombCannon",
+      "owner": "bhv_water_bomb_cannon_loop",
+      "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+      "reason": "Native cannon state creates projectiles and barrel bubbles.",
+      "children": [
+        {
+          "model": "MODEL_CANNON_BARREL",
+          "behavior": "bhvCannonBarrelBubbles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+            "location": "water_bomb_cannon_act_0",
+            "expression": "spawn_object(o, MODEL_CANNON_BARREL, bhvCannonBarrelBubbles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/water_bomb_cannon.inc.c",
+            "location": "water_bomb_cannon_act_0",
+            "expression": "spawn_object(o, MODEL_CANNON_BARREL, bhvCannonBarrelBubbles)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvBobomb",
+      "owner": [
+        "bhv_bobomb_init",
+        "bhv_bobomb_loop"
+      ],
+      "source": "src/game/behaviors/bobomb.inc.c",
+      "reason": "Explosion, fuse smoke, and coin reward originate in native logic.",
+      "children": [
+        {
+          "model": "MODEL_EXPLOSION",
+          "behavior": "bhvExplosion",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/bobomb.inc.c",
+            "location": "bobomb_act_explode",
+            "expression": "spawn_object(o, MODEL_EXPLOSION, bhvExplosion)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/bobomb.inc.c",
+            "location": "bobomb_act_explode",
+            "expression": "spawn_object(o, MODEL_EXPLOSION, bhvExplosion)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_SMOKE",
+          "behavior": "bhvBobombFuseSmoke",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/bobomb.inc.c",
+            "location": "bhv_bobomb_loop",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvBobombFuseSmoke)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/bobomb.inc.c",
+            "location": "bhv_bobomb_loop",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvBobombFuseSmoke)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_YELLOW_COIN",
+          "behavior": "bhvMovingYellowCoin",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/obj_behaviors.c",
+            "location": "obj_spawn_yellow_coins",
+            "expression": "spawn_object(obj, MODEL_YELLOW_COIN, bhvMovingYellowCoin)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/bobomb.inc.c",
+            "location": "bobomb_spawn_coin",
+            "expression": "obj_spawn_yellow_coins(o, 1)",
+            "kind": "count_argument",
+            "argument": 1
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvChainChomp",
+      "owner": "bhv_chain_chomp_update",
+      "source": "src/game/behaviors/chain_chomp.inc.c",
+      "reason": "Native initialization makes chain parts and destruction produces the bounded coin reward.",
+      "children": [
+        {
+          "model": "MODEL_METALLIC_BALL",
+          "behavior": "bhvChainChompChainPart",
+          "maximum_instances": 4,
+          "edge": {
+            "source": "src/game/behaviors/chain_chomp.inc.c",
+            "location": "chain_chomp_act_uninitialized",
+            "expression": "spawn_object_relative(i, 0, 0, 0, o, MODEL_METALLIC_BALL, bhvChainChompChainPart)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/chain_chomp.inc.c",
+            "location": "chain_chomp_act_uninitialized",
+            "expression": "for (i = 1; i <= 4; i++)",
+            "kind": "inclusive_loop"
+          }
+        },
+        {
+          "model": "MODEL_NONE",
+          "behavior": "bhvChainChompChainPart",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/chain_chomp.inc.c",
+            "location": "chain_chomp_act_uninitialized",
+            "expression": "spawn_object(o, CHAIN_CHOMP_CHAIN_PART_BP_PIVOT, bhvChainChompChainPart)",
+            "model_location": "chain_chomp_act_uninitialized",
+            "model_expression": "CHAIN_CHOMP_CHAIN_PART_BP_PIVOT",
+            "model_symbol": "CHAIN_CHOMP_CHAIN_PART_BP_PIVOT"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/chain_chomp.inc.c",
+            "location": "chain_chomp_act_uninitialized",
+            "expression": "spawn_object(o, CHAIN_CHOMP_CHAIN_PART_BP_PIVOT, bhvChainChompChainPart)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvKoopa",
+      "owner": [
+        "bhv_koopa_init",
+        "bhv_koopa_update"
+      ],
+      "source": "src/game/behaviors/koopa.inc.c",
+      "reason": "Native Koopa transitions create shell, smoke, and race star objects.",
+      "children": [
+        {
+          "model": "MODEL_KOOPA_SHELL",
+          "behavior": "bhvKoopaShell",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/koopa.inc.c",
+            "location": "shelled_koopa_attack_handler",
+            "expression": "spawn_object(o, MODEL_KOOPA_SHELL, bhvKoopaShell)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa.inc.c",
+            "location": "shelled_koopa_attack_handler",
+            "expression": "spawn_object(o, MODEL_KOOPA_SHELL, bhvKoopaShell)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_SMOKE",
+          "behavior": "bhvWhitePuffSmoke2",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/koopa.inc.c",
+            "location": "koopa_dive_update_speed",
+            "expression": "spawn_object_with_scale(o, MODEL_SMOKE, bhvWhitePuffSmoke2, 1.0f)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/koopa.inc.c",
+            "location": "koopa_dive_update_speed",
+            "expression": "spawn_object_with_scale(o, MODEL_SMOKE, bhvWhitePuffSmoke2, 1.0f)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvStarSpawnCoordinates",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvKingBobomb",
+      "owner": "bhv_king_bobomb_loop",
+      "source": "src/game/behaviors/king_bobomb.inc.c",
+      "reason": "The victory star is emitted through native helper calls.",
+      "children": [
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvStarSpawnCoordinates",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/spawn_star.inc.c",
+            "location": "spawn_star",
+            "expression": "sp30 = spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStarSpawnCoordinates, o->oPosX, o->oPosY,",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvBreakableBoxSmall",
+      "owner": [
+        "bhv_breakable_box_small_init",
+        "bhv_breakable_box_small_loop"
+      ],
+      "source": "src/game/behaviors/breakable_box_small.inc.c",
+      "reason": "Native break handling emits smoke and reward coins.",
+      "children": [
+        {
+          "model": "MODEL_SMOKE",
+          "behavior": "bhvSmoke",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/breakable_box_small.inc.c",
+            "location": "small_breakable_box_spawn_dust",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvSmoke)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/breakable_box_small.inc.c",
+            "location": "small_breakable_box_spawn_dust",
+            "expression": "spawn_object(o, MODEL_SMOKE, bhvSmoke)",
+            "kind": "single"
+          }
+        },
+        {
+          "model": "MODEL_YELLOW_COIN",
+          "behavior": "bhvMovingYellowCoin",
+          "maximum_instances": 3,
+          "edge": {
+            "source": "src/game/obj_behaviors.c",
+            "location": "obj_spawn_yellow_coins",
+            "expression": "spawn_object(obj, MODEL_YELLOW_COIN, bhvMovingYellowCoin)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/breakable_box_small.inc.c",
+            "location": "small_breakable_box_act_move",
+            "expression": "obj_spawn_yellow_coins(o, 3)",
+            "kind": "count_argument",
+            "argument": 1
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvBreakableBox",
+      "owner": "bhv_breakable_box_loop",
+      "source": "src/game/behaviors/breakable_box.inc.c",
+      "reason": "Native break handling creates its configured coin reward.",
+      "children": [
+        {
+          "model": "MODEL_YELLOW_COIN",
+          "behavior": "bhvSingleCoinGetsSpawned",
+          "maximum_instances": 5,
+          "edge": {
+            "source": "src/game/object_helpers.c",
+            "location": "obj_spawn_loot_yellow_coins",
+            "expression": "obj_spawn_loot_coins(obj, numCoins, sp28, bhvSingleCoinGetsSpawned, 0, MODEL_YELLOW_COIN)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/switch_hidden_objects.inc.c",
+            "location": "breakable_box_init",
+            "expression": "o->oNumLootCoins = 5",
+            "kind": "literal"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvCoinFormation",
+      "owner": [
+        "bhv_coin_formation_init",
+        "bhv_coin_formation_loop"
+      ],
+      "source": "src/game/behaviors/coin.inc.c",
+      "reason": "Formation layout is computed in native code and instantiates eight coin-forming children.",
+      "children": [
+        {
+          "model": "MODEL_YELLOW_COIN",
+          "behavior": "bhvCoinFormationSpawn",
+          "maximum_instances": 8,
+          "edge": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "spawn_coin_in_formation",
+            "expression": "spawn_object_relative(sp50, sp40[0], sp40[1], sp40[2], o, MODEL_YELLOW_COIN, bhvCoinFormationSpawn)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_formation_loop",
+            "expression": "for (bitIndex = 0; bitIndex < 8; bitIndex++)",
+            "kind": "exclusive_loop"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvHiddenStar",
+      "owner": [
+        "bhv_hidden_star_init",
+        "bhv_hidden_star_loop"
+      ],
+      "source": "src/game/behaviors/hidden_star.inc.c",
+      "reason": "Native hidden-star completion creates a star outside the BehaviorScript.",
+      "children": [
+        {
+          "model": "MODEL_STAR",
+          "behavior": "bhvStar",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/hidden_star.inc.c",
+            "location": "bhv_hidden_star_init",
+            "expression": "spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStar, o->oPosX, o->oPosY, o->oPosZ, 0, 0, 0)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/hidden_star.inc.c",
+            "location": "bhv_hidden_star_init",
+            "expression": "spawn_object_abs_with_rot(o, 0, MODEL_STAR, bhvStar, o->oPosX, o->oPosY, o->oPosZ, 0, 0, 0)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvWoodenPost",
+      "owner": "bhv_wooden_post_update",
+      "source": "src/game/behaviors/chain_chomp.inc.c",
+      "reason": "The wooden-post completion callback emits five yellow loot coins through the shared helper.",
+      "children": [
+        {
+          "model": "MODEL_YELLOW_COIN",
+          "behavior": "bhvSingleCoinGetsSpawned",
+          "maximum_instances": 5,
+          "edge": {
+            "source": "src/game/object_helpers.c",
+            "location": "obj_spawn_loot_yellow_coins",
+            "expression": "obj_spawn_loot_coins(obj, numCoins, sp28, bhvSingleCoinGetsSpawned, 0, MODEL_YELLOW_COIN)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/chain_chomp.inc.c",
+            "location": "bhv_wooden_post_update",
+            "expression": "obj_spawn_loot_yellow_coins(o, 5, 20.0f)",
+            "kind": "count_argument",
+            "argument": 1
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvMovingYellowCoin",
+      "owner": [
+        "bhv_moving_yellow_coin_init",
+        "bhv_moving_yellow_coin_loop"
+      ],
+      "source": "src/game/behaviors/moving_coin.inc.c",
+      "reason": "The moving-coin collection helper creates one golden-sparkle controller.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES",
+          "behavior": "bhvGoldenCoinSparkles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/moving_coin.inc.c",
+            "location": "coin_collected",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/moving_coin.inc.c",
+            "location": "coin_collected",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)",
+            "kind": "single"
+          }
+        }
+      ]
+    },
+    {
+      "behavior": "bhvSingleCoinGetsSpawned",
+      "owner": [
+        "bhv_coin_init",
+        "bhv_coin_loop"
+      ],
+      "source": "src/game/behaviors/coin.inc.c",
+      "reason": "The spawned-coin loop reaches the common collection sparkle helper.",
+      "children": [
+        {
+          "model": "MODEL_SPARKLES",
+          "behavior": "bhvGoldenCoinSparkles",
+          "maximum_instances": 1,
+          "edge": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)"
+          },
+          "capacity": {
+            "source": "src/game/behaviors/coin.inc.c",
+            "location": "bhv_coin_sparkles_init",
+            "expression": "spawn_object(o, MODEL_SPARKLES, bhvGoldenCoinSparkles)",
+            "kind": "single"
+          }
+        }
+      ]
+    }
   ]
 }

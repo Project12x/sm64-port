@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from collect_scene_closure import ClosureError, _native_spawn_edges, collect_scene_closure
+from collect_scene_closure import ClosureError, _native_spawn_edges, _rules, collect_scene_closure
 from scene_package_schema import validate_scene_closure
 
 
@@ -59,6 +59,45 @@ class SceneClosureTest(unittest.TestCase):
 
     def collect(self, root: Path) -> dict:
         return collect_scene_closure(root, "test", 1, root / "rules.json")
+
+    def native_rule_fixture(self) -> Path:
+        root = self.fixture()
+        write(root / "data/behavior_data.c", """
+            const BehaviorScript bhvParent[] = { CALL_NATIVE(bhv_parent_loop) };
+            const BehaviorScript bhvChild[] = {};
+            const BehaviorScript bhvController[] = {};
+            const BehaviorScript bhvCycle[] = {};
+            const BehaviorScript bhvReward[] = {};
+            const BehaviorScript bhvProjectile[] = {};
+            const BehaviorScript bhvEffect[] = {};
+        """)
+        write(root / "src/game/behaviors/parent.inc.c", """
+            void bhv_parent_loop(void) {
+                spawn_object(o, MODEL_CHILD, bhvChild);
+            }
+        """)
+        write(root / "src/game/behaviors/unrelated.inc.c", """
+            void bhv_unrelated_loop(void) {
+                spawn_object(o, MODEL_CHILD, bhvChild);
+            }
+        """)
+        write(root / "rules.json", json.dumps({
+            "schema": "sm64-saturn-behavior-spawn-rules-v2",
+            "rules": [{
+                "behavior": "bhvParent",
+                "owner": "bhv_parent_loop",
+                "source": "src/game/behaviors/parent.inc.c",
+                "reason": "The native owner creates one child.",
+                "children": [{
+                    "model": "MODEL_CHILD",
+                    "behavior": "bhvChild",
+                    "maximum_instances": 1,
+                    "edge": {"location": "bhv_parent_loop", "expression": "spawn_object(o, MODEL_CHILD, bhvChild)"},
+                    "capacity": {"location": "bhv_parent_loop", "expression": "spawn_object(o, MODEL_CHILD, bhvChild)", "kind": "single"},
+                }],
+            }],
+        }))
+        return root
 
     def test_collects_transitive_generic_dependencies_deterministically(self) -> None:
         root = self.fixture()
@@ -108,6 +147,84 @@ class SceneClosureTest(unittest.TestCase):
     def test_rejects_unknown_computed_native_spawn_arguments(self) -> None:
         with self.assertRaisesRegex(ClosureError, "unrecognized dynamic native spawn form"):
             _native_spawn_edges("spawn_object(o, model_from_table, behavior_from_table);")
+
+    def test_rules_are_repo_relative_hash_covered_and_source_attested(self) -> None:
+        root = self.native_rule_fixture()
+        closure = self.collect(root)
+        self.assertIn("rules.json", closure["scene_sources"])
+        self.assertIn("rules.json", closure["source_hashes"])
+        outside = Path(tempfile.mkdtemp(prefix="external-rules-")) / "rules.json"
+        outside.write_bytes((root / "rules.json").read_bytes())
+        with self.assertRaisesRegex(ClosureError, "rule file outside repository"):
+            collect_scene_closure(root, "test", 1, outside)
+
+    def test_rules_reject_unattested_owner_edge_capacity_and_duplicates(self) -> None:
+        mutations = [
+            (lambda rule: rule.update(source="src/game/behaviors/unrelated.inc.c"), "does not define owner"),
+            (lambda rule: rule["children"][0]["edge"].update(expression="spawn_object(o, MODEL_CHILD, bhvMissing)"), "edge expression"),
+            (lambda rule: rule["children"][0].update(maximum_instances=2), "capacity expression"),
+            (lambda rule: rule.update(source="../parent.inc.c"), "repository-relative"),
+            (lambda rule: rule["children"].append(dict(rule["children"][0])), "duplicate manual rule edge"),
+        ]
+        for mutate, message in mutations:
+            with self.subTest(message=message):
+                root = self.native_rule_fixture()
+                payload = json.loads((root / "rules.json").read_text(encoding="utf-8"))
+                mutate(payload["rules"][0])
+                write(root / "rules.json", json.dumps(payload))
+                with self.assertRaisesRegex(ClosureError, message):
+                    _rules(root, root / "rules.json")
+        root = self.native_rule_fixture()
+        payload = json.loads((root / "rules.json").read_text(encoding="utf-8"))
+        payload["rules"].append(dict(payload["rules"][0]))
+        write(root / "rules.json", json.dumps(payload))
+        with self.assertRaisesRegex(ClosureError, "duplicate manual rule behavior"):
+            _rules(root, root / "rules.json")
+
+    def test_audio_is_behavior_scoped_bank_bound_and_declaration_hashed(self) -> None:
+        root = self.native_rule_fixture()
+        write(root / "src/game/behaviors/parent.inc.c", """
+            static void parent_sound_helper(void) {
+                cur_obj_play_sound_2(SOUND_OBJ_USED_BY_PARENT);
+            }
+            static void unrelated_sound_helper(void) {
+                cur_obj_play_sound_2(SOUND_GENERAL_MUST_NOT_LEAK);
+            }
+            void bhv_parent_loop(void) {
+                parent_sound_helper();
+                spawn_object(o, MODEL_CHILD, bhvChild);
+            }
+        """)
+        write(root / "include/sounds.h", """
+            #define SOUND_OBJ_USED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 1, 2, 3)
+            #define SOUND_GENERAL_MUST_NOT_LEAK SOUND_ARG_LOAD(SOUND_BANK_GENERAL, 4, 5, 6)
+        """)
+        closure = self.collect(root)
+        parent = next(record for record in closure["records"] if record["stable_id"] == "bhvParent")
+        self.assertEqual(parent["sfx_ids"], ["SOUND_OBJ_USED_BY_PARENT"])
+        self.assertEqual(parent["sfx_banks"], ["obj"])
+        self.assertIn("include/sounds.h", {source["path"] for source in parent["sources"]})
+        self.assertIn("include/sounds.h", closure["source_hashes"])
+
+    def test_audio_rejects_missing_and_ambiguous_sound_bank_declarations(self) -> None:
+        for declarations, message in [
+            ("", "missing SOUND_ARG_LOAD declaration"),
+            ("""
+                #define SOUND_OBJ_USED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_OBJ, 1, 2, 3)
+                #define SOUND_OBJ_USED_BY_PARENT SOUND_ARG_LOAD(SOUND_BANK_GENERAL, 1, 2, 3)
+            """, "ambiguous SOUND_ARG_LOAD declaration"),
+        ]:
+            with self.subTest(message=message):
+                root = self.native_rule_fixture()
+                write(root / "src/game/behaviors/parent.inc.c", """
+                    void bhv_parent_loop(void) {
+                        cur_obj_play_sound_2(SOUND_OBJ_USED_BY_PARENT);
+                        spawn_object(o, MODEL_CHILD, bhvChild);
+                    }
+                """)
+                write(root / "include/sounds.h", declarations)
+                with self.assertRaisesRegex(ClosureError, message):
+                    self.collect(root)
 
     def test_schema_rejects_stale_hash_duplicate_id_and_bob_only_field(self) -> None:
         closure = self.collect(self.fixture())
