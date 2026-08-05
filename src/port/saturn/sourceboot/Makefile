@@ -6,6 +6,11 @@ ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
+SOURCEBOOT_BUILD_IDENTITY_SPEC ?= $(SOURCEBOOT_GENERATED)/saturn_build_identity_spec.json
+SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_values.inc
+SOURCEBOOT_BUILD_IDENTITY_BIN := $(SOURCEBOOT_GENERATED)/saturn_build_identity.bin
+SOURCEBOOT_BUILD_IDENTITY_JSON := $(SOURCEBOOT_GENERATED)/saturn_build_identity.json
+SOURCEBOOT_BUILD_IDENTITY_LABEL := $(SOURCEBOOT_GENERATED)/saturn_build_identity.label
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump
 SOURCEBOOT_SH_READELF := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-readelf
 SOURCEBOOT_SH_ADDR2LINE := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-addr2line
@@ -23,6 +28,50 @@ SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
+SATURN_SOURCEBOOT_LEVEL_ID ?= 9
+SATURN_SOURCEBOOT_AREA_ID ?= 1
+SATURN_SOURCEBOOT_ROUTE_ID ?= 0
+SATURN_FEATURE_COMPLETE_MARIO_ANIMATION ?= 0
+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE ?= 0
+SATURN_FEATURE_SEMANTIC_AUDIO ?= 0
+SATURN_DIAGNOSTIC_MODE ?= 0
+SATURN_CART_MBIT ?= 32
+ifneq ($(words $(filter $(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION),0 1)),1)
+  $(error SATURN_FEATURE_COMPLETE_MARIO_ANIMATION must be 0 or 1)
+endif
+ifneq ($(words $(filter $(SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE),0 1)),1)
+  $(error SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE must be 0 or 1)
+endif
+ifneq ($(words $(filter $(SATURN_FEATURE_SEMANTIC_AUDIO),0 1)),1)
+  $(error SATURN_FEATURE_SEMANTIC_AUDIO must be 0 or 1)
+endif
+ifneq ($(words $(filter $(SATURN_DIAGNOSTIC_MODE),0 1 2)),1)
+  $(error SATURN_DIAGNOSTIC_MODE must be 0, 1 (animation sweep), or 2 (scene transition))
+endif
+ifneq ($(words $(filter $(SATURN_CART_MBIT),32 64)),1)
+  $(error SATURN_CART_MBIT must be 32 or 64)
+endif
+SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS = \
+  --expect features.complete_mario_animation=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION) \
+  --expect features.dynamic_actor_closure=$(SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE) \
+  --expect features.semantic_audio=$(SATURN_FEATURE_SEMANTIC_AUDIO) \
+  --expect renderer_pipeline=$(SATURN_RENDERER_PIPELINE) \
+  --expect level_id=$(SATURN_SOURCEBOOT_LEVEL_ID) \
+  --expect area_id=$(SATURN_SOURCEBOOT_AREA_ID) \
+  --expect route_id=$(SATURN_SOURCEBOOT_ROUTE_ID) \
+  --expect route_replay_mode=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
+  --expect live_input_mode=$(SATURN_SOURCEBOOT_LIVE_INPUT) \
+  --expect camera_route=$(SATURN_SOURCEBOOT_CAMERA_ROUTE) \
+  --expect camera_variant=$(SATURN_CAMERA_VARIANT) \
+  --expect diagnostic_mode=$(SATURN_DIAGNOSTIC_MODE) \
+  --expect bootstrap_ticks=$(SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS) \
+  --expect cart_mbit=$(SATURN_CART_MBIT) \
+  --expect cart_stage_sectors=$(SATURN_SOURCE_CART_STAGE_SECTORS) \
+  --expect hot_promotion=$(SATURN_DEMO_HOT_PROMOTION) \
+  --expect near_clip=$(SATURN_DEMO_NEAR_CLIP) \
+  --expect bsp_order=$(SATURN_DEMO_BSP_ORDER) \
+  --expect polygon_tier=$(SATURN_DEMO_POLY_TIER) \
+  --expect fragment_mode=$(SATURN_DEMO_FRAGMENT_MODE)
 SATURN_EXPERIMENTAL_SKIP_GEO_WALK ?= 0
 # Preserve the caller's exact spelling long enough to reject hidden activation
 # forms, then make every validation, branch, compiler flag, and output tag
@@ -103,7 +152,17 @@ endif
 SATURN_DEMO_HOT_PROMOTION ?= 0
 SATURN_DEMO_NEAR_CLIP ?= 0
 SATURN_DEMO_BSP_ORDER ?= 1
-SATURN_DEMO_BSP_FRAGMENTS ?= 0
+SATURN_DEMO_BSP_FRAGMENTS ?= $(if $(filter undefined,$(origin SATURN_DEMO_FRAGMENT_MODE)),0,$(SATURN_DEMO_FRAGMENT_MODE))
+SATURN_DEMO_FRAGMENT_MODE ?= $(SATURN_DEMO_BSP_FRAGMENTS)
+ifneq ($(words $(filter $(SATURN_DEMO_BSP_FRAGMENTS),0 1)),1)
+  $(error SATURN_DEMO_BSP_FRAGMENTS must be 0 or 1)
+endif
+ifneq ($(words $(filter $(SATURN_DEMO_FRAGMENT_MODE),0 1)),1)
+  $(error SATURN_DEMO_FRAGMENT_MODE must be 0 or 1)
+endif
+ifneq ($(SATURN_DEMO_BSP_FRAGMENTS),$(SATURN_DEMO_FRAGMENT_MODE))
+  $(error SATURN_DEMO_BSP_FRAGMENTS and SATURN_DEMO_FRAGMENT_MODE must match)
+endif
 SATURN_DEMO_BSP_FRAGMENT_FLAT ?= 0
 # Build-lineage tag only. Keep the throughput-recovery image in a distinct
 # directory so a manual session running the previous renderer is never
@@ -184,6 +243,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
 SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c source_cart.c source_q16_kernel_probe.c \
+  $(ROOT)/src/port/saturn/platform/saturn_build_identity.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
   $(ROOT)/src/port/saturn/runtime/saturn_source_runtime.c \
@@ -259,6 +319,17 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPU
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-frag$(SATURN_DEMO_BSP_FRAGMENTS),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-pipe$(SATURN_RENDERER_PIPELINE),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENT_FLAT)),$(SOURCEBOOT_OUTPUT_TAG)-flat1,$(SOURCEBOOT_OUTPUT_TAG))
+# A hash-bound spec is the diagnostic-build boundary. Once present, the
+# generator validates every artifact, constructs the exact ABI bytes, and the
+# staging label comes back from those bytes. The legacy hand-authored tag above
+# remains only for pre-spec asset-generation invocations.
+ifneq ($(wildcard $(SOURCEBOOT_BUILD_IDENTITY_SPEC)),)
+SOURCEBOOT_IDENTITY_LABEL_VALUE := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
+ifeq ($(SOURCEBOOT_IDENTITY_LABEL_VALUE),)
+  $(error sourceboot build identity spec did not produce a compiled identity label)
+endif
+override SOURCEBOOT_OUTPUT_TAG := -identity-$(SOURCEBOOT_IDENTITY_LABEL_VALUE)
+endif
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
@@ -300,6 +371,12 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -DSATURN_ATAN2_VARIANT=$(SATURN_ATAN2_VARIANT) \
   -DSATURN_CAMERA_VARIANT=$(SATURN_CAMERA_VARIANT) \
   -DSATURN_SOURCEBOOT_CAMERA_ROUTE=$(SATURN_SOURCEBOOT_CAMERA_ROUTE) \
+  -DSATURN_FEATURE_COMPLETE_MARIO_ANIMATION=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION) \
+  -DSATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=$(SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE) \
+  -DSATURN_FEATURE_SEMANTIC_AUDIO=$(SATURN_FEATURE_SEMANTIC_AUDIO) \
+  -DSATURN_DIAGNOSTIC_MODE=$(SATURN_DIAGNOSTIC_MODE) \
+  -DSATURN_CART_MBIT=$(SATURN_CART_MBIT) \
+  -DSATURN_DEMO_FRAGMENT_MODE=$(SATURN_DEMO_FRAGMENT_MODE) \
   -DSATURN_CAMERA_IDLE_START_TICK=$(SATURN_CAMERA_IDLE_START_TICK) \
   -DSATURN_CAMERA_IDLE_DISCOVERY=$(SATURN_CAMERA_IDLE_DISCOVERY) \
   -DSATURN_CAMERA_RANGE_CAPTURE=$(SATURN_CAMERA_RANGE_CAPTURE) \
@@ -584,6 +661,18 @@ $(SOURCEBOOT_BOB_SKY_ASM): $(SOURCEBOOT_BOB_SKY)
 	  '_sm64_saturn_bob_sky_bitmap_end:' \
 	  '.align 4' > "$@"
 
+$(SOURCEBOOT_BUILD_IDENTITY_INC) $(SOURCEBOOT_BUILD_IDENTITY_BIN) \
+$(SOURCEBOOT_BUILD_IDENTITY_JSON) $(SOURCEBOOT_BUILD_IDENTITY_LABEL) &: \
+    $(SOURCEBOOT_BUILD_IDENTITY_SPEC) $(ROOT)/tools/saturn/gen_build_identity.py
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" \
+	  --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" \
+	  --output-c-include "$(SOURCEBOOT_BUILD_IDENTITY_INC)" \
+	  --output-binary "$(SOURCEBOOT_BUILD_IDENTITY_BIN)" \
+	  --output-json "$(SOURCEBOOT_BUILD_IDENTITY_JSON)" \
+	  --output-label "$(SOURCEBOOT_BUILD_IDENTITY_LABEL)" \
+	  $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)
+
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
 
 # Yaul's bundled rule declares the CUE's ISO prerequisite order-only. That
@@ -598,7 +687,8 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # race a consumer against the generator. Order-only, so a regenerated map does
 # not by itself rebuild the world -- the generated .d files carry the real
 # header dependency once a build has run.
-$(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER)
+$(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
+  $(SOURCEBOOT_BUILD_IDENTITY_INC)
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
 # the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,

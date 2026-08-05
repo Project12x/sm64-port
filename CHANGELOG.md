@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Bound sourceboot diagnostic artifacts to a fixed-width, versioned target
+  identity containing the complete feature tuple, behavior configuration, and
+  hash-verified source/route/input/camera/cart/scene/actor/animation/audio
+  inputs. Capture now resolves the identity from the exact ELF, checks the
+  loaded target bytes before telemetry, and derives labels from those compiled
+  bytes, closing the prior gap where a directory label could describe
+  behavior or packages the ELF did not contain. The accepted 5.294 FPS A9A
+  ELF/ISO/CUE is separately archived after exact hash, CUE-reference, profile,
+  config, capture, and preserved-commit ancestry checks so later feature-off
+  descendants cannot silently replace the historical rollback baseline.
+
 - Reconciled the SH-2 native-math verifier with the live descriptor-queue
   renderer route. The pinned oracle now follows the lifecycle and master/slave
   callback tables instead of removed frame/terrain-worker symbols, and every

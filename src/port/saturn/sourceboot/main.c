@@ -24,6 +24,7 @@
 #include "saturn_vdp1_backend.h"
 #include "saturn_vdp1_frame_bank.h"
 #include "saturn_vdp2_frame.h"
+#include "saturn_build_identity.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -1261,6 +1262,9 @@ int main(void) {
      * no-cart negative-control configuration too: cart loading may fail
      * before the source game loop is available. */
     sourceboot_boot_trace_write(SOURCEBOOT_BOOT_TRACE_STAGE_MAIN_ENTRY, 0U);
+    if (!sm64_saturn_build_identity_is_valid(&saturn_build_identity)) {
+        for (;;) {}
+    }
     sm64_saturn_sourceboot_q16_kernel_probe_run();
     const sm64_saturn_source_cart_status_t cart_status =
         sm64_saturn_source_cart_load();

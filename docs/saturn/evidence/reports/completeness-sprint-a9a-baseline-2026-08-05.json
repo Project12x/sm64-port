@@ -1,0 +1,74 @@
+{
+  "ancestry": {
+    "27cebc7e": {
+      "is_ancestor_of_head": true
+    },
+    "d5f70887": {
+      "is_ancestor_of_head": true
+    },
+    "d7b04d61": {
+      "is_ancestor_of_head": true
+    }
+  },
+  "artifacts": {
+    "cue": {
+      "archive_path": "build\\saturn\\baselines\\a9a-2026-08-05\\sm64-saturn-sourceboot-e2.cue",
+      "original_path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "size": 88
+    },
+    "elf": {
+      "archive_path": "build\\saturn\\baselines\\a9a-2026-08-05\\sm64-saturn-sourceboot-e2.elf",
+      "original_path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "sha256": "1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2",
+      "size": 8721516
+    },
+    "iso": {
+      "archive_path": "build\\saturn\\baselines\\a9a-2026-08-05\\sm64-saturn-sourceboot-e2.iso",
+      "original_path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96",
+      "size": 4653056
+    }
+  },
+  "capture_evidence": {
+    "report_path": "docs\\saturn\\evidence\\reports\\a9a-step11-overlap-throughput-repaired-2026-08-05.json",
+    "schema": "sm64-saturn-sourceboot-throughput-v1",
+    "target_identity": {
+      "address": 100679680,
+      "expected_sha256": "7a6e2339eb6fd0135c5c4ec49d22acf47d2b68df7f5ec926d01d93a66b249f8b",
+      "match": true,
+      "observed_sha256": "7a6e2339eb6fd0135c5c4ec49d22acf47d2b68df7f5ec926d01d93a66b249f8b",
+      "size": 16,
+      "startup_identity_attempts": 540,
+      "startup_vblanks_waited": 540
+    }
+  },
+  "config_evidence": {
+    "atan2_variant": 2,
+    "bootstrap_ticks": 600,
+    "bsp_order": 1,
+    "camera_route": 0,
+    "camera_variant": 3,
+    "cart_stage_sectors": 8,
+    "fragment_mode": 0,
+    "hot_promotion": 1,
+    "live_input_mode": 1,
+    "near_clip": 1,
+    "output_label": "e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4",
+    "polygon_tier": 2,
+    "renderer_pipeline": 4,
+    "route_replay_mode": 1,
+    "slave_render": 1,
+    "view_radius": 6000
+  },
+  "measurement": {
+    "guest_fps_mean": 5.294117647058823
+  },
+  "profile_evidence": {
+    "launcher": "desktop-ymir-profile",
+    "profile": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+    "ram_cart": "profile-managed-32-mbit-dram"
+  },
+  "schema": "sm64-saturn-a9a-baseline-v1",
+  "status": "immutable-historical-rollback"
+}

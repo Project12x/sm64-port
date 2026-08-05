@@ -21,6 +21,7 @@ from typing import Any
 from capture_hwtest import artifact_identity, cap_stderr
 from capture_route_views import YmirClient
 from capture_sourceboot_boot_trace import bind_capture_artifacts, run_bios_handoff
+import gen_build_identity as build_identity
 
 
 SCHEMA = "sm64-saturn-sourceboot-throughput-v1"
@@ -68,6 +69,7 @@ REQUIRED_SYMBOLS = {
     "s_runtime": tuple(RUNTIME_LAYOUTS),
     "s_render_job_queue": RENDER_JOB_QUEUE_BYTES,
 }
+BUILD_IDENTITY_SYMBOL = "saturn_build_identity"
 
 
 class ObservationError(ValueError):
@@ -136,11 +138,12 @@ def _elf32_load_segments(data: bytes, endian: str) -> list[dict[str, int]]:
     return segments
 
 
-def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
-    """Resolve exactly one local-or-underscore target data symbol of each size."""
+def _resolve_symbols(
+    elf: Path, requirements: dict[str, int | tuple[int, ...]]
+) -> dict[str, dict[str, int]]:
     data = elf.read_bytes()
     endian, sections = _elf32_sections(data)
-    found: dict[str, list[dict[str, int]]] = {name: [] for name in REQUIRED_SYMBOLS}
+    found: dict[str, list[dict[str, int]]] = {name: [] for name in requirements}
     for section in sections:
         if section["type"] != 2:  # SHT_SYMTAB: a stripped ELF has no usable table.
             continue
@@ -170,7 +173,7 @@ def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
                 }
             )
     resolved: dict[str, dict[str, int]] = {}
-    for name, expected_size in REQUIRED_SYMBOLS.items():
+    for name, expected_size in requirements.items():
         matches = found[name]
         if not matches:
             raise ValueError(f"ELF is missing required symbol {name}")
@@ -191,6 +194,83 @@ def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
             )
         resolved[name] = symbol
     return resolved
+
+
+def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
+    """Resolve exactly one local-or-underscore telemetry symbol of each size."""
+    return _resolve_symbols(elf, REQUIRED_SYMBOLS)
+
+
+def resolve_build_identity_symbol(
+    symbols: dict[str, dict[str, int]],
+) -> dict[str, int]:
+    """Require the fixed ABI symbol independently of mutable output labels."""
+    symbol = symbols.get(BUILD_IDENTITY_SYMBOL)
+    if symbol is None:
+        raise ValueError(f"ELF is missing required symbol {BUILD_IDENTITY_SYMBOL}")
+    if symbol.get("size") != build_identity.IDENTITY_SIZE:
+        raise ValueError(
+            f"ELF symbol {BUILD_IDENTITY_SYMBOL} has wrong size "
+            f"{symbol.get('size')}, expected {build_identity.IDENTITY_SIZE}"
+        )
+    return symbol
+
+
+def _elf_symbol_bytes(elf: Path, symbol: dict[str, int]) -> bytes:
+    data = elf.read_bytes()
+    endian, _sections = _elf32_sections(data)
+    address = int(symbol["address"])
+    size = int(symbol["size"])
+    for segment in _elf32_load_segments(data, endian):
+        if (segment["address"] <= address
+                and address + size <= segment["address"] + segment["file_size"]):
+            offset = segment["offset"] + address - segment["address"]
+            return data[offset:offset + size]
+    raise ValueError("ELF build identity is not contained in a file-backed PT_LOAD segment")
+
+
+def build_elf_build_identity_probe(elf: Path) -> dict[str, Any]:
+    symbols = _resolve_symbols(
+        elf, {BUILD_IDENTITY_SYMBOL: build_identity.IDENTITY_SIZE}
+    )
+    symbol = resolve_build_identity_symbol(symbols)
+    raw = _elf_symbol_bytes(elf, symbol)
+    parsed = build_identity.validate_identity(raw)
+    return {
+        "address": int(symbol["address"]),
+        "size": build_identity.IDENTITY_SIZE,
+        "expected_bytes": list(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "label": build_identity.identity_label(raw),
+        "identity": parsed,
+    }
+
+
+def validate_build_identity(
+    elf_raw: bytes, loaded_raw: bytes, *, expected_label: str | None = None
+) -> dict[str, Any]:
+    parsed = build_identity.validate_identity(loaded_raw, expected=elf_raw)
+    label = build_identity.identity_label(loaded_raw, expected=elf_raw)
+    if expected_label is not None and label != expected_label:
+        raise ValueError(
+            f"compiled identity label mismatch: expected {expected_label}, got {label}"
+        )
+    return {
+        "match": True,
+        "label": label,
+        "sha256": hashlib.sha256(loaded_raw).hexdigest(),
+        "identity": parsed,
+    }
+
+
+def prove_loaded_build_identity(
+    client: Any, probe: dict[str, Any], *, expected_label: str | None = None
+) -> dict[str, Any]:
+    loaded = read_exact(client, _p2(int(probe["address"])), int(probe["size"]))
+    result = validate_build_identity(
+        bytes(probe["expected_bytes"]), loaded, expected_label=expected_label
+    )
+    return {"address": int(probe["address"]), "size": int(probe["size"]), **result}
 
 
 def build_elf_identity_probe(elf: Path) -> dict[str, Any]:
@@ -737,6 +817,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="exact matching sourceboot CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching sourceboot ELF")
+    parser.add_argument(
+        "--expected-label",
+        help="optional caller expectation checked against the compiled identity-derived label",
+    )
     parser.add_argument("--output", type=Path, required=True, help="structured JSON evidence report")
     parser.add_argument(
         "--startup-vblanks",
@@ -787,6 +871,11 @@ def main(argv: list[str] | None = None) -> int:
         report["symbols"] = symbols
         identity_probe = build_elf_identity_probe(args.elf)
         report["identity_probe"] = {key: value for key, value in identity_probe.items() if key != "expected_bytes"}
+        build_identity_probe = build_elf_build_identity_probe(args.elf)
+        report["elf_build_identity"] = {
+            key: value for key, value in build_identity_probe.items()
+            if key != "expected_bytes"
+        }
         stage = "ymir-start"
         client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
         stage = "bios-handoff"
@@ -794,6 +883,10 @@ def main(argv: list[str] | None = None) -> int:
         stage = "target-identity"
         report["target_identity"] = wait_for_target_identity(
             client, identity_probe, startup_vblanks=args.startup_vblanks
+        )
+        stage = "build-identity"
+        report["target_build_identity"] = prove_loaded_build_identity(
+            client, build_identity_probe, expected_label=args.expected_label
         )
         stage = "observation"
         report["observation"] = observe_target(

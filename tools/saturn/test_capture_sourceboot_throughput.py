@@ -1042,9 +1042,19 @@ class ThroughputCaptureTests(unittest.TestCase):
                 mock.patch.object(capture, "artifact_identity", return_value={"sha256": "ymir"}),
                 mock.patch.object(capture, "resolve_required_symbols", return_value={}),
                 mock.patch.object(capture, "build_elf_identity_probe", return_value={"expected_bytes": [1]}),
+                mock.patch.object(
+                    capture,
+                    "build_elf_build_identity_probe",
+                    return_value={"expected_bytes": [2], "label": "compiled-label"},
+                ),
                 mock.patch.object(capture, "YmirClient", return_value=FakeClient()),
                 mock.patch.object(capture, "run_bios_handoff"),
                 mock.patch.object(capture, "wait_for_target_identity", return_value={"matched": True}),
+                mock.patch.object(
+                    capture,
+                    "prove_loaded_build_identity",
+                    return_value={"match": True, "label": "compiled-label"},
+                ),
                 mock.patch.object(
                     capture,
                     "observe_target",
