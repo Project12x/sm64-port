@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Corrected the sourceboot memory-map verifier to require `.uncached` to be
+  initialized `PROGBITS`, matching the pinned Yaul ELF contract. The section
+  contains the slave SH-2 entry and executable cache-through helpers, so the
+  previous `NOBITS` requirement would approve an image that omitted required
+  bytes and reject the real linked artifact. The P2 address, physical HWRAM
+  end, margin, and LWRAM checks remain fail-closed and unchanged.
+
 - Repaired the A9A target's HWRAM boot boundary after retries against the
   unchanged reviewed ELF failed target identity at both 600 and 4,096 startup
   VBlanks. Its exact map placed `___end` at `0x061040D0`, `0x40D0` bytes past

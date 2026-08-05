@@ -17,7 +17,7 @@ def image(name: str, *, end: int, stage: int, scc: bool,
     sections = {
         ".uncached": verify.Section(
             ".uncached", 0x20000000 | uncached_start,
-            max(0, end - uncached_start), "NOBITS"
+            max(0, end - uncached_start), "PROGBITS"
         ),
         ".lwram_cmdts": verify.Section(".lwram_cmdts", 0x00200000, 0x20000, "NOBITS"),
         ".lwram_bss": verify.Section(".lwram_bss", 0x00240000, 0x8BB20, "NOBITS"),
@@ -44,6 +44,28 @@ def image(name: str, *, end: int, stage: int, scc: bool,
 
 
 class VerifySourcebootMemoryMapTest(unittest.TestCase):
+    def test_accepts_initialized_uncached_progbits(self) -> None:
+        layout = image("initialized-uncached", end=0x060F9000, stage=8, scc=False)
+
+        result = verify.validate_layout(
+            layout, route=0, stage_sectors=8,
+            required_final_margin=0x1B00,
+        )
+
+        self.assertEqual(result["uncached_size"], 0x1000)
+
+    def test_rejects_uncached_nobits_that_would_omit_slave_entry_bytes(self) -> None:
+        layout = image("missing-uncached-bytes", end=0x060F9000, stage=8, scc=False)
+        layout.sections[".uncached"] = verify.Section(
+            ".uncached", 0x260F8000, 0x1000, "NOBITS"
+        )
+
+        with self.assertRaisesRegex(ValueError, "PROGBITS"):
+            verify.validate_layout(
+                layout, route=0, stage_sectors=8,
+                required_final_margin=0x1B00,
+            )
+
     def test_accepts_all_three_named_phase_a_camera_roles(self) -> None:
         for variant in (1, 2, 3):
             with self.subTest(variant=variant):
@@ -139,7 +161,7 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
     def test_rejects_uncached_section_that_disagrees_with_cached_end(self) -> None:
         layout = image("uncached-mismatch", end=0x060F9000, stage=8, scc=False)
         layout.sections[".uncached"] = verify.Section(
-            ".uncached", 0x260F8000, 0x0F00, "NOBITS"
+            ".uncached", 0x260F8000, 0x0F00, "PROGBITS"
         )
         with self.assertRaisesRegex(ValueError, "uncached section end"):
             verify.validate_layout(

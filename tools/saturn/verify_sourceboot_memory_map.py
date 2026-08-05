@@ -154,9 +154,9 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
     if HWRAM_TOP - end.address < required_final_margin:
         raise ValueError("ELF HWRAM margin is below required final floor")
     uncached = layout.sections.get(".uncached")
-    if uncached is None or uncached.kind != "NOBITS" or \
+    if uncached is None or uncached.kind != "PROGBITS" or \
             uncached.address & SH2_PARTITION_MASK != SH2_P2_BASE:
-        raise ValueError("ELF uncached section is not the exact P2 NOBITS range")
+        raise ValueError("ELF uncached section is not the exact P2 PROGBITS range")
     uncached_physical_start = uncached.address & ~SH2_P2_BASE
     uncached_physical_end = uncached_physical_start + uncached.size
     if uncached_physical_start < HWRAM_BASE or \
