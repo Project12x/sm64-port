@@ -255,3 +255,81 @@ native-math, and manual gates remain explicitly open and were not run.  The
 controller-owned active plan and progress ledger were preserved and unstaged.
 Implementation commit: `32937067ffc6a8c96ba13289c746481438a1a649`
 (`fix(saturn): close native scene graph gaps`).
+
+## Rereview repair round 4
+
+Status remains **source-complete (host tooling)**.  The round-3 `86/127`
+artifact is superseded by an `86/133` closure because model-to-geo binding
+sources are now explicit per behavior variant.  Implementation commit:
+`923f9310` (`fix(saturn): close scene closure provenance bypasses`).
+
+RED regressions reproduced every round-3 rereview bypass before production
+changes.  The generic suite demonstrated that a callback defined under
+`src/engine` was invisible and a missing `CALL_NATIVE` definition was skipped;
+a generic helper's comparison-only sound constant leaked while a caller-local
+sound value did not flow; a one-shot BehaviorScript spawn inherited another
+site's recurrence decision; schema validation accepted an untyped child and a
+coherently swapped but false model/geo claim; and an entry-level `JUMP_LINK`
+could hide the selected `AREA` while a linked comment donated a sequence ID.
+The real BOB test independently failed on absent White Puff variants, and a
+mutated Goomba deletion attestation was accepted until the new proof contract
+was implemented.
+
+The bounded native index now covers canonical repository `src/**/*.c`
+definitions instead of only `src/game`, with explicit 4,096-source,
+65,536-symbol, and 256-region traversal ceilings.  Mutually exclusive
+`src/port` overlay/stub definitions are excluded from the canonical graph;
+audio-engine sinks are terminal nodes because object creation and caller SFX
+arguments are owned above that boundary.  Missing or ambiguous reachable
+callback definitions fail closed.  Comment-free signature indexing also
+correctly resolves the repository's real `bhv_fading_warp_loop` definition.
+
+Each behavior now carries sorted `model_variants` and exact behavior, model,
+model-to-geo binding, geo, and animation symbol/file provenance.  BOB's
+`bhvWhitePuffExplosion` therefore records both
+`MODEL_BUBBLE`/`bubble_geo` (`actors/bubble/geo.inc.c`) and
+`MODEL_MIST`/`mist_geo` (`actors/mist/geo.inc.c`) instead of whichever model
+was visited first.  The schema resolves every cited definition and binding,
+requires the normal `children`, `rewards`, `projectiles`, and `effects` lists
+to be disjoint and to exactly partition `spawned_children`, and retains exact
+source-hash coverage.
+
+Audio extraction reads concrete sound constants from reachable data and call
+arguments, including caller-local assignment/alias flow, but not constants
+that appear only in generic-helper comparisons.  BehaviorScript live bounds
+are classified at each individual spawn site.  The former name/token Goomba
+exception is removed: the three-member recurrent bound is accepted only when
+the rule attests the unloaded-state spawn guard, activation and unload
+transitions, the child callback, its parent-state guard, and child deletion in
+the cited source.  Entry `JUMP_LINK`s are recursively expanded in place before
+area selection, and comments are removed before object/model/music scans.
+
+Fresh serial host evidence from the committed implementation:
+
+```text
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_scene_closure.py
+Ran 17 tests in 1.439s ... OK
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_scene_closure.py
+Ran 1 test in 51.099s ... OK
+
+.venv-saturn-tools\Scripts\python.exe tools\saturn\test_actor_generalization_inventory.py
+Ran 1 test in 49.020s ... OK
+
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 compile-scene-closure SCENE_LEVEL=bob SCENE_AREA=1
+exit 0; generated build/saturn/packages/bob/1/closure.json
+```
+
+The generated canonical file has 86 records, 133 complete source hashes,
+exact area music `SEQ_LEVEL_GRASS`, no untyped child, and SHA-256
+`9b74cc1d6828b0060ef7d6549062fac0b18690a7e0d85680c51c5cfdc03fddfd`.
+BOB's generated Goomba maximum remains 11 from two direct macros plus three
+source-attested triplets.
+
+Self-review verdict: **PASS** for all seven rereview contracts and the real BOB
+closure.  No external implementation was copied or adapted; this remains a
+clean-room parser over hash-covered in-tree source, so no new third-party
+attribution applies.  Independent rereview remains a controller gate.  Target,
+Ymir, FPS, package-link/seal, broad native-math, and manual evidence gates were
+not run and remain open.  The controller-owned active plan and execution
+ledger were preserved and unstaged.
