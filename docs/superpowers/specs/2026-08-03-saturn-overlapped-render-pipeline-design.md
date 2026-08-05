@@ -341,9 +341,10 @@ each task back here.
 - [x] **A7 — alternating source banks:** complete and independently approved. Patch compile-once templates in
   LWRAM command banks and HWRAM Gouraud banks with explicit
   worker/DMA/presentation tickets.
-- [ ] **A8 — deferred transfer/presentation:** active next; enable valid command/Gouraud
-  DMA, remove immediate waits, use one terminal boundary, and measure the real
-  wait sites.
+- [ ] **A8 — deferred transfer/presentation:** repair source-complete pending
+  rereview; queue-owned CPU-DMAC completion, stale-loop service, immutable
+  camera coalescing, and fail-closed resident-VRAM ownership remove immediate
+  transport waits without inventing wait telemetry.
 - [ ] **A9 — frame overlap and cadence:** render snapshot `N` while fixed-step
   simulation advances, enforce a bounded catch-up policy, and prevent partial
   publication.
@@ -361,6 +362,7 @@ ownership rule, acceptance condition, or prior-art interpretation.
 
 | Date | Decision or deviation | Status / evidence |
 | --- | --- | --- |
+| 2026-08-05 | CPU-DMAC channel 0 retirement is interrupt-owned; resident VDP1 failure poisons presentation; VDP2 camera is bank-owned. | Review proved pinned Yaul's `channel_busy` formula reports false idle for active DE=1/TE=0. A8 now stops channel 0 at ownership handoff, uses public config/start plus a completion IHR, and never retires from busy status. Stale iterations service the serial lane without moving VBlank-owned publication. Any partial destination failure disables plotting rather than pairing old metadata with changed VRAM. Each BUILDING bank captures the camera later consumed by its own published generation. Focused RED-to-GREEN fixtures pass; rereview and target evidence remain open. |
 | 2026-08-03 | Allow one completed render snapshot of visual latency while authoritative simulation remains fixed-step. | Approved by owner. |
 | 2026-08-03 | Preserve completed sprint components but supersede same-frame serial scheduling. | Approved by owner after manual BOB test remained extremely slow. |
 | 2026-08-03 | First visible checkpoint is duplicate source-render preparation removal; strict native-math census does not block this experimental CUE. | Approved architecture policy. |

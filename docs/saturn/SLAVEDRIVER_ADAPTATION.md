@@ -59,8 +59,12 @@ CPU-DMAC and HWRAM Gouraud tables through SCU-DMA, then returns. A later field
 polls, arms, and publishes the resident list. Yaul commit
 `6012f79f237773378c8014e70d8998ad95a38d98` (MIT), file
 `libyaul/scu/bus/cpu/cpu_dmac.c`, was inspected and used **pattern-only**:
-the public helper is called only after its internally waiting channel is
-proved idle; no Yaul implementation was copied. Z-Treme commit
+the queue does not call its wait-before-start convenience helper. After the
+post-boot ownership handoff it uses public channel configure/start calls and a
+queue-owned completion IHR. This is required because pinned
+`cpu_dmac_status_get().channel_busy` can report false idle for DE=1/TE=0; only
+the IHR retires the command ticket, while status still exposes address/NMI
+failure. No Yaul implementation was copied. Z-Treme commit
 `cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0) remains
 **pattern-only** for double-buffered build/present ownership; A8 deliberately
 does not copy its renderer or claim destination-banked overlap.

@@ -48,7 +48,9 @@ class TransferPipelineSourceTests(unittest.TestCase):
         users = []
         for subtree in ("gfx", "gpl", "sourceboot"):
           for path in (ROOT / "src/port/saturn" / subtree).rglob("*.c"):
-            if "cpu_dmac_transfer(0" in path.read_text(encoding="utf-8"):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("cpu_dmac_transfer(0", text)
+            if "cpu_dmac_channel_config_set(" in text:
                 users.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(users, ["src/port/saturn/gpl/slavedriver_dma_queue.c"])
 

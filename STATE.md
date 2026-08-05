@@ -42,13 +42,17 @@ The exact audited Route0/live-input/Pipe4 `make -B -j1` exits zero in 336.9
 seconds. A8 deferred transfer is now active next; no A8 behavior, Ymir result,
 or FPS evidence is claimed.
 
-A8 is now source-integrated and focused-host-green pending independent review
-and one serialized target build. Both renderer paths stop after command/Gouraud
-construction. Sourceboot carries a TRANSFERRING bank across fields, suppresses
-presentation while the single VDP1 destinations are partial, and publishes the
-bank's snapshot generation only after exact command and Gouraud retirement and
-one resident-list arm. CPU-DMAC and SCU-DMA remain serial by design. This state
-claims no target boot, Ymir result, or FPS improvement.
+A8's independent review returned NO-GO and its source repairs are now
+focused-host-green pending rereview and one later serialized target build.
+Both renderer paths stop after command/Gouraud construction. Queue-owned
+CPU-DMAC channel 0 uses public config/start plus a completion IHR because
+pinned Yaul busy status can report false idle. Sourceboot services the serial
+CPU/SCU lane during stale iterations, suppresses presentation while the single
+VDP1 destinations are partial, and permanently fails closed after any partial
+resident-write failure. Published banks carry their immutable VDP2 camera and
+snapshot generation. The ordinary path explicitly reports zero at nonexistent
+transport/terminal waits. CPU-DMAC and SCU-DMA remain serial by design. This
+state claims no target boot, Ymir result, or FPS improvement.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

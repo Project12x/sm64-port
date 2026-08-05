@@ -207,6 +207,20 @@ static void test_destination_contract_is_exact_and_nonoverlapping(void)
     assert(!sm64_saturn_vdp1_frame_bank_submit_transfers(
         &bank, &transfer_targets));
     bank.gouraud_bank->vram_base = (uintptr_t)0x25C10000U;
+
+    transfer_targets = targets();
+    transfer_targets.gouraud_vram = (void *)(uintptr_t)0x25C10004U;
+    bank.gouraud_bank->vram_base = (uintptr_t)transfer_targets.gouraud_vram;
+    assert(!sm64_saturn_vdp1_frame_bank_submit_transfers(
+        &bank, &transfer_targets));
+
+    transfer_targets = targets();
+    transfer_targets.gouraud_vram = (void *)(uintptr_t)0x25C7FFF8U;
+    bank.gouraud_bank->vram_base = (uintptr_t)transfer_targets.gouraud_vram;
+    assert(!sm64_saturn_vdp1_frame_bank_submit_transfers(
+        &bank, &transfer_targets));
+
+    bank.gouraud_bank->vram_base = (uintptr_t)0x25C10000U;
     assert(s_pair_submits == 0U);
 }
 

@@ -1728,16 +1728,45 @@ no Ymir, hardware, asynchronous-transfer, or FPS result.
 A8 removes both accepted emitters' blocking transfer/upload tails. Sourceboot
 now crosses the single-destination VDP1 overwrite fence, atomically enqueues
 the LWRAM command prefix as CPU-DMAC and the HWRAM Gouraud prefix as SCU-DMA,
-kicks once, and returns without waiting. A later field polls exact descriptor
-status; both retirements are required before the master consumes a one-shot
-resident-list arm, publishes the bank, and presents that bank's snapshot
-generation. A first-descriptor failure keeps the sibling draining before the
-bank becomes QUARANTINED, so queued work cannot outlive reusable source data.
+kicks once, and returns without waiting. Ordinary and stale-loop iterations
+poll exact descriptor status; both retirements are required before a later
+fresh-field master transition consumes a one-shot resident-list arm, publishes
+the bank, and presents that bank's snapshot generation. A first-descriptor
+failure keeps the sibling draining before the bank becomes QUARANTINED, so
+queued work cannot outlive reusable source data.
 
 Focused host evidence is green: strict DMA queue, A7 frame-bank, A8 transfer
 pipeline, VDP2 HUD, and profile layout/decode fixtures, plus the source
 anti-pattern/state-machine checks. These prove serial transport selection,
-zero submit waits, busy-channel guards, exact destination/capacity rules,
+zero submit waits, completion-IHR CPU retirement, guarded SCU entry, exact
+destination/capacity rules,
 atomic pair failure, staggered retirement, durable exact failure status, and
 exactly-once arm. Independent review and target compilation remain open. No
 target boot, Ymir capture, hardware result, or FPS improvement is claimed.
+
+### A8 independent-review repair (2026-08-05)
+
+The first A8 review is NO-GO. It found pinned Yaul's channel-busy calculation
+can report false idle for active DE=1/TE=0, serial transfer stages advanced at
+most once per fresh field, VDP2 reread mutable camera state, partial resident
+VRAM failure could leave old metadata eligible for plotting, wait telemetry
+timed nonblocking calls, and destination validation covered only used prefixes.
+
+The repair hands CPU-DMAC channel 0 to the queue after boot work retires,
+configures/starts it through public Yaul APIs, and retires only from its
+completion IHR; an exact host model keeps `channel_busy=0` throughout the
+active transfer and proves no early retirement. Stale loop iterations now
+poll/kick until the serial CPU then SCU stages reach terminal status, while
+publication remains VBlank-owned. A failed/partial resident transfer poisons
+the destination and disables plotting. Each BUILDING bank captures the camera
+consumed with its published VDP1 generation. Ordinary command/Gouraud and
+terminal wait counters are explicitly zero, QNS is guarded and single-counted,
+and full declared VRAM capacities plus Gouraud 8-byte alignment are enforced.
+
+Fresh strict DMA, transfer-pipeline, frame-bank, VDP2, runtime-contract, and 15
+source/mutation tests pass. Memory-map unit coverage passes 10/10; profile
+layout/decode passes 21 tests with one historical-capture skip. The first
+aggregate MSYS `make` invocation was discarded because POSIX `realpath` was
+fed to Windows Python as `\d\...`; the same gates were run directly with the
+configured Windows host compiler/Python. Repair commit, independent rereview,
+and any serialized target build remain open. No target/Ymir/FPS claim is made.

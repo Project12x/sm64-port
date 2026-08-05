@@ -7,11 +7,16 @@
 - Replaced sourceboot's per-emitter blocking Gouraud transfer and CPU command
   upload with an A8 two-phase frame-bank transport. After the prior VDP1 list
   is overwrite-safe, command and Gouraud descriptors commit atomically to one
-  serial queue, use guarded CPU-DMAC channel 0 and SCU-DMA level 0, and retire
-  across later fields before one master-owned resident-list arm/publication.
+  serial queue, use completion-interrupt-owned CPU-DMAC channel 0 and guarded
+  SCU-DMA level 0, and retire before one master-owned resident-list
+  arm/publication. Stale iterations service both serial stages without one
+  stage per VBlank; published banks carry immutable VDP2 camera state; and a
+  partial resident-VRAM failure disables plotting instead of reusing old
+  metadata. Full declared destination ranges and Gouraud alignment are checked.
   Exact per-ticket failures drain their accepted sibling before quarantine,
   preserving the prior publication. This removes the immediate transport wait
-  from the accepted frame path; target/Ymir/FPS validation remains pending.
+  from the accepted frame path and reports zero at nonexistent wait sites;
+  rereview and target/Ymir/FPS validation remain pending.
 
 - Hardened A7 publication after review: wrap-safe ordering now quarantines a
   late completed bank instead of regressing the current publication; manager

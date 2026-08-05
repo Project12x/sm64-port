@@ -21,8 +21,11 @@ static mock_scu_transfer_t s_active_cpu_transfer;
 static uint32_t s_cpu_transfer_starts;
 static uint32_t s_cpu_waits;
 static int s_cpu_busy;
-static int s_cpu_complete_on_poll;
 static int s_cpu_address_error;
+static cpu_dmac_cfg_t s_cpu_cfg;
+static uint32_t s_cpu_configures;
+static uint32_t s_cpu_stops;
+static uint32_t s_cpu_enables;
 
 void
 scu_dma_transfer(scu_dma_level_t level, void *dst, const void *src, size_t len)
@@ -57,24 +60,62 @@ scu_dma_transfer_wait(scu_dma_level_t level)
 void cpu_dmac_status_get(cpu_dmac_status_t *status)
 {
     assert(status != NULL);
-    if (s_cpu_busy && s_cpu_complete_on_poll) {
-        memcpy(s_active_cpu_transfer.dst, s_active_cpu_transfer.src,
-               s_active_cpu_transfer.len);
-        s_cpu_busy = 0;
-    }
+    /* Match the pinned Yaul false-idle case: DE=1/TE=0 is active in hardware,
+     * but cpu_dmac_status_get().channel_busy reports zero. Queue retirement
+     * must therefore be driven by the completion IHR, never this field. */
     *status = (cpu_dmac_status_t){ .enabled = 1U,
                                   .address_error = (unsigned)s_cpu_address_error,
-                                  .channel_busy = (unsigned)s_cpu_busy };
+                                  .channel_busy = 0U };
+}
+
+void cpu_dmac_channel_config_set(const cpu_dmac_cfg_t *cfg)
+{
+    assert(cfg != NULL);
+    assert(cfg->channel == 0U);
+    s_cpu_cfg = *cfg;
+    s_cpu_configures++;
+}
+
+void cpu_dmac_channel_start(cpu_dmac_channel_t channel)
+{
+    assert(channel == 0U);
+    assert(!s_cpu_busy);
+    s_active_cpu_transfer = (mock_scu_transfer_t){
+        (void *)s_cpu_cfg.dst, (const void *)s_cpu_cfg.src,
+        s_cpu_cfg.len, channel
+    };
+    s_cpu_transfer_starts++;
+    s_cpu_busy = 1;
+}
+
+void cpu_dmac_channel_stop(cpu_dmac_channel_t channel)
+{
+    assert(channel == 0U);
+    s_cpu_stops++;
+    s_cpu_busy = 0;
+}
+
+void cpu_dmac_enable(void)
+{
+    s_cpu_enables++;
 }
 
 void cpu_dmac_transfer(cpu_dmac_channel_t channel, void *dst,
                        const void *src, size_t len)
 {
-    assert(channel == 0U);
-    assert(!s_cpu_busy);
-    s_active_cpu_transfer = (mock_scu_transfer_t){ dst, src, len, channel };
-    s_cpu_transfer_starts++;
-    s_cpu_busy = 1;
+    (void)channel; (void)dst; (void)src; (void)len;
+    assert(!"queue must not enter Yaul's blocking cpu_dmac_transfer helper");
+}
+
+static void
+mock_cpu_complete(void)
+{
+    assert(s_cpu_busy);
+    memcpy(s_active_cpu_transfer.dst, s_active_cpu_transfer.src,
+           s_active_cpu_transfer.len);
+    s_cpu_busy = 0;
+    assert(s_cpu_cfg.ihr != NULL);
+    s_cpu_cfg.ihr(s_cpu_cfg.ihr_work);
 }
 
 void cpu_dmac_transfer_wait(cpu_dmac_channel_t channel)
@@ -107,8 +148,11 @@ reset_mock(void)
     s_cpu_transfer_starts = 0U;
     s_cpu_waits = 0U;
     s_cpu_busy = 0;
-    s_cpu_complete_on_poll = 0;
     s_cpu_address_error = 0;
+    memset(&s_cpu_cfg, 0, sizeof(s_cpu_cfg));
+    s_cpu_configures = 0U;
+    s_cpu_stops = 0U;
+    s_cpu_enables = 0U;
     saturn_dma_queue_init();
 }
 
@@ -122,7 +166,6 @@ static void test_cpu_dmac_error_is_failure_not_retirement(void)
         &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU_DMAC);
     saturn_dma_queue_kick();
     s_cpu_address_error = 1;
-    s_cpu_busy = 0;
     saturn_dma_queue_poll();
     assert(!saturn_dma_queue_sequence_retired(sequence));
     assert(saturn_dma_queue_sequence_failed(sequence));
@@ -150,34 +193,33 @@ static void test_cpu_dmac_submit_is_wait_free_and_poll_driven(void)
     saturn_dma_queue_poll();
     assert(!saturn_dma_queue_sequence_retired(sequence));
 
-    s_cpu_complete_on_poll = 1;
+    mock_cpu_complete();
     saturn_dma_queue_poll();
     assert(destination == source);
     assert(saturn_dma_queue_sequence_retired(sequence));
     assert(s_cpu_waits == 0U);
 }
 
-static void test_cpu_dmac_kick_does_not_enter_yaul_while_channel_busy(void)
+static void test_cpu_dmac_false_idle_status_cannot_retire_early(void)
 {
     uint32_t source = UINT32_C(0xA5A55A5A);
     uint32_t destination = 0U;
 
     reset_mock();
-    s_cpu_busy = 1;
     const saturn_dma_queue_sequence_t sequence = saturn_dma_queue_submit(
         &destination, &source, sizeof(source), SATURN_DMA_QUEUE_CPU_DMAC);
     assert(sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID);
     saturn_dma_queue_kick();
-    assert(s_cpu_transfer_starts == 0U);
-    assert(!saturn_dma_queue_sequence_started(sequence));
-    assert(!saturn_dma_queue_sequence_retired(sequence));
-
-    s_cpu_busy = 0;
-    saturn_dma_queue_kick();
     assert(s_cpu_transfer_starts == 1U);
-    s_cpu_complete_on_poll = 1;
+    assert(s_cpu_configures == 1U);
+    assert(saturn_dma_queue_sequence_started(sequence));
+    saturn_dma_queue_poll();
+    assert(!saturn_dma_queue_sequence_retired(sequence));
+    assert(destination == 0U);
+    mock_cpu_complete();
     saturn_dma_queue_poll();
     assert(saturn_dma_queue_sequence_retired(sequence));
+    assert(destination == source);
 }
 
 static void test_scu_kick_does_not_enter_yaul_while_level_busy(void)
@@ -403,7 +445,7 @@ main(void)
     test_wait_accepts_retired_and_rejects_non_outstanding();
     test_submit_rejects_illegal_requests_without_fifo_mutation();
     test_cpu_dmac_submit_is_wait_free_and_poll_driven();
-    test_cpu_dmac_kick_does_not_enter_yaul_while_channel_busy();
+    test_cpu_dmac_false_idle_status_cannot_retire_early();
     test_scu_kick_does_not_enter_yaul_while_level_busy();
     test_pair_submission_is_atomic_when_only_one_slot_remains();
     test_cpu_dmac_error_is_failure_not_retirement();

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "saturn_fast3d_frontend.h"
+#include "saturn_vdp2_camera_snapshot.h"
 
 /* VDP2 owns only sky, HUD text, and layer composition.  These values follow
  * Yaul's NBG register numbering but keep the frame policy host-testable. */
@@ -14,12 +15,6 @@
 #define SM64_SATURN_VDP2_FRAME_HUD_TICK_DIVISOR 30U
 #define SM64_SATURN_VDP2_FRAME_SOURCE_TICKS_PER_SECOND 30U
 #define SM64_SATURN_VDP2_FRAME_HUD_TEXT_CAPACITY 224U
-
-typedef struct sm64_saturn_vdp2_camera_snapshot {
-    int16_t yaw;
-    int16_t pitch;
-    uint8_t valid;
-} sm64_saturn_vdp2_camera_snapshot_t;
 
 typedef struct sm64_saturn_vdp2_frame {
     int32_t sky_scroll_x;

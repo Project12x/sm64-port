@@ -162,6 +162,7 @@ bool sm64_saturn_vdp1_frame_bank_begin_build(
         bank->command_count = 0U;
         bank->gouraud_count = 0U;
         bank->snapshot_generation = generation;
+        bank->camera_snapshot = (sm64_saturn_vdp2_camera_snapshot_t){0};
         bank->worker_ticket = SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID;
         bank->command_transfer_ticket =
             SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID;
@@ -177,6 +178,17 @@ bool sm64_saturn_vdp1_frame_bank_begin_build(
         return true;
     }
     return false;
+}
+
+bool sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    const sm64_saturn_vdp2_camera_snapshot_t *snapshot)
+{
+    if (bank == NULL || snapshot == NULL ||
+        bank->state != SM64_SATURN_VDP1_FRAME_BANK_BUILDING)
+        return false;
+    bank->camera_snapshot = *snapshot;
+    return true;
 }
 
 bool sm64_saturn_vdp1_frame_bank_ready(
@@ -232,23 +244,26 @@ bool sm64_saturn_vdp1_frame_bank_submit_transfers(
             SM64_SATURN_VDP1_VRAM_BASE ||
         normalized_address(targets->command_vram) %
             SM64_SATURN_VDP1_COMMAND_BYTES != 0U ||
-        !range_in_region(targets->command_vram, command_bytes,
-                         SM64_SATURN_VDP1_VRAM_BASE,
-                         SM64_SATURN_VDP1_VRAM_TOP) ||
         targets->command_capacity_bytes !=
             (size_t)bank->command_capacity * SM64_SATURN_VDP1_COMMAND_BYTES ||
+        !range_in_region(targets->command_vram,
+                         targets->command_capacity_bytes,
+                         SM64_SATURN_VDP1_VRAM_BASE,
+                         SM64_SATURN_VDP1_VRAM_TOP) ||
         !sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
             bank->command_storage, command_bytes) ||
         (bank->gouraud_count > 0U &&
          (targets->gouraud_vram == NULL ||
           normalized_address(targets->gouraud_vram) !=
               normalized_address((void *)bank->gouraud_bank->vram_base) ||
-          !range_in_region(targets->gouraud_vram, gouraud_bytes,
-                           SM64_SATURN_VDP1_VRAM_BASE,
-                           SM64_SATURN_VDP1_VRAM_TOP) ||
+          (normalized_address(targets->gouraud_vram) & 7U) != 0U ||
           targets->gouraud_capacity_bytes !=
               (size_t)bank->gouraud_bank->capacity *
                   sizeof(sm64_saturn_gouraud_table_t) ||
+          !range_in_region(targets->gouraud_vram,
+                           targets->gouraud_capacity_bytes,
+                           SM64_SATURN_VDP1_VRAM_BASE,
+                           SM64_SATURN_VDP1_VRAM_TOP) ||
           ranges_overlap(targets->command_vram,
                          targets->command_capacity_bytes,
                          targets->gouraud_vram,

@@ -317,7 +317,9 @@ and the evidence report before starting another task.
   audited Route0/live-input/Pipe4 `make -B -j1` exits zero with ELF
   `1eba8888...e99267c`. No Ymir, hardware, asynchronous-transfer, or FPS
   evidence is claimed by A7.
-- [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** active.
+- [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** repair
+  source-complete and focused-host-green; independent rereview and its
+  authorized serialized target gate remain open.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
@@ -1514,8 +1516,11 @@ yet.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
-**Status:** source-integrated and focused-host-green; independent review and
-serialized target validation remain open. No Ymir/FPS claim.
+**Status:** independent review NO-GO repairs are source-complete and
+focused-host-green. No target build is authorized until the repaired
+CPU-DMAC completion, stale-loop service, coherent VDP2 snapshot,
+partial-write failure, telemetry, and destination-range contracts pass focused
+rereview. No Ymir/FPS claim.
 
 **A8 design correction (2026-08-05):** the final command and Gouraud
 destinations remain single VDP1-VRAM ranges in A8, so no transfer may begin
@@ -1524,10 +1529,11 @@ A8 therefore overlaps source-bank construction with the prior VDP1 plot and
 makes both post-boundary submissions wait-free; it does not claim that the
 VRAM writes themselves overlap the prior plot. True frame-over-frame transfer
 overlap requires destination ownership/banking and remains A9 scope.
-`cpu_dmac_transfer()` is accepted only after a same-channel idle poll because
-the pinned public Yaul helper contains an internal channel wait; this is a
-proved-zero precondition, not an assertion that the helper is intrinsically
-nonblocking.
+The first implementation's `cpu_dmac_status_get().channel_busy` guard was
+rejected: pinned Yaul does not reliably report DE=1/TE=0 as busy. The repair
+must configure/start queue-owned channel 0 through public APIs and retire only
+from a queue-owned completion callback; `cpu_dmac_transfer()` is not accepted
+as a nonblocking primitive.
 The frame queue exclusively owns CPU-DMAC channel 0 after
 `saturn_dma_queue_init()`; all boot-time channel-0 work must finish before that
 handoff, and source gates reject other frame-loop owners. The overwrite-safe
@@ -1546,6 +1552,7 @@ shared bank transport owns every frame upload.
 - Modify: `src/port/saturn/gfx/saturn_vdp1_backend.h`
 - Modify: `src/port/saturn/gfx/saturn_vdp1_frame_bank.h`
 - Modify: `src/port/saturn/gfx/saturn_vdp1_frame_bank.c`
+- Create: `src/port/saturn/gfx/saturn_vdp2_camera_snapshot.h`
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c`
 - Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`
 - Modify: `src/port/saturn/gfx/saturn_gouraud_transfer.c`
@@ -1566,8 +1573,10 @@ shared bank transport owns every frame upload.
   retains `SATURN_DMA_QUEUE_SCU` for valid HWRAM Gouraud sources.
 - Produces `sm64_saturn_vdp1_frame_bank_submit_transfers()` and
   `sm64_saturn_vdp1_frame_bank_poll_transfers()`; submit returns immediately.
-- The only blocking wait is at source-bank reuse or the safe publication
-  boundary when the required ticket has not retired.
+- The accepted sourceboot path does not block on a transport ticket: it
+  services the serial lane during ordinary and stale-loop iterations and
+  publishes only after later positive completion. The retained blocking helper
+  is compatibility/exceptional-recovery API, not ordinary publication.
 
   ```c
   bool sm64_saturn_vdp1_frame_bank_submit_transfers(
@@ -1598,11 +1607,13 @@ shared bank transport owns every frame upload.
 
 - [x] **Step 4: Add CPU-DMAC queue transport using pinned Yaul APIs**
 
-  Adapt the public `cpu_dmac_transfer(0, dst, src, size)` lifecycle from pinned
-  Yaul `libyaul/scu/bus/cpu/cpu_dmac.c`. Do not copy internal implementation.
-  Poll `cpu_dmac_status_get()` and channel-0's `channel_busy` bit; call
-  `cpu_dmac_transfer_wait(0)` only at bank reuse/publication when polling has
-  not already observed retirement.
+  Adapt the public channel configuration lifecycle from pinned Yaul
+  `libyaul/scu/bus/cpu/cpu_dmac.c` without copying internal implementation.
+  At the post-boot ownership handoff, stop/reset queue-owned channel 0; later
+  configure/start it with `cpu_dmac_channel_config_set()` and
+  `cpu_dmac_channel_start()`. Retire only from the configured completion IHR.
+  Pinned `cpu_dmac_status_get().channel_busy` is explicitly non-authoritative
+  for DE=1/TE=0 and is used only for terminal error flags.
 
 - [x] **Step 5: Submit both transfers after bank construction**
 
@@ -1613,18 +1624,34 @@ shared bank transport owns every frame upload.
 - [x] **Step 6: Publish only after transfer and VDP1 list safety**
 
   Wait for old VDP1 list ownership only at the actual VRAM overwrite/publish
-  boundary. Never overwrite the displayed/plotting list. Coalesce VDP2 state at
-  the same VBlank-owned transition.
+  boundary. Never plot old metadata after either single resident range may be
+  partially overwritten: transfer failure poisons the destination and disables
+  plotting until a future explicit restore. Poll/kick during stale iterations
+  so the serial CPU/SCU stages are not quantized to fields, while publication
+  stays VBlank-owned. Capture camera state into the immutable frame bank and
+  coalesce VDP2 from the exact bank published to VDP1.
 
 - [x] **Step 7: Measure the real waits**
 
   Add distinct counters for command CPU-DMAC wait, Gouraud SCU-DMA wait,
   VDP1-list overwrite wait, bank-reuse wait, and terminal fence. Update HUD and
-  decoder so `VDP1W` no longer samples only later nonblocking calls.
+  decoder so `VDP1W` no longer samples only later nonblocking calls. The
+  ordinary accepted path explicitly reports zero command/Gouraud and terminal
+  wait ticks because it does not wait there; QNS increments once only when the
+  post-kick exact command ticket is neither started nor retired.
+
+- [x] **Independent-review repair checklist (source/host)**
+
+  Callback-only CPU-DMAC retirement and false-idle regression; stale-loop
+  transport progression; fail-closed partial-write poison; immutable
+  VDP1/VDP2 camera-generation snapshot; truthful wait/QNS telemetry; full
+  command/Gouraud capacity bounds and 8-byte Gouraud destination alignment.
 
 - [ ] **Step 8: Run DMA, transfer, bank, VDP2, memory-map, and runtime gates**
-  — focused host gates are green; presentation/runtime/memory-map and one
-  serialized target build remain open until source review readiness.
+  — repaired strict DMA, transfer, bank, VDP2, runtime-contract, presentation,
+  memory-map (10/10), and profile layout/decode (21 tests, one historical
+  capture skip) gates are green. The serialized target build remains open and
+  is blocked on focused rereview.
 
   Expected: all PASS; submit-before-wait ordering and transport selection are
   enforced by mutation tests.
@@ -1632,8 +1659,9 @@ shared bank transport owns every frame upload.
 - [ ] **Step 9: Update provenance/live documents, commit, and review**
 
   Correct `SLAVEDRIVER_ADAPTATION.md` to state that upstream active DMA is
-  serial and this asynchronous lifecycle is project hardening. Commit with
-  `perf(saturn): defer VDP1 source-bank transfers` and complete both reviews.
+  serial and this asynchronous lifecycle is project hardening. Initial commit
+  `862c7f7c` received NO-GO; live documents now record the callback/fail-closed
+  repair. Repair commit and focused rereview remain open.
 
 ### Task 9: Overlap snapshot rendering with simulation and bound catch-up
 

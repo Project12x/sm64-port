@@ -33,6 +33,7 @@ static saturn_dma_request_t _queue[SATURN_DMA_QUEUE_CAPACITY];
 static size_t _head;
 static size_t _tail;
 static bool _active;
+static volatile bool _cpu_dmac_completed;
 static saturn_dma_queue_sequence_t _next_sequence;
 static uint32_t _wait_ticks;
 
@@ -52,6 +53,13 @@ static size_t
 _next_index(size_t index)
 {
         return (index + 1U) & (SATURN_DMA_QUEUE_CAPACITY - 1U);
+}
+
+static void
+_cpu_dmac_complete_ihr(void *work)
+{
+        (void)work;
+        _cpu_dmac_completed = true;
 }
 
 static bool
@@ -125,9 +133,15 @@ _sequence_outstanding(saturn_dma_queue_sequence_t sequence)
 void
 saturn_dma_queue_init(void)
 {
+        /* Channel 0 becomes queue-owned only after boot-time users have
+         * retired. Reset its enable bit once at that ownership handoff; all
+         * later completion is signalled by our configured IHR. */
+        cpu_dmac_channel_stop(0);
+        cpu_dmac_enable();
         _head = 0U;
         _tail = 0U;
         _active = false;
+        _cpu_dmac_completed = false;
         _next_sequence = SATURN_DMA_QUEUE_INITIAL_SEQUENCE;
         if (_next_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
                 _next_sequence = 1U;
@@ -203,16 +217,6 @@ saturn_dma_queue_kick(void)
                 return;
         }
         const saturn_dma_request_t *request = &_queue[_tail];
-        if (request->mode == SATURN_DMA_QUEUE_CPU_DMAC) {
-                cpu_dmac_status_t status;
-                cpu_dmac_status_get(&status);
-                /* The pinned public helper waits before programming channel
-                 * 0. Enter it only after the same public status API proves
-                 * that wait is zero; this queue is channel 0's frame owner. */
-                if ((status.channel_busy & 1U) != 0U) {
-                        return;
-                }
-        }
         if (request->mode == SATURN_DMA_QUEUE_SCU &&
             scu_dma_level_busy(0) != 0U) {
                 return;
@@ -224,8 +228,22 @@ saturn_dma_queue_kick(void)
                                          request->len);
                 }
         } else if (request->mode == SATURN_DMA_QUEUE_CPU_DMAC) {
-                cpu_dmac_transfer(0, request->dst, request->src,
-                                  request->len);
+                const cpu_dmac_cfg_t config = {
+                    .channel = 0,
+                    .src_mode = CPU_DMAC_SOURCE_INCREMENT,
+                    .dst_mode = CPU_DMAC_DESTINATION_INCREMENT,
+                    .stride = CPU_DMAC_STRIDE_4_BYTES,
+                    .bus_mode = CPU_DMAC_BUS_MODE_CYCLE_STEAL,
+                    .src = (uintptr_t)request->src,
+                    .dst = CPU_CACHE_THROUGH | (uintptr_t)request->dst,
+                    .len = request->len,
+                    .ihr = _cpu_dmac_complete_ihr,
+                    .ihr_work = NULL,
+                };
+                _cpu_dmac_completed = false;
+                cpu_dmac_channel_config_set(&config);
+                cpu_dmac_channel_start(0);
+                cpu_dmac_enable();
         } else {
                 if (request->len != 0U) {
                         memcpy(request->dst, request->src, request->len);
@@ -258,13 +276,17 @@ saturn_dma_queue_poll(void)
                 cpu_dmac_status_t status;
                 cpu_dmac_status_get(&status);
                 if (status.address_error != 0U || status.nmi_interrupt != 0U) {
+                        cpu_dmac_channel_stop(0);
                         _completion_record(request->sequence,
                                            SATURN_DMA_COMPLETION_FAILED);
                         _tail = _next_index(_tail);
                         _active = false;
                         return;
                 }
-                if ((status.channel_busy & 1U) != 0U) {
+                /* Pinned Yaul computes channel_busy incorrectly for the
+                 * hardware's active DE=1/TE=0 state. Only the configured
+                 * completion interrupt is authoritative. */
+                if (!_cpu_dmac_completed) {
                         return;
                 }
         }

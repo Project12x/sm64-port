@@ -84,6 +84,15 @@ static void test_lifecycle_and_ticket_retirement(void)
     assert(first->command_storage == (void *)(uintptr_t)0x00200000U);
     assert(first->gouraud_storage == (void *)(uintptr_t)0x06010000U);
     assert(first->state == SM64_SATURN_VDP1_FRAME_BANK_BUILDING);
+    const sm64_saturn_vdp2_camera_snapshot_t camera = {
+        .yaw = 123,
+        .pitch = -45,
+        .valid = 1U,
+    };
+    assert(sm64_saturn_vdp1_frame_bank_set_camera_snapshot(first, &camera));
+    assert(first->camera_snapshot.yaw == camera.yaw);
+    assert(first->camera_snapshot.pitch == camera.pitch);
+    assert(first->camera_snapshot.valid == camera.valid);
     assert(!sm64_saturn_vdp1_frame_bank_begin_build(&set, 10U, &second));
     assert(!sm64_saturn_vdp1_frame_bank_ready(first, 2U, 0U, 99U));
     assert(!sm64_saturn_vdp1_frame_bank_ready(first, 2049U, 0U, 99U));
@@ -91,6 +100,7 @@ static void test_lifecycle_and_ticket_retirement(void)
     assert(!sm64_saturn_vdp1_frame_bank_ready(first, 12U, 2U,
                                                SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID));
     assert(sm64_saturn_vdp1_frame_bank_ready(first, 12U, 2U, 100U));
+    assert(!sm64_saturn_vdp1_frame_bank_set_camera_snapshot(first, &camera));
     assert(first->state == SM64_SATURN_VDP1_FRAME_BANK_READY);
     assert(!sm64_saturn_vdp1_frame_bank_publish(&set, first));
 
