@@ -1986,8 +1986,9 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** active plan; no implementation, test, review, target build, or FPS
-evidence exists yet. Task 9A is the next measured CPU-lifetime experiment.
+**Status:** active implementation; lifecycle/source/cadence RED evidence is
+recorded. No production implementation, review, target build, or FPS evidence
+exists yet. Task 9A is the next measured CPU-lifetime experiment.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
 
@@ -2115,7 +2116,7 @@ expected FPS lever.
   repository-wide license found, inspected paths recorded in the upstream
   ledger: behavior-study only; no PS1 source or packet format copied.
 
-- [ ] **Step 1: Write the renderer-lifecycle RED fixture**
+- [x] **Step 1: Write the renderer-lifecycle RED fixture**
 
   Add `tools/saturn/demo_render_overlap_test.c` with controlled fake queue and
   backend hooks. Its exact sequence is: start nonzero `N`; assert one graph
@@ -2127,7 +2128,7 @@ expected FPS lever.
   second concurrent start, wrong-generation poll, failed descriptor, and late
   retirement after quarantine. All reject without full-frame replay.
 
-- [ ] **Step 2: Add the source integration and scene-neutral RED contracts**
+- [x] **Step 2: Add the source integration and scene-neutral RED contracts**
 
   Update `test_a9_frame_pipeline_integration_contract.py` and
   `test_a9_sourceboot_cadence_trace_contract.py` to require start-before-return,
@@ -2138,7 +2139,7 @@ expected FPS lever.
   scan rejecting case-insensitive `bob|mario|castle|saturn_demo_render` in
   `saturn_frame_pipeline.{h,c}`.
 
-- [ ] **Step 3: Run RED and record the intended failures**
+- [x] **Step 3: Run RED and record the intended failures**
 
   Run:
 
@@ -2152,6 +2153,16 @@ expected FPS lever.
   pending retention; Make fails because `verify-demo-render-overlap` and the
   start/poll symbols do not exist. Record commands and failure text in the
   aggregate evidence report before implementation.
+
+  RED recorded 2026-08-05. The integration contract errors on the absent
+  `sm64_saturn_demo_render_start_frame()` call, the cadence source contract
+  fails the still-version-1/60-byte ABI and absent start/poll boundary, and the
+  new C11 lifecycle fixture fails compilation because the production
+  `saturn_render_lifecycle.{h,c}` seam does not exist. The capture-tool suite
+  independently fails because the decoder still advertises 60 bytes/version 1
+  and has no overlapping-slave-window phase. The host's plain `python` and
+  `make` aliases are unavailable; the recorded reruns use the repository venv
+  and `mingw32-make` without invoking MSYS/SH directly.
 
 - [ ] **Step 4: Split the renderer at the existing queue-retirement boundary**
 

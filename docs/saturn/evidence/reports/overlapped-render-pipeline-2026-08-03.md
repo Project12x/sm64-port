@@ -2008,3 +2008,39 @@ Unchecked implementation gates:
 
 No tests, builds, captures, or reviews were run for this documentation-only
 transition.
+
+## Task 9A Steps 1--3 — watched lifecycle/source/cadence RED (2026-08-05)
+
+Pinned prior art was re-inspected before production work: SlaveDriver
+`a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later,
+`WALLS.C:1240-1408,1803-1950`, `DMA.C`, `DMA.H`, `V_BLANK.C:94-145`), Sonic
+Z-Treme `cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0,
+`ZT_RENDERING.c:406-505,718-786`, `ZT_FRUSTUM.c:126-161`,
+`ZT_LOADING.c:118-176,299-355`, `workarea.c:12-25`), Yaul
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT, public DMA/VDP1 APIs and
+`libmic3d/render.c`), Jo Engine
+`556d081146211b6a1cfa6591d70f9487d406758b` (MIT plus file-level BSD-style
+notices, `vdp1_command_pipeline.c`, `3d.c`), and the recorded sm64-psx pin
+`3073845688ea273da78d539b20c45110d8a868c3` (no repository-wide license,
+source-loop/compact-render behavior study only). Reuse remains existing
+dependency/API use and pattern-only project code; no source is copied.
+
+Watched RED commands and intended failures:
+
+- `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_a9_frame_pipeline_integration_contract.py`
+  exits 1: the service adapter has no `sm64_saturn_demo_render_start_frame()`
+  or retained pending transaction.
+- `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_a9_sourceboot_cadence_trace_contract.py`
+  exits 1: sourceboot still publishes version 1/60 bytes and calls the
+  monolithic renderer.
+- `mingw32-make -f Makefile.saturn.mk verify-demo-render-overlap` exits 1:
+  the real fake-hook fixture cannot include or compile the missing
+  `saturn_render_lifecycle.{h,c}` production seam.
+- `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_capture_sourceboot_throughput.py`
+  runs 31 tests and exits 1 with one failure/one error: the decoder still
+  reports 60 bytes/version 1 and no `slave_work_overlap_window` phase exists.
+
+The initial literal `python` and `make` invocations were unavailable in this
+PowerShell host, so the evidence reruns use the repository venv and native Qt
+MinGW make. No MSYS/SH command, target build, Ymir, broad verify, or
+native-math census was invoked. Steps 4--12 remain unchecked.

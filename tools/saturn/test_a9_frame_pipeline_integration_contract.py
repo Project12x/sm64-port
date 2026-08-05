@@ -98,7 +98,7 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
         assert generation_check is not None
         self.assertLess(tick, generation_check.start())
         for forbidden in (
-            "sm64_saturn_demo_render_frame(",
+            "sm64_saturn_demo_render_start_frame(",
             "sm64_saturn_vdp1_frame_bank_submit_transfers(",
             "sourceboot_present_generation(",
         ):
@@ -114,7 +114,8 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
             "sm64_saturn_vdp1_frame_bank_begin_build(",
             "sm64_saturn_vdp1_frame_bank_set_camera_snapshot(",
             "sm64_saturn_vdp1_backend_bind_frame_bank(",
-            "sm64_saturn_demo_render_frame(",
+            "sm64_saturn_demo_render_start_frame(",
+            "sm64_saturn_demo_render_poll_frame(",
             "sm64_saturn_vdp1_frame_bank_ready(",
             "sm64_saturn_frame_pipeline_render_complete(",
             "sm64_saturn_render_snapshot_complete(",
@@ -122,6 +123,16 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
         )
         positions = [render.index(call) for call in ordered_calls]
         self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("sm64_saturn_demo_render_frame(", self.source)
+        self.assertIn("sourceboot_active_build_bank", render)
+        self.assertIn("SM64_SATURN_DEMO_RENDER_PENDING", render)
+        self.assertIn("SM64_SATURN_DEMO_RENDER_COMPLETE", render)
+        self.assertIn("SM64_SATURN_DEMO_RENDER_FAILED", render)
+        pending = render.index("SM64_SATURN_DEMO_RENDER_PENDING")
+        ready = render.index("sm64_saturn_vdp1_frame_bank_ready(")
+        self.assertLess(pending, ready)
+        self.assertIn("sm64_saturn_vdp1_frame_bank_quarantine(", render)
+        self.assertNotIn("while (", render)
         for call in (
             "sm64_saturn_render_snapshot_acquire_ready",
             "sm64_saturn_vdp1_frame_bank_begin_build",
@@ -142,6 +153,17 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
             "sourceboot_present_generation(",
         ):
             self.assertNotIn(forbidden, render)
+
+    def test_generic_scheduler_state_has_no_demo_or_scene_symbols(self) -> None:
+        for path in (
+            ROOT / "src" / "port" / "saturn" / "runtime" / "saturn_frame_pipeline.h",
+            ROOT / "src" / "port" / "saturn" / "runtime" / "saturn_frame_pipeline.c",
+        ):
+            self.assertNotRegex(
+                path.read_text(encoding="utf-8"),
+                r"(?i)bob|mario|castle|saturn_demo_render",
+                f"generic frame lifecycle leaked scene state into {path.name}",
+            )
 
     def test_poll_action_is_one_bounded_nonblocking_transfer_opportunity(self) -> None:
         poll = extract_c_function(self.source, "sourceboot_frame_poll_transfers")

@@ -69,6 +69,28 @@ def cadence_trace(*, sequence: int = 2, record: dict[str, int] | None = None) ->
     return bytes(raw)
 
 
+def cadence_trace_v1(*, sequence: int = 2,
+                     record: dict[str, int] | None = None) -> bytes:
+    record = record or {}
+    fields = (
+        "observed_vblank_generation", "frame_generation", "build_generation",
+        "presentation_generation", "dropped_vblank_credit",
+        "simulation_vblank_crossings", "simulation_count",
+        "construction_vblank_crossings", "construction_count",
+        "transport_presentation_vblank_crossings",
+        "transport_presentation_count",
+    )
+    raw = bytearray(60)
+    raw[0:4] = capture.CADENCE_TRACE_MAGIC.to_bytes(4, "big")
+    raw[4:8] = (1).to_bytes(4, "big")
+    raw[8:12] = sequence.to_bytes(4, "big")
+    for field_index, field in enumerate(fields):
+        base = 12 + field_index * 4
+        raw[base : base + 4] = record.get(field, 0).to_bytes(4, "big")
+    raw[-4:] = sequence.to_bytes(4, "big")
+    return bytes(raw)
+
+
 def elf32_with_symbols(
     path: Path,
     symbols: list[tuple[str, int, int]],
@@ -144,6 +166,63 @@ def elf32_with_symbols(
 
 
 class ThroughputCaptureTests(unittest.TestCase):
+    def test_decodes_v2_overlap_window_and_retains_explicit_v1_support(self) -> None:
+        self.assertEqual(capture.CADENCE_TRACE_BYTES, 76)
+        self.assertEqual(capture.CADENCE_TRACE_VERSION, 2)
+        record = {
+            field: index + 1 for index, field in
+            enumerate(capture.CADENCE_RECORD_FIELDS)
+        }
+        decoded_v2 = capture.decode_cadence_trace(
+            cadence_trace(sequence=12, record=record)
+        )
+        self.assertEqual(decoded_v2["version"], 2)
+        self.assertEqual(decoded_v2["record"], record)
+        decoded_v1 = capture.decode_cadence_trace(
+            cadence_trace_v1(sequence=14, record=record)
+        )
+        self.assertEqual(decoded_v1["version"], 1)
+        self.assertNotIn("slave_work_vblank_crossings", decoded_v1["record"])
+        with self.assertRaisesRegex(ValueError, "size|version"):
+            capture.decode_cadence_trace(cadence_trace_v1()[:-4])
+        wrong_version = bytearray(cadence_trace())
+        wrong_version[4:8] = (3).to_bytes(4, "big")
+        with self.assertRaisesRegex(ValueError, "version"):
+            capture.decode_cadence_trace(bytes(wrong_version))
+
+    def test_v2_phase_delta_excludes_overlapping_slave_window(self) -> None:
+        previous = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        current.update({
+            "observed_vblank_generation": 5,
+            "simulation_vblank_crossings": 2,
+            "simulation_count": 1,
+            "construction_vblank_crossings": 1,
+            "construction_count": 1,
+            "transport_presentation_vblank_crossings": 1,
+            "transport_presentation_count": 1,
+            "slave_work_vblank_crossings": 4,
+            "slave_work_count": 1,
+            "master_finalize_vblank_crossings": 1,
+            "master_finalize_count": 1,
+        })
+        delta = capture.phase_delta(previous, current)
+        self.assertEqual(
+            delta["slave_work_overlap_window"],
+            {"vblank_crossings": 4, "count": 1},
+        )
+        self.assertEqual(
+            delta["master_finalization"],
+            {"vblank_crossings": 1, "count": 1},
+        )
+        self.assertEqual(delta["attributed_vblank_crossings"], 4)
+        self.assertEqual(delta["unattributed_vblank_crossings"], 1)
+
+        impossible = dict(current)
+        impossible["slave_work_vblank_crossings"] = 0
+        with self.assertRaisesRegex(ValueError, "overlap window.*finalization"):
+            capture.phase_delta(previous, impossible)
+
     def test_decodes_fixed_seqlock_cadence_trace_and_rejects_bad_abi(self) -> None:
         record = {field: index + 1 for index, field in enumerate(capture.CADENCE_RECORD_FIELDS)}
         decoded = capture.decode_cadence_trace(cadence_trace(sequence=8, record=record))

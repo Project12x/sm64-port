@@ -11,7 +11,8 @@ SOURCE = (Path(__file__).resolve().parents[2] / "src/port/saturn/sourceboot/main
 
 class A9CadenceTraceContractTests(unittest.TestCase):
     def test_trace_is_fixed_size_seqlock_and_published_through_p2(self) -> None:
-        self.assertIn("sizeof(sm64_saturn_sourceboot_cadence_trace_t) == 60U", SOURCE)
+        self.assertIn("SOURCEBOOT_CADENCE_TRACE_VERSION 2U", SOURCE)
+        self.assertIn("sizeof(sm64_saturn_sourceboot_cadence_trace_t) == 76U", SOURCE)
         self.assertIn("sourceboot_cadence_trace_visible", SOURCE)
         self.assertIn("CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_cadence_trace", SOURCE)
         self.assertIn("trace->sequence_begin = next_sequence - 1U", SOURCE)
@@ -32,6 +33,8 @@ class A9CadenceTraceContractTests(unittest.TestCase):
             "transport_presentation_count",
             "frame_generation", "build_generation", "presentation_generation",
             "dropped_vblank_credit",
+            "slave_work_vblank_crossings", "slave_work_count",
+            "master_finalize_vblank_crossings", "master_finalize_count",
         ):
             self.assertIn(field, SOURCE)
         self.assertIn("sourceboot_cadence_trace_append", SOURCE)
@@ -45,11 +48,13 @@ class A9CadenceTraceContractTests(unittest.TestCase):
         render_start = SOURCE.index("const uint32_t construction_vblank_start")
         snapshot = SOURCE.index("sm64_saturn_render_snapshot_acquire_ready(", render_start)
         pose = SOURCE.index("sm64_saturn_mario_actor_pose(", render_start)
-        render_call = SOURCE.index("sm64_saturn_demo_render_frame(", render_start)
-        render_end = SOURCE.index("sourceboot_phase_accumulate", render_call)
+        render_call = SOURCE.index("sm64_saturn_demo_render_start_frame(", render_start)
+        poll_call = SOURCE.index("sm64_saturn_demo_render_poll_frame(", render_call)
+        render_end = SOURCE.index("sourceboot_phase_accumulate", poll_call)
         self.assertLess(render_start, snapshot)
         self.assertLess(render_start, pose)
         self.assertLess(render_start, render_call)
+        self.assertLess(render_call, poll_call)
         self.assertLess(render_call, render_end)
 
 
