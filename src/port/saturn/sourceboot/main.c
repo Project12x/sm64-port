@@ -18,6 +18,7 @@
 #include "saturn_texture_residency.h"
 #include "saturn_source_runtime.h"
 #include "saturn_frame_pipeline.h"
+#include "saturn_render_overlap_phase.h"
 #include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
 #include "saturn_vdp1_frame_bank.h"
@@ -157,15 +158,10 @@ static uint32_t sourceboot_trace_vdp1_presentation_generation;
 static uint32_t sourceboot_trace_vdp2_presentation_generation;
 static uint32_t sourceboot_simulation_vblank_crossings;
 static uint32_t sourceboot_simulation_count;
-static uint32_t sourceboot_construction_vblank_crossings;
-static uint32_t sourceboot_construction_count;
 static uint32_t sourceboot_transport_presentation_vblank_crossings;
 static uint32_t sourceboot_transport_presentation_count;
-static uint32_t sourceboot_slave_work_vblank_crossings;
-static uint32_t sourceboot_slave_work_count;
-static uint32_t sourceboot_master_finalize_vblank_crossings;
-static uint32_t sourceboot_master_finalize_count;
-static uint32_t sourceboot_active_slave_vblank_start;
+static sm64_saturn_render_overlap_phase_t sourceboot_render_overlap_phase;
+static bool sourceboot_render_overlap_event_ok;
 static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
@@ -241,18 +237,22 @@ static void sourceboot_cadence_trace_append(uint32_t frame_generation,
     trace->dropped_vblank_credit = sourceboot_sim_vblank_credit_dropped;
     trace->simulation_vblank_crossings = sourceboot_simulation_vblank_crossings;
     trace->simulation_count = sourceboot_simulation_count;
-    trace->construction_vblank_crossings = sourceboot_construction_vblank_crossings;
-    trace->construction_count = sourceboot_construction_count;
+    trace->construction_vblank_crossings =
+        sourceboot_render_overlap_phase.construction_vblank_crossings;
+    trace->construction_count =
+        sourceboot_render_overlap_phase.construction_count;
     trace->transport_presentation_vblank_crossings =
         sourceboot_transport_presentation_vblank_crossings;
     trace->transport_presentation_count =
         sourceboot_transport_presentation_count;
     trace->slave_work_vblank_crossings =
-        sourceboot_slave_work_vblank_crossings;
-    trace->slave_work_count = sourceboot_slave_work_count;
+        sourceboot_render_overlap_phase.slave_work_vblank_crossings;
+    trace->slave_work_count =
+        sourceboot_render_overlap_phase.slave_work_count;
     trace->master_finalize_vblank_crossings =
-        sourceboot_master_finalize_vblank_crossings;
-    trace->master_finalize_count = sourceboot_master_finalize_count;
+        sourceboot_render_overlap_phase.master_finalize_vblank_crossings;
+    trace->master_finalize_count =
+        sourceboot_render_overlap_phase.master_finalize_count;
     trace->sequence_end = next_sequence;
     /* Publish last: equality plus an even value identifies a stable sample. */
     trace->sequence_begin = next_sequence;
@@ -785,6 +785,43 @@ static void sourceboot_frame_run_sim_tick(uint32_t generation)
                                 generation);
 }
 
+#if SATURN_DEMO_PATH
+static void sourceboot_render_lifecycle_event(
+    void *context, sm64_saturn_render_lifecycle_event_t event,
+    uint32_t generation)
+{
+    (void)context;
+    bool accepted = false;
+    if (event == SM64_SATURN_RENDER_LIFECYCLE_NOTIFIED)
+        accepted = sm64_saturn_render_overlap_phase_notification_published(
+            &sourceboot_render_overlap_phase, generation,
+            sourceboot_vblank_out_count);
+    else if (event == SM64_SATURN_RENDER_LIFECYCLE_RETIRED)
+        accepted = sm64_saturn_render_overlap_phase_retirement_published(
+            &sourceboot_render_overlap_phase, generation,
+            sourceboot_vblank_out_count);
+    sourceboot_render_overlap_event_ok =
+        sourceboot_render_overlap_event_ok && accepted;
+}
+
+static bool sourceboot_render_overlap_terminal(uint32_t generation)
+{
+    if (!sourceboot_render_overlap_phase.active) return true;
+    if (!sourceboot_render_overlap_phase.notified)
+        return sm64_saturn_render_overlap_phase_abort(
+            &sourceboot_render_overlap_phase, generation,
+            sourceboot_vblank_out_count);
+    if (sourceboot_active_render_snapshot == NULL ||
+        sourceboot_active_build_bank == NULL)
+        return false;
+    return sourceboot_render_overlap_event_ok &&
+        sm64_saturn_render_overlap_phase_terminal(
+            &sourceboot_render_overlap_phase, generation,
+            sourceboot_active_render_snapshot,
+            sourceboot_active_build_bank, sourceboot_vblank_out_count);
+}
+#endif
+
 static void sourceboot_frame_service_render(uint32_t generation)
 {
     const uint16_t render_start = cpu_frt_count_get();
@@ -805,23 +842,15 @@ static void sourceboot_frame_service_render(uint32_t generation)
             goto failed;
         }
 #if SATURN_DEMO_PATH
-        const uint32_t master_finalize_vblank_start =
-            sourceboot_vblank_out_count;
+        if (!sm64_saturn_render_overlap_phase_retains(
+                &sourceboot_render_overlap_phase, generation,
+                sourceboot_active_render_snapshot,
+                sourceboot_active_build_bank))
+            goto failed;
         render_status = sm64_saturn_demo_render_poll_frame(
             &sourceboot_fast3d.profile, generation);
         if (render_status == SM64_SATURN_DEMO_RENDER_PENDING) goto finish;
-        sourceboot_phase_accumulate(master_finalize_vblank_start,
-                                    sourceboot_vblank_out_count,
-                                    &sourceboot_master_finalize_vblank_crossings,
-                                    &sourceboot_master_finalize_count);
-        sourceboot_phase_accumulate(master_finalize_vblank_start,
-                                    sourceboot_vblank_out_count,
-                                    &sourceboot_construction_vblank_crossings,
-                                    &sourceboot_construction_count);
-        sourceboot_phase_accumulate(sourceboot_active_slave_vblank_start,
-                                    master_finalize_vblank_start,
-                                    &sourceboot_slave_work_vblank_crossings,
-                                    &sourceboot_slave_work_count);
+        if (!sourceboot_render_overlap_terminal(generation)) goto failed;
         if (render_status == SM64_SATURN_DEMO_RENDER_FAILED) goto failed;
         if (render_status != SM64_SATURN_DEMO_RENDER_COMPLETE) goto failed;
         render_complete = true;
@@ -830,6 +859,13 @@ static void sourceboot_frame_service_render(uint32_t generation)
 #endif
     } else {
         if (sourceboot_render_started) goto failed;
+#if SATURN_DEMO_PATH
+        sourceboot_render_overlap_event_ok = true;
+        if (!sm64_saturn_render_overlap_phase_begin(
+                &sourceboot_render_overlap_phase, generation,
+                sourceboot_vblank_out_count))
+            goto failed;
+#endif
 
         sourceboot_active_render_snapshot =
             sm64_saturn_render_snapshot_acquire_ready(
@@ -854,6 +890,13 @@ static void sourceboot_frame_service_render(uint32_t generation)
             sourceboot_vdp1_bank_overwrite_attempts++;
             goto failed;
         }
+#if SATURN_DEMO_PATH
+        if (!sm64_saturn_render_overlap_phase_bind(
+                &sourceboot_render_overlap_phase, generation,
+                sourceboot_active_render_snapshot,
+                sourceboot_active_build_bank))
+            goto failed;
+#endif
 
         const sm64_saturn_vdp2_camera_snapshot_t camera_snapshot = {
             .yaw = sourceboot_mario_snapshot.camera_yaw,
@@ -873,10 +916,6 @@ static void sourceboot_frame_service_render(uint32_t generation)
             &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
             &sourceboot_mario_pose, generation);
         if (!render_complete) goto failed;
-        /* start_frame returns immediately after notify publication. Begin the
-         * overlap window here so immutable preparation is not misattributed
-         * to slave execution. */
-        sourceboot_active_slave_vblank_start = sourceboot_vblank_out_count;
         sourceboot_render_started = true;
         goto finish;
 #else
@@ -913,6 +952,10 @@ static void sourceboot_frame_service_render(uint32_t generation)
     goto finish;
 
 failed:
+#if SATURN_DEMO_PATH
+    if (!sourceboot_render_overlap_terminal(generation))
+        sourceboot_fast3d.profile.pipeline_faults++;
+#endif
     if (sourceboot_active_build_bank != NULL &&
         sourceboot_active_build_bank->state !=
             SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED)
@@ -1341,7 +1384,14 @@ int main(void) {
 
         vdp1_vram_partitions_get(&partitions);
 #if SATURN_DEMO_PATH
+        sm64_saturn_render_overlap_phase_init(
+            &sourceboot_render_overlap_phase);
         sm64_saturn_demo_render_init();
+        if (!sm64_saturn_demo_render_observe_lifecycle(
+                sourceboot_render_lifecycle_event, NULL)) {
+            dbgio_puts("sourceboot: render lifecycle observer failed\n");
+            for (;;) {}
+        }
         /* The baked BOB bank is linked into .cart_rodata and copied to the
          * DRAM cart at its final VMA by source_cart_load(). Stage it through
          * the shared residency API before the first demo-path command list;

@@ -197,7 +197,7 @@ class ThroughputCaptureTests(unittest.TestCase):
             "observed_vblank_generation": 5,
             "simulation_vblank_crossings": 2,
             "simulation_count": 1,
-            "construction_vblank_crossings": 1,
+            "construction_vblank_crossings": 2,
             "construction_count": 1,
             "transport_presentation_vblank_crossings": 1,
             "transport_presentation_count": 1,
@@ -215,13 +215,27 @@ class ThroughputCaptureTests(unittest.TestCase):
             delta["master_finalization"],
             {"vblank_crossings": 1, "count": 1},
         )
-        self.assertEqual(delta["attributed_vblank_crossings"], 4)
-        self.assertEqual(delta["unattributed_vblank_crossings"], 1)
+        self.assertEqual(delta["construction"], {
+            "vblank_crossings": 2, "count": 1,
+        })
+        self.assertEqual(delta["attributed_vblank_crossings"], 5)
+        self.assertEqual(delta["unattributed_vblank_crossings"], 0)
 
         impossible = dict(current)
-        impossible["slave_work_vblank_crossings"] = 0
-        with self.assertRaisesRegex(ValueError, "overlap window.*finalization"):
+        impossible["master_finalize_vblank_crossings"] = 3
+        with self.assertRaisesRegex(ValueError, "finalization.*construction"):
             capture.phase_delta(previous, impossible)
+
+    def test_failure_queue_record_preserves_nonzero_quarantine(self) -> None:
+        decoded = capture.decode_runtime(runtime(
+            qn=8, qr=8, notify=4, retired=4,
+            master_failures=0, slave_failures=1, qq=1,
+        ))
+        coherent = capture.accept_coherent_queue(decoded, 0)
+        self.assertIsNotNone(coherent)
+        assert coherent is not None
+        self.assertEqual(coherent["qf"], 1)
+        self.assertEqual(coherent["qq"], 1)
 
     def test_decodes_fixed_seqlock_cadence_trace_and_rejects_bad_abi(self) -> None:
         record = {field: index + 1 for index, field in enumerate(capture.CADENCE_RECORD_FIELDS)}

@@ -16,8 +16,19 @@ typedef enum sm64_saturn_render_lifecycle_status {
     SM64_SATURN_RENDER_LIFECYCLE_FAILED,
 } sm64_saturn_render_lifecycle_status_t;
 
+typedef enum sm64_saturn_render_lifecycle_event {
+    SM64_SATURN_RENDER_LIFECYCLE_NOTIFIED = 0,
+    SM64_SATURN_RENDER_LIFECYCLE_RETIRED,
+} sm64_saturn_render_lifecycle_event_t;
+
+typedef void (*sm64_saturn_render_lifecycle_observer_t)(
+    void *context, sm64_saturn_render_lifecycle_event_t event,
+    uint32_t generation);
+
 typedef struct sm64_saturn_render_lifecycle {
     uint32_t active_generation;
+    sm64_saturn_render_lifecycle_observer_t observer;
+    void *observer_context;
     bool active;
 } sm64_saturn_render_lifecycle_t;
 
@@ -30,6 +41,10 @@ typedef struct sm64_saturn_render_lifecycle_ops {
                      uint16_t master_jobs);
     void (*quarantine)(void *context, uint32_t generation);
 } sm64_saturn_render_lifecycle_ops_t;
+
+bool sm64_saturn_render_lifecycle_observe(
+    sm64_saturn_render_lifecycle_t *lifecycle,
+    sm64_saturn_render_lifecycle_observer_t observer, void *context);
 
 bool sm64_saturn_render_lifecycle_start(
     sm64_saturn_render_lifecycle_t *lifecycle,

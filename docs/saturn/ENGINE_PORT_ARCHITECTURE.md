@@ -218,6 +218,17 @@ and exact publish acknowledgement are unchanged. Generic lifecycle state has
 no BOB, Mario, Castle, or demo-renderer dependency. Focused host/source and
 versioned-cadence tests are green; review and target evidence remain open.
 
+Independent A9A review exposed one exception to that immutable-lifetime claim:
+the N+1 source tick could reset the global LOD tier/cluster state while N's
+slave lower job still used it. The renderer now defers those scene resets in a
+generation gate and applies them only after exact N retirement. A shared
+scene-neutral overlap controller receives lifecycle notification/retirement
+events at the production boundary, accounts first-service preparation and
+terminal lowering as complete construction, and retains master finalization as
+a subset. Terminal telemetry scans quarantine state before queue reset. These
+repairs are covered by a real runtime/graph/queue/lifecycle integration harness;
+fresh source rereview remains required before target evidence.
+
 At that terminal boundary, VDP2 composes only the immutable sky camera carried
 by the displayed VDP1 bank and a small displayed/rendered/simulation generation
 record. The HUD names those exact generations; camera/bank or

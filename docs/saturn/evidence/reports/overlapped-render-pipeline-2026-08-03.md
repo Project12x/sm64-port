@@ -2100,3 +2100,67 @@ RED checkpoint is `ec81ddc6`; scoped implementation is `0f5ccd65`. Independent
 specification/quality review,
 the serialized target build, exact-identity cadence capture, manual Ymir, broad
 verify, and native-math census remain unchecked.
+
+## Task 9A Fix Round 1 — independent-review remediation (2026-08-05)
+
+**Status: fixes implemented and focused-host-green; fresh rereview required.**
+Independent review of `0350a473..d45c0a41` returned specification/code-quality
+FAIL and target-build NO-GO. No target, Ymir, broad build, or native-math gate
+was run during this correction.
+
+- C1 is repaired by renderer-owned `saturn_lod_lifetime`: a source scene
+  transition observed while generation N is active advances only pending
+  master state. Worker tier/cluster storage remains unchanged until N reaches
+  a terminal lifecycle, when the deferred reset is applied for N+1.
+- I1 is repaired by scene-neutral `saturn_render_overlap_phase`. Sourceboot
+  begins construction before snapshot acquisition, binds exact snapshot/bank
+  identities, receives timestamps after actual notify and positive retirement,
+  and terminates after complete renderer construction. Construction is start
+  preparation plus finalization; master finalization remains its explicit
+  subset, and host additive attribution now consumes complete construction.
+- I2 is repaired by a wait-free terminal telemetry refresh before the queue is
+  snapshotted/reset. A failed admit with a quarantined dependent publishes
+  `QF=1, QQ=1` in the executable integration path.
+- I3 is repaired by `render_overlap_integration_test.c`, which links the real
+  job runtime/graph/queue, lifecycle, scheduler, LOD lifetime, and phase
+  controller. It holds N pending across an N+1 scene transition, proves N uses
+  its retained FAR tier, applies the reset only after retirement, completes
+  exact generation promotion, accounts start/slave/finalize boundaries, and
+  exercises failure quarantine. Four compiled mutations are rejected.
+- M1 is resolved by narrowing compatibility language: the decoder accepts
+  explicit direct/saved v1 60-byte buffers, while live target observation
+  requires the current v2 symbol and 76-byte payload.
+
+Watched RED:
+
+- `mingw32-make -f Makefile.saturn.mk verify-render-overlap-integration`
+  failed at the absent shared production controllers.
+- `.venv-saturn-tools\\Scripts\\python.exe tools/saturn/test_capture_sourceboot_throughput.py`
+  failed because v2 attribution returned 4 rather than the required complete 5
+  crossings.
+
+Focused GREEN:
+
+- `mingw32-make -f Makefile.saturn.mk verify-render-overlap-integration`:
+  nominal PASS; all four mutations caught.
+- `mingw32-make -f Makefile.saturn.mk verify-demo-render-overlap`: nominal
+  lifecycle PASS; prior early-finalize/double-lower/replay mutations and the
+  new production integration mutations are caught.
+- `.venv-saturn-tools\\Scripts\\python.exe tools/saturn/test_capture_sourceboot_throughput.py`:
+  32/32 PASS.
+- `test_a9_sourceboot_cadence_trace_contract.py`: 4/4 PASS;
+  `test_a9_frame_pipeline_integration_contract.py`: 9/9 PASS.
+- The direct render-job runtime fixture and source contract PASS. The combined
+  optional graph gate still fails its pre-existing obsolete assertion that the
+  already-landed production renderer must not include
+  `saturn_render_job_graph.h`; it is not reported green.
+
+Reference use is unchanged: SlaveDriver
+`a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later), Sonic Z-Treme
+`cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0), Yaul
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT), Jo Engine
+`556d081146211b6a1cfa6591d70f9487d406758b` (MIT/BSD-style file notices), and
+sm64-psx `3073845688ea273da78d539b20c45110d8a868c3` (no repository-wide
+license). Reuse mode remains dependency/API use or pattern-only; no upstream
+source was copied or close-ported. Fresh independent specification and quality
+rereview remain mandatory before the serialized target-build gate can open.

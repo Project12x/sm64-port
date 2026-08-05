@@ -65,7 +65,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-frame-pipeline verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-dual-actor-worker verify-actor-meshlets verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-dual-actor-worker verify-actor-meshlets verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context classify-source compile-introface-mesh compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -595,7 +595,89 @@ verify-frame-pipeline:
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/frame-pipeline-incomplete-mutation$(HOST_EXEEXT)" \
 	  --label "frame pipeline incomplete-bank publication mutation"
 
-verify-demo-render-overlap:
+verify-render-overlap-integration:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-integration-test$(HOST_EXEEXT)"
+	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-integration-test$(HOST_EXEEXT)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_LIFETIME_TEST_APPLY_DURING_ACTIVE=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-lod-race-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-lod-race-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap active-generation LOD reset mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_RENDER_OVERLAP_PHASE_TEST_OMIT_START=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-start-phase-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-start-phase-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap omitted start-construction mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_RENDER_LIFECYCLE_TEST_OBSERVER_BEFORE_NOTIFY=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-notify-boundary-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-notify-boundary-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap pre-publication timestamp mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_SKIP_TERMINAL_REFRESH=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-quarantine-refresh-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-quarantine-refresh-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap skipped quarantine refresh mutation"
+
+verify-demo-render-overlap: verify-render-overlap-integration
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \

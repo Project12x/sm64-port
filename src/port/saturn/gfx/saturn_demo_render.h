@@ -7,6 +7,7 @@
 #include "saturn_fast3d_frontend.h"
 #include "saturn_actor_bridge.h"
 #include "saturn_gouraud_bank.h"
+#include "saturn_render_lifecycle.h"
 #include "saturn_vdp1_backend.h"
 
 /* Bounded IR renderer used by sourceboot's opt-in demo profile.  It consumes
@@ -20,6 +21,9 @@ void sm64_saturn_demo_render_init(void);
  * the source scene boundary rather than at renderer startup alone. */
 void sm64_saturn_demo_render_scene_observe(bool active, int16_t level,
                                            int16_t area);
+
+bool sm64_saturn_demo_render_observe_lifecycle(
+    sm64_saturn_render_lifecycle_observer_t observer, void *context);
 
 typedef enum sm64_saturn_demo_render_status {
     SM64_SATURN_DEMO_RENDER_PENDING = 0,

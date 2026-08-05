@@ -14,6 +14,7 @@
 #include "saturn_gouraud.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
+#include "saturn_lod_lifetime.h"
 #include "saturn_matrix_kernels.h"
 #include "saturn_render_job_bridge.h"
 #include "saturn_render_callback_context.h"
@@ -201,7 +202,7 @@ static sm64_saturn_render_lod_state_t s_render_cluster_lod[
 static sm64_saturn_render_cluster_result_t s_admitted_cluster_results[
     SM64_SATURN_BOB_CLUSTER_COUNT] __attribute__((section(".lwram_bss")));
 static uint16_t s_admitted_cluster_count;
-static saturn_lod_scene_t s_lod_scene;
+static sm64_saturn_lod_lifetime_t s_lod_lifetime;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
     __attribute__((section(".lwram_bss")));
@@ -1030,18 +1031,22 @@ static uint16_t demo_primitive_projected_span(
  * Gouraud allocation.  The controller's depth plus projected-span windows
  * make boundary jitter stable while retaining the renderer's source identity
  * and route safety checks below. */
-static uint8_t demo_lod_select(uint16_t primitive_index, int32_t depth,
-                               uint16_t projected_span)
+static uint8_t demo_lod_select(uint32_t generation, uint16_t primitive_index,
+                               int32_t depth, uint16_t projected_span)
 {
-    const uint8_t previous = s_primitive_lod_tier[primitive_index];
     uint8_t next = SATURN_LOD_NEAR;
+    uint8_t transition = 0U;
 #if SATURN_DEMO_POLY_TIER != 0
     const saturn_lod_thresholds_t thresholds = saturn_lod_default_thresholds();
-    next = (uint8_t)saturn_lod_select((saturn_lod_tier_t)previous, depth,
-                                      projected_span, &thresholds);
+    const saturn_lod_thresholds_t *thresholds_ptr = &thresholds;
+#else
+    const saturn_lod_thresholds_t *thresholds_ptr = NULL;
 #endif
-    s_primitive_lod_tier[primitive_index] = next;
-    s_primitive_lod_transition[primitive_index] = previous != next ? 1U : 0U;
+    if (!sm64_saturn_lod_lifetime_select(
+            &s_lod_lifetime, generation, primitive_index, depth,
+            projected_span, thresholds_ptr, &next, &transition))
+        return SATURN_LOD_NEAR;
+    s_primitive_lod_transition[primitive_index] = transition;
     return next;
 }
 
@@ -1383,8 +1388,10 @@ void sm64_saturn_demo_render_init(void)
         &s_actor_ref_payload, s_actor_queue_ref_master,
         s_actor_queue_ref_slave, sizeof(s_actor_queue_ref_master[0]),
         DEMO_ACTOR_QUEUE_PAYLOAD_CAPACITY);
-    saturn_lod_reset(s_primitive_lod_tier, sizeof(s_primitive_lod_tier));
-    saturn_lod_scene_init(&s_lod_scene);
+    sm64_saturn_lod_lifetime_init(
+        &s_lod_lifetime, s_primitive_lod_tier,
+        sizeof(s_primitive_lod_tier), s_render_cluster_lod,
+        sizeof(s_render_cluster_lod));
     memset(s_primitive_lod_transition, 0,
            sizeof(s_primitive_lod_transition));
     memset(s_primitive_lod_suppressed, 0,
@@ -1438,13 +1445,8 @@ void sm64_saturn_demo_render_init(void)
 void sm64_saturn_demo_render_scene_observe(bool active, int16_t level,
                                            int16_t area)
 {
-    if (saturn_lod_scene_observe(&s_lod_scene, active, level, area,
-                                 s_primitive_lod_tier,
-                                 sizeof(s_primitive_lod_tier))) {
-        /* Cluster hysteresis belongs to the immutable generated scene bank;
-         * a level/area transition may not inherit its previous depth tier. */
-        memset(s_render_cluster_lod, 0, sizeof(s_render_cluster_lod));
-    }
+    (void)sm64_saturn_lod_lifetime_observe_scene(
+        &s_lod_lifetime, active, level, area);
 }
 
 static sm64_saturn_camera_transform_t demo_camera(
@@ -1657,7 +1659,8 @@ static void demo_classify_exact(demo_classify_context_t *context,
                 depth = demo_view_read(lane, primitive->indices[corner])->z;
         const uint16_t projected_span =
             demo_primitive_projected_span(lane, primitive);
-        const uint8_t lod_tier = demo_lod_select(i, depth, projected_span);
+        const uint8_t lod_tier = demo_lod_select(
+            context->transform_sequence, i, depth, projected_span);
         s_primitive_lod_suppressed[i] = 0U;
         s_primitive_lod_texture_downgraded[i] = 0U;
         /* The far mask is baked from stable source identity. Preserve the
@@ -3837,6 +3840,7 @@ static bool demo_render_finalize(void *opaque, uint32_t generation,
     const vdp1_vram_partitions_t *const partitions = &transaction->partitions;
 
     sm64_saturn_render_job_runtime_telemetry_t queue_telemetry;
+    sm64_saturn_render_job_runtime_refresh_terminal_telemetry();
     const bool telemetry_ok =
         sm64_saturn_render_job_runtime_telemetry_snapshot(&queue_telemetry);
     if (telemetry_ok) {
@@ -3984,6 +3988,13 @@ static const sm64_saturn_render_lifecycle_ops_t s_demo_render_lifecycle_ops = {
     .quarantine = demo_render_quarantine,
 };
 
+bool sm64_saturn_demo_render_observe_lifecycle(
+    sm64_saturn_render_lifecycle_observer_t observer, void *context)
+{
+    return sm64_saturn_render_lifecycle_observe(
+        &s_demo_render_transaction.lifecycle, observer, context);
+}
+
 bool sm64_saturn_demo_render_start_frame(
     sm64_saturn_vdp1_backend_t *backend,
     sm64_saturn_gouraud_bank_t *gouraud_bank,
@@ -3996,6 +4007,8 @@ bool sm64_saturn_demo_render_start_frame(
         snapshot == NULL || pose == NULL || generation == 0U ||
         s_demo_render_transaction.lifecycle.active)
         return false;
+    if (!sm64_saturn_lod_lifetime_begin(&s_lod_lifetime, generation))
+        return false;
     s_demo_render_transaction.backend = backend;
     s_demo_render_transaction.gouraud_bank = gouraud_bank;
     s_demo_render_transaction.profile = profile;
@@ -4005,6 +4018,8 @@ bool sm64_saturn_demo_render_start_frame(
             &s_demo_render_transaction.lifecycle,
             &s_demo_render_lifecycle_ops, &s_demo_render_transaction,
             generation)) {
+        (void)sm64_saturn_lod_lifetime_finish(
+            &s_lod_lifetime, generation);
         s_demo_render_transaction.backend = NULL;
         s_demo_render_transaction.gouraud_bank = NULL;
         s_demo_render_transaction.profile = NULL;
@@ -4029,6 +4044,8 @@ sm64_saturn_demo_render_status_t sm64_saturn_demo_render_poll_frame(
             generation);
     if (status == SM64_SATURN_RENDER_LIFECYCLE_PENDING)
         return SM64_SATURN_DEMO_RENDER_PENDING;
+    if (!sm64_saturn_lod_lifetime_finish(&s_lod_lifetime, generation))
+        return SM64_SATURN_DEMO_RENDER_FAILED;
     s_demo_render_transaction.backend = NULL;
     s_demo_render_transaction.gouraud_bank = NULL;
     s_demo_render_transaction.profile = NULL;

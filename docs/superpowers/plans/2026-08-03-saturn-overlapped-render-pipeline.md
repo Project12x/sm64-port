@@ -332,8 +332,9 @@ and the evidence report before starting another task.
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
 - [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--9 are
-  source-implemented and focused-host-green; two-stage review is next, so the
-  task is not yet source-complete and no target/FPS claim exists. The accepted
+  source-implemented. Independent review was NO-GO; Fix Round 1 is focused-
+  host-green and fresh two-stage rereview is next, so the task is not yet
+  source-complete and no target/FPS claim exists. The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
   the master may execute the one queued source tick for `N+1`. Exactly one
@@ -811,6 +812,10 @@ types, ownership rules, or production fallbacks.
 - Modify: `tools/saturn/bake_bob_bsp_fragments.py`
 - Modify: `tools/saturn/extract_mario_actor.py`
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c`
+- Create: `src/port/saturn/gfx/saturn_lod_lifetime.h`
+- Create: `src/port/saturn/gfx/saturn_lod_lifetime.c`
+- Create: `src/port/saturn/runtime/saturn_render_overlap_phase.h`
+- Create: `src/port/saturn/runtime/saturn_render_overlap_phase.c`
 - Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.h`
 - Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`
 - Create: `src/port/saturn/gfx/saturn_gouraud_transfer.h`
@@ -1988,10 +1993,11 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** Steps 1--9 source-implemented and focused-host-green; specification
-and quality review are next. No target build, capture, or FPS evidence exists
-yet, and Task 9A is not source-complete before those reviews. RED is
-`ec81ddc6`; the scoped implementation is `0f5ccd65`.
+**Status:** Independent review of `0350a473..d45c0a41` was FAIL/NO-GO. Fix
+Round 1 addresses its C1/I1/I2/I3/M1 findings and is focused-host-green; fresh
+specification and quality rereview are next. No target build, capture, or FPS
+evidence exists yet, and Task 9A is not source-complete before those reviews.
+The original RED/implementation checkpoints are `ec81ddc6` and `0f5ccd65`.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
 
@@ -2004,6 +2010,7 @@ expected FPS lever.
 - Modify only with matching model RED/GREEN evidence:
   `src/port/saturn/runtime/saturn_frame_pipeline.c`
 - Create: `tools/saturn/demo_render_overlap_test.c`
+- Create: `tools/saturn/render_overlap_integration_test.c`
 - Modify: `tools/saturn/frame_pipeline_test.c`
 - Modify: `tools/saturn/test_a9_frame_pipeline_integration_contract.py`
 - Modify: `tools/saturn/test_a9_sourceboot_cadence_trace_contract.py`
@@ -2097,8 +2104,10 @@ expected FPS lever.
   target record is 76 bytes/19 words. The slave lifetime runs from successful
   notify publication to positive retirement and may overlap source simulation,
   so the host report must label it an overlap window rather than add it to the
-  exclusive attribution total. Master finalization is exclusive construction
-  work. The decoder retains explicit 60-byte/version-1 historical support.
+  exclusive attribution total. Master finalization is an explicit subset of
+  complete exclusive construction. The decoder retains explicit 60-byte/
+  version-1 support for direct or saved buffers; live target observation
+  requires the version-2 symbol and 76-byte payload.
 
 **Pinned reference-code record (no new source copying):**
 - SlaveDriver `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0-or-later,
@@ -2278,6 +2287,20 @@ expected FPS lever.
   Steps 1--9 are checkpointed by `ec81ddc6..0f5ccd65`. Independent review,
   target build/capture, broad verify, native-math, and manual Ymir remain
   unchecked.
+
+  Fix Round 1 watched RED reproduced the review gaps: the new production-
+  linked integration target failed before the LOD-lifetime and overlap-phase
+  controllers existed, and the v2 capture fixture reported only four of five
+  attributable crossings. GREEN now uses renderer-owned exact-generation LOD
+  lifetime state, lifecycle notification/retirement events, complete
+  construction accounting from first service through final lowering, and a
+  terminal quarantine refresh before queue reset. The real job runtime, graph,
+  queue, lifecycle, frame scheduler, LOD path, and overlap controller pass one
+  N/N+1 executable harness; mutations for active-state reset, omitted start
+  work, pre-notify timing, and skipped quarantine refresh are all rejected.
+  Direct/saved v1 buffers remain supported; live observation requires v2.
+  Fresh independent rereview, target/Ymir, broad verify, and native-math gates
+  remain unchecked.
 
 - [ ] **Step 10: Complete two-stage source review before any target build**
 

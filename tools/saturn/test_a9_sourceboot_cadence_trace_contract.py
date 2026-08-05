@@ -6,7 +6,11 @@ import re
 import unittest
 
 
-SOURCE = (Path(__file__).resolve().parents[2] / "src/port/saturn/sourceboot/main.c").read_text(encoding="utf-8")
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = (ROOT / "src/port/saturn/sourceboot/main.c").read_text(encoding="utf-8")
+RENDERER = (ROOT / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
+    encoding="utf-8"
+)
 
 
 class A9CadenceTraceContractTests(unittest.TestCase):
@@ -46,23 +50,51 @@ class A9CadenceTraceContractTests(unittest.TestCase):
         self.assertLess(sim_before, tick)
         self.assertLess(tick, sim_after)
         render_start = SOURCE.index("static void sourceboot_frame_service_render")
+        phase_begin = SOURCE.index(
+            "sm64_saturn_render_overlap_phase_begin(", render_start
+        )
         snapshot = SOURCE.index("sm64_saturn_render_snapshot_acquire_ready(", render_start)
         pose = SOURCE.index("sm64_saturn_mario_actor_pose(", render_start)
-        render_call = SOURCE.index("sm64_saturn_demo_render_start_frame(", render_start)
-        slave_window_start = SOURCE.index(
-            "sourceboot_active_slave_vblank_start =", render_call
+        phase_bind = SOURCE.index(
+            "sm64_saturn_render_overlap_phase_bind(", snapshot
         )
+        render_call = SOURCE.index("sm64_saturn_demo_render_start_frame(", render_start)
         render_started = SOURCE.index("sourceboot_render_started = true", render_call)
+        retained = SOURCE.index(
+            "sm64_saturn_render_overlap_phase_retains(", render_start
+        )
         poll_call = SOURCE.index("sm64_saturn_demo_render_poll_frame(", render_start)
-        render_end = SOURCE.index("sourceboot_phase_accumulate", poll_call)
-        self.assertLess(render_start, snapshot)
+        render_end = SOURCE.index("sourceboot_render_overlap_terminal", poll_call)
+        self.assertLess(render_start, phase_begin)
+        self.assertLess(phase_begin, snapshot)
         self.assertLess(render_start, pose)
+        self.assertLess(pose, phase_bind)
+        self.assertLess(phase_bind, render_call)
         self.assertLess(render_start, render_call)
-        self.assertLess(render_call, slave_window_start)
-        self.assertLess(slave_window_start, render_started)
+        self.assertLess(render_call, render_started)
+        self.assertLess(retained, poll_call)
         self.assertLess(poll_call, render_end)
-        self.assertIn("sourceboot_active_slave_vblank_start", SOURCE)
-        self.assertIn("master_finalize_vblank_start", SOURCE)
+        self.assertNotIn("sourceboot_active_slave_vblank_start", SOURCE)
+        self.assertNotIn("master_finalize_vblank_start", SOURCE)
+        self.assertIn("sm64_saturn_demo_render_observe_lifecycle(", SOURCE)
+        self.assertIn("sourceboot_render_overlap_phase.construction_vblank_crossings", SOURCE)
+
+    def test_renderer_uses_generation_lifetime_and_terminal_refresh(self) -> None:
+        self.assertIn("sm64_saturn_lod_lifetime_observe_scene(", RENDERER)
+        self.assertIn("sm64_saturn_lod_lifetime_begin(", RENDERER)
+        self.assertIn("sm64_saturn_lod_lifetime_select(", RENDERER)
+        self.assertIn("sm64_saturn_lod_lifetime_finish(", RENDERER)
+        refresh = RENDERER.index(
+            "sm64_saturn_render_job_runtime_refresh_terminal_telemetry();"
+        )
+        snapshot = RENDERER.index(
+            "sm64_saturn_render_job_runtime_telemetry_snapshot(", refresh
+        )
+        reset = RENDERER.index(
+            "sm64_saturn_render_job_queue_reset_retired(", snapshot
+        )
+        self.assertLess(refresh, snapshot)
+        self.assertLess(snapshot, reset)
 
 
 if __name__ == "__main__":

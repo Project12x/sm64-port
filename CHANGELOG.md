@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Hardened the A9A frame-lifetime split after independent review. A renderer-
+  owned generation gate now defers source scene/LOD resets until the active
+  slave generation retires, lifecycle observers timestamp the actual notify
+  and retirement publications, and sourceboot attributes complete master
+  construction from first service through final lowering while retaining
+  master finalization as a reported subset. Terminal queue telemetry is
+  refreshed before reset so failed generations publish their real quarantine
+  count. A production-linked host harness covers the N/N+1 transition and
+  catches all four regressions. Historical cadence v1 compatibility is
+  explicitly limited to direct or saved 60-byte buffers; live target capture
+  continues to require the current v2 76-byte symbol.
+
 - Split sourceboot's accepted demo renderer into exact-generation start and
   poll/finalize phases so slave construction for frame `N` can remain active
   while the master executes the single queued source tick for `N+1`. The
@@ -14,9 +26,10 @@
   moving presentation or VRAM ownership.
 - Extended the cache-through cadence record from version 1/60 bytes to version
   2/76 bytes with separate slave-work overlap and master-finalization counters.
-  Historical v1 captures remain decodable; v2 reports the slave interval as a
-  non-additive overlap window so phase attribution cannot double-count source
-  work that ran concurrently.
+  Historical v1 direct/saved buffers remain decodable; live target observation
+  requires v2. Version 2 reports the slave interval as a non-additive overlap
+  window so phase attribution cannot double-count source work that ran
+  concurrently.
 
 - VDP2 composition now consumes the immutable camera carried by the displayed
   VDP1 bank together with explicit displayed/rendered/simulation generation

@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — review A9A true frame-lifetime overlap
+## Now — rereview A9A true frame-lifetime overlap
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -12,13 +12,17 @@ permit the master-owned queued source tick for `N+1`, and finalize/merge/lower
 the pending snapshot/descriptor payloads/BUILDING bank, A8 transport ownership,
 all A9 cadence/publication laws, and previous-complete-frame reuse are retained.
 Failure quarantines `N` without replay. Focused lifecycle/source/transfer tests
-and the version-2 cadence decoder are green; specification and quality review
-are the next gates.
+and the version-2 cadence decoder are green. Independent review then found an
+active-generation LOD race plus phase, quarantine, and production-harness gaps.
+Fix Round 1 repairs all four with shared production controllers and mutation-
+sensitive executable integration; fresh specification and quality rereview are
+the next gates.
 
 Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
 two-stage review, then exactly one serialized DLL-safe target build and exact-
-identity capture splitting source tick, overlapping slave work, and master
-finalization. No target build may run in parallel.
+identity capture splitting source tick, overlapping slave work, and complete
+construction with master finalization as a subset. No target build may run in
+parallel, and none was run for Fix Round 1.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 

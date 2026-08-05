@@ -391,12 +391,12 @@ def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, 
     slave_work_crossings = (
         delta("slave_work_vblank_crossings") if has_overlap_phases else 0
     )
-    if has_overlap_phases and slave_work_crossings < master_finalize_crossings:
+    if has_overlap_phases and master_finalize_crossings > construction_crossings:
         raise ValueError(
-            "slave overlap window is shorter than the finalization boundary"
+            "master finalization exceeds complete construction"
         )
     attributed = (
-        simulation_crossings + master_finalize_crossings +
+        simulation_crossings + construction_crossings +
         transport_presentation_crossings
     )
     if attributed > vblank_delta:

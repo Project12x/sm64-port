@@ -232,9 +232,11 @@ uint16_t sm64_saturn_render_job_runtime_drain_master(void)
     return completed;
 }
 
-void sm64_saturn_render_job_runtime_record_master_wait(uint32_t iterations)
+void sm64_saturn_render_job_runtime_refresh_terminal_telemetry(void)
 {
-    s_runtime.telemetry.master_wait_iterations = iterations;
+#if defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_SKIP_TERMINAL_REFRESH)
+    return;
+#endif
     s_runtime.telemetry.quarantined = 0U;
     if (s_runtime.queue != NULL) {
         const uint32_t generation =
@@ -249,6 +251,12 @@ void sm64_saturn_render_job_runtime_record_master_wait(uint32_t iterations)
                 s_runtime.telemetry.quarantined++;
     }
     runtime_fence();
+}
+
+void sm64_saturn_render_job_runtime_record_master_wait(uint32_t iterations)
+{
+    s_runtime.telemetry.master_wait_iterations = iterations;
+    sm64_saturn_render_job_runtime_refresh_terminal_telemetry();
 }
 
 bool sm64_saturn_render_job_runtime_telemetry_snapshot(

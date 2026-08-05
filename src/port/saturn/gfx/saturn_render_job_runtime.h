@@ -51,6 +51,7 @@ uint16_t sm64_saturn_render_job_runtime_drain_master(void);
  * retirement spin locally, then records once so telemetry adds no call or
  * shared-write overhead inside the hot wait loop. */
 void sm64_saturn_render_job_runtime_record_master_wait(uint32_t iterations);
+void sm64_saturn_render_job_runtime_refresh_terminal_telemetry(void);
 bool sm64_saturn_render_job_runtime_telemetry_snapshot(
     sm64_saturn_render_job_runtime_telemetry_t *telemetry);
 
