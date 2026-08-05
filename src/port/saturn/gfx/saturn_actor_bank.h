@@ -38,6 +38,9 @@ typedef struct sm64_saturn_actor_bank_view {
 
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view);
+bool sm64_saturn_actor_bank_validate_expected(
+    const void *data, size_t byte_count, const uint32_t expected_source_hash[8],
+    sm64_saturn_actor_bank_view_t *view);
 bool sm64_saturn_actor_bank_animation(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
     sm64_saturn_actor_animation_record_t *record);

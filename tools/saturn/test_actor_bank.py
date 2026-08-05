@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from compile_actor_bank import (  # noqa: E402
+    _source_digest,
     compile_mario_actor_bank,
     decode_animation_channels,
     validate_actor_bank_document,
@@ -110,6 +111,56 @@ class ActorBankTest(unittest.TestCase):
         reordered["sources"] = list(reversed(reordered["sources"]))
         with self.assertRaisesRegex(ValueError, "canonical source order"):
             validate_actor_bank_document(reordered, payload)
+
+    def test_provenance_binds_exact_sources_membership_and_header_digest(self) -> None:
+        document, payload = self.compiled
+
+        duplicate_path = copy.deepcopy(document)
+        duplicate_path["sources"][1]["path"] = duplicate_path["sources"][0]["path"]
+        duplicate_path["sources"].sort(key=lambda item: item["path"])
+        with self.assertRaisesRegex(ValueError, "unique source path"):
+            validate_actor_bank_document(duplicate_path, payload)
+
+        bad_hash = copy.deepcopy(document)
+        bad_hash["sources"][0]["sha256"] = "z" * 64
+        with self.assertRaisesRegex(ValueError, "hex source hash"):
+            validate_actor_bank_document(bad_hash, payload)
+
+        bad_membership = copy.deepcopy(document)
+        bad_membership["animations"][0]["source_path"] = "assets/anims/not-present.inc.c"
+        with self.assertRaisesRegex(ValueError, "animation source membership"):
+            validate_actor_bank_document(bad_membership, payload)
+
+        bad_count = copy.deepcopy(document)
+        bad_count["source_file_count"] = 192
+        with self.assertRaisesRegex(ValueError, "193 animation source files"):
+            validate_actor_bank_document(bad_count, payload)
+
+        bad_document_digest = copy.deepcopy(document)
+        bad_document_digest["source_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "source-set digest"):
+            validate_actor_bank_document(bad_document_digest, payload)
+
+        bad_header = bytearray(payload)
+        bad_header[26] ^= 1
+        bad_header_document = copy.deepcopy(document)
+        bad_header_document["payload_sha256"] = hashlib.sha256(bad_header).hexdigest()
+        with self.assertRaisesRegex(ValueError, "header source digest"):
+            validate_actor_bank_document(bad_header_document, bytes(bad_header))
+
+        renamed = copy.deepcopy(document)
+        old_path = renamed["animations"][0]["source_path"]
+        new_path = "assets/anims/anim_FF.inc.c"
+        renamed["animations"][0]["source_path"] = new_path
+        next(source for source in renamed["sources"] if source["path"] == old_path)["path"] = new_path
+        renamed["sources"].sort(key=lambda item: item["path"])
+        renamed_digest = _source_digest(renamed["sources"])
+        renamed["source_sha256"] = renamed_digest.hex()
+        renamed_payload = bytearray(payload)
+        renamed_payload[26:58] = renamed_digest
+        renamed["payload_sha256"] = hashlib.sha256(renamed_payload).hexdigest()
+        with self.assertRaisesRegex(ValueError, "animation source filename"):
+            validate_actor_bank_document(renamed, bytes(renamed_payload))
 
 
 if __name__ == "__main__":

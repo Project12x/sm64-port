@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import struct
 from pathlib import Path
 from typing import Iterable
@@ -388,10 +389,14 @@ def validate_actor_bank_document(document: dict[str, object], payload: bytes) ->
     paths = [str(item.get("path", "")) for item in sources]
     if paths != sorted(paths):
         raise ValueError("canonical source order is required")
+    if len(paths) != len(set(paths)):
+        raise ValueError("unique source path is required")
     for source in sources:
         digest = source.get("sha256")
         if not isinstance(digest, str) or len(digest) != 64:
             raise ValueError("missing source hash")
+        if re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise ValueError("lowercase hex source hash is required")
     animations = document.get("animations")
     if not isinstance(animations, list):
         raise ValueError("missing animation records")
@@ -400,6 +405,40 @@ def validate_actor_bank_document(document: dict[str, object], payload: bytes) ->
         raise ValueError("duplicate animation ID")
     if ids != list(range(209)):
         raise ValueError("complete animation ID set is required")
+    if document.get("source_file_count") != 193:
+        raise ValueError("actor bank requires exactly 193 animation source files")
+    animation_paths = {str(item.get("source_path", "")) for item in animations}
+    fixed_paths = {"include/mario_animation_ids.h", "actors/mario/geo.inc.c",
+                   "actors/mario/model.inc.c"}
+    if (len(animation_paths) != 193 or len(sources) != 196 or
+            set(paths) != fixed_paths | animation_paths):
+        raise ValueError("animation source membership does not match exact source set")
+    source_hashes = {str(item["path"]): str(item["sha256"]) for item in sources}
+    for item in animations:
+        if source_hashes.get(str(item.get("source_path", ""))) != item.get("source_sha256"):
+            raise ValueError("animation source membership/hash mismatch")
+        animation_id = int(item["animation_id"])
+        if item.get("symbol") != f"anim_{animation_id:02X}":
+            raise ValueError("animation source symbol does not match stable ID")
+    for source_path in animation_paths:
+        match = re.fullmatch(
+            r"assets/anims/anim_([0-9A-F]{2})(?:_([0-9A-F]{2}))?\.inc\.c",
+            source_path)
+        if match is None:
+            raise ValueError("animation source filename does not match stable IDs")
+        expected_ids = {int(value, 16) for value in match.groups() if value is not None}
+        actual_ids = {int(item["animation_id"]) for item in animations
+                      if item["source_path"] == source_path}
+        if actual_ids != expected_ids:
+            raise ValueError("animation source filename membership mismatch")
+    source_digest = _source_digest(sources)
+    document_digest = document.get("source_sha256")
+    if (not isinstance(document_digest, str) or
+            re.fullmatch(r"[0-9a-f]{64}", document_digest) is None or
+            bytes.fromhex(document_digest) != source_digest):
+        raise ValueError("source-set digest mismatch")
+    if payload[26:58] != source_digest:
+        raise ValueError("header source digest mismatch")
     for item in animations:
         for offset_name, size_name in (("values_offset", "values_size"),
                                        ("indices_offset", "indices_size")):

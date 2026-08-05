@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "sm64-saturn-actor-bank-v1.schema.json",
+  "$comment": "Advisory report-shape schema only. compile_actor_bank.validate_actor_bank_document is the authoritative semantic, provenance, and payload validator.",
   "title": "SM64 Saturn actor bank report v1",
   "type": "object",
   "required": [

@@ -5,6 +5,85 @@
 
 #include "saturn_actor_bank.h"
 
+static uint16_t read_be16(const uint8_t *data)
+{
+    return (uint16_t)(((uint16_t)data[0] << 8) | data[1]);
+}
+
+static uint32_t read_be32(const uint8_t *data)
+{
+    return ((uint32_t)data[0] << 24) | ((uint32_t)data[1] << 16) |
+           ((uint32_t)data[2] << 8) | data[3];
+}
+
+static void write_be16(uint8_t *data, uint16_t value)
+{
+    data[0] = (uint8_t)(value >> 8);
+    data[1] = (uint8_t)value;
+}
+
+static void write_be32(uint8_t *data, uint32_t value)
+{
+    data[0] = (uint8_t)(value >> 24);
+    data[1] = (uint8_t)(value >> 16);
+    data[2] = (uint8_t)(value >> 8);
+    data[3] = (uint8_t)value;
+}
+
+static int reject_u16_mutation(const uint8_t *source, size_t size,
+                               uint32_t offset, uint16_t value,
+                               const char *label)
+{
+    uint8_t *copy = malloc(size);
+    sm64_saturn_actor_bank_view_t view;
+    if (copy == NULL) return 1;
+    memcpy(copy, source, size);
+    write_be16(copy + offset, value);
+    if (sm64_saturn_actor_bank_validate(copy, size, &view)) {
+        fprintf(stderr, "%s was accepted\n", label);
+        free(copy);
+        return 1;
+    }
+    free(copy);
+    return 0;
+}
+
+static int reject_u32_mutation(const uint8_t *source, size_t size,
+                               uint32_t offset, uint32_t value,
+                               const char *label)
+{
+    uint8_t *copy = malloc(size);
+    sm64_saturn_actor_bank_view_t view;
+    if (copy == NULL) return 1;
+    memcpy(copy, source, size);
+    write_be32(copy + offset, value);
+    if (sm64_saturn_actor_bank_validate(copy, size, &view)) {
+        fprintf(stderr, "%s was accepted\n", label);
+        free(copy);
+        return 1;
+    }
+    free(copy);
+    return 0;
+}
+
+static int reject_u8_mutation(const uint8_t *source, size_t size,
+                              uint32_t offset, uint8_t value,
+                              const char *label)
+{
+    uint8_t *copy = malloc(size);
+    sm64_saturn_actor_bank_view_t view;
+    if (copy == NULL) return 1;
+    memcpy(copy, source, size);
+    copy[offset] = value;
+    if (sm64_saturn_actor_bank_validate(copy, size, &view)) {
+        fprintf(stderr, "%s was accepted\n", label);
+        free(copy);
+        return 1;
+    }
+    free(copy);
+    return 0;
+}
+
 static uint8_t *read_file(const char *path, size_t *size)
 {
     FILE *file = fopen(path, "rb");
@@ -33,6 +112,9 @@ int main(int argc, char **argv)
     sm64_saturn_actor_bank_view_t view;
     sm64_saturn_actor_animation_record_t first, shared_a, shared_b;
     int16_t sample;
+    uint32_t geometry, part_offset, material_offset, meshlet_offset;
+    uint32_t primitive_offset, primitive_ref_offset, vertex_ref_offset;
+    uint32_t expected_source_hash[8];
     if (argc != 2 || (bytes = read_file(argv[1], &size)) == NULL) {
         fprintf(stderr, "usage: actor-pose-bank-test actor-bank.s64b\n");
         return 1;
@@ -42,6 +124,97 @@ int main(int argc, char **argv)
         view.bank.vertex_count != 424U || view.bank.primitive_count != 644U ||
         view.bank.meshlet_count != 31U || view.max_scratch < 3928U) {
         fprintf(stderr, "complete actor bank did not validate\n");
+        free(bytes);
+        return 1;
+    }
+    memcpy(expected_source_hash, view.bank.source_hash_words,
+           sizeof(expected_source_hash));
+    if (!sm64_saturn_actor_bank_validate_expected(
+            bytes, size, expected_source_hash, &view)) {
+        fprintf(stderr, "expected source identity rejected valid actor bank\n");
+        free(bytes);
+        return 1;
+    }
+    {
+        uint8_t *copy = malloc(size);
+        if (copy == NULL) {
+            free(bytes);
+            return 1;
+        }
+        memcpy(copy, bytes, size);
+        copy[26U] ^= 1U;
+        if (sm64_saturn_actor_bank_validate_expected(
+                copy, size, expected_source_hash, &view)) {
+            fprintf(stderr, "mismatched source identity was accepted\n");
+            free(copy);
+            free(bytes);
+            return 1;
+        }
+        free(copy);
+    }
+    geometry = view.meshlets_offset;
+    part_offset = geometry + read_be32(bytes + geometry + 22U);
+    material_offset = geometry + read_be32(bytes + geometry + 26U);
+    meshlet_offset = geometry + read_be32(bytes + geometry + 30U);
+    primitive_offset = geometry + read_be32(bytes + geometry + 34U);
+    primitive_ref_offset = geometry + read_be32(bytes + geometry + 38U);
+    vertex_ref_offset = geometry + read_be32(bytes + geometry + 42U);
+    if (reject_u32_mutation(bytes, size, geometry + 26U,
+                            read_be32(bytes + geometry + 26U) + 1U,
+                            "noncanonical material span") ||
+        reject_u32_mutation(bytes, size, geometry + 30U,
+                            read_be32(bytes + geometry + 30U) + 1U,
+                            "noncanonical meshlet span") ||
+        reject_u32_mutation(bytes, size, geometry + 34U,
+                            read_be32(bytes + geometry + 34U) + 1U,
+                            "noncanonical primitive span") ||
+        reject_u32_mutation(bytes, size, geometry + 38U,
+                            read_be32(bytes + geometry + 38U) + 1U,
+                            "noncanonical primitive-reference span") ||
+        reject_u32_mutation(bytes, size, geometry + 42U,
+                            read_be32(bytes + geometry + 42U) + 1U,
+                            "noncanonical vertex-reference span") ||
+        reject_u16_mutation(bytes, size, geometry + 10U,
+                            (uint16_t)(view.bank.meshlet_count + 1U),
+                            "meshlet count mismatch") ||
+        reject_u16_mutation(bytes, size, geometry + 12U,
+                            (uint16_t)(view.bank.primitive_count + 1U),
+                            "primitive count mismatch") ||
+        reject_u16_mutation(bytes, size, geometry + 14U,
+                            (uint16_t)(read_be16(bytes + geometry + 14U) + 1U),
+                            "primitive-reference count mismatch") ||
+        reject_u16_mutation(bytes, size, geometry + 16U,
+                            (uint16_t)(read_be16(bytes + geometry + 16U) + 1U),
+                            "vertex-reference count mismatch") ||
+        reject_u16_mutation(bytes, size, part_offset, view.bank.joint_count,
+                            "part joint ownership overflow") ||
+        reject_u16_mutation(bytes, size, part_offset + 2U, 0xFFFFU,
+                            "part branch ownership overflow") ||
+        reject_u8_mutation(bytes, size, material_offset, 32U,
+                           "material RGB555 lane overflow") ||
+        reject_u16_mutation(bytes, size, meshlet_offset,
+                            read_be16(bytes + geometry + 8U),
+                            "meshlet material overflow") ||
+        reject_u8_mutation(bytes, size, meshlet_offset + 5U, 1U,
+                           "meshlet reserved metadata") ||
+        reject_u16_mutation(bytes, size, meshlet_offset + 6U, 0x7FFFU,
+                            "inverted meshlet bounds") ||
+        reject_u32_mutation(bytes, size, meshlet_offset + 18U, 1U,
+                            "nonmonotonic meshlet tier primitive span") ||
+        reject_u16_mutation(bytes, size, primitive_offset,
+                            read_be16(bytes + geometry + 8U),
+                            "primitive material overflow") ||
+        reject_u16_mutation(bytes, size, primitive_offset + 2U,
+                            view.bank.vertex_count,
+                            "primitive vertex overflow") ||
+        reject_u16_mutation(bytes, size, primitive_ref_offset,
+                            view.bank.primitive_count,
+                            "meshlet primitive reference overflow") ||
+        reject_u16_mutation(bytes, size, vertex_ref_offset,
+                            view.bank.vertex_count,
+                            "meshlet vertex reference overflow") ||
+        reject_u32_mutation(bytes, size, 98U, view.max_scratch - 1U,
+                            "undersized actor scratch claim")) {
         free(bytes);
         return 1;
     }
