@@ -40,7 +40,10 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             iso.write_bytes(b"disc")
 
             plan = builder(executable, profile, cue)
-            self.assertEqual(plan["command"], [str(executable), "-p", str(profile), "-d", str(cue)])
+            self.assertEqual(
+                plan["command"],
+                [str(executable), "--profile", str(profile), "--disc", str(cue)],
+            )
             self.assertEqual(plan["working_directory"], str(executable.parent))
             self.assertEqual(plan["profile"], str(profile))
             self.assertEqual(plan["cue"]["path"], str(cue))
@@ -48,6 +51,10 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             self.assertEqual(plan["iso"]["path"], str(iso))
             self.assertEqual(plan["iso"]["sha256"], hashlib.sha256(b"disc").hexdigest())
             self.assertEqual(plan["ram_cart"], "profile-managed-32-mbit-dram")
+
+    def test_default_executable_is_the_proven_build_agent_desktop(self) -> None:
+        self.assertIn("ymir-agent\\build-agent\\apps", str(desktop.DEFAULT_YMIR))
+        self.assertNotIn("build-agent2", str(desktop.DEFAULT_YMIR))
 
     def test_build_plan_rejects_a_missing_cue_local_iso(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

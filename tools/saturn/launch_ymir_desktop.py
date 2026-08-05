@@ -22,7 +22,7 @@ WORKTREE_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = WORKTREE_ROOT.parent.parent
 DEFAULT_PROFILE = PROJECT_ROOT / ".ymir-profile"
 DEFAULT_YMIR = (
-    PROJECT_ROOT.parent / "ymir-agent" / "build-agent2" / "apps" / "ymir-sdl3"
+    PROJECT_ROOT.parent / "ymir-agent" / "build-agent" / "apps" / "ymir-sdl3"
     / "Release" / "ymir-sdl3.exe"
 )
 
@@ -62,7 +62,7 @@ def build_launch_plan(executable: Path, profile: Path, cue: Path) -> dict[str, A
         raise ValueError(f"CUE referenced ISO does not exist: {iso}")
     return {
         "launcher": "desktop-ymir-profile",
-        "command": [str(executable), "-p", str(profile), "-d", str(cue)],
+        "command": [str(executable), "--profile", str(profile), "--disc", str(cue)],
         "working_directory": str(executable.parent),
         "profile": str(profile),
         "ram_cart": "profile-managed-32-mbit-dram",

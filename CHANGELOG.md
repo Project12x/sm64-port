@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added bounded automatic desktop-Ymir performance capture. The helper reads
+  Ymir's native one-second window-title counters for VDP1 framebuffer swaps,
+  VDP1 completed draw calls, VDP2 frames, GUI rate, and emulation speed,
+  records every sample with exact CUE/ISO identity, and leaves the visible
+  emulator open for manual testing. This removes OCR and manual title-bar
+  transcription from FPS comparisons.
+
 - Recorded the first desktop-Ymir result for the atomic shared-SH-2 renderer:
   it remains roughly 3–4 FPS, matching the prior A3+A4 candidate. The cutover
   is retained as a correctness/ownership foundation, but no performance gain
@@ -22,6 +29,11 @@
   cache-behavior, or FPS evidence is claimed.
 
 ### Fixed
+
+- Restored the desktop launcher to the proven `ymir-agent/build-agent`
+  executable and explicit `--profile`/`--disc` arguments. The prior default
+  had drifted to `build-agent2`, which could launch without the intended disc
+  or 32-Mbit RAM profile and made test sessions unreliable.
 
 - Fixed A5.9 retirement telemetry publication so the slave writes its retired
   generation/sequence before releasing the positive retirement marker. The

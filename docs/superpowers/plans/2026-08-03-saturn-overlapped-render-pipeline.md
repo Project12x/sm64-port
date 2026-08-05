@@ -1230,14 +1230,27 @@ yet.
   positive retirement marker in both SH-2 and host paths. Fresh rereview is
   GO at audit `e98210ba`; strict runtime/VDP2 C11 and focused Python gates
   independently pass.
-- [ ] **Step 6: Serialized target build and desktop-Ymir observation.** Only
-  after review, build once and read the visible `QM/QS/QN/QR/QW/QF/QQ` values.
-  Those values choose the next scheduler repair; no optimization is guessed
-  from the host schedule alone.
-  Target half complete: the guarded `-B -j1` build exits 0, retains the runtime
+- [ ] **Step 6: Serialized target build and automatic desktop-Ymir
+  observation.** The guarded `-B -j1` build exits 0, retains the runtime
   telemetry snapshot and VDP2 HUD consumers, has zero unresolved symbols, and
-  leaves 15,412 bytes HWRAM plus 30,800 bytes LWRAM. Desktop Ymir and the
-  visible counter transcription remain unchecked.
+  leaves 15,412 bytes HWRAM plus 30,800 bytes LWRAM. The owner then confirmed
+  the candidate still runs at roughly 3--4 VDP1 FPS, but the queue HUD was not
+  transcribed. The active correction is a host-tested desktop capture command
+  that launches the exact profile/CUE, samples Ymir's native VDP1/VDP2/draw
+  counters without OCR, and records bounded machine-readable evidence. Where
+  feasible it must also collect `QM/QS/QN/QR/QW/QF/QQ`; otherwise that target
+  telemetry remains explicitly open rather than inferred. These observations
+  choose the next scheduler repair; no optimization is guessed from the host
+  schedule alone.
+  Automatic FPS half complete: 14 focused host tests and module compilation
+  pass. The exact desktop command captured ten running-counter snapshots after warmup:
+  VDP2 median 60 FPS and VDP1 median 4 FPS (range 3--4), with the emulator left
+  alive. Queue values and independent review remain unchecked. First review
+  was NO-GO on evidence semantics and failure durability. The repair timestamps
+  snapshots without claiming distinct rollovers, preserves fractional medians,
+  writes structured failure JSON, checks process liveness, and pins the Win32
+  ABI. Rereview is GO; failed reports also retain stage, PID when launched, and
+  adjacent log paths. Queue values remain open.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

@@ -15,8 +15,14 @@ but its roughly 3–4 FPS result did not improve on A3+A4. Per-phase claim,
 notify/retire, wait, failure, and quarantine telemetry is now source-complete
 and host-green. Repair rereview is GO at `e98210ba`; one serialized target
 build is target-green with the appended profile ABI linked and both memory
-margins intact. A manual HUD observation is next; those live values determine
-the scheduler repair.
+margins intact. The owner confirmed it remains roughly 3--4 VDP1 FPS, but
+manual HUD transcription is unreliable. The active tooling correction
+automates desktop Ymir's native VDP1/VDP2/draw counters and, if the available
+debug boundary supports it, the queue telemetry too. Those live values
+determine the scheduler repair. The FPS half is now live-proven: ten automatic
+running-counter snapshots report VDP2 median 60 FPS and VDP1 median 4 FPS
+(range 3--4). The first review's evidence-durability repairs are host-green
+and rereview is GO; queue counter capture remains open.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

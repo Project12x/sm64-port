@@ -83,8 +83,27 @@ before the positive retirement marker, pinned by a source mutation test. Fresh
 rereview is GO at `e98210ba`. The serialized Route-0/live-input/Pipe4 target
 build now compiles, links, and packages with the appended telemetry ABI live,
 15,412 bytes HWRAM and 30,800 bytes LWRAM margin, and zero unresolved symbols.
-Only manual desktop-Ymir HUD observation remains open. A5.8 must not be
-called a performance win from source/link evidence alone.
+The owner confirmed this candidate still runs at roughly 3--4 VDP1 FPS, so it
+is not a performance win. Manual HUD transcription did not produce the queue
+values. The active correction is an automatic, host-tested desktop-Ymir
+capture path for native VDP1/VDP2/draw measurements and, where the emulator's
+debug boundary permits, `QM/QS/QN/QR/QW/QF/QQ`. Those queue values remain open
+until captured; they must not be inferred from the host delayed-slave fixture.
+The automatic desktop path now has a live exact-CUE proof: ten native Ymir
+running-counter snapshots after warmup give VDP2 median 60 FPS and VDP1 median
+4 FPS, range 3--4.
+The emulator remained alive. This closes manual title transcription, not the
+queue-counter gate or A5.9 independent review.
+The first review was NO-GO because unchanged title strings could not prove ten
+distinct rollover intervals, even-sample medians truncated, failures lacked a
+JSON report, and Win32 types were implicit. The repair uses honest snapshot
+wording/timestamps, fractional medians, structured failure evidence, exact
+process-liveness checks, and explicit Win32 prototypes. Fourteen focused tests
+pass; rereview is GO. Failed reports also retain stage, PID when available,
+and adjacent log paths.
+The final repaired collector then attached to the same running desktop process
+for five more snapshots: VDP2 median 60 FPS and VDP1 median 3 FPS, range 3--4.
+The combined automatic evidence therefore confirms sustained 3--4 VDP1 FPS.
 
 The isolated audio lane now has a standalone soundtest CUE candidate. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated
