@@ -133,9 +133,14 @@ int main(void)
     assert(observed.commits == 3U && observed.sky_updates == 3U);
     assert(observed.hud_updates == 3U && observed.layer_updates == 3U);
 
+    /* Keep the displayed/rendered/camera tuple coherent at zero: this can
+     * exercise only the reserved displayed-generation guard. */
+    sm64_saturn_vdp2_camera_snapshot_t zero_displayed_snapshot = snapshot;
+    zero_displayed_snapshot.generation = 0U;
     sm64_saturn_vdp2_generation_state_t zero_displayed = generations;
     zero_displayed.displayed_generation = 0U;
-    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile,
+    zero_displayed.rendered_generation = 0U;
+    sm64_saturn_vdp2_frame_begin(&frame, &zero_displayed_snapshot, &profile,
                                  &zero_displayed, 32U);
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 3U && observed.sky_updates == 3U);

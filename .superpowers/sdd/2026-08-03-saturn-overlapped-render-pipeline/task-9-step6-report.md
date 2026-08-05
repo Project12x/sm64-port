@@ -28,8 +28,9 @@ define the relevant generation ownership.
   defect: a changed sky composition at tick 15 did not refresh the HUD before
   its tick-30 metric interval.
 - GREEN: direct host GCC compilation/execution of
-  `tools/saturn/vdp2_frame_contract_test.c`, including Fix Round 1 checks that
-  zero displayed or simulation generations make no backend callbacks.
+  `tools/saturn/vdp2_frame_contract_test.c`, including Fix Round 2 checks that
+  a coherent zero displayed/rendered/camera tuple and an otherwise coherent
+  zero simulation generation make no backend callbacks.
 - GREEN: `tools/saturn/test_sourceboot_presentation_boundary.py`, 7/7 tests,
   including mutations that detach the VDP2 simulation/render/camera ownership.
 - GREEN: direct host GCC compilation/execution of
@@ -43,8 +44,12 @@ Task 9 brief, source evidence, governing active plan, and `STATE.md`. The
 execution ledger records this transition through a surgical cached hunk; mixed
 native-math work remains unstaged.
 
-Independent review of `2377bf8b` was specification **NO-GO** solely for the
-missing plan/ledger transition and code **APPROVED WITH MINOR FOLLOW-UP**.
-Fix Round 1 corrects those records and closes the direct zero-generation test
-gap; focused rereview remains pending. No target build, target capture, Ymir
-launch, manual observation, or native-math gate was run or claimed.
+Fix Round 1 rereview of `1ecc6e7c` remained specification **NO-GO** because
+the surgical ledger hunk split an unrelated Task 5.7 sentence and because the
+displayed-zero fixture also tripped mismatch guards. Fix Round 2 moves the two
+Step 6 paragraphs to a complete ledger boundary and makes
+`snapshot == displayed == rendered == 0` with simulation nonzero, isolating
+the displayed reserved-zero guard; simulation zero remains otherwise coherent.
+The direct VDP2 fixture passes after the change. Focused rereview remains
+pending. No target build, target capture, Ymir launch, manual observation, or
+native-math gate was run or claimed.

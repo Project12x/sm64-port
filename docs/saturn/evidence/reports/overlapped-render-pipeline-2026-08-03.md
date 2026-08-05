@@ -1937,3 +1937,15 @@ FOLLOW-UP**, but rendered the specification **NO-GO** solely because the active
 plan and SDD ledger had not recorded the transition; this reconciliation closes
 that process defect. Focused rereview is pending. No target build/capture,
 manual Ymir observation, or broad native-math result is claimed here.
+
+### Task 9 Step 6 Fix Round 2 (2026-08-05)
+
+The first reconciliation commit placed its surgical ledger hunk inside an
+unrelated Task 5.7 sentence, and its displayed-zero fixture also exercised
+mismatch rejection. Fix Round 2 restores the surrounding Task 5.7 prose and
+records Step 6 at a complete ledger boundary. The direct VDP2 fixture now uses
+`snapshot == displayed == rendered == 0` with nonzero simulation, so removing
+the explicit displayed-zero guard makes that case fail; its independent
+simulation-zero case remains otherwise coherent. The direct C11/Werror fixture
+passes. Focused rereview is pending; no target, Ymir, manual, or native-math
+gate is claimed.
