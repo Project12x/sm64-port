@@ -2,6 +2,36 @@
 
 See `docs/saturn/` for the Saturn architecture and contracts.
 
+The active full-game completeness architecture packages source content rather
+than creating level-specific runtime paths. A deterministic closure compiler
+follows LevelScript objects, macro/special presets, behavior-spawned children,
+models/GeoLayouts, animation/material/effect features, sequences, and sound
+banks. One versioned S64P root atomically binds inline world/collision/sky/BSP
+data to content-addressed actor, animation, and audio payload descriptors.
+Root and payload hashes, lifetimes, generations, and explicit WRAM/cart/
+sound-RAM budgets validate together; the root and complete feature-active
+payload set commit atomically or fail closed. BOB is the first complete
+manifest; Whomp's Fortress is the second-level load/transition fixture.
+
+Mario and ordinary actors share compact joint-local family banks and one pose
+evaluator. Source animation IDs/frames and resolved geo switch/visibility
+state—including typed render-range/distance, billboard, shadow, held/parent,
+effect lifetime/parameters, and exact actor-bank identity—is captured after
+the authoritative source tick. A dedicated bounded
+actor-instance queue gives each admitted live instance descriptor-owned work
+and disjoint claimant output without widening the proven eight-entry world
+phase graph or its eight-bit dependency mask. Either SH-2 may claim actor or
+world work; the master retains package residency, final painter order, VDP1
+lowering, DMA publication, and presentation.
+
+Audio preserves the public source API and source-owned queue/priority/fade/
+interruption policy. Pointer-free big-endian semantic control and SFX rings
+feed a timer-driven MC68000 sequence VM and SCSP voice allocator. The complete
+content catalog lives in a CD package; only closure-selected scene bundles are
+resident below sound RAM's fixed mailbox/driver regions. Audio faults mute and
+report without blocking simulation/rendering, and audio never borrows render
+queues, SH-2 worker ownership, VDP DMA queues, or frame fences.
+
 Mario/actor ordering is a generated-bank boundary: tight material/opacity
 meshlets retain source ordinals and compact tier references. Admission projects
 live yawed pose vertices (including walking banks), then passes the generated

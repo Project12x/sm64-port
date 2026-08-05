@@ -1,6 +1,24 @@
 # State
 
-See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
+Active plan:
+`docs/superpowers/plans/2026-08-05-saturn-full-game-completeness-parallel-optimization.md`.
+
+The full-game completeness sprint supersedes active Task 10 tracking while
+preserving every completed A9A/Task 10 commit and evidence item. It interleaves
+complete source-selected Mario animation, generated BOB actor/effect closure,
+full semantic music/SFX, and continued renderer/runtime optimization through
+one reviewed integration spine. Whomp's Fortress area 1 is the second-level
+package-generation/load proof. Intermediate feature regressions are measured
+but do not block merges; the final all-features BOB build must measure at least
+4.0 mean presentation FPS in the pinned setup (the accepted observed band is
+4--6 FPS) before the next 12--15 FPS sprint.
+
+Implementation begins with the existing dirty native-math verifier/oracle
+repair, then immutable feature/package identity and the transitive scene
+closure. The accepted rollback remains BOB with live input, Q16 camera,
+32-Mbit DRAM cart, and renderer Pipeline 4. The detailed plan has 29 small,
+reviewed tasks, immediate plan/ledger updates at every transition, and
+serialized `-j1` build/Ymir gates for the busy host.
 
 Task 9A/A9A is **rebuilt, exact-map green, independently reviewed, and captured
 at runtime**. Specification is PASS; code-quality review found no

@@ -1,6 +1,24 @@
 # Roadmap
 
-## Now — Task 10 source hardening and full-game publication
+## Now — full-game completeness and parallel optimization
+
+Execute
+`docs/superpowers/plans/2026-08-05-saturn-full-game-completeness-parallel-optimization.md`
+with fresh implementer/reviewer subagents and immediate task/ledger updates.
+Four interleaved lanes deliver all 209 source-selected Mario animations, the
+generated complete BOB dynamic-family/effect closure, full original music/SFX
+semantics on the MC68000/SCSP, and continued scene-neutral render/runtime
+reductions. The generated scene/audio package workflow must also validate and
+load Whomp's Fortress area 1 without adding a level-specific frame loop,
+renderer, pose evaluator, or audio backend.
+
+The accepted A9A 4--6 FPS build remains the immutable historical rollback.
+Intermediate completeness work may regress when independently feature-switched
+and measured. After the full-feature build measures at least 4.0 mean
+presentation FPS in the pinned setup (4--6 FPS is the accepted band), the
+next sprint pursues 12--15 FPS against the representative workload.
+
+## Inherited — Task 10 source hardening and full-game publication
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by

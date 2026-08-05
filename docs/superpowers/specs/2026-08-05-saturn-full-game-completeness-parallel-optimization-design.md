@@ -1,7 +1,7 @@
 # Saturn Full-Game Completeness and Parallel Optimization Design
 
 **Date:** 2026-08-05  
-**Status:** Approved in conversation; written-spec review pending  
+**Status:** Approved; detailed implementation plan published
 **Supersedes:** Task 10/A10 of the overlapped-render-pipeline plan as the active
 umbrella sprint. Completed Task 10 commits and evidence remain valid inputs.
 
@@ -11,8 +11,9 @@ Produce a representative, increasingly complete Saturn build that exposes the
 entire source-selected Mario animation table, renders every dynamic family
 required by Bob-omb Battlefield, preserves the original game's music and sound
 effect semantics, and continues reducing unfinished renderer/runtime overhead
-in parallel. The final sprint build must recover to at least the accepted
-manual 4--6 FPS range with all required features enabled. A later optimization
+in parallel. The final sprint build must meet a measured 4.0 mean presentation
+FPS gate with all required features enabled (the accepted observed range is
+4--6 FPS). A later optimization
 sprint targets 12--15 FPS on that representative workload.
 
 BOB is the first complete coverage manifest and manual proving ground. It is
@@ -32,7 +33,9 @@ The sprint uses one integration spine with four parallel lanes:
 Intermediate feature increments may temporarily reduce FPS. Each lane remains
 independently selectable so the cost can be attributed. Performance
 observations do not block intermediate feature merges. The all-features final
-integration gate does require recovery to the current 4--6 FPS baseline.
+integration gate requires a measured mean presentation cadence of at least
+4.0 FPS in the pinned comparative Ymir setup. "4--6 FPS" is the accepted
+observed band, not a second subjective threshold.
 
 ## Source ownership
 
@@ -91,13 +94,23 @@ Each live object produces a bounded immutable instance snapshot containing:
 - family/model identity and snapshot generation;
 - transform, scale, and render-active state;
 - selected animation ID/frame and `animState`;
-- opacity, billboard, shadow, and declared effect state; and
-- source-owned draw-distance and lifecycle state.
+- opacity, billboard, shadow type/scale/solidity, and typed effect kind,
+  parameters, flags, and lifetime;
+- source-owned render-active, render-range minimum/maximum, and draw-distance
+  state;
+- held/parent node identity and offsets; and
+- exact root-package generation plus actor-bank ID/hash.
 
-Every admitted instance becomes a descriptor-owned actor job in the existing
-shared render queue. The claiming SH-2 writes only its assigned output lane;
-the master retains final painter ordering, VDP1 lowering, and publication.
-No family receives a private CPU-DUAL callback or fixed master/slave split.
+Every admitted instance becomes a descriptor-owned actor job in the shared
+render scheduling domain. Implementation planning exposed a capacity boundary:
+the proven world/phase graph has eight descriptors and an eight-bit dependency
+mask, so it cannot honestly represent the complete live BOB population.
+Rather than widening every A5/A9 graph ABI, actor instances use a companion
+bounded work-stealing queue with the same exact-generation/P2 publication and
+claimant-owned-output laws. The existing eight-entry world graph remains
+unchanged. The claiming SH-2 writes only its assigned output lane; the master
+retains final painter ordering, VDP1 lowering, and publication. No family
+receives a private CPU-DUAL callback or fixed master/slave split.
 
 ### Full music and SFX semantics
 
@@ -151,20 +164,35 @@ render construction, VDP1 command count, transfer wait, or audio work.
 ## Scene packages and future-level adaptation
 
 A scene-package compiler consumes a source level/area and produces one
-versioned Saturn package plus a human-readable closure report. Inputs include
+versioned atomic Saturn root package, a content-addressed payload set, and a
+human-readable closure report. "One package" means one S64P root and one
+generation commit; it does not require every multi-megabyte asset to be
+embedded or simultaneously resident. Inputs include
 LevelScript, GeoLayout, macro objects, static geometry, collision, referenced
 actor families, behavior-spawned children, textures/materials, animations,
 music IDs, and sound banks.
 
-The package contains generic records:
+The S64P root contains generic records:
 
-- scene manifest: level/area identity, world clusters, BSP/portal metadata,
-  collision, sky/background, and resource dependencies;
-- actor-family manifests as defined above;
-- animation banks and maximum pose/scratch bounds;
-- audio sequence/sample manifests keyed by original source IDs; and
+- world/static geometry;
+- collision;
+- sky/background;
+- BSP/portal metadata;
+- sorted actor-payload dependency descriptors;
+- sorted animation-payload dependency descriptors;
+- sorted audio-payload dependency descriptors; and
 - residency records: CD/cartridge location, WRAM destination, alignment,
   lifetime, dependency, and eviction policy.
+
+Every dependency descriptor carries stable ID, kind, byte count, destination,
+lifetime, maximum scratch, and SHA-256. The root hash covers the descriptors;
+a dependency-set hash covers the sorted actor, animation, and audio hashes.
+Root and all payload descriptors validate together. The root and its complete
+feature-active payload set commit under one master-owned generation, or fail
+closed without exposing a partial scene; inactive-feature descriptors remain
+hash-validated but nonresident so the diagnostic matrix can attribute costs.
+Generation N retains every resident render and voice payload until its render,
+bank, and voice lifetimes retire.
 
 The normal adaptation workflow is:
 
@@ -197,8 +225,13 @@ The authoritative candidate enables all four. Diagnostic builds cover:
 3. renderer, animation, and BOB actor closure; and
 4. all features including music and SFX.
 
-Every ELF/CUE identity records the exact feature tuple, source/package hashes,
-route/input/camera settings, cart profile, and renderer pipeline. Intermediate
+Every ELF/CUE identity records the exact feature tuple, source/root/payload
+hashes, live/replay input mode, bootstrap ticks, route, camera route/variant,
+route/input/camera artifact hashes, full cart profile hash and stage size, hot
+promotion, clipping, BSP ordering, polygon/LOD tier, fragmentation mode,
+diagnostic mode, and renderer pipeline. A canonical effective-config digest
+covers all behavior-affecting values, and each field is independently mutation
+tested. Intermediate
 regressions are measured and attributed but are not arbitrary merge blockers.
 
 ## Integration waves
@@ -210,6 +243,8 @@ regressions are measured and attributed but are not arbitrary merge blockers.
 - Add independent feature identities and package hashes.
 - Preserve the current accepted 4--6 FPS CUE as rollback evidence.
 - Generate the authoritative BOB closure report.
+- Implement the S64P schema/compiler and synthetic/provisional fixtures only;
+  do not claim a final BOB root before actor, animation, and audio payloads.
 
 ### Wave 2: complete Mario animation and audio control plane
 
@@ -230,6 +265,8 @@ regressions are measured and attributed but are not arbitrary merge blockers.
 ### Wave 4: complete BOB object/effect closure
 
 - Resolve every family and feature declared by the generated BOB closure.
+- Link/reseal the final BOB root from the completed actor, animation, and audio
+  payload hashes, byte counts, lifetimes, and scratch limits.
 - Complete the BOB music/SFX semantic coverage report.
 - Add broad actor batching, early visibility rejection, effect budgets, and
   bounded package residency.
@@ -247,8 +284,8 @@ regressions are measured and attributed but are not arbitrary merge blockers.
 - Remove or quarantine diagnostic paths that cannot serve the full game.
 - Verify controls, camera, all Mario animations, complete BOB closure,
   music/SFX semantics, geometry stability, and package transitions.
-- Recover the all-features build to at least the accepted manual 4--6 FPS
-  range before beginning the 12--15 FPS optimization sprint.
+- Recover the all-features build to at least 4.0 mean presentation FPS in the
+  pinned setup before beginning the 12--15 FPS optimization sprint.
 
 ## Failure and capacity policy
 
@@ -306,6 +343,21 @@ Existing pinned references retain their documented licenses and reuse modes:
   close-port and protocol pattern study remain recorded in
   `docs/saturn/audio/PCM68K_PROVENANCE.md`. Full semantic sequencing is new
   project work unless a separately pinned compatible source is approved.
+- Inherited Project12x SM64 audio at repository pin `36d015fb`: Tasks inspect
+  `src/audio/external.c`, `seqplayer.c`, `playback.c`, `synthesis.c`, `heap.c`,
+  `load.c`, `data.c`, and their headers before implementation. Reuse mode is
+  in-tree semantic close-port: preserve public IDs/policy, sequence control
+  flow, layer/note rules, ADSR/release, priority, and tuning. Rewrite only the
+  N64 pointer/task/RSP ABI and synthesis backend required by bounded big-endian
+  package offsets and MC68000/SCSP slot events. The inherited Project12x tree
+  has no root license file, so preserve existing notices and do not claim or
+  export a new license for these files.
+- `malucard/sm64-psx` at
+  `3073845688ea273da78d539b20c45110d8a868c3`, with no repository-wide
+  license established: behavior/architecture study only. Its compact
+  generated IR/assets, target-native lowering, whole-loop profiling, and
+  prepared residency remain useful constraints; no PS1 source, GTE math,
+  ordering tables, VRAM layout, or packet format may be copied.
 
 Eyepatch Entertainment's private 3DO rewrite and reported Saturn work are
 feasibility evidence only. No repository or distributable source is available,
@@ -331,7 +383,8 @@ and differential-review gate before adaptation.
 - Every dynamic family required by BOB is in scope, including spawned children
   and required effects identified by generated closure.
 - Temporary measured regressions are allowed during integration.
-- The final all-features build must recover to at least 4--6 FPS.
+- The final all-features build must measure at least 4.0 mean presentation FPS
+  in the pinned setup; 4--6 FPS is the accepted observed band.
 - Whomp's Fortress proves future-level adaptation through the same package
   compiler and runtime.
 - This umbrella sprint supersedes active Task 10 tracking while preserving all

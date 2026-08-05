@@ -353,7 +353,11 @@ and the evidence report before starting another task.
   the master may execute the one queued source tick for `N+1`. Exactly one
   render generation, the A8 transport owner, master-only final ordering/VDP1,
   and all A9 cadence/publication laws remain unchanged.
-- [ ] **Task 10 / A10 — full-game hardening and publication:** active. This
+- [ ] **Task 10 / A10 — full-game hardening and publication:** superseded as
+  the active umbrella by
+  `docs/superpowers/plans/2026-08-05-saturn-full-game-completeness-parallel-optimization.md`.
+  Completed selector/source-contract/manual evidence remains inherited; open
+  host/linked/full-game gates migrate to Tasks 1, 2, 22, 28, and 29 there. This
   includes scene-neutral level extraction and validation, generalized dynamic
   actor/enemy banks using the same actor pipeline proven by Mario, and
   per-level coarse BSP/frustum/portal-window admission. It does **not** yet
