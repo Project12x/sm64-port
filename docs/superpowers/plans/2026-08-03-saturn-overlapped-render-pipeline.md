@@ -307,17 +307,17 @@ and the evidence report before starting another task.
   CPU-DUAL live cutover were bound by the later reviewed A5.8 activation. The
   A3+A4 3–4 FPS candidate remains the rollback baseline.
 - [ ] **Task 6 / A6 — localized recovery and quarantine:** pending.
-- [ ] **Task 7 / A7 — alternating source-bank ownership:** source-complete,
-  independent review pending. The A5.9
+- [x] **Task 7 / A7 — alternating source-bank ownership:** complete. The A5.9
   live capture proved both SH-2s claimed useful work with no recorded queue
   retirement wait in the observed frame. A7 now makes command/Gouraud source
   ownership explicit so A8 can defer the remaining master-owned transfers
   without overwriting a building, transferring, or displayed bank.
   The lifecycle, sourceboot integration, exact memory-map checks, and focused
-  host gates are green. The SH-2 image compiles and links; the broad verifier
-  remains open on an unrelated pre-existing native-math oracle edge. No Ymir,
-  hardware, asynchronous-transfer, or FPS evidence is claimed by A7.
-- [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** pending.
+  host gates are green. Independent rereview is PASS/APPROVED and the exact
+  audited Route0/live-input/Pipe4 `make -B -j1` exits zero with ELF
+  `1eba8888...e99267c`. No Ymir, hardware, asynchronous-transfer, or FPS
+  evidence is claimed by A7.
+- [ ] **Task 8 / A8 — deferred transfers and true wait telemetry:** active.
 - [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
   scoped Emergency A9.0 presentation-boundary correction.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
@@ -1477,18 +1477,19 @@ yet.
   gates pass. The linked ELF proves `.lwram_cmdts` is a `0x20000`-byte NOBITS
   section at `0x00200000`, Gouraud staging is exactly `0x6000` bytes at
   `0x060D8FB8`, and `___end=0x060FC86C` leaves `0x3794` HWRAM bytes. The broad
-  `make verify` remains unchecked because the pre-existing native-math census
-  rejects `_play_cutscene -> _cutscene_bbh_death`; this is not substituted by
-  the green focused gates. The updated dual-actor structural gate still stops
+  The first integration attempt stopped on the then-pre-existing native-math
+  census edge `_play_cutscene -> _cutscene_bbh_death`; the final exact audited
+  `make -B -j1` later exits zero. The updated dual-actor structural gate still stops
   earlier on its pre-existing live-pointer helper, and the full cluster suite
   still requires absent generated Mario LOD symbols; the A7-specific live
   renderer signature/merge and generation-slice checks pass independently.
 
-- [ ] **Step 7: Update documents, commit, and complete two-stage review** — active
+- [x] **Step 7: Update documents, commit, and complete two-stage review** — complete
 
   Implementation and synchronized behavior documents are committed at
   `650b911a` (`feat(saturn): track VDP1 source-bank lifetimes`). Independent
-  specification and quality reviews remain open, so Task 7 is not complete.
+  Consolidated repair commit `41a4ce7e` and documentation commit `deebd06e`
+  are independently PASS/APPROVED.
 
   **Consolidated review repair (2026-08-05): source-green; target integration green; rereview pending.** Publication rejects
   a completed generation that is not wrap-safely newer than the current
@@ -1504,11 +1505,16 @@ yet.
   native-math oracle error. Repair rereview is the remaining A7 gate.
   The final object-pointer overlap/alignment strengthening was host-compiled
   after that single target run; it was not target-rebuilt because the task cap
-  permits at most one serialized target validation.
+  permitted at most one serialized target validation in that repair turn. The
+  root's final audited clean rebuild subsequently closes the exact target gate:
+  exit 0 in 336.9 seconds, ELF SHA-256
+  `1eba88885b611f0c99dea3971dda871fcc30fdb8ac21c4fcfc5e051f0e99267c`.
   Consolidated repair commit: `41a4ce7e`
   (`fix(saturn): fail closed on stale VDP1 banks`).
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
+
+**Status:** active next task; no A8 behavior is complete yet.
 
 **Files:**
 - Modify: `src/port/saturn/gpl/slavedriver_dma_queue.h`

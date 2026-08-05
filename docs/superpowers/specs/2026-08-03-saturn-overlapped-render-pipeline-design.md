@@ -338,10 +338,10 @@ each task back here.
   renderer-local, so queue descriptors remain pointer-free and fixed-width.
 - [ ] **A6 — localized recovery:** recover only unclaimed/failed jobs, reject
   stale generations, and allow previous-complete-frame presentation.
-- [ ] **A7 — alternating source banks:** source-complete, review pending. Patch compile-once templates in
+- [x] **A7 — alternating source banks:** complete and independently approved. Patch compile-once templates in
   LWRAM command banks and HWRAM Gouraud banks with explicit
   worker/DMA/presentation tickets.
-- [ ] **A8 — deferred transfer/presentation:** enable valid command/Gouraud
+- [ ] **A8 — deferred transfer/presentation:** active next; enable valid command/Gouraud
   DMA, remove immediate waits, use one terminal boundary, and measure the real
   wait sites.
 - [ ] **A9 — frame overlap and cadence:** render snapshot `N` while fixed-step

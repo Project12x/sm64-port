@@ -1711,3 +1711,14 @@ not target-rebuilt because the review task allowed at most one serialized
 target validation. Repair commit `41a4ce7e` contains the production, tests,
 build integration, and synchronized behavior documents. Independent rereview
 remains open.
+
+### A7 final closure (2026-08-05)
+
+Independent consolidated rereview of reviewed HEAD `deebd06e` is
+PASS/APPROVED; both strict host fixtures independently pass. The exact audited
+Route0/live-input/Pipe4 wrapper ran `make -B -j1` to exit 0 in 336.9 seconds.
+Fresh ELF:
+`build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/obj/sm64-saturn-sourceboot-e2.elf`,
+SHA-256 `1eba88885b611f0c99dea3971dda871fcc30fdb8ac21c4fcfc5e051f0e99267c`.
+A7 is complete. A8 is active next but has no behavior-complete claim; A7 adds
+no Ymir, hardware, asynchronous-transfer, or FPS result.

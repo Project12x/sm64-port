@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — review A7, then implement A8 deferred VDP1 transfer
+## Now — implement A8 deferred VDP1 transfer
 
 Use the now-proven dual-SH-2 queue as the producer side of a smaller,
 deferred VDP1 command stream. First reduce admitted geometry/command volume
@@ -39,9 +39,11 @@ build, transfer, publication, quarantine, and retirement states; renderer
 failure retains the previous publication; and build/published/displayed
 generations are separate. Its SH-2 image compiles and links with the exact
 bank memory-map contract. Independent review and the unrelated strict
-native-math census repair remain open. Because A7 still uses the synchronous
-completion adapter around today's blocking renderer, visible FPS uplift is
-expected from A8/A9 rather than from this ownership-only slice.
+native-math census repair are closed by independent PASS/APPROVED rereview and
+the exact audited exit-zero Pipe4 rebuild. Because A7 still uses the
+synchronous completion adapter around today's blocking renderer, visible FPS
+uplift is expected from A8/A9 rather than from this ownership-only slice. A8 is
+active next; no deferred-transfer behavior is complete yet.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the
@@ -49,7 +51,7 @@ flat desktop result is retained as the A5.8 baseline.
 
 ## Next — A9 true frame lifetime overlap
 
-Complete A6 localized recovery and A7 alternating source-bank ownership around
+Complete A6 localized recovery around the now-closed A7 ownership contract and
 the A8 deferred-transfer seam, then allow frame N+1 production while frame N
 is presented. Gate: no partial-frame publication, measured terminal waits,
 and source/target contract evidence.

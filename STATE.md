@@ -4,9 +4,9 @@ See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
 Task 5/A5.9 is closed after completing the atomic cutover from fixed
 terrain/Mario workers to one dependency-aware descriptor queue and observing
-that queue on the exact target image. Task 7/A7 is source-complete and awaits
-repair rereview after consolidated review found and repaired stale publication,
-untruthful emitter completion, and storage-alias gaps. The original lifetime
+that queue on the exact target image. Task 7/A7 is complete after consolidated
+review found and repaired stale publication, untruthful emitter completion,
+and storage-alias gaps. Independent rereview is PASS/APPROVED. The original lifetime
 boundary landed at `650b911a`; the repair landed at `41a4ce7e`. The two VDP1
 command/Gouraud source-bank lifetimes are now explicit before A8 defers their
 transfers. The accepted A5 frame publishes
@@ -33,13 +33,14 @@ FPS claim. The broad target verifier remains open on the pre-existing
 native-math oracle error `_play_cutscene -> _cutscene_bbh_death`; A7 itself
 compiled, linked, and passed its memory-map checks.
 
-The A7 review repair is focused- and target-link-green. Wrap-safe publication
+The A7 review repair is focused- and target-green. Wrap-safe publication
 ordering quarantines late completion; both emitters fail before command upload
 after two invalid Gouraud submissions; and manager initialization rejects
 physical aliases, overlap, and misalignment. Fresh Pipe4 ELF SHA-256 is
-`b0ede6f93681984046904b1c4743f6bb38c7b3de89fa6f8e562baa23190401cc`.
-The broad verifier again reached only the unrelated native-math oracle blocker.
-Independent repair rereview remains open; no Ymir or FPS evidence is claimed.
+`1eba88885b611f0c99dea3971dda871fcc30fdb8ac21c4fcfc5e051f0e99267c`.
+The exact audited Route0/live-input/Pipe4 `make -B -j1` exits zero in 336.9
+seconds. A8 deferred transfer is now active next; no A8 behavior, Ymir result,
+or FPS evidence is claimed.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact
