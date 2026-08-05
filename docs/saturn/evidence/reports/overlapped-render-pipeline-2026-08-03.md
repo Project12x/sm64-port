@@ -1923,3 +1923,17 @@ The profile-backed desktop helper launched the exact A9 CUE with the project's
 20-second monitor; details are in
 `a9-step5-desktop-launch-2026-08-05.json`. This proves only launch configuration
 and survival. Owner-visible speed, controls, and geometry remain unchecked.
+
+## Task 9 Step 6 VDP2 generation-coherence reconciliation (2026-08-05)
+
+Commit `2377bf8b` is source-complete: VDP2 accepts only a camera owned by the
+displayed VDP1 bank and a displayed/rendered/simulation tuple, updates the HUD
+tuple with sky identity changes, and rejects zero or mismatched ownership before
+callbacks. Direct host VDP2 and runtime-contract binaries passed, and the
+sourceboot presentation-boundary mutation suite passed 7/7. Fix Round 1 adds
+direct fixture checks that zero displayed or simulation generations cause no
+backend effects. Independent review found the code **APPROVED WITH MINOR
+FOLLOW-UP**, but rendered the specification **NO-GO** solely because the active
+plan and SDD ledger had not recorded the transition; this reconciliation closes
+that process defect. Focused rereview is pending. No target build/capture,
+manual Ymir observation, or broad native-math result is claimed here.

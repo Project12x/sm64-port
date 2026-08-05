@@ -257,3 +257,12 @@ A/B/C playback and that X stops playback in desktop Ymir. The supplied screen
 also showed READY, an advancing heartbeat, consumed commands, a started voice,
 and zero drops. Sourceboot/game integration, automated telemetry, and
 transport-cost gates remain open.
+
+Task 9 Step 6 is source-complete at `2377bf8b`: VDP2 composes only the immutable
+camera from the displayed VDP1 bank with its displayed/rendered/simulation
+metadata, labels the tuple, and rejects mismatched or zero ownership. The
+initial independent review was **NO-GO** solely for missing governing-plan and
+execution-ledger records, with code **APPROVED WITH MINOR FOLLOW-UP**. Fix
+Round 1 reconciles those records and adds direct zero-generation coverage;
+focused rereview, target evidence, manual Ymir, and broad native-math remain
+open.

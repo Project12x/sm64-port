@@ -1912,10 +1912,17 @@ shared bank transport owns every frame upload.
   values now count whole discarded 30 Hz simulation-tick credits rather than
   raw fields; capture comparisons must use that documented unit change.
 
-- [ ] **Step 6: Verify generation-coherent VDP2 composition**
+- [x] **Step 6: Verify generation-coherent VDP2 composition — SOURCE COMPLETE; FIX ROUND 1 RECONCILED**
 
-  Sky camera and HUD metrics must name the same displayed/rendered/simulation
-  generations. VDP2 remains geometry-free.
+  Commit `2377bf8b` makes VDP2 consume only the immutable camera from the
+  displayed VDP1 bank plus one displayed/rendered/simulation tuple, label it
+  in HUD output, force its identity refresh with the sky, and reject invalid
+  or mismatched ownership before callbacks. Direct VDP2/runtime tests and
+  sourceboot boundary mutations passed; Fix Round 1 adds direct zero
+  displayed/simulation rejection. Independent review was **NO-GO** solely for
+  missing plan/ledger reconciliation and **APPROVED WITH MINOR FOLLOW-UP** on
+  code. Focused rereview remains pending; target capture, manual Ymir, and the
+  broad native-math gate remain explicitly unchecked.
 
 - [ ] **Step 7: Run frame-pipeline, snapshot, queue, recovery, transfer, VDP2, runtime, and replay-host gates — ACTIVE (TARGET BUILD FIRST)**
 

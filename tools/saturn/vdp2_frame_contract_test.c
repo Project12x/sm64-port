@@ -132,5 +132,21 @@ int main(void)
     sm64_saturn_vdp2_frame_commit(&frame, &backend);
     assert(observed.commits == 3U && observed.sky_updates == 3U);
     assert(observed.hud_updates == 3U && observed.layer_updates == 3U);
+
+    sm64_saturn_vdp2_generation_state_t zero_displayed = generations;
+    zero_displayed.displayed_generation = 0U;
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile,
+                                 &zero_displayed, 32U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+    assert(observed.commits == 3U && observed.sky_updates == 3U);
+    assert(observed.hud_updates == 3U && observed.layer_updates == 3U);
+
+    sm64_saturn_vdp2_generation_state_t zero_simulation = generations;
+    zero_simulation.simulation_generation = 0U;
+    sm64_saturn_vdp2_frame_begin(&frame, &snapshot, &profile,
+                                 &zero_simulation, 33U);
+    sm64_saturn_vdp2_frame_commit(&frame, &backend);
+    assert(observed.commits == 3U && observed.sky_updates == 3U);
+    assert(observed.hud_updates == 3U && observed.layer_updates == 3U);
     return 0;
 }

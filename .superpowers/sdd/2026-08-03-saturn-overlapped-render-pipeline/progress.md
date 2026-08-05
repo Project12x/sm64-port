@@ -404,6 +404,22 @@ independent descriptors cannot encode terrain transform→classify→ordered
 multi-result merge or Mario transform→classify dependencies. RED graph fixture
 preceded `saturn_render_job_graph.h`; GREEN adds P2-visible renderer-local
 dependency masks, exact-index claims, failed-predecessor quarantine, and
+2026-08-05 Task 9 Step 6: **SOURCE COMPLETE** (`2377bf8b`). VDP2 now accepts
+only a bank-owned immutable camera and displayed/rendered/simulation metadata,
+labels the tuple in HUD output, force-refreshes it on tuple change, and
+fails closed before VDP2 callbacks on camera/bank mismatch. Direct host VDP2
+and runtime-contract binaries pass; sourceboot-boundary mutations pass 7/7;
+`git diff --check` is clean. Independent rereview, target/manual, and
+native-math gates remain unchecked. This mixed ledger entry is deliberately
+unstaged.
+
+2026-08-05 Task 9 Step 6 Fix Round 1: review of `2377bf8b` was specification
+**NO-GO** solely for absent governing-plan/ledger records and code **APPROVED
+WITH MINOR FOLLOW-UP**. The governing plan, `STATE.md`, and evidence now record
+the source-complete transition; direct VDP2 fixture checks confirm zero
+displayed or simulation generations cause no backend effects. This exact Step 6
+ledger hunk is staged surgically; focused rereview, target/manual evidence, and
+broad native-math remain unchecked.
 `(job_index, output_index)` terrain merge identities. The fixed renderer,
 legacy CPU-DUAL callback, and intentionally red live-cutover source gate remain
 unchanged. No target build/Ymir. Pending commit and review.
