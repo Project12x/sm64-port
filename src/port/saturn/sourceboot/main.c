@@ -19,6 +19,7 @@
 #include "saturn_source_runtime.h"
 #include "saturn_frame_pipeline.h"
 #include "saturn_render_overlap_phase.h"
+#include "saturn_render_job_runtime.h"
 #include "saturn_camera_role.h"
 #include "saturn_vdp1_backend.h"
 #include "saturn_vdp1_frame_bank.h"
@@ -141,7 +142,7 @@ static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
 static uint32_t sourceboot_render_ticks_accum;
-static volatile uint32_t sourceboot_vblank_out_count;
+static volatile uint32_t sourceboot_vblank_out_count __uncached;
 static uint32_t sourceboot_sim_vblank_credit_dropped;
 static uint32_t sourceboot_vdp1_bank_generation;
 static uint32_t sourceboot_vdp1_bank_submitted;
@@ -160,8 +161,9 @@ static uint32_t sourceboot_simulation_vblank_crossings;
 static uint32_t sourceboot_simulation_count;
 static uint32_t sourceboot_transport_presentation_vblank_crossings;
 static uint32_t sourceboot_transport_presentation_count;
-static sm64_saturn_render_overlap_phase_t sourceboot_render_overlap_phase;
-static bool sourceboot_render_overlap_event_ok;
+static sm64_saturn_render_overlap_phase_t sourceboot_render_overlap_phase
+    __uncached;
+static bool sourceboot_render_overlap_event_ok __uncached;
 static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
@@ -786,20 +788,25 @@ static void sourceboot_frame_run_sim_tick(uint32_t generation)
 }
 
 #if SATURN_DEMO_PATH
-static void sourceboot_render_lifecycle_event(
-    void *context, sm64_saturn_render_lifecycle_event_t event,
-    uint32_t generation)
+static uint32_t sourceboot_render_marker_clock(void *context)
 {
     (void)context;
+    return sourceboot_vblank_out_count;
+}
+
+static void sourceboot_render_runtime_marker(
+    void *context, sm64_saturn_render_job_runtime_marker_t marker,
+    uint32_t generation, uint32_t sequence, uint32_t marker_vblank)
+{
+    (void)context;
+    (void)sequence;
     bool accepted = false;
-    if (event == SM64_SATURN_RENDER_LIFECYCLE_NOTIFIED)
+    if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED)
         accepted = sm64_saturn_render_overlap_phase_notification_published(
-            &sourceboot_render_overlap_phase, generation,
-            sourceboot_vblank_out_count);
-    else if (event == SM64_SATURN_RENDER_LIFECYCLE_RETIRED)
+            &sourceboot_render_overlap_phase, generation, marker_vblank);
+    else if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED)
         accepted = sm64_saturn_render_overlap_phase_retirement_published(
-            &sourceboot_render_overlap_phase, generation,
-            sourceboot_vblank_out_count);
+            &sourceboot_render_overlap_phase, generation, marker_vblank);
     sourceboot_render_overlap_event_ok =
         sourceboot_render_overlap_event_ok && accepted;
 }
@@ -1387,9 +1394,10 @@ int main(void) {
         sm64_saturn_render_overlap_phase_init(
             &sourceboot_render_overlap_phase);
         sm64_saturn_demo_render_init();
-        if (!sm64_saturn_demo_render_observe_lifecycle(
-                sourceboot_render_lifecycle_event, NULL)) {
-            dbgio_puts("sourceboot: render lifecycle observer failed\n");
+        if (!sm64_saturn_render_job_runtime_observe_markers(
+                sourceboot_render_runtime_marker,
+                sourceboot_render_marker_clock, NULL)) {
+            dbgio_puts("sourceboot: render marker observer failed\n");
             for (;;) {}
         }
         /* The baked BOB bank is linked into .cart_rodata and copied to the

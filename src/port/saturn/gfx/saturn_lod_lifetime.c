@@ -67,6 +67,9 @@ bool sm64_saturn_lod_lifetime_select(
     const saturn_lod_thresholds_t *thresholds,
     uint8_t *tier_out, uint8_t *transition_out)
 {
+#if defined(SM64_SATURN_LOD_LIFETIME_TEST_IGNORE_GENERATION)
+    generation = lifetime != NULL ? lifetime->active_generation : generation;
+#endif
     if (lifetime == NULL || !lifetime->active ||
         generation != lifetime->active_generation ||
         primitive_index >= lifetime->tier_count || tier_out == NULL)

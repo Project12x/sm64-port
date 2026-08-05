@@ -2,14 +2,15 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Task 9A/A9A independent review found a blocking cross-CPU LOD reset race and
-three evidence/coverage defects. Fix Round 1 now defers scene-state reset until
-the exact active generation retires, timestamps actual lifecycle publication
-boundaries, includes first-service preparation in complete construction,
-refreshes terminal quarantine telemetry, and exercises the real runtime seam
-in a mutation-sensitive C harness. Focused host gates are green; fresh two-
-stage rereview is next, so the task is not yet source-complete and no target
-build, capture, or FPS result exists. The accepted demo renderer now exposes
+Task 9A/A9A Fix Round 2 closes the remaining source findings from review of
+`d45c0a41..420b6ce8`: worker-visible LOD lifetime/tier/cluster state and the
+sourceboot phase clock/record now live behind the target-coherent P2 boundary;
+runtime marker hooks capture notification and positive retirement at their
+actual release sites; and the production-linked integration fixture combines
+deferred scene reset with failure quarantine and nonzero `QQ`. The normal path
+and all six mutations are focused-host/source-green. Fresh two-stage rereview
+is next, so the task is not yet source-complete and no target build, capture,
+or FPS result exists. The accepted demo renderer now exposes
 `start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
 the slave once, and returns. Poll remains PENDING until positive slave
 retirement, then the master drains remaining READY work, validates/merges,

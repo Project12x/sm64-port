@@ -191,18 +191,19 @@ static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_recovery[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_corner_count[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_lod_tier[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_lod_tier[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CROSS_CPU_SHARED;
 static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_pretransform_lod_tier;
 static sm64_saturn_render_lod_state_t s_render_cluster_lod[
-    SM64_SATURN_BOB_CLUSTER_COUNT] __attribute__((section(".lwram_bss")));
+    SM64_SATURN_BOB_CLUSTER_COUNT] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_cluster_result_t s_admitted_cluster_results[
     SM64_SATURN_BOB_CLUSTER_COUNT] __attribute__((section(".lwram_bss")));
 static uint16_t s_admitted_cluster_count;
-static sm64_saturn_lod_lifetime_t s_lod_lifetime;
+static sm64_saturn_lod_lifetime_t s_lod_lifetime DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
     __attribute__((section(".lwram_bss")));

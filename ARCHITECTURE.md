@@ -120,15 +120,19 @@ one serial lane, not a parallel scheduler. A9 retains true destination-banked
 frame overlap.
 
 Task 9A adds the missing CPU lifetime overlap without changing those owners.
-After independent review, the renderer owns an exact-generation LOD lifetime:
+After independent review remediation, the renderer owns an exact-generation
+LOD lifetime entirely in the target's linker-owned P2 `.uncached` partition:
 an N+1 source scene transition updates only pending master state while N is
 active, and tier/cluster reset is applied only after N's terminal lifecycle.
-Lifecycle notification and retirement events also drive one scene-neutral
-phase controller, so construction includes first-service preparation plus
-terminal lowering and master finalization remains its explicit subset.
+Runtime notify and positive-retirement release sites stamp one scene-neutral
+phase controller. The controller record is published before slave wake or
+retirement release, so the peer cannot observe a half-published phase edge;
+construction includes first-service preparation plus terminal lowering and
+master finalization remains its explicit subset.
 Terminal queue telemetry is refreshed before retirement reset. The repaired
-boundary is focused-host-green and remains a source candidate pending fresh
-two-stage review, with target timing deliberately unmeasured.
+boundary is focused-host/source-green, including generation, late-marker,
+deferred-reset, and quarantine mutations, and remains a source candidate
+pending fresh two-stage review, with target timing deliberately unmeasured.
 For generation `N`, renderer start may publish only immutable descriptor
 contexts and notify the slave, then must return before master drain, queue
 retirement, Gouraud reservation, VDP1 begin/lowering, or transfer. Sourceboot

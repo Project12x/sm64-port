@@ -22,6 +22,7 @@ typedef struct integration_context {
     uint32_t generation;
     uint32_t notify_boundary;
     uint32_t finalize_end;
+    uint32_t marker_clock_reads;
     uint8_t worker_lod;
     bool fail_admit;
     bool phase_ok;
@@ -77,6 +78,7 @@ static void integration_notify(void *opaque)
     integration_context_t *const context = opaque;
     context->clock = context->notify_boundary;
     sm64_saturn_render_job_runtime_notify();
+    context->clock++;
 }
 
 static bool integration_slave_retired(void *opaque)
@@ -123,18 +125,31 @@ static void integration_quarantine(void *opaque, uint32_t generation)
             &context->queue, generation);
 }
 
-static void integration_lifecycle_event(
-    void *opaque, sm64_saturn_render_lifecycle_event_t event,
-    uint32_t generation)
+static uint32_t integration_marker_clock(void *opaque)
 {
     integration_context_t *const context = opaque;
+    context->marker_clock_reads++;
+    const uint32_t marker_vblank = context->clock;
+#if defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER) || \
+    defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_RETIRE_MARKER)
+    context->clock++;
+#endif
+    return marker_vblank;
+}
+
+static void integration_runtime_marker(
+    void *opaque, sm64_saturn_render_job_runtime_marker_t marker,
+    uint32_t generation, uint32_t sequence, uint32_t marker_vblank)
+{
+    integration_context_t *const context = opaque;
+    (void)sequence;
     bool accepted = false;
-    if (event == SM64_SATURN_RENDER_LIFECYCLE_NOTIFIED)
+    if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED)
         accepted = sm64_saturn_render_overlap_phase_notification_published(
-            &context->phase, generation, context->clock);
-    else if (event == SM64_SATURN_RENDER_LIFECYCLE_RETIRED)
+            &context->phase, generation, marker_vblank);
+    else if (marker == SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED)
         accepted = sm64_saturn_render_overlap_phase_retirement_published(
-            &context->phase, generation, context->clock);
+            &context->phase, generation, marker_vblank);
     context->phase_ok = context->phase_ok && accepted;
 }
 
@@ -160,6 +175,7 @@ static bool begin_generation(integration_context_t *context,
     context->clock = construction_begin;
     context->notify_boundary = notify_boundary;
     context->phase_ok = true;
+    context->marker_clock_reads = 0U;
     return sm64_saturn_render_overlap_phase_begin(
                &context->phase, generation, construction_begin) &&
         sm64_saturn_render_overlap_phase_bind(
@@ -200,6 +216,17 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
     if (context->tiers[0] != SATURN_LOD_FAR ||
         context->cluster_lod[0] != 0x7FU)
         return 16;
+    uint8_t wrong_generation_tier = 0xA5U;
+    uint8_t wrong_generation_transition = 0x5AU;
+    const saturn_lod_thresholds_t thresholds =
+        saturn_lod_default_thresholds();
+    if (sm64_saturn_lod_lifetime_select(
+            &context->lod, 8U, 0U, 6500, 45U, &thresholds,
+            &wrong_generation_tier, &wrong_generation_transition) ||
+        context->tiers[0] != SATURN_LOD_FAR ||
+        wrong_generation_tier != 0xA5U ||
+        wrong_generation_transition != 0x5AU)
+        return 26;
     if (sm64_saturn_render_lifecycle_poll(
             &context->lifecycle, &s_lifecycle_ops, context, 7U) !=
             SM64_SATURN_RENDER_LIFECYCLE_PENDING)
@@ -208,6 +235,7 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
     context->clock = 16U;
     if (sm64_saturn_render_job_runtime_poll_slave() != 2U)
         return 18;
+    context->clock = 17U;
     context->finalize_end = 18U;
     if (sm64_saturn_render_lifecycle_poll(
             &context->lifecycle, &s_lifecycle_ops, context, 7U) !=
@@ -230,6 +258,10 @@ static int test_pending_generation_retains_lod_and_complete_phase_accounting(
         context->phase.master_finalize_vblank_crossings != 2U ||
         context->phase.master_finalize_count != 1U)
         return 24;
+    if (context->phase.notification_vblank != 12U ||
+        context->phase.retirement_vblank != 16U ||
+        context->marker_clock_reads != 2U)
+        return 27;
 
     if (!sm64_saturn_frame_pipeline_render_complete(&pipeline, 7U) ||
         sm64_saturn_frame_pipeline_step(&pipeline, 104U) !=
@@ -248,13 +280,24 @@ static int test_failed_generation_publishes_nonzero_quarantine(
 {
     context->fail_admit = true;
     if (!begin_generation(context, 8U, 20U, 21U)) return 30;
+    context->tiers[0] = SATURN_LOD_FAR;
+    context->cluster_lod[0] = 0x55U;
+    if (sm64_saturn_lod_lifetime_observe_scene(
+            &context->lod, true, 3, 1) ||
+        context->tiers[0] != SATURN_LOD_FAR ||
+        context->cluster_lod[0] != 0x55U)
+        return 35;
     context->clock = 22U;
     if (sm64_saturn_render_job_runtime_poll_slave() != 1U) return 31;
+    context->clock = 23U;
     context->finalize_end = 23U;
     if (sm64_saturn_render_lifecycle_poll(
             &context->lifecycle, &s_lifecycle_ops, context, 8U) !=
             SM64_SATURN_RENDER_LIFECYCLE_FAILED)
         return 32;
+    if (context->tiers[0] != SATURN_LOD_FAR ||
+        context->cluster_lod[0] != 0x55U)
+        return 36;
     if (!context->phase_ok ||
         !sm64_saturn_render_overlap_phase_terminal(
             &context->phase, 8U,
@@ -262,7 +305,9 @@ static int test_failed_generation_publishes_nonzero_quarantine(
         !sm64_saturn_lod_lifetime_finish(&context->lod, 8U))
         return 33;
     if (context->telemetry.slave_failures != 1U ||
-        context->telemetry.quarantined != 1U)
+        context->telemetry.quarantined != 1U ||
+        context->tiers[0] != SATURN_LOD_NEAR ||
+        context->cluster_lod[0] != 0U)
         return 34;
     return 0;
 }
@@ -276,11 +321,12 @@ int main(void)
     sm64_saturn_lod_lifetime_init(
         &context.lod, context.tiers, sizeof(context.tiers),
         context.cluster_lod, sizeof(context.cluster_lod));
-    sm64_saturn_render_lifecycle_observe(
-        &context.lifecycle, integration_lifecycle_event, &context);
     if (!sm64_saturn_render_job_runtime_activate_graph(
             &context.graph, &s_callbacks, &context))
         return 2;
+    if (!sm64_saturn_render_job_runtime_observe_markers(
+            integration_runtime_marker, integration_marker_clock, &context))
+        return 4;
     if (!sm64_saturn_lod_lifetime_observe_scene(
             &context.lod, true, 1, 1))
         return 3;

@@ -1,17 +1,34 @@
-# Task 9A Steps 1--9 Implementation Report
+# Task 9A Steps 1--9 and Fix Round 2 Implementation Report
 
 Date: 2026-08-05
 
-Base: `0350a473`
+Fix Round 2 base: `420b6ce8`
 
-RED checkpoint: `ec81ddc6`
+Original RED checkpoint: `ec81ddc6`
 
-Implementation: `0f5ccd65`
+Original implementation: `0f5ccd65`
 
-Status: Steps 1--9 source-implemented and focused-host-green; Steps 10--12 not
-started. This is not a review, target-build, runtime-capture, or FPS claim.
+Status: Steps 1--9 plus Fix Round 2 are source-implemented and focused-host/
+source-green; Step 10 fresh rereview and Steps 11--12 remain unchecked. The
+reviewed base verdict remains FAIL/NO-GO. This is not a target-build,
+runtime-capture, manual-Ymir, broad-verify, native-math, or FPS claim.
 
 ## Outcome
+
+- Moved primitive LOD tiers, cluster LOD state, and the exact-generation LOD
+  lifetime into `DEMO_CROSS_CPU_SHARED`; the source/layout gate traces that
+  macro to `.uncached` and the linker's P2 mapping. Sourceboot's VBlank marker
+  clock, overlap phase record, and acceptance flag are also `__uncached`.
+- Added a runtime marker observer/clock contract stored in the already-uncached
+  CPU-DUAL owner. Notification and positive retirement receive timestamps at
+  their actual release sites, and publish the phase record before waking the
+  slave or exposing retirement.
+- Extended the production-linked integration fixture to reject N+1 LOD access
+  while N is active and to combine deferred scene transition with failure
+  quarantine. It proves reset ordering and publishes `QF=1, QQ=1`.
+- Added target-aware layout/ownership assertions and compiled mutations for
+  late notify, late retirement, and ignored LOD generation. Together with the
+  retained mutations, all six regressions are caught.
 
 - Replaced the accepted monolithic demo-render call with exact-generation
   `start_frame(N)` and `poll_frame(N)` operations.
@@ -64,6 +81,17 @@ upstream source was copied or closely ported.
 
 ## Watched RED
 
+Fix Round 2 RED:
+
+- `test_a9_overlap_target_coherency.py` failed 3/3 on cached worker-visible LOD
+  state, cached sourceboot phase state, lifecycle-level timestamps, and absent
+  runtime release helpers.
+- A direct C11/Werror integration compile failed on the absent runtime marker
+  enum and observer registration API. The aggregate gate stopped at the source
+  RED first, so the compile used its exact source list and flags directly.
+
+Original Steps 1--3 RED (retained for provenance):
+
 - Integration contract: missing start/poll and pending retention.
 - Cadence source contract: version 1/60 bytes and absent overlap counters.
 - `verify-demo-render-overlap`: missing production lifecycle module.
@@ -75,6 +103,17 @@ reruns used the repository venv and native `mingw32-make`. No MSYS/SH command
 was invoked.
 
 ## GREEN evidence
+
+Fix Round 2 focused evidence:
+
+- `mingw32-make -f Makefile.saturn.mk verify-render-overlap-integration`:
+  nominal PASS, 3/3 target-aware source assertions PASS, and all six mutations
+  caught.
+- `mingw32-make -f Makefile.saturn.mk verify-render-job-runtime verify-demo-render-overlap`:
+  runtime fixture PASS, runtime source 5/5 PASS, integration plus mutations
+  PASS, lifecycle fixture PASS, and all three lifecycle mutations caught.
+
+Original Steps 1--9 evidence (retained for provenance):
 
 - `mingw32-make -f Makefile.saturn.mk verify-demo-render-overlap`: PASS;
   nominal plus finalize-before-retirement, double-lowering, and serial-replay
@@ -102,8 +141,8 @@ green gate.
 
 ## Remaining gates
 
-- [ ] Step 10 specification review.
-- [ ] Step 10 quality review.
+- [ ] Step 10 fresh specification rereview of Fix Round 2.
+- [ ] Step 10 fresh quality rereview of Fix Round 2.
 - [ ] Step 11 process audit and one serialized target build.
 - [ ] Step 11 exact-identity automatic cadence capture.
 - [ ] Step 12 final reconciliation and rereview.
@@ -111,4 +150,4 @@ green gate.
 - [ ] Broad verify/native-math publication census.
 
 No target build, Ymir process, broad make verification, or native-math census
-was run during Steps 1--9.
+was run during either Fix Round 2 or the original Steps 1--9 source work.

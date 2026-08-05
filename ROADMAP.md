@@ -14,15 +14,17 @@ all A9 cadence/publication laws, and previous-complete-frame reuse are retained.
 Failure quarantines `N` without replay. Focused lifecycle/source/transfer tests
 and the version-2 cadence decoder are green. Independent review then found an
 active-generation LOD race plus phase, quarantine, and production-harness gaps.
-Fix Round 1 repairs all four with shared production controllers and mutation-
-sensitive executable integration; fresh specification and quality rereview are
-the next gates.
+Fix Round 2 additionally places the complete worker-visible LOD lifetime behind
+the target's P2 `.uncached` boundary, stamps phase events at runtime release
+markers, and combines deferred scene transition with terminal quarantine and
+nonzero `QQ` in the production-linked executable. Focused host/source gates are
+green; fresh specification and quality rereview remain the next gates.
 
 Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
 two-stage review, then exactly one serialized DLL-safe target build and exact-
 identity capture splitting source tick, overlapping slave work, and complete
 construction with master finalization as a subset. No target build may run in
-parallel, and none was run for Fix Round 1.
+parallel, and none was run for either fix round.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 

@@ -597,6 +597,7 @@ verify-frame-pipeline:
 
 verify-render-overlap-integration:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_a9_overlap_target_coherency.py"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
@@ -645,7 +646,7 @@ verify-render-overlap-integration:
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-start-phase-mutation$(HOST_EXEEXT)" \
 	  --label "render overlap omitted start-construction mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
-	  -DSM64_SATURN_RENDER_LIFECYCLE_TEST_OBSERVER_BEFORE_NOTIFY=1 \
+	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
@@ -659,7 +660,39 @@ verify-render-overlap-integration:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-notify-boundary-mutation$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
 	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-notify-boundary-mutation$(HOST_EXEEXT)" \
-	  --label "render overlap pre-publication timestamp mutation"
+	  --label "render overlap late notify-marker timestamp mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_RETIRE_MARKER=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-retire-boundary-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-retire-boundary-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap late retirement-marker timestamp mutation"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -DSM64_SATURN_LOD_LIFETIME_TEST_IGNORE_GENERATION=1 \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/render_overlap_integration_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_lod_lifetime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_runtime.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_lifecycle.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gpl/ztreme_hot_promotion.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_frame_pipeline.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_render_overlap_phase.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-generation-mutation$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/expect_failure.py" \
+	  "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-overlap-generation-mutation$(HOST_EXEEXT)" \
+	  --label "render overlap ignored LOD generation mutation"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSM64_SATURN_RENDER_JOB_RUNTIME_TEST_SKIP_TERMINAL_REFRESH=1 \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \

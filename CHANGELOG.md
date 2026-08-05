@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Closed the second A9A review-fix source round by moving every LOD lifetime
+  object read by either SH-2 into the linker-owned P2 `.uncached` partition.
+  Runtime marker clocks now stamp the real notify and positive-retirement
+  release sites, and publish the phase record before waking the slave or
+  exposing retirement so neither CPU can observe a half-published boundary.
+  The production-linked integration gate combines a deferred scene reset with
+  terminal quarantine, proves reset happens only after exact-generation
+  finish, asserts nonzero `QQ`, and catches late-marker and ignored-generation
+  mutations. Target/Ymir evidence remains open pending two-stage rereview.
+
 - Hardened the A9A frame-lifetime split after independent review. A renderer-
   owned generation gate now defers source scene/LOD resets until the active
   slave generation retires, lifecycle observers timestamp the actual notify

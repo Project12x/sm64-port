@@ -2164,3 +2164,69 @@ sm64-psx `3073845688ea273da78d539b20c45110d8a868c3` (no repository-wide
 license). Reuse mode remains dependency/API use or pattern-only; no upstream
 source was copied or close-ported. Fresh independent specification and quality
 rereview remain mandatory before the serialized target-build gate can open.
+
+## Task 9A Fix Round 2 — target-coherency and exact-marker remediation (2026-08-05)
+
+**Status: focused host/source GREEN; fresh rereview required.** Review of
+`d45c0a41..420b6ce8` remained FAIL/NO-GO on C1, I1, and I3. Fix Round 2 moves
+the complete worker-visible LOD lifetime into the target-coherent partition,
+stamps the true release sites, and strengthens the integrated failure case. It
+does not mark Step 10, target evidence, Ymir, broad verify, or native math
+complete.
+
+Watched RED:
+
+- `.venv-saturn-tools\Scripts\python.exe tools/saturn/test_a9_overlap_target_coherency.py`
+  failed 3/3: primitive tiers, cluster LOD state, and lifetime were cached;
+  sourceboot's phase clock/record were cached and registered the lifecycle
+  observer; runtime release-marker helpers did not exist.
+- The direct C11/Werror integration compile failed on the absent
+  `sm64_saturn_render_job_runtime_marker_t` and
+  `sm64_saturn_render_job_runtime_observe_markers()` API. The aggregate target
+  stopped at the earlier source-contract RED, so this compile was run directly
+  with the same sources and flags.
+
+Implementation and design correction:
+
+- `s_primitive_lod_tier`, `s_render_cluster_lod`, and `s_lod_lifetime` now use
+  `DEMO_CROSS_CPU_SHARED`, which the source/layout gate traces through
+  `.uncached` to the sourceboot linker's P2 `0x20000000 | ___bss_end` mapping.
+  Sourceboot's VBlank clock, phase record, and phase acceptance flag are also
+  `__uncached` because the slave retirement hook writes them.
+- Runtime marker registration stores the observer and target clock inside the
+  already-uncached runtime owner. Notification captures its stamp at the
+  notify release and publishes the phase record before MMIO wake. Retirement
+  captures at the positive release site and publishes the phase record before
+  the retirement sequence becomes visible. Compiled late-notify and late-
+  retire mutations invert those boundaries and are rejected.
+- The integration fixture rejects an N+1 LOD selection while N is active,
+  combines an active deferred scene transition with terminal quarantine,
+  proves no reset before `lod_lifetime_finish`, then proves reset plus
+  `QF=1, QQ=1`. An ignored-generation mutation is rejected.
+
+Focused GREEN:
+
+- `mingw32-make -f Makefile.saturn.mk verify-render-overlap-integration`:
+  production integration PASS; 3/3 target-coherency source assertions PASS;
+  six mutations caught (active reset, omitted start, late notify, late retire,
+  ignored generation, skipped quarantine refresh).
+- `mingw32-make -f Makefile.saturn.mk verify-render-job-runtime verify-demo-render-overlap`:
+  runtime C fixture PASS, runtime source contract 5/5 PASS, production
+  integration and all six mutations PASS, lifecycle fixture PASS, and its
+  early-finalize/double-lower/replay mutations are caught.
+- `git diff --check` remains a required pre-commit gate and is recorded with
+  the implementation commit below.
+
+Prior-art record is unchanged: SlaveDriver
+`a8986591557b6e680550d3c23970284d3b38ff8f` (GPL-3.0-or-later), Sonic Z-Treme
+`cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0), Yaul
+`6012f79f237773378c8014e70d8998ad95a38d98` (MIT), Jo Engine
+`556d081146211b6a1cfa6591d70f9487d406758b` (MIT/BSD-style file notices), and
+sm64-psx `3073845688ea273da78d539b20c45110d8a868c3` (no repository-wide
+license). Reuse remains dependency/API use or pattern-only; no upstream source
+was copied or closely ported.
+
+Independent-review verdict is still FAIL/NO-GO for the reviewed base. Fresh
+Step 10 specification and quality rereview are unchecked. Step 11 serialized
+target build/capture, manual Ymir acceptance, broad verify, and native-math
+publication census are also unchecked.

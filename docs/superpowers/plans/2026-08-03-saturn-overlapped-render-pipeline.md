@@ -332,8 +332,9 @@ and the evidence report before starting another task.
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
 - [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--9 are
-  source-implemented. Independent review was NO-GO; Fix Round 1 is focused-
-  host-green and fresh two-stage rereview is next, so the task is not yet
+  source-implemented. Independent review was NO-GO; Fix Round 2 closes its
+  remaining source findings and is focused-host/source-green. Fresh two-stage
+  rereview is next, so the task is not yet
   source-complete and no target/FPS claim exists. The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
@@ -1993,10 +1994,11 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** Independent review of `0350a473..d45c0a41` was FAIL/NO-GO. Fix
-Round 1 addresses its C1/I1/I2/I3/M1 findings and is focused-host-green; fresh
-specification and quality rereview are next. No target build, capture, or FPS
-evidence exists yet, and Task 9A is not source-complete before those reviews.
+**Status:** Independent review of `0350a473..d45c0a41` and Fix Round 1 review
+of `d45c0a41..420b6ce8` were FAIL/NO-GO. Fix Round 2 closes the remaining C1,
+I1, and I3 source findings and is focused-host/source-green; fresh specification
+and quality rereview are next. No target build, capture, or FPS evidence exists
+yet, and Task 9A is not source-complete before those reviews.
 The original RED/implementation checkpoints are `ec81ddc6` and `0f5ccd65`.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
@@ -2301,6 +2303,23 @@ expected FPS lever.
   Direct/saved v1 buffers remain supported; live observation requires v2.
   Fix Round 1 implementation is `24528bf6`.
   Fresh independent rereview, target/Ymir, broad verify, and native-math gates
+  remain unchecked.
+
+  Fix Round 2 watched RED first failed the new target-aware source contract
+  3/3 on cached worker-visible LOD state, cached phase clock/record, and absent
+  runtime release hooks. A direct C11/Werror integration compile then failed on
+  the absent marker type and registration API. GREEN moves primitive tiers,
+  cluster LOD state, and the exact-generation lifetime to the linker's P2
+  `.uncached` partition; sourceboot's marker clock, phase record, and acceptance
+  flag use the same target-coherent boundary. Runtime marker callbacks carry
+  timestamps captured at notify and positive-retirement release, with phase
+  publication ordered before slave wake or retirement visibility. The
+  production-linked failure case combines a deferred scene transition with
+  terminal quarantine and asserts no early reset, post-finish reset, one slave
+  failure, and nonzero `QQ`. The normal integration and six mutations pass;
+  `verify-render-job-runtime` and `verify-demo-render-overlap` also pass.
+  Independent verdict remains FAIL/NO-GO for the reviewed base; Step 10 fresh
+  rereview, Step 11 target/capture, manual Ymir, broad verify, and native-math
   remain unchecked.
 
 - [ ] **Step 10: Complete two-stage source review before any target build**

@@ -9,6 +9,9 @@ typedef struct sm64_saturn_render_job_runtime {
     sm64_saturn_render_job_graph_t *graph;
     const sm64_saturn_render_job_callback_table_t *callbacks;
     void *context;
+    sm64_saturn_render_job_runtime_marker_observer_fn marker_observer;
+    sm64_saturn_render_job_runtime_marker_clock_fn marker_clock;
+    void *marker_context;
     uint32_t active;
     volatile uint32_t notify_sequence;
     volatile uint32_t retired_sequence;
@@ -54,6 +57,67 @@ static void telemetry_retire(uint32_t generation, uint32_t sequence)
     s_runtime.telemetry.retired_sequence = sequence;
 }
 
+static uint32_t runtime_marker_clock(void)
+{
+    return s_runtime.marker_clock != NULL
+        ? s_runtime.marker_clock(s_runtime.marker_context) : 0U;
+}
+
+static void runtime_observe_marker(
+    sm64_saturn_render_job_runtime_marker_t marker, uint32_t generation,
+    uint32_t sequence, uint32_t marker_vblank)
+{
+    if (s_runtime.marker_observer != NULL)
+        s_runtime.marker_observer(s_runtime.marker_context, marker,
+                                  generation, sequence, marker_vblank);
+}
+
+static void runtime_publish_notify_marker(uint32_t generation,
+                                          uint32_t sequence)
+{
+#if !defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER)
+    const uint32_t marker_vblank = runtime_marker_clock();
+#endif
+    s_runtime.notify_sequence = sequence;
+    runtime_fence();
+#if !defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER)
+    runtime_observe_marker(SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED,
+                           generation, sequence, marker_vblank);
+#endif
+#if defined(__sh__)
+    cpu_dual_slave_notify();
+#endif
+#if defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_NOTIFY_MARKER)
+    /* Model a field edge after the release/MMIO site, then sample at the
+     * deliberately wrong late observer boundary. */
+    (void)runtime_marker_clock();
+    const uint32_t marker_vblank = runtime_marker_clock();
+    runtime_observe_marker(SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED,
+                           generation, sequence, marker_vblank);
+#endif
+}
+
+static void runtime_publish_retirement_marker(uint32_t generation,
+                                              uint32_t sequence)
+{
+#if defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_RETIRE_MARKER)
+    s_runtime.retired_sequence = sequence;
+    runtime_fence();
+    (void)runtime_marker_clock();
+    const uint32_t marker_vblank = runtime_marker_clock();
+    runtime_observe_marker(SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED,
+                           generation, sequence, marker_vblank);
+#else
+    const uint32_t marker_vblank = runtime_marker_clock();
+    runtime_observe_marker(SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED,
+                           generation, sequence, marker_vblank);
+#endif
+#if !defined(SM64_SATURN_RENDER_JOB_RUNTIME_TEST_LATE_RETIRE_MARKER)
+    s_runtime.retired_sequence = sequence;
+    runtime_fence();
+#endif
+}
+
 #if defined(__sh__)
 static void render_job_slave_entry(void)
 {
@@ -66,8 +130,7 @@ static void render_job_slave_entry(void)
     /* Positive retirement is the release marker. Publish every diagnostic
      * field first so a master that observes this sequence can snapshot one
      * coherent completed generation. */
-    s_runtime.retired_sequence = notified;
-    runtime_fence();
+    runtime_publish_retirement_marker(generation, notified);
 }
 #endif
 
@@ -104,18 +167,30 @@ bool sm64_saturn_render_job_runtime_activate_graph(
     return true;
 }
 
+bool sm64_saturn_render_job_runtime_observe_markers(
+    sm64_saturn_render_job_runtime_marker_observer_fn observer,
+    sm64_saturn_render_job_runtime_marker_clock_fn clock, void *context)
+{
+    if (s_runtime.active == 0U || observer == NULL || clock == NULL ||
+        s_runtime.marker_observer != NULL || s_runtime.notify_sequence != 0U)
+        return false;
+    s_runtime.marker_observer = observer;
+    s_runtime.marker_clock = clock;
+    s_runtime.marker_context = context;
+    runtime_fence();
+    return true;
+}
+
 void sm64_saturn_render_job_runtime_notify(void)
 {
     if (s_runtime.active == 0U || s_runtime.queue == NULL) return;
     uint32_t sequence = s_runtime.notify_sequence + 1U;
     if (sequence == 0U) sequence = 1U;
-    s_runtime.notify_sequence = sequence;
-    telemetry_reset(sm64_saturn_render_job_queue_generation(s_runtime.queue),
-                    sequence);
+    const uint32_t generation =
+        sm64_saturn_render_job_queue_generation(s_runtime.queue);
+    telemetry_reset(generation, sequence);
     runtime_fence();
-#if defined(__sh__)
-    cpu_dual_slave_notify();
-#endif
+    runtime_publish_notify_marker(generation, sequence);
 }
 
 bool sm64_saturn_render_job_runtime_slave_retired(void)
@@ -176,8 +251,8 @@ uint16_t sm64_saturn_render_job_runtime_poll_slave(void)
 #if !defined(__sh__)
     telemetry_retire(generation, s_runtime.notify_sequence);
     runtime_fence();
-    s_runtime.retired_sequence = s_runtime.notify_sequence;
-    runtime_fence();
+    runtime_publish_retirement_marker(generation,
+                                      s_runtime.notify_sequence);
 #endif
     return completed;
 }

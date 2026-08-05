@@ -18,6 +18,17 @@ typedef struct sm64_saturn_render_job_runtime_telemetry {
     uint32_t quarantined;
 } sm64_saturn_render_job_runtime_telemetry_t;
 
+typedef enum sm64_saturn_render_job_runtime_marker {
+    SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_NOTIFIED,
+    SM64_SATURN_RENDER_JOB_RUNTIME_MARKER_RETIRED,
+} sm64_saturn_render_job_runtime_marker_t;
+
+typedef uint32_t (*sm64_saturn_render_job_runtime_marker_clock_fn)(
+    void *context);
+typedef void (*sm64_saturn_render_job_runtime_marker_observer_fn)(
+    void *context, sm64_saturn_render_job_runtime_marker_t marker,
+    uint32_t generation, uint32_t sequence, uint32_t marker_vblank);
+
 /* Deprecated raw-queue activation. It fails closed: dependent live work must
  * enter through graph-aware activation below. */
 bool sm64_saturn_render_job_runtime_activate(
@@ -30,6 +41,13 @@ bool sm64_saturn_render_job_runtime_activate(
 bool sm64_saturn_render_job_runtime_activate_graph(
     sm64_saturn_render_job_graph_t *graph,
     const sm64_saturn_render_job_callback_table_t *callbacks, void *context);
+
+/* Installs the target-clock sampler used at the two cross-CPU release
+ * markers. The observer receives the captured value, so callback latency can
+ * never move the recorded notification or retirement boundary. */
+bool sm64_saturn_render_job_runtime_observe_markers(
+    sm64_saturn_render_job_runtime_marker_observer_fn observer,
+    sm64_saturn_render_job_runtime_marker_clock_fn clock, void *context);
 
 /* The master calls this only after queue publication. */
 void sm64_saturn_render_job_runtime_notify(void);

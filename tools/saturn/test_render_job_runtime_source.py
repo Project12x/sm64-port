@@ -34,20 +34,22 @@ class RenderJobRuntimeSourceTests(unittest.TestCase):
             '#if defined(__sh__)\n#include <cpu/cache.h>\n#endif', source
         )
 
-    def test_retirement_marker_is_published_after_telemetry(self):
+    def test_retirement_helper_is_called_after_telemetry(self):
         source = RUNTIME.read_text(encoding="utf-8")
         start = source.index("static void render_job_slave_entry(void)")
         body = source[start:source.index("\n}", start) + 2]
         self.assertLess(
             body.index("telemetry_retire(generation, notified)"),
-            body.index("s_runtime.retired_sequence = notified"),
+            body.index("runtime_publish_retirement_marker(generation, notified)"),
         )
 
-        host_start = source.index("#if !defined(__sh__)")
+        host_start = source.index(
+            "telemetry_retire(generation, s_runtime.notify_sequence)"
+        )
         host_body = source[host_start:source.index("#endif", host_start)]
         self.assertLess(
             host_body.index("telemetry_retire(generation, s_runtime.notify_sequence)"),
-            host_body.index("s_runtime.retired_sequence = s_runtime.notify_sequence"),
+            host_body.index("runtime_publish_retirement_marker("),
         )
 
 

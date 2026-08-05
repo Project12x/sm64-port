@@ -221,13 +221,16 @@ versioned-cadence tests are green; review and target evidence remain open.
 Independent A9A review exposed one exception to that immutable-lifetime claim:
 the N+1 source tick could reset the global LOD tier/cluster state while N's
 slave lower job still used it. The renderer now defers those scene resets in a
-generation gate and applies them only after exact N retirement. A shared
-scene-neutral overlap controller receives lifecycle notification/retirement
-events at the production boundary, accounts first-service preparation and
-terminal lowering as complete construction, and retains master finalization as
-a subset. Terminal telemetry scans quarantine state before queue reset. These
-repairs are covered by a real runtime/graph/queue/lifecycle integration harness;
-fresh source rereview remains required before target evidence.
+generation gate and applies them only after exact N retirement. The gate,
+primitive tiers, and cluster LOD state are linker-owned P2 `.uncached` objects,
+so the slave never consumes an ordinary cached master static. A shared scene-
+neutral overlap controller is stamped at the runtime notify and positive-
+retirement release sites; its phase record is published before slave wake or
+retirement visibility. Terminal telemetry scans quarantine state before queue
+reset. A production-linked fixture combines active deferred scene state with
+failure quarantine, proves reset ordering and nonzero `QQ`, and catches late-
+marker plus wrong-generation mutations. Fresh source rereview remains required
+before target evidence.
 
 At that terminal boundary, VDP2 composes only the immutable sky camera carried
 by the displayed VDP1 bank and a small displayed/rendered/simulation generation
