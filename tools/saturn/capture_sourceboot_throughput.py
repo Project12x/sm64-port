@@ -49,7 +49,12 @@ CADENCE_RECORD_FIELDS = CADENCE_V1_RECORD_FIELDS + (
     "master_finalize_vblank_crossings",
     "master_finalize_count",
 )
-RUNTIME_BYTES = 92
+RUNTIME_LAYOUTS = {
+    # Four owner pointers, active/notify/retired, then telemetry.
+    92: {"telemetry": 28},
+    # Fix Round 2 adds marker observer/clock/context before active.
+    104: {"telemetry": 40},
+}
 RENDER_JOB_QUEUE_BYTES = 232
 IDENTITY_PROBE_BYTES = 16
 MAX_VBLANKS = 4096
@@ -60,7 +65,7 @@ IDENTITY_MISMATCH_MESSAGE = "running target does not contain immutable bytes fro
 REQUIRED_SYMBOLS = {
     "sourceboot_boot_trace": BOOT_TRACE_BYTES,
     "sourceboot_cadence_trace": CADENCE_TRACE_BYTES,
-    "s_runtime": RUNTIME_BYTES,
+    "s_runtime": tuple(RUNTIME_LAYOUTS),
     "s_render_job_queue": RENDER_JOB_QUEUE_BYTES,
 }
 
@@ -172,9 +177,17 @@ def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
         if len(matches) != 1:
             raise ValueError(f"ELF has duplicate required symbol {name}")
         symbol = matches[0]
-        if symbol["size"] != expected_size:
+        expected_sizes = (expected_size,) if isinstance(expected_size, int) \
+            else expected_size
+        if symbol["size"] not in expected_sizes:
+            if len(expected_sizes) == 1:
+                expectation = f"expected {expected_sizes[0]}"
+            else:
+                expectation = "known sizes " + ", ".join(
+                    str(size) for size in expected_sizes
+                )
             raise ValueError(
-                f"ELF symbol {name} has wrong size {symbol['size']}, expected {expected_size}"
+                f"ELF symbol {name} has wrong size {symbol['size']}, {expectation}"
             )
         resolved[name] = symbol
     return resolved
@@ -318,24 +331,26 @@ def decode_cadence_trace(raw: bytes) -> dict[str, Any]:
 
 
 def decode_runtime(raw: bytes) -> dict[str, Any]:
-    if len(raw) != RUNTIME_BYTES:
+    layout = RUNTIME_LAYOUTS.get(len(raw))
+    if layout is None:
         raise ValueError("runtime telemetry has wrong size")
-    qm = [_be32(raw, 44 + 4 * index) for index in range(4)]
-    qs = [_be32(raw, 60 + 4 * index) for index in range(4)]
-    master_failures = _be32(raw, 80)
-    slave_failures = _be32(raw, 84)
+    telemetry = layout["telemetry"]
+    qm = [_be32(raw, telemetry + 16 + 4 * index) for index in range(4)]
+    qs = [_be32(raw, telemetry + 32 + 4 * index) for index in range(4)]
+    master_failures = _be32(raw, telemetry + 52)
+    slave_failures = _be32(raw, telemetry + 56)
     return {
-        "qn": _be32(raw, 28),
-        "qr": _be32(raw, 32),
-        "notify_sequence": _be32(raw, 36),
-        "retired_sequence": _be32(raw, 40),
+        "qn": _be32(raw, telemetry),
+        "qr": _be32(raw, telemetry + 4),
+        "notify_sequence": _be32(raw, telemetry + 8),
+        "retired_sequence": _be32(raw, telemetry + 12),
         "qm": qm,
         "qs": qs,
-        "qw": _be32(raw, 76),
+        "qw": _be32(raw, telemetry + 48),
         "master_failures": master_failures,
         "slave_failures": slave_failures,
         "qf": master_failures + slave_failures,
-        "qq": _be32(raw, 88),
+        "qq": _be32(raw, telemetry + 60),
     }
 
 
@@ -535,7 +550,10 @@ def observe_target(
     for sample_index in range(max_vblanks):
         client.call("exec.run_for", {"frames": 1})
         trace = decode_boot_trace(read_exact(client, _p2(symbols["sourceboot_boot_trace"]["address"]), BOOT_TRACE_BYTES))
-        runtime = decode_runtime(read_exact(client, _p2(symbols["s_runtime"]["address"]), RUNTIME_BYTES))
+        runtime_size = symbols["s_runtime"]["size"]
+        runtime = decode_runtime(read_exact(
+            client, _p2(symbols["s_runtime"]["address"]), runtime_size
+        ))
         queue_generation = decode_queue_generation(
             read_exact(client, _p2(symbols["s_render_job_queue"]["address"]), RENDER_JOB_QUEUE_BYTES)
         )

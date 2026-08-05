@@ -2339,7 +2339,7 @@ expected FPS lever.
   reviewer explicitly authorizes exactly one serialized Step 11 build/capture;
   actual ELF/map P2 addresses, memory margins, and runtime uplift remain open.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — BUILD PASS; CAPTURE CONTRACT BLOCKED**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2350,6 +2350,28 @@ expected FPS lever.
   retirement/failure/quarantine, transfer faults/waits, reuse, and FPS. The
   capture is comparative emulator evidence, not a promised uplift or manual
   acceptance.
+
+  The sole forced `-B -j1` build passed in 334.1 seconds through the DLL-safe
+  wrapper. Exact artifacts: ELF `5afbc752...3065f0` (8,745,796 bytes), ISO
+  `1d5f55f2...ab5411` (4,679,680 bytes), and CUE
+  `cdbf0bfa...f46dba7` (88 bytes). The first bounded capture failed closed at
+  symbol resolution before Ymir startup because the production runtime grew
+  from 92 to 104 bytes for exact marker ownership while the observer still
+  required 92. Failed report: `a9a-step11-overlap-throughput-2026-08-05.json`.
+  Capture/FPS, linked P2 addresses, and memory margins remain unchecked while
+  the observer layout contract is repaired and reviewed; do not rebuild.
+
+  Fix Round 3 is source-repaired and focused-green, but capture retry remains
+  unauthorized pending independent review. The watched fixture models the
+  exact source evolution: legacy `s_runtime` is 92 bytes with telemetry at
+  offset 28; the reviewed marker-enabled runtime adds three 32-bit owner
+  pointers before `active`, is 104 bytes, and places telemetry at offset 40.
+  The observer now selects only those two explicit layouts from the resolved
+  ELF symbol size and reads that exact byte count; unknown sizes still fail
+  closed. The focused capture suite passes 35/35, and symbol-only validation of
+  exact ELF `5afbc752...3065f0` selects 104/40. The failed JSON remains the
+  disposition of the first pre-Ymir attempt, not target runtime evidence.
+  No rebuild, Ymir launch, capture retry, or FPS result was produced.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

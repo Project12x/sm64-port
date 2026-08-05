@@ -1,0 +1,47 @@
+{
+  "artifacts": {
+    "cue": {
+      "mtime": 1785924030.0693479,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.cue",
+      "sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+      "size": 88
+    },
+    "elf": {
+      "mtime": 1785924023.139235,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\obj\\sm64-saturn-sourceboot-e2.elf",
+      "sha256": "5afbc7527bf470e9c9b099d5874f13030f4a4406dc93d9a751b057584c3065f0",
+      "size": 8745796
+    },
+    "iso": {
+      "mtime": 1785924028.8486648,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\sourceboot\\e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4\\sm64-saturn-sourceboot-e2.iso",
+      "sha256": "1d5f55f2d3013b24b656edcf56dac521a2b9c9472f354f778cacc3d027ab5411",
+      "size": 4679680
+    },
+    "ymir": {
+      "mtime": 1784690285.4231486,
+      "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\ymir-agent\\build-agent2\\apps\\ymir-headless\\Release\\ymir-headless.exe",
+      "sha256": "fcc88d82b2ea7afdf400bcf67d45139d02354379388f7f9dba731b63a38d3943",
+      "size": 3255296
+    }
+  },
+  "created_utc": "2026-08-05T10:01:57.594313+00:00",
+  "evidence_kind": "ymir-sourceboot-queue-throughput",
+  "failure": {
+    "message": "ELF symbol s_runtime has wrong size 104, expected 92",
+    "stage": "symbol-resolution",
+    "type": "ValueError"
+  },
+  "protocol": {
+    "notifications": [],
+    "notifications_original_bytes": 0,
+    "notifications_original_count": 0,
+    "notifications_truncated": false,
+    "ready": false,
+    "stderr": "",
+    "stderr_original_bytes": 0,
+    "stderr_truncated": false
+  },
+  "schema": "sm64-saturn-sourceboot-throughput-v1",
+  "status": "failed"
+}

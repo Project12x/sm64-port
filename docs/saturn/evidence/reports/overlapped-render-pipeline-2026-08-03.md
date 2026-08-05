@@ -2235,3 +2235,44 @@ coverage, and unchanged bank/A8/A9/VDP1/VDP2 ownership. Step 10 is complete and
 the reviewer authorizes exactly one serialized Step 11 build/capture. Actual
 ELF/map P2 placement, memory margins, manual Ymir acceptance, broad verify, and
 native-math publication census remain unchecked.
+
+## Task 9A Step 11 first target attempt (2026-08-05)
+
+The sole DLL-safe forced `-B -j1` build exits zero in 334.1 seconds. Exact
+artifacts are ELF `5afbc752...3065f0` (8,745,796 bytes), ISO
+`1d5f55f2...ab5411` (4,679,680 bytes), and CUE
+`cdbf0bfa...f46dba7` (88 bytes). The first bounded capture fails closed at
+symbol resolution before Ymir starts: reviewed runtime-marker fields increase
+`s_runtime` from 92 to 104 bytes, but the observer still requires 92. The
+failed JSON report is `a9a-step11-overlap-throughput-2026-08-05.json`. No FPS,
+runtime phase, linked P2 placement, or memory-margin claim is credited. Repair
+and independently review the observer contract against this exact ELF; do not
+rebuild the target.
+
+### Step 11 capture observer Fix Round 3
+
+Root cause is an ABI-aware observer defect, not a target runtime failure. The
+reviewed marker repair added three 32-bit function/context pointers before
+`active`: exact `s_runtime` therefore evolved from 92 bytes/telemetry offset 28
+to 104 bytes/telemetry offset 40. Accepting size 104 while retaining the old
+offsets would silently misdecode active/runtime words as telemetry, so the
+repair uses two explicit source-validated layouts rather than a minimum-size or
+arbitrary-size rule.
+
+Watched RED: repository-venv
+`test_capture_sourceboot_throughput.py` ran 35 tests and failed three exact new
+cases: the layout table was absent, 104-byte decode raised `runtime telemetry
+has wrong size`, and ELF resolution raised `s_runtime has wrong size 104,
+expected 92`. GREEN: the same suite passes 35/35. It proves legacy 92/28 and
+marker 104/40 decoding, requires the reviewed source field order, accepts the
+exact two symbol sizes, and rejects 88/96/100/108. A read-only symbol check
+against ELF SHA-256
+`5afbc7527bf470e9c9b099d5874f13030f4a4406dc93d9a751b057584c3065f0`
+resolves `s_runtime` as 104 bytes and selects telemetry offset 40.
+
+The failed JSON is retained and committed as the disposition of the first
+attempt: status `failed`, stage `symbol-resolution`, protocol `ready=false`, no
+notifications, and no Ymir startup. It provides no FPS, phase, P2 placement, or
+margin evidence. Independent review must approve this source-only observer
+repair before retrying the capture. No target rebuild, Ymir launch, capture
+retry, broad verify, or native-math census occurred.

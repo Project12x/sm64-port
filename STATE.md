@@ -21,6 +21,22 @@ its BUILDING source bank remain owned while pending; the single queued snapshot
 `N+1` may receive its master-owned source tick but cannot become an active
 render until `N` retires and publishes.
 
+Step 11's sole forced target build passes in 334.1 seconds with ELF
+`5afbc752...3065f0`, ISO `1d5f55f2...ab5411`, and unchanged CUE identity
+`cdbf0bfa...f46dba7`. The first automatic capture failed closed before Ymir
+startup because its observer still required the pre-marker 92-byte `s_runtime`
+symbol while the reviewed target links 104 bytes. Capture/FPS, linked P2
+addresses, and memory margins remain open pending a TDD observer-contract
+repair and independent review; no second target build is authorized.
+
+Fix Round 3 repairs that observer contract without rebuilding or launching
+Ymir. A watched 104-byte fixture proves the marker-enabled telemetry begins at
+offset 40 rather than legacy offset 28; symbol resolution accepts only the
+source-validated 92/104-byte layouts, and observation reads the exact resolved
+size. The focused capture suite passes 35/35, and direct resolution of exact
+ELF `5afbc752...3065f0` selects size 104/offset 40. Capture retry, FPS, P2
+addresses, and margins remain blocked pending independent review.
+
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's
 nonzero successor and 30 Hz remainder, one normal plus one recovery tick,

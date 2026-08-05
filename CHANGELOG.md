@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Repaired the A9A Step 11 throughput observer after the sole target build
+  exposed an intentional runtime-layout evolution. The capture now recognizes
+  exactly two source-validated SH-2 layouts: the reachable 92-byte legacy
+  runtime with telemetry at byte 28 and the reviewed 104-byte marker-enabled
+  runtime with telemetry at byte 40. It reads the resolved symbol size and
+  decodes every sequence/counter relative to that layout; nearby or unknown
+  sizes still fail closed. The first failed report remains evidence only of a
+  pre-Ymir observer-contract mismatch. No target rebuild, Ymir launch, capture
+  retry, or FPS claim accompanies this repair.
+
 - Closed the second A9A review-fix source round by moving every LOD lifetime
   object read by either SH-2 into the linker-owned P2 `.uncached` partition.
   Runtime marker clocks now stamp the real notify and positive-retirement

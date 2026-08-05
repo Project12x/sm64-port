@@ -52,6 +52,24 @@ def runtime(
     return be_words(92, values)
 
 
+def marker_runtime(
+    *, qn: int, qr: int, notify: int, retired: int,
+    qm: tuple[int, int, int, int] = (1, 2, 3, 4),
+    qs: tuple[int, int, int, int] = (5, 6, 7, 8),
+    qw: int = 9, master_failures: int = 10, slave_failures: int = 11,
+    qq: int = 12,
+) -> bytes:
+    values = {
+        40: qn, 44: qr, 48: notify, 52: retired, 88: qw,
+        92: master_failures, 96: slave_failures, 100: qq,
+    }
+    for index, value in enumerate(qm):
+        values[56 + 4 * index] = value
+    for index, value in enumerate(qs):
+        values[72 + 4 * index] = value
+    return be_words(104, values)
+
+
 def queue(generation: int) -> bytes:
     return be_words(232, {224: generation})
 
@@ -166,6 +184,61 @@ def elf32_with_symbols(
 
 
 class ThroughputCaptureTests(unittest.TestCase):
+    def test_runtime_layouts_match_exact_reviewed_source_evolution(self) -> None:
+        self.assertEqual(
+            capture.RUNTIME_LAYOUTS,
+            {
+                92: {"telemetry": 28},
+                104: {"telemetry": 40},
+            },
+        )
+        source = (
+            TOOLS_DIR.parent.parent
+            / "src/port/saturn/gfx/saturn_render_job_runtime.c"
+        ).read_text(encoding="utf-8")
+        start = source.index("typedef struct sm64_saturn_render_job_runtime {")
+        body = source[start:source.index("} sm64_saturn_render_job_runtime_t;", start)]
+        self.assertLess(body.index("void *context;"), body.index("marker_observer;"))
+        self.assertLess(body.index("marker_observer;"), body.index("marker_clock;"))
+        self.assertLess(body.index("marker_clock;"), body.index("marker_context;"))
+        self.assertLess(body.index("marker_context;"), body.index("uint32_t active;"))
+        self.assertLess(body.index("retired_sequence;"), body.index("telemetry;"))
+
+    def test_decodes_marker_enabled_runtime_at_shifted_offsets(self) -> None:
+        decoded = capture.decode_runtime(marker_runtime(
+            qn=13, qr=14, notify=15, retired=16,
+        ))
+        self.assertEqual(decoded["qn"], 13)
+        self.assertEqual(decoded["qr"], 14)
+        self.assertEqual(decoded["notify_sequence"], 15)
+        self.assertEqual(decoded["retired_sequence"], 16)
+        self.assertEqual(decoded["qm"], [1, 2, 3, 4])
+        self.assertEqual(decoded["qs"], [5, 6, 7, 8])
+        self.assertEqual(decoded["qw"], 9)
+        self.assertEqual(decoded["qf"], 21)
+        self.assertEqual(decoded["qq"], 12)
+
+    def test_symbol_resolution_accepts_only_known_runtime_layout_sizes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            elf = Path(directory) / "game.elf"
+            symbols = [
+                ("sourceboot_boot_trace", BOOT_ADDRESS, 32),
+                ("sourceboot_cadence_trace", CADENCE_ADDRESS,
+                 capture.CADENCE_TRACE_BYTES),
+                ("s_runtime", RUNTIME_ADDRESS, 104),
+                ("s_render_job_queue", QUEUE_ADDRESS, 232),
+            ]
+            elf32_with_symbols(elf, symbols)
+            self.assertEqual(
+                capture.resolve_required_symbols(elf)["s_runtime"]["size"],
+                104,
+            )
+            for unknown_size in (88, 96, 100, 108):
+                symbols[2] = ("s_runtime", RUNTIME_ADDRESS, unknown_size)
+                elf32_with_symbols(elf, symbols)
+                with self.assertRaisesRegex(ValueError, "known sizes"):
+                    capture.resolve_required_symbols(elf)
+
     def test_decodes_v2_overlap_window_and_retains_explicit_v1_support(self) -> None:
         self.assertEqual(capture.CADENCE_TRACE_BYTES, 76)
         self.assertEqual(capture.CADENCE_TRACE_VERSION, 2)
