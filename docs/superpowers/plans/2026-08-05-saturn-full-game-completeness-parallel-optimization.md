@@ -116,7 +116,7 @@ all complete.
 - [ ] Task 1 — source-complete — commits `f349fe9f`, `52c75422`; independent rereview PASS. Focused 222/222, mutation, and equivalent MSYS normal host gate are green. The prescribed Qt wrapper quote defect and capped broad exact-ELF verifier remain open; no target/Ymir/manual evidence is claimed.
 - [ ] Task 2 — source-complete — commits `f5a0248d`, `8c97fd4e` (reports `264f3b4b`, `5008759e`); independent rereview PASS. Identity 9/9, sourceboot identity 5/5, capture 35/35, archive 12/12, and no-build baseline revalidation are green. Linked SH-2 symbol/layout, Ymir/manual, and Task 1 broad native-math gates remain open.
 - [ ] Task 3 — source-complete — final rereview SPEC/QUALITY PASS. Generic 19/19, real BOB 1/1, inventory 1/1, and serial closure compilation are green. BOB is 86 records, 133 source hashes, 54 proven SFX IDs/8 banks; target/Ymir/FPS/package/native-math/manual gates remain open.
-- [ ] Task 4 — compile the generic S64P schema and provisional fixtures
+- [ ] Task 4 — active — compiling the generic S64P schema and provisional fixtures from the now source-complete scene closure
 - [ ] Task 5 — validate and retain scene-package residency
 - [ ] Task 6 — evolve PCM protocol v2 with protected control capacity
 - [ ] Task 7 — generate the complete Mario animation bank
