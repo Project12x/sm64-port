@@ -2,10 +2,10 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Task 9A/A9A is **rebuilt with valid physical WRAM margins, but blocked at an
-over-strict verifier section-type contract before capture**. Fix Round 4
-specification and quality reviews were PASS with no Critical or Important
-findings. The accepted renderer still exposes exact-generation
+Task 9A/A9A is **rebuilt and exact-map green; the narrow verifier correction is
+awaiting independent review before capture**. Fix Round 4 specification and
+quality reviews were PASS with no Critical or Important findings. The accepted
+renderer still exposes exact-generation
 `start_frame(N)` and `poll_frame(N)`: start publishes immutable jobs and
 returns after one slave notification; poll waits for positive retirement,
 then drains, merges, lowers once, and retires. Failure quarantines without
@@ -39,9 +39,11 @@ integration are green, including all six mutations. The authorized forced
 `-j1` rebuild passed in 331.4 seconds. Exact ELF `1905ec8d...fc2e2` ends at
 `0x060FDED8`, leaving `0x2128` HWRAM; `.lwram_bss` ends at `0x002F8B10`,
 leaving `0x74F0` LWRAM. P2 `.uncached=0x260FD810+0x6C8` maps exactly to
-`___end`, but is correctly emitted as `PROGBITS` because it includes Yaul's
-`.uncached.function` cache helpers. The verifier currently requires `NOBITS`
-and therefore failed before capture. No Ymir run or FPS claim is credited.
+`___end`, and is correctly emitted as `PROGBITS` because it includes Yaul's
+`.uncached.function` cache helpers and initialized slave entry. Commit
+`cfb07a7d` corrects the verifier to require `PROGBITS` exactly; 15/15 focused
+tests and the exact hash-bound ELF now pass. No Ymir run or FPS claim is
+credited pending independent review.
 
 The unchanged invariants are master-only simulation/input/live state/
 allocation/final order/VDP1/presentation, one active render generation, A9's

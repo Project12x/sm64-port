@@ -1,0 +1,43 @@
+{
+  "schema": "sm64-saturn-a9a-repaired-memory-map-v1",
+  "status": "pass",
+  "verifier_commit": "cfb07a7deccea420a05c49d20defc8a32e52d8fd",
+  "artifact": {
+    "elf_sha256": "1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2",
+    "elf_size": 8721516,
+    "iso_sha256": "1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96",
+    "iso_size": 4653056,
+    "cue_sha256": "cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7",
+    "cue_size": 88
+  },
+  "layout": {
+    "bss_end": "0x060FD810",
+    "uncached_kind": "PROGBITS",
+    "uncached_address": "0x260FD810",
+    "uncached_size": "0x6C8",
+    "end": "0x060FDED8",
+    "hwram_margin": 8488,
+    "hwram_margin_hex": "0x2128",
+    "lwram_bss_address": "0x00220000",
+    "lwram_bss_size": "0xD8B10",
+    "lwram_end": "0x002F8B10",
+    "lwram_margin": 29936,
+    "lwram_margin_hex": "0x74F0"
+  },
+  "checks": {
+    "uncached_is_loadable_progbits": true,
+    "uncached_is_p2": true,
+    "uncached_physical_end_matches_end": true,
+    "hwram_floor_0x1b00": true,
+    "lwram_floor_0x4000": true,
+    "route0_has_no_capture_storage": true,
+    "stage8_bytes": 16384
+  },
+  "tests": {
+    "command": ".venv-saturn-tools\\Scripts\\python.exe tools\\saturn\\test_verify_sourceboot_memory_map.py",
+    "passed": 15,
+    "failed": 0
+  },
+  "runtime_claim": null,
+  "note": "This is exact ELF/map acceptance only; no Ymir launch, boot identity, capture, or FPS claim is implied."
+}

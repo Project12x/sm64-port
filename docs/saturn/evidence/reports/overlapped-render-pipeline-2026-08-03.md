@@ -2402,6 +2402,16 @@ Reference-code-first record: Yaul
 state and executable cache routines into the same P2 output section. Reuse mode
 is pattern-only/contract alignment; no upstream code is copied.
 
+Verifier correction `cfb07a7d` was developed with watched RED: after changing
+the valid fixture to `PROGBITS` and adding explicit type cases, the old gate
+rejected valid layouts and accepted `NOBITS`. The production edit requires
+`PROGBITS` exactly and changes no P2, HWRAM, physical-end, LWRAM, route, or
+stage predicate. Fresh verification passes 15/15 tests. The exact repaired ELF
+also passes, recorded in
+`docs/saturn/evidence/reports/a9a-step11-repaired-memory-map-2026-08-05.json`.
+Independent review and runtime capture remain open; no rebuild or Ymir run
+accompanied this correction.
+
 Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-

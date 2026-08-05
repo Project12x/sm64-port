@@ -2356,7 +2356,7 @@ expected FPS lever.
   reviewer authorizes exactly one fresh serialized repaired build followed by
   fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD PASS; VERIFIER TYPE CONTRACT BLOCKS CAPTURE**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP PASS; VERIFIER FIX REVIEW PENDING**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2454,6 +2454,15 @@ expected FPS lever.
   bytes. Reuse mode is pattern-only/contract alignment; no upstream code is
   copied. Watched RED/GREEN must change only the section-type predicate and
   retain all boundary, margin, and end-identity gates.
+
+  Commit `cfb07a7d` implements that exact correction with watched RED: the old
+  gate rejected valid `PROGBITS` layouts and accepted explicit `NOBITS`.
+  GREEN requires `PROGBITS` exactly, keeps every other predicate unchanged,
+  and passes 15/15 focused tests. The same exact ELF now passes with HWRAM
+  margin 8,488 (`0x2128`) and LWRAM margin 29,936 (`0x74F0`); evidence is
+  `docs/saturn/evidence/reports/a9a-step11-repaired-memory-map-2026-08-05.json`.
+  Fresh independent review of `cfb07a7d` is required before Ymir; no rebuild is
+  needed or authorized for that capture.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 
