@@ -2419,7 +2419,8 @@ expected FPS lever.
   capture, or FPS measurement was run for Fix Round 4. Projected margins
   (`~0x2168` HWRAM and `~0x74E0` LWRAM) are planning estimates, not target
   evidence; replace them with reviewed rebuilt-ELF/map values. Fresh two-stage
-  review is the next gate.
+  review is the next gate. Fix Round 4 implementation/tests/docs/evidence:
+  `d8dfe35f`.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

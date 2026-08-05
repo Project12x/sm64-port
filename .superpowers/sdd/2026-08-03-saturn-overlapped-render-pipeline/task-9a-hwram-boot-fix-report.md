@@ -4,7 +4,7 @@ Date: 2026-08-05
 
 Base: `8e13fd01200bfce1c7dad0f386e2cf8fe664e249`
 
-Implementation/docs commit: pending closeout commit
+Implementation/tests/docs/evidence commit: `d8dfe35f`
 
 Status: **source-repaired and focused GREEN; independent specification and
 code-quality review required.** This report does not claim a repaired target

@@ -2374,6 +2374,6 @@ Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-
 through, and canonical-P2 snapshot patterns; no upstream source was copied or
-closely ported. Scoped implementation/docs commit is recorded in the Task 9A
-Fix Round 4 SDD report. Fresh specification and code-quality review are the
-next gate; only a GO may authorize one serialized repaired target build.
+closely ported. Scoped implementation/tests/docs/evidence commit: `d8dfe35f`.
+Fresh specification and code-quality review are the next gate; only a GO may
+authorize one serialized repaired target build.
