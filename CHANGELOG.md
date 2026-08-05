@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added a deterministic, generic scene-closure generator and its versioned
+  schema. It follows LevelScript declarations, macro presets, model/geo
+  bindings, BehaviorScript children, and explicitly reviewed native computed
+  spawn rules, with source hashes and fail-closed validation. BOB's former
+  hand-maintained Goomba count is now one generated capacity fact (11), so
+  model-less controllers, rewards, effects, and cyclic behavior graphs cannot
+  be silently excluded from later actor, animation, or audio package work.
+
 - Closed the first independent-review gaps in the sourceboot build identity and
   historical A9A archive. The effective-config digest and identity-derived
   output label now bind every remaining compiler-affecting wrapper control,
