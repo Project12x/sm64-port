@@ -97,6 +97,79 @@ static void test_lifecycle_and_ticket_retirement(void)
     assert(sm64_saturn_vdp1_frame_bank_begin_build(&set, 12U, &first));
 }
 
+static void test_init_rejects_alias_overlap_and_misalignment(void)
+{
+    sm64_saturn_vdp1_frame_bank_set_t set;
+    sm64_saturn_gouraud_bank_t gouraud[2];
+    sm64_saturn_gouraud_bank_init(
+        &gouraud[0], (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06010000U,
+        1536U, 0x25C40000U);
+    sm64_saturn_gouraud_bank_init(
+        &gouraud[1], (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06013000U,
+        1536U, 0x25C40000U);
+
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00200000U, 2048U, &gouraud[0], &gouraud[1]));
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200001U,
+        (void *)(uintptr_t)0x00210000U, 2048U, &gouraud[0], &gouraud[1]));
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00208000U, 2048U, &gouraud[0], &gouraud[1]));
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U, &gouraud[0], &gouraud[0]));
+    sm64_saturn_gouraud_bank_t *const overlapping_object =
+        (sm64_saturn_gouraud_bank_t *)((uint8_t *)&gouraud[0] +
+            _Alignof(sm64_saturn_gouraud_bank_t));
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U,
+        &gouraud[0], overlapping_object));
+    sm64_saturn_gouraud_bank_t *const misaligned_object =
+        (sm64_saturn_gouraud_bank_t *)((uint8_t *)&gouraud[1] + 1U);
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U,
+        &gouraud[0], misaligned_object));
+
+    gouraud[1].staging = gouraud[0].staging;
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U, &gouraud[0], &gouraud[1]));
+    gouraud[1].staging =
+        (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06011000U;
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U, &gouraud[0], &gouraud[1]));
+    gouraud[1].staging =
+        (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06013004U;
+    assert(!sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x00200000U,
+        (void *)(uintptr_t)0x00210000U, 2048U, &gouraud[0], &gouraud[1]));
+}
+
+static void test_late_completion_cannot_regress_publication(void)
+{
+    sm64_saturn_vdp1_frame_bank_set_t set;
+    sm64_saturn_gouraud_bank_t gouraud[2];
+    sm64_saturn_vdp1_frame_bank_t *late = NULL;
+    sm64_saturn_vdp1_frame_bank_t *newest = NULL;
+    init_set(&set, gouraud);
+
+    assert(sm64_saturn_vdp1_frame_bank_begin_build(&set, UINT32_MAX, &late));
+    assert(sm64_saturn_vdp1_frame_bank_begin_build(&set, 1U, &newest));
+    assert(sm64_saturn_vdp1_frame_bank_ready(late, 3U, 0U, 10U));
+    assert(sm64_saturn_vdp1_frame_bank_record_synchronous_complete(late));
+    assert(sm64_saturn_vdp1_frame_bank_ready(newest, 3U, 0U, 11U));
+    assert(sm64_saturn_vdp1_frame_bank_record_synchronous_complete(newest));
+    assert(sm64_saturn_vdp1_frame_bank_publish(&set, newest));
+    assert(!sm64_saturn_vdp1_frame_bank_publish(&set, late));
+    assert(set.published == newest);
+    assert(late->state == SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED);
+}
+
 static void test_generation_wrap_and_wrong_bank(void)
 {
     sm64_saturn_vdp1_frame_bank_set_t set;
@@ -141,6 +214,8 @@ int main(void)
 {
     test_region_contract();
     test_lifecycle_and_ticket_retirement();
+    test_init_rejects_alias_overlap_and_misalignment();
+    test_late_completion_cannot_regress_publication();
     test_generation_wrap_and_wrong_bank();
     test_failed_build_is_quarantined_and_previous_bank_survives();
     return 0;

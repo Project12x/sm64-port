@@ -5,9 +5,11 @@ See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 Task 5/A5.9 is closed after completing the atomic cutover from fixed
 terrain/Mario workers to one dependency-aware descriptor queue and observing
 that queue on the exact target image. Task 7/A7 is source-complete and awaits
-independent review at implementation commit `650b911a`: the two VDP1
-command/Gouraud source-bank lifetimes are now
-explicit before A8 defers their transfers. The accepted A5 frame publishes
+repair rereview after consolidated review found and repaired stale publication,
+untruthful emitter completion, and storage-alias gaps. The original lifetime
+boundary landed at `650b911a`; the repair commit is pending. The two VDP1
+command/Gouraud source-bank lifetimes are now explicit before A8 defers their
+transfers. The accepted A5 frame publishes
 four coarse admit/lower jobs, publishes self-contained callback contexts before
 notification, lets both SH-2s claim work, requires terminal descriptors plus
 positive slave retirement, then performs final assembly and VDP1 lowering on
@@ -30,6 +32,14 @@ NOBITS section and `sourceboot_gouraud_staging` at `0x060D8FB8` with exact size
 FPS claim. The broad target verifier remains open on the pre-existing
 native-math oracle error `_play_cutscene -> _cutscene_bbh_death`; A7 itself
 compiled, linked, and passed its memory-map checks.
+
+The A7 review repair is focused- and target-link-green. Wrap-safe publication
+ordering quarantines late completion; both emitters fail before command upload
+after two invalid Gouraud submissions; and manager initialization rejects
+physical aliases, overlap, and misalignment. Fresh Pipe4 ELF SHA-256 is
+`b0ede6f93681984046904b1c4743f6bb38c7b3de89fa6f8e562baa23190401cc`.
+The broad verifier again reached only the unrelated native-math oracle blocker.
+Independent repair rereview remains open; no Ymir or FPS evidence is claimed.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact

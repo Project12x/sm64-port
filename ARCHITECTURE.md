@@ -89,9 +89,17 @@ represented as an explicit satisfied `NOOP`. Publication installs the new
 complete bank before the prior published fallback may retire, and retirement
 refuses the current fallback. Renderer failure quarantines only the incomplete
 building bank and retains the last complete publication.
+Publication also requires the candidate generation to follow the current bank
+under the same signed-delta wrap rule used for build admission. A late completed
+bank is quarantined rather than allowed to regress `published`. Manager setup
+normalizes Saturn aliases and rejects physical command/Gouraud overlap,
+misalignment, or duplicate bank objects.
 
 Build/snapshot, published/submitted, and displayed generations are distinct.
 The A7 adapter records today's internally blocking uploads as synchronously
 retired after the renderer returns. It does not claim asynchronous transfer or
 frame overlap; A8 must replace that adapter with real CPU-DMAC/SCU-DMA
 submission and retirement polling.
+Both current emitters nevertheless expose a truthful synchronous result: if a
+Gouraud queue submission is still invalid after one drain/retry, they return
+failure before command upload and sourceboot quarantines that build.

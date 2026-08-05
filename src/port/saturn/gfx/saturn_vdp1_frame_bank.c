@@ -18,6 +18,20 @@ static bool range_in_region(const void *source, size_t bytes,
            address < region_top && bytes <= region_top - address;
 }
 
+static uintptr_t normalized_address(const void *source)
+{
+    return (uintptr_t)source & SM64_SATURN_ADDRESS_MASK;
+}
+
+static bool ranges_overlap(const void *left, size_t left_bytes,
+                           const void *right, size_t right_bytes)
+{
+    const uintptr_t left_address = normalized_address(left);
+    const uintptr_t right_address = normalized_address(right);
+    return left_address < right_address + right_bytes &&
+           right_address < left_address + left_bytes;
+}
+
 bool sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
     const void *source, size_t bytes)
 {
@@ -52,24 +66,40 @@ bool sm64_saturn_vdp1_frame_bank_set_init(
     sm64_saturn_gouraud_bank_t *gouraud_bank_1)
 {
     if (banks == NULL || gouraud_bank_0 == NULL || gouraud_bank_1 == NULL ||
+        normalized_address(gouraud_bank_0) %
+            _Alignof(sm64_saturn_gouraud_bank_t) != 0U ||
+        normalized_address(gouraud_bank_1) %
+            _Alignof(sm64_saturn_gouraud_bank_t) != 0U ||
+        ranges_overlap(gouraud_bank_0, sizeof(*gouraud_bank_0),
+                       gouraud_bank_1, sizeof(*gouraud_bank_1)) ||
         command_capacity < SM64_SATURN_VDP1_SETUP_COMMANDS)
         return false;
     const size_t command_bytes =
         (size_t)command_capacity * SM64_SATURN_VDP1_COMMAND_BYTES;
+    const size_t gouraud_bytes_0 = gouraud_bank_0->capacity > 0U
+        ? (size_t)gouraud_bank_0->capacity *
+            sizeof(sm64_saturn_gouraud_table_t) : 1U;
+    const size_t gouraud_bytes_1 = gouraud_bank_1->capacity > 0U
+        ? (size_t)gouraud_bank_1->capacity *
+            sizeof(sm64_saturn_gouraud_table_t) : 1U;
     if (!sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
             command_bank_0, command_bytes) ||
         !sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
             command_bank_1, command_bytes) ||
+        normalized_address(command_bank_0) % 32U != 0U ||
+        normalized_address(command_bank_1) % 32U != 0U ||
+        ranges_overlap(command_bank_0, command_bytes,
+                       command_bank_1, command_bytes) ||
         !sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
-            gouraud_bank_0->staging,
-            gouraud_bank_0->capacity > 0U
-                ? (size_t)gouraud_bank_0->capacity *
-                    sizeof(sm64_saturn_gouraud_table_t) : 1U) ||
+            gouraud_bank_0->staging, gouraud_bytes_0) ||
         !sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
-            gouraud_bank_1->staging,
-            gouraud_bank_1->capacity > 0U
-                ? (size_t)gouraud_bank_1->capacity *
-                    sizeof(sm64_saturn_gouraud_table_t) : 1U))
+            gouraud_bank_1->staging, gouraud_bytes_1) ||
+        normalized_address(gouraud_bank_0->staging) %
+            _Alignof(sm64_saturn_gouraud_table_t) != 0U ||
+        normalized_address(gouraud_bank_1->staging) %
+            _Alignof(sm64_saturn_gouraud_table_t) != 0U ||
+        ranges_overlap(gouraud_bank_0->staging, gouraud_bytes_0,
+                       gouraud_bank_1->staging, gouraud_bytes_1))
         return false;
     *banks = (sm64_saturn_vdp1_frame_bank_set_t){0};
     init_bank(&banks->banks[0], command_bank_0, command_capacity,
@@ -87,6 +117,11 @@ static bool generation_is_newer(const sm64_saturn_vdp1_frame_bank_set_t *banks,
     if (!banks->has_build_generation)
         return true;
     return (int32_t)(generation - banks->latest_build_generation) > 0;
+}
+
+static bool generation_follows(uint32_t generation, uint32_t prior)
+{
+    return generation != 0U && (int32_t)(generation - prior) > 0;
 }
 
 bool sm64_saturn_vdp1_frame_bank_begin_build(
@@ -208,6 +243,12 @@ bool sm64_saturn_vdp1_frame_bank_publish(
         (bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_RETIRED &&
          bank->gouraud_transfer_obligation != SM64_SATURN_VDP1_TRANSFER_NOOP))
         return false;
+    if (banks->published != NULL &&
+        !generation_follows(bank->snapshot_generation,
+                            banks->published->snapshot_generation)) {
+        bank->state = SM64_SATURN_VDP1_FRAME_BANK_QUARANTINED;
+        return false;
+    }
     bank->state = SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED;
     banks->published = bank;
     return true;

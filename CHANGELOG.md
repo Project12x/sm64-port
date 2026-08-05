@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Hardened A7 publication after review: wrap-safe ordering now quarantines a
+  late completed bank instead of regressing the current publication; manager
+  initialization rejects aliased, overlapping, or misaligned command/Gouraud
+  storage; and both renderer paths return failure when Gouraud queue submission
+  remains unavailable after one bounded drain/retry. Sourceboot therefore
+  retains the prior complete frame instead of publishing commands whose
+  Gouraud dependency was never submitted.
+
 - Replaced sourceboot's ad-hoc VDP1 bank XOR with an explicit two-bank
   lifecycle covering construction, transfer obligations, publication,
   quarantine, and retirement. Only a renderer-confirmed complete frame may

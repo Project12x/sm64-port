@@ -12,6 +12,7 @@
 #include "saturn_dual_frame_bank.h"
 #include "saturn_actor_meshlets.h"
 #include "saturn_gouraud.h"
+#include "saturn_gouraud_transfer.h"
 #include "saturn_ir_texture.h"
 #include "saturn_ir_transform.h"
 #include "saturn_matrix_kernels.h"
@@ -3889,24 +3890,15 @@ bool sm64_saturn_demo_render_frame(
      * The 68000 stays out of this path; as in Z-Treme and SlaveDriver it is
      * reserved for SCSP/audio service rather than geometry dispatch. */
     demo_emit_mario(snapshot, pose, backend, &partitions, profile);
-    saturn_dma_queue_sequence_t gouraud_sequence =
-        SATURN_DMA_QUEUE_SEQUENCE_INVALID;
-    if (sm64_saturn_gouraud_bank_used_bytes(gouraud_bank) > 0U) {
-        gouraud_sequence = saturn_dma_queue_submit(
-            (void *)gouraud_bank->vram_base, gouraud_bank->staging,
-            sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
-            SATURN_DMA_QUEUE_SCU);
-        if (gouraud_sequence == SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
-            /* The ring is deliberately bounded. Recover only by retiring
-             * outstanding descriptors, never by overwriting their sources. */
-            profile->pipeline_faults++;
-            saturn_dma_queue_drain();
-            gouraud_sequence = saturn_dma_queue_submit(
-                (void *)gouraud_bank->vram_base, gouraud_bank->staging,
-                sm64_saturn_gouraud_bank_used_bytes(gouraud_bank),
-                SATURN_DMA_QUEUE_SCU);
-        }
+    saturn_dma_queue_sequence_t gouraud_sequence;
+    bool gouraud_retried;
+    if (!sm64_saturn_gouraud_transfer_submit(
+            gouraud_bank, &gouraud_sequence, &gouraud_retried)) {
+        profile->pipeline_faults++;
+        return false;
     }
+    if (gouraud_retried)
+        profile->pipeline_faults++;
     sm64_saturn_vdp1_backend_finish(backend);
     if (gouraud_sequence != SATURN_DMA_QUEUE_SEQUENCE_INVALID) {
         /* Final VDP1 ordering and presentation remain master-owned. The

@@ -1673,3 +1673,39 @@ Z-Treme commit `cff75451c1616aac1236fc2b44223902b55c706b` (GPL-3.0,
 `6012f79f237773378c8014e70d8998ad95a38d98` (MIT, `cpu_dmac.c`) were inspected.
 No upstream code was copied. Yaul's convenience call waits before starting a
 channel, so A8 must not treat it as a zero-wait submission primitive.
+
+### A7 consolidated review repair begins (2026-08-05)
+
+Independent review is NO-GO pending three fail-closed repairs: stale
+out-of-order completion can currently regress `published`; both emitters can
+publish after a second Gouraud queue-submit failure; and manager initialization
+does not yet reject aliased, overlapping, or misaligned command/Gouraud
+storage. The late-completed bank disposition is quarantine. Red direct tests
+for all three contracts are required before production changes. The stale
+`main.c` HWRAM comment must also say `0x1B00`, matching the linker/verifier.
+
+RED evidence: the expanded frame-bank fixture aborts when aliased command banks
+are incorrectly accepted (line 111); its later cases also pin command/Gouraud
+overlap, alignment, and late `UINT32_MAX` completion after generation 1. The
+new Gouraud-transfer target fails to compile because the shared result-bearing
+helper does not exist. Production repair now begins from those failures.
+
+Focused GREEN evidence: the expanded lifecycle binary passes all stale-wrap,
+quarantine, alias, overlap, and alignment cases; the shared transfer helper
+passes zero-work, first-submit, retry-success, and repeated-failure cases; and
+2/2 source mutation checks pin stale quarantine before publication plus false
+outcomes from both emitters propagated by sourceboot. Presentation remains 6/6
+and memory-map validation 10/10. A serialized target compile/link check is next;
+no Ymir/FPS claim is made.
+
+Target integration GREEN: the single serialized incremental Pipe4 validation
+compiled both renderer paths, the shared transfer helper, manager, and main;
+then linked and packaged fresh ELF SHA-256
+`b0ede6f93681984046904b1c4743f6bb38c7b3de89fa6f8e562baa23190401cc`.
+The broad verifier subsequently stopped at the unchanged unrelated census
+error `INDIRECT_EDGE has unreachable dispatcher: _play_cutscene ->
+_cutscene_bbh_death`. No second target build was run. The live-cutover source
+binary also passes after the repair. A final host-green strengthening rejects
+overlapping or misaligned Gouraud manager objects before dereference; it was
+not target-rebuilt because the review task allowed at most one serialized
+target validation. Independent rereview remains open.

@@ -473,7 +473,7 @@ static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
  * re-measured, so successive additions each charged themselves against
  * the same non-decrementing number. Re-measure with sh-elf-nm after any
  * change to static HWRAM, and note that sourceboot-cart.x now enforces
- * a 4 KiB floor at link time for libyaul's TLSF control block. */
+ * a 0x1B00-byte floor at link time for libyaul's TLSF control block. */
 static sm64_saturn_gouraud_table_t sourceboot_gouraud_staging[2]
     [SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
 static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2];
@@ -1028,7 +1028,7 @@ int main(void) {
                 &sourceboot_fast3d.profile, &sourceboot_mario_snapshot,
                 &sourceboot_mario_pose);
 #else
-            sm64_saturn_fast3d_vdp1_emit(
+            render_complete = sm64_saturn_fast3d_vdp1_emit(
                 &sourceboot_fast3d, &sourceboot_vdp1_backend,
                 build_bank->gouraud_bank);
 #endif

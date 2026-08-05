@@ -792,6 +792,10 @@ types, ownership rules, or production fallbacks.
 - Modify: `tools/saturn/bake_bob_bsp_fragments.py`
 - Modify: `tools/saturn/extract_mario_actor.py`
 - Modify: `src/port/saturn/gfx/saturn_demo_render.c`
+- Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.h`
+- Modify: `src/port/saturn/gfx/saturn_fast3d_vdp1_emit.c`
+- Create: `src/port/saturn/gfx/saturn_gouraud_transfer.h`
+- Create: `src/port/saturn/gfx/saturn_gouraud_transfer.c`
 - Modify: `tools/saturn/test_tools.py`
 - Create: `tools/saturn/render_cluster_test.c`
 - Modify: `Makefile.saturn.mk`
@@ -1390,6 +1394,7 @@ yet.
 - Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: `src/port/saturn/sourceboot/sourceboot-cart.x`
 - Create: `tools/saturn/vdp1_frame_bank_test.c`
+- Create: `tools/saturn/gouraud_transfer_test.c`
 - Modify: `tools/saturn/test_verify_sourceboot_memory_map.py`
 - Modify: `tools/saturn/dual_actor_worker_test.c`
 - Modify: `tools/saturn/render_job_live_cutover_source_test.c`
@@ -1484,6 +1489,22 @@ yet.
   Implementation and synchronized behavior documents are committed at
   `650b911a` (`feat(saturn): track VDP1 source-bank lifetimes`). Independent
   specification and quality reviews remain open, so Task 7 is not complete.
+
+  **Consolidated review repair (2026-08-05): source-green; target integration green; rereview pending.** Publication rejects
+  a completed generation that is not wrap-safely newer than the current
+  publication; the rejected late bank is quarantined. Both the demo and normal
+  emitters must return false when Gouraud submission fails again after the one
+  bounded drain/retry, so sourceboot cannot publish an incomplete image.
+  Manager initialization must reject misaligned, aliased, or overlapping
+  command and Gouraud storage. Direct and mutation-resistant fixtures precede
+  the repair. The direct bank/transfer fixtures, two source-mutation checks,
+  6/6 presentation tests, 10/10 memory-map tests, and the live-cutover source
+  gate pass. One serialized Pipe4 build compiled and linked fresh ELF
+  `b0ede6f9...190401cc`; broad verification then reached the unchanged unrelated
+  native-math oracle error. Repair rereview is the remaining A7 gate.
+  The final object-pointer overlap/alignment strengthening was host-compiled
+  after that single target run; it was not target-rebuilt because the task cap
+  permits at most one serialized target validation.
 
 ### Task 8: Transfer command and Gouraud banks without immediate waits
 
