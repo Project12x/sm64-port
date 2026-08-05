@@ -8,9 +8,10 @@ sourceboot phase clock/record now live behind the target-coherent P2 boundary;
 runtime marker hooks capture notification and positive retirement at their
 actual release sites; and the production-linked integration fixture combines
 deferred scene reset with failure quarantine and nonzero `QQ`. The normal path
-and all six mutations are focused-host/source-green. Fresh two-stage rereview
-is next, so the task is not yet source-complete and no target build, capture,
-or FPS result exists. The accepted demo renderer now exposes
+and all six mutations are focused-host/source-green. Scoped rereview of
+`420b6ce8..050aa3bc` is specification PASS and code-quality PASS with no
+findings, authorizing exactly one serialized target build/capture. No target
+build, capture, or FPS result exists yet. The accepted demo renderer now exposes
 `start_frame(N)` and `poll_frame(N)`. Start publishes immutable jobs, notifies
 the slave once, and returns. Poll remains PENDING until positive slave
 retirement, then the master drains remaining READY work, validates/merges,

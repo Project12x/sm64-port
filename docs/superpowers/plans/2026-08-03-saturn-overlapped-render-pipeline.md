@@ -331,11 +331,11 @@ and the evidence report before starting another task.
   six-tick catch-up death spiral while deliberately retaining synchronous
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
-- [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--9 are
-  source-implemented. Independent review was NO-GO; Fix Round 2 closes its
-  remaining source findings and is focused-host/source-green. Fresh two-stage
-  rereview is next, so the task is not yet
-  source-complete and no target/FPS claim exists. The accepted
+- [ ] **Task 9A / A9A — true frame-lifetime overlap:** Steps 1--10 are
+  source-complete. Fix Round 2 closes the review findings and scoped rereview
+  of `420b6ce8..050aa3bc` is specification PASS, code-quality PASS, with no
+  findings and GO for exactly one serialized target build/capture. No target/
+  FPS claim exists yet. The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
   the master may execute the one queued source tick for `N+1`. Exactly one
@@ -2319,11 +2319,12 @@ expected FPS lever.
   failure, and nonzero `QQ`. The normal integration and six mutations pass;
   `verify-render-job-runtime` and `verify-demo-render-overlap` also pass.
   Fix Round 2 implementation and governing-doc transition is `162f2a7d`.
-  Independent verdict remains FAIL/NO-GO for the reviewed base; Step 10 fresh
-  rereview, Step 11 target/capture, manual Ymir, broad verify, and native-math
-  remain unchecked.
+  Scoped rereview of `420b6ce8..050aa3bc` is specification PASS and code-
+  quality PASS with no findings. C1 target-coherent LOD ownership, I1 exact
+  marker timing, and I3 production-path assurance are closed. Step 11 target/
+  capture, manual Ymir, broad verify, and native-math remain unchecked.
 
-- [ ] **Step 10: Complete two-stage source review before any target build**
+- [x] **Step 10: Complete two-stage source review before any target build — PASS / GO**
 
   Request specification review against this Task 9A contract, then quality
   review across the exact scoped diff. Required verdict is GO/PASS from both.
@@ -2331,6 +2332,12 @@ expected FPS lever.
   repaired with watched RED/GREEN evidence and rereview. Record review commit/
   range and verdict in the plan, aggregate report, and SDD ledger. A review
   failure leaves the target build checkbox unchecked.
+
+  Initial review was FAIL/NO-GO. Fix Rounds 1 and 2 landed through `050aa3bc`.
+  Final scoped rereview of `420b6ce8..050aa3bc` is specification PASS and
+  code-quality PASS with no Critical, Important, or Minor findings. The
+  reviewer explicitly authorizes exactly one serialized Step 11 build/capture;
+  actual ELF/map P2 addresses, memory margins, and runtime uplift remain open.
 
 - [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture**
 

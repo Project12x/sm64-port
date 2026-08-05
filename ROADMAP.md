@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — rereview A9A true frame-lifetime overlap
+## Now — build and capture reviewed A9A true frame-lifetime overlap
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -18,7 +18,8 @@ Fix Round 2 additionally places the complete worker-visible LOD lifetime behind
 the target's P2 `.uncached` boundary, stamps phase events at runtime release
 markers, and combines deferred scene transition with terminal quarantine and
 nonzero `QQ` in the production-linked executable. Focused host/source gates are
-green; fresh specification and quality rereview remain the next gates.
+green. Scoped specification and quality rereview is PASS with no findings and
+authorizes exactly one serialized target build/capture.
 
 Gate: focused lifecycle/wrap/deadline/failure/scene-neutral RED/GREEN tests,
 two-stage review, then exactly one serialized DLL-safe target build and exact-

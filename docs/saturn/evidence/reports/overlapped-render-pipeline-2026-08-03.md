@@ -2228,7 +2228,10 @@ sm64-psx `3073845688ea273da78d539b20c45110d8a868c3` (no repository-wide
 license). Reuse remains dependency/API use or pattern-only; no upstream source
 was copied or closely ported.
 
-Independent-review verdict is still FAIL/NO-GO for the reviewed base. Fresh
-Step 10 specification and quality rereview are unchecked. Step 11 serialized
-target build/capture, manual Ymir acceptance, broad verify, and native-math
-publication census are also unchecked.
+Scoped rereview of `420b6ce8..050aa3bc` is specification PASS and code-quality
+PASS with no Critical, Important, or Minor findings. It verifies C1 target-
+coherent LOD ownership, I1 exact release-marker timing, I3 production-path
+coverage, and unchanged bank/A8/A9/VDP1/VDP2 ownership. Step 10 is complete and
+the reviewer authorizes exactly one serialized Step 11 build/capture. Actual
+ELF/map P2 placement, memory margins, manual Ymir acceptance, broad verify, and
+native-math publication census remain unchecked.
