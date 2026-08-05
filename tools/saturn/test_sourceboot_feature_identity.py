@@ -41,6 +41,11 @@ class SourcebootFeatureIdentityTests(unittest.TestCase):
             "bootstrap_ticks": 600, "cart_mbit": 32,
             "cart_stage_sectors": 8, "hot_promotion": 1, "near_clip": 1,
             "bsp_order": 1, "polygon_tier": 2, "fragment_mode": 0,
+            "atan2_variant": 2, "demo_path": 1, "demo_view_radius": 6000,
+            "slave_render": 1, "camera_idle_start_tick": 0,
+            "camera_idle_discovery": 0, "camera_range_capture": 0,
+            "bsp_fragment_flat": 0, "fast3d_q16_trace": 0,
+            "experimental_skip_geo_walk": 0,
             "artifacts": artifacts,
         }
         self.raw = identity.build_identity(self.spec).raw
@@ -123,6 +128,27 @@ class SourcebootFeatureIdentityTests(unittest.TestCase):
             )["address"],
             0x06020000,
         )
+
+    def test_make_wrapper_binds_every_additional_compiler_control(self) -> None:
+        makefile = (
+            TOOLS_DIR.parents[1] / "src" / "port" / "saturn" / "sourceboot" /
+            "Makefile"
+        ).read_text(encoding="utf-8")
+        bindings = {
+            "atan2_variant": "SATURN_ATAN2_VARIANT",
+            "demo_path": "SATURN_DEMO_PATH",
+            "demo_view_radius": "SATURN_DEMO_VIEW_RADIUS",
+            "slave_render": "SATURN_SLAVE_RENDER",
+            "camera_idle_start_tick": "SATURN_CAMERA_IDLE_START_TICK",
+            "camera_idle_discovery": "SATURN_CAMERA_IDLE_DISCOVERY",
+            "camera_range_capture": "SATURN_CAMERA_RANGE_CAPTURE",
+            "bsp_fragment_flat": "SATURN_DEMO_BSP_FRAGMENT_FLAT",
+            "fast3d_q16_trace": "SATURN_FAST3D_Q16_TRACE",
+            "experimental_skip_geo_walk": "SATURN_EXPERIMENTAL_SKIP_GEO_WALK",
+        }
+        for field, variable in bindings.items():
+            with self.subTest(field=field):
+                self.assertIn(f"--expect {field}=$({variable})", makefile)
 
     def test_reserved_and_unknown_feature_bits_are_invalid_even_without_expected_tuple(self) -> None:
         for field in ("reserved0", "reserved1"):

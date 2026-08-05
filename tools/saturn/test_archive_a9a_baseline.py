@@ -63,20 +63,72 @@ class ArchiveA9ABaselineTests(unittest.TestCase):
                 kind: {"path": str(path), "sha256": self.hashes[kind]}
                 for kind, path in self.paths.items()
             },
-            "target_identity": {"match": True, "expected_sha256": "11" * 32,
-                                "observed_sha256": "11" * 32},
-            "observation": {"measurement": {"guest_fps_mean": 5.294117647058823}},
+            "target_identity": {
+                "address": 0x06004000,
+                "match": True,
+                "expected_sha256": "11" * 32,
+                "observed_sha256": "11" * 32,
+                "size": 16,
+                "startup_identity_attempts": 540,
+                "startup_vblanks_waited": 540,
+            },
+            "observation": {"measurement": {
+                "guest_fps_mean": 5.294117647058823,
+                "guest_fps_median": 5.0,
+                "guest_fps_1pct_low": 5.0,
+                "interval_count": 9,
+                "nominal_refresh_hz": 60.0,
+                "presentation_event_count": 10,
+                "target_vblank_delta": 102,
+                "intervals": [{"guest_fps": 5.0}],
+            }},
         }
+        self.profile_dir = self.root / ".ymir-profile"
+        self.profile_dir.mkdir()
+        self.profile_config = self.profile_dir / "Ymir.toml"
+        self.profile_config.write_text(
+            "[Cartridge]\nType = 'DRAM'\n\n[Cartridge.DRAM]\nCapacity = '32Mbit'\n",
+            encoding="utf-8",
+        )
+        self.stdout_log = self.root / "launch.stdout.log"
+        self.stderr_log = self.root / "launch.stderr.log"
+        self.stdout_log.write_text("launched", encoding="utf-8")
+        self.stderr_log.write_bytes(b"")
+        self.ymir = self.root / "ymir-sdl3.exe"
+        self.ymir.write_bytes(b"ymir")
         self.profile = {
-            "execution": {"requested": True, "alive_after_monitor": True},
+            "execution": {
+                "requested": True,
+                "alive_after_monitor": True,
+                "exit_code": None,
+                "monitor_seconds": 20.0,
+                "pid": 1234,
+                "started_utc": "2026-08-05T07:58:06-04:00",
+                "stdout_log": str(self.stdout_log),
+                "stderr_log": str(self.stderr_log),
+            },
             "plan": {
                 "launcher": "desktop-ymir-profile",
-                "profile": str(self.root / ".ymir-profile"),
+                "profile": str(self.profile_dir),
                 "ram_cart": "profile-managed-32-mbit-dram",
                 "cue": {"path": str(self.paths["cue"]), "sha256": self.hashes["cue"]},
                 "iso": {"path": str(self.paths["iso"]), "sha256": self.hashes["iso"]},
+                "command": [
+                    str(self.ymir), "--profile", str(self.profile_dir),
+                    "--disc", str(self.paths["cue"]),
+                ],
             },
         }
+        self.expected_measurement_sha256 = archive.canonical_sha256(
+            self.capture["observation"]["measurement"]
+        ) if hasattr(archive, "canonical_sha256") else "missing-red-api"
+        self.expected_target_identity = json.loads(json.dumps(
+            self.capture["target_identity"]
+        ))
+        self.expected_profile_sha256 = sha256(self.profile_config)
+        self.expected_launch_sha256 = archive.canonical_sha256(
+            self.profile
+        ) if hasattr(archive, "canonical_sha256") else "missing-red-api"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -96,6 +148,10 @@ class ArchiveA9ABaselineTests(unittest.TestCase):
             "expected_hashes": self.hashes,
             "required_commits": ("one", "two", "three"),
             "ancestry_check": lambda _repo, _commit: True,
+            "expected_measurement_sha256": self.expected_measurement_sha256,
+            "expected_target_identity": self.expected_target_identity,
+            "expected_profile_sha256": self.expected_profile_sha256,
+            "expected_launch_sha256": self.expected_launch_sha256,
         }
         arguments.update(overrides)
         return archive.archive_baseline(**arguments)
@@ -104,6 +160,14 @@ class ArchiveA9ABaselineTests(unittest.TestCase):
         manifest = self.run_archive()
         self.assertEqual(manifest["schema"], "sm64-saturn-a9a-baseline-v1")
         self.assertEqual(manifest["measurement"]["guest_fps_mean"], 5.294117647058823)
+        self.assertEqual(
+            manifest["capture_evidence"]["measurement_sha256"],
+            self.expected_measurement_sha256,
+        )
+        self.assertEqual(
+            manifest["capture_evidence"]["target_identity_sha256"],
+            archive.canonical_sha256(self.expected_target_identity),
+        )
         self.assertEqual(manifest["config_evidence"]["output_label"], CONFIG_LABEL)
         self.assertEqual(manifest["profile_evidence"]["ram_cart"],
                          "profile-managed-32-mbit-dram")
@@ -155,11 +219,56 @@ class ArchiveA9ABaselineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "profile"):
             self.run_archive()
 
+    def test_rejects_any_cadence_or_exact_target_identity_mutation(self) -> None:
+        mutations = (
+            ("cadence", lambda: self.capture["observation"]["measurement"].update(
+                guest_fps_mean=5.3)),
+            ("target", lambda: self.capture["target_identity"].update(size=15)),
+            ("target", lambda: self.capture["target_identity"].update(
+                startup_vblanks_waited=541)),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label):
+                original_capture = json.loads(json.dumps(self.capture))
+                mutate()
+                with self.assertRaisesRegex(ValueError, label):
+                    self.run_archive()
+                self.capture = original_capture
+
+    def test_rejects_profile_content_hash_or_cart_configuration_mutation(self) -> None:
+        expected = sha256(self.profile_config)
+        self.profile_config.write_text(
+            "[Cartridge]\nType = 'None'\n\n[Cartridge.DRAM]\nCapacity = '16Mbit'\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "profile"):
+            self.run_archive(expected_profile_sha256=expected)
+
+    def test_rejects_failed_or_nonmatching_launch_evidence(self) -> None:
+        mutations = (
+            lambda: self.profile["execution"].update(alive_after_monitor=False,
+                                                      exit_code=1),
+            lambda: self.profile["plan"]["command"].__setitem__(-1, "other.cue"),
+            lambda: self.profile["execution"].pop("stdout_log"),
+        )
+        for mutate in mutations:
+            original_profile = json.loads(json.dumps(self.profile))
+            mutate()
+            with self.assertRaisesRegex(ValueError, "launch|profile"):
+                self.run_archive()
+            self.profile = original_profile
+
     def test_refuses_to_overwrite_a_different_archived_file(self) -> None:
         self.archive_dir.mkdir(parents=True)
         (self.archive_dir / self.paths["elf"].name).write_bytes(b"different")
         with self.assertRaisesRegex(ValueError, "refuse.*overwrite"):
             self.run_archive()
+
+    def test_rejects_conflicting_manifest_before_copying_any_archive_file(self) -> None:
+        self.manifest_path.write_text('{"schema":"conflict"}\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "manifest"):
+            self.run_archive()
+        self.assertFalse(self.archive_dir.exists())
 
     def test_rejects_failed_preserved_commit_ancestry(self) -> None:
         with self.assertRaisesRegex(ValueError, "ancestry.*two"):

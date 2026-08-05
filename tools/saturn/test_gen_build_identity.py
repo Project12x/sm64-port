@@ -56,6 +56,16 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "bsp_order": 1,
             "polygon_tier": 2,
             "fragment_mode": 0,
+            "atan2_variant": 2,
+            "demo_path": 1,
+            "demo_view_radius": 6000,
+            "slave_render": 1,
+            "camera_idle_start_tick": 0,
+            "camera_idle_discovery": 0,
+            "camera_range_capture": 0,
+            "bsp_fragment_flat": 0,
+            "fast3d_q16_trace": 0,
+            "experimental_skip_geo_walk": 0,
             "artifacts": self.artifacts,
         }
 
@@ -173,6 +183,39 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
                 self.assertNotEqual(changed["effective_config_hash"],
                                     baseline["effective_config_hash"])
                 path.write_bytes(path.read_bytes()[:-8])
+
+    def test_effective_config_hash_covers_every_additional_compiler_control(self) -> None:
+        baseline_built = identity.build_identity(self.spec)
+        baseline = identity.parse_identity(baseline_built.raw)
+        baseline_label = identity.identity_label(baseline_built.raw)
+        mutations = {
+            "atan2_variant": 1,
+            "demo_path": 0,
+            "demo_view_radius": 5000,
+            "slave_render": 0,
+            "camera_idle_start_tick": 600,
+            "camera_idle_discovery": 1,
+            "camera_range_capture": 1,
+            "bsp_fragment_flat": 1,
+            "fast3d_q16_trace": 1,
+            "experimental_skip_geo_walk": 1,
+        }
+        for field, value in mutations.items():
+            with self.subTest(field=field):
+                spec = copy.deepcopy(self.spec)
+                spec[field] = value
+                changed_built = identity.build_identity(spec)
+                changed = identity.parse_identity(changed_built.raw)
+                self.assertNotEqual(
+                    changed["effective_config_hash"],
+                    baseline["effective_config_hash"],
+                )
+                self.assertNotEqual(changed_built.raw, baseline_built.raw)
+                self.assertNotEqual(
+                    identity.identity_label(changed_built.raw), baseline_label
+                )
+                with self.assertRaisesRegex(ValueError, "compiled identity drift"):
+                    identity.validate_spec_expectations(self.spec, {field: value})
 
     def test_label_is_derived_from_validated_compiled_identity(self) -> None:
         built = identity.build_identity(self.spec)

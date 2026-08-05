@@ -27,6 +27,11 @@ SCALAR_FIELDS = (
     "cart_stage_sectors", "hot_promotion", "near_clip", "bsp_order",
     "polygon_tier", "fragment_mode",
 )
+COMPILER_CONFIG_FIELDS = (
+    "atan2_variant", "demo_path", "demo_view_radius", "slave_render",
+    "camera_idle_start_tick", "camera_idle_discovery", "camera_range_capture",
+    "bsp_fragment_flat", "fast3d_q16_trace", "experimental_skip_geo_walk",
+)
 ARTIFACT_HASH_FIELDS = (
     "source_hash", "route_artifact_hash", "input_artifact_hash",
     "camera_artifact_hash", "cart_profile_hash", "scene_package_hash",
@@ -107,6 +112,40 @@ def _validate_scalars(spec: Mapping[str, Any]) -> dict[str, int]:
     return values
 
 
+def _validate_compiler_config(spec: Mapping[str, Any]) -> dict[str, int]:
+    missing = [field for field in COMPILER_CONFIG_FIELDS if field not in spec]
+    if missing:
+        raise ValueError(
+            "missing compiler config scalar(s): " + ", ".join(missing)
+        )
+    return {
+        "atan2_variant": _choice("atan2_variant", spec["atan2_variant"], (1, 2)),
+        "demo_path": _boolean("demo_path", spec["demo_path"]),
+        "demo_view_radius": _integer(
+            "demo_view_radius", spec["demo_view_radius"], 1, 0xFFFFFFFF
+        ),
+        "slave_render": _boolean("slave_render", spec["slave_render"]),
+        "camera_idle_start_tick": _integer(
+            "camera_idle_start_tick", spec["camera_idle_start_tick"], 0, 0xFFFFFFFF
+        ),
+        "camera_idle_discovery": _boolean(
+            "camera_idle_discovery", spec["camera_idle_discovery"]
+        ),
+        "camera_range_capture": _boolean(
+            "camera_range_capture", spec["camera_range_capture"]
+        ),
+        "bsp_fragment_flat": _boolean(
+            "bsp_fragment_flat", spec["bsp_fragment_flat"]
+        ),
+        "fast3d_q16_trace": _boolean(
+            "fast3d_q16_trace", spec["fast3d_q16_trace"]
+        ),
+        "experimental_skip_geo_walk": _boolean(
+            "experimental_skip_geo_walk", spec["experimental_skip_geo_walk"]
+        ),
+    }
+
+
 def _validate_features(features: Any) -> tuple[dict[str, int], int]:
     if not isinstance(features, Mapping):
         raise ValueError("features must be an object")
@@ -143,6 +182,7 @@ def _sha256_file(field: str, descriptor: Any) -> str:
 def build_identity(spec: Mapping[str, Any]) -> BuiltIdentity:
     """Validate all inputs, hash their bytes, and create one canonical identity."""
     scalars = _validate_scalars(spec)
+    compiler_config = _validate_compiler_config(spec)
     features, feature_bits = _validate_features(spec.get("features"))
     artifacts = spec.get("artifacts")
     if not isinstance(artifacts, Mapping):
@@ -159,6 +199,7 @@ def build_identity(spec: Mapping[str, Any]) -> BuiltIdentity:
         "schema": "sm64-saturn-effective-config-v1",
         "features": features,
         **scalars,
+        **compiler_config,
         "artifact_hashes": hashes,
     }
     canonical = json.dumps(
@@ -186,7 +227,8 @@ def validate_spec_expectations(
     """Reject wrapper/spec drift before either C bytes or a label are emitted."""
     features, _bits = _validate_features(spec.get("features"))
     scalars = _validate_scalars(spec)
-    available = {**scalars, **{
+    compiler_config = _validate_compiler_config(spec)
+    available = {**scalars, **compiler_config, **{
         f"features.{name}": value for name, value in features.items()
     }}
     unknown = sorted(set(expectations) - set(available))

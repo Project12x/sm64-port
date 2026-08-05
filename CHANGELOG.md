@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Closed the first independent-review gaps in the sourceboot build identity and
+  historical A9A archive. The effective-config digest and identity-derived
+  output label now bind every remaining compiler-affecting wrapper control,
+  including atan2, demo/camera/slave-render, flat-fragment, trace, and
+  diagnostic geo-walk switches, preventing distinct binaries from sharing one
+  claimed identity. Baseline archival now requires the exact accepted cadence
+  and target records, the hash and parsed 32-Mbit DRAM content of the actual
+  Ymir profile, and the exact successful matching launch report and logs. It
+  also rejects a conflicting manifest before creating or copying archive
+  files, so a failed archive attempt cannot leave a partial accepted trio.
+
 - Bound sourceboot diagnostic artifacts to a fixed-width, versioned target
   identity containing the complete feature tuple, behavior configuration, and
   hash-verified source/route/input/camera/cart/scene/actor/animation/audio

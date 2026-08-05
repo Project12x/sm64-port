@@ -31,6 +31,7 @@
     }
   },
   "capture_evidence": {
+    "measurement_sha256": "45685dfb2b013356e0c1e19a7b51fd621cd7a941f37b066d15b01a29bde2fb4b",
     "report_path": "docs\\saturn\\evidence\\reports\\a9a-step11-overlap-throughput-repaired-2026-08-05.json",
     "schema": "sm64-saturn-sourceboot-throughput-v1",
     "target_identity": {
@@ -41,7 +42,8 @@
       "size": 16,
       "startup_identity_attempts": 540,
       "startup_vblanks_waited": 540
-    }
+    },
+    "target_identity_sha256": "eee27f6d08b1fa473bbbf3c715972202020733511b1b012404f2cf7d70651727"
   },
   "config_evidence": {
     "atan2_variant": 2,
@@ -62,11 +64,42 @@
     "view_radius": 6000
   },
   "measurement": {
-    "guest_fps_mean": 5.294117647058823
+    "guest_fps_1pct_low": 5.0,
+    "guest_fps_mean": 5.294117647058823,
+    "guest_fps_median": 5.0,
+    "interval_count": 9,
+    "nominal_refresh_hz": 60.0,
+    "presentation_event_count": 10,
+    "target_vblank_delta": 102
   },
   "profile_evidence": {
+    "cartridge_type": "DRAM",
+    "dram_capacity": "32Mbit",
+    "execution": {
+      "alive_after_monitor": true,
+      "exit_code": null,
+      "logs": {
+        "stderr": {
+          "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\ymir-desktop-launches\\a9a-repaired-manual-20260805.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size": 0
+        },
+        "stdout": {
+          "path": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.worktrees\\sh2-native-math-purge\\build\\saturn\\ymir-desktop-launches\\a9a-repaired-manual-20260805.stdout.log",
+          "sha256": "e9ea4bc1791ce7675f59f5a58c73897757a97ea5126c9144f6e70302bfcd259e",
+          "size": 87491
+        }
+      },
+      "monitor_seconds": 20.0,
+      "pid": 12148,
+      "requested": true,
+      "started_utc": "2026-08-05T11:58:06.756144+00:00"
+    },
+    "launch_report_sha256": "0c8e0d3617a8cec36b13818244980e6e3bdbf7c579851261f2622daea37b53a7",
     "launcher": "desktop-ymir-profile",
     "profile": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile",
+    "profile_config": "D:\\Code\\RetroDev\\sm64-saturn-port\\sm64-port\\.ymir-profile\\Ymir.toml",
+    "profile_config_sha256": "33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566",
     "ram_cart": "profile-managed-32-mbit-dram"
   },
   "schema": "sm64-saturn-a9a-baseline-v1",

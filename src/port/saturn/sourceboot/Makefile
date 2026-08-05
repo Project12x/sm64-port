@@ -36,6 +36,7 @@ SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE ?= 0
 SATURN_FEATURE_SEMANTIC_AUDIO ?= 0
 SATURN_DIAGNOSTIC_MODE ?= 0
 SATURN_CART_MBIT ?= 32
+SATURN_FAST3D_Q16_TRACE ?= 0
 ifneq ($(words $(filter $(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION),0 1)),1)
   $(error SATURN_FEATURE_COMPLETE_MARIO_ANIMATION must be 0 or 1)
 endif
@@ -50,6 +51,9 @@ ifneq ($(words $(filter $(SATURN_DIAGNOSTIC_MODE),0 1 2)),1)
 endif
 ifneq ($(words $(filter $(SATURN_CART_MBIT),32 64)),1)
   $(error SATURN_CART_MBIT must be 32 or 64)
+endif
+ifneq ($(words $(filter $(SATURN_FAST3D_Q16_TRACE),0 1)),1)
+  $(error SATURN_FAST3D_Q16_TRACE must be 0 or 1)
 endif
 SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS = \
   --expect features.complete_mario_animation=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION) \
@@ -72,6 +76,17 @@ SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS = \
   --expect bsp_order=$(SATURN_DEMO_BSP_ORDER) \
   --expect polygon_tier=$(SATURN_DEMO_POLY_TIER) \
   --expect fragment_mode=$(SATURN_DEMO_FRAGMENT_MODE)
+SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS += \
+  --expect atan2_variant=$(SATURN_ATAN2_VARIANT) \
+  --expect demo_path=$(SATURN_DEMO_PATH) \
+  --expect demo_view_radius=$(SATURN_DEMO_VIEW_RADIUS) \
+  --expect slave_render=$(SATURN_SLAVE_RENDER) \
+  --expect camera_idle_start_tick=$(SATURN_CAMERA_IDLE_START_TICK) \
+  --expect camera_idle_discovery=$(SATURN_CAMERA_IDLE_DISCOVERY) \
+  --expect camera_range_capture=$(SATURN_CAMERA_RANGE_CAPTURE) \
+  --expect bsp_fragment_flat=$(SATURN_DEMO_BSP_FRAGMENT_FLAT) \
+  --expect fast3d_q16_trace=$(SATURN_FAST3D_Q16_TRACE) \
+  --expect experimental_skip_geo_walk=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK)
 SATURN_EXPERIMENTAL_SKIP_GEO_WALK ?= 0
 # Preserve the caller's exact spelling long enough to reject hidden activation
 # forms, then make every validation, branch, compiler flag, and output tag
@@ -145,6 +160,12 @@ endif
 SATURN_DEMO_PATH ?= 0
 SATURN_DEMO_VIEW_RADIUS ?= 6000
 SATURN_SLAVE_RENDER ?= 1
+ifneq ($(words $(filter $(SATURN_DEMO_PATH),0 1)),1)
+  $(error SATURN_DEMO_PATH must be 0 or 1)
+endif
+ifneq ($(words $(filter $(SATURN_SLAVE_RENDER),0 1)),1)
+  $(error SATURN_SLAVE_RENDER must be 0 or 1)
+endif
 SATURN_DEMO_POLY_TIER ?= 0
 ifneq ($(words $(filter $(SATURN_DEMO_POLY_TIER),0 1 2)),1)
   $(error SATURN_DEMO_POLY_TIER must be 0 (reference), 1 (material), or 2 (far))
@@ -164,6 +185,9 @@ ifneq ($(SATURN_DEMO_BSP_FRAGMENTS),$(SATURN_DEMO_FRAGMENT_MODE))
   $(error SATURN_DEMO_BSP_FRAGMENTS and SATURN_DEMO_FRAGMENT_MODE must match)
 endif
 SATURN_DEMO_BSP_FRAGMENT_FLAT ?= 0
+ifneq ($(words $(filter $(SATURN_DEMO_BSP_FRAGMENT_FLAT),0 1)),1)
+  $(error SATURN_DEMO_BSP_FRAGMENT_FLAT must be 0 or 1)
+endif
 # Build-lineage tag only. Keep the throughput-recovery image in a distinct
 # directory so a manual session running the previous renderer is never
 # overwritten underneath Ymir.
@@ -356,7 +380,6 @@ SH_SPECS := sourceboot.specs
 # Task 2 evidence-only switch.  It appends a bounded 16-record Fast3D
 # transform trace to _sourceboot_fast3d; default builds remain byte-for-byte
 # free of the trace state and stores.
-SATURN_FAST3D_Q16_TRACE ?= 0
 ifeq ($(SATURN_FAST3D_Q16_TRACE),1)
 SH_CFLAGS += -DSM64_SATURN_FAST3D_Q16_TRACE=1
 endif
