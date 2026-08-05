@@ -2524,14 +2524,21 @@ expected FPS lever.
   telemetry, worker ownership, transfer waits, command/geometry counters, and
   manual result.
 
-- [ ] **Step 1: Add the final source-contract test**
+- [x] **Step 1: Add the final source-contract test** — source-complete
+  (`tools/saturn/test_overlapped_pipeline_source.py`). The contract now checks
+  the scene-neutral overlap source closure and proves that the reviewed
+  `SATURN_RENDERER_PIPELINE` values (`2`, `3`, `4`) are validated and passed
+  into `SH_CFLAGS`; an output-directory `-pipeN` label can no longer drift from
+  the compiled feature. Existing source contracts continue to cover the
+  scheduler's removed catch-up path and accepted Mario ordering; the broader
+  linked target census remains Step 4.
 
   Require every architecture component in the linked source set, reject the
   old fixed joins/full-span fallback/immediate waits/insertion sort/four-tick
   catch-up, and verify `SATURN_RENDERER_PIPELINE` is an actual validated
   compile-time feature rather than an output-directory label.
 
-- [ ] **Step 2: Run the complete host gate serially**
+- [ ] **Step 2: Run the complete host gate serially** — active next
 
   Run the focused targets from Tasks 1–9, `verify-tools`,
   `verify-runtime-contracts`, `verify-dual-frame-bank` (which invokes

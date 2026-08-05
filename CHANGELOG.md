@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Hardened the Task 10 sourceboot pipeline selector: `SATURN_RENDERER_PIPELINE`
+  now accepts only the reviewed `2`, `3`, and `4` variants and is passed into
+  the SH-2 preprocessor flags. Previously `-pipeN` changed only the output
+  directory, allowing an artifact label to claim a pipeline that the compiler
+  never selected; the new source contract catches that drift before a target
+  build.
+
 - Corrected the sourceboot memory-map verifier to require `.uncached` to be
   initialized `PROGBITS`, matching the pinned Yaul ELF contract. The section
   contains the slave SH-2 entry and executable cache-through helpers, so the

@@ -109,6 +109,9 @@ SATURN_DEMO_BSP_FRAGMENT_FLAT ?= 0
 # directory so a manual session running the previous renderer is never
 # overwritten underneath Ymir.
 SATURN_RENDERER_PIPELINE ?= 2
+ifneq ($(words $(filter $(SATURN_RENDERER_PIPELINE),2 3 4)),1)
+  $(error SATURN_RENDERER_PIPELINE must be 2, 3, or 4)
+endif
 # The meshes the quad map is compiled from. Listed here so a geometry change
 # regenerates the map inside the build that consumes it -- a stale map is
 # never reachable. The actor list and the tool arguments live once, in
@@ -301,6 +304,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -DSATURN_CAMERA_IDLE_DISCOVERY=$(SATURN_CAMERA_IDLE_DISCOVERY) \
   -DSATURN_CAMERA_RANGE_CAPTURE=$(SATURN_CAMERA_RANGE_CAPTURE) \
   -DSATURN_SOURCE_CART_STAGE_SECTORS=$(SATURN_SOURCE_CART_STAGE_SECTORS) \
+  -DSATURN_RENDERER_PIPELINE=$(SATURN_RENDERER_PIPELINE) \
   -DSATURN_DEMO_VIEW_RADIUS=$(SATURN_DEMO_VIEW_RADIUS) \
   -DSATURN_SLAVE_RENDER=$(SATURN_SLAVE_RENDER) \
   -DSATURN_DEMO_POLY_TIER=$(SATURN_DEMO_POLY_TIER) \
