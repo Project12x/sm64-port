@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — review and rebuild the A9A HWRAM boot repair
+## Now — rebuild and capture the reviewed A9A HWRAM boot repair
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -29,11 +29,11 @@ source/layout and production-linked mutation gates are green. This is not
 target proof; projected HWRAM and LWRAM margins must be replaced by values from
 a reviewed fresh ELF.
 
-Gate: independent specification and quality review of Fix Round 4, then one
-serialized DLL-safe target build. Record exact P2 placement and both margins,
-prove repaired-image boot/identity, and only then run the bounded overlap/FPS
-capture. No target build, Ymir launch, or capture is authorized from the
-unreviewed repair.
+Gate: Fix Round 4 independent specification and quality reviews are PASS with
+no Critical or Important findings; one stale-status Minor is corrected in the
+same documentation transition. Run exactly one serialized DLL-safe target
+build, validate the exact map fail-closed, record P2 placement and both margins,
+then prove repaired-image boot/identity and run the bounded overlap/FPS capture.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 

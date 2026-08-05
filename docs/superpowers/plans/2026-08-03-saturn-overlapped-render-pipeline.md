@@ -331,10 +331,11 @@ and the evidence report before starting another task.
   six-tick catch-up death spiral while deliberately retaining synchronous
   construction. Manual owner-visible Ymir acceptance and the unrelated broad
   native-math census remain open and are not converted into green gates.
-- [ ] **Task 9A / A9A — true frame-lifetime overlap:** active. Steps 1--9
-  remain source-complete through the previously reviewed overlap
-  implementation; Fix Round 4 is source-repaired and reopens Step 10 for fresh
-  independent review. The sole
+- [ ] **Task 9A / A9A — true frame-lifetime overlap:** active. Steps 1--10 are
+  source-complete and independently reviewed. Fix Round 4 specification and
+  quality reviews are PASS with no Critical or Important findings and one
+  documentation-only Minor corrected here; the reviewer authorizes one fresh
+  serialized repaired build/map/identity capture. The sole prior
   target build linked `___end=0x061040D0`, `0x40D0` past HWRAM, after bulk LOD
   arrays moved into `.uncached`; the old margin subtraction underflowed. Both
   retries against that unchanged ELF failed target identity after 600 and
@@ -2000,11 +2001,15 @@ shared bank transport owns every frame upload.
 
 ### Task 9A: Implement true frame-lifetime overlap before hardening
 
-**Status:** Independent review of `0350a473..d45c0a41` and Fix Round 1 review
-of `d45c0a41..420b6ce8` were FAIL/NO-GO. Fix Round 2 closes the remaining C1,
-I1, and I3 source findings and is focused-host/source-green; fresh specification
-and quality rereview are next. No target build, capture, or FPS evidence exists
-yet, and Task 9A is not source-complete before those reviews.
+**Status:** Steps 1--10 are source-complete and independently PASS/APPROVED.
+The first target build passed but produced an ELF `0x40D0` beyond HWRAM; both
+identity captures against that exact image therefore failed before target
+identity. Fix Round 4 (`d8dfe35f`, evidence `1e1fbe92`) repairs the storage and
+fail-closed link/map contracts. Its independent specification and quality
+review are PASS with no Critical or Important findings and one stale-status
+Minor corrected in this transition. One serialized repaired rebuild, exact map
+validation, and exact-artifact boot/capture are authorized next. No successful
+repaired capture or new FPS evidence exists yet.
 The original RED/implementation checkpoints are `ec81ddc6` and `0f5ccd65`.
 Task 10 is hardening/publication and scene-neutral coverage, not the next
 expected FPS lever.
@@ -2345,10 +2350,13 @@ expected FPS lever.
   reviewer explicitly authorizes exactly one serialized Step 11 build/capture;
   actual ELF/map P2 addresses, memory margins, and runtime uplift remain open.
   That authorization was consumed by the sole build. Fix Round 4 changes
-  storage ownership and linker/verifier acceptance, so specification and
-  code-quality review are reopened before any fresh target build.
+  storage ownership and linker/verifier acceptance. Its independent review is
+  specification PASS and code-quality PASS with no Critical or Important
+  findings; the only Minor was this section's stale status, now corrected. The
+  reviewer authorizes exactly one fresh serialized repaired build followed by
+  fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — BUILD PASS; IDENTITY RETRIES FAILED; BOOT REPAIR AWAITS REVIEW**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — PRIOR BUILD PASS/INVALID MAP; REPAIRED REBUILD AUTHORIZED**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2418,9 +2426,11 @@ expected FPS lever.
   stops with `ELF end is past HWRAM top`. No target build, Ymir launch,
   capture, or FPS measurement was run for Fix Round 4. Projected margins
   (`~0x2168` HWRAM and `~0x74E0` LWRAM) are planning estimates, not target
-  evidence; replace them with reviewed rebuilt-ELF/map values. Fresh two-stage
-  review is the next gate. Fix Round 4 implementation/tests/docs/evidence:
-  `d8dfe35f`.
+  evidence; replace them with rebuilt-ELF/map values. Fix Round 4 implementation
+  and evidence are `d8dfe35f` and `1e1fbe92`; its independent specification and
+  quality review are PASS, with no Critical or Important findings and one
+  corrected documentation-only Minor. The next gate is exactly one serialized
+  repaired build, then fail-closed map validation before any capture.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

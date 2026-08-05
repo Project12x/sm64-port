@@ -2286,7 +2286,8 @@ math census occurred. Scoped repair/docs/evidence commit: `39b99c21`.
 
 ## Task 9A Fix Round 4 — HWRAM boot-boundary repair (2026-08-05)
 
-**Status: source/layout GREEN; fresh independent review required.** The Fix
+**Status: source/layout GREEN; independently approved for one serialized
+repaired rebuild.** The Fix
 Round 3 observer was retried only against the unchanged reviewed artifacts.
 The canonical report failed target identity after 600 one-VBlank startup
 attempts; a diagnostic extension failed the same stage after 4,096 attempts.
