@@ -2357,12 +2357,12 @@ expected FPS lever.
   reviewer authorizes exactly one fresh serialized repaired build followed by
   fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP + SPEC REVIEW PASS; QUALITY REVIEW PENDING**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP/REVIEWS PASS; EXACT-ARTIFACT CAPTURE READY**
 
-  After both reviews pass, verify no `make`, SH compiler, or sibling target
-  build is running, then use the exact wrapper below with `make -B -j1`. Never
-  run target builds in parallel. Record exit, duration, ELF/ISO/CUE hashes,
-  sizes, map margins, and feature flags. Against that exact ELF/CUE, run one
+  The one repaired build has already been consumed and is exact-map green. Do
+  **not** rebuild: another `make -B -j1` would replace the hash-bound artifact.
+  Verify no build or Ymir process is running, confirm the recorded ELF/ISO/CUE
+  hashes and sizes still match, and against that exact existing ELF/CUE run one
   bounded automatic cadence capture and record source-tick fields, slave work
   overlap window, master-finalization fields, generations, queue claims/
   retirement/failure/quarantine, transfer faults/waits, reuse, and FPS. The
@@ -2471,7 +2471,11 @@ expected FPS lever.
   Its two documentation-only Minors are corrected here: the live summary now
   distinguishes the successful repaired target/map from absent runtime/FPS
   evidence, and the JSON key states that loadability comes from map evidence.
-  Independent code-quality review remains required before capture.
+  Independent code-quality review found no implementation Critical, Important,
+  or Minor defect. Its sole documentation-only Important was the stale rebuild
+  instruction above and matching aggregate-report text; both are corrected in
+  this transition. The resulting GO authorizes only same-artifact identity/
+  Ymir capture, with no rebuild or test rerun.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

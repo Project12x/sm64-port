@@ -2418,12 +2418,14 @@ the two direct type tests, exact artifact hashes/sizes/map values, and truthful
 absence of runtime/FPS evidence. Two documentation-only Minors were corrected:
 the active summary now distinguishes target/map PASS from missing runtime/FPS,
 and the exact-map JSON identifies the load-address assertion as map evidence.
-Code-quality review remains open before capture.
+Code-quality review found no implementation defect. Its sole documentation-only
+Important was contradictory rebuild guidance, corrected below.
 
 Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-
 through, and canonical-P2 snapshot patterns; no upstream source was copied or
 closely ported. Scoped implementation/tests/docs/evidence commit: `d8dfe35f`.
-Fresh specification and code-quality review are the next gate; only a GO may
-authorize one serialized repaired target build.
+The repaired build has already been consumed and exact-map validated. Do not
+rebuild it. The completed reviews authorize only identity/Ymir capture of the
+same hash-bound ELF/CUE, with no rebuild or test rerun.

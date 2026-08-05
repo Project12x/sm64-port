@@ -1,6 +1,6 @@
 # Roadmap
 
-## Now — quality-review the repaired A9A verifier, then capture
+## Now — capture the reviewed, hash-bound A9A artifact
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores
 30 Hz source pacing and raises the exact cadence from 1.622 to 4.463 FPS by
@@ -37,8 +37,10 @@ for Yaul's initialized slave entry and `.uncached.function` cache helpers.
 Commit `cfb07a7d` now requires `PROGBITS` exactly; 15/15 focused tests pass and
 the same hash-bound ELF is exact-map green. Independent specification review is
 PASS/GO with no Critical or Important findings; its two documentation-only
-Minors are corrected. Complete independent code-quality review, then run boot/
-identity and bounded overlap/FPS capture without another rebuild.
+Minors are corrected. Code-quality review found no implementation defect; its
+sole documentation-only Important removed contradictory rebuild instructions.
+Run boot/identity and bounded overlap/FPS capture against the existing exact
+ELF/CUE without rebuilding or rerunning tests.
 
 ## Completed diagnosis — post-A8 CPU frame cost
 
