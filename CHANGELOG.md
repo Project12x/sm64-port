@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Bounded the proposed state-only source-geo optimization and left it
+  deliberately disabled.  Executable source-site evidence shows the old
+  `geo_process_root()` skip loses Mario animation and switch state, painting,
+  water/moving-texture counters, camera/matrix-derived object state, graph
+  lifecycle cleanup, and visibility decisions.  The only generic boundary
+  after generated callbacks is too late to avoid their display-list
+  construction, while an earlier boundary also omits those source mutations.
+  A reserved digest API therefore fails closed without touching caller output,
+  and the normal full geo walk remains authoritative until a future bounded
+  split can prove exact state digests.
+
 - Hardened the compact Mario actor bank after independent review.  The target
   decoder now proves every packed GEO1 table boundary and count, joint/branch
   ownership and node ordering, RGB555 material, meshlet bounds/tier spans,
