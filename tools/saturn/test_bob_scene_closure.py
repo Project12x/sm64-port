@@ -28,8 +28,8 @@ class BobSceneClosureTest(unittest.TestCase):
             self.assertEqual(first_hash, hashlib.sha256(first_path.read_bytes()).hexdigest())
             self.assertEqual(second_hash, hashlib.sha256(second_path.read_bytes()).hexdigest())
             validate_scene_closure(first)
-            self.assertEqual(len(first["records"]), 71)
-            self.assertEqual(len(first["source_hashes"]), 71)
+            self.assertEqual(len(first["records"]), 74)
+            self.assertEqual(len(first["source_hashes"]), 72)
             records = {record["stable_id"]: record for record in first["records"]}
             self.assertEqual(records["bhvGoomba"]["maximum_live_instances"], 11)
             self.assertIn("bhvGoomba", records["bhvGoombaTripletSpawner"]["spawned_children"])

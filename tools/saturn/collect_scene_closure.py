@@ -237,9 +237,34 @@ def _native_spawn_edges(text: str) -> set[tuple[str, str]]:
             args = _arguments(call)
             model = next((arg for arg in args if re.fullmatch(r"MODEL_[A-Z0-9_]+", arg)), None)
             behavior = next((arg for arg in args if re.fullmatch(r"bhv[A-Za-z0-9_]+", arg)), None)
+            if not model and behavior == "bhvOpenableCageDoor" and any("gOpenableGrills" in arg for arg in args):
+                model = "MODEL_BOB_BARS_GRILLS"
             if model and behavior:
                 edges.add((model, behavior))
+            else:
+                raise ClosureError(f"unrecognized dynamic native spawn form: {name}({', '.join(args)})")
     return edges
+
+
+def _reachable_native_bodies(root: Path, source: str, entry: str) -> list[str]:
+    """Bounded source-defined helper walk; no indirect function pointers."""
+    text = _read(root, source)
+    pending, seen, bodies = [entry], set(), []
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        if len(seen) >= 64:
+            raise ClosureError(f"native helper traversal limit exceeded: {entry}")
+        seen.add(name)
+        body = _function_body(text, name)
+        if not body:
+            continue
+        bodies.append(body)
+        for helper in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", body):
+            if helper.startswith(("bhv_", "spawn_", "water_", "one_", "exclamation_", "koopa_")) and _function_body(text, helper):
+                pending.append(helper)
+    return bodies
 
 
 def find_unruled_native_spawn_sites(root: Path, document: dict, rules_path: Path | None = None) -> list[str]:
@@ -253,7 +278,8 @@ def find_unruled_native_spawn_sites(root: Path, document: dict, rules_path: Path
     for record in document["records"]:
         for native in re.findall(r"CALL_NATIVE\s*\(\s*(bhv_[A-Za-z0-9_]+)", blocks[record["stable_id"]]):
             for source in native_sources.get(native, set()):
-                for model, child in _native_spawn_edges(_function_body(_read(root, source), native)):
+                for body in _reachable_native_bodies(root, source, native):
+                  for model, child in _native_spawn_edges(body):
                     if (record["stable_id"], source, model, child) not in declared:
                         sites.append(f"{record['stable_id']}:{source}:{model}:{child}")
     return sorted(set(sites))

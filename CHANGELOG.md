@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Scene closure now walks bounded source-defined native helper chains from
+  BehaviorScript callbacks, rejecting unknown computed spawn arguments before
+  output. Recognized grill-table expansion remains explicit, while newly
+  discovered concrete coin/star helper effects must be reviewed as normal
+  source-attested edges.
+
 - Scope LevelScript inline object discovery to the requested `AREA`, while
   retaining only that area's linked local scripts, so objects from another
   area cannot inflate a scene package's dependency or capacity closure.

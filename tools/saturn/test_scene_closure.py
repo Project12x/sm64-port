@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from collect_scene_closure import ClosureError, collect_scene_closure
+from collect_scene_closure import ClosureError, _native_spawn_edges, collect_scene_closure
 from scene_package_schema import validate_scene_closure
 
 
@@ -104,6 +104,10 @@ class SceneClosureTest(unittest.TestCase):
     def test_rejects_reachable_behavior_cycles(self) -> None:
         with self.assertRaisesRegex(ClosureError, "behavior spawn cycle"):
             self.collect(self.fixture(with_cycle=True))
+
+    def test_rejects_unknown_computed_native_spawn_arguments(self) -> None:
+        with self.assertRaisesRegex(ClosureError, "unrecognized dynamic native spawn form"):
+            _native_spawn_edges("spawn_object(o, model_from_table, behavior_from_table);")
 
     def test_schema_rejects_stale_hash_duplicate_id_and_bob_only_field(self) -> None:
         closure = self.collect(self.fixture())
