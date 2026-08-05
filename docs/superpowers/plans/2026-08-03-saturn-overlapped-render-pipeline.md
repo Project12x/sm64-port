@@ -341,7 +341,8 @@ and the evidence report before starting another task.
   retries against that unchanged ELF failed target identity after 600 and
   4,096 startup VBlanks. The bulk arrays now share one LWRAM object and one P2
   accessor while the small lifetime record remains uncached; HWRAM/LWRAM
-  bounds fail before margin subtraction. No repaired target/FPS claim exists.
+  bounds fail before margin subtraction. The repaired target build and exact
+  map now pass; runtime identity/capture and FPS evidence do not yet exist.
   The accepted
   synchronous renderer is split into start and
   poll/finalize phases so immutable render generation `N` remains active while
@@ -2356,7 +2357,7 @@ expected FPS lever.
   reviewer authorizes exactly one fresh serialized repaired build followed by
   fail-closed map validation and exact-artifact identity/boot capture.
 
-- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP PASS; VERIFIER FIX REVIEW PENDING**
+- [ ] **Step 11: Run exactly one serialized DLL-safe target build and capture — REPAIRED BUILD/MAP + SPEC REVIEW PASS; QUALITY REVIEW PENDING**
 
   After both reviews pass, verify no `make`, SH compiler, or sibling target
   build is running, then use the exact wrapper below with `make -B -j1`. Never
@@ -2463,6 +2464,14 @@ expected FPS lever.
   `docs/saturn/evidence/reports/a9a-step11-repaired-memory-map-2026-08-05.json`.
   Fresh independent review of `cfb07a7d` is required before Ymir; no rebuild is
   needed or authorized for that capture.
+
+  Independent specification review is PASS/GO with no Critical or Important
+  findings. It confirms strict `PROGBITS`, all retained fail-closed predicates,
+  exact artifact hashes/sizes/map values, and the absence of a runtime claim.
+  Its two documentation-only Minors are corrected here: the live summary now
+  distinguishes the successful repaired target/map from absent runtime/FPS
+  evidence, and the JSON key states that loadability comes from map evidence.
+  Independent code-quality review remains required before capture.
 
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 

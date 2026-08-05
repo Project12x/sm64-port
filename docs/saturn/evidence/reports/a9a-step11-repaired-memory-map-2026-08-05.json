@@ -25,7 +25,7 @@
     "lwram_margin_hex": "0x74F0"
   },
   "checks": {
-    "uncached_is_loadable_progbits": true,
+    "uncached_is_progbits_with_map_load_address": true,
     "uncached_is_p2": true,
     "uncached_physical_end_matches_end": true,
     "hwram_floor_0x1b00": true,

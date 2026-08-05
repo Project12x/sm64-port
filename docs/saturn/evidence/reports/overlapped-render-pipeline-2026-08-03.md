@@ -2412,6 +2412,14 @@ also passes, recorded in
 Independent review and runtime capture remain open; no rebuild or Ymir run
 accompanied this correction.
 
+Independent specification review is PASS/GO with no Critical or Important
+findings. It confirms strict `PROGBITS`, unchanged fail-closed boundary gates,
+the two direct type tests, exact artifact hashes/sizes/map values, and truthful
+absence of runtime/FPS evidence. Two documentation-only Minors were corrected:
+the active summary now distinguishes target/map PASS from missing runtime/FPS,
+and the exact-map JSON identifies the load-address assertion as map evidence.
+Code-quality review remains open before capture.
+
 Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-

@@ -3,9 +3,9 @@
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
 Task 9A/A9A is **rebuilt and exact-map green; the narrow verifier correction is
-awaiting independent review before capture**. Fix Round 4 specification and
-quality reviews were PASS with no Critical or Important findings. The accepted
-renderer still exposes exact-generation
+specification-reviewed PASS and awaiting code-quality review before capture**.
+No Critical or Important specification finding remains. The accepted renderer
+still exposes exact-generation
 `start_frame(N)` and `poll_frame(N)`: start publishes immutable jobs and
 returns after one slave notification; poll waits for positive retirement,
 then drains, merges, lowers once, and retires. Failure quarantines without
