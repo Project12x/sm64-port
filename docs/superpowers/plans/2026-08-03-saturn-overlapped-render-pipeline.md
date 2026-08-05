@@ -1251,7 +1251,13 @@ yet.
   snapshots without claiming distinct rollovers, preserves fractional medians,
   writes structured failure JSON, checks process liveness, and pins the Win32
   ABI. Rereview is GO; failed reports also retain stage, PID when launched, and
-  adjacent log paths. Queue values remain open.
+  adjacent log paths. Queue values remain open. **Queue-observation correction
+  (2026-08-05):** `capture_sourceboot_throughput.py` is source-complete and
+  host-green. It binds the matching CUE/ELF/Ymir identities, verifies an ELF
+  code window in target memory, resolves exact local/underscore symbols
+  in-process, and accepts P2 samples only after coherent retirement while
+  advancing one VBlank at a time. This is not target evidence: no valid live
+  report has been captured, so the step and queue gate remain unchecked.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

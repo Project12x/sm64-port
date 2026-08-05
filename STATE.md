@@ -107,6 +107,16 @@ The final repaired collector then attached to the same running desktop process
 for five more snapshots: VDP2 median 60 FPS and VDP1 median 3 FPS, range 3--4.
 The combined automatic evidence therefore confirms sustained 3--4 VDP1 FPS.
 
+The remaining queue observation boundary is now source-complete and host-green:
+`capture_sourceboot_throughput.py` requires the exact matching CUE and ELF,
+hashes them with Ymir, proves immutable ELF code bytes are present at their
+linked target address, and accepts P2 telemetry only after queue retirement
+and both runtime sequence pairs agree. It advances exactly one emulated VBlank
+per sample and records VDP2 presentation cadence without inferring a queue
+owner from the host delayed-slave fixture. No valid live capture has yet been
+recorded, so the A5.9 queue gate remains open and the 3--4 VDP1 FPS result is
+unchanged.
+
 The isolated audio lane now has an accepted standalone soundtest proof. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated
 CC0 proof bank contains three sounds in 4,408 bytes. Host register, pitch,

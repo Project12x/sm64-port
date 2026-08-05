@@ -22,7 +22,11 @@ debug boundary supports it, the queue telemetry too. Those live values
 determine the scheduler repair. The FPS half is now live-proven: ten automatic
 running-counter snapshots report VDP2 median 60 FPS and VDP1 median 4 FPS
 (range 3--4). The first review's evidence-durability repairs are host-green
-and rereview is GO; queue counter capture remains open.
+and rereview is GO. The queue half now has a strict-TDD, host-green capture
+tool that binds and hashes the explicit CUE/ELF/Ymir artifacts, proves an ELF
+code window exists in target memory, and rejects incoherent P2 telemetry while
+sampling each VBlank. A valid matching live capture remains required; queue
+counter capture stays open and no scheduler change is authorized yet.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

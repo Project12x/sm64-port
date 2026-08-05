@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added a bounded sourceboot throughput capture for the remaining A5.9 queue
+  observation gate. It binds an explicit CUE/ELF/Ymir triple by hash, verifies
+  a linked immutable ELF code window in the running target before sampling,
+  reads runtime and queue records through P2, and fails closed unless terminal
+  queue telemetry and two VDP2 presentation edges are coherent. This replaces
+  unreliable manual HUD transcription without changing target code, queue
+  policy, or the already measured 3--4 VDP1 FPS result.
+
 - Added bounded automatic desktop-Ymir performance capture. The helper reads
   Ymir's native one-second window-title counters for VDP1 framebuffer swaps,
   VDP1 completed draw calls, VDP2 frames, GUI rate, and emulation speed,

@@ -45,6 +45,14 @@ write the same kind. This matches the bounded physical arrays without wasting
 memory on a synthetic global arena and preserves the pointer-free 16-byte
 descriptor ABI. The single atomic CPU-DUAL cutover is live and target-link
 green; live claim ownership and terminal waits remain the A5.9 evidence gate.
+The host-side observation boundary resolves the three target records from the
+exact supplied ELF (including local/leading-underscore symbols), validates one
+immutable executable byte window in target memory before accepting telemetry,
+then reads the shared records through P2 once per emulated VBlank. A queue
+sample is evidence only when its queue generation is retired and its notify,
+retire, and HUD publication sequences agree; each retired sequence can attach
+to at most one VDP2 presentation edge. This diagnosis changes no target
+scheduler behavior and remains open until a matching live CUE capture passes.
 
 Callback contexts use a separate pointer-free P2 release record. The record
 binds one immutable queue descriptor generation/index/phase to a nonzero

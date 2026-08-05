@@ -1500,3 +1500,29 @@ open.
   `build/saturn/sourceboot/e2-bob-demo-replay-camroute0-live-input-boot600-atan2v2-camv3-stage8-r6000-slave1-poly2-hot1-clip1-bsp1-frag0-pipe4/sm64-saturn-sourceboot-e2.cue`.
   No Ymir launch, visible HUD transcription, scheduler conclusion, or FPS
   claim occurred in this gate.
+
+### A5.9 automatic queue-observation source evidence (2026-08-05)
+
+- Watched RED: `python tools/saturn/test_capture_sourceboot_throughput.py`
+  failed with `AssertionError: sourceboot throughput capture helper is missing`.
+- GREEN: the focused host suite reports `Ran 9 tests ... OK`; the existing
+  sourceboot boot-trace suite reports `Ran 16 tests ... OK`; both modules pass
+  `python -m py_compile`, and `git diff --check` is clean for this task.
+- The new bounded tool requires explicit matching CUE and ELF inputs, records
+  SHA-256 identities for them, their referenced ISO, and Ymir, resolves
+  `_sourceboot_boot_trace` (32), `_s_runtime` (92), and
+  `_s_render_job_queue` (232) with an in-process ELF32 parser, and rejects
+  missing, duplicate, stripped, or wrong-size definitions.
+- Before reading telemetry it matches a linked executable ELF byte window in
+  target memory. It then reads the three records through P2 after exactly one
+  emulated VBlank per sample. It accepts terminal queue data only when queue
+  generation is zero, notify equals retire and is nonzero, and QN equals QR
+  and is nonzero; a sequence cannot attach to two presentation edges.
+- The report contains only bounded artifacts, addresses/sizes, identity proof,
+  cadence summary, latest coherent queue data, and presentation edges. RPC,
+  identity, or coherence failures instead produce `status: failed` with a
+  stage/type/message; no success-shaped partial is emitted.
+- No target build, Ymir invocation, live queue capture, FPS result, or
+  scheduler-policy change occurred. The queue observation gate remains open
+  until a matching CUE produces at least two VDP2 presentation edges and one
+  coherent terminal queue record.
