@@ -14,7 +14,6 @@ import hashlib
 import json
 import math
 import statistics
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,6 +31,8 @@ RENDER_JOB_QUEUE_BYTES = 232
 IDENTITY_PROBE_BYTES = 16
 MAX_VBLANKS = 4096
 P2_ALIAS_BIT = 0x20000000
+MAX_DIAGNOSTIC_NOTIFICATIONS = 64
+MAX_DIAGNOSTIC_NOTIFICATION_BYTES = 64 * 1024
 REQUIRED_SYMBOLS = {
     "sourceboot_boot_trace": BOOT_TRACE_BYTES,
     "s_runtime": RUNTIME_BYTES,
@@ -69,6 +70,32 @@ def _elf32_sections(data: bytes) -> tuple[str, list[dict[str, int]]]:
             raise ValueError("ELF section contents are outside file")
         sections.append(section)
     return endian, sections
+
+
+def _elf32_load_segments(data: bytes, endian: str) -> list[dict[str, int]]:
+    """Return valid ELF32 PT_LOAD segments for identity-probe containment."""
+    program_offset = int.from_bytes(data[28:32], endian)
+    program_size = int.from_bytes(data[42:44], endian)
+    program_count = int.from_bytes(data[44:46], endian)
+    if program_count == 0 or program_size < 32:
+        return []
+    segments: list[dict[str, int]] = []
+    for index in range(program_count):
+        base = program_offset + index * program_size
+        if base + 32 > len(data):
+            raise ValueError("ELF program header is outside file")
+        segment = {
+            "type": int.from_bytes(data[base : base + 4], endian),
+            "offset": int.from_bytes(data[base + 4 : base + 8], endian),
+            "address": int.from_bytes(data[base + 8 : base + 12], endian),
+            "file_size": int.from_bytes(data[base + 16 : base + 20], endian),
+            "memory_size": int.from_bytes(data[base + 20 : base + 24], endian),
+        }
+        if segment["offset"] + segment["file_size"] > len(data):
+            raise ValueError("ELF load segment is outside file")
+        if segment["type"] == 1:
+            segments.append(segment)
+    return segments
 
 
 def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
@@ -123,9 +150,24 @@ def resolve_required_symbols(elf: Path) -> dict[str, dict[str, int]]:
 def build_elf_identity_probe(elf: Path) -> dict[str, Any]:
     """Bind one immutable mapped code window to the exact supplied ELF."""
     data = elf.read_bytes()
-    _endian, sections = _elf32_sections(data)
+    endian, sections = _elf32_sections(data)
+    load_segments = _elf32_load_segments(data, endian)
     for section in sections:
-        if not section["flags"] & 0x4 or section["size"] < IDENTITY_PROBE_BYTES:
+        if (
+            section["type"] != 1  # SHT_PROGBITS
+            or section["flags"] & 0x6 != 0x6  # SHF_ALLOC | SHF_EXECINSTR
+            or section["size"] < IDENTITY_PROBE_BYTES
+        ):
+            continue
+        section_end = section["address"] + IDENTITY_PROBE_BYTES
+        file_end = section["offset"] + IDENTITY_PROBE_BYTES
+        if not any(
+            segment["address"] <= section["address"]
+            and section_end <= segment["address"] + segment["file_size"]
+            and segment["offset"] <= section["offset"]
+            and file_end <= segment["offset"] + segment["file_size"]
+            for segment in load_segments
+        ):
             continue
         start = section["offset"]
         expected = data[start : start + IDENTITY_PROBE_BYTES]
@@ -135,7 +177,7 @@ def build_elf_identity_probe(elf: Path) -> dict[str, Any]:
             "expected_bytes": list(expected),
             "expected_sha256": hashlib.sha256(expected).hexdigest(),
         }
-    raise ValueError("ELF has no executable section large enough for identity probe")
+    raise ValueError("ELF has no loadable executable PROGBITS section for identity probe")
 
 
 def read_exact(client: Any, address: int, count: int) -> bytes:
@@ -298,7 +340,7 @@ def observe_target(
             "vblank_generation": trace["observed_vblank_generation"],
             "presentation_generation": presentation,
         }
-        if coherent is not None and int(coherent["sequence"]) not in used_sequences:
+        if coherent is not None:
             attach_queue_record(event, coherent, used_sequences)
         events.append(event)
         last_presentation = presentation
@@ -315,12 +357,39 @@ def observe_target(
     }
 
 
+def _bounded_notifications(notifications: list[dict[str, Any]]) -> dict[str, Any]:
+    """Retain only a byte- and count-bounded tail of JSON-RPC notifications."""
+    original_bytes = 0
+    retained_reversed: list[dict[str, Any]] = []
+    retained_bytes = 2  # JSON list delimiters.
+    for notification in notifications:
+        original_bytes += len(json.dumps(notification, separators=(",", ":")).encode("utf-8"))
+    for notification in reversed(notifications):
+        encoded = json.dumps(notification, separators=(",", ":")).encode("utf-8")
+        separator_bytes = 1 if retained_reversed else 0
+        if (
+            len(retained_reversed) >= MAX_DIAGNOSTIC_NOTIFICATIONS
+            or retained_bytes + separator_bytes + len(encoded) > MAX_DIAGNOSTIC_NOTIFICATION_BYTES
+        ):
+            continue
+        retained_reversed.append(notification)
+        retained_bytes += separator_bytes + len(encoded)
+    retained = list(reversed(retained_reversed))
+    return {
+        "notifications": retained,
+        "notifications_original_count": len(notifications),
+        "notifications_original_bytes": original_bytes,
+        "notifications_truncated": len(retained) != len(notifications),
+    }
+
+
 def _protocol_diagnostics(client: YmirClient | None) -> dict[str, Any]:
     stderr = client.stderr if client is not None else ""
     capped, original_bytes = cap_stderr(stderr)
+    notifications = client.notifications if client is not None else []
     return {
-        "ready": bool(client and any(message.get("method") == "instance.ready" for message in client.notifications)),
-        "notifications": client.notifications if client is not None else [],
+        "ready": any(message.get("method") == "instance.ready" for message in notifications),
+        **_bounded_notifications(notifications),
         "stderr": capped,
         "stderr_truncated": original_bytes > len(capped),
         "stderr_original_bytes": original_bytes,

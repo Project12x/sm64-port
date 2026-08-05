@@ -38,6 +38,14 @@
 
 ### Fixed
 
+- Hardened A5.9 sourceboot queue capture against false-positive evidence. A
+  terminal sequence reused across two presentation edges now fails the capture
+  instead of being silently omitted; ELF identity bytes must come from an
+  allocated `SHT_PROGBITS` section contained in `PT_LOAD`; and JSON-RPC
+  notifications are independently count- and byte-bounded in reports. These
+  changes preserve the fail-closed observation contract without touching the
+  target or scheduler.
+
 - Restored the desktop launcher to the proven `ymir-agent/build-agent`
   executable and explicit `--profile`/`--disc` arguments. The prior default
   had drifted to `build-agent2`, which could launch without the intended disc

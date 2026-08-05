@@ -284,7 +284,13 @@ yet.
   ELF record sizes in-process, proves target code identity before accepting a
   sample, reads P2 telemetry one VBlank at a time, and fails closed on an
   in-flight or reused queue sequence. No matching live invocation has occurred;
-  retain this step and the queue gate unchecked.
+  retain this step and the queue gate unchecked. **Review repair 1/5
+  (2026-08-05):** coherent sequence reuse across two presentation edges now
+  fails end-to-end rather than being omitted, identity proof accepts only
+  allocated `SHT_PROGBITS` bytes contained in `PT_LOAD`, and diagnostics cap
+  notification count and serialized bytes independently of the Ymir client.
+  Twelve focused capture tests and sixteen boot-trace tests are host-green;
+  no target evidence exists and this step remains unchecked.
 ## Controller amendment — execute only A5.9 automatic queue observation
 
 This dispatch does **not** reopen the completed A5 queue/cutover work below.

@@ -1526,3 +1526,19 @@ open.
   scheduler-policy change occurred. The queue observation gate remains open
   until a matching CUE produces at least two VDP2 presentation edges and one
   coherent terminal queue record.
+
+### A5.9 queue-observation review repair 1/5 (2026-08-05)
+
+- A repeated coherent retirement sequence at a second presentation edge now
+  fails the capture, rather than being excluded from that edge while allowing
+  a success report. The end-to-end fake-Ymir regression test supplies the
+  duplicate sequence and observes the required failure.
+- Identity evidence now accepts only allocated executable `SHT_PROGBITS` bytes
+  in a loadable `PT_LOAD` file/virtual range. Non-alloc, non-PROGBITS, and
+  non-loadable executable fixtures are rejected.
+- Serialized JSON-RPC notification diagnostics have an independent 64-record,
+  64-KiB bound and report original count/bytes/truncation. This remains bounded
+  even if the imported client retains an unbounded notification list.
+- Focused capture tests: 12/12 PASS; existing boot-trace tests: 16/16 PASS;
+  both modules compile. No target build, Ymir capture, or target conclusion
+  occurred. The queue gate remains unchecked.

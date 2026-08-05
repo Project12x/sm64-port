@@ -81,3 +81,51 @@ record.
   was prepared.
 - Independent-review verdict: open.
 - Target evidence: open; host-green is not target evidence.
+
+## Review repair 1/5 (2026-08-05)
+
+### Findings addressed
+
+- **CRITICAL:** `observe_target()` now always calls `attach_queue_record()`
+  for a coherent sample at a presentation edge. A sequence already attached to
+  an earlier edge raises `ValueError`; it cannot be silently omitted while the
+  capture succeeds.
+- **IMPORTANT:** `build_elf_identity_probe()` now requires an executable
+  identity window to be `SHT_PROGBITS`, `SHF_ALLOC|SHF_EXECINSTR`, and wholly
+  contained in both file and virtual ranges of a `PT_LOAD` segment.
+- **IMPORTANT:** protocol diagnostics now retain only a count- and
+  serialized-byte-bounded tail of notifications, with original count/byte and
+  truncation metadata calculated locally rather than relying on `YmirClient`.
+- **MINOR:** removed the unused `time` import.
+
+### Watched RED
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+Ran 12 tests ... FAILED
+FAIL: test_repeated_coherent_sequence_fails_end_to_end_instead_of_being_silently_omitted
+FAIL: test_identity_probe_rejects_non_alloc_non_progbits_or_unloaded_executable_sections
+ERROR: test_protocol_diagnostics_bounds_many_and_oversized_notifications
+```
+
+### GREEN verification
+
+```text
+python tools\saturn\test_capture_sourceboot_throughput.py
+............
+Ran 12 tests ... OK
+
+python tools\saturn\test_capture_sourceboot_boot_trace.py
+................
+Ran 16 tests ... OK
+
+python -m py_compile tools\saturn\capture_sourceboot_throughput.py tools\saturn\test_capture_sourceboot_throughput.py
+git diff --check
+```
+
+Covering tests: `test_repeated_coherent_sequence_fails_end_to_end_instead_of_being_silently_omitted`,
+`test_identity_probe_rejects_non_alloc_non_progbits_or_unloaded_executable_sections`,
+and `test_protocol_diagnostics_bounds_many_and_oversized_notifications`.
+
+No target build or Ymir run occurred. The live queue-observation and review
+gates remain open.

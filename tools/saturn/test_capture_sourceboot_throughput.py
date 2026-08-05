@@ -54,7 +54,15 @@ def queue(generation: int) -> bytes:
     return be_words(232, {224: generation})
 
 
-def elf32_with_symbols(path: Path, symbols: list[tuple[str, int, int]], *, duplicate: bool = False) -> None:
+def elf32_with_symbols(
+    path: Path,
+    symbols: list[tuple[str, int, int]],
+    *,
+    duplicate: bool = False,
+    text_type: int = 1,
+    text_flags: int = 0x6,
+    loadable: bool = True,
+) -> None:
     """Create a tiny big-endian ELF32 with one executable and one symbol table section."""
     names = b"\x00" + b"\x00".join(name.encode("ascii") for name, _, _ in symbols) + b"\x00"
     name_offsets: dict[str, int] = {}
@@ -75,17 +83,28 @@ def elf32_with_symbols(path: Path, symbols: list[tuple[str, int, int]], *, dupli
     image[:4] = b"\x7fELF"
     image[4] = 1
     image[5] = 2
+    image[28:32] = (0xE0).to_bytes(4, "big")
     image[32:36] = section_offset.to_bytes(4, "big")
+    image[42:44] = (32).to_bytes(2, "big")
+    image[44:46] = (1 if loadable else 0).to_bytes(2, "big")
     image[46:48] = (40).to_bytes(2, "big")
     image[48:50] = section_count.to_bytes(2, "big")
     # text
     text = memoryview(image)[section_offset + 40 : section_offset + 80]
-    text[4:8] = (1).to_bytes(4, "big")
-    text[8:12] = (0x6).to_bytes(4, "big")
+    text[4:8] = text_type.to_bytes(4, "big")
+    text[8:12] = text_flags.to_bytes(4, "big")
     text[12:16] = BOOT_ADDRESS.to_bytes(4, "big")
     text[16:20] = text_offset.to_bytes(4, "big")
     text[20:24] = (32).to_bytes(4, "big")
     image[text_offset : text_offset + 32] = bytes(range(32))
+    if loadable:
+        segment = memoryview(image)[0xE0 : 0xE0 + 32]
+        segment[0:4] = (1).to_bytes(4, "big")  # PT_LOAD
+        segment[4:8] = text_offset.to_bytes(4, "big")
+        segment[8:12] = BOOT_ADDRESS.to_bytes(4, "big")
+        segment[16:20] = (32).to_bytes(4, "big")
+        segment[20:24] = (32).to_bytes(4, "big")
+        segment[24:28] = (0x5).to_bytes(4, "big")
     # symtab
     symtab = memoryview(image)[section_offset + 80 : section_offset + 120]
     symtab[4:8] = (2).to_bytes(4, "big")
@@ -169,6 +188,23 @@ class ThroughputCaptureTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "does not contain"):
                 capture.prove_target_identity(type("Bad", (), {"call": lambda *_: {"data": [0] * 16}})(), probe)
 
+    def test_identity_probe_rejects_non_alloc_non_progbits_or_unloaded_executable_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            elf = Path(directory) / "game.elf"
+            symbols = [
+                ("sourceboot_boot_trace", BOOT_ADDRESS, 32),
+                ("s_runtime", RUNTIME_ADDRESS, 92),
+                ("s_render_job_queue", QUEUE_ADDRESS, 232),
+            ]
+            for kwargs in (
+                {"text_flags": 0x4},
+                {"text_type": 8},
+                {"loadable": False},
+            ):
+                elf32_with_symbols(elf, symbols, **kwargs)
+                with self.assertRaisesRegex(ValueError, "loadable"):
+                    capture.build_elf_identity_probe(elf)
+
     def test_decodes_every_big_endian_offset_and_phase_order(self) -> None:
         self.assertEqual(capture.decode_boot_trace(trace(0xFFFFFFFE, 7)), {"observed_vblank_generation": 0xFFFFFFFE, "vdp2_presentation_generation": 7})
         decoded = capture.decode_runtime(runtime(qn=13, qr=14, notify=15, retired=16))
@@ -225,6 +261,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                 self.tick = 0
                 self.inflight = runtime(qn=1, qr=0, notify=5, retired=4)
                 self.coherent = runtime(qn=2, qr=2, notify=6, retired=6)
+                self.next_coherent = runtime(qn=2, qr=2, notify=7, retired=7)
 
             def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
                 if method == "exec.run_for":
@@ -238,7 +275,9 @@ class ThroughputCaptureTests(unittest.TestCase):
                 if address == BOOT_ADDRESS:
                     return {"data": list(trace(self.tick, self.tick // 2))}
                 if address == RUNTIME_ADDRESS:
-                    return {"data": list(self.inflight if self.tick == 1 else self.coherent)}
+                    if self.tick == 1:
+                        return {"data": list(self.inflight)}
+                    return {"data": list(self.coherent if self.tick < 4 else self.next_coherent)}
                 if address == QUEUE_ADDRESS:
                     return {"data": list(queue(0))}
                 raise AssertionError(address)
@@ -254,8 +293,53 @@ class ThroughputCaptureTests(unittest.TestCase):
             nominal_refresh_hz=60.0,
         )
         self.assertEqual(len(observation["presentation_events"]), 2)
-        self.assertEqual(observation["latest_coherent_queue"]["sequence"], 6)
+        self.assertEqual(observation["latest_coherent_queue"]["sequence"], 7)
         self.assertEqual(observation["measurement"]["guest_fps_mean"], 30.0)
+
+    def test_repeated_coherent_sequence_fails_end_to_end_instead_of_being_silently_omitted(self) -> None:
+        class FakeYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+                self.coherent = runtime(qn=2, qr=2, notify=6, retired=6)
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, self.tick // 2))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(self.coherent)}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        with self.assertRaisesRegex(ValueError, "already attached"):
+            capture.observe_target(
+                FakeYmir(),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=4,
+                nominal_refresh_hz=60.0,
+            )
+
+    def test_protocol_diagnostics_bounds_many_and_oversized_notifications(self) -> None:
+        oversized = {"method": "instance.note", "params": {"message": "x" * (128 * 1024)}}
+        client = type("Client", (), {
+            "stderr": "",
+            "notifications": [oversized] + [{"method": "instance.note", "params": {"index": index}} for index in range(200)],
+        })()
+        diagnostics = capture._protocol_diagnostics(client)
+        encoded = json.dumps(diagnostics["notifications"], separators=(",", ":")).encode("utf-8")
+        self.assertTrue(diagnostics["ready"] is False)
+        self.assertTrue(diagnostics["notifications_truncated"])
+        self.assertEqual(diagnostics["notifications_original_count"], 201)
+        self.assertLessEqual(len(diagnostics["notifications"]), capture.MAX_DIAGNOSTIC_NOTIFICATIONS)
+        self.assertLessEqual(len(encoded), capture.MAX_DIAGNOSTIC_NOTIFICATION_BYTES + 2)
 
     def test_cli_writes_a_failed_report_instead_of_success_shaped_partial_output(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
