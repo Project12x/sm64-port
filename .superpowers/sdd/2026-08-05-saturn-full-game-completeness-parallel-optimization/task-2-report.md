@@ -90,3 +90,48 @@ Independent review was not run in this worker task; controller-side independent 
 - No Ymir/headless/desktop capture or manual controls/visual check was run. The new loaded-identity capture path is host-tested but awaits a later exact target artifact.
 - The broad native-math gate was not run, as explicitly prohibited.
 - Controller-side independent review and active plan/SDD ledger reconciliation remain open and controller-owned.
+
+## Independent-review fix round 1 of 5
+
+Status: source-complete at `8c97fd4e` (`fix(saturn): close Task 2 identity review gaps`), pending controller-side independent rereview. The first independent review recorded `SPEC FAIL / QUALITY FAIL`; its three findings were accepted and repaired. The controller-owned active plan and progress ledger were again left untouched.
+
+### Corrections
+
+- Added every omitted compiler-affecting sourceboot control to the canonical effective-config digest and Make wrapper expectations: atan2 variant, demo-path enable and view radius, slave rendering, camera idle/discovery/range controls, flat BSP fragments, Fast3D Q16 trace, and experimental geo-walk suppression. Each legal mutation now changes the 404-byte identity and identity-derived output label, while wrapper/spec drift fails before emission.
+- Replaced the archive helper's permissive FPS/target/profile checks with exact canonical hashes for the accepted full cadence record and launch report plus exact target identity content. The helper reads the actual profile's `Ymir.toml`, verifies SHA-256 `33a155e765dac9bd2871ca725ed7f444d1fbbb95876d43c955c0b688e6931566`, parses `DRAM` / `32Mbit`, requires the successful monitored command for the accepted CUE, and records both launch logs and their hashes.
+- Moved conflicting-manifest rejection ahead of archive directory creation and all artifact copies. Source sizes are recorded before copying, and existing archive bytes remain fail-closed by exact SHA-256.
+- Regenerated only the tracked manifest metadata from the already accepted evidence and archive bytes. No target build, Ymir run, capture, or ELF/ISO/CUE replacement occurred.
+
+### Permanent RED evidence
+
+1. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py`
+   - Exit `1`; ten mutation subtests failed because all ten omitted compiler controls retained the baseline effective-config hash. This was the missing identity behavior under review, not a fixture or syntax failure.
+2. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_archive_a9a_baseline.py`
+   - Exit `1`; the new exact cadence/target/profile/launch and pre-copy conflict contracts failed on the absent canonical-evidence API and permissive archive behavior. This was the missing archive behavior under review.
+
+### Final GREEN evidence
+
+The required focused gates were run serially after the final changes:
+
+1. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py`
+   - Exit `0`; `Ran 9 tests`; `OK`.
+2. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_feature_identity.py`
+   - Exit `0`; `Ran 5 tests`; `OK`. This includes a permanent contract for all ten Make wrapper bindings.
+3. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_capture_sourceboot_throughput.py`
+   - Exit `0`; `Ran 35 tests`; `OK`. The emitted failed JSON documents are intentional negative CLI fixtures.
+4. `.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_archive_a9a_baseline.py`
+   - Exit `0`; `Ran 12 tests`; `OK`.
+
+The no-build real archive revalidation command also exited `0` against the tracked manifest. Post-validation archived hashes and sizes remained exact:
+
+- ELF, 8,721,516 bytes: `1905ec8d42ea00ea2c000b5f53dd88f2079ffda8ceb67bcd5879e8e96acfc2e2`
+- ISO, 4,653,056 bytes: `1ccaef4f2a2d379d82879d3e823d84db135fdee1045d69aa8e0a60d150cfaf96`
+- CUE, 88 bytes: `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`
+
+The accepted full measurement canonical hash is `45685dfb2b013356e0c1e19a7b51fd621cd7a941f37b066d15b01a29bde2fb4b`; the exact target identity hash is `eee27f6d08b1fa473bbbf3c715972202020733511b1b012404f2cf7d70651727`; and the exact successful launch-report hash is `0c8e0d3617a8cec36b13818244980e6e3bdbf7c579851261f2622daea37b53a7`.
+
+### Fix-round self-review and remaining gates
+
+Self-review verdict: PASS for the three review findings and Task 2 source/test/manifest scope. The implementation commit included its `[Unreleased]` changelog reasoning, and `git diff --cached --check` passed before commit. No third-party source was copied or closely ported; reuse mode remains original repository-local implementation based on the approved local design.
+
+Independent rereview remains open and controller-owned. No linked SH-2 target build, ELF linkage inspection, Ymir execution, manual visual/control gate, or broad native-math gate was run; those gates remain unchecked and must not be inferred from the focused host tests.
