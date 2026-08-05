@@ -2389,6 +2389,19 @@ accepted target result. No Ymir process or capture was started. A watched
 fail-closed correction and fresh independent review are required before this
 same hash-bound artifact may proceed to boot/identity capture.
 
+Independent audit verdict: require `PROGBITS` exactly. Accepting both
+`PROGBITS` and `NOBITS` would admit an image missing required load bytes.
+Reference-code-first record: Yaul
+`https://github.com/yaul-org/libyaul.git` at commit
+`6012f79f237773378c8014e70d8998ad95a38d98`, MIT license, inspected
+`libyaul/common/ldscripts/yaul.x:70-82`,
+`libyaul/scu/bus/cpu/cpu/cache.h:65,68,188,198,204,214`,
+`libyaul/scu/bus/cpu/cpu_cache.c:17-68`,
+`libyaul/scu/bus/cpu/cpu_dual.c:38,140`, and
+`libyaul/kernel/sys/init.c:54,66`. Yaul's linker collects initialized shared
+state and executable cache routines into the same P2 output section. Reuse mode
+is pattern-only/contract alignment; no upstream code is copied.
+
 Prior-art record is unchanged: pinned SlaveDriver, Z-Treme, Yaul, Jo Engine,
 and sm64-psx sources retain their recorded dependency/API or pattern-only reuse
 modes. This repair applies existing project `.lwram_bss`, dual-frame cache-

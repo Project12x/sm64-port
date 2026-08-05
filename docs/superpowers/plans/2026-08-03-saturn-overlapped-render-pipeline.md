@@ -2445,6 +2445,16 @@ expected FPS lever.
   watched test repair and independent review. The exact image has not been run
   in Ymir and no FPS evidence is credited.
 
+  Independent read-only audit resolves the contract direction: require
+  `PROGBITS` exactly, not `PROGBITS|NOBITS`. Pinned upstream Yaul commit
+  `6012f79f237773378c8014e70d8998ad95a38d98` (MIT) combines `.uncached` and
+  `.uncached.*` at P2 with an HWRAM load address; `cpu_cache.c` supplies
+  executable `.uncached.function` routines and `cpu_dual.c` supplies an
+  initialized uncached slave-entry pointer. `NOBITS` would omit required load
+  bytes. Reuse mode is pattern-only/contract alignment; no upstream code is
+  copied. Watched RED/GREEN must change only the section-type predicate and
+  retain all boundary, margin, and end-identity gates.
+
 - [ ] **Step 12: Reconcile, commit, and review the completed transition**
 
   Mark Task 9A `source-complete` only after focused tests and two-stage review;
