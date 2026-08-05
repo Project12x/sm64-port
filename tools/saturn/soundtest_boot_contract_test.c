@@ -90,13 +90,15 @@ static void test_boot_orders_copy_and_wait_then_enqueues_proof(void)
     assert(memcmp(fixture.ram + SM64_SATURN_PCM_BANK_OFFSET,
                   bank, sizeof(bank)) == 0);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,
-                                    SM64_SATURN_PCM_PRODUCER_OFFSET) == 2U);
+                     SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET) == 1U);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,
-                                    SM64_SATURN_PCM_RING_OFFSET) ==
-           SM64_SATURN_PCM_OPCODE_SET_MASTER);
+                     SM64_SATURN_PCM_SFX_PRODUCER_OFFSET) == 1U);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,
-                                    SM64_SATURN_PCM_RING_OFFSET + 16U) ==
-           SM64_SATURN_PCM_OPCODE_PLAY);
+                     SM64_SATURN_PCM_CONTROL_RING_OFFSET) ==
+           SM64_SATURN_AUDIO_OPCODE_SET_MASTER);
+    assert(sm64_saturn_pcm_get_be16(fixture.ram,
+                     SM64_SATURN_PCM_SFX_RING_OFFSET) ==
+           SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH);
 }
 
 static void test_oversize_and_timeout_fail_without_enqueue(void)
@@ -123,7 +125,9 @@ static void test_oversize_and_timeout_fail_without_enqueue(void)
     assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
            SM64_SATURN_SOUNDTEST_BOOT_HEARTBEAT_TIMEOUT);
     assert(sm64_saturn_pcm_get_be16(fixture.ram,
-                                    SM64_SATURN_PCM_PRODUCER_OFFSET) == 0U);
+                     SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(fixture.ram,
+                     SM64_SATURN_PCM_SFX_PRODUCER_OFFSET) == 0U);
 }
 
 int main(void)

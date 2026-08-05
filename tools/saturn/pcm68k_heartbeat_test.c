@@ -24,13 +24,25 @@ int main(void)
     assert(sm64_saturn_pcm_get_be16(sound_ram,
                                     SM64_SATURN_PCM_HEARTBEAT_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(sound_ram,
-                                    SM64_SATURN_PCM_PRODUCER_OFFSET) == 0U);
+                     SM64_SATURN_PCM_CONTROL_PRODUCER_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(sound_ram,
-                                    SM64_SATURN_PCM_CONSUMER_OFFSET) == 0U);
+                     SM64_SATURN_PCM_CONTROL_CONSUMER_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(sound_ram,
+                     SM64_SATURN_PCM_SFX_PRODUCER_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(sound_ram,
+                     SM64_SATURN_PCM_SFX_CONSUMER_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                sound_ram, SM64_SATURN_PCM_COMMANDS_CONSUMED_OFFSET) == 0U);
     assert(sm64_saturn_pcm_get_be16(
                sound_ram, SM64_SATURN_PCM_PROTOCOL_FAULTS_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               sound_ram, SM64_SATURN_PCM_CONTROL_SATURATED_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               sound_ram, SM64_SATURN_PCM_SFX_SATURATED_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               sound_ram, SM64_SATURN_PCM_CONTROL_CONSUMED_OFFSET) == 0U);
+    assert(sm64_saturn_pcm_get_be16(
+               sound_ram, SM64_SATURN_PCM_SFX_CONSUMED_OFFSET) == 0U);
 
     sm64_saturn_pcm68k_publish_tick(sound_ram, &heartbeat);
     assert(heartbeat == 0U);

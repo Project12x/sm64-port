@@ -16,6 +16,10 @@ MEMORY
 }
 
 __mailbox_start = 0x00004000;
+__control_ring_start = 0x00004040;
+__sfx_ring_start = 0x000040C0;
+__command_region_end = 0x00004240;
+__work_start = 0x00005000;
 __pcm_bank_start = 0x00008000;
 __stack_bottom = 0x00003C00;
 __stack_top = 0x00003FFC;

@@ -62,15 +62,15 @@ sm64_saturn_soundtest_boot_result_t sm64_saturn_soundtest_boot(
         if (ready(boot->sound_ram, heartbeat)) {
             sm64_saturn_pcm_transport_init(transport, boot->sound_ram);
             words[0] = boot->initial_master_volume;
-            if (!sm64_saturn_pcm_enqueue(
-                    transport, SM64_SATURN_PCM_OPCODE_SET_MASTER, words)) {
+            if (!sm64_saturn_audio_control_enqueue(
+                    transport, SM64_SATURN_AUDIO_OPCODE_SET_MASTER, words)) {
                 return SM64_SATURN_SOUNDTEST_BOOT_ENQUEUE_FAILED;
             }
             words[0] = 0U;
             words[1] = 12U;
             words[2] = 0U;
-            if (!sm64_saturn_pcm_enqueue(
-                    transport, SM64_SATURN_PCM_OPCODE_PLAY, words)) {
+            if (!sm64_saturn_audio_sfx_enqueue(
+                    transport, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, words)) {
                 return SM64_SATURN_SOUNDTEST_BOOT_ENQUEUE_FAILED;
             }
             return SM64_SATURN_SOUNDTEST_BOOT_READY;

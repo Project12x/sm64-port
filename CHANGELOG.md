@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Replaced the single PCM proof command ring with pointer-free, big-endian
+  semantic-audio protocol v2 rings: eight protected control records at
+  `0x04040` and twenty-four SFX records at `0x040C0`.  Two-lap cursors retain
+  every physical slot, validate corrupt producer/consumer distances, and
+  publish producer/consumer cursors only after record/telemetry bytes.  The
+  MC68000 validates both rings and the protocol version before consumption,
+  always spends its bounded poll budget on control first, and reports separate
+  control/SFX saturation and consumption counters.  This prevents an SFX
+  burst from dropping future music/package control while keeping rendering
+  and simulation independent of audio service.  The exact v1 ABI remains a
+  tested historical contract, and the audible proof soundtest now emits the
+  equivalent reset/master/proof-tone commands through v2 only after the new
+  host gates pass.
+
 - Bound every S64P residency reference to a bounded, nonzero lease token
   instead of trusting an aggregate consumer count. Duplicate acquisition,
   duplicate/stale release, and token-table exhaustion now fail closed without

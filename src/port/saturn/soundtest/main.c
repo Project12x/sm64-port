@@ -47,15 +47,17 @@ static void wait_vblank(void *context __unused)
     vdp2_sync_wait();
 }
 
-static bool enqueue(uint16_t opcode, uint16_t word0)
+static bool enqueue(sm64_saturn_audio_opcode_t opcode, uint16_t word0)
 {
     uint16_t words[7] = {0};
     words[0] = word0;
-    if (opcode == SM64_SATURN_PCM_OPCODE_PLAY) {
+    if (opcode == SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH) {
         words[1] = 12U;
     }
-    return sm64_saturn_pcm_enqueue(&transport,
-        (sm64_saturn_pcm_opcode_t)opcode, words);
+    if (sm64_saturn_audio_opcode_is_control(opcode)) {
+        return sm64_saturn_audio_control_enqueue(&transport, opcode, words);
+    }
+    return sm64_saturn_audio_sfx_enqueue(&transport, opcode, words);
 }
 
 void user_init(void)
@@ -108,17 +110,23 @@ int main(void)
             } else {
                 edge = digital.held.raw;
             }
-            if ((edge & PERIPHERAL_DIGITAL_A) != 0U) (void)enqueue(1U, 0U);
-            if ((edge & PERIPHERAL_DIGITAL_B) != 0U) (void)enqueue(1U, 1U);
-            if ((edge & PERIPHERAL_DIGITAL_C) != 0U) (void)enqueue(1U, 2U);
-            if ((edge & PERIPHERAL_DIGITAL_X) != 0U) (void)enqueue(2U, 0U);
+            if ((edge & PERIPHERAL_DIGITAL_A) != 0U)
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, 0U);
+            if ((edge & PERIPHERAL_DIGITAL_B) != 0U)
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, 1U);
+            if ((edge & PERIPHERAL_DIGITAL_C) != 0U)
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, 2U);
+            if ((edge & PERIPHERAL_DIGITAL_X) != 0U)
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_RESET, 0U);
             if ((edge & PERIPHERAL_DIGITAL_L) != 0U && master_volume > 0U) {
                 master_volume--;
-                (void)enqueue(3U, master_volume);
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_SET_MASTER,
+                              master_volume);
             }
             if ((edge & PERIPHERAL_DIGITAL_R) != 0U && master_volume < 15U) {
                 master_volume++;
-                (void)enqueue(3U, master_volume);
+                (void)enqueue(SM64_SATURN_AUDIO_OPCODE_SET_MASTER,
+                              master_volume);
             }
         }
         dbgio_puts("\x1B[H\x1B[2JSM64 SATURN PCM68K SOUNDTEST\n\n");
@@ -133,8 +141,9 @@ int main(void)
         dbgio_printf("started: %u  drops: %u  high: %u\n",
             sm64_saturn_pcm_get_be16(SOUND_RAM,
                 SM64_SATURN_PCM_VOICES_STARTED_OFFSET),
-            (unsigned int)transport.dropped,
-            (unsigned int)transport.high_water);
+            (unsigned int)(transport.control_saturated +
+                           transport.sfx_saturated),
+            (unsigned int)transport.sfx_high_water);
         dbgio_printf("A low  B high  C noise  X stop\nL/R volume: %u\n",
             (unsigned int)master_volume);
         dbgio_flush();

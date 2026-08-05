@@ -29,6 +29,8 @@ typedef struct sm64_saturn_pcm_voice {
 typedef struct sm64_saturn_pcm_voice_state {
     sm64_saturn_pcm_voice_t voices[SM64_SATURN_PCM_VOICE_COUNT];
     uint32_t commands_consumed;
+    uint32_t control_commands_consumed;
+    uint32_t sfx_commands_consumed;
     uint32_t voices_started;
     uint32_t keyoffs;
     uint32_t unknown_opcodes;

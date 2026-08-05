@@ -151,11 +151,17 @@ def _pcm68k_elf(load_address: int = 0, file_size: int = 0x500,
 
 def _pcm68k_map(driver_end: int = 0x600, mailbox_start: int = 0x4000,
                 bank_start: int = 0x8000, stack_bottom: int = 0x3C00,
-                stack_top: int = 0x3FFC) -> str:
+                stack_top: int = 0x3FFC, control_start: int = 0x4040,
+                sfx_start: int = 0x40C0, command_end: int = 0x4240,
+                work_start: int = 0x5000) -> str:
     return "\n".join((
         f"0x00000000 __image_start = ORIGIN (driver)",
         f"0x{driver_end:08x} __driver_end = ALIGN (0x4)",
         f"0x{mailbox_start:08x} __mailbox_start = 0x4000",
+        f"0x{control_start:08x} __control_ring_start = 0x4040",
+        f"0x{sfx_start:08x} __sfx_ring_start = 0x40c0",
+        f"0x{command_end:08x} __command_region_end = 0x4240",
+        f"0x{work_start:08x} __work_start = 0x5000",
         f"0x{bank_start:08x} __pcm_bank_start = 0x8000",
         f"0x{stack_bottom:08x} __stack_bottom = 0x3c00",
         f"0x{stack_top:08x} __stack_top = 0x3ffc",
@@ -219,6 +225,18 @@ class Pcm68kImageContractTests(unittest.TestCase):
     def test_rejects_writable_segment_starting_at_pcm_bank(self) -> None:
         with self.assertRaisesRegex(ImageContractError, "PCM bank"):
             self._verify(elf=_pcm68k_elf(writable_bank_segment=True))
+
+    def test_rejects_split_ring_or_work_boundary_drift(self) -> None:
+        mutations = (
+            (_pcm68k_map(control_start=0x4042), "control ring"),
+            (_pcm68k_map(sfx_start=0x40C2), "SFX ring"),
+            (_pcm68k_map(command_end=0x4242), "command region"),
+            (_pcm68k_map(work_start=0x5002), "work region"),
+        )
+        for map_text, message in mutations:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ImageContractError, message):
+                    self._verify(map_text=map_text)
 
     def test_rejects_unresolved_symbols(self) -> None:
         with self.assertRaisesRegex(ImageContractError, "unresolved"):

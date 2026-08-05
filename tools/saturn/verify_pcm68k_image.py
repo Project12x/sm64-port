@@ -13,6 +13,10 @@ from pathlib import Path
 
 DRIVER_LIMIT = 0x4000
 MAILBOX_START = 0x4000
+CONTROL_RING_START = 0x4040
+SFX_RING_START = 0x40C0
+COMMAND_REGION_END = 0x4240
+WORK_START = 0x5000
 PCM_BANK_START = 0x8000
 EM_68K = 4
 PT_LOAD = 1
@@ -52,7 +56,9 @@ def _elf_contract(data: bytes) -> tuple[int, list[tuple[int, int, int, int, int]
 
 def _map_symbols(text: str) -> dict[str, int]:
     required = ("__image_start", "__driver_end", "__mailbox_start",
-                "__pcm_bank_start", "__stack_bottom", "__stack_top")
+                "__control_ring_start", "__sfx_ring_start",
+                "__command_region_end", "__work_start", "__pcm_bank_start",
+                "__stack_bottom", "__stack_top")
     symbols: dict[str, int] = {}
     for symbol in required:
         match = re.search(
@@ -103,6 +109,15 @@ def verify_image(elf_path: Path, map_path: Path,
         raise ImageContractError("loadable image exceeds declared driver end")
     if symbols["__mailbox_start"] != MAILBOX_START:
         raise ImageContractError("mailbox symbol is not fixed at 0x4000")
+    if symbols["__control_ring_start"] != CONTROL_RING_START:
+        raise ImageContractError("control ring symbol is not fixed at 0x4040")
+    if symbols["__sfx_ring_start"] != SFX_RING_START:
+        raise ImageContractError("SFX ring symbol is not fixed at 0x40c0")
+    if symbols["__command_region_end"] != COMMAND_REGION_END:
+        raise ImageContractError(
+            "command region end symbol is not fixed at 0x4240")
+    if symbols["__work_start"] != WORK_START:
+        raise ImageContractError("work region symbol is not fixed at 0x5000")
     if symbols["__pcm_bank_start"] != PCM_BANK_START:
         raise ImageContractError("PCM bank symbol is not fixed at 0x8000")
     if not (symbols["__driver_end"] <= symbols["__stack_bottom"] <
@@ -118,6 +133,10 @@ def verify_image(elf_path: Path, map_path: Path,
         "driver_end": symbols["__driver_end"],
         "stack_bottom": symbols["__stack_bottom"],
         "stack_top": symbols["__stack_top"],
+        "control_ring_start": symbols["__control_ring_start"],
+        "sfx_ring_start": symbols["__sfx_ring_start"],
+        "command_region_end": symbols["__command_region_end"],
+        "work_start": symbols["__work_start"],
     }
 
 
