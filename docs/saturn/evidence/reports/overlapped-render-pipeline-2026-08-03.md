@@ -2106,7 +2106,7 @@ verify, and native-math census remain unchecked.
 **Status: fixes implemented and focused-host-green; fresh rereview required.**
 Independent review of `0350a473..d45c0a41` returned specification/code-quality
 FAIL and target-build NO-GO. No target, Ymir, broad build, or native-math gate
-was run during this correction.
+was run during this correction. Fix Round 1 implementation is `24528bf6`.
 
 - C1 is repaired by renderer-owned `saturn_lod_lifetime`: a source scene
   transition observed while generation N is active advances only pending

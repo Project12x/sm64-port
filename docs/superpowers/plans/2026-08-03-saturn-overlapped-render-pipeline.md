@@ -2299,6 +2299,7 @@ expected FPS lever.
   N/N+1 executable harness; mutations for active-state reset, omitted start
   work, pre-notify timing, and skipped quarantine refresh are all rejected.
   Direct/saved v1 buffers remain supported; live observation requires v2.
+  Fix Round 1 implementation is `24528bf6`.
   Fresh independent rereview, target/Ymir, broad verify, and native-math gates
   remain unchecked.
 
