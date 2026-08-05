@@ -1,12 +1,12 @@
 # Roadmap
 
-## Now — A5.9 observe atomic dual-SH-2 scheduling
+## Now — A8 reduce and overlap the master-only VDP1 path
 
-Move terrain execution/merge and Mario transform/classify from fixed CPU-range
-ownership into graph-gated, descriptor-owned payload banks. Replace the legacy
-CPU-DUAL callback only in one atomic default-path cutover. Gate: a reviewed
-target CUE with a manual desktop-Ymir comparison against the accepted 3–4 FPS
-baseline.
+Use the now-proven dual-SH-2 queue as the producer side of a smaller,
+deferred VDP1 command stream. First reduce admitted geometry/command volume
+before final lowering; then move command transfer behind an explicit
+double-buffered ownership boundary. Gate: exact target identity, unchanged
+scene/gameplay state, no stale bank, and automatic presentation/queue evidence.
 
 The ordered terrain-command lookup and pointer-free P2 callback-context gate
 are source-review GO and target compile/link/section-green. The single-owner
@@ -25,18 +25,26 @@ running-counter snapshots report VDP2 median 60 FPS and VDP1 median 4 FPS
 and rereview is GO. The queue half now has a strict-TDD, host-green capture
 tool that binds and hashes the explicit CUE/ELF/Ymir artifacts, proves an ELF
 code window exists in target memory, and rejects incoherent P2 telemetry while
-sampling each VBlank. A valid matching live capture remains required; queue
-counter capture stays open and no scheduler change is authorized yet.
+sampling each VBlank. Queue counter capture is live-green. The exact coherent
+record reports
+`QM=[1,1,0,0]`, `QS=[0,0,1,1]`, `QN=QR=3`, and `QW=QF=QQ=0` with no CPU
+failures. The measured three-edge cadence remains only 4.8 FPS mean. This rules
+out idle-slave ownership and retirement waiting as the primary observed
+bottleneck, so no speculative queue reschedule is authorized. The next FPS
+slice should reduce geometry/command volume before final lowering and move
+VDP1 command transfer behind an explicit deferred/double-buffered boundary,
+then use A9 frame overlap once bank lifetime is proven.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the
 flat desktop result is retained as the A5.8 baseline.
 
-## Next — frame lifetime and transfer overlap
+## Next — A9 true frame lifetime overlap
 
-Complete A6 localized recovery, A7 alternating source-bank ownership, A8
-deferred VDP1 transfer, and A9 true frame overlap. Gate: no partial-frame
-publication, measured terminal waits, and source/target contract evidence.
+Complete A6 localized recovery and A7 alternating source-bank ownership around
+the A8 deferred-transfer seam, then allow frame N+1 production while frame N
+is presented. Gate: no partial-frame publication, measured terminal waits,
+and source/target contract evidence.
 
 ## Then — full-game hardening
 

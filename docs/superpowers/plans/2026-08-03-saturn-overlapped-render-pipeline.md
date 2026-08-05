@@ -107,9 +107,8 @@ and the evidence report before starting another task.
   coherency mutation gate are source-complete. Descriptor kind now selects a
   terrain or actor output bank, and the CPU that actually claims the descriptor
   publishes its cache lane atomically; this removes the unsafe `begin == 0`
-  inference that prevented work stealing. Wiring that source-only contract into
-  the currently active A3/A4 renderer candidate remains deliberately deferred
-  so this task does not silently alter either candidate's accepted path. The
+  inference that prevented work stealing. That contract is now active in the
+  accepted atomic-cutover renderer and has matching target evidence. The
   A5.5 bridge final review is GO for source-only scope at 87824a5a; it
   explicitly does not authorize activation. **Design correction (2026-08-04,
   A5.6):** inspection of the live renderer proved the bridge's descriptor
@@ -120,8 +119,8 @@ and the evidence report before starting another task.
   readers, and CPU-DUAL lifecycle. The watched
   test_render_job_live_cutover_source.py is RED against the current fixed
   dispatch; no partial queue bind is permitted. The accepted 3–4 FPS A3+A4
-  CUE remains the rollback baseline. Live queue integration, target evidence,
-  and independent reviews remain open.
+  CUE remains the rollback baseline. Those A5.6 gates were subsequently closed
+  by the A5.8 atomic cutover, target build, reviews, and A5.9 live observation.
   **A5.8 terrain migration milestone (2026-08-04):** the live-cutover source
   gate is now a host-compiled C executable because the configured `py -3`
   launcher is unavailable. Its expected RED result proves the default frame
@@ -1231,7 +1230,7 @@ yet.
   positive retirement marker in both SH-2 and host paths. Fresh rereview is
   GO at audit `e98210ba`; strict runtime/VDP2 C11 and focused Python gates
   independently pass.
-- [ ] **Step 6: Serialized target build and automatic desktop-Ymir
+- [x] **Step 6: Serialized target build and automatic desktop-Ymir
   observation.** The guarded `-B -j1` build exits 0, retains the runtime
   telemetry snapshot and VDP2 HUD consumers, has zero unresolved symbols, and
   leaves 15,412 bytes HWRAM plus 30,800 bytes LWRAM. The owner then confirmed
@@ -1275,8 +1274,29 @@ yet.
   identity one VBlank at a time within separate `--startup-vblanks` bound
   (default 600), reports its exact wait/attempt count, and fails closed without
   a telemetry read if identity never appears. Seventeen capture tests and
-  sixteen boot-trace tests are host-green. This resolves only startup timing;
-  valid live observation remains the Step 6/queue-evidence gate.
+  sixteen boot-trace tests are host-green. Root and independent reviewer each
+  repeat those tests plus module compilation; scoped rereview is spec PASS /
+  quality APPROVED. This resolves only startup timing; valid live observation
+  remains the Step 6/queue-evidence gate. The first repaired live run proves
+  exact target identity after 540 startup VBlanks but then observes no
+  presentations because the chosen `build-agent` Ymir executable predates
+  headless `--dram-cart` support. Target probe `SCAR` reports stage FAILED,
+  `cart_id=0`, `cart_size=0`, status `MISSING_4MIB`, and the linked PC remains
+  in `main`'s cart-failure loop. A newer existing `build-agent2` executable was
+  built after commit `bf3e4a4a` added the 32-Mbit cart flag; it is the next
+  live candidate, without rebuilding either target or emulator. That newer
+  binary leaves the failure loop and logs sustained `SOURCE.DAT` sector reads;
+  the 600-VBlank observation bound expires while the 3.2-MiB cart bank is
+  still copying. The next diagnostic changes only the existing observation
+  bound to its 4096-VBlank maximum so startup I/O can finish before requiring
+  two presentation edges. The bounded run then passes: exact ELF identity
+  matches after 540 startup VBlanks; three presentation edges occur by sample
+  1185; cadence is 4.8 FPS mean, 4.87 median, and 4.29 1%-low. Coherent retired
+  sequence 1 reports `QN=QR=3`, `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, and
+  `QW=QF=QQ=0`, with zero CPU failures. The automatic A5.9 observation gate
+  is complete. This rules out an idle slave and retirement waiting for the
+  observed frame, while leaving unequal job cost and master-only final
+  merge/VDP1 lowering as active hypotheses.
 
 ### Task 6: Add cancellation, localized recovery, and permanent quarantine
 

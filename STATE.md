@@ -2,29 +2,18 @@
 
 See `docs/superpowers/plans/2026-08-03-saturn-overlapped-render-pipeline.md`.
 
-Current active source slice: Task 5/A5.8 has made the source-complete atomic
-cutover from the fixed terrain/Mario workers to one dependency-aware,
-descriptor-owned SH-2 queue. The accepted frame now publishes four coarse
-terrain/Mario admit/lower jobs, publishes both self-contained callback
-contexts before notifying the one graph runtime, drains useful master work,
-requires all descriptors terminal plus positive slave callback retirement,
-then assembles descriptor-owned results before master-only VDP1 lowering. The
-cutover is host-green. Its first independent review, audit `8e64b482`, was
-NO-GO because the single terrain admit retained a nonexistent peer wait and a
-slave-admit/master-lower handoff could read stale owner bytes. Both findings
-are repaired with an executable two-generation handoff fixture. Fresh scoped
-re-review is GO at audit `1819f2b4`; the next gate is one serialized
-post-cutover target build. That build compiled but exposed a 10,032-byte
-HWRAM link overflow once callbacks became reachable. The narrow repair moves
-only the two master-owned 13,872-byte final terrain merge streams into
-`.lwram_bss`; its focused host contract is green. Review is GO at
-`b997fea1`, and the sole post-review serialized rebuild
-now links and packages with 16,148 bytes HWRAM and 30,800 bytes LWRAM margin,
-zero unresolved symbols, live graph callbacks/drains, and one non-null
-CPU-DUAL application registration. Desktop Ymir now confirms the exact
-post-cutover candidate remains at sustained 3--4 VDP1 FPS while VDP2 holds
-roughly 60 FPS. Automatic FPS observation is closed; live queue ownership and
-wait telemetry remain open.
+Current active source slice: Task 5/A5.9 has completed the atomic cutover from
+fixed terrain/Mario workers to one dependency-aware descriptor queue and has
+now observed that queue on the exact target image. The accepted frame publishes
+four coarse admit/lower jobs, publishes self-contained callback contexts before
+notification, lets both SH-2s claim work, requires terminal descriptors plus
+positive slave retirement, then performs final assembly and VDP1 lowering on
+the master. Independent source reviews, the serialized target build, exact
+ELF identity, and automatic desktop/headless evidence are green. The live
+record splits the four jobs two-and-two across master and slave with no wait,
+failure, or quarantine, while cadence remains 4.8 FPS mean (4.87 median).
+Therefore the next optimization attacks admitted work volume and the
+master-only final merge/VDP1 transfer path rather than assuming an idle slave.
 
 Terrain's live WORLD_ADMIT callback publishes transformed-position
 completion by exact descriptor identity, and WORLD_LOWER records its exact
@@ -107,15 +96,17 @@ The final repaired collector then attached to the same running desktop process
 for five more snapshots: VDP2 median 60 FPS and VDP1 median 3 FPS, range 3--4.
 The combined automatic evidence therefore confirms sustained 3--4 VDP1 FPS.
 
-The remaining queue observation boundary is now source-complete and host-green:
+The queue observation boundary is source-complete, reviewed, and live-green:
 `capture_sourceboot_throughput.py` requires the exact matching CUE and ELF,
 hashes them with Ymir, proves immutable ELF code bytes are present at their
 linked target address, and accepts P2 telemetry only after queue retirement
 and both runtime sequence pairs agree. It advances exactly one emulated VBlank
 per sample and records VDP2 presentation cadence without inferring a queue
-owner from the host delayed-slave fixture. No valid live capture has yet been
-recorded, so the A5.9 queue gate remains open and the 3--4 VDP1 FPS result is
-unchanged.
+owner from the host delayed-slave fixture. The valid `build-agent2` run records
+three presentation events, 4.8 FPS mean / 4.87 median / 4.29 1%-low, and one
+coherent sequence: `QN=QR=3`, `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, and
+`QW=QF=QQ=0`, with zero master/slave failures. A5.9 automatic observation is
+closed. This is diagnostic evidence, not a performance improvement.
 
 The isolated audio lane now has an accepted standalone soundtest proof. Its
 2,918-byte source-built 68K image drives four SCSP PCM8 slots, and its generated

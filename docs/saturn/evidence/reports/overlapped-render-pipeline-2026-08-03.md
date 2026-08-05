@@ -1569,3 +1569,28 @@ open.
 - Focused capture tests: 17/17 PASS; boot-trace tests: 16/16 PASS; modules
   compile and diff-check is clean. No target build, Ymir launch, or new live
   observation is credited by this source repair.
+
+### A5.9 automatic queue observation live proof (2026-08-05)
+
+- Evidence JSON:
+  `docs/saturn/evidence/reports/a59-sourceboot-queue-throughput-2026-08-05.json`.
+  It binds CUE `cdbf0bfa...b0f46dba7`, ISO `d21138b2...23d84f3f`, ELF
+  `76bccfc4...16519f6a`, and the post-DRAM-cart headless Ymir executable
+  `fcc88d82...38d3943`.
+- The earlier `build-agent` executable is rejected for this purpose: its July
+  18 binary predates headless DRAM-cart support. Target `SCAR` telemetry proved
+  `cart_id=0`, `cart_size=0`, and `MISSING_4MIB`. The existing `build-agent2`
+  binary postdates `bf3e4a4a`, accepts the 32-Mbit cart, and completes the
+  3.2-MiB `SOURCE.DAT` copy. No emulator or target rebuild was needed.
+- Exact target ELF bytes match after 540 one-VBlank startup attempts. With the
+  independent observation bound raised from 600 to 4096 to include cart-copy
+  time, the capture completes after 1,185 observation VBlanks with three VDP2
+  presentation events. Intervals are 11 and 14 VBlanks: 4.8 FPS mean, 4.87
+  median, and 4.29 1%-low at nominal 60 Hz.
+- Coherent retired sequence 1 reports `QN=3`, `QR=3`,
+  `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, `QW=0`, `QF=0`, `QQ=0`, and zero master or
+  slave failures. Both SH-2s therefore claim useful nonduplicated work in the
+  observed frame, and the master does not spin on retirement. A5.9's automatic
+  observation gate is closed. The result does not prove equal per-job cost;
+  final merge, VDP1 lowering/transfer, and total admitted geometry remain the
+  next bottleneck candidates.

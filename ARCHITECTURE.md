@@ -43,8 +43,13 @@ derives the kind from the immutable type/callback pair, rejects an unknown or
 mismatched pair, and requires spans to be disjoint only among descriptors that
 write the same kind. This matches the bounded physical arrays without wasting
 memory on a synthetic global arena and preserves the pointer-free 16-byte
-descriptor ABI. The single atomic CPU-DUAL cutover is live and target-link
-green; live claim ownership and terminal waits remain the A5.9 evidence gate.
+descriptor ABI. The single atomic CPU-DUAL cutover is live, target-link green,
+and live-observed. One coherent retired frame assigns WORLD phases 0--1 to the
+master and ACTOR phases 2--3 to the slave (`QM=[1,1,0,0]`,
+`QS=[0,0,1,1]`) with zero wait, failures, or quarantine. Thus A5.9 closes the
+idle-slave and queue-wait hypotheses for the observed frame; it does not prove
+that the coarse jobs have equal cycle cost or that final master-only merge and
+VDP1 submission are cheap.
 The host-side observation boundary resolves the three target records from the
 exact supplied ELF (including local/leading-underscore symbols), validates one
 immutable executable byte window in target memory before accepting telemetry,
@@ -52,7 +57,9 @@ then reads the shared records through P2 once per emulated VBlank. A queue
 sample is evidence only when its queue generation is retired and its notify,
 retire, and HUD publication sequences agree; each retired sequence can attach
 to at most one VDP2 presentation edge. This diagnosis changes no target
-scheduler behavior and remains open until a matching live CUE capture passes.
+scheduler behavior. The exact matching live CUE capture now passes with three
+presentation edges and one coherent retired queue record; future scheduler
+changes must preserve this identity/coherence boundary.
 
 Callback contexts use a separate pointer-free P2 release record. The record
 binds one immutable queue descriptor generation/index/phase to a nonzero
