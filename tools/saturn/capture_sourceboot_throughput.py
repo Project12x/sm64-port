@@ -26,6 +26,22 @@ from capture_sourceboot_boot_trace import bind_capture_artifacts, run_bios_hando
 SCHEMA = "sm64-saturn-sourceboot-throughput-v1"
 EVIDENCE_KIND = "ymir-sourceboot-queue-throughput"
 BOOT_TRACE_BYTES = 32
+CADENCE_TRACE_BYTES = 60
+CADENCE_TRACE_MAGIC = 0x53394354
+CADENCE_TRACE_VERSION = 1
+CADENCE_RECORD_FIELDS = (
+    "observed_vblank_generation",
+    "frame_generation",
+    "build_generation",
+    "presentation_generation",
+    "dropped_vblank_credit",
+    "simulation_vblank_crossings",
+    "simulation_count",
+    "construction_vblank_crossings",
+    "construction_count",
+    "transport_presentation_vblank_crossings",
+    "transport_presentation_count",
+)
 RUNTIME_BYTES = 92
 RENDER_JOB_QUEUE_BYTES = 232
 IDENTITY_PROBE_BYTES = 16
@@ -36,6 +52,7 @@ MAX_DIAGNOSTIC_NOTIFICATION_BYTES = 64 * 1024
 IDENTITY_MISMATCH_MESSAGE = "running target does not contain immutable bytes from the matching ELF"
 REQUIRED_SYMBOLS = {
     "sourceboot_boot_trace": BOOT_TRACE_BYTES,
+    "sourceboot_cadence_trace": CADENCE_TRACE_BYTES,
     "s_runtime": RUNTIME_BYTES,
     "s_render_job_queue": RENDER_JOB_QUEUE_BYTES,
 }
@@ -262,6 +279,27 @@ def decode_boot_trace(raw: bytes) -> dict[str, int]:
     }
 
 
+def decode_cadence_trace(raw: bytes) -> dict[str, Any]:
+    """Decode one stable big-endian target seqlock snapshot."""
+    if len(raw) != CADENCE_TRACE_BYTES:
+        raise ValueError("cadence trace has wrong size")
+    if _be32(raw, 0) != CADENCE_TRACE_MAGIC:
+        raise ValueError("cadence trace has wrong magic")
+    if _be32(raw, 4) != CADENCE_TRACE_VERSION:
+        raise ValueError("cadence trace has wrong version")
+    sequence_begin = _be32(raw, 8)
+    sequence_end = _be32(raw, CADENCE_TRACE_BYTES - 4)
+    if sequence_begin != sequence_end or sequence_begin & 1:
+        raise ValueError("cadence trace seqlock is not stable")
+    return {
+        "sequence": sequence_begin,
+        "record": {
+            field: _be32(raw, 12 + 4 * index)
+            for index, field in enumerate(CADENCE_RECORD_FIELDS)
+        },
+    }
+
+
 def decode_runtime(raw: bytes) -> dict[str, Any]:
     if len(raw) != RUNTIME_BYTES:
         raise ValueError("runtime telemetry has wrong size")
@@ -314,6 +352,44 @@ def _unsigned_delta(previous: int, current: int) -> int:
     return (current - previous) & 0xFFFFFFFF
 
 
+def phase_delta(previous: dict[str, int], current: dict[str, int]) -> dict[str, Any]:
+    """Calculate adjacent deltas from cumulative wrap-safe target counters."""
+    delta = lambda field: _unsigned_delta(int(previous[field]), int(current[field]))
+    vblank_delta = delta("observed_vblank_generation")
+    simulation_crossings = delta("simulation_vblank_crossings")
+    construction_crossings = delta("construction_vblank_crossings")
+    transport_presentation_crossings = delta(
+        "transport_presentation_vblank_crossings"
+    )
+    attributed = (
+        simulation_crossings + construction_crossings +
+        transport_presentation_crossings
+    )
+    if attributed > vblank_delta:
+        raise ValueError("phase VBlank crossings exceed the observed interval")
+    return {
+        "vblank_delta": vblank_delta,
+        "frame_delta": delta("frame_generation"),
+        "build_delta": delta("build_generation"),
+        "presentation_delta": delta("presentation_generation"),
+        "dropped_vblank_credit_delta": delta("dropped_vblank_credit"),
+        "simulation": {
+            "vblank_crossings": simulation_crossings,
+            "count": delta("simulation_count"),
+        },
+        "construction": {
+            "vblank_crossings": construction_crossings,
+            "count": delta("construction_count"),
+        },
+        "transport_presentation": {
+            "vblank_crossings": transport_presentation_crossings,
+            "count": delta("transport_presentation_count"),
+        },
+        "attributed_vblank_crossings": attributed,
+        "unattributed_vblank_crossings": vblank_delta - attributed,
+    }
+
+
 def summarize_cadence(events: list[dict[str, Any]], *, nominal_refresh_hz: float = 60.0) -> dict[str, Any]:
     """Derive cadence from adjacent target generation edges, including wrap."""
     if len(events) < 2:
@@ -327,7 +403,13 @@ def summarize_cadence(events: list[dict[str, Any]], *, nominal_refresh_hz: float
         )
         if delta == 0:
             raise ValueError("adjacent presentation events have no VBlank progress")
-        intervals.append({"vblank_delta": delta, "guest_fps": nominal_refresh_hz / delta})
+        interval: dict[str, Any] = {
+            "vblank_delta": delta,
+            "guest_fps": nominal_refresh_hz / delta,
+        }
+        if "cadence" in previous and "cadence" in current:
+            interval["phases"] = phase_delta(previous["cadence"], current["cadence"])
+        intervals.append(interval)
     total_vblanks = sum(int(interval["vblank_delta"]) for interval in intervals)
     rates = sorted(float(interval["guest_fps"]) for interval in intervals)
     return {
@@ -366,6 +448,8 @@ def observe_target(
     last_trace: dict[str, int] | None = None
     last_runtime: dict[str, Any] | None = None
     last_queue_generation: int | None = None
+    last_cadence_trace: dict[str, Any] | None = None
+    cadence_symbol = symbols.get("sourceboot_cadence_trace")
     for sample_index in range(max_vblanks):
         client.call("exec.run_for", {"frames": 1})
         trace = decode_boot_trace(read_exact(client, _p2(symbols["sourceboot_boot_trace"]["address"]), BOOT_TRACE_BYTES))
@@ -390,17 +474,71 @@ def observe_target(
             "vblank_generation": trace["observed_vblank_generation"],
             "presentation_generation": presentation,
         }
+        if cadence_symbol is not None:
+            try:
+                last_cadence_trace = decode_cadence_trace(
+                    read_exact(client, _p2(cadence_symbol["address"]), CADENCE_TRACE_BYTES)
+                )
+            except ValueError as error:
+                raise ObservationError(
+                    f"cadence trace decode failed: {error}",
+                    {
+                        "vblanks_advanced": sample_index + 1,
+                        "presentation_events_observed": len(events),
+                        "presentation_events_required": presentation_events,
+                        "last_trace": trace,
+                        "last_cadence_trace": last_cadence_trace,
+                        "cadence_decode_error": str(error),
+                        "last_runtime": runtime,
+                        "last_queue_generation": queue_generation,
+                    },
+                ) from error
+            cadence_record = last_cadence_trace["record"]
+            if cadence_record["presentation_generation"] != presentation:
+                raise ObservationError(
+                    "cadence trace does not match presentation edge",
+                    {
+                        "vblanks_advanced": sample_index + 1,
+                        "presentation_events_observed": len(events),
+                        "presentation_events_required": presentation_events,
+                        "last_trace": trace,
+                        "last_cadence_trace": last_cadence_trace,
+                        "last_runtime": runtime,
+                        "last_queue_generation": queue_generation,
+                    },
+                )
+            event["cadence"] = cadence_record
         if coherent is not None:
             attach_queue_record(event, coherent, used_sequences)
         events.append(event)
         last_presentation = presentation
         if len(events) >= presentation_events and latest_queue is not None:
             break
+    if cadence_symbol is not None:
+        try:
+            last_cadence_trace = decode_cadence_trace(
+                read_exact(client, _p2(cadence_symbol["address"]), CADENCE_TRACE_BYTES)
+            )
+        except ValueError as error:
+            raise ObservationError(
+                f"cadence trace decode failed: {error}",
+                {
+                    "vblanks_advanced": sample_index + 1,
+                    "presentation_events_observed": len(events),
+                    "presentation_events_required": presentation_events,
+                    "last_trace": last_trace,
+                    "last_cadence_trace": last_cadence_trace,
+                    "cadence_decode_error": str(error),
+                    "last_runtime": last_runtime,
+                    "last_queue_generation": last_queue_generation,
+                },
+            ) from error
     diagnostics = {
         "vblanks_advanced": sample_index + 1,
         "presentation_events_observed": len(events),
         "presentation_events_required": presentation_events,
         "last_trace": last_trace,
+        "last_cadence_trace": last_cadence_trace,
         "last_runtime": last_runtime,
         "last_queue_generation": last_queue_generation,
     }

@@ -74,6 +74,21 @@ stable 36--38-field intervals: 1.63 FPS mean, 1.62 median, and 1.58 1%-low.
 measured regression from the 4.8-FPS A5.9 baseline, not an A8 uplift; the next
 investigation must split CPU construction/simulation cost because the
 deferred-transfer wait counters do not explain the 37-field cadence.
+A9 is active at an evidence-first Step 0: sample wrap-safe deltas from the
+existing simulation and render/construction timing counters at each exact
+presentation edge. Scheduler behavior remains unchanged until that split
+identifies which CPU phase owns the stable 36--38-field interval.
+Inspection corrected the telemetry design: the existing phase accumulators
+lose 16-bit FRT wraps at this cadence and are not explicitly cache-through.
+Step 0 therefore uses a small P2-published VBlank-crossing trace rather than
+claiming absolute time from those counters.
+Step 0 is now exact-target complete at ELF `1ffb47cc...e4edfe6`. Nine intervals
+account for all 333 fields: simulation 283 (85.0%), construction 49 (14.7%),
+transport/presentation 1 (0.3%), unattributed 0. Six simulation ticks execute
+per presented frame and 222 additional credits are dropped. The root cause is
+now concrete: the two-tick catch-up bound resets per outer iteration, so three
+iterations repeat it before one presentation. Task 9 Step 1 is active to make
+that budget presentation-generation scoped.
 The post-repair direct host fixtures for render-job runtime, actor meshlets,
 DMA queue, and VDP1 transfer pipeline also exit zero. The aggregate Make gate
 did not execute them because the known MSYS-to-Windows path conversion defect

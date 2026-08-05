@@ -54,6 +54,8 @@
 #define SOURCEBOOT_MAX_SIM_CATCHUP 2U
 #define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
 #define SOURCEBOOT_BOOT_TRACE_VERSION 1U
+#define SOURCEBOOT_CADENCE_TRACE_MAGIC 0x53394354U
+#define SOURCEBOOT_CADENCE_TRACE_VERSION 1U
 
 typedef struct {
     uint32_t magic;
@@ -68,6 +70,27 @@ typedef struct {
 
 _Static_assert(sizeof(sm64_saturn_sourceboot_boot_trace_t) == 32U,
                "sourceboot boot trace ABI must remain eight words");
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t sequence_begin;
+    uint32_t observed_vblank_generation;
+    uint32_t frame_generation;
+    uint32_t build_generation;
+    uint32_t presentation_generation;
+    uint32_t dropped_vblank_credit;
+    uint32_t simulation_vblank_crossings;
+    uint32_t simulation_count;
+    uint32_t construction_vblank_crossings;
+    uint32_t construction_count;
+    uint32_t transport_presentation_vblank_crossings;
+    uint32_t transport_presentation_count;
+    uint32_t sequence_end;
+} sm64_saturn_sourceboot_cadence_trace_t;
+
+_Static_assert(sizeof(sm64_saturn_sourceboot_cadence_trace_t) == 60U,
+               "sourceboot cadence trace ABI must remain fifteen words");
 
 enum {
     SOURCEBOOT_BOOT_TRACE_STAGE_USER_INIT_ENTRY = 1U,
@@ -102,6 +125,14 @@ volatile sm64_saturn_sourceboot_boot_trace_t sourceboot_boot_trace = {
     .version = SOURCEBOOT_BOOT_TRACE_VERSION,
 };
 
+/* One fixed target-visible seqlock snapshot. The host pauses after each
+ * VBlank and owns append-only edge history, avoiding a target-side ring in
+ * scarce HWRAM while retaining a coherent cumulative counter sample. */
+volatile sm64_saturn_sourceboot_cadence_trace_t sourceboot_cadence_trace = {
+    .magic = SOURCEBOOT_CADENCE_TRACE_MAGIC,
+    .version = SOURCEBOOT_CADENCE_TRACE_VERSION,
+};
+
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
@@ -121,6 +152,12 @@ static uint32_t sourceboot_vdp1_transfer_queued_not_started;
 static uint32_t sourceboot_trace_scheduler_credit;
 static uint32_t sourceboot_trace_vdp1_presentation_generation;
 static uint32_t sourceboot_trace_vdp2_presentation_generation;
+static uint32_t sourceboot_simulation_vblank_crossings;
+static uint32_t sourceboot_simulation_count;
+static uint32_t sourceboot_construction_vblank_crossings;
+static uint32_t sourceboot_construction_count;
+static uint32_t sourceboot_transport_presentation_vblank_crossings;
+static uint32_t sourceboot_transport_presentation_count;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
@@ -162,6 +199,48 @@ static void sourceboot_boot_trace_write(uint32_t stage_id,
         sourceboot_trace_vdp2_presentation_generation;
     trace->stage_id = stage_id;
     trace->stage++;
+}
+
+static volatile sm64_saturn_sourceboot_cadence_trace_t *
+sourceboot_cadence_trace_visible(void)
+{
+    return (volatile sm64_saturn_sourceboot_cadence_trace_t *)(
+        CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_cadence_trace);
+}
+
+static void sourceboot_phase_accumulate(uint32_t start, uint32_t end,
+                                        uint32_t *crossings,
+                                        uint32_t *count)
+{
+    *crossings += end - start;
+    (*count)++;
+}
+
+static void sourceboot_cadence_trace_append(uint32_t frame_generation,
+                                            uint32_t build_generation,
+                                            uint32_t presentation_generation)
+{
+    volatile sm64_saturn_sourceboot_cadence_trace_t *const trace =
+        sourceboot_cadence_trace_visible();
+    const uint32_t next_sequence = (trace->sequence_end + 2U) & ~1U;
+    trace->sequence_begin = next_sequence - 1U;
+    trace->sequence_end = next_sequence - 1U;
+    trace->observed_vblank_generation = sourceboot_vblank_out_count;
+    trace->frame_generation = frame_generation;
+    trace->build_generation = build_generation;
+    trace->presentation_generation = presentation_generation;
+    trace->dropped_vblank_credit = sourceboot_sim_vblank_credit_dropped;
+    trace->simulation_vblank_crossings = sourceboot_simulation_vblank_crossings;
+    trace->simulation_count = sourceboot_simulation_count;
+    trace->construction_vblank_crossings = sourceboot_construction_vblank_crossings;
+    trace->construction_count = sourceboot_construction_count;
+    trace->transport_presentation_vblank_crossings =
+        sourceboot_transport_presentation_vblank_crossings;
+    trace->transport_presentation_count =
+        sourceboot_transport_presentation_count;
+    trace->sequence_end = next_sequence;
+    /* Publish last: equality plus an even value identifies a stable sample. */
+    trace->sequence_begin = next_sequence;
 }
 
 static uint16_t sourceboot_frt_delta(uint16_t start, uint16_t end)
@@ -951,6 +1030,8 @@ int main(void) {
         sourceboot_trace_scheduler_credit = sim_vblank_credit;
         bool transfer_ready_before_field = false;
         if (sourceboot_vdp1_transfer_pending != NULL) {
+            const uint32_t transport_presentation_vblank_start =
+                sourceboot_vblank_out_count;
             sm64_saturn_vdp1_frame_bank_t *const transfer_bank =
                 sourceboot_vdp1_transfer_pending;
             transfer_ready_before_field =
@@ -966,6 +1047,10 @@ int main(void) {
                 sourceboot_vdp1_destination_poisoned = true;
                 sourceboot_vdp1_transfer_pending = NULL;
             }
+            sourceboot_phase_accumulate(transport_presentation_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_transport_presentation_vblank_crossings,
+                                        &sourceboot_transport_presentation_count);
         }
         if (scheduler_now == sourceboot_presentation_generation) {
             /* Service the serial CPU-DMAC then SCU-DMA lane as quickly as the
@@ -989,6 +1074,8 @@ int main(void) {
         bool published_transfer_this_field = false;
         if (sourceboot_vdp1_transfer_pending != NULL &&
             transfer_ready_before_field) {
+            const uint32_t transport_presentation_vblank_start =
+                sourceboot_vblank_out_count;
             sm64_saturn_vdp1_frame_bank_t *const transfer_bank =
                 sourceboot_vdp1_transfer_pending;
             sm64_saturn_vdp1_frame_bank_t *const previous_published =
@@ -1016,6 +1103,10 @@ int main(void) {
                 sourceboot_vdp1_destination_poisoned = true;
             }
             sourceboot_vdp1_transfer_pending = NULL;
+            sourceboot_phase_accumulate(transport_presentation_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_transport_presentation_vblank_crossings,
+                                        &sourceboot_transport_presentation_count);
         }
         for (uint8_t catchup = 0U;
              sim_vblank_credit >= SOURCEBOOT_SIM_VBLANK_DIVISOR &&
@@ -1025,7 +1116,13 @@ int main(void) {
             sourceboot_boot_trace_write(
                 SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_BEFORE,
                 scheduler_now);
+            const uint32_t simulation_vblank_start =
+                sourceboot_vblank_out_count;
             sourceboot_run_source_tick();
+            sourceboot_phase_accumulate(simulation_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_simulation_vblank_crossings,
+                                        &sourceboot_simulation_count);
             sourceboot_boot_trace_write(
                 SOURCEBOOT_BOOT_TRACE_STAGE_SOURCE_TICK_AFTER,
                 scheduler_now);
@@ -1045,6 +1142,9 @@ int main(void) {
             sim_vblank_credit -= dropped_vblank_credit;
         }
         sourceboot_trace_scheduler_credit = sim_vblank_credit;
+
+        const uint32_t construction_vblank_start =
+            sourceboot_vblank_out_count;
 
         /* Current sourceboot renders only the latest completed fixed-step
          * state. A bounded recovery tick can leave one older READY snapshot;
@@ -1128,7 +1228,15 @@ int main(void) {
                 build_bank->gouraud_bank->used,
                 build_bank->snapshot_generation);
         }
+        if (build_attempted) {
+            sourceboot_phase_accumulate(construction_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_construction_vblank_crossings,
+                                        &sourceboot_construction_count);
+        }
         if (render_complete) {
+            const uint32_t transport_presentation_vblank_start =
+                sourceboot_vblank_out_count;
             const bool overwrite_waited = vdp1_sync_busy();
             const uint16_t overwrite_wait_start = cpu_frt_count_get();
             if (overwrite_waited)
@@ -1157,6 +1265,10 @@ int main(void) {
                         build_bank->command_transfer_ticket))
                     sourceboot_vdp1_transfer_queued_not_started++;
             }
+            sourceboot_phase_accumulate(transport_presentation_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_transport_presentation_vblank_crossings,
+                                        &sourceboot_transport_presentation_count);
         }
         if (!render_complete && build_bank != NULL &&
             build_bank->state != SM64_SATURN_VDP1_FRAME_BANK_PUBLISHED) {
@@ -1231,9 +1343,19 @@ int main(void) {
                 : 0U;
         if (presentation_generation != 0U &&
             sourceboot_vdp1_transfer_pending == NULL &&
-            !sourceboot_vdp1_destination_poisoned)
+            !sourceboot_vdp1_destination_poisoned) {
+            const uint32_t transport_presentation_vblank_start =
+                sourceboot_vblank_out_count;
             sourceboot_present_generation(
                 sourceboot_vdp1_frame_banks.published);
+            sourceboot_phase_accumulate(transport_presentation_vblank_start,
+                                        sourceboot_vblank_out_count,
+                                        &sourceboot_transport_presentation_vblank_crossings,
+                                        &sourceboot_transport_presentation_count);
+            sourceboot_cadence_trace_append(sourceboot_sim_tick_count,
+                                            sourceboot_vdp1_bank_generation,
+                                            presentation_generation);
+        }
         if (sourceboot_vdp1_frame_banks.published != NULL)
             sourceboot_vdp1_bank_displayed =
                 sourceboot_vdp1_frame_banks.published->snapshot_generation;

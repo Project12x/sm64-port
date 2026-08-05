@@ -58,6 +58,15 @@ master/slave split and `QW=QF=QQ=0`. A8 therefore closes a correctness and
 lifetime prerequisite but does not improve cadence. Split CPU construction
 from simulation timing and use that result to scope A9 overlap; do not spend a
 manual-test cycle looking for an uplift the automatic evidence disproves.
+The field-resolution split instead proves simulation dominance: 283 of 333
+measured fields (85.0%) are spent across six source simulation ticks per
+presented frame; construction is 49 fields (14.7%), transport/presentation is
+one field, and nothing is unattributed. The two-tick catch-up limit resets on
+each outer iteration, allowing six ticks before one presentation and dropping
+222 more credits across nine intervals. Fix the scheduler so normal+recovery
+credit is bounded per presentation generation. Worker-materialized terrain
+commands remain a source-backed later reduction, not the current dominant
+lever.
 The first cutover build reached link and exposed a 10,032-byte HWRAM overflow;
 the active narrow repair relocates 27,744 bytes of master-only terrain merge
 scratch to LWRAM. Independent review and the one target rebuild now pass; the

@@ -1794,3 +1794,25 @@ generations retire with `QM=[1,1,0,0]`, `QS=[0,0,1,1]`, `QN=QR=10`, and
 `QW=QF=QQ=0`; worker failure counters are also zero. A8 closes the transfer
 lifetime prerequisite but provides no measured cadence uplift. The next task
 must split CPU construction and simulation timing before choosing A9 overlap.
+
+### A9 Step 0 field-resolution attribution (2026-08-05)
+
+A 60-byte cache-through seqlock trace samples cumulative VBlank crossings for
+simulation, frame construction, and transport/presentation without changing
+scheduler behavior. The first independent review rejected a one-marker
+seqlock, a construction boundary after Mario pose, an incomplete publication
+boundary, and lost diagnostics on torn reads. The repair marks both ends odd
+before payload, includes snapshot/pose preparation in construction, reports an
+explicit unattributed residual, names the combined transport/presentation
+phase honestly, and wraps cadence decode failures in bounded diagnostics.
+
+The serialized target build exits zero with exact ELF SHA-256
+`1ffb47ccb10908507703eba6799d5891af3a71cada70ffac4de189a26e4edfe6`.
+The exact ten-edge report
+`docs/saturn/evidence/reports/a9-phase-attribution-throughput-2026-08-05.json`
+accounts for all 333 interval fields: simulation 283 (85.0%), construction 49
+(14.7%), transport/presentation 1 (0.3%), unattributed 0. Each presentation
+interval executes six simulation ticks and the nine intervals drop 222 more
+VBlank credits. Thus the current per-outer-iteration two-tick catch-up limit
+repeats three times before one frame publishes. Task 9 Step 1 must make normal
+plus recovery work presentation-generation scoped.

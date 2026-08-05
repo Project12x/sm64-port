@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Added a 60-byte cache-through A9 cadence trace and exact-capture decoding for
+  wrap-safe VBlank crossings in simulation, synchronous frame construction,
+  and transport/presentation. This replaces misleading absolute claims from the
+  16-bit FRT accumulators while leaving scheduler behavior unchanged.
+
 - Extended the exact-identity sourceboot throughput capture with a configurable
   presentation-event depth and bounded final diagnostics on cadence failure.
   This replaces one-interval A8 guesses with a repeatable multi-frame sample

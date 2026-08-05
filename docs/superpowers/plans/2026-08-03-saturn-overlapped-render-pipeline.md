@@ -326,8 +326,9 @@ and the evidence report before starting another task.
   `10e92064...df569ab`. Ten-event evidence measures 1.63 FPS mean with every
   queue generation retired and no queue wait/failure; A8 closes without an
   uplift claim and hands measured CPU-cost isolation to A9.
-- [ ] **Task 9 / A9 — frame overlap and bounded cadence:** pending after the
-  scoped Emergency A9.0 presentation-boundary correction.
+- [ ] **Task 9 / A9 — frame overlap and bounded cadence:** active. Step 0 first
+  splits existing simulation/render counters across the measured 37-field
+  presentation interval so the scheduler targets the dominant CPU phase.
 - [ ] **Task 10 / A10 — full-game hardening and publication:** pending. This
   includes scene-neutral level extraction and validation, generalized dynamic
   actor/enemy banks using the same actor pipeline proven by Mario, and
@@ -1767,7 +1768,50 @@ shared bank transport owns every frame upload.
       sm64_saturn_frame_pipeline_t *pipeline, uint32_t vblank_count);
   ```
 
-- [ ] **Step 1: Write a deterministic scheduler model test**
+- [x] **Step 0: Attribute the measured post-A8 frame interval — COMPLETE**
+
+  Extend exact-identity automatic evidence to sample existing simulation and
+  render/construction timing at each presentation edge, using wrap-safe deltas
+  and no target scheduling change. If current profile publication cannot
+  support that split, add the smallest diagnostic-only counters first. Record
+  the phase split before implementing scheduler policy; A8's stable 36--38
+  fields and zero transfer waits are the baseline.
+
+  **Design correction (2026-08-05):** the existing simulation/render FRT
+  accumulators add modulo-16-bit phase deltas and can lose multiple wraps at
+  the measured 1.6 FPS; the frontend profile also lacks an explicit
+  cache-through publication boundary. They are gauges, not evidence-grade
+  absolute attribution. Add one fixed-size P2-published cadence trace with
+  wrap-safe VBlank-crossing accumulators and phase counts, then sample it at
+  the same exact presentation edges. The current evidence already localizes
+  the interval: each presentation generation trails its pre-render bank stamp
+  by 36--38 fields while transfer waits remain zero.
+
+  Exact ELF `1ffb47cc...e4edfe6` and ten-edge report
+  `docs/saturn/evidence/reports/a9-phase-attribution-throughput-2026-08-05.json`
+  account for every one of 333 interval fields: simulation 283 (85.0%), frame
+  construction 49 (14.7%), transport/presentation 1 (0.3%), unattributed 0.
+  Every presented frame spans six authoritative simulation ticks and the nine
+  intervals drop another 222 VBlank credits. The existing two-tick bound is
+  per outer iteration, not per presentation generation; repeated outer
+  iterations recreate the death spiral before one frame can publish.
+
+- [ ] **Step 0.1: Materialize terrain commands in `WORLD_LOWER` — DEFERRED;
+  CONSTRUCTION IS 14.7%**
+
+  Use the descriptor-owned 32-byte command image to copy and XY-patch the
+  resolved template in the worker, after publishing the immutable template
+  bank for P2/cache-through reads. The master retains stable painter merge,
+  final-bank copy/link/END, bounded Gouraud allocation/GRDA patching, and actor
+  tail ownership. Preserve the current fallback for malformed or unresolved
+  templates. This is pattern-only from libyaul
+  `6012f79f237773378c8014e70d8998ad95a38d98` (`libmic3d/render.c:381-430,
+  525-568,920-952`) and the already-attributed SlaveDriver
+  `a8986591557b6e680550d3c23970284d3b38ff8f` worker-result ownership shape
+  (`WALLS.C:1240-1408,1803-1950`); no upstream code is copied. Do not combine
+  this bounded experiment with direct alternating-bank writes.
+
+- [ ] **Step 1: Write a deterministic scheduler model test — ACTIVE**
 
   Feed synthetic VBlank/render/transfer completion events. Assert snapshot N
   presentation while simulation is N+1, no mixed generations, useful job

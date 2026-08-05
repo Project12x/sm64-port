@@ -123,10 +123,12 @@ The fail-closed zero-admitted-actor repair produces exact Pipe4 ELF
 `10e92064175f1d277039322f6be874f646b71a486c7f18ccd8a2e9786df569ab`.
 Its ten-event automatic series is stable at 1.63 FPS mean / 1.62 median with
 all ten queue generations retired and no queue waits or failures. A8 is a
-necessary lifetime correction but not an FPS win. Split CPU construction from
-simulation timing next, then scope A9 overlap around the measured dominant
-work. BOB remains only the current demonstrator and every transport/ownership
-interface must serve the full game.
+necessary lifetime correction but not an FPS win. A9's exact phase trace now
+proves simulation consumes 283/333 measured fields (85.0%): the nominal
+two-tick catch-up cap resets across outer iterations and executes six source
+ticks per presented frame. Make the catch-up budget presentation-generation
+scoped next. BOB remains only the current demonstrator and every transport/
+ownership interface must serve the full game.
 
 ## Environment facts
 

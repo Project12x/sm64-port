@@ -24,6 +24,7 @@ except ModuleNotFoundError as error:
 BOOT_ADDRESS = 0x06010000
 RUNTIME_ADDRESS = 0x06010100
 QUEUE_ADDRESS = 0x06010200
+CADENCE_ADDRESS = 0x06010300
 
 
 def be_words(size: int, values: dict[int, int]) -> bytes:
@@ -53,6 +54,19 @@ def runtime(
 
 def queue(generation: int) -> bytes:
     return be_words(232, {224: generation})
+
+
+def cadence_trace(*, sequence: int = 2, record: dict[str, int] | None = None) -> bytes:
+    record = record or {}
+    raw = bytearray(capture.CADENCE_TRACE_BYTES)
+    raw[0:4] = capture.CADENCE_TRACE_MAGIC.to_bytes(4, "big")
+    raw[4:8] = capture.CADENCE_TRACE_VERSION.to_bytes(4, "big")
+    raw[8:12] = sequence.to_bytes(4, "big")
+    for field_index, field in enumerate(capture.CADENCE_RECORD_FIELDS):
+        base = 12 + field_index * 4
+        raw[base : base + 4] = record.get(field, 0).to_bytes(4, "big")
+    raw[-4:] = sequence.to_bytes(4, "big")
+    return bytes(raw)
 
 
 def elf32_with_symbols(
@@ -130,11 +144,169 @@ def elf32_with_symbols(
 
 
 class ThroughputCaptureTests(unittest.TestCase):
+    def test_decodes_fixed_seqlock_cadence_trace_and_rejects_bad_abi(self) -> None:
+        record = {field: index + 1 for index, field in enumerate(capture.CADENCE_RECORD_FIELDS)}
+        decoded = capture.decode_cadence_trace(cadence_trace(sequence=8, record=record))
+        self.assertEqual(decoded["sequence"], 8)
+        self.assertEqual(decoded["record"], record)
+        with self.assertRaisesRegex(ValueError, "magic"):
+            capture.decode_cadence_trace(bytes(capture.CADENCE_TRACE_BYTES))
+        torn = bytearray(cadence_trace(sequence=8, record=record))
+        torn[-4:] = (6).to_bytes(4, "big")
+        with self.assertRaisesRegex(ValueError, "seqlock"):
+            capture.decode_cadence_trace(bytes(torn))
+
+    def test_phase_summary_uses_adjacent_wrap_safe_cumulative_deltas(self) -> None:
+        previous = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        current = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+        previous.update({
+            "observed_vblank_generation": 0xFFFFFFFE,
+            "frame_generation": 0xFFFFFFFF,
+            "build_generation": 7,
+            "presentation_generation": 8,
+            "dropped_vblank_credit": 0xFFFFFFFF,
+            "simulation_vblank_crossings": 0xFFFFFFFE,
+            "simulation_count": 0xFFFFFFFF,
+            "construction_vblank_crossings": 9,
+            "construction_count": 10,
+            "transport_presentation_vblank_crossings": 11,
+            "transport_presentation_count": 12,
+        })
+        current.update({
+            "observed_vblank_generation": 3,
+            "frame_generation": 1,
+            "build_generation": 9,
+            "presentation_generation": 9,
+            "dropped_vblank_credit": 2,
+            "simulation_vblank_crossings": 1,
+            "simulation_count": 1,
+            "construction_vblank_crossings": 10,
+            "construction_count": 12,
+            "transport_presentation_vblank_crossings": 12,
+            "transport_presentation_count": 15,
+        })
+        delta = capture.phase_delta(previous, current)
+        self.assertEqual(delta["vblank_delta"], 5)
+        self.assertEqual(delta["frame_delta"], 2)
+        self.assertEqual(delta["dropped_vblank_credit_delta"], 3)
+        self.assertEqual(delta["simulation"], {"vblank_crossings": 3, "count": 2})
+        self.assertEqual(delta["construction"], {"vblank_crossings": 1, "count": 2})
+        self.assertEqual(delta["transport_presentation"], {"vblank_crossings": 1, "count": 3})
+        self.assertEqual(delta["attributed_vblank_crossings"], 5)
+        self.assertEqual(delta["unattributed_vblank_crossings"], 0)
+        impossible = dict(current)
+        impossible["construction_vblank_crossings"] = 11
+        with self.assertRaisesRegex(ValueError, "exceed"):
+            capture.phase_delta(previous, impossible)
+
+    def test_observation_samples_cadence_on_each_presentation_and_retains_final_snapshot(self) -> None:
+        class FakeYmir:
+            def __init__(self) -> None:
+                self.tick = 0
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, self.tick))}
+                if address == CADENCE_ADDRESS:
+                    record = {field: 0 for field in capture.CADENCE_RECORD_FIELDS}
+                    record["observed_vblank_generation"] = self.tick
+                    record["frame_generation"] = self.tick
+                    record["build_generation"] = self.tick
+                    record["presentation_generation"] = self.tick
+                    record["dropped_vblank_credit"] = self.tick
+                    record["simulation_vblank_crossings"] = self.tick
+                    record["simulation_count"] = self.tick
+                    return {"data": list(cadence_trace(sequence=self.tick * 2, record=record))}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=self.tick, qr=self.tick, notify=self.tick, retired=self.tick))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        observation = capture.observe_target(
+            FakeYmir(),
+            {
+                "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+            },
+            max_vblanks=3,
+            nominal_refresh_hz=60.0,
+        )
+        events = observation["presentation_events"]
+        self.assertEqual([event["cadence"]["presentation_generation"] for event in events], [2, 3])
+        self.assertEqual(events[1]["cadence"]["frame_generation"], 3)
+        self.assertEqual(events[1]["cadence"]["dropped_vblank_credit"], 3)
+        self.assertEqual(observation["measurement"]["intervals"][0]["phases"]["simulation"]["count"], 1)
+
+    def test_failed_observation_retains_final_cadence_seqlock_snapshot(self) -> None:
+        class FakeYmir:
+            def __init__(self, *, torn_cadence: bool = False) -> None:
+                self.tick = 0
+                self.torn_cadence = torn_cadence
+
+            def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                if method == "exec.run_for":
+                    self.tick += 1
+                    return {}
+                address = params["address"] & ~capture.P2_ALIAS_BIT
+                if address == BOOT_ADDRESS:
+                    return {"data": list(trace(self.tick, 0))}
+                if address == CADENCE_ADDRESS:
+                    record = {field: self.tick for field in capture.CADENCE_RECORD_FIELDS}
+                    record["presentation_generation"] = 0
+                    raw = bytearray(cadence_trace(sequence=6, record=record))
+                    if self.torn_cadence:
+                        raw[-4:] = (4).to_bytes(4, "big")
+                    return {"data": list(raw)}
+                if address == RUNTIME_ADDRESS:
+                    return {"data": list(runtime(qn=0, qr=0, notify=0, retired=0))}
+                if address == QUEUE_ADDRESS:
+                    return {"data": list(queue(0))}
+                raise AssertionError(address)
+
+        with self.assertRaises(capture.ObservationError) as caught:
+            capture.observe_target(
+                FakeYmir(),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=2,
+                nominal_refresh_hz=60.0,
+            )
+        final_trace = caught.exception.diagnostics["last_cadence_trace"]
+        self.assertEqual(final_trace["sequence"], 6)
+        self.assertEqual(final_trace["record"]["observed_vblank_generation"], 2)
+
+        with self.assertRaises(capture.ObservationError) as torn:
+            capture.observe_target(
+                FakeYmir(torn_cadence=True),
+                {
+                    "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
+                    "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
+                    "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
+                },
+                max_vblanks=2,
+                nominal_refresh_hz=60.0,
+            )
+        self.assertIn("seqlock", torn.exception.diagnostics["cadence_decode_error"])
+        self.assertEqual(torn.exception.diagnostics["last_runtime"]["qn"], 0)
+
     def test_resolves_exact_sized_symbols_and_rejects_wrong_missing_or_duplicate_symbols(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             elf = Path(directory) / "game.elf"
             elf32_with_symbols(elf, [
                 ("_sourceboot_boot_trace", BOOT_ADDRESS, 32),
+                ("_sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
                 ("_s_runtime", RUNTIME_ADDRESS, 92),
                 ("_s_render_job_queue", QUEUE_ADDRESS, 232),
             ])
@@ -142,12 +314,14 @@ class ThroughputCaptureTests(unittest.TestCase):
                 capture.resolve_required_symbols(elf),
                 {
                     "sourceboot_boot_trace": {"address": BOOT_ADDRESS, "size": 32},
+                    "sourceboot_cadence_trace": {"address": CADENCE_ADDRESS, "size": 60},
                     "s_runtime": {"address": RUNTIME_ADDRESS, "size": 92},
                     "s_render_job_queue": {"address": QUEUE_ADDRESS, "size": 232},
                 },
             )
             elf32_with_symbols(elf, [
                 ("sourceboot_boot_trace", BOOT_ADDRESS, 31),
+                ("sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
                 ("s_runtime", RUNTIME_ADDRESS, 92),
                 ("s_render_job_queue", QUEUE_ADDRESS, 232),
             ])
@@ -155,6 +329,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                 capture.resolve_required_symbols(elf)
             elf32_with_symbols(elf, [
                 ("sourceboot_boot_trace", BOOT_ADDRESS, 32),
+                ("sourceboot_cadence_trace", CADENCE_ADDRESS, 60),
                 ("s_runtime", RUNTIME_ADDRESS, 92),
                 ("s_render_job_queue", QUEUE_ADDRESS, 232),
             ], duplicate=True)

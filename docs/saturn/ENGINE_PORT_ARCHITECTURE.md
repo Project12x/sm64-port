@@ -176,15 +176,27 @@ branches in a future shared backend fail this contract.
 
 ## Frame and cadence contract
 
-SM64 simulation remains a deterministic 30 Hz stream. Rendering may initially
-present at 15–20 FPS, but low rendering throughput must not slow simulation or
-change input semantics. The scheduler therefore owns separate counters for:
+SM64 simulation targets a deterministic 30 Hz stream. Rendering may initially
+present below that rate, but overload must not trigger unbounded catch-up or
+change input semantics. A presentation-generation lifetime may execute at most
+one normal source tick plus one recovery tick; further real-time credit is
+dropped explicitly and counted until source simulation itself is optimized.
+This is an overload degradation rule, not a claim that sub-30-Hz simulation is
+the final shipping cadence. The scheduler therefore owns separate counters for:
 
 1. source update ticks;
 2. render submissions accepted or intentionally skipped;
 3. VDP1 completion wait;
 4. VBlank presentation; and
 5. audio production when audio is enabled.
+
+The A9 field-resolution trace proved why this lifetime scope is mandatory. On
+exact ELF `1ffb47cc...e4edfe6`, the old per-outer-iteration cap reset three
+times before one presentation: six simulation ticks consumed 283 of 333
+measured fields (85.0%), construction consumed 49, transport/presentation one,
+and zero fields were unattributed. Nine intervals also dropped 222 credits.
+Scheduler budgets therefore reset only after a new complete frame is
+presented, never merely because the outer loop observes another VBlank.
 
 An optimization is portable only when it reduces a named shared stage—source
 update, geo/Fast3D front end, transform/clip, ordering, command build, transfer,
