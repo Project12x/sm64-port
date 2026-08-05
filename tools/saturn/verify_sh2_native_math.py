@@ -1158,6 +1158,263 @@ def sourceboot_null_task_submit_dead_nodes(
     return frozenset()
 
 
+def _source_without_comments(text: str) -> str:
+    return re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.DOTALL)
+
+
+def _source_braced_body(text: str, declaration: str) -> str | None:
+    match = re.search(declaration, text, flags=re.MULTILINE)
+    if match is None:
+        return None
+    opening = text.find("{", match.end())
+    if opening < 0:
+        return None
+    depth = 0
+    for index in range(opening, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[opening + 1:index]
+    return None
+
+
+def prove_sourceboot_bob_null_camera_triggers(repo_root: Path) -> bool:
+    """Prove the checked sourceboot route selects BOB's null trigger table."""
+    try:
+        source_entry = _source_without_comments(
+            (repo_root / "src/port/saturn/sourceboot/source_entry.c").read_text(
+                encoding="utf-8"
+            )
+        )
+        level_update = _source_without_comments(
+            (repo_root / "src/game/level_update.c").read_text(encoding="utf-8")
+        )
+        bob_script = _source_without_comments(
+            (repo_root / "levels/bob/script.c").read_text(encoding="utf-8")
+        )
+        level_defines = _source_without_comments(
+            (repo_root / "levels/level_defines.h").read_text(encoding="utf-8")
+        )
+        camera_source = _source_without_comments(
+            (repo_root / "src/game/camera.c").read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError):
+        return False
+
+    loop = _source_braced_body(
+        source_entry,
+        r"static\s+const\s+LevelScript\s+sSourcebootLevelLoop\s*\[\s*\]\s*=",
+    )
+    marker = _source_braced_body(
+        source_entry,
+        r"static\s+s32\s+sourceboot_mark_save_file_exists\s*\([^)]*\)",
+    )
+    init_from_save = _source_braced_body(
+        level_update, r"s32\s+lvl_init_from_save_file\s*\([^)]*\)"
+    )
+    set_current = _source_braced_body(
+        level_update, r"s32\s+lvl_set_current_level\s*\([^)]*\)"
+    )
+    bob_entry = _source_braced_body(
+        bob_script, r"const\s+LevelScript\s+level_bob_entry\s*\[\s*\]\s*="
+    )
+    if None in (loop, marker, init_from_save, set_current, bob_entry):
+        return False
+
+    compact_loop = re.sub(r"\s+", "", loop or "")
+    route_sequence = (
+        "SET_REG(LEVEL_BOB),"
+        "CALL(0,sourceboot_mark_save_file_exists),"
+        "CALL(0,lvl_init_from_save_file),"
+        "CALL(0,lvl_set_current_level),"
+        "EXECUTE(0x0E,NULL,NULL,level_bob_entry),"
+    )
+    if compact_loop.count(route_sequence) != 1:
+        return False
+    if re.findall(r"SET_REG\((LEVEL_[A-Z0-9_]+)\)", compact_loop) != [
+        "LEVEL_BOB"
+    ]:
+        return False
+
+    compact_marker = re.sub(r"\s+", "", marker or "")
+    compact_init = re.sub(r"\s+", "", init_from_save or "")
+    compact_set = re.sub(r"\s+", "", set_current or "")
+    compact_bob = re.sub(r"\s+", "", bob_entry or "")
+    if "save_file_set_flags(SAVE_FLAG_FILE_EXISTS);returnvalue;" \
+            not in compact_marker:
+        return False
+    if "gCurrLevelNum=levelNum;" not in compact_init \
+            or "returnlevelNum;" not in compact_init:
+        return False
+    if "gCurrLevelNum=levelNum;" not in compact_set:
+        return False
+    if "CALL(0,lvl_init_or_update),CALL_LOOP(1,lvl_init_or_update)," \
+            not in compact_bob:
+        return False
+
+    selected_tables: list[str] = []
+    for match in re.finditer(
+        r"^\s*DEFINE_LEVEL\s*\((.*?)\)\s*$", level_defines,
+        flags=re.MULTILINE,
+    ):
+        fields = tuple(field.strip() for field in match.group(1).split(","))
+        if len(fields) != 11:
+            return False
+        if fields[1] == "LEVEL_BOB":
+            selected_tables.append(fields[10])
+    if selected_tables != ["_"]:
+        return False
+    if re.search(r"^\s*#define\s+_\s+NULL\s*$", camera_source,
+                 flags=re.MULTILINE) is None:
+        return False
+    if re.search(
+        r"^\s*#define\s+DEFINE_LEVEL\([^\n]*cameratable\)\s+cameratable,\s*$",
+        camera_source, flags=re.MULTILINE,
+    ) is None:
+        return False
+    if re.search(
+        r"sCameraTriggers\s*\[[^]]+\]\s*=\s*\{\s*"
+        r"NULL,\s*#include\s+\"levels/level_defines\.h\"\s*\};",
+        camera_source, flags=re.DOTALL,
+    ) is None:
+        return False
+    return True
+
+
+def _null_camera_path_reaches_transfer(
+    instructions: dict[int, Instruction], owner: FunctionOwner,
+    start: int, transfers: frozenset[int],
+) -> bool | None:
+    """Return whether a direct CFG path reaches a transfer; None is unknown."""
+    pending = [start]
+    visited: set[int] = set()
+    while pending:
+        address = pending.pop()
+        if address in visited:
+            continue
+        if address in transfers:
+            return True
+        if not owner.start <= address < owner.end:
+            return None
+        row = instructions.get(address)
+        if row is None:
+            return None
+        visited.add(address)
+        mnemonic = row.mnemonic
+        if mnemonic == "rts":
+            if instructions.get(address + 2) is None:
+                return None
+            continue
+        if mnemonic in {"jmp", "braf"}:
+            return None
+        if mnemonic in {"bra", "bsr", "bt", "bf", "bt.s", "bf.s"}:
+            target = _target_from_text(row.operands)
+            if target is None:
+                return None
+            delayed = mnemonic in {"bra", "bsr", "bt.s", "bf.s"}
+            if delayed and instructions.get(address + 2) is None:
+                return None
+            if mnemonic == "bsr":
+                pending.append(address + 4)
+            elif mnemonic == "bra":
+                pending.append(target)
+            elif delayed:
+                pending.extend((target, address + 4))
+            else:
+                pending.extend((target, address + 2))
+            continue
+        pending.append(address + 2)
+    return False
+
+
+def sourceboot_bob_null_camera_trigger_dead_transfers(
+    instructions: dict[int, Instruction],
+    owners: Iterable[FunctionOwner],
+    *,
+    route_selects_null: bool,
+) -> frozenset[tuple[str, int]]:
+    """Return only the two exact trigger calls bypassed by the BOB null guard."""
+    if not route_selects_null:
+        return frozenset()
+    owner = next(
+        (item for item in owners if item.name == "_camera_course_processing"),
+        None,
+    )
+    if owner is None:
+        return frozenset()
+    start = owner.start
+
+    def row(offset: int) -> Instruction | None:
+        return instructions.get(start + offset)
+
+    def operands(offset: int) -> str | None:
+        item = row(offset)
+        return None if item is None else item.operands.replace(" ", "")
+
+    table_load = row(0x44)
+    table_atom = (
+        None if table_load is None
+        else _symbol_from_annotation(table_load.annotation)
+    )
+    exact = (
+        table_load is not None
+        and table_load.mnemonic == "mov.l"
+        and table_atom is not None
+        and table_atom.name == "_sCameraTriggers"
+        and operands(0x44) is not None
+        and operands(0x44).endswith(",r14")
+        and row(0x46) is not None and row(0x46).mnemonic == "exts.w"
+        and operands(0x46) == "r1,r2"
+        and row(0x48) is not None and row(0x48).mnemonic == "shll2"
+        and operands(0x48) == "r2"
+        and row(0x4A) is not None and row(0x4A).mnemonic == "add"
+        and operands(0x4A) == "r2,r14"
+        and row(0x4C) is not None and row(0x4C).mnemonic == "mov.l"
+        and operands(0x4C) == "@r14,r2"
+        and row(0x4E) is not None and row(0x4E).mnemonic == "tst"
+        and operands(0x4E) == "r2,r2"
+        and row(0x50) is not None and row(0x50).mnemonic == "bt"
+        and _target_from_text(row(0x50).operands) == start + 0x56
+        and row(0x52) is not None and row(0x52).mnemonic == "bra"
+        and _target_from_text(row(0x52).operands) == start + 0x152
+        and row(0x54) is not None and row(0x54).mnemonic == "mov"
+        and operands(0x54) == "#0,r9"
+        and row(0x118) is not None and row(0x118).mnemonic == "mov.l"
+        and operands(0x118) == "@r14,r2"
+        and row(0x11A) is not None and row(0x11A).mnemonic == "add"
+        and operands(0x11A) == "r9,r2"
+        and row(0x11C) is not None and row(0x11C).mnemonic == "mov.l"
+        and operands(0x11C) == "@(4,r2),r2"
+        and row(0x11E) is not None and row(0x11E).mnemonic == "jsr"
+        and operands(0x11E) == "@r2"
+        and row(0x120) is not None and row(0x120).mnemonic == "mov"
+        and operands(0x120) == "#1,r13"
+        and row(0x13A) is not None and row(0x13A).mnemonic == "mov.l"
+        and operands(0x13A) == "@(4,r2),r2"
+        and row(0x13C) is not None and row(0x13C).mnemonic == "jsr"
+        and operands(0x13C) == "@r2"
+        and row(0x13E) is not None and row(0x13E).mnemonic == "mov"
+        and operands(0x13E) == "r8,r4"
+        and row(0x142) is not None and row(0x142).mnemonic == "mov.l"
+        and operands(0x142) == "@r14,r12"
+        and row(0x14E) is not None and row(0x14E).mnemonic == "bra"
+        and _target_from_text(row(0x14E).operands) == start + 0x56
+        and row(0x152) is not None and row(0x152).mnemonic == "bra"
+        and _target_from_text(row(0x152).operands) == start + 0x142
+    )
+    if not exact:
+        return frozenset()
+    transfer_addresses = frozenset({start + 0x11E, start + 0x13C})
+    reaches = _null_camera_path_reaches_transfer(
+        instructions, owner, start + 0x56, transfer_addresses
+    )
+    if reaches is not False:
+        return frozenset()
+    return frozenset((owner.name, address) for address in transfer_addresses)
+
+
 def comparison_predicate(
     instruction: Instruction | None,
     state: dict[str, AbstractValue],
@@ -3320,6 +3577,7 @@ def analyze_code_only(
     max_discovery_restarts: int = 8,
     progress_callback: Callable[[dict[str, object]], None] | None = None,
     known_null_addresses: frozenset[int] = frozenset(),
+    proven_dead_transfers: frozenset[tuple[str, int]] = frozenset(),
     island_origins: dict[str, frozenset[str]] | None = None,
     selected_owner_identities: set[str] | None = None,
 ) -> CodeAnalysis:
@@ -3602,6 +3860,11 @@ def analyze_code_only(
             selected_owner_identities=selected_owner_identities,
         )
         accepted = merge_code_analyses(accepted_entry, accepted_components)
+        if proven_dead_transfers:
+            accepted.unresolved_transfers = [
+                transfer for transfer in accepted.unresolved_transfers
+                if (transfer.caller, transfer.address) not in proven_dead_transfers
+            ]
         missing_edges = new_edges - frozen_edges
         emit_progress({
             "event": "phase_complete",
@@ -3675,7 +3938,7 @@ BOUNDED_SINGLE_REGISTER_WRITERS = frozenset({
 # Pinned digests deliberately make the route and helper ceilings append-only
 # contracts. Updating either requires an explicit v2 implementation change,
 # not a quiet edit to a text allowlist.
-ROUTE_ORACLE_V1_SHA256 = "a9cfea12e749495ec13e31d9c3b732691215acde99a94abe656b82c7c8d69c72"
+ROUTE_ORACLE_V1_SHA256 = "b7187dea8859bce0275d05998187f0fac09fd9662ad9100d92677268e79e8b91"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
 SIM_ROUTE_ORACLE_V1_SHA256 = "084313eeeb16ace7a05b252a0519bfbc86cc2f43db1260292d1db77da388af44"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
@@ -4903,6 +5166,35 @@ def _bounded_disassembly_blocks(
     return {name: "".join(block) for name, block in rows.items()}
 
 
+def validate_route_oracle_owned_blocks(
+    disassembly: str,
+    owners: Iterable[FunctionOwner],
+    oracle: RouteOracle,
+) -> RouteOracle:
+    """Require every pinned route symbol to own one linked disassembly block."""
+    owner_list = tuple(owners)
+    canonical = _route_oracle_owner_identities(oracle, owner_list)
+    blocks = _bounded_disassembly_blocks(disassembly, owner_list, ())
+    required = set(canonical.roots)
+    for dispatcher, callback in (
+        canonical.static_manifest_edges | canonical.indirect_edges
+    ):
+        required.update((dispatcher, callback))
+    missing = required.difference(blocks)
+    if missing:
+        display_by_identity = {
+            _bounded_owner_identity(owner): owner.name for owner in owner_list
+        }
+        raise ValueError(
+            "route oracle has no owned block: "
+            + ", ".join(sorted(
+                display_by_identity.get(identity, identity)
+                for identity in missing
+            ))
+        )
+    return canonical
+
+
 def _selected_island_decoded_lines(
     text: str, islands: tuple[LocalIsland, ...],
 ) -> dict[str, set[int]]:
@@ -5740,6 +6032,11 @@ def main(argv: list[str] | None = None) -> int:
         sections = parse_readelf_sections(sections_text)
         symbols = parse_readelf_symbols(symbols_text, sections)
         owners = resolve_function_owners(symbols, sections)
+        validate_route_oracle_owned_blocks(disassembly, owners, oracle)
+        if audit_oracle is not None:
+            validate_route_oracle_owned_blocks(
+                disassembly, owners, audit_oracle
+            )
         local_islands = resolve_local_islands(symbols, sections, owners)
         owner_address_map = build_owner_address_map(owners)
         analysis = None
@@ -5791,6 +6088,15 @@ def main(argv: list[str] | None = None) -> int:
             known_null_addresses = prove_sourceboot_null_task_submit(
                 parsed_instructions, owners
             )
+            bob_null_camera_triggers = prove_sourceboot_bob_null_camera_triggers(
+                Path(__file__).resolve().parents[2]
+            )
+            proven_dead_transfers = (
+                sourceboot_bob_null_camera_trigger_dead_transfers(
+                    parsed_instructions, owners,
+                    route_selects_null=bob_null_camera_triggers,
+                )
+            )
             analysis = analyze_code_only(
                 parsed_instructions,
                 owners,
@@ -5800,6 +6106,7 @@ def main(argv: list[str] | None = None) -> int:
                 owner_address_map=owner_address_map,
                 local_islands=local_islands,
                 known_null_addresses=known_null_addresses,
+                proven_dead_transfers=proven_dead_transfers,
                 island_origins=island_seed_origins,
                 selected_owner_identities=candidate_owner_identities,
             )

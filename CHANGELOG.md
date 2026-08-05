@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Reconciled the SH-2 native-math verifier with the live descriptor-queue
+  renderer route. The pinned oracle now follows the lifecycle and master/slave
+  callback tables instead of removed frame/terrain-worker symbols, and every
+  oracle identity must own an unambiguous linked disassembly block. Sourceboot
+  may suppress only the two exact BOB camera-trigger calls proven unreachable
+  through the null camera-table guard; route, table, control-flow, third-call,
+  or owned-block drift remains fail-closed.
+
 - Hardened the Task 10 sourceboot pipeline selector: `SATURN_RENDERER_PIPELINE`
   now accepts only the reviewed `2`, `3`, and `4` variants and is passed into
   the SH-2 preprocessor flags. Previously `-pipeN` changed only the output

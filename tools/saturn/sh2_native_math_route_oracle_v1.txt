@@ -1,15 +1,42 @@
-# Immutable v1 replay-route root oracle. Its SHA-256 is pinned in the census
-# verifier so changing a root requires an explicit versioned code change.
+# Immutable v1 renderer-route oracle. Its SHA-256 is pinned in the census
+# verifier so changing a root or callback requires an explicit code change.
 #
-# SATURN_DEMO_PATH=1 / SATURN_SOURCEBOOT_ROUTE_REPLAY=1 calls this renderer
-# once per emitted frame. The verifier expands every linked direct-call child
-# from this root, so a new per-frame child cannot be silently marked COLD.
-# The dual-worker dispatch invokes its function-pointer argument on both SH-2
-# CPUs. The static edge is derived from saturn_demo_render.c's terrain_worker
-# initializer and the terrain-worker wrapper's job->range forwarding; the
-# checked edge records that callback even though serial recovery also makes it
-# directly reachable in the linked call graph.
+# The live renderer starts and polls one descriptor generation through the
+# lifecycle table. The CPU-DUAL polling entry is an independent per-frame root;
+# both it and the master drain resolve the same renderer-local callback table.
+# Every edge below is derived from those exact checked-in source initializers
+# and invocations, then required to resolve to one owned linked-ELF block.
 ROUTE_ORACLE_VERSION 1
-ROOT _sm64_saturn_demo_render_frame
-STATIC_MANIFEST_EDGE _sm64_saturn_dual_worker_run _demo_terrain_compact_range
-INDIRECT_EDGE _sm64_saturn_dual_worker_run _demo_terrain_compact_range
+ROOT _sm64_saturn_demo_render_poll_frame
+ROOT _sm64_saturn_demo_render_start_frame
+ROOT _sm64_saturn_render_job_runtime_poll_slave
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_actor_queue_classify
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_actor_queue_transform
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_terrain_queue_world_admit
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_terrain_queue_world_lower
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_actor_queue_classify
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_actor_queue_transform
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_terrain_queue_world_admit
+STATIC_MANIFEST_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_terrain_queue_world_lower
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_drain_master
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_finalize
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_quarantine
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_slave_retired
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_start _demo_render_notify
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_start _demo_render_prepare_publish
+STATIC_MANIFEST_EDGE _sm64_saturn_render_lifecycle_start _demo_render_quarantine
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_actor_queue_classify
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_actor_queue_transform
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_terrain_queue_world_admit
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_drain_master _demo_terrain_queue_world_lower
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_actor_queue_classify
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_actor_queue_transform
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_terrain_queue_world_admit
+INDIRECT_EDGE _sm64_saturn_render_job_runtime_poll_slave _demo_terrain_queue_world_lower
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_drain_master
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_finalize
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_quarantine
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_poll _demo_render_slave_retired
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_start _demo_render_notify
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_start _demo_render_prepare_publish
+INDIRECT_EDGE _sm64_saturn_render_lifecycle_start _demo_render_quarantine

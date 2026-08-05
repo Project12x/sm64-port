@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import verify_sh2_native_math as verifier
 from verify_sh2_native_math import (
     ConstSet,
     DirectCallFact,
@@ -1416,85 +1417,401 @@ def _assert_bob_source_oracle_matches(
     test_case.assertEqual(declared_edges, expected_edges)
 
 
-def _derive_renderer_worker_edges(
-    repo_root: Path,
-) -> frozenset[tuple[str, str]]:
-    """Derive the renderer's dual-worker callback from its checked-in source."""
+def _single_braced_body(source: str, declaration: str, label: str) -> str:
+    matches = list(re.finditer(declaration, source, flags=re.MULTILINE))
+    if len(matches) != 1:
+        raise ValueError(f"expected one {label} declaration, got {len(matches)}")
+    opening = source.find("{", matches[0].end())
+    if opening < 0:
+        raise ValueError(f"{label} declaration has no body")
+    depth = 0
+    for index in range(opening, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening + 1:index]
+    raise ValueError(f"{label} declaration has an unterminated body")
+
+
+def _derive_renderer_route_oracle(repo_root: Path) -> verifier.RouteOracle:
+    """Derive the live descriptor route from its checked-in source owners."""
     renderer = _strip_c_comments(
         (repo_root / "src/port/saturn/gfx/saturn_demo_render.c").read_text(
             encoding="utf-8"
         )
     )
-    jobs = re.findall(
-        r"const\s+sm64_saturn_terrain_worker_job_t\s+terrain_worker\s*=\s*"
-        r"\{(.*?)\};",
+    lifecycle = _strip_c_comments(
+        (repo_root / "src/port/saturn/gfx/saturn_render_lifecycle.c")
+        .read_text(encoding="utf-8")
+    )
+    runtime = _strip_c_comments(
+        (repo_root / "src/port/saturn/gfx/saturn_render_job_runtime.c")
+        .read_text(encoding="utf-8")
+    )
+
+    callback_tables = re.findall(
+        r"static\s+const\s+sm64_saturn_render_job_callback_table_t\s+"
+        r"callbacks\s*=\s*\{\s*\{(.*?)\}\s*\}\s*;",
         renderer,
         flags=re.DOTALL,
     )
-    if len(jobs) != 1:
+    if len(callback_tables) != 1:
         raise ValueError(
-            f"expected one terrain_worker definition, got {len(jobs)}"
+            "expected one descriptor callback table, got "
+            f"{len(callback_tables)}"
         )
-    callbacks = re.findall(
-        r"\.range\s*=\s*([A-Za-z_]\w*)\s*,", jobs[0]
+    callbacks = tuple(
+        field.strip() for field in callback_tables[0].split(",")
+        if field.strip()
     )
-    if len(callbacks) != 1:
+    if len(callbacks) != 4 or any(
+        re.fullmatch(r"[A-Za-z_]\w*", callback) is None
+        for callback in callbacks
+    ):
         raise ValueError(
-            f"expected one terrain_worker range callback, got {callbacks}"
+            f"expected four descriptor callbacks, got {callbacks}"
         )
-    callback = callbacks[0]
-    if re.search(
-        rf"static\s+void\s+{re.escape(callback)}\s*\(", renderer
-    ) is None:
-        raise ValueError(f"terrain callback definition is missing: {callback}")
+    for callback in callbacks:
+        _single_braced_body(
+            renderer,
+            rf"static\s+bool(?:\s+__attribute__\s*\(\([^)]*\)\))?\s+"
+            rf"{re.escape(callback)}\s*\(",
+            callback,
+        )
+
+    lifecycle_tables = re.findall(
+        r"static\s+const\s+sm64_saturn_render_lifecycle_ops_t\s+"
+        r"s_demo_render_lifecycle_ops\s*=\s*\{(.*?)\};",
+        renderer,
+        flags=re.DOTALL,
+    )
+    if len(lifecycle_tables) != 1:
+        raise ValueError(
+            "expected one render lifecycle table, got "
+            f"{len(lifecycle_tables)}"
+        )
+    lifecycle_pairs = re.findall(
+        r"\.([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\s*,?",
+        lifecycle_tables[0],
+    )
+    lifecycle_callbacks = dict(lifecycle_pairs)
+    expected_lifecycle_fields = {
+        "prepare_publish", "notify", "slave_retired", "drain_master",
+        "finalize", "quarantine",
+    }
+    if len(lifecycle_pairs) != len(expected_lifecycle_fields) or \
+            set(lifecycle_callbacks) != expected_lifecycle_fields:
+        raise ValueError(
+            f"unexpected render lifecycle callback table: {lifecycle_pairs}"
+        )
+
+    start_body = _single_braced_body(
+        lifecycle,
+        r"bool\s+sm64_saturn_render_lifecycle_start\s*\(",
+        "render lifecycle start",
+    )
+    poll_body = _single_braced_body(
+        lifecycle,
+        r"sm64_saturn_render_lifecycle_status_t\s+"
+        r"sm64_saturn_render_lifecycle_poll\s*\(",
+        "render lifecycle poll",
+    )
+    start_fields = frozenset(re.findall(r"\bops->([A-Za-z_]\w*)\s*\(", start_body))
+    poll_fields = frozenset(re.findall(r"\bops->([A-Za-z_]\w*)\s*\(", poll_body))
+    if start_fields != frozenset({"prepare_publish", "notify", "quarantine"}):
+        raise ValueError(f"unexpected lifecycle-start calls: {sorted(start_fields)}")
+    if poll_fields != frozenset({
+        "slave_retired", "drain_master", "finalize", "quarantine",
+    }):
+        raise ValueError(f"unexpected lifecycle-poll calls: {sorted(poll_fields)}")
+
+    for function in (
+        "sm64_saturn_demo_render_start_frame",
+        "sm64_saturn_demo_render_poll_frame",
+    ):
+        _single_braced_body(
+            renderer, rf"\b{function}\s*\(", function
+        )
     if len(re.findall(
-        r"\bsm64_saturn_terrain_worker_run\s*\(\s*&terrain_worker\s*,",
+        r"\bsm64_saturn_render_lifecycle_start\s*\(\s*"
+        r"&s_demo_render_transaction\.lifecycle\s*,\s*"
+        r"&s_demo_render_lifecycle_ops\s*,",
         renderer,
     )) != 1:
-        raise ValueError("terrain_worker must be submitted exactly once")
+        raise ValueError("render start no longer owns the lifecycle table")
+    if len(re.findall(
+        r"\bsm64_saturn_render_lifecycle_poll\s*\(\s*"
+        r"&s_demo_render_transaction\.lifecycle\s*,\s*"
+        r"&s_demo_render_lifecycle_ops\s*,",
+        renderer,
+    )) != 1:
+        raise ValueError("render poll no longer owns the lifecycle table")
 
-    terrain_wrapper = _strip_c_comments(
-        (repo_root / "src/port/saturn/gpl/slavedriver_terrain_worker.c")
-        .read_text(encoding="utf-8")
+    for function in (
+        "sm64_saturn_render_job_runtime_poll_slave",
+        "sm64_saturn_render_job_runtime_drain_master",
+    ):
+        body = _single_braced_body(
+            runtime, rf"uint16_t\s+{function}\s*\(", function
+        )
+        if body.count("s_runtime.callbacks->entries[callback_index]") != 1:
+            raise ValueError(f"{function} no longer resolves the callback table")
+        if len(re.findall(r"\bcallback\s*\(", body)) != 1:
+            raise ValueError(f"{function} no longer invokes one resolved callback")
+    slave_entry = _single_braced_body(
+        runtime,
+        r"static\s+void\s+render_job_slave_entry\s*\(",
+        "render job slave entry",
     )
-    if re.search(
-        r"return\s+sm64_saturn_dual_worker_run\s*\(\s*"
-        r"job->range\s*,\s*job->context\s*,\s*job->count\s*,\s*"
-        r"job->slave_begin\s*,\s*stats\s*\)\s*;",
-        terrain_wrapper,
-        flags=re.DOTALL,
-    ) is None:
-        raise ValueError("terrain worker no longer forwards its range callback")
+    if len(re.findall(
+        r"\bsm64_saturn_render_job_runtime_poll_slave\s*\(\s*\)",
+        slave_entry,
+    )) != 1 or len(re.findall(
+        r"\bcpu_dual_slave_set\s*\(\s*render_job_slave_entry\s*\)",
+        runtime,
+    )) != 1:
+        raise ValueError("descriptor slave polling entry is no longer pinned")
 
-    dual_worker = _strip_c_comments(
-        (repo_root / "src/port/saturn/gpl/slavedriver_dual_worker.c")
-        .read_text(encoding="utf-8")
+    lifecycle_edges = {
+        ("_sm64_saturn_render_lifecycle_start",
+         "_" + lifecycle_callbacks[field])
+        for field in start_fields
+    } | {
+        ("_sm64_saturn_render_lifecycle_poll",
+         "_" + lifecycle_callbacks[field])
+        for field in poll_fields
+    }
+    descriptor_edges = {
+        ("_" + dispatcher, "_" + callback)
+        for dispatcher in (
+            "sm64_saturn_render_job_runtime_poll_slave",
+            "sm64_saturn_render_job_runtime_drain_master",
+        )
+        for callback in callbacks
+    }
+    edges = frozenset(lifecycle_edges | descriptor_edges)
+    return verifier.RouteOracle(
+        1,
+        frozenset({
+            "_sm64_saturn_demo_render_start_frame",
+            "_sm64_saturn_demo_render_poll_frame",
+            "_sm64_saturn_render_job_runtime_poll_slave",
+        }),
+        edges,
+        edges,
     )
-    if re.search(
-        r"\bfn\s*\(\s*context\s*,\s*0U\s*,\s*slave_begin\s*\)\s*;",
-        dual_worker,
-    ) is None:
-        raise ValueError("dual worker no longer invokes its range callback")
-
-    return frozenset({(
-        "_sm64_saturn_dual_worker_run", "_" + callback,
-    )})
 
 
 # Keep the source-derivation machinery at module scope without splitting the
 # one unittest fixture that owns the shared audit helpers above and below it.
 class NativeMathCensusTests(NativeMathCensusTests):
 
-    def test_checked_in_renderer_oracle_matches_source_worker_edge(self) -> None:
+    def test_checked_in_renderer_oracle_matches_live_descriptor_route(self) -> None:
         repo_root = Path(__file__).parents[2]
         oracle = parse_route_oracle(
             Path(__file__).with_name(
                 "sh2_native_math_route_oracle_v1.txt"
             ).read_text(encoding="utf-8")
         )
-        expected = _derive_renderer_worker_edges(repo_root)
-        self.assertEqual(oracle.static_manifest_edges, expected)
-        self.assertEqual(oracle.indirect_edges, expected)
+        expected = _derive_renderer_route_oracle(repo_root)
+        self.assertEqual(oracle, expected)
+        linked_names = oracle.roots | frozenset(
+            name for edge in oracle.indirect_edges for name in edge
+        )
+        self.assertNotIn("_sm64_saturn_demo_render_frame", linked_names)
+        self.assertNotIn("_sm64_saturn_dual_worker_run", linked_names)
+        self.assertNotIn("_demo_terrain_compact_range", linked_names)
+
+    @staticmethod
+    def _camera_trigger_source_root(
+        directory: str, mutations: dict[str, tuple[str, str]] | None = None,
+    ) -> Path:
+        repo_root = Path(__file__).parents[2]
+        fixture_root = Path(directory)
+        paths = (
+            "src/port/saturn/sourceboot/source_entry.c",
+            "src/game/level_update.c",
+            "src/game/camera.c",
+            "levels/level_defines.h",
+            "levels/bob/script.c",
+        )
+        for relative in paths:
+            source = (repo_root / relative).read_text(encoding="utf-8")
+            if mutations and relative in mutations:
+                before, after = mutations[relative]
+                if source.count(before) != 1:
+                    raise AssertionError(
+                        f"camera proof fixture mutation is not unique: {relative}"
+                    )
+                source = source.replace(before, after, 1)
+            target = fixture_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(source, encoding="utf-8")
+        return fixture_root
+
+    @staticmethod
+    def _camera_trigger_disassembly(*, first_call: str = "jsr", guard_gap: bool = False) -> str:
+        gap = " 6000046: 00 09 nop\n" if guard_gap else ""
+        exts_address = 0x6000048 if guard_gap else 0x6000046
+        return f"""
+06000000 <_camera_course_processing>:
+ 6000044: de 67 mov.l 6000200 <_camera_course_processing+0x200>,r14 ! 06010000 <_sCameraTriggers>
+{gap} {exts_address:x}: 62 1f exts.w r1,r2
+ {exts_address + 2:x}: 42 08 shll2 r2
+ {exts_address + 4:x}: 3e 2c add r2,r14
+ {exts_address + 6:x}: 62 e2 mov.l @r14,r2
+ {exts_address + 8:x}: 22 28 tst r2,r2
+ {exts_address + 10:x}: 89 01 bt 6000056 <_camera_course_processing+0x56>
+ {exts_address + 12:x}: a0 7e bra 6000152 <_camera_course_processing+0x152>
+ {exts_address + 14:x}: e9 00 mov #0,r9
+ 6000056: d9 64 mov.l 6000204 <_sStatusFlags>,r9 ! 06011000 <_sStatusFlags>
+ 6000058: 60 91 mov.w @r9,r0
+ 600005a: 60 08 swap.b r0,r0
+ 600005c: c8 10 tst #16,r0
+ 600005e: 8b 01 bf 6000064 <_camera_course_processing+0x64>
+ 6000060: a0 79 bra 6000092 <_camera_course_processing+0x92>
+ 6000062: 00 09 nop
+ 6000064: 92 b1 mov.w 6000208 <_camera_course_processing+0x208>,r2 ! efff
+ 6000066: 61 91 mov.w @r9,r1
+ 6000068: 50 f2 mov.l @(8,r15),r0
+ 600006a: 21 29 and r2,r1
+ 600006c: 88 06 cmp/eq #6,r0
+ 600006e: 8f 06 bf.s 600007e <_camera_course_processing+0x7e>
+ 6000070: 29 11 mov.w r1,@r9
+ 6000072: 60 80 mov.b @r8,r0
+ 6000074: d1 59 mov.l 600020c <_sModeInfo>,r1 ! 06012000 <_sModeInfo>
+ 6000076: 60 0c extu.b r0,r0
+ 6000078: 81 11 mov.w r0,@(2,r1)
+ 600007a: 84 ff mov.b @(15,r15),r0
+ 600007c: 28 00 mov.b r0,@r8
+ 600007e: 60 80 mov.b @r8,r0
+ 6000080: 60 0c extu.b r0,r0
+ 6000082: 7f 2c add #44,r15
+ 6000084: 4f 26 lds.l @r15+,pr
+ 6000086: 6e f6 mov.l @r15+,r14
+ 6000088: 6d f6 mov.l @r15+,r13
+ 600008a: 6c f6 mov.l @r15+,r12
+ 600008c: 6b f6 mov.l @r15+,r11
+ 600008e: 6a f6 mov.l @r15+,r10
+ 6000090: 69 f6 mov.l @r15+,r9
+ 6000092: 00 0b rts
+ 6000094: 68 f6 mov.l @r15+,r8
+ 6000096: 63 c0 mov.b @r12,r3
+ 6000118: 62 e2 mov.l @r14,r2
+ 600011a: 32 9c add r9,r2
+ 600011c: 52 21 mov.l @(4,r2),r2
+ 600011e: 42 0b {first_call} @r2
+ 6000120: ed 01 mov #1,r13
+ 6000138: 8b 02 bf 6000140 <_camera_course_processing+0x140>
+ 600013a: 52 21 mov.l @(4,r2),r2
+ 600013c: 42 0b jsr @r2
+ 600013e: 64 83 mov r8,r4
+ 6000140: 79 18 add #24,r9
+ 6000142: 6c e2 mov.l @r14,r12
+ 6000144: 3c 9c add r9,r12
+ 6000146: 53 c1 mov.l @(4,r12),r3
+ 6000148: 23 38 tst r3,r3
+ 600014a: 8f a4 bf.s 6000096 <_camera_course_processing+0x96>
+ 600014c: 51 f4 mov.l @(16,r15),r1
+ 600014e: af 82 bra 6000056 <_camera_course_processing+0x56>
+ 6000150: 00 09 nop
+ 6000152: af f6 bra 6000142 <_camera_course_processing+0x142>
+ 6000154: ed 00 mov #0,r13
+ 6000180: 43 0b jsr @r3
+ 6000182: 00 09 nop
+"""
+
+    def test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites(self) -> None:
+        self.assertTrue(hasattr(
+            verifier, "prove_sourceboot_bob_null_camera_triggers"
+        ), "BOB camera-trigger source proof is missing")
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = self._camera_trigger_source_root(directory)
+            self.assertTrue(
+                verifier.prove_sourceboot_bob_null_camera_triggers(source_root)
+            )
+
+        instructions = parse_instructions(self._camera_trigger_disassembly())
+        owners = (FunctionOwner(
+            "_camera_course_processing", 0x6000000, 0x6000200, 1
+        ),)
+        dead = verifier.sourceboot_bob_null_camera_trigger_dead_transfers(
+            instructions, owners, route_selects_null=True
+        )
+        self.assertEqual(dead, frozenset({
+            ("_camera_course_processing", 0x600011E),
+            ("_camera_course_processing", 0x600013C),
+        }))
+        result = analyze_code_only(
+            instructions,
+            owners,
+            decoded_lines={"_camera_course_processing": {
+                0x600011E, 0x600013C, 0x6000180,
+            }},
+            selected_names={"_camera_course_processing"},
+            include_owner_entry=False,
+            proven_dead_transfers=dead,
+        )
+        self.assertEqual(
+            [(item.address, item.mnemonic) for item in result.unresolved_transfers
+             if item.mnemonic == "jsr"],
+            [(0x6000180, "jsr")],
+        )
+
+    def test_camera_trigger_proof_fails_closed_for_route_and_source_mutations(self) -> None:
+        mutations = {
+            "unknown_level": (
+                "src/port/saturn/sourceboot/source_entry.c",
+                ("SET_REG(/* value */ LEVEL_BOB)", "SET_REG(/* value */ level_from_runtime)"),
+            ),
+            "non_bob_level": (
+                "src/port/saturn/sourceboot/source_entry.c",
+                ("SET_REG(/* value */ LEVEL_BOB)", "SET_REG(/* value */ LEVEL_CCM)"),
+            ),
+            "bob_nonnull_table": (
+                "levels/level_defines.h",
+                (
+                    'DEFINE_LEVEL("BATTLE FIELD",   LEVEL_BOB,              COURSE_BOB,      bob,              generic,  15000,    0x08, 0x08, 0x08, _,         _)',
+                    'DEFINE_LEVEL("BATTLE FIELD",   LEVEL_BOB,              COURSE_BOB,      bob,              generic,  15000,    0x08, 0x08, 0x08, _,         sCamBOB)',
+                ),
+            ),
+            "intervening_command": (
+                "src/port/saturn/sourceboot/source_entry.c",
+                (
+                    "SET_REG(/* value */ LEVEL_BOB),\n    /* Before lvl_init_from_save_file",
+                    "SET_REG(/* value */ LEVEL_BOB),\n    SLEEP(/* frames */ 1),\n    /* Before lvl_init_from_save_file",
+                ),
+            ),
+        }
+        for label, (relative, mutation) in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                source_root = self._camera_trigger_source_root(
+                    directory, {relative: mutation}
+                )
+                self.assertFalse(
+                    verifier.prove_sourceboot_bob_null_camera_triggers(source_root)
+                )
+
+    def test_camera_trigger_dead_transfer_shape_rejects_near_matches_and_unknown_route(self) -> None:
+        owners = (FunctionOwner(
+            "_camera_course_processing", 0x6000000, 0x6000200, 1
+        ),)
+        cases = (
+            ("unknown_route", self._camera_trigger_disassembly(), False),
+            ("guard_gap", self._camera_trigger_disassembly(guard_gap=True), True),
+            ("wrong_first_call", self._camera_trigger_disassembly(first_call="jmp"), True),
+        )
+        for label, disassembly, route_selects_null in cases:
+            with self.subTest(label=label):
+                self.assertEqual(
+                    verifier.sourceboot_bob_null_camera_trigger_dead_transfers(
+                        parse_instructions(disassembly), owners,
+                        route_selects_null=route_selects_null,
+                    ),
+                    frozenset(),
+                )
 
     def test_sourceboot_null_task_submit_rejects_dead_window_branch_targets_and_gaps(self) -> None:
         def fixture(branch_target: int, transfer_address: int) -> str:
@@ -5359,6 +5676,40 @@ fixture.c 3 0x06003002
                 "fixture.c 1 0x06001002\n",
                 self.OWNERS[:1],
                 (self.ORACLE,),
+            )
+
+    def test_route_oracle_rejects_stale_owner_and_missing_owned_block(self) -> None:
+        self.assertTrue(
+            hasattr(bounded_verifier, "validate_route_oracle_owned_blocks"),
+            "linked route-oracle owner validation is missing",
+        )
+        stale = bounded_verifier.RouteOracle(
+            1, frozenset({"_stale_root"}), frozenset(), frozenset()
+        )
+        with self.assertRaisesRegex(ValueError, "no linked owner"):
+            bounded_verifier.validate_route_oracle_owned_blocks(
+                self._route_disassembly(include_large=False),
+                self.OWNERS[:2],
+                stale,
+            )
+
+        linked_edge = ("_route_root", "_route_child")
+        oracle = bounded_verifier.RouteOracle(
+            1,
+            frozenset({"_route_root"}),
+            frozenset({linked_edge}),
+            frozenset({linked_edge}),
+        )
+        root_only = """
+06001000 <_route_root>:
+ 6001000: 00 0b rts
+ 6001002: 00 09 nop
+"""
+        with self.assertRaisesRegex(ValueError, "no owned block.*_route_child"):
+            bounded_verifier.validate_route_oracle_owned_blocks(
+                root_only,
+                self.OWNERS[:2],
+                oracle,
             )
 
     def test_internal_local_header_call_is_owned_by_enclosing_route_function(self) -> None:
