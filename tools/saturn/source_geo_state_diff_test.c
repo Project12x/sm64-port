@@ -31,11 +31,11 @@ static uint32_t digest_word(uint32_t domain, uint32_t value)
     return (UINT32_C(2166136261) ^ domain ^ value) * UINT32_C(16777619);
 }
 
-/* Reference effects are tied to executable source-site checks in
- * test_source_geo_state_contract.py. This fixture does not propose a second
- * geo implementation; it makes the observed normal-vs-old-skip state loss
- * explicit at the digest boundary required by this task. */
-static void reference_render_walk(source_geo_domain_state_t *state)
+/* Illustrative model only. The values correspond to state domains identified
+ * by the companion static source audit, but this fixture does not execute
+ * geo_process_root() or any original callback and therefore is not
+ * differential evidence. */
+static void illustrative_render_walk(source_geo_domain_state_t *state)
 {
     state->animation -= 1U;
     state->painting += 3U;
@@ -63,7 +63,7 @@ static source_geo_domain_digest_t capture_domains(
     return digest;
 }
 
-static void test_old_root_suppression_changes_every_required_state_domain(void)
+static void test_illustrative_model_distinguishes_required_state_domains(void)
 {
     const source_geo_domain_state_t initial = {
         .animation = 19U,
@@ -80,7 +80,7 @@ static void test_old_root_suppression_changes_every_required_state_domain(void)
     source_geo_domain_digest_t normal_digest;
     source_geo_domain_digest_t suppressed_digest;
 
-    reference_render_walk(&normal);
+    illustrative_render_walk(&normal);
     normal_digest = capture_domains(&normal);
     suppressed_digest = capture_domains(&old_suppressed);
 
@@ -127,7 +127,7 @@ static void test_invalid_requests_fail_closed(void)
 
 int main(void)
 {
-    test_old_root_suppression_changes_every_required_state_domain();
+    test_illustrative_model_distinguishes_required_state_domains();
     test_unproven_state_only_update_fails_closed();
     test_invalid_requests_fail_closed();
     return 0;

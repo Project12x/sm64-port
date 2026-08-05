@@ -331,13 +331,14 @@ verify-source-render-policy:
 	$(MAKE) -f "$(SATURN_REPO_ROOT)/Makefile.saturn.mk" verify-runtime-contracts
 
 verify-source-geo-state-diff:
+	@printf '%s\n' 'Task 8 static source audit plus illustrative digest model; real graph differential remains open'
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/source_geo_state_diff_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_source_geo_state.c" \
-	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-geo-state-diff-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-geo-state-diff-test$(HOST_EXEEXT)'], check=True)"
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-geo-state-contract-test$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/source-geo-state-contract-test$(HOST_EXEEXT)'], check=True)"
 
 verify-sourceboot-presentation-boundary:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_presentation_boundary.py"

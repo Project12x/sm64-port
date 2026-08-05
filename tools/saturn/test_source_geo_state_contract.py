@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Executable evidence gate for the deferred source-geo state seam."""
+"""Static source audit and fail-closed contract for the deferred geo seam.
+
+This file does not execute the real scene graph and must not be treated as a
+normal-versus-suppressed differential.
+"""
 
 from __future__ import annotations
 
@@ -55,8 +59,8 @@ def compact(text: str) -> str:
     ).strip()
 
 
-class SourceGeoStateContractTests(unittest.TestCase):
-    def test_old_root_suppression_omits_the_only_render_walk(self) -> None:
+class SourceGeoStaticAuditTests(unittest.TestCase):
+    def test_static_audit_finds_root_walk_inside_suppression_guard(self) -> None:
         raw_body = extract_c_function(AREA_C, "render_game")
         body = compact(raw_body)
         guarded = compact(extract_if_block(raw_body, "!scene_graph_suppressed"))
@@ -68,7 +72,7 @@ class SourceGeoStateContractTests(unittest.TestCase):
         self.assertIn("render_screen_transition(", body)
         self.assertNotIn("render_screen_transition(", guarded)
 
-    def test_animation_and_visibility_mutate_during_render_callbacks(self) -> None:
+    def test_static_audit_finds_animation_and_visibility_mutations(self) -> None:
         attack = compact(extract_c_function(MARIO_C, "geo_mario_hand_foot_scaler"))
         hand = compact(extract_c_function(MARIO_C, "geo_switch_mario_hand"))
         self.assertIn("callContext == GEO_CONTEXT_RENDER", attack)
@@ -77,7 +81,7 @@ class SourceGeoStateContractTests(unittest.TestCase):
         self.assertIn("callContext == GEO_CONTEXT_RENDER", hand)
         self.assertIn("switchCase->selectedCase =", hand)
 
-    def test_painting_update_and_display_construction_share_one_callback(self) -> None:
+    def test_static_audit_finds_painting_update_and_display_construction_together(self) -> None:
         body = compact(extract_c_function(PAINTINGS_C, "geo_painting_draw"))
         self.assertIn("callContext == GEO_CONTEXT_RENDER", body)
         self.assertIn("paintingDlist = display_painting(painting)", body)
@@ -85,7 +89,7 @@ class SourceGeoStateContractTests(unittest.TestCase):
         self.assertIn("wall_painting_update(painting, paintingGroup)", body)
         self.assertIn("floor_painting_update(painting, paintingGroup)", body)
 
-    def test_water_and_moving_texture_state_mutate_during_render_callbacks(self) -> None:
+    def test_static_audit_finds_water_and_moving_texture_mutations(self) -> None:
         water = compact(extract_c_function(MOVTEX_C, "geo_wdw_set_initial_water_level"))
         pause = compact(extract_c_function(MOVTEX_C, "geo_movtex_pause_control"))
         self.assertIn("callContext == GEO_CONTEXT_RENDER", water)
@@ -94,7 +98,7 @@ class SourceGeoStateContractTests(unittest.TestCase):
         self.assertIn("gMovtexCounterPrev = gMovtexCounter", pause)
         self.assertIn("gMovtexCounter = gAreaUpdateCounter", pause)
 
-    def test_camera_matrix_object_and_visibility_state_require_the_walk(self) -> None:
+    def test_static_audit_finds_camera_matrix_object_and_lifecycle_mutations(self) -> None:
         camera = compact(extract_c_function(CAMERA_C, "geo_camera_main"))
         obj = compact(extract_c_function(GRAPH_C, "geo_process_object"))
         self.assertIn("case GEO_CONTEXT_RENDER", camera)
@@ -107,13 +111,13 @@ class SourceGeoStateContractTests(unittest.TestCase):
         self.assertIn("obj_is_in_view(&node->header.gfx, gMatStack[gMatStackIndex])", obj)
         self.assertGreaterEqual(obj.count("node->header.gfx.throwMatrix = NULL"), 1)
 
-    def test_generic_generated_list_seam_is_after_callback_construction(self) -> None:
+    def test_static_audit_finds_append_after_generated_callback(self) -> None:
         generated = compact(extract_c_function(GRAPH_C, "geo_process_generated_list"))
         callback = generated.index("node->fnNode.func(GEO_CONTEXT_RENDER")
         append = generated.index("geo_append_display_list(")
         self.assertLess(callback, append)
 
-    def test_root_matrix_setup_and_display_construction_are_interleaved(self) -> None:
+    def test_static_audit_finds_root_matrix_construction_before_walk(self) -> None:
         root = compact(extract_c_function(GRAPH_C, "geo_process_root"))
         self.assertLess(root.index("alloc_display_list(sizeof(*initialMatrix))"), root.index("geo_process_node_and_siblings("))
         self.assertLess(root.index("gSPMatrix("), root.index("geo_process_node_and_siblings("))
