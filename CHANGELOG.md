@@ -7,7 +7,7 @@
 - Hardened the compact Mario actor bank after independent review.  The target
   decoder now proves every packed GEO1 table boundary and count, joint/branch
   ownership and node ordering, RGB555 material, meshlet bounds/tier spans,
-  source-ordinal ownership, exact tier primitive/vertex relationships,
+  globally gap-free source-ordinal ownership, exact tier primitive/vertex relationships,
   primitive material/vertex ownership, and the compiler-derived minimum
   scratch requirement before exposing a bank.  Callers may bind validation to
   the expected eight-word source identity, so a nonzero but wrong source digest
@@ -15,7 +15,8 @@
   animation inventory at commit `68f9dd10` via canonical path-set SHA-256
   `2d7c66e9…c67e1`, in addition to unique provenance paths, lowercase hashes,
   per-animation membership, and payload digest binding.  This rejects both
-  in-range internally inconsistent GEO1 payloads and self-consistent resealed
+  in-range internally inconsistent GEO1 payloads, coordinated duplicate/gap
+  meshlet partitions, degenerate primitive shapes, and self-consistent resealed
   filename repartitions; the JSON schema is advisory while executable
   validation owns semantic authority.
 

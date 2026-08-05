@@ -116,6 +116,7 @@ bool sm64_saturn_actor_bank_validate_expected(
     uint32_t geometry_meshlet_offset, geometry_primitive_offset;
     uint32_t geometry_primitive_ref_offset, geometry_vertex_ref_offset;
     uint32_t primitive_cursor = 0U, vertex_cursor = 0U;
+    uint32_t source_primitive_cursor = 0U;
     uint32_t minimum_scratch;
     int16_t previous_node = -1;
     bool hash_nonzero = false;
@@ -281,7 +282,8 @@ bool sm64_saturn_actor_bank_validate_expected(
         for (uint16_t corner = 0U; corner < 4U; corner++)
             if (read_be16(record + 2U + corner * 2U) >= parsed.bank.vertex_count)
                 return false;
-        if (d != c && (a == b || a == c || a == d || b == c || b == d || c == d))
+        if (a == b || a == c || b == c ||
+            (d != c && (a == d || b == d)))
             return false;
     }
     for (uint16_t reference = 0U; reference < primitive_ref_count; reference++)
@@ -310,6 +312,7 @@ bool sm64_saturn_actor_bank_validate_expected(
         if (primitive_counts[0] == 0U || primitive_counts[1] == 0U ||
             primitive_counts[0] != primitive_counts[1] ||
             vertex_counts[0] != vertex_counts[1] ||
+            (uint32_t)source_ordinal != source_primitive_cursor ||
             read_be16(geometry + geometry_primitive_ref_offset +
                       primitive_offsets[0] * 2U) != source_ordinal)
             return false;
@@ -355,7 +358,10 @@ bool sm64_saturn_actor_bank_validate_expected(
                     vertex_offsets[tier], vertex_counts[tier], material))
                 return false;
         }
+        source_primitive_cursor += primitive_counts[0];
     }
+    if (source_primitive_cursor != geometry_primitive_count)
+        return false;
     for (uint16_t animation = 0U; animation < parsed.bank.animation_count; animation++) {
         sm64_saturn_actor_animation_record_t record;
         uint32_t index_words, value_words;

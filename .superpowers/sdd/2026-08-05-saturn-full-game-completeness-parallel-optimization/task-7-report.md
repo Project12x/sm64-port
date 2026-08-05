@@ -133,3 +133,16 @@ POSIX-root path was passed unconverted to Windows Python; this narrower native
 path invocation does not claim that Make gate.  The Task 10 switch-variant and
 production-runtime cutover caveat is unchanged.  No target, Ymir, manual,
 final-package, or FPS gate was run or claimed.
+
+The next scoped rereview found that per-meshlet source ownership did not yet
+prove the tier-0 runs formed one global partition.  A coordinated mutation was
+then observed RED: it copied meshlet 0's same-sized, same-material tier data
+over meshlet 4, duplicating primitives 0..31 and leaving 101..132 unowned while
+preserving every per-meshlet relationship.  The validator now carries a global
+source primitive cursor, requires each meshlet to begin exactly at that cursor,
+and requires final coverage to equal the GEO1 primitive count.  It also requires
+triangle vertices A/B/C to be distinct (with D==C only as the triangle marker)
+and all four quad vertices to be distinct.  Fresh DLL-preflight native-path
+C11/Werror compile and the actor-pose fixture pass with the coordinated
+duplicate/gap mutation rejected.  This fix changes no Task 10, target, Ymir,
+manual, package, or FPS claim.

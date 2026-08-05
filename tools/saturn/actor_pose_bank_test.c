@@ -84,6 +84,51 @@ static int reject_u8_mutation(const uint8_t *source, size_t size,
     return 0;
 }
 
+static int reject_duplicate_meshlet_partition(const uint8_t *source, size_t size,
+                                              uint32_t meshlet_offset,
+                                              uint32_t primitive_ref_offset,
+                                              uint32_t vertex_ref_offset)
+{
+    uint8_t *copy = malloc(size);
+    sm64_saturn_actor_bank_view_t view;
+    const uint8_t *source_meshlet = source + meshlet_offset;
+    uint8_t *duplicate_meshlet;
+    if (copy == NULL) return 1;
+    memcpy(copy, source, size);
+    duplicate_meshlet = copy + meshlet_offset + 4U * 66U;
+    write_be16(duplicate_meshlet + 2U, read_be16(source_meshlet + 2U));
+    for (uint32_t tier = 0U; tier < 3U; tier++) {
+        const uint8_t *source_fields = source_meshlet + 18U + tier * 16U;
+        const uint8_t *duplicate_fields =
+            source + meshlet_offset + 4U * 66U + 18U + tier * 16U;
+        uint32_t source_primitive_start = read_be32(source_fields);
+        uint32_t primitive_count = read_be32(source_fields + 4U);
+        uint32_t source_vertex_start = read_be32(source_fields + 8U);
+        uint32_t vertex_count = read_be32(source_fields + 12U);
+        uint32_t duplicate_primitive_start = read_be32(duplicate_fields);
+        uint32_t duplicate_vertex_start = read_be32(duplicate_fields + 8U);
+        if (primitive_count != read_be32(duplicate_fields + 4U) ||
+            vertex_count != read_be32(duplicate_fields + 12U)) {
+            fprintf(stderr, "duplicate-partition fixture counts changed\n");
+            free(copy);
+            return 1;
+        }
+        memcpy(copy + primitive_ref_offset + duplicate_primitive_start * 2U,
+               source + primitive_ref_offset + source_primitive_start * 2U,
+               primitive_count * 2U);
+        memcpy(copy + vertex_ref_offset + duplicate_vertex_start * 2U,
+               source + vertex_ref_offset + source_vertex_start * 2U,
+               vertex_count * 2U);
+    }
+    if (sm64_saturn_actor_bank_validate(copy, size, &view)) {
+        fprintf(stderr, "coordinated duplicate/gap meshlet partition was accepted\n");
+        free(copy);
+        return 1;
+    }
+    free(copy);
+    return 0;
+}
+
 static uint8_t *read_file(const char *path, size_t *size)
 {
     FILE *file = fopen(path, "rb");
@@ -273,6 +318,9 @@ int main(int argc, char **argv)
                             (uint16_t)((read_be16(bytes + part_offset) + 1U) %
                                        view.bank.joint_count),
                             "in-range part joint ownership mismatch") ||
+        reject_duplicate_meshlet_partition(bytes, size, meshlet_offset,
+                                           primitive_ref_offset,
+                                           vertex_ref_offset) ||
         reject_u32_mutation(bytes, size, 98U, view.max_scratch - 1U,
                             "undersized actor scratch claim")) {
         free(bytes);
