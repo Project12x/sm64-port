@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "../runtime/saturn_scene_package.h"
+
 typedef enum sm64_saturn_source_cart_status {
     SM64_SATURN_SOURCE_CART_OK = 0,
     SM64_SATURN_SOURCE_CART_MISSING_4MIB,
@@ -10,6 +12,7 @@ typedef enum sm64_saturn_source_cart_status {
     SM64_SATURN_SOURCE_CART_IMAGE_NOT_FOUND,
     SM64_SATURN_SOURCE_CART_SIZE_MISMATCH,
     SM64_SATURN_SOURCE_CART_READ_FAILED,
+    SM64_SATURN_SOURCE_CART_PROVISIONAL_SCENE_ROOT,
 } sm64_saturn_source_cart_status_t;
 
 /* Kept in work RAM so Ymir's debugger can prove early CD -> cart progress
@@ -42,5 +45,11 @@ sm64_saturn_source_cart_status_t sm64_saturn_source_cart_load(void);
 
 /* This reports through boot-resident data, so it is safe after a failed load. */
 void sm64_saturn_source_cart_report_failure(sm64_saturn_source_cart_status_t status);
+
+/* Future final scene roots use this strict target boundary. Task 4's
+ * provisional fixtures are never accepted for boot. */
+bool sm64_saturn_source_cart_scene_package_validate(
+    const void *bytes, uint32_t byte_count,
+    sm64_saturn_scene_package_view_t *view);
 
 #endif

@@ -168,3 +168,10 @@ void sm64_saturn_source_cart_report_failure(
     }
     dbgio_flush();
 }
+
+bool sm64_saturn_source_cart_scene_package_validate(
+    const void *bytes, uint32_t byte_count,
+    sm64_saturn_scene_package_view_t *view) {
+    return sm64_saturn_scene_package_validate(bytes, byte_count, view) &&
+        !sm64_saturn_scene_package_is_provisional(view);
+}

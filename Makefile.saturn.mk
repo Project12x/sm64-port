@@ -846,6 +846,28 @@ verify-scene-package-schema: check-host-tools
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_scene_package_schema.py"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_scene_package_determinism.py"
 
+verify-scene-package-runtime: check-host-tools
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/scene_package_runtime_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_scene_package.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-package-runtime-test$(HOST_EXEEXT)"
+	$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-package-runtime-test$(HOST_EXEEXT)
+
+verify-scene-residency: check-host-tools
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/runtime" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  -I"$(SATURN_REPO_ROOT)/tools/saturn" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/scene_residency_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_scene_package.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_scene_residency.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-residency-test$(HOST_EXEEXT)"
+	$(SATURN_REPO_ROOT)/build/saturn/host-tests/scene-residency-test$(HOST_EXEEXT)
+
 # Task 4's BOB artifact is deliberately provisional and cannot satisfy a
 # target/final closure gate. Later payload tasks emit content-addressed
 # dependencies; Task 22 alone links and reseals the final root.

@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Added bytewise big-endian target validation and exact-generation residency
+  for version-one `S64P` roots.  Root, section, canonical dependency-set, and
+  external payload hashes now fail closed before placement; feature-inactive
+  payloads remain validated without consuming residency.  Root plus active
+  payloads commit atomically, old generations cannot be evicted until their
+  render, bank, and voice consumers retire, and immutable render snapshots
+  carry only scalar package/bank identities.  Available CART capacity is
+  injected explicitly so the existing native-pointer `SOURCE.DAT` prefix is
+  never mistaken for free memory, and sourceboot rejects provisional roots.
+
 - Added the generic, versioned, big-endian `S64P` scene-root compiler,
   validator, and C ABI emitter.  Roots now bind all eight closed section kinds,
   sorted content-addressed actor/animation/audio descriptors, package and

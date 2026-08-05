@@ -47,6 +47,13 @@ typedef struct sm64_saturn_render_snapshot {
     uint32_t area_id;
     uint32_t geometry_bank_id;
     uint32_t material_bank_id;
+    uint32_t scene_package_id;
+    uint32_t active_feature_mask;
+    uint8_t scene_package_sha256[32];
+    uint8_t scene_dependency_set_sha256[32];
+    uint8_t actor_bank_identity[32];
+    uint8_t animation_bank_identity[32];
+    uint8_t audio_bank_identity[32];
 } sm64_saturn_render_snapshot_t;
 
 /* Keep the small release record distinct from the bulk snapshot. Target code
