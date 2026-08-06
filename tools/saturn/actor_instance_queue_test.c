@@ -212,7 +212,86 @@ static void test_invalid_spans_capacity_duplicates_and_claimant_failure(void)
            SM64_SATURN_ACTOR_QUARANTINED);
 }
 
-static void test_memory_report_matches_the_fixed_queue_storage(void)
+static void test_output_count_overflow_quarantines_only_that_instance(void)
+{
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_instance_snapshot_t instance =
+        snapshot(45U, 15U, 0x0001000aU, 71U, 18U, 51U);
+    sm64_saturn_actor_instance_descriptor_t job = descriptor(
+        &instance, 0U, 0U, 1U, SM64_SATURN_ACTOR_OUTPUT_OPAQUE, 0U, 2U);
+    uint16_t index = UINT16_MAX;
+
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(sm64_saturn_actor_instance_queue_publish(
+        &queue, 45U, 1U, 2U, &job, 1U));
+    assert(sm64_saturn_actor_instance_queue_claim_master(
+        &queue, 45U, &index));
+    assert(!sm64_saturn_actor_instance_queue_complete(
+        &queue, 45U, index, SM64_SATURN_ACTOR_CLAIMED_MASTER,
+        &instance, 3U));
+    assert(sm64_saturn_actor_instance_queue_state(&queue, 45U, index) ==
+           SM64_SATURN_ACTOR_QUARANTINED);
+    assert(sm64_saturn_actor_instance_queue_result(&queue, 45U, index)->reason ==
+           SM64_SATURN_ACTOR_QUARANTINE_OUTPUT_OVERFLOW);
+}
+
+static void test_full_instance_ceiling_and_p2_safe_count(void)
+{
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_instance_snapshot_t instances[
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    sm64_saturn_actor_instance_descriptor_t jobs[
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    uint16_t index;
+    uint16_t count = 0U;
+
+    for (index = 0U; index < SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE; index++) {
+        instances[index] = snapshot(
+            47U, 16U, (uint32_t)index + 1U, 72U, 19U, 52U);
+        jobs[index] = descriptor(
+            &instances[index], index, index, 1U,
+            SM64_SATURN_ACTOR_OUTPUT_OPAQUE, index, 1U);
+    }
+
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(sm64_saturn_actor_instance_queue_publish(
+        &queue, 47U, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE, jobs,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE));
+    assert(sm64_saturn_actor_instance_queue_count(&queue, 47U, &count));
+    assert(count == SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
+    assert(!sm64_saturn_actor_instance_queue_count(&queue, 46U, &count));
+    assert(count == 0U);
+
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(!sm64_saturn_actor_instance_queue_publish(
+        &queue, 47U, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE + 1U,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE, jobs,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE));
+}
+
+static void test_output_storage_exact_fit_and_one_record_overflow(void)
+{
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_instance_snapshot_t instance =
+        snapshot(49U, 17U, 0x0001000bU, 73U, 20U, 53U);
+    sm64_saturn_actor_instance_descriptor_t exact = descriptor(
+        &instance, 0U, 0U, 1U, SM64_SATURN_ACTOR_OUTPUT_OPAQUE, 0U,
+        SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING);
+
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(sm64_saturn_actor_instance_queue_publish(
+        &queue, 49U, 1U, SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING,
+        &exact, 1U));
+
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(!sm64_saturn_actor_instance_queue_publish(
+        &queue, 49U, 1U,
+        (uint16_t)(SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING + 1U),
+        &exact, 1U));
+}
+
+static void test_memory_report_accounts_for_the_complete_actor_arena(void)
 {
     sm64_saturn_actor_instance_queue_memory_report_t report;
     sm64_saturn_actor_instance_queue_memory_report(&report);
@@ -221,6 +300,16 @@ static void test_memory_report_matches_the_fixed_queue_storage(void)
     assert(report.release_bytes == 768U);
     assert(report.result_bytes == 768U);
     assert(report.queue_bytes == sizeof(sm64_saturn_actor_instance_queue_t));
+    assert(report.actor_bank_bytes == 24088U);
+    assert(report.observer_bytes == 12320U);
+    assert(report.batch_bytes == 1024U);
+    assert(report.output_record_bytes == 8U);
+    assert(report.output_storage_bytes == 22448U);
+    assert(report.alignment_padding_bytes == 12U);
+    assert(report.runtime_alignment == 16U);
+    assert(report.runtime_bytes == 65536U);
+    assert(report.lwram_budget_bytes == 65536U);
+    assert(report.output_record_ceiling == 2806U);
 }
 
 typedef struct processor_context {
@@ -290,7 +379,10 @@ int main(void)
     test_stale_identity_quarantines_only_its_claim();
     test_stale_package_bank_and_generation_are_rejected();
     test_invalid_spans_capacity_duplicates_and_claimant_failure();
-    test_memory_report_matches_the_fixed_queue_storage();
+    test_output_count_overflow_quarantines_only_that_instance();
+    test_full_instance_ceiling_and_p2_safe_count();
+    test_output_storage_exact_fit_and_one_record_overflow();
+    test_memory_report_accounts_for_the_complete_actor_arena();
     test_drain_rejects_stale_identity_before_local_processing();
     return 0;
 }

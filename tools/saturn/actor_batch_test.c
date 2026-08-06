@@ -134,9 +134,18 @@ static void test_quarantine_removes_only_failed_instance(void)
     assert(batches[1].first_descriptor == 2U);
 }
 
+static void test_runtime_storage_exactly_fits_the_actor_lwram_budget(void)
+{
+    assert(_Alignof(sm64_saturn_actor_runtime_storage_t) == 16U);
+    assert(sizeof(sm64_saturn_actor_runtime_storage_t) == 65536U);
+    assert(sizeof(((sm64_saturn_actor_runtime_storage_t *)0)->outputs) ==
+           22448U);
+}
+
 int main(void)
 {
     test_batches_compatible_instances_without_reordering();
     test_quarantine_removes_only_failed_instance();
+    test_runtime_storage_exactly_fits_the_actor_lwram_budget();
     return 0;
 }

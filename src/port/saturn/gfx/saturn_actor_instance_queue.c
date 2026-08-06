@@ -472,6 +472,20 @@ sm64_saturn_actor_instance_queue_result(
     return &queue->results[descriptor_index];
 }
 
+bool sm64_saturn_actor_instance_queue_count(
+    const sm64_saturn_actor_instance_queue_t *queue, uint32_t generation,
+    uint16_t *count)
+{
+    queue = actor_queue_uncached((sm64_saturn_actor_instance_queue_t *)queue);
+    if (count != NULL) *count = 0U;
+    if (queue == NULL || count == NULL || generation == 0U ||
+        queue->generation != generation)
+        return false;
+    actor_queue_fence();
+    *count = queue->count;
+    return *count <= SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE;
+}
+
 bool sm64_saturn_actor_instance_queue_all_terminal(
     const sm64_saturn_actor_instance_queue_t *queue, uint32_t generation)
 {
@@ -528,7 +542,21 @@ void sm64_saturn_actor_instance_queue_memory_report(
     report->result_bytes = sizeof(
         ((sm64_saturn_actor_instance_queue_t *)0)->results);
     report->queue_bytes = sizeof(sm64_saturn_actor_instance_queue_t);
+    report->actor_bank_bytes = sizeof(sm64_saturn_actor_instance_bank_t);
+    report->observer_bytes = sizeof(sm64_saturn_geo_state_observer_t);
+    report->batch_bytes = SM64_SATURN_ACTOR_BATCH_STORAGE_BYTES;
+    report->output_storage_bytes =
+        SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING *
+        sizeof(sm64_saturn_actor_output_record_t);
+    report->alignment_padding_bytes = SM64_SATURN_ACTOR_RUNTIME_BYTES -
+        (report->actor_bank_bytes + report->observer_bytes +
+         report->queue_bytes + report->batch_bytes +
+         report->output_storage_bytes);
+    report->runtime_bytes = SM64_SATURN_ACTOR_RUNTIME_BYTES;
+    report->lwram_budget_bytes = SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET;
     report->capacity = SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE;
     report->output_record_ceiling =
         SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING;
+    report->output_record_bytes = sizeof(sm64_saturn_actor_output_record_t);
+    report->runtime_alignment = SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT;
 }

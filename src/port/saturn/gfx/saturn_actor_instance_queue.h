@@ -7,7 +7,11 @@
 
 #include "saturn_actor_instance.h"
 
-#define SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING 4096U
+#define SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT 16U
+#define SM64_SATURN_ACTOR_BATCH_ABI_BYTES 16U
+/* Actor runtime allocation budget. Physical LWRAM and linker margins are
+ * broader target gates and must not silently enlarge this per-system arena. */
+#define SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET 65536U
 
 typedef enum sm64_saturn_actor_claim_lane {
     SM64_SATURN_ACTOR_CLAIMED_MASTER = 1U,
@@ -37,6 +41,15 @@ typedef enum sm64_saturn_actor_quarantine_reason {
     SM64_SATURN_ACTOR_QUARANTINE_STALE_BANK = 5U,
     SM64_SATURN_ACTOR_QUARANTINE_OUTPUT_OVERFLOW = 6U,
 } sm64_saturn_actor_quarantine_reason_t;
+
+/* One claimant-owned, renderer-neutral draw reference. The later actor-bank
+ * processor supplies the IDs and painter key; this task only budgets and owns
+ * the shared output span. */
+typedef struct sm64_saturn_actor_output_record {
+    uint16_t meshlet_id;
+    uint16_t primitive_id;
+    uint32_t sort_key;
+} sm64_saturn_actor_output_record_t;
 
 /* This pointer-free descriptor is an adapter over Task 14's canonical
  * snapshot ABI.  The full snapshot remains in its immutable generation bank;
@@ -86,13 +99,50 @@ typedef struct sm64_saturn_actor_instance_queue {
     uint16_t reserved;
 } sm64_saturn_actor_instance_queue_t;
 
+/* The Task 14 bank type already contains both immutable snapshot generations.
+ * Align every arena region to one SH-2 cache line and spend only the remainder
+ * on complete eight-byte output records. An even record count also keeps the
+ * enclosing arena's final size aligned without hidden tail overflow. */
+#define SM64_SATURN_ACTOR_ALIGN_UP(value) \
+    (((value) + SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT - 1U) & \
+     ~(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT - 1U))
+#define SM64_SATURN_ACTOR_BATCH_STORAGE_BYTES \
+    (SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE * SM64_SATURN_ACTOR_BATCH_ABI_BYTES)
+#define SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES \
+    (SM64_SATURN_ACTOR_ALIGN_UP(sizeof(sm64_saturn_actor_instance_bank_t)) + \
+     SM64_SATURN_ACTOR_ALIGN_UP(sizeof(sm64_saturn_geo_state_observer_t)) + \
+     SM64_SATURN_ACTOR_ALIGN_UP(sizeof(sm64_saturn_actor_instance_queue_t)) + \
+     SM64_SATURN_ACTOR_ALIGN_UP(SM64_SATURN_ACTOR_BATCH_STORAGE_BYTES))
+#define SM64_SATURN_ACTOR_OUTPUT_RECORD_RAW_CEILING \
+    ((SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES <= \
+      SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET) \
+         ? ((SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET - \
+             SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES) / \
+            sizeof(sm64_saturn_actor_output_record_t)) \
+         : 0U)
+#define SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING \
+    (SM64_SATURN_ACTOR_OUTPUT_RECORD_RAW_CEILING & ~1U)
+#define SM64_SATURN_ACTOR_RUNTIME_BYTES \
+    (SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES + \
+     SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING * \
+         sizeof(sm64_saturn_actor_output_record_t))
+
 typedef struct sm64_saturn_actor_instance_queue_memory_report {
     uint32_t descriptor_bytes;
     uint32_t release_bytes;
     uint32_t result_bytes;
     uint32_t queue_bytes;
+    uint32_t actor_bank_bytes;
+    uint32_t observer_bytes;
+    uint32_t batch_bytes;
+    uint32_t output_storage_bytes;
+    uint32_t alignment_padding_bytes;
+    uint32_t runtime_bytes;
+    uint32_t lwram_budget_bytes;
     uint16_t capacity;
     uint16_t output_record_ceiling;
+    uint16_t output_record_bytes;
+    uint16_t runtime_alignment;
 } sm64_saturn_actor_instance_queue_memory_report_t;
 
 typedef bool (*sm64_saturn_actor_instance_process_fn)(
@@ -117,6 +167,16 @@ _Static_assert(sizeof(sm64_saturn_actor_instance_release_t) == 12U,
                "actor-instance release ABI changed");
 _Static_assert(sizeof(sm64_saturn_actor_instance_result_t) == 12U,
                "actor-instance result ABI changed");
+_Static_assert(sizeof(sm64_saturn_actor_output_record_t) == 8U,
+               "actor output-record ABI changed");
+_Static_assert(SM64_SATURN_ACTOR_RUNTIME_FIXED_BYTES <=
+                   SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET,
+               "actor fixed runtime storage exceeds its LWRAM budget");
+_Static_assert(SM64_SATURN_ACTOR_RUNTIME_BYTES <=
+                   SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET,
+               "actor runtime storage exceeds its LWRAM budget");
+_Static_assert(SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING <= UINT16_MAX,
+               "actor output-record ceiling exceeds the queue ABI");
 
 bool sm64_saturn_actor_instance_descriptor_from_snapshot(
     const sm64_saturn_actor_instance_snapshot_t *snapshot,
@@ -167,6 +227,9 @@ const sm64_saturn_actor_instance_result_t *
 sm64_saturn_actor_instance_queue_result(
     const sm64_saturn_actor_instance_queue_t *queue, uint32_t generation,
     uint16_t descriptor_index);
+bool sm64_saturn_actor_instance_queue_count(
+    const sm64_saturn_actor_instance_queue_t *queue, uint32_t generation,
+    uint16_t *count);
 bool sm64_saturn_actor_instance_queue_all_terminal(
     const sm64_saturn_actor_instance_queue_t *queue, uint32_t generation);
 bool sm64_saturn_actor_instance_queue_reset_retired(

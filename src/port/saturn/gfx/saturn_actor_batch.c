@@ -19,14 +19,15 @@ bool sm64_saturn_actor_batches_build(
     sm64_saturn_actor_batch_t *batches, uint16_t batch_capacity,
     sm64_saturn_actor_batch_summary_t *summary)
 {
-    uint16_t index;
+    uint16_t count, index;
     if (summary != NULL) memset(summary, 0, sizeof(*summary));
     if (queue == NULL || summary == NULL || generation == 0U ||
         (batch_capacity != 0U && batches == NULL) ||
-        !sm64_saturn_actor_instance_queue_all_terminal(queue, generation))
+        !sm64_saturn_actor_instance_queue_all_terminal(queue, generation) ||
+        !sm64_saturn_actor_instance_queue_count(queue, generation, &count))
         return false;
 
-    for (index = 0U; index < queue->count; index++) {
+    for (index = 0U; index < count; index++) {
         const sm64_saturn_actor_instance_job_state_t state =
             sm64_saturn_actor_instance_queue_state(queue, generation, index);
         if (state == SM64_SATURN_ACTOR_QUARANTINED) {

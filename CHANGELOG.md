@@ -21,7 +21,10 @@
   arena; record 2,807 fails closed. Batch construction reads its count through
   the queue's P2 alias. This remains infrastructure source-incomplete until
   generic actor-meshlet preparation and a production drain/cutover exist; the
-  concurrent retirement race and all target evidence remain open.
+  concurrent retirement race and all target evidence remain open. The runtime
+  memory report exposes every component, output byte, and alignment byte, and
+  executable boundary mutations pin overflow quarantine, the valid 64th
+  instance, and exact-fit publication.
 
 - Added the scene-neutral admission boundary for validated render packages.
   Generic cluster/node/portal views now reject malformed metadata before

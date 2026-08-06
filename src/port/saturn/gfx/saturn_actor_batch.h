@@ -27,6 +27,37 @@ typedef struct sm64_saturn_actor_batch_summary {
 
 _Static_assert(sizeof(sm64_saturn_actor_batch_t) == 16U,
                "actor batch ABI changed");
+_Static_assert(sizeof(sm64_saturn_actor_batch_t) ==
+                   SM64_SATURN_ACTOR_BATCH_ABI_BYTES,
+               "actor batch size disagrees with runtime accounting");
+
+/* Complete CPU-only storage contract. This owns one Task 14 container (which
+ * itself contains both snapshot generations), its observer, the shared queue,
+ * master batches, and the claimant output records. */
+typedef struct sm64_saturn_actor_runtime_storage {
+    _Alignas(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT)
+        sm64_saturn_actor_instance_bank_t instances;
+    _Alignas(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT)
+        sm64_saturn_geo_state_observer_t observer;
+    _Alignas(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT)
+        sm64_saturn_actor_instance_queue_t queue;
+    _Alignas(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT)
+        sm64_saturn_actor_batch_t batches[
+            SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    _Alignas(SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT)
+        sm64_saturn_actor_output_record_t outputs[
+            SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING];
+} sm64_saturn_actor_runtime_storage_t;
+
+_Static_assert(_Alignof(sm64_saturn_actor_runtime_storage_t) ==
+                   SM64_SATURN_ACTOR_RUNTIME_ALIGNMENT,
+               "actor runtime arena alignment changed");
+_Static_assert(sizeof(sm64_saturn_actor_runtime_storage_t) ==
+                   SM64_SATURN_ACTOR_RUNTIME_BYTES,
+               "actor runtime arena disagrees with memory report");
+_Static_assert(sizeof(sm64_saturn_actor_runtime_storage_t) <=
+                   SM64_SATURN_ACTOR_RUNTIME_LWRAM_BUDGET,
+               "actor runtime arena exceeds its LWRAM budget");
 
 /* The queue must be terminal. DONE descriptors are visited in published
  * source/painter order; quarantined descriptors are skipped without moving
