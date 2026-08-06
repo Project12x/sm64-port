@@ -344,6 +344,18 @@ def identity_label(raw: bytes, *, expected: bytes | None = None) -> str:
     )
 
 
+def identity_directory_tag(raw: bytes, *, expected: bytes | None = None) -> str:
+    """Return the short, validated object-directory discriminator.
+
+    The full label is intentionally descriptive and remains an emitted build
+    artifact.  Yaul derives object names from their full paths, so using that
+    label as a Windows worktree directory can exceed the filesystem component
+    limit before the compiler starts.
+    """
+    values = validate_identity(raw, expected=expected)
+    return "id-" + values["effective_config_hash"][:16]
+
+
 def emit_c_include(raw: bytes) -> str:
     values = validate_identity(raw)
     hashes = {
@@ -381,6 +393,10 @@ def main() -> int:
     parser.add_argument("--output-json", type=Path)
     parser.add_argument("--output-label", type=Path)
     parser.add_argument(
+        "--print-directory-tag", action="store_true",
+        help="print the validated short object-directory tag",
+    )
+    parser.add_argument(
         "--expect", action="append", default=[], metavar="NAME=INTEGER",
         help="require one spec scalar/feature to match its build-wrapper value",
     )
@@ -389,6 +405,12 @@ def main() -> int:
     validate_spec_expectations(spec, _parse_expectations(args.expect))
     built = build_identity(spec)
     label = identity_label(built.raw)
+    if args.print_directory_tag:
+        if any((args.output_binary, args.output_c_include, args.output_json,
+                args.output_label)):
+            parser.error("--print-directory-tag cannot be combined with output files")
+        print(identity_directory_tag(built.raw))
+        return 0
     if args.output_binary:
         _write(args.output_binary, built.raw)
     if args.output_c_include:

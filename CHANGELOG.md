@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Sourceboot now bootstraps its generated build-identity spec from canonical
+  route, input, camera, cart, scene, actor, animation, and feature-selected
+  audio provenance before selecting an output directory. Each manifest is
+  hash-validated by the existing identity generator, so a clean tree no longer
+  fails on a missing spec and a failed bootstrap cannot silently reuse a stale
+  identity or handwritten label. The descriptive identity label remains an
+  emitted artifact, while the Yaul object directory now uses a validated short
+  configuration-hash tag to stay within Windows path limits.
+
 - Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
   owner in sourceboot, replacing standalone actor observer/bank storage and
   explicitly clearing it through the cache-through alias before binding the

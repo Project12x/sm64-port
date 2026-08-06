@@ -370,17 +370,55 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPU
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-frag$(SATURN_DEMO_BSP_FRAGMENTS),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_PATH)),$(SOURCEBOOT_OUTPUT_TAG)-pipe$(SATURN_RENDERER_PIPELINE),$(SOURCEBOOT_OUTPUT_TAG))
 SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENT_FLAT)),$(SOURCEBOOT_OUTPUT_TAG)-flat1,$(SOURCEBOOT_OUTPUT_TAG))
-# A hash-bound spec is the diagnostic-build boundary. Once present, the
-# generator validates every artifact, constructs the exact ABI bytes, and the
-# staging label comes back from those bytes. The legacy hand-authored tag above
-# remains only for pre-spec asset-generation invocations.
-ifneq ($(wildcard $(SOURCEBOOT_BUILD_IDENTITY_SPEC)),)
+# A clean tree has no checked-in identity spec. Materialize it from canonical
+# source/package provenance before selecting an output directory; a bootstrap
+# failure is fatal so Make can never fall back to a stale label or old identity.
+SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS = \
+  --set features.complete_mario_animation=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION) \
+  --set features.dynamic_actor_closure=$(SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE) \
+  --set features.semantic_audio=$(SATURN_FEATURE_SEMANTIC_AUDIO) \
+  --set renderer_pipeline=$(SATURN_RENDERER_PIPELINE) \
+  --set level_id=$(SATURN_SOURCEBOOT_LEVEL_ID) \
+  --set area_id=$(SATURN_SOURCEBOOT_AREA_ID) \
+  --set route_id=$(SATURN_SOURCEBOOT_ROUTE_ID) \
+  --set route_replay_mode=$(SATURN_SOURCEBOOT_ROUTE_REPLAY) \
+  --set live_input_mode=$(SATURN_SOURCEBOOT_LIVE_INPUT) \
+  --set camera_route=$(SATURN_SOURCEBOOT_CAMERA_ROUTE) \
+  --set camera_variant=$(SATURN_CAMERA_VARIANT) \
+  --set diagnostic_mode=$(SATURN_DIAGNOSTIC_MODE) \
+  --set bootstrap_ticks=$(SATURN_SOURCEBOOT_LIVE_INPUT_BOOTSTRAP_TICKS) \
+  --set cart_mbit=$(SATURN_CART_MBIT) \
+  --set cart_stage_sectors=$(SATURN_SOURCE_CART_STAGE_SECTORS) \
+  --set hot_promotion=$(SATURN_DEMO_HOT_PROMOTION) \
+  --set near_clip=$(SATURN_DEMO_NEAR_CLIP) \
+  --set bsp_order=$(SATURN_DEMO_BSP_ORDER) \
+  --set polygon_tier=$(SATURN_DEMO_POLY_TIER) \
+  --set fragment_mode=$(SATURN_DEMO_FRAGMENT_MODE) \
+  --set atan2_variant=$(SATURN_ATAN2_VARIANT) \
+  --set demo_path=$(SATURN_DEMO_PATH) \
+  --set demo_view_radius=$(SATURN_DEMO_VIEW_RADIUS) \
+  --set slave_render=$(SATURN_SLAVE_RENDER) \
+  --set camera_idle_start_tick=$(SATURN_CAMERA_IDLE_START_TICK) \
+  --set camera_idle_discovery=$(SATURN_CAMERA_IDLE_DISCOVERY) \
+  --set camera_range_capture=$(SATURN_CAMERA_RANGE_CAPTURE) \
+  --set bsp_fragment_flat=$(SATURN_DEMO_BSP_FRAGMENT_FLAT) \
+  --set fast3d_q16_trace=$(SATURN_FAST3D_Q16_TRACE) \
+  --set experimental_skip_geo_walk=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK)
+SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_STATUS := $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/bootstrap_sourceboot_identity_spec.py" --root "$(ROOT)" --output "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS) && printf ready)
+ifneq ($(SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_STATUS),ready)
+  $(error sourceboot build identity bootstrap failed)
+endif
+# The generator validates every artifact, constructs the exact ABI bytes, and
+# the staging label comes back from those bytes rather than a handwritten tag.
 SOURCEBOOT_IDENTITY_LABEL_VALUE := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
 ifeq ($(SOURCEBOOT_IDENTITY_LABEL_VALUE),)
   $(error sourceboot build identity spec did not produce a compiled identity label)
 endif
-override SOURCEBOOT_OUTPUT_TAG := -identity-$(SOURCEBOOT_IDENTITY_LABEL_VALUE)
+SOURCEBOOT_IDENTITY_DIRECTORY_TAG := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" --print-directory-tag $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
+ifeq ($(SOURCEBOOT_IDENTITY_DIRECTORY_TAG),)
+  $(error sourceboot build identity spec did not produce an object-directory tag)
 endif
+override SOURCEBOOT_OUTPUT_TAG := -identity-$(SOURCEBOOT_IDENTITY_DIRECTORY_TAG)
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd

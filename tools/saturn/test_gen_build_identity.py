@@ -220,12 +220,17 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
     def test_label_is_derived_from_validated_compiled_identity(self) -> None:
         built = identity.build_identity(self.spec)
         label = identity.identity_label(built.raw)
+        directory_tag = identity.identity_directory_tag(built.raw)
         self.assertIn("feat101", label)
         self.assertIn("pipe4", label)
+        self.assertRegex(directory_tag, r"^id-[0-9a-f]{16}$")
+        self.assertLess(len(directory_tag), len(label))
         mutated = bytearray(built.raw)
         mutated[8:12] = (0).to_bytes(4, "big")
         with self.assertRaisesRegex(ValueError, "feature|identity"):
             identity.identity_label(bytes(mutated), expected=built.raw)
+        with self.assertRaisesRegex(ValueError, "feature|identity"):
+            identity.identity_directory_tag(bytes(mutated), expected=built.raw)
 
     def test_rejects_wrapper_feature_or_scalar_drift_before_emission(self) -> None:
         identity.validate_spec_expectations(
