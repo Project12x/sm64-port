@@ -89,6 +89,7 @@
 - 2026-08-06 actor-arena reservation staging: the fixed 65,536-byte arithmetic and output ceiling are not a linker/package reservation. A future lane must prove one aligned sourceboot-owned arena symbol, exact bank/observer/queue/batch/output spans, linker/map bounds, initialization through that owner, and manifest-derived capacity before any target or production-drain claim.
 - 2026-08-06 actor-owner scope correction: the first accepted source slice may reserve and clear the single owner without inventing package-capacity APIs or a production queue/batch/output handoff. Manifest-derived 64/2718 bounds and peer-visible member binding remain separate unchecked gates until their authoritative package/production seams exist.
 - 2026-08-06 LWRAM reclaim preflight correction: `sourceboot_vdp1_cmdts[2][2048]` is `2 * 2048 * 32 = 0x20000` bytes, not `0x10000`; the complete 32-byte-aligned block relocated to HWRAM `.bss` exceeds the required `0xCB10` by `0x34F0` and leaves route-0 LWRAM at `0x74F0`, above the `0x4000` floor. This arithmetic correction is source/layout evidence only; DMA/cache/target proof remains open.
+- 2026-08-06 desktop-crash investigation correction: the fresh dual-SH2 identity `e2-bob-identity-id-751e5f93f1483a0b` links with HWRAM margin `0x1BE8` and LWRAM margin `19792` bytes, and the exact DRAM-cart ELF survives bounded headless runs through 3600 frames. A direct visible Ymir run reaches gameplay/VDP1 output, then falls to 0 FPS/black and enters an exception loop whose first writes descend below `0x06000000` while the vector repeats at `PC=0x000003F2`; the current stack symbols place the slave stack top at `0x06001E00`, so stack exhaustion is the leading hypothesis, not a proven fix. A diagnostic rebuild moved only the slave stack to `0x002FB2B0` in LWRAM and stayed responsive/CPU-active through roughly 53 seconds, beyond the old collapse window. The permanent follow-up now reserves the final 16 KiB of LWRAM with linker assertions. The first production image with that contract (`e2-bob-identity-id-1393481dd549c922`) reached Mario and stayed responsive for over a minute, but the owner then observed a green/blank surface; headless bracketing logs an unhandled write to `0x057EFFFE` after 720 post-BIOS frames and shows the master SP near `0x06001F1C` immediately before it. Master-stack exhaustion in the source/behavior path is now the next bounded hypothesis. The desktop/target/manual/FPS gate remains open; no single-SH2 fallback, texture flag, capacity shrink, or link-margin weakening is authorized.
 
 ## Prior art and reuse mode
 
@@ -1261,8 +1262,74 @@ transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
   texture, audio, and FPS gates remain unchecked.
 - [ ] Inspect the fresh image under the repository Ymir profile with DRAM/CUE,
   then prove P2/cache ownership and real concurrent-SH2 execution before claiming
-  a manual or performance improvement. A single-SH2 build is not an accepted
-  substitute.
+  a manual or performance improvement. The 2026-08-06 attempt reached responsive
+  100% emulation with VDP2 at 60–61 fps but showed a black game surface and VDP1
+  at 0 draws, so this gate remains open as a fresh-image runtime/visual blocker.
+  A single-SH2 build is not an accepted substitute.
+- [ ] **Runtime-exception follow-up (2026-08-06):** the current source-owned
+  dual-SH2 image is `e2-bob-identity-id-a15ffdec4e406673` (ELF/CUE/ISO hashes
+  are recorded in `docs/saturn/evidence/reports/current-memory-fixed-desktop-crash-2026-08-06.md`).
+  Both master and slave INTC tables now install frame-preserving exception
+  trampolines and a persistent register record. A bounded headless run remains
+  textured/gameplay-valid through post-BIOS frame 8,970 with both SH-2s live;
+  the 9,000→30,000 soak hit only the client response timeout. The desktop
+  manual gate is being rerun with the current `.ymir-profile` (32-Mbit DRAM)
+  and the previously verified `ymir-agent/build-agent` desktop executable,
+  not the older shared profile or `build-agent2`. The first `build-agent2`
+  retry inserted DRAM but still showed no textures. Do not mark this
+  visual/runtime gate complete until the exact verified launch produces a
+  textured frame beyond the previous green transition or the saved exception
+  frame is decoded.
+
+- [ ] **Texture-flag reconciliation (2026-08-06):** the owner-visible
+  no-texture image was built with `SATURN_DEMO_PATH=0`, which currently routes
+  through the RGB-only source Fast3D VDP1 emitter; `SATURN_DEMO_MARIO_TEXTURES=1`
+  does not provide terrain texture/CLUT lowering on that route. The repository
+  `.ymir-profile` and 32-Mbit DRAM launch contract are therefore not implicated.
+  A fresh current-head `SATURN_DEMO_PATH=1` identity
+  `e2-bob-identity-id-b16071bfda7aa10d` is launched as a textured BOB diagnostic
+  only. Keep this visual check separate from the permanent full-game gate: the
+  source route still needs texture residency and texture-aware VDP1 lowering,
+  and no default-flag flip or single-SH2 fallback is accepted as closure.
+
+- [ ] **Memory-dump root-cause correction (2026-08-06):** the exception-enabled
+  Ymir desktop run wrote a dump under the repository profile. Decoding the
+  linked source-owned record for `e2-bob-identity-id-b16071bfda7aa10d` gives
+  `Illegal instruction`, `vbr=0x06000000` (master), `sp=0x060026DC`,
+  `pc=0x881C8901`, and `pr=0x06000928`. With `___master_stack=0x06004000`,
+  the saved SP is `0x19324` bytes below the configured stack top and both
+  control addresses are outside linked text. This is the first direct
+  target-side evidence of master-stack overrun/corruption and supersedes the
+  earlier interim withdrawal based on an empty record. The next implementation
+  must provide a source-owned, linker-asserted master stack arena (or remove
+  the unbounded frame demand), preserve dual-SH2/LWRAM ownership, and repeat
+  the exact manual/dump gate. No texture flag, single-SH2 fallback, capacity
+  shrink, or unverified stack relocation is accepted as closure.
+
+  The exact ELF disassembly shows `geo_process_node_and_siblings` consumes
+  `0x1A4` bytes of locals plus 32 bytes of saved state per recursive descent.
+  The dump's underrun is therefore approximately 228 live scene-graph walker
+  frames. Because sourceboot deliberately keeps the original `geo_process_root`
+  walk active in the textured diagnostic, the permanent production repair must
+  bound that recursion with an owned iterative/traversal arena (or prove a
+  linker-asserted dedicated arena), rather than disable the walk or move only
+  a small stack window.
+  Evidence status: the 100-byte big-endian record was decoded directly from
+  the profile dump and cross-checked against the linked map/assembly; no
+  source/host/target gate or independent rereview was rerun in this diagnostic
+  transition, and the exception-capture sources remain uncommitted pending
+  the bounded repair and its required `CHANGELOG.md` entry.
+
+- [ ] **Iterative geo-walk repair (2026-08-06, active):** owner approved the
+  permanent full-game repair. Production Saturn traversal will use an explicit
+  enter/leave continuation stack in a linker-owned LWRAM arena, with capacity
+  generated from every linked level/actor geo tree and exact source callback,
+  sibling, switch, matrix, animation, and shared-child restoration semantics.
+  The recursive walker remains baseline/oracle-only. The slave SH-2 continues
+  to consume immutable jobs; no single-SH2 fallback, disabled walk, BOB-only
+  capacity, or unverified master-stack relocation is authorized. Detailed
+  design/spec and execution plan: `docs/superpowers/specs/2026-08-06-saturn-iterative-geo-walk-design.md`
+  and `docs/superpowers/plans/2026-08-06-saturn-iterative-geo-walk.md`.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
