@@ -975,6 +975,21 @@ change linker placement or claim target visibility.
 - [ ] Keep implementation, linked target, Ymir/manual, concurrent SH-2, and FPS
   evidence as later unchecked transitions.
 
+#### Task 14 bounded preflight: LWRAM reclaim/relocation for actor arena
+
+The reservation cannot begin until a source-attested set of at least `0xCB10`
+bytes is reclaimed or relocated without breaking SH-2 cache aliases, SCU/CPU
+DMA legality, sourceboot initialization, or the `0x4000` final LWRAM margin.
+This is a read-only inventory lane; it must not move globals speculatively.
+
+- [ ] Identify candidate `.lwram_bss`/command staging allocations, every reader
+  and writer, DMA/cache constraints, lifetime, and destination-class options.
+- [ ] Produce `task-14-lwram-reclaim-preflight-report.md` with a ranked,
+  source-attested reclaim set totaling at least `0xCB10`, exact risk/rollback
+  boundaries, and the smallest implementation sequence.
+- [ ] Keep linker edits, target image, P2/concurrent SH-2, Ymir/manual, and FPS
+  evidence unchecked until the reservation owner is implemented and mapped.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
