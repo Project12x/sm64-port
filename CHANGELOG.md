@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Added the scene-neutral admission boundary for validated render packages.
+  Generic cluster/node/portal views now reject malformed metadata before
+  traversal, perform conservative Z-Treme-derived frustum tests before
+  transform/classify/lower, preserve mandatory clusters, and emit ordered
+  bounded references with cycle/capacity telemetry. BOB adapts through a
+  deterministic package-view helper while the full runtime remains
+  scene-independent; target/Ymir activation and FPS evidence remain open.
+  The serial DLL-preflight gate also uses Python subprocess launches for the
+  host executables, avoiding the inherited MSYS quoted-path EOF failure.
+
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed
   replacement generations fail closed without mutating the active plan, and

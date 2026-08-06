@@ -69,6 +69,25 @@ class Polygon:
 Plane = tuple[int, int, int, int]
 
 
+def conservative_bounds(polygons: Iterable[Polygon]) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Return integer floor/ceil bounds suitable for runtime admission.
+
+    This is deliberately scene-neutral: the admission pass consumes bounds,
+    not BSP node internals, and the outward quantization preserves visible
+    geometry at the fixed-point runtime boundary.
+    """
+    items = list(polygons)
+    if not items:
+        raise ValueError("cannot bound an empty polygon set")
+    points = [vertex.position for polygon in items for vertex in polygon.vertices]
+    minimum = tuple(min(value[axis] for value in points) for axis in range(3))
+    maximum = tuple(max(value[axis] for value in points) for axis in range(3))
+    return (
+        tuple(value.numerator // value.denominator for value in minimum),
+        tuple(-((-value.numerator) // value.denominator) for value in maximum),
+    )
+
+
 def _lcm(a: int, b: int) -> int:
     return abs(a * b) // gcd(a, b) if a and b else 0
 

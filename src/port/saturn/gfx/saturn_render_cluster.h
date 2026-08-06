@@ -25,6 +25,11 @@ typedef struct sm64_saturn_render_cluster {
     uint16_t source_ordinal;
     uint8_t mandatory;
     uint8_t reserved[3];
+    /* Optional package-local node identity. Zero is a valid first node; a
+     * caller that does not publish node ownership leaves this field zero and
+     * uses the generic scene-admission reference table instead. */
+    uint16_t scene_node;
+    uint16_t scene_flags;
 } sm64_saturn_render_cluster_t;
 
 typedef struct sm64_saturn_render_cluster_result {

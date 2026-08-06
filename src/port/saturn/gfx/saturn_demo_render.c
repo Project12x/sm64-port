@@ -214,6 +214,12 @@ static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint8_t s_primitive_lod_texture_downgraded[
     SM64_SATURN_BOB_PRIMITIVE_COUNT];
+/* Compatibility names retained for the compact actor-bank contract: the
+ * generalized scene admission path consumes the same selected tier stream
+ * that the former Mario-only path exposed as
+ * sm64_mario_render_cluster_lod_vertex_offsets /
+ * sm64_mario_render_cluster_lod_vertex_list.  `transform_ref_count` remains
+ * the bounded span count and s_actor_vertex_owner the lane ownership map. */
 static uint8_t s_pretransform_lod_tier;
 static sm64_saturn_render_cluster_result_t s_admitted_cluster_results[
     SM64_SATURN_BOB_CLUSTER_COUNT] __attribute__((section(".lwram_bss")));

@@ -50,6 +50,47 @@ def build_render_clusters(mesh: dict[str, object],
     return clusters
 
 
+def build_scene_admission_metadata(
+    clusters: list[dict[str, object]],
+    bsp: dict[str, object],
+) -> dict[str, object]:
+    """Adapt any validated cluster bank to the generic admission view.
+
+    BOB currently publishes only compact node spans.  Until the S64P portal
+    section grows node bounds, one conservative root node is emitted; callers
+    can replace it with validated node/portal arrays without changing the
+    runtime API.  The fallback bounds are the outward union of cluster bounds.
+    """
+    if not clusters:
+        raise ValueError("scene admission requires at least one cluster")
+    refs = list(range(len(clusters)))
+    minimum = [min(int(cluster["bounds"]["min"][axis])
+                   for cluster in clusters) for axis in range(3)]
+    maximum = [max(int(cluster["bounds"]["max"][axis])
+                   for cluster in clusters) for axis in range(3)]
+    node_spans = bsp.get("node_spans", {})
+    if not isinstance(node_spans, dict):
+        raise ValueError("BSP node spans are malformed")
+    return {
+        "schema": "sm64-saturn-scene-admission-v1",
+        "metadata_valid": True,
+        "root_node": 0,
+        "nodes": [{
+            "bounds_min": minimum,
+            "bounds_max": maximum,
+            "cluster_ref_first": 0,
+            "cluster_ref_count": len(refs),
+            "portal_ref_first": 0,
+            "portal_ref_count": 0,
+        }],
+        "cluster_refs": refs,
+        "portals": [],
+        "portal_refs": [],
+        "source_bsp_sha256": node_spans.get("sha256"),
+        "cluster_count": len(clusters),
+    }
+
+
 def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
                bsp: dict[str, object]) -> str:
     entries = {int(entry["source_triangle"]): entry for entry in manifest["entries"]}
