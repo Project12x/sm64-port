@@ -40,6 +40,7 @@
 - 2026-08-05 pose-runtime review correction: Task 10's enabled complete-animation path uses checked int64 translation sums, honors matrix-multiply failure, and publishes a two-slot pose handoff selected by `pose_slot` so frame-overlap workers never read a single mutable global. Legacy `walking_bank`/neutral fallback remains feature-off-only compatibility state; the complete path does not assign it. The selector ABI grows with the shared header and must not be treated as a frozen byte-size contract.
 - 2026-08-05 actor-family review correction: Task 11 keeps compiler and C ABI capability ranking identical (total mask bits, then bounded multiplicity), canonicalizes family representatives/order independent of closure input order, sums shared-family live multiplicity, and binds every S64F payload to a nonzero expected SHA-256 in the C validator. Zero/unknown flags and tampered payloads fail closed. The current BOB evidence intentionally reports 13 unsupported geo nodes, so the complete-closure gate remains open.
 - 2026-08-05 audio-catalog review correction: Task 12's hardened ABI/SHA/signed-PCM/metadata/residency slices are retained, but the task is blocked rather than promoted. The repository lacks the real expanded `00_sound_player` payload, BOB/WF closures are still music-only, S64P `AUDIO_DEPENDENCIES` and closure-selectable S64A chunks are not emitted, and the 68K active-plan validation plus general m64 control-flow parser remain incomplete. Synthetic fixtures must not be presented as full-game audio evidence.
+- 2026-08-05 scene-admission integration correction: Task 13's production sourceboot path now links `saturn_scene_admission.c` and consumes regenerated BOB admission metadata rather than a hand-assembled runtime table. The queued bounded worklist handles the real 1183-node BOB graph; immutable view orientation takes precedence, zero lateral rows use a conservative depth-only fallback, and validation rejects reserved fields, non-endpoint portal ownership, missing global cluster coverage, and node-containment violations while retaining mandatory clusters. The generic path is source-complete, but target/Ymir/manual/FPS evidence and whole-game closure remain open.
 
 ## Prior art and reuse mode
 
@@ -134,8 +135,8 @@ all complete.
 - [x] Task 10 — source-complete — implementation `ea6a1236`, hardening `a4d00a61`; independent rereview SPEC/QUALITY PASS, C0/I0/M1. Focused actor-pose bank, feature identity 5/5, variant identity 2/2, sweep validator 2/2, strict feature 0/1 bridge syntax, and scoped diff checks pass. The complete path is source-selected and two-slot immutable across overlap; linked variant/Ymir/manual gates remain open because the dry-run stops at missing `YAUL_INSTALL_ROOT`.
 - [x] Task 11 — source-complete — implementation `52999c35`, repairs `acff11a8`, `7f0caa62`; independent final rereview SPEC/QUALITY PASS, C0/I0/M0. Generic suite 4/4, full-game source contract 4/4, serial `compile-actor-banks SCENE_LEVEL=bob SCENE_AREA=1`, strict actor-bank C11/Werror syntax, executable C tamper/hash and unequal-capability ranking checks, and scoped diff pass. BOB emits 47 deterministic S64F families (99,105 bytes, SHA `97dc231b…`) from 86 closure records/133 source hashes; 13 unsupported geo nodes keep `complete_closure=false`. S64P linkage, runtime cutover, target/Ymir/manual/FPS gates remain open.
 - [ ] Task 12 — blocked — hardened commits `48d6401c`, `628c8324`, `724aaa84`, `7c0bbb72`, `7b8aa224`, `cc092c69`, `fa0f1040`, `78d1f967`, `b06382c8`, `2da45926`, `90b152e6`, `583c3840`, `ac3b91b2`, `b937456e`; independent rereview remains SPEC/QUALITY FAIL for the broader task. ABI/SHA/signed-PCM/metadata/work-span slices are preserved, and the MC68000 active+replacement plan check is now implemented, but the official package gate is blocked by the absent real seq00 asset, music-only BOB/WF closures, missing S64P/closure-selectable payload linkage, and incomplete general m64 control-flow parsing. Task 13 may proceed independently; Task 12 must not claim a full catalog or target/Ymir/manual evidence.
-- [ ] Task 13 — generalize BSP/frustum/portal-window admission
-- [ ] Task 14 — publish generic immutable actor-instance snapshots
+- [x] Task 13 — source-complete — implementation `33e06fb8`; repairs `280e1804`, `f6e0aa03`, `0d6707c8`, `d2e5b604`, `a888ff00`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Generic scene admission, regenerated BOB metadata, sourceboot linkage, queued 1183-node worklist, containment/coverage/reserved-field/portal checks, and depth-only orientation fallback are green in the focused serial gates. Target/Ymir/manual/FPS evidence remains open.
+- [ ] Task 14 — active — publish generic immutable actor-instance snapshots
 - [ ] Task 15 — implement the bounded MC68000 sequence VM
 - [ ] Task 16 — batch generic actor jobs through a dedicated shared queue
 - [ ] Task 17 — implement timer-driven SCSP voices and allocation
@@ -687,15 +688,15 @@ bool sm64_saturn_scene_admit(const sm64_saturn_scene_admission_view_t *scene,
                              sm64_saturn_scene_admission_stats_t *stats);
 ```
 
-- [ ] RED cases: wholly outside frustum, behind camera, near-plane intersection, camera inside bounds, mandatory cluster, open/closed portal, cyclic adjacency, invalid node/ref/window, zero clusters, capacity exhaustion, and yaw/pitch views.
-- [ ] Adapt the pinned Z-Treme frustum and existing BOB BSP/cluster paths through generic package views; record exact prior-art file/range if new code is closely ported. Portal windows remain conservative—false-positive drawing is permitted, false-negative visible rejection is not.
-- [ ] Run GREEN:
+- [x] RED cases: wholly outside frustum, behind camera, near-plane intersection, camera inside bounds, mandatory cluster, open/closed portal, cyclic adjacency, invalid node/ref/window, zero clusters, capacity exhaustion, and yaw/pitch views. Focused scene-admission, portal-window, render-cluster, and Z-Treme frustum suites cover these mutations; mandatory/coverage/containment/reserved-field cases are included in the final integration set.
+- [x] Adapt the pinned Z-Treme frustum and existing BOB BSP/cluster paths through generic package views; exact prior-art ranges are recorded in the provenance section. Portal windows remain conservative—false-positive drawing is permitted, false-negative visible rejection is not.
+- [x] Run GREEN:
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-scene-admission verify-portal-windows verify-render-clusters verify-ztreme-frustum
   ```
 
-- [ ] Commit as `perf(saturn): admit packaged scenes before transform`; review near-plane conservatism, traversal cycles, zero admission, and no level symbols in runtime.
+- [x] Commit as `perf(saturn): admit packaged scenes before transform`; review near-plane conservatism, traversal cycles, zero admission, and no level symbols in runtime. Final implementation/repair range is `33e06fb8..a888ff00`; independent rereview is SPEC PASS / QUALITY PASS, C0/I0/M0. Target/Ymir/manual/FPS evidence is intentionally not claimed here.
 
 ### Task 14: Publish generic immutable actor-instance snapshots
 
