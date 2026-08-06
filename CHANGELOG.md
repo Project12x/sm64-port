@@ -1331,6 +1331,16 @@
 
 ### Fixed
 
+- Repaired sourceboot's fragment-mode compatibility defaults. Two deferred
+  `?=` aliases could recurse when neither spelling was supplied, preventing
+  route-0 Make parsing before compilation. The canonical fragment value is now
+  resolved eagerly only when it is absent, while the legacy spelling remains a
+  compatible default and existing invalid/mismatched-value checks remain in
+  force. An isolated parser matrix covers default, both one-sided aliases,
+  matching/mismatched inputs, and mutation back to the recursive form. This
+  fixes a host build invocation boundary only; a linked map, target, Ymir/manual,
+  and FPS evidence remain separate.
+
 - Corrected Task 14 actor snapshot publication so capture writes the bulk
   payload through the existing SH-2 cache-through bank alias before the
   unchanged publish transition. Previously capture addressed the cached bank
