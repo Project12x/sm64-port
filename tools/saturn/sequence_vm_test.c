@@ -68,6 +68,9 @@ static void test_layer_call_loop_and_persistent_short_note_state(void)
     static const uint8_t persistent_script[] = {
         0xc1, 0x7f, 0xc9, 0x40, 0xc3, 1, 0x41, 0x42, 0xff,
     };
+    static const uint8_t large_note_script[] = {
+        0x01, 1, 0x20, 0x40, 0x41, 1, 0x30, 0xff,
+    };
     sm64_saturn_sequence_vm_t vm;
     sm64_saturn_sequence_vm_event_t events[8];
     uint8_t count;
@@ -102,6 +105,20 @@ static void test_layer_call_loop_and_persistent_short_note_state(void)
                                         sizeof(persistent_script), events, 8U,
                                         &count));
     assert(count == 1U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_END);
+
+    sm64_saturn_sequence_vm_init(
+        &vm, (uint16_t)sizeof(large_note_script), 0U,
+        SM64_SATURN_SEQUENCE_VM_LAYER_LARGE);
+    assert(sm64_saturn_sequence_vm_tick(&vm, large_note_script,
+                                        sizeof(large_note_script), events, 8U,
+                                        &count));
+    assert(count == 1U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_NOTE &&
+           events[0].arg1 == 0x2040U);
+    assert(sm64_saturn_sequence_vm_tick(&vm, large_note_script,
+                                        sizeof(large_note_script), events, 8U,
+                                        &count));
+    assert(count == 1U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_NOTE &&
+           events[0].arg1 == 0x3000U && vm.layer_note_duration == 0U);
 }
 
 static void test_bounded_flow_and_output_guards(void)
@@ -165,6 +182,9 @@ static void test_branch_polarity_and_channel_state(void)
     static const uint8_t channel_state[] = {
         0xd7, 0, 1, 0x00, 0xd6, 0, 1, 0x00, 0xff,
     };
+    static const uint8_t channel_init_accumulates[] = {
+        0xd7, 0, 1, 0xd7, 0, 2, 0xff,
+    };
     sm64_saturn_sequence_vm_t vm;
     sm64_saturn_sequence_vm_event_t events[8];
     uint8_t count;
@@ -197,6 +217,52 @@ static void test_branch_polarity_and_channel_state(void)
                                         &count));
     assert(count == 5U && events[1].arg0 == 0U && events[3].arg0 == 1U &&
            vm.channel_active_mask == 0U && vm.channel_finished_mask == 0xffffU);
+
+    sm64_saturn_sequence_vm_init(
+        &vm, (uint16_t)sizeof(channel_init_accumulates), 0U,
+        SM64_SATURN_SEQUENCE_VM_SEQUENCE);
+    assert(sm64_saturn_sequence_vm_tick(&vm, channel_init_accumulates,
+                                        sizeof(channel_init_accumulates), events,
+                                        8U, &count));
+    assert(count == 3U && vm.channel_active_mask == 0x0003U &&
+           (vm.channel_finished_mask & 0x0003U) == 0U);
+}
+
+static void test_eu_sh_unsupported_sequence_opcodes_fail_closed(void)
+{
+    static const uint8_t eu_fade_opcode[] = {0xda, 2, 0, 4, 0xff};
+    static const uint8_t eu_tempo_add_opcode[] = {0xdc, 4, 0xff};
+    static const uint8_t eu_layer_relative_jump[] = {0xf4, 2, 0xc1, 0x7f, 0xff};
+    sm64_saturn_sequence_vm_t vm;
+    sm64_saturn_sequence_vm_event_t events[4];
+    uint8_t count;
+
+    sm64_saturn_sequence_vm_init_ex(
+        &vm, (uint16_t)sizeof(eu_fade_opcode), 0U,
+        SM64_SATURN_SEQUENCE_VM_SEQUENCE,
+        SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH);
+    assert(!sm64_saturn_sequence_vm_tick(&vm, eu_fade_opcode,
+                                         sizeof(eu_fade_opcode), events, 4U,
+                                         &count));
+    assert(vm.faulted != 0U && vm.pc == 1U);
+
+    sm64_saturn_sequence_vm_init_ex(
+        &vm, (uint16_t)sizeof(eu_tempo_add_opcode), 0U,
+        SM64_SATURN_SEQUENCE_VM_SEQUENCE,
+        SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH);
+    assert(!sm64_saturn_sequence_vm_tick(&vm, eu_tempo_add_opcode,
+                                         sizeof(eu_tempo_add_opcode), events, 4U,
+                                         &count));
+    assert(vm.faulted != 0U && vm.pc == 1U);
+
+    sm64_saturn_sequence_vm_init_ex(
+        &vm, (uint16_t)sizeof(eu_layer_relative_jump), 0U,
+        SM64_SATURN_SEQUENCE_VM_LAYER_SMALL,
+        SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH);
+    assert(sm64_saturn_sequence_vm_tick(&vm, eu_layer_relative_jump,
+                                        sizeof(eu_layer_relative_jump), events,
+                                        4U, &count));
+    assert(count == 1U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_END);
 }
 
 static void test_sequence_format_reserve_opcodes(void)
@@ -280,6 +346,7 @@ int main(void)
     test_bounded_flow_and_output_guards();
     test_branch_polarity_and_channel_state();
     test_sequence_format_reserve_opcodes();
+    test_eu_sh_unsupported_sequence_opcodes_fail_closed();
     test_fail_closed_inputs();
     test_pointer_free_bounded_state();
     return 0;

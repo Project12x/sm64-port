@@ -33,6 +33,15 @@
   SCSP/PCM driver, expanded seq00 payload, full sequence catalog/S64P closure,
   Ymir, hardware, or manual audio evidence is claimed.
 
+- Narrowed the format-specific VM boundary after rereview. Large-layer note1
+  now stores and emits its source-mandated zero duration, EU/SH layer relative
+  jumps use the bounded flow engine, and `seq_initchannels` accumulates selected
+  channel bits instead of discarding earlier selections. EU/SH sequence `0xda`
+  fade-state and `0xdc` tempo-add forms are rejected before operand consumption
+  until their distinct state machines are represented; the RED fixture covers
+  these fail-closed cases and the large-note transition. This keeps the claim
+  limited to the bounded host VM and does not imply full EU/SH package support.
+
 - Added a dedicated, bounded actor-instance queue and master-only batch merge
   without expanding the proven eight-entry world graph. Each pointer-free job
   owns one Task 14 snapshot identity and a disjoint output span, either SH-2

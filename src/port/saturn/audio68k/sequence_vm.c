@@ -233,6 +233,13 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
         if (!vm_read_u8(sequence, length, &vm->pc, &cmd)) return false;
         vm->instruction_count++;
         if (cmd >= 0xc0U) {
+            /* The EU/SH sequence layout does not share the US meanings of
+             * 0xDA (fade state + s16) or 0xDC (SH tempo-add state).  Until
+             * those state machines are represented, fail closed before
+             * consuming an incompatible operand. */
+            if (vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH &&
+                (cmd == 0xdaU || cmd == 0xdcU))
+                return false;
             /* US/JPN reserve-notes is F2 + u8; EU/SH uses F1 + u8 and
              * reserves F2/F3/F4 for conditional relative branches. */
             if (cmd == 0xf0U || cmd == 0xf1U ||
@@ -274,8 +281,10 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
                     if (!vm_read_be16(sequence, length, &vm->pc, &value16))
                         return false;
                     if (cmd == 0xd7U) {
-                        vm->channel_active_mask = value16;
-                        vm->channel_finished_mask = (uint16_t)~value16;
+                        vm->channel_active_mask = (uint16_t)(
+                            vm->channel_active_mask | value16);
+                        vm->channel_finished_mask = (uint16_t)(
+                            vm->channel_finished_mask & ~value16);
                     } else if (cmd == 0xd6U) {
                         vm->channel_active_mask =
                             (uint16_t)(vm->channel_active_mask & ~value16);
@@ -391,7 +400,8 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
         if (!vm_read_u8(sequence, length, &vm->pc, &cmd)) return false;
         vm->instruction_count++;
         if (cmd == 0xffU || cmd == 0xf8U || cmd == 0xf7U || cmd == 0xfbU ||
-            cmd == 0xfcU) {
+            cmd == 0xfcU ||
+            (cmd == 0xf4U && vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH)) {
             if (!vm_flow(vm, sequence, length, cmd, source_offset, events,
                          event_capacity, event_count, &stopped)) return false;
             if (stopped || vm->halted) return true;
@@ -466,6 +476,7 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
             if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE &&
                 !vm_read_u8(sequence, length, &vm->pc, &velocity)) return false;
             if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE) {
+                duration = 0U;
                 vm->layer_velocity = velocity;
                 vm->layer_note_duration = 0U;
             }
