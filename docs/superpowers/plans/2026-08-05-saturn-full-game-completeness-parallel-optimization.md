@@ -1071,8 +1071,12 @@ license, renderer, or target-performance result.
   gates pass; compilation completes, but link stops on HWRAM overflow by
   `159664` bytes. No ELF/map or target/P2/concurrent-SH2/Ymir/manual/FPS
   evidence is claimed.
-- [ ] Commit/review the build-input boundary separately from actor/audio code;
-  independent rereview is pending.
+- [ ] Repair the identity coverage before acceptance: the independent
+  rereview of `730346c9` is SPEC/QUALITY FAIL, C1/I1/M0 because `source_hash`
+  omits most compiled source and package-named fields hash recipe manifests
+  rather than exact payloads; the fixture also misses closure/path/tag
+  negatives. Add source-closure/payload mutations and rerun the serialized
+  build. No current-head image is authorized until rereview passes.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
