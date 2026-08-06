@@ -273,10 +273,33 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
         if existing is None:
             families_by_key[key] = family
         else:
+            if str(family["stable_id"]) < str(existing["stable_id"]):
+                existing["stable_id"] = family["stable_id"]
             existing["actor_count"] = int(existing["actor_count"]) + 1
-            existing["maximum_live_instances"] = max(
-                int(existing["maximum_live_instances"]), int(family["maximum_live_instances"]))
+            # Multiplicity is a closure fact.  Shared geometry may serve more
+            # than one behavior, so capacities add rather than silently
+            # under-reporting the number of simultaneously live instances.
+            existing["maximum_live_instances"] = (
+                int(existing["maximum_live_instances"]) +
+                int(family["maximum_live_instances"]))
+            existing["capability_mask"] = int(existing["capability_mask"]) | int(family["capability_mask"])
+            existing["capabilities"] = sorted(set(existing["capabilities"]) |
+                                                set(family["capabilities"]),
+                                                key=ACTOR_CAPABILITY_NAMES.index)
+            existing["geo_nodes"] = sorted(set(existing["geo_nodes"]) |
+                                             set(family["geo_nodes"]))
             existing["unsupported"] = sorted(set(existing["unsupported"]) | set(family["unsupported"]))
+            existing["supported"] = not existing["unsupported"]
+            existing["effects"] = sorted(set(existing["effects"]) | set(family["effects"]))
+            source_by_path = {str(item["path"]): item for item in existing["sources"]}
+            for source in family["sources"]:
+                path = str(source["path"])
+                prior = source_by_path.get(path)
+                if prior is not None and prior.get("sha256") != source.get("sha256"):
+                    existing["unsupported"] = sorted(set(existing["unsupported"]) |
+                                                      {f"SOURCE_HASH_CONFLICT:{path}"})
+                source_by_path[path] = source
+            existing["sources"] = [source_by_path[path] for path in sorted(source_by_path)]
             existing["supported"] = not existing["unsupported"]
     families = sorted(families_by_key.values(), key=lambda item: (int(item["family_id"]), str(item["family_key"])))
     payload = _pack_family_bank(families)
@@ -309,12 +332,13 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
 
 def select_actor_family(families: list[dict[str, object]], required_mask: int, multiplicity: int) -> str | None:
     candidates = [item for item in families if item["supported"] and
+                  item.get("geo_source") is not None and
                   int(item["capability_mask"]) & required_mask == required_mask and
                   int(item["maximum_live_instances"]) >= multiplicity]
     if not candidates:
         return None
     selected = min(candidates, key=lambda item: (
-        (int(item["capability_mask"]) & required_mask).bit_count(),
+        int(item["capability_mask"]).bit_count(),
         int(item["maximum_live_instances"]), int(item["family_id"]), str(item["family_key"])))
     return str(selected["stable_id"])
 

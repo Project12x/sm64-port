@@ -4,6 +4,10 @@
 
 ### Changed
 
+- Corrected generic family selection to exclude model-less/controller records
+  from drawable runtime admission while retaining them in the closure report;
+  both the Python proof and C selector now require the immutable geometry flag.
+
 - Added a generic, content-addressed S64F actor-family bank compiler for every
   BOB closure record.  Source geo vocabulary, material flags, animation,
   multiplicity, effects, and model variants become stable capability records;

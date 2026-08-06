@@ -88,16 +88,35 @@ class GenericActorBankTest(unittest.TestCase):
         self.assertEqual(first["closure_record_count"], len(closure["records"]))
         self.assertGreater(first["family_count"], 0)
         self.assertTrue(any(not item["supported"] for item in first["families"]))
+        blue_coin = next(item for item in first["families"]
+                         if item["stable_id"] == "bhvBlueCoinJumping")
+        self.assertEqual(blue_coin["actor_count"], 2)
+        self.assertGreaterEqual(blue_coin["maximum_live_instances"], 480)
         validate_family_bank_payload(first_payload)
+
+        # Valid closure order is not a content identity.  Reordering records
+        # must not change the selected representative or payload hash.
+        with tempfile.TemporaryDirectory() as reversed_dir:
+            reversed_path = Path(reversed_dir) / "closure.json"
+            reversed_closure = copy.deepcopy(closure)
+            reversed_closure["records"] = list(reversed(reversed_closure["records"]))
+            reversed_path.write_text(json.dumps(reversed_closure, sort_keys=True),
+                                     encoding="utf-8")
+            reordered = compile_actor_family_banks(ROOT, reversed_path,
+                                                   Path(reversed_dir) / "actors")
+        self.assertEqual(first["payload_sha256"], reordered["payload_sha256"])
 
     def test_selection_is_smallest_supported_capability_and_capacity(self) -> None:
         families = [
-            {"stable_id": "large", "supported": True, "capability_mask": 1,
-             "maximum_live_instances": 20, "family_id": 30, "family_key": "large"},
+            {"stable_id": "large", "supported": True, "capability_mask": 5,
+             "maximum_live_instances": 20, "family_id": 30, "family_key": "large",
+             "geo_source": "actors/large/geo.inc.c"},
             {"stable_id": "small", "supported": True, "capability_mask": 1,
-             "maximum_live_instances": 2, "family_id": 20, "family_key": "small"},
+             "maximum_live_instances": 2, "family_id": 20, "family_key": "small",
+             "geo_source": "actors/small/geo.inc.c"},
             {"stable_id": "unsupported", "supported": False, "capability_mask": 1,
-             "maximum_live_instances": 1, "family_id": 1, "family_key": "bad"},
+             "maximum_live_instances": 1, "family_id": 1, "family_key": "bad",
+             "geo_source": "actors/bad/geo.inc.c"},
         ]
         self.assertEqual(select_actor_family(families, 1, 1), "small")
         self.assertEqual(select_actor_family(families, 1, 3), "large")

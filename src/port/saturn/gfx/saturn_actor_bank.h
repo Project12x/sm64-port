@@ -106,6 +106,9 @@ bool sm64_saturn_actor_bank_vertex(
 bool sm64_saturn_actor_family_bank_validate(
     const void *data, size_t byte_count,
     sm64_saturn_actor_family_bank_view_t *view);
+bool sm64_saturn_actor_family_bank_validate_expected(
+    const void *data, size_t byte_count, const uint32_t expected_hash[8],
+    sm64_saturn_actor_family_bank_view_t *view);
 bool sm64_saturn_actor_family_bank_record(
     const sm64_saturn_actor_family_bank_view_t *view, uint16_t index,
     sm64_saturn_actor_family_record_t *out);

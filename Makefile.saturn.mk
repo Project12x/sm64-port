@@ -624,7 +624,14 @@ compile-actor-banks: compile-scene-closure check-host-tools
 	  --report "$(ACTOR_FAMILY_BANK_REPORT)"
 
 verify-actor-family-bank: compile-actor-banks
-	@"$(SATURN_TOOLS_PYTHON)" -c "import json; from pathlib import Path; p=Path(r'$(ACTOR_FAMILY_BANK_REPORT)'); d=json.loads(p.read_text()); assert d['payload_sha256'] and d['family_count'] > 0; print('actor family bank: PASS', d['family_count'], 'families', d['unsupported_required_capability_count'], 'unsupported')"
+	@"$(SATURN_TOOLS_PYTHON)" -c "import json; from pathlib import Path; p=Path(r'$(ACTOR_FAMILY_BANK_REPORT)'); d=json.loads(p.read_text()); assert d['payload_sha256'] and d['family_count'] > 0 and d['unsupported_required_capability_count'] == 13 and not d['complete_closure']; print('actor family report: PASS', d['family_count'], 'families', d['unsupported_required_capability_count'], 'unsupported')"
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_family_bank_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-family-bank-test$(HOST_EXEEXT)"
+	@"$(SATURN_TOOLS_PYTHON)" -c "import json, subprocess; from pathlib import Path; d=json.loads(Path(r'$(ACTOR_FAMILY_BANK_REPORT)').read_text()); subprocess.check_call([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-family-bank-test$(HOST_EXEEXT)', str(Path(d['payload']))])"
 
 verify-actor-pose-bank: compile-mario-actor-bank
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
