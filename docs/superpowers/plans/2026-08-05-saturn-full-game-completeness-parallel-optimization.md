@@ -1027,9 +1027,11 @@ start because the inherited MSYS invocation fails before compilation with
 invocation/environment contract; it must not weaken the linker assertions or
 silently substitute a host-only map.
 
-- [ ] RED: capture the exact failing make expansion under the DLL-preflighted
-  wrapper and add a mutation/fixture that rejects the recursive variable or
-  Windows `find` form before editing the invocation.
+- [x] RED preflight: capture the exact failing make expansion under the
+  DLL-preflighted wrapper; the deferred alias cycle is reproduced before
+  prerequisites. The isolated mutation/fixture is still a separate gate.
+- [ ] Add a mutation/fixture that rejects the recursive variable or Windows
+  `find` form before editing the invocation.
 - [ ] Implement the smallest source/build-only repair that preserves the
   sibling Yaul environment, `-j1` serialization, and all existing route-0
   targets; keep the fix Saturn-only and record the inherited-environment reason.
@@ -1232,15 +1234,17 @@ existing PoneSound/Yaul loader seams and inventory the current Saturn audio
 tree so the first source slice cannot accidentally duplicate a public symbol,
 claim full semantic audio, or make the SH-2 own MC68000 slot state.
 
-- [ ] Inventory the current Yaul SMPC/sound-RAM loader, PoneSound-derived
+- [x] Inventory the current Yaul SMPC/sound-RAM loader, PoneSound-derived
   startup, mailbox fields, SCSP register definitions, and 68K build targets;
   record exact files/commits/licenses and a reuse mode for every inspected
   upstream range.
-- [ ] Define and mutation-test the smallest project-owned boundary:
-  `saturn_audio_init`, bank load, render-ready voice publication, stop-all,
-  and driver-alive, with a pointer-free voice table and no SequencePlayer
-  pointers crossing the mailbox.
-- [ ] Produce a source-only 68K image/linker/asset integration brief and
+- [x] Define the smallest project-owned boundary: `saturn_audio_init`, bank
+  prepare/commit, semantic-event publication, stop-all, and driver status,
+  with pointer-free records and no SequencePlayer pointers crossing the
+  mailbox. Render-ready voice/slot state remains MC68000-local.
+- [ ] Mutation-test that boundary and reject native voice tables, pointers,
+  duplicate owners, stale identities, and feature-on fallback to the weak sink.
+- [x] Produce a source-only 68K image/linker/asset integration brief and
   identify the first host/linked gates. No full music/SFX, target, audible, or
   FPS claim is allowed in this preflight.
 
