@@ -51,6 +51,7 @@
 - 2026-08-06 voice-scheduler review correction: Task 17's first independent rereview is SPEC/QUALITY FAIL, C1/I2/M0. Stale-generation slot recovery can clear software state while hardware remains keyed, the freestanding m68k gate can pass from cached objects without pinned tool discovery, and the report overstates source-faithful ADSR while software TL and SCSP EG both participate. A repair must make stale recovery transactional, force a reproducible toolchain rebuild, and narrow/trace envelope ownership before the bounded slice is accepted.
 - 2026-08-06 voice-scheduler repair: `144b4aa6` makes stale-generation recovery transactional (successful key-off clears software state; zero-capacity retains/retries with capacity telemetry), forces a pinned PoneSound/GCC rebuild with artifact hash and empty `nm -u`, and makes software total-level the sole envelope owner with neutral SCSP EG words. The actual Project12x release range and simplified/non-source-faithful envelope boundary are documented; independent rereview is pending.
 - 2026-08-06 voice-scheduler repair acceptance: independent rereview of `144b4aa6` is SPEC/QUALITY PASS, C0/I0/M0. Real `scsp_pcm8` caller-path tests prove transactional stale key-off/retry; forced `-B` m68k verification attests the pinned PoneSound/GCC/artifact hashes and empty `nm -u`; software TL is the sole deliberately simplified envelope owner. Production heartbeat/package/target/Ymir/manual/FPS remain open.
+- 2026-08-06 actor-capability scope correction: Task 18's generic slice derives class bits from closure records and runtime masks from fields actually present in the actor ABI. It can validate rigid/opaque/static-transform/platform/collectible class requirements without a family whitelist, but surface/collectible source fields remain unresolved and fail closed; BOB still reports 13 unsupported records and `complete_closure=false`.
 
 ## Prior art and reuse mode
 
@@ -150,7 +151,7 @@ all complete.
 - [ ] Task 15 — active/source-incomplete — commits `df95a107`, `52d45d5e`, `211158ea`, `b004fe7b`; bounded pointer-free VM scaffold and `verify-sequence-vm` are green, with Project12x ranges/provenance and source-parity repairs recorded. Bounded-slice rereview is SPEC/QUALITY PASS, C0/I0/M0. Full seq00/35-sequence/S64P/MC68000 image/SCSP/target/Ymir/manual audio gates remain blocked by Task 12 assets and later integration.
 - [ ] Task 16 — active/source-incomplete — infrastructure `0549f7af`; independent rereview SPEC/QUALITY FAIL. Exact-once queue/batching, stale-generation quarantine, and host mutation gates pass, but the 64-instance arena/accounting/P2/output-boundary repair is in progress and actor-meshlet/production renderer cutover remains open.
 - [ ] Task 17 — active/source-incomplete — infrastructure commits `5b74081c`, `144b4aa6`; serial allocator/slot-shadow/timer/SCSP-PCM8/sequence-VM and forced m68k provenance gates pass. Repair rereview is SPEC/QUALITY PASS, C0/I0/M0. Full envelope/package data, heartbeat/MC68000 drain, target image, Ymir/tempo/manual/FPS evidence remain open.
-- [ ] Task 18 — close BOB rigid/opaque/platform/collectible capabilities
+- [ ] Task 18 — active/source-incomplete — generic capability slice `a319583c`; serial actor-capability-bank/C mutation, closure-derived Python 2/2, and generic actor-bank 4/4 gates pass. BOB payload is 47 families/86 records (SHA `53f541e6…`), with 13 unsupported records; default opaque query fails closed on exact unresolved IDs and rigid/static adds 5 existing unsupported geo families. Independent review pending; no full BOB/target/Ymir/manual/FPS claim.
 - [ ] Task 19 — close BOB articulated/enemy/boss capabilities
 - [ ] Task 20 — close BOB billboard/translucent/shadow/effect capabilities
 - [ ] Task 21 — integrate bounded audio package boot/residency in sourceboot
@@ -871,17 +872,17 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 - Create: `tools/saturn/test_bob_actor_capabilities.py`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`
 
-- [ ] Query `closure.json` for required rigid/opaque/static-transform/platform/surface/collectible feature sets and make the test fail with the exact unresolved family IDs. Do not write a source-level family whitelist.
-- [ ] Implement only generic capability records: transforms/scales, immutable material selection, moving-surface presentation, model mutation already declared in snapshot state, and source-owned active/opacity/lifecycle flags.
-- [ ] Require multiplicity/capacity from the generated maximum-live counts and prove each visible instance gets its own queue descriptor/output span.
-- [ ] Run GREEN:
+- [x] Query `closure.json` for required rigid/opaque/static-transform/platform/surface/collectible feature sets and make the test fail with exact unresolved family IDs. No source-level family whitelist is used; default opaque fails on eight exact IDs and rigid/static adds five existing unsupported geo families.
+- [x] Implement generic capability class/runtime masks for transform, scale, material, surface, and lifecycle fields present in the actor ABI. Unknown runtime bits and missing required masks fail closed; source-owned surface/collectible fields remain unresolved rather than fabricated.
+- [ ] Require multiplicity/capacity from generated maximum-live counts and prove each visible instance gets its own queue descriptor/output span — blocked by Task 14 registry/typed-field gaps and Task 16 production drain.
+- [x] Run GREEN for the generic slice:
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-capability-opaque verify-actor-instance-queue
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_actor_capabilities.py --class opaque
   ```
 
-- [ ] Commit as `feat(saturn): close BOB opaque actor capabilities`; review report counts, surface ownership, capacity, and absence of family-specific runtime callbacks.
+- [x] Commit generic slice as `a319583c`; independent review pending. BOB `complete_closure=false`, 13 unsupported records, and no target/Ymir/manual/FPS claim remain explicit.
 
 ### Task 19: Close BOB articulated, enemy, and boss capabilities
 
