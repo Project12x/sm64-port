@@ -24,6 +24,7 @@
 #include "saturn_render_lifecycle.h"
 #include "saturn_render_output_bank.h"
 #include "saturn_render_payload_bank.h"
+#include "saturn_scene_admission.h"
 #include "saturn_terrain_command_template.h"
 #include "saturn_terrain_emit_policy.h"
 #include "saturn_terrain_fused.h"
@@ -183,6 +184,8 @@ static uint32_t s_spatial_ref_seen[DEMO_SPATIAL_REF_SEEN_WORDS];
  * fixed-capacity traversal has the same safety property: each node is visited
  * at most once per frame. */
 static uint8_t s_spatial_node_seen[SM64_SATURN_BOB_BSP_NODE_COUNT];
+static sm64_saturn_scene_admission_node_t s_scene_admission_nodes[
+    SM64_SATURN_BOB_BSP_NODE_COUNT];
 static uint16_t s_render_work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 static uint16_t s_render_work_count;
 static uint16_t s_primitive_leaf_id[SM64_SATURN_BOB_PRIMITIVE_COUNT];
@@ -583,6 +586,7 @@ static inline bool demo_actor_valid_read(uint16_t vertex)
 }
 
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
+static int32_t demo_q16_from_world(int32_t value);
 static void demo_spatial_append_node_span(
     uint16_t node, sm64_saturn_fast3d_profile_t *profile)
 {
@@ -699,8 +703,78 @@ static sm64_saturn_ztreme_frustum_result_t demo_spatial_admit_node(
 
 static void demo_spatial_admit(
     const sm64_saturn_camera_transform_t *camera,
-    sm64_saturn_fast3d_profile_t *profile)
+    sm64_saturn_fast3d_profile_t *profile, uint32_t generation)
 {
+    /* The generic package view is the production admission owner. BOB's
+     * legacy recursive painter remains below as a fail-closed compatibility
+     * fallback for a malformed generated header, but normal frames never
+     * enter that scene-specific path. */
+    sm64_saturn_render_view_t render_view = {0};
+    sm64_saturn_scene_admission_output_t admission_output;
+    sm64_saturn_scene_admission_stats_t admission_stats;
+    uint16_t portal_indices[1];
+    sm64_saturn_scene_admission_view_t scene = {0};
+    for (uint16_t node = 0U; node < SM64_SATURN_BOB_BSP_NODE_COUNT; node++) {
+        for (uint8_t axis = 0U; axis < 3U; axis++) {
+            s_scene_admission_nodes[node].bounds_min_q16[axis] =
+                demo_q16_from_world(sm64_saturn_bob_bsp_bounds_min[node][axis]);
+            s_scene_admission_nodes[node].bounds_max_q16[axis] =
+                demo_q16_from_world(sm64_saturn_bob_bsp_bounds_max[node][axis]);
+        }
+        s_scene_admission_nodes[node].cluster_ref_first =
+            sm64_saturn_bob_node_first_ref[node];
+        s_scene_admission_nodes[node].cluster_ref_count =
+            sm64_saturn_bob_node_ref_count[node];
+        s_scene_admission_nodes[node].portal_ref_first = 0U;
+        s_scene_admission_nodes[node].portal_ref_count = 0U;
+        s_scene_admission_nodes[node].reserved = 0U;
+    }
+    render_view.camera_position_q16[0] = demo_q16_from_world(camera->position.x);
+    render_view.camera_position_q16[1] = demo_q16_from_world(camera->position.y);
+    render_view.camera_position_q16[2] = demo_q16_from_world(camera->position.z);
+    render_view.view_forward_q16[0] = camera->forward.x;
+    render_view.view_forward_q16[1] = camera->forward.y;
+    render_view.view_forward_q16[2] = camera->forward.z;
+    render_view.view_projection_q16[0][0] = camera->right.x;
+    render_view.view_projection_q16[0][1] = camera->right.y;
+    render_view.view_projection_q16[0][2] = camera->right.z;
+    render_view.view_projection_q16[1][0] = camera->up.x;
+    render_view.view_projection_q16[1][1] = camera->up.y;
+    render_view.view_projection_q16[1][2] = camera->up.z;
+    render_view.generation = generation;
+    scene.metadata_version = SM64_SATURN_SCENE_ADMISSION_VERSION;
+    scene.metadata_valid = 1U;
+    scene.clusters = sm64_saturn_bob_render_clusters;
+    scene.cluster_count = SM64_SATURN_BOB_CLUSTER_COUNT;
+    scene.nodes = s_scene_admission_nodes;
+    scene.node_count = SM64_SATURN_BOB_BSP_NODE_COUNT;
+    scene.cluster_refs = sm64_saturn_bob_primitive_refs;
+    scene.cluster_ref_count = SM64_SATURN_BOB_PRIMITIVE_REF_COUNT;
+    scene.portal_ref_count = 0U;
+    scene.root_node = 0U;
+    scene.frustum.near_depth = SATURN_DEMO_NEAR_DEPTH;
+    scene.frustum.far_depth = DEMO_FAR_DEPTH;
+    scene.frustum.half_width = DEMO_CENTER_X;
+    scene.frustum.half_height = DEMO_CENTER_Y;
+    scene.frustum.focal_length = DEMO_FOCAL_LENGTH;
+    admission_output = (sm64_saturn_scene_admission_output_t){
+        .cluster_indices = s_render_work_order,
+        .cluster_capacity = SM64_SATURN_BOB_PRIMITIVE_COUNT,
+        .portal_indices = portal_indices,
+        .portal_capacity = 0U};
+    if (sm64_saturn_scene_admit(&scene, &render_view, &admission_output,
+                                &admission_stats)) {
+        s_render_work_count = admission_output.cluster_count;
+        profile->demo_bob_primitives_spatial_admitted +=
+            admission_stats.clusters_admitted;
+        profile->demo_bob_primitives_spatial_dropped +=
+            admission_stats.output_exhausted;
+        profile->demo_bob_nodes_visited += admission_stats.nodes_tested;
+        profile->demo_bob_nodes_outside += admission_stats.nodes_tested -
+            admission_stats.nodes_admitted;
+        profile->demo_bob_nodes_inside += admission_stats.nodes_admitted;
+        return;
+    }
     memset(s_spatial_ref_seen, 0, sizeof(s_spatial_ref_seen));
     memset(s_spatial_node_seen, 0, sizeof(s_spatial_node_seen));
     s_render_work_count = 0U;
@@ -3724,11 +3798,11 @@ static bool demo_render_prepare_publish(void *opaque, uint32_t generation)
      * below derives each tier from the immutable camera view and its own
      * hysteretic state before any worker transforms positions. */
     s_pretransform_lod_tier = (uint8_t)SATURN_DEMO_POLY_TIER;
+    const uint32_t transform_generation = generation;
     vdp1_vram_partitions_get(&transaction->partitions);
 #if SATURN_DEMO_BSP_ORDER && !SATURN_DEMO_BSP_FRAGMENTS
-    demo_spatial_admit(&terrain_job.camera, profile);
+    demo_spatial_admit(&terrain_job.camera, profile, transform_generation);
 #endif
-    const uint32_t transform_generation = generation;
     demo_prepare_render_work_order(
         &terrain_job.camera, profile, transform_generation);
     const uint16_t required_positions = demo_build_visible_position_set(

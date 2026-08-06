@@ -13,6 +13,10 @@
   scene-independent; target/Ymir activation and FPS evidence remain open.
   The serial DLL-preflight gate also uses Python subprocess launches for the
   host executables, avoiding the inherited MSYS quoted-path EOF failure.
+  The production BOB render-prep now constructs and consumes this package
+  view; frame-owned orientation overrides static metadata, portal endpoints
+  must agree in both adjacency lists, and queued nodes are marked before
+  enqueue to keep bounded traversal deterministic.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed

@@ -23,6 +23,7 @@ typedef struct sm64_saturn_scene_admission_node {
     uint16_t cluster_ref_count;
     uint16_t portal_ref_first;
     uint16_t portal_ref_count;
+    uint16_t reserved;
 } sm64_saturn_scene_admission_node_t;
 
 typedef struct sm64_saturn_scene_admission_portal_window {

@@ -49,11 +49,24 @@ static sm64_saturn_ztreme_frustum_t admission_frustum(
     uint8_t axis;
     for (axis = 0U; axis < 3U; axis++)
         frustum.position[axis] = floor_q16(view->camera_position_q16[axis]);
-    if (frustum.forward[0] == 0 && frustum.forward[1] == 0 &&
-        frustum.forward[2] == 0) {
-        frustum.forward[0] = view->view_forward_q16[0];
-        frustum.forward[1] = view->view_forward_q16[1];
-        frustum.forward[2] = view->view_forward_q16[2];
+    /* Orientation is frame-owned. Package metadata may provide limits, but
+     * it can never override the immutable view's forward basis. */
+    frustum.forward[0] = view->view_forward_q16[0];
+    frustum.forward[1] = view->view_forward_q16[1];
+    frustum.forward[2] = view->view_forward_q16[2];
+    if (view->view_projection_q16[0][0] != 0 ||
+        view->view_projection_q16[0][1] != 0 ||
+        view->view_projection_q16[0][2] != 0) {
+        frustum.right[0] = view->view_projection_q16[0][0];
+        frustum.right[1] = view->view_projection_q16[0][1];
+        frustum.right[2] = view->view_projection_q16[0][2];
+    }
+    if (view->view_projection_q16[1][0] != 0 ||
+        view->view_projection_q16[1][1] != 0 ||
+        view->view_projection_q16[1][2] != 0) {
+        frustum.up[0] = view->view_projection_q16[1][0];
+        frustum.up[1] = view->view_projection_q16[1][1];
+        frustum.up[2] = view->view_projection_q16[1][2];
     }
     if (frustum.near_depth <= 0) frustum.near_depth = 1;
     if (frustum.far_depth <= frustum.near_depth)
@@ -141,7 +154,7 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
                               node->portal_ref_count;
         if (!bounds_valid(node->bounds_min_q16, node->bounds_max_q16) ||
             cluster_end > scene->cluster_ref_count ||
-            portal_end > scene->portal_ref_count) {
+            portal_end > scene->portal_ref_count || node->reserved != 0U) {
             stats->malformed_metadata = 1U;
             return false;
         }
@@ -157,6 +170,7 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
         if (!bounds_valid(portal->bounds_min_q16, portal->bounds_max_q16) ||
             portal->node_a >= scene->node_count ||
             portal->node_b >= scene->node_count || portal->node_a == portal->node_b ||
+            portal->open > 1U ||
             portal->reserved[0] != 0U || portal->reserved[1] != 0U ||
             portal->reserved[2] != 0U) {
             stats->malformed_metadata = 1U;
@@ -167,7 +181,31 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
         if (scene->portal_refs[index] >= scene->portal_count) {
             stats->malformed_metadata = 1U;
             return false;
+    }
+    /* Every edge must be represented by both endpoint adjacency lists. This
+     * removes the old traversal guess where a ref was interpreted as the
+     * opposite endpoint even when the package omitted the relationship. */
+    for (index = 0U; index < scene->portal_count; index++) {
+        const sm64_saturn_scene_admission_portal_window_t *portal =
+            &scene->portals[index];
+        uint16_t endpoint, node_index;
+        for (endpoint = 0U; endpoint < 2U; endpoint++) {
+            const uint16_t node_id = endpoint == 0U ? portal->node_a : portal->node_b;
+            bool found = false;
+            for (node_index = 0U; node_index < scene->node_count; node_index++) {
+                const sm64_saturn_scene_admission_node_t *node = &scene->nodes[node_index];
+                if (node_index != node_id) continue;
+                uint16_t ref;
+                for (ref = 0U; ref < node->portal_ref_count; ref++)
+                    if (scene->portal_refs[node->portal_ref_first + ref] == index)
+                        found = true;
+            }
+            if (!found) {
+                stats->malformed_metadata = 1U;
+                return false;
+            }
         }
+    }
     return true;
 }
 
@@ -180,6 +218,7 @@ bool sm64_saturn_scene_admit(
     sm64_saturn_ztreme_frustum_t frustum;
     uint8_t visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
     uint16_t queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+    uint8_t queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
     uint16_t queue_head = 0U, queue_tail = 0U;
     uint16_t index;
     bool success = true;
@@ -199,8 +238,10 @@ bool sm64_saturn_scene_admit(
     }
     if (!metadata_valid(scene, stats)) return false;
     memset(visited, 0, sizeof(visited));
+    memset(queued, 0, sizeof(queued));
     frustum = admission_frustum(scene, view);
     queue[queue_tail++] = scene->root_node;
+    queued[scene->root_node] = 1U;
     while (queue_head < queue_tail) {
         const uint16_t node_index = queue[queue_head++];
         const sm64_saturn_scene_admission_node_t *node;
@@ -274,13 +315,14 @@ bool sm64_saturn_scene_admit(
             }
             destination = portal->node_a == node_index ? portal->node_b :
                          portal->node_a;
-            if (visited[destination] != 0U) {
+            if (visited[destination] != 0U || queued[destination] != 0U) {
                 stats->cycle_edges++;
             } else if (queue_tail >= SM64_SATURN_SCENE_ADMISSION_MAX_NODES) {
                 stats->output_exhausted = 1U;
                 success = false;
             } else {
                 queue[queue_tail++] = destination;
+                queued[destination] = 1U;
             }
         }
     }
