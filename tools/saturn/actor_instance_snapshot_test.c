@@ -403,6 +403,25 @@ static void test_pre_acquire_recycle_releases_stranded_writing_bank(void)
         assert(((const uint8_t *)bank.snapshots[index])[byte] == 0U);
 }
 
+static void test_two_failed_captures_do_not_strand_both_banks(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_capture_telemetry_t telemetry;
+    uint8_t index;
+    uint16_t count;
+
+    sm64_saturn_actor_instance_bank_init(&bank);
+    /* RED with the former quarantine path: generation 1 and 2 consumed each
+     * physical bank, leaving no FREE slot for generation 3. */
+    assert(!sm64_saturn_actor_instance_bank_capture(
+        &bank, 101U, 0U, &index, &count, &telemetry));
+    assert(!sm64_saturn_actor_instance_bank_capture(
+        &bank, 102U, 0U, &index, &count, &telemetry));
+    assert(bank.state[0] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
+    assert(bank.state[1] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
+    assert(sm64_saturn_actor_instance_bank_begin_write(&bank, 103U, &index));
+}
+
 static void test_pre_acquire_recycle_enforces_exact_ready_ownership(void)
 {
     sm64_saturn_actor_instance_bank_t bank;
@@ -477,6 +496,7 @@ int main(void)
     test_bank_rejects_stale_and_duplicate_generations();
     test_bank_capture_acquires_exact_published_payload();
     test_pre_acquire_recycle_releases_stranded_writing_bank();
+    test_two_failed_captures_do_not_strand_both_banks();
     test_pre_acquire_recycle_enforces_exact_ready_ownership();
     test_pre_acquire_recycle_rejects_post_acquire_states();
     return 0;
