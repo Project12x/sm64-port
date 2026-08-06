@@ -1071,12 +1071,13 @@ license, renderer, or target-performance result.
   gates pass; compilation completes, but link stops on HWRAM overflow by
   `159664` bytes. No ELF/map or target/P2/concurrent-SH2/Ymir/manual/FPS
   evidence is claimed.
-- [ ] Repair the identity coverage before acceptance: the independent
-  rereview of `730346c9` is SPEC/QUALITY FAIL, C1/I1/M0 because `source_hash`
-  omits most compiled source and package-named fields hash recipe manifests
-  rather than exact payloads; the fixture also misses closure/path/tag
-  negatives. Add source-closure/payload mutations and rerun the serialized
-  build. No current-head image is authorized until rereview passes.
+- [ ] Repair the identity coverage before acceptance: fix `a32913cb` replaces
+  the three-file source whitelist with a conservative source/config/linker/tool
+  closure, binds exact current feature-off BOB/actor/animation payload bytes,
+  and fails closed for missing actor or semantic-audio payloads. Its bootstrap
+  5/5, identity 9/9, and source-identity 5/5 gates pass; independent fix
+  rereview is pending after the prior SPEC/QUALITY FAIL C1/I1/M0. No
+  current-head image is authorized until rereview passes.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
