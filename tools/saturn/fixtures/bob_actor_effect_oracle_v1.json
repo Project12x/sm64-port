@@ -1,0 +1,31 @@
+{
+  "schema": "sm64-saturn-actor-effect-oracle-v1",
+  "closure_schema": "sm64-saturn-scene-closure-v1",
+  "family_schema": "sm64-saturn-actor-family-bank-v2",
+  "family_header_content_sha256": "56e9a35c2ee24c92e0cf3f7f80f5a10720e87183c9cd0f5a18e135b463a71bad",
+  "family_payload_sha256": "861be66d903460f9e54689a2dccbd611374a9123e3db75c6bc291c0d7ca7f298",
+  "classes": {
+    "BILLBOARD": ["bhvBobomb", "bhvBobombBuddy", "bhvBobombBuddyOpensCannon", "bhvGoomba", "bhvKingBobomb"],
+    "ALPHA": ["bhv1Up", "bhvBlueCoinJumping", "bhvBobomb", "bhvBobombBuddy", "bhvBobombBuddyOpensCannon", "bhvBowlingBall", "bhvBreakBoxTriangle", "bhvChainChomp", "bhvChainChompChainPart", "bhvChainChompGate", "bhvCoinFormationSpawn", "bhvCoinSparkles", "bhvGoldenCoinSparkles", "bhvGoomba", "bhvHidden1up", "bhvHidden1upInPole", "bhvKingBobomb", "bhvMovingYellowCoin", "bhvMrIBlueCoin", "bhvOpenableCageDoor", "bhvOrangeNumber", "bhvPitBowlingBall", "bhvRedCoin", "bhvSingleCoinGetsSpawned", "bhvSpawnedStar", "bhvStar", "bhvStarSpawnCoordinates", "bhvWhitePuffExplosion", "bhvWingCap", "bhvYellowCoin"],
+    "TRANSLUCENT": ["bhvBobombBullyDeathSmoke", "bhvBobombFuseSmoke", "bhvBubbleSplash", "bhvExplosion", "bhvKoopaShellFlame", "bhvObjectWaterSplash", "bhvObjectWaterWave", "bhvObjectWaveTrail", "bhvRecoveryHeart", "bhvRedCoinStarMarker", "bhvSmoke", "bhvSparkle", "bhvWaterBomb", "bhvWaterBombShadow", "bhvWaterDropletSplash", "bhvWhitePuffExplosion", "bhvWhitePuffSmoke2", "bhvWingCap"],
+    "SHADOW": ["bhv1Up", "bhvBlueCoinJumping", "bhvBobomb", "bhvBobombBuddy", "bhvBobombBuddyOpensCannon", "bhvBowlingBall", "bhvBreakableBox", "bhvBreakableBoxSmall", "bhvChainChomp", "bhvChainChompChainPart", "bhvCoinFormationSpawn", "bhvExclamationBox", "bhvGoomba", "bhvHidden1up", "bhvHidden1upInPole", "bhvKingBobomb", "bhvKoopa", "bhvKoopaShell", "bhvKoopaShellFlame", "bhvMessagePanel", "bhvMovingYellowCoin", "bhvMrIBlueCoin", "bhvPitBowlingBall", "bhvRecoveryHeart", "bhvRedCoin", "bhvRedCoinStarMarker", "bhvSingleCoinGetsSpawned", "bhvSpawnedStar", "bhvStar", "bhvStarSpawnCoordinates", "bhvWaterBomb", "bhvWaterBombShadow", "bhvWingCap", "bhvYellowCoin"],
+    "PARTICLE": [],
+    "DECAL": []
+  },
+  "roles": {
+    "projectiles": ["bhvBowlingBall", "bhvWaterBomb", "bhvWaterBombShadow"],
+    "rewards": ["bhvBlueCoinJumping", "bhvCoinFormationSpawn", "bhvHidden1upInPole", "bhvMovingYellowCoin", "bhvMrIBlueCoin", "bhvSingleCoinGetsSpawned", "bhvSpawnedStar", "bhvStar", "bhvStarSpawnCoordinates", "bhvWingCap"],
+    "effects": ["bhvBobombBullyDeathSmoke", "bhvBobombExplosionBubble", "bhvBobombFuseSmoke", "bhvBubbleSplash", "bhvCannonBarrelBubbles", "bhvCoinSparkles", "bhvExplosion", "bhvGoldenCoinSparkles", "bhvKoopaShellFlame", "bhvObjectBubble", "bhvObjectWaterWave", "bhvObjectWaveTrail", "bhvSmoke", "bhvSparkle", "bhvSparkleSpawn", "bhvWaterDroplet", "bhvWaterDropletSplash", "bhvWhitePuffExplosion", "bhvWhitePuffSmoke2"]
+  },
+  "unsupported_effect_records": [
+    "bhvBreakBoxTriangle[0x08324fd7]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvBreakableBoxSmall[0xed463998]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvBreakableBox[0xb826b5f0]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvChainChompGate[0x28a7c27d]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvExclamationBox[0xcbaa8d1a]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvKoopaShellFlame[0x548d47cb]:UNSUPPORTED_GEO_NODE:GEO_BRANCH_AND_LINK",
+    "bhvOpenableCageDoor[0x38d3445c]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvWaterBombShadow[0xc156e2f8]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+    "bhvWaterBomb[0x8192ed5b]:UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS"
+  ]
+}

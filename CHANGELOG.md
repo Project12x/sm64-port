@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Added bounded BOB actor-effect infrastructure derived from the generated
+  closure rather than runtime behavior-name branches. An exact pinned oracle
+  covers billboard, alpha-cutout, translucent, shadow, particle, decal,
+  projectile, reward, and effect records; identity, inventory, role, unknown
+  feature, stale generation, and fixed-capacity mutations fail closed. The
+  pointer-free descriptor path preserves source lifetime, uses the existing
+  fixed-point billboard basis, distinguishes cutout replacement from true
+  VDP1 half-transparency, and produces stable far-to-near order. The nine
+  `GEO_CULLING_RADIUS`/`GEO_BRANCH_AND_LINK` records and all production
+  observer effect fields remain explicitly unresolved, so this host-only slice
+  does not claim target/Ymir/manual output, complete BOB effects, or FPS gain.
+
 - Added the bounded Task 19 actor-capability admission infrastructure. The
   generated BOB closure now has an independent exact oracle for ANIMATED,
   SWITCH, PARENTED, HELD, MODEL_MUTATION, and LOD, including behavior-spawned

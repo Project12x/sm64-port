@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 from collect_scene_closure import collect_scene_closure
-from compile_actor_bank import compile_actor_family_banks
+from compile_actor_bank import _family_record, compile_actor_family_banks
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +24,78 @@ RULES = ROOT / "tools/saturn/behavior_spawn_rules.json"
 DEFAULT_CLOSURE = ROOT / "build/saturn/packages/bob/1/closure.json"
 DEFAULT_REPORT = ROOT / "build/saturn/packages/bob/1/actors/actor-families.json"
 ORACLE = ROOT / "tools/saturn/fixtures/bob_actor_capability_oracle_v1.json"
+EFFECT_ORACLE = ROOT / "tools/saturn/fixtures/bob_actor_effect_oracle_v1.json"
+
+EFFECT_CLASSES = ("BILLBOARD", "ALPHA", "TRANSLUCENT", "SHADOW", "PARTICLE")
+KNOWN_MATERIAL_FEATURES = frozenset({
+    "alpha", "animated", "billboard", "decal", "shadow", "transparent",
+    "translucent",
+})
+
+
+def effect_inventory(
+    closure: dict[str, object], report: dict[str, object],
+) -> dict[str, object]:
+    families = {str(item["family_key"]): item for item in report["families"]}
+    classes = {name: [] for name in (*EFFECT_CLASSES, "DECAL")}
+    effect_records: set[str] = set()
+    unsupported: set[str] = set()
+    for record in closure["records"]:
+        candidate = _family_record(ROOT, record)
+        features = {str(item).lower()
+                    for item in record.get("material_feature_bits", ())}
+        unknown = features - KNOWN_MATERIAL_FEATURES
+        if unknown:
+            raise AssertionError("unknown effect material feature(s): " +
+                                 ", ".join(sorted(unknown)))
+        active_classes = [name for name in EFFECT_CLASSES
+                          if name in candidate["capabilities"]]
+        if "decal" in features:
+            active_classes.append("DECAL")
+        for name in active_classes:
+            classes[name].append(str(record["stable_id"]))
+        if active_classes:
+            effect_records.add(str(record["stable_id"]))
+            family = families.get(str(candidate["family_key"]))
+            if family is None:
+                raise AssertionError(f"missing effect family {record['stable_id']}")
+            for reason in family["unsupported"]:
+                if reason in {"UNSUPPORTED_GEO_NODE:GEO_CULLING_RADIUS",
+                              "UNSUPPORTED_GEO_NODE:GEO_BRANCH_AND_LINK"}:
+                    unsupported.add(
+                        f"{record['stable_id']}[{int(family['family_id']):#010x}]:{reason}")
+    return {
+        "classes": {name: sorted(values) for name, values in classes.items()},
+        # These roles are generated closure fields. They are not recomputed
+        # from family names at runtime.
+        "roles": {role: sorted({str(child) for record in closure["records"]
+                                for child in record.get(role, ())})
+                  for role in ("projectiles", "rewards", "effects")},
+        "unsupported_effect_records": sorted(unsupported),
+    }
+
+
+def assert_effect_oracle(
+    closure: dict[str, object], report: dict[str, object],
+) -> None:
+    oracle = json.loads(EFFECT_ORACLE.read_text(encoding="utf-8"))
+    if oracle.get("schema") != "sm64-saturn-actor-effect-oracle-v1":
+        raise AssertionError("unexpected actor effect oracle schema")
+    if oracle.get("closure_schema") != closure.get("schema"):
+        raise AssertionError("actor effect closure schema drift")
+    if oracle.get("family_schema") != report.get("schema") or \
+            oracle.get("family_header_content_sha256") != \
+                report.get("header_content_sha256") or \
+            oracle.get("family_payload_sha256") != report.get("payload_sha256"):
+        raise AssertionError("actor effect family source identity drift")
+    actual = effect_inventory(closure, report)
+    expected = {key: oracle[key] for key in
+                ("classes", "roles", "unsupported_effect_records")}
+    if actual != expected:
+        raise AssertionError(
+            "actor effect oracle drift:\n"
+            f"expected={json.dumps(expected, sort_keys=True)}\n"
+            f"actual={json.dumps(actual, sort_keys=True)}")
 
 RUNTIME_FOR_CLASS = {
     "rigid": ("TRANSFORM", "SCALE", "MATERIAL", "LIFECYCLE"),
@@ -102,6 +174,55 @@ def unresolved_family_ids(
 
 
 class BobActorCapabilityTest(unittest.TestCase):
+    def test_exact_bob_effect_inventory_and_roles(self) -> None:
+        closure = json.loads(DEFAULT_CLOSURE.read_text(encoding="utf-8"))
+        report = json.loads(DEFAULT_REPORT.read_text(encoding="utf-8"))
+        assert_effect_oracle(closure, report)
+
+    def test_effect_oracle_rejects_unknown_material_and_stale_identity(self) -> None:
+        closure = json.loads(DEFAULT_CLOSURE.read_text(encoding="utf-8"))
+        report = json.loads(DEFAULT_REPORT.read_text(encoding="utf-8"))
+        unknown = copy.deepcopy(closure)
+        unknown["records"][0]["material_feature_bits"] = ["mystery-effect"]
+        with self.assertRaisesRegex(AssertionError, "unknown effect material"):
+            effect_inventory(unknown, report)
+        for identity_field in ("header_content_sha256", "payload_sha256"):
+            with self.subTest(identity_field=identity_field):
+                stale = copy.deepcopy(report)
+                stale[identity_field] = "00" * 32
+                with self.assertRaisesRegex(AssertionError,
+                                             "source identity drift"):
+                    assert_effect_oracle(closure, stale)
+
+    def test_effect_oracle_rejects_inventory_role_and_family_mutations(self) -> None:
+        closure = json.loads(DEFAULT_CLOSURE.read_text(encoding="utf-8"))
+        report = json.loads(DEFAULT_REPORT.read_text(encoding="utf-8"))
+
+        inventory_mutation = copy.deepcopy(closure)
+        record = next(item for item in inventory_mutation["records"]
+                      if "alpha" in item.get("material_feature_bits", ()))
+        record["material_feature_bits"] = [
+            item for item in record["material_feature_bits"] if item != "alpha"
+        ]
+        with self.assertRaisesRegex(AssertionError, "oracle drift"):
+            assert_effect_oracle(inventory_mutation, report)
+
+        role_mutation = copy.deepcopy(closure)
+        record = next(item for item in role_mutation["records"]
+                      if item.get("effects"))
+        record["effects"] = list(record["effects"]) + ["bhvMutationSentinel"]
+        with self.assertRaisesRegex(AssertionError, "oracle drift"):
+            assert_effect_oracle(role_mutation, report)
+
+        missing_family = copy.deepcopy(report)
+        candidate = _family_record(ROOT, closure["records"][0])
+        missing_family["families"] = [
+            family for family in missing_family["families"]
+            if family["family_key"] != candidate["family_key"]
+        ]
+        with self.assertRaisesRegex(AssertionError, "missing effect family"):
+            effect_inventory(closure, missing_family)
+
     def test_unknown_source_requirement_names_exact_family(self) -> None:
         closure = collect_scene_closure(ROOT, "bob", 1, RULES)
         oracle = json.loads(ORACLE.read_text(encoding="utf-8"))
@@ -187,7 +308,7 @@ class BobActorCapabilityTest(unittest.TestCase):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--class", dest="class_name",
-                        choices=sorted((*RUNTIME_FOR_CLASS, "articulated")),
+                        choices=sorted((*RUNTIME_FOR_CLASS, "articulated", "effect")),
                         default="opaque")
     parser.add_argument("--closure", type=Path, default=DEFAULT_CLOSURE)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
@@ -198,6 +319,15 @@ def main() -> None:
         return
     closure = json.loads(args.closure.read_text(encoding="utf-8"))
     report = json.loads(args.report.read_text(encoding="utf-8"))
+    if args.class_name == "effect":
+        assert_effect_oracle(closure, report)
+        inventory = effect_inventory(closure, report)
+        counts = ", ".join(
+            f"{name}={len(records)}"
+            for name, records in inventory["classes"].items())
+        print("actor effect capabilities: PASS " + counts +
+              f", unsupported={len(inventory['unsupported_effect_records'])}")
+        return
     unresolved = unresolved_family_ids(closure, report, args.class_name)
     if unresolved:
         raise SystemExit(
