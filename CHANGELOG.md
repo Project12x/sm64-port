@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Added a bounded, pointer-free M64 sequence VM scaffold for the MC68000
+  audio lane. It preserves Project12x compressed-delay, tempo-accumulator,
+  call/return, loop, branch, and note timing semantics while emitting scalar
+  control/note events only; it performs no SCSP writes and is not linked into
+  sourceboot. An eight-frame stack, 64-instruction tick budget, bounded event
+  output, and strict operand/target validation fail closed on malformed,
+  truncated, unknown, or non-progressing streams. The serialized
+  `verify-sequence-vm` gate launches through Python subprocess to avoid the
+  inherited MSYS quoted-executable/DLL failure. No expanded seq00 bytes are
+  present, so full sequence/catalog, S64P, target, Ymir, and manual audio
+  claims remain open.
+
 - Added a dedicated, bounded actor-instance queue and master-only batch merge
   without expanding the proven eight-entry world graph. Each pointer-free job
   owns one Task 14 snapshot identity and a disjoint output span, either SH-2
