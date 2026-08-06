@@ -1048,6 +1048,29 @@ silently substitute a host-only map.
   it confirms the repair is not merely a host-green workaround. The linked
   ELF/map and all target evidence remain open.
 
+#### Task 2/14 bounded continuation: restore the generated identity-spec bootstrap
+
+The repaired route-0 invocation now reaches a missing
+`build/saturn/sourceboot/generated/saturn_build_identity_spec.json` before
+compile/link. Task 2's generator and identity gates are accepted in isolation,
+but the sourceboot Make/variant path does not currently materialize the spec
+needed by its own grouped output rule. This is a build-input seam, not a
+license, renderer, or target-performance result.
+
+- [ ] RED: reproduce the missing-spec failure from the documented serialized
+  route command and trace every producer/consumer of the spec; add an isolated
+  mutation gate that rejects a build which silently falls back to a label or
+  stale generated identity.
+- [ ] Implement the smallest deterministic bootstrap that derives the spec
+  from the canonical variant/config inputs before Make parses the grouped
+  identity outputs. Preserve exact hashes, serialized `-j1`, feature-off
+  semantics, and no ad-hoc checked-in generated identity.
+- [ ] Run the identity tests plus one fresh route-0 linked build through the
+  DLL-preflight wrapper; inspect the resulting identity label and only then
+  continue to HWRAM/LWRAM map assertions. Target/P2/concurrent-SH2/Ymir/manual
+  and FPS evidence remain unchecked.
+- [ ] Commit/review the build-input boundary separately from actor/audio code.
+
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
 With the complete VDP1 command block relocated, implement the dedicated
