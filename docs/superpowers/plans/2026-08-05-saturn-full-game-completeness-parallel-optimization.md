@@ -1071,21 +1071,24 @@ license, renderer, or target-performance result.
   gates pass; compilation completes, but link stops on HWRAM overflow by
   `159664` bytes. No ELF/map or target/P2/concurrent-SH2/Ymir/manual/FPS
   evidence is claimed.
-- [ ] Repair the identity coverage before acceptance: fix `a32913cb` replaces
-  the three-file source whitelist with a conservative source/config/linker/tool
-  closure, binds exact current feature-off BOB/actor/animation payload bytes,
-  and fails closed for missing actor or semantic-audio payloads. Its bootstrap
-  5/5, identity 9/9, and source-identity 5/5 gates pass, but the independent
-  fix rereview is SPEC/QUALITY FAIL C2/I1/M0: parse-time bootstrap requires
-  generated payloads before the producer rules can create them, and the
-  closure still omits image-affecting skybox/texture inputs and generated
-  outputs. The focused fixture also masks clean ordering and lacks real
-  path/precedence/tag coverage. Repair is active; no current-head image is
-  authorized until a rereview passes.
-- [ ] Rework bootstrap to use only pre-Make source/config inputs, then bind the
-  complete image-affecting source/generated closure (including the skybox and
-  texture `incbin` chain) after those producers run; add a real clean-build
-  ordering/path/precedence mutation gate and independently rereview the repair.
+- [x] Repair the identity coverage before acceptance: `a32913cb` replaced the
+  three-file source whitelist with a conservative source/config/linker/tool
+  closure, bound exact current feature-off BOB/actor/animation payload bytes,
+  and failed closed for missing actor or semantic-audio payloads. The first
+  rereview found SPEC/QUALITY FAIL C2/I1/M0 because parse-time bootstrap needed
+  generated payloads before their producer rules could run and omitted
+  image-affecting skybox/texture inputs.
+- [x] Rework bootstrap in `7a641f48`: the top-level sourceboot target now runs
+  an explicit `SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets` pass
+  before the normal seal-stage parse; the closure binds textures/assets plus
+  exact generated compile/incbin inputs, including the water PNG → baked sky
+  chain, CLUT/fragment banks, quad map, collision catalog, Mario animation and
+  texture outputs. Bootstrap 6/6, identity 9/9, feature identity 5/5, and a
+  DLL-preflighted top-level `make -n -j1 sourceboot` command-order gate pass.
+- [ ] Independently rereview `a32913cb..7a641f48`, then run a clean serialized
+  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
+  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
+  pass; do not launch an older artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
