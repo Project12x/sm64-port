@@ -23,6 +23,9 @@
   than frozen at `play_sound()`, and requests expire after the inherited
   countdown.  Pending requests also retain their token lease across
   same-frame stop calls until they are admitted or rejected,
+  and spatial refresh is keyed by the full sound handle as well as the source
+  token so simultaneous cross-bank sounds sharing one position keep their
+  own bank- and flag-specific volume, pitch, and priority,
   published requests retire through generation-matched completion feedback,
   and invalid per-bank sound IDs fail before consuming an identity slot.
   Jingle/secondary completion, published-SFX lowering, and global fades now

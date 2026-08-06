@@ -682,9 +682,9 @@ bool sm64_saturn_audio_policy_complete_handle(
 }
 
 bool sm64_saturn_audio_policy_update_spatial(
-    sm64_saturn_audio_policy_t *policy, uint16_t source_token,
-    uint16_t package_generation, uint8_t volume, uint8_t pan,
-    uint16_t pitch, uint32_t priority_score)
+    sm64_saturn_audio_policy_t *policy, uint32_t sound_bits,
+    uint16_t source_token, uint16_t package_generation, uint8_t volume,
+    uint8_t pan, uint16_t pitch, uint32_t priority_score)
 {
     uint16_t i;
     bool found = false;
@@ -694,7 +694,8 @@ bool sm64_saturn_audio_policy_update_spatial(
     for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {
         sm64_saturn_audio_sfx_state_t *state = &policy->sfx[i];
         if (state->active && state->source_token == source_token &&
-            state->package_generation == package_generation) {
+            state->package_generation == package_generation &&
+            state->sound_bits == sound_bits) {
             state->volume = volume;
             state->pan = pan;
             state->pitch = pitch;
@@ -706,7 +707,8 @@ bool sm64_saturn_audio_policy_update_spatial(
         sm64_saturn_audio_pending_request_t *pending =
             &policy->pending_requests[i];
         if (pending->refresh.source_token == source_token &&
-            pending->refresh.package_generation == package_generation) {
+            pending->refresh.package_generation == package_generation &&
+            pending->refresh.sound_bits == sound_bits) {
             pending->refresh.volume = volume;
             pending->refresh.pan = pan;
             pending->refresh.pitch = pitch;

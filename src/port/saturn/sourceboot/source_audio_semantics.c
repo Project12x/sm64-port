@@ -155,8 +155,9 @@ static void refresh_active_source_positions(void)
             source_level_acoustic_reach(), gAudioRandom,
             pos[0], pos[1], pos[2], &params);
         (void)sm64_saturn_audio_policy_update_spatial(
-            &s_policy, state->source_token, state->package_generation,
-            params.volume, params.pan, params.pitch, params.priority_score);
+            &s_policy, state->sound_bits, state->source_token,
+            state->package_generation, params.volume, params.pan,
+            params.pitch, params.priority_score);
     }
     for (i = 0U; i < s_policy.pending_request_count; ++i) {
         sm64_saturn_audio_pending_request_t *pending =
@@ -179,7 +180,8 @@ static void refresh_active_source_positions(void)
             source_level_acoustic_reach(), gAudioRandom,
             pos[0], pos[1], pos[2], &params);
         (void)sm64_saturn_audio_policy_update_spatial(
-            &s_policy, pending->refresh.source_token,
+            &s_policy, pending->refresh.sound_bits,
+            pending->refresh.source_token,
             pending->refresh.package_generation, params.volume, params.pan,
             params.pitch, params.priority_score);
     }

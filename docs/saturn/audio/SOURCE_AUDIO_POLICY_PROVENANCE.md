@@ -63,7 +63,11 @@ later source movement does not erase the provenance.
   request queue and its control-operation interleavings.  Their SH-2-local
   pointer tokens are resolved again at admission so moving sources use the
   current coordinates, and pending records keep the token live across
-  same-frame source/bank stop operations.  Waiting discrete requests use the exact ten-count
+  same-frame source/bank stop operations.  Spatial updates match the complete
+  sound handle (`soundBits`, token, and package generation), not the position
+  token alone; cross-bank sounds may legitimately share one object or global
+  source pointer without inheriting each other's bank-specific spatial
+  parameters.  Waiting discrete requests use the exact ten-count
   post-decrement lifetime; published discrete requests retire on preemption or
   generation-matched driver completion.  Continuous requests retain their
   two-frame refresh grace.

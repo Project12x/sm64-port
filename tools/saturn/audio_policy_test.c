@@ -322,7 +322,8 @@ static void test_pending_request_retains_token_and_accepts_spatial_refresh(void)
     assert(sm64_saturn_audio_policy_token_is_active(
         &policy, refresh.source_token, refresh.package_generation));
     assert(sm64_saturn_audio_policy_update_spatial(
-        &policy, refresh.source_token, refresh.package_generation,
+        &policy, refresh.sound_bits, refresh.source_token,
+        refresh.package_generation,
         77U, 31U, 5000U, 42U));
     sm64_saturn_audio_policy_tick(&policy);
     assert(policy.sfx[0].volume == 77U);
@@ -333,6 +334,50 @@ static void test_pending_request_retains_token_and_accepts_spatial_refresh(void)
         &policy, refresh.source_token, refresh.package_generation));
     assert(!sm64_saturn_audio_policy_token_is_active(
         &policy, refresh.source_token, refresh.package_generation));
+}
+
+static void test_spatial_refresh_isolated_by_sound_handle(void)
+{
+    sm64_saturn_audio_policy_t policy;
+    event_log_t log;
+    sm64_saturn_audio_play_refresh_t bank_two = {
+        0x20208001U, 7U, 3U, 255U, 64U, 4096U, 0U
+    };
+    sm64_saturn_audio_play_refresh_t bank_three = {
+        0x30218001U, 7U, 3U, 255U, 64U, 4096U, 0U
+    };
+
+    init(&policy, &log);
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &bank_two, 1000U));
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &bank_three, 2000U));
+    assert(sm64_saturn_audio_policy_update_spatial(
+        &policy, bank_two.sound_bits, bank_two.source_token,
+        bank_two.package_generation, 81U, 21U, 4100U, 101U));
+    assert(sm64_saturn_audio_policy_update_spatial(
+        &policy, bank_three.sound_bits, bank_three.source_token,
+        bank_three.package_generation, 62U, 42U, 5200U, 202U));
+
+    assert(policy.pending_requests[0].refresh.volume == 81U);
+    assert(policy.pending_requests[0].refresh.pan == 21U);
+    assert(policy.pending_requests[0].refresh.pitch == 4100U);
+    assert(policy.pending_requests[0].priority_score == 101U);
+    assert(policy.pending_requests[1].refresh.volume == 62U);
+    assert(policy.pending_requests[1].refresh.pan == 42U);
+    assert(policy.pending_requests[1].refresh.pitch == 5200U);
+    assert(policy.pending_requests[1].priority_score == 202U);
+
+    sm64_saturn_audio_policy_tick(&policy);
+    assert(sm64_saturn_audio_policy_update_spatial(
+        &policy, bank_two.sound_bits, bank_two.source_token,
+        bank_two.package_generation, 73U, 17U, 4300U, 303U));
+    assert(policy.sfx[0].volume == 73U);
+    assert(policy.sfx[0].pan == 17U);
+    assert(policy.sfx[0].pitch == 4300U);
+    assert(policy.sfx[0].priority_score == 303U);
+    assert(policy.sfx[1].volume == 62U);
+    assert(policy.sfx[1].pan == 42U);
+    assert(policy.sfx[1].pitch == 5200U);
+    assert(policy.sfx[1].priority_score == 202U);
 }
 
 static void test_lowering_only_tracks_published_sound_and_emits_fades(void)
@@ -506,10 +551,12 @@ static void test_frame_spatial_update_can_change_selected_source(void)
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &second, 1000U));
     sm64_saturn_audio_policy_tick(&policy);
     assert(sm64_saturn_audio_policy_update_spatial(
-        &policy, first.source_token, first.package_generation,
+        &policy, first.sound_bits, first.source_token,
+        first.package_generation,
         first.volume, first.pan, first.pitch, 2000U));
     assert(sm64_saturn_audio_policy_update_spatial(
-        &policy, second.source_token, second.package_generation,
+        &policy, second.sound_bits, second.source_token,
+        second.package_generation,
         second.volume, second.pan, second.pitch, 50U));
     sm64_saturn_audio_policy_tick(&policy);
     sm64_saturn_audio_policy_get_playing(&policy, 3U, &playing, &in_bank,
@@ -572,6 +619,7 @@ int main(void)
     test_bank_pool_matches_inherited_38_usable_nodes();
     test_request_queue_is_bounded_and_drains_at_tick();
     test_pending_request_retains_token_and_accepts_spatial_refresh();
+    test_spatial_refresh_isolated_by_sound_handle();
     test_lowering_only_tracks_published_sound_and_emits_fades();
     test_secondary_jingle_and_global_fade_publish_bounded_actions();
     test_same_source_priority_and_discrete_restart();
