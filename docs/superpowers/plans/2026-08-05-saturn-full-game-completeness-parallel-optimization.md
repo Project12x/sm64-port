@@ -1119,9 +1119,16 @@ license, renderer, or target-performance result.
   identity, independent generated-include mutation, and DLL-preflighted
   top-level dry-run gates pass.
 - [ ] Independently rereview `ecefd288..f9611fc0`, then run a clean serialized
-  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
-  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
-  pass; do not launch an older artifact.
+  sourceboot build and inspect the new identity-bearing ELF/map. The rereview is
+  SPEC/QUALITY FAIL C1/I1/M0: the derived closure finds 1,020 generated targets
+  and correctly handles actor-bank-C/stage guards, but generated
+  `text_strings.h` includes `text_menu_strings.h`; only the parent is sealed,
+  so a mutation of the transitive generated header leaves identity unchanged.
+  No current-head CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed;
+  do not launch an older artifact.
+- [ ] Seal the transitive generated text header (and test missing/mutated
+  actor-bank-C plus transitive-header cases), then independently rereview before
+  any clean linked image is considered launchable.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
