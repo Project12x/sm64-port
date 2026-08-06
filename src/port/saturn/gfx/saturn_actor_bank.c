@@ -736,7 +736,7 @@ int sm64_saturn_actor_family_bank_select(
             (record.capability_mask & required_capability_mask) != required_capability_mask ||
             record.maximum_live_instances < multiplicity)
             continue;
-        bits = (record.capability_mask & required_capability_mask);
+        bits = record.capability_mask;
         bits = bits == 0U ? 0U : (uint32_t)__builtin_popcount(bits);
         if (bits < selected_bits ||
             (bits == selected_bits && record.maximum_live_instances < selected_capacity) ||

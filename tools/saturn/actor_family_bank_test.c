@@ -34,6 +34,8 @@ int main(int argc, char **argv)
     uint32_t expected[8];
     sm64_saturn_actor_family_bank_view_t view;
     sm64_saturn_actor_family_record_t record;
+    sm64_saturn_actor_family_record_t candidate;
+    uint32_t selected_capability_bits;
     int selected;
     unsigned int index;
     if (argc != 2 || !read_file(argv[1], &bytes, &size) ||
@@ -50,6 +52,19 @@ int main(int argc, char **argv)
         (record.flags & SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED) == 0U ||
         (record.flags & SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY) == 0U)
         return 3;
+    selected_capability_bits = (uint32_t)__builtin_popcount(record.capability_mask);
+    for (index = 0U; index < view.family_count; index++) {
+        if (!sm64_saturn_actor_family_bank_record(&view, (uint16_t)index, &candidate) ||
+            (candidate.flags & (SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED |
+                                SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY)) !=
+                (SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED |
+                 SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY) ||
+            candidate.maximum_live_instances < 1U)
+            continue;
+        if ((uint32_t)__builtin_popcount(candidate.capability_mask) <
+            selected_capability_bits)
+            return 6;
+    }
     copy = (unsigned char *)malloc(size);
     if (copy == NULL)
         return 4;

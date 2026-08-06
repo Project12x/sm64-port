@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Closed the remaining S64F admission-integrity gaps: runtime capability
+  selection now ranks total family capability bits, the host validator rejects
+  empty/unknown-flag banks, and the C validator recomputes and optionally
+  binds the payload SHA-256 before exposing records.  The executable family
+  test now checks the unequal-capability selection invariant and payload
+  tamper rejection.
+
 - Corrected generic family selection to exclude model-less/controller records
   from drawable runtime admission while retaining them in the closure report;
   both the Python proof and C selector now require the immutable geometry flag.

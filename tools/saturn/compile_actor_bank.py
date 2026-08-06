@@ -234,7 +234,7 @@ def validate_family_bank_payload(payload: bytes) -> None:
     magic, version, count, records_offset, records_size, blob_offset, blob_size, digest = FAMILY_HEADER_STRUCT.unpack_from(payload)
     if magic != FAMILY_MAGIC or version != FAMILY_VERSION:
         raise ValueError("invalid family bank identity")
-    if records_offset != FAMILY_HEADER_STRUCT.size or records_size != count * FAMILY_RECORD_STRUCT.size:
+    if count == 0 or records_offset != FAMILY_HEADER_STRUCT.size or records_size != count * FAMILY_RECORD_STRUCT.size:
         raise ValueError("invalid family record span")
     if blob_offset != records_offset + records_size or blob_offset + blob_size != len(payload):
         raise ValueError("invalid family blob span")
@@ -248,7 +248,8 @@ def validate_family_bank_payload(payload: bytes) -> None:
     for index in range(count):
         fields = FAMILY_RECORD_STRUCT.unpack_from(payload, records_offset + index * FAMILY_RECORD_STRUCT.size)
         family_id = fields[0]
-        if family_id == 0 or family_id in seen:
+        if (family_id == 0 or family_id in seen or
+                fields[4] & ~(FAMILY_FLAG_SUPPORTED | FAMILY_FLAG_GEOMETRY)):
             raise ValueError("duplicate or empty family ID")
         seen.add(family_id)
         for offset, size in ((fields[5], fields[6]), (fields[7], fields[8]),
