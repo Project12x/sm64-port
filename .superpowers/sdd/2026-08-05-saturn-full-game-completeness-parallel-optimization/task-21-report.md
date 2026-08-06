@@ -175,3 +175,43 @@ launcher as the earlier soundtest/protocol repair, closing the inherited MSYS
 quoted-path GUI-launch failure without changing test semantics. Independent
 review remains required before the bounded slice is marked accepted. Target,
 Ymir, hardware, manual, audible, and FPS evidence remain open.
+
+## Wave 2 fix round 1
+
+Independent rereview of `d23ec834` returned SPEC/QUALITY FAIL, C0/I5/M0. The
+five findings were reproduced as direct RED cases before repair: wrong
+same-class opcode retirement, legacy/no-ack reuse of a pending cursor, an
+off/on/off status-publication race, live `0xffff` saturation wrap, and illegal
+status/opcode pairs.
+
+The pending table now retains the exact opcode and completion poll compares it
+before either consumer publication or retirement. Unticketed compatibility
+enqueue is explicitly no-ack but cannot bypass that reservation. Status flags
+encode an advancing publication sequence (flags 1 stable, 3 writing, 5 next
+stable); the reader requires matching stable-even values around the split
+fields. A read observer changes 1 to 5 between generation halves and proves
+the mixed `0x11114444` value is discarded before the coherent
+`0x33334444` retry is returned.
+Bits 2..15 are the bounded sequence, bit 1 is the in-progress parity bit, and
+the future producer must not wrap all 16384 sequence values within one bounded
+three-attempt read; Wave 2 still links no producer.
+
+Both live command saturation paths now use the saturating helper. A single
+closed matrix governs poll and required-capacity classification: FINISHED is
+not a command ACK in this wave, DROPPED_SFX applies only to PLAY_REFRESH,
+PREPARED/COMMITTED require their matching package opcodes, and generic
+ACCEPTED cannot retire either package transaction command.
+
+The fix remains host-only. No MC68000 producer, source service, package
+transaction, target/Ymir/manual, audible, or performance claim is added.
+
+Fresh serialized GREEN after the repair:
+
+```text
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 \
+  mingw32-make -f Makefile.saturn.mk -j1 \
+  verify-pcm-protocol verify-audio-protocol-v2 \
+  verify-audio-completion-abi verify-pcm-transport \
+  verify-audio-sound-cpu-boot verify-soundtest-boot
+PASS (4.1 s; sound-CPU ownership 2/2)
+```

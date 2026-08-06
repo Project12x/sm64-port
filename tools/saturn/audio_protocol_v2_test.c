@@ -85,6 +85,50 @@ static void test_completion_status_and_generation_contract(void)
     assert(sm64_saturn_audio_completion_publication_allowed(24U, true));
     assert(sm64_saturn_audio_completion_publication_allowed(31U, true));
     assert(!sm64_saturn_audio_completion_publication_allowed(32U, true));
+    assert(sm64_saturn_pcm_status_publication_begin(
+               SM64_SATURN_PCM_ABI_FLAG_COMPLETION) == 3U);
+    assert(sm64_saturn_pcm_status_publication_finish(3U) == 5U);
+    assert((sm64_saturn_pcm_status_publication_begin(1U) &
+            SM64_SATURN_PCM_ABI_FLAG_STATUS_WRITING) != 0U);
+    assert((sm64_saturn_pcm_status_publication_finish(3U) &
+            SM64_SATURN_PCM_ABI_FLAG_STATUS_WRITING) == 0U);
+
+    assert(sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_PREPARE,
+        SM64_SATURN_AUDIO_COMPLETION_PREPARED));
+    assert(sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT,
+        SM64_SATURN_AUDIO_COMPLETION_COMMITTED));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_PREPARE,
+        SM64_SATURN_AUDIO_COMPLETION_ACCEPTED));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT,
+        SM64_SATURN_AUDIO_COMPLETION_ACCEPTED));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_RESET,
+        SM64_SATURN_AUDIO_COMPLETION_FINISHED));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_SFX,
+        SM64_SATURN_AUDIO_OPCODE_STOP_SOURCE,
+        SM64_SATURN_AUDIO_COMPLETION_DROPPED_SFX));
+    assert(sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_SFX,
+        SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH,
+        SM64_SATURN_AUDIO_COMPLETION_DROPPED_SFX));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT,
+        SM64_SATURN_AUDIO_COMPLETION_PREPARED));
+    assert(!sm64_saturn_audio_completion_status_opcode_is_legal(
+        SM64_SATURN_AUDIO_RING_CONTROL,
+        SM64_SATURN_AUDIO_OPCODE_PACKAGE_PREPARE,
+        SM64_SATURN_AUDIO_COMPLETION_COMMITTED));
 }
 
 static void test_opcode_classes_are_closed_and_disjoint(void)

@@ -6,6 +6,35 @@
 #include "saturn_pcm_protocol.h"
 #include "saturn_pcm_transport.h"
 
+static bool s_replace_status_during_read;
+static uint16_t s_status_read_observations;
+
+static void observe_status_generation_read(volatile uint8_t *ram)
+{
+    s_status_read_observations++;
+    if (s_replace_status_during_read) {
+        s_replace_status_during_read = false;
+        sm64_saturn_pcm_put_be16(
+            ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET,
+            sm64_saturn_pcm_status_publication_begin(
+                SM64_SATURN_PCM_ABI_FLAG_COMPLETION));
+        sm64_saturn_pcm_put_be16(
+            ram, SM64_SATURN_PCM_ACTIVE_GENERATION_HIGH_OFFSET, 0x3333U);
+        sm64_saturn_pcm_put_be16(
+            ram, SM64_SATURN_PCM_ACTIVE_GENERATION_LOW_OFFSET, 0x4444U);
+        sm64_saturn_pcm_put_be16(
+            ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET,
+            sm64_saturn_pcm_status_publication_finish(
+                sm64_saturn_pcm_status_publication_begin(
+                    SM64_SATURN_PCM_ABI_FLAG_COMPLETION)));
+    }
+}
+
+#define SM64_SATURN_PCM_STATUS_GENERATION_READ_OBSERVER(ram) \
+    observe_status_generation_read(ram)
+#include "../../src/port/saturn/audio/saturn_pcm_transport.c"
+#undef SM64_SATURN_PCM_STATUS_GENERATION_READ_OBSERVER
+
 static void publish_v2_header(uint8_t *ram)
 {
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_MAGIC_OFFSET,
@@ -176,7 +205,7 @@ static void test_status_snapshot_and_required_ack_classification(void)
         SM64_SATURN_AUDIO_RING_CONTROL,
         SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT,
         SM64_SATURN_AUDIO_COMPLETION_COMMITTED));
-    assert(sm64_saturn_audio_completion_is_required(
+    assert(!sm64_saturn_audio_completion_is_required(
         SM64_SATURN_AUDIO_RING_SFX,
         SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH,
         SM64_SATURN_AUDIO_COMPLETION_FINISHED));
@@ -248,8 +277,8 @@ static void test_pending_cursor_refuses_aba_until_completion(void)
             sm64_saturn_pcm_ring_cursor_next(
                 tickets[i].cursor, SM64_SATURN_PCM_CONTROL_RING_COUNT));
     }
-    assert(!sm64_saturn_audio_control_enqueue_ticket(
-        &transport, SM64_SATURN_AUDIO_OPCODE_MUTE, words, &retry));
+    assert(!sm64_saturn_audio_control_enqueue(
+        &transport, SM64_SATURN_AUDIO_OPCODE_MUTE, words));
     assert(transport.ticket_busy == 1U);
 
     publish_completion(ram, 0U, SM64_SATURN_AUDIO_RING_CONTROL,
@@ -261,6 +290,53 @@ static void test_pending_cursor_refuses_aba_until_completion(void)
     assert(retry.cursor == 0U);
 }
 
+static void test_wrong_same_class_opcode_does_not_retire_ticket(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    const uint16_t words[7] = {0};
+    sm64_saturn_pcm_transport_t transport;
+    sm64_saturn_audio_ticket_t ticket;
+    sm64_saturn_audio_completion_t completion;
+
+    publish_v2_header(ram);
+    sm64_saturn_pcm_transport_init(&transport, ram);
+    assert(sm64_saturn_audio_control_enqueue_ticket(
+        &transport, SM64_SATURN_AUDIO_OPCODE_SEQ_START, words, &ticket));
+    publish_completion(ram, 0U, ticket.source_ring, ticket.cursor,
+                       SM64_SATURN_AUDIO_OPCODE_MUTE,
+                       SM64_SATURN_AUDIO_COMPLETION_ACCEPTED, 1U, 0U, 1U);
+    assert(!sm64_saturn_audio_completion_poll(&transport, &completion));
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_COMPLETION_CONSUMER_OFFSET) == 0U);
+    assert(transport.control_ticket_pending[ticket.cursor] == ticket.opcode);
+
+    publish_completion(ram, 0U, ticket.source_ring, ticket.cursor,
+                       ticket.opcode, SM64_SATURN_AUDIO_COMPLETION_ACCEPTED,
+                       1U, 0U, 2U);
+    assert(sm64_saturn_audio_completion_poll(&transport, &completion));
+    assert(transport.control_ticket_pending[ticket.cursor] == 0U);
+}
+
+static void test_status_sequence_retries_instead_of_accepting_torn_value(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    sm64_saturn_pcm_transport_t transport;
+    sm64_saturn_audio_status_snapshot_t status;
+
+    publish_v2_header(ram);
+    sm64_saturn_pcm_put_be16(
+        ram, SM64_SATURN_PCM_ACTIVE_GENERATION_HIGH_OFFSET, 0x1111U);
+    sm64_saturn_pcm_put_be16(
+        ram, SM64_SATURN_PCM_ACTIVE_GENERATION_LOW_OFFSET, 0x2222U);
+    sm64_saturn_pcm_transport_init(&transport, ram);
+    s_status_read_observations = 0U;
+    s_replace_status_during_read = true;
+    assert(sm64_saturn_audio_status_snapshot(&transport, &status));
+    assert(status.active_generation == 0x33334444U);
+    assert(status.active_generation != 0x11114444U);
+    assert(s_status_read_observations >= 2U);
+}
+
 int main(void)
 {
     test_ticket_correlation_and_semantic_statuses();
@@ -268,5 +344,7 @@ int main(void)
     test_status_snapshot_and_required_ack_classification();
     test_capability_seqlock_and_play_refresh_rejection();
     test_pending_cursor_refuses_aba_until_completion();
+    test_wrong_same_class_opcode_does_not_retire_ticket();
+    test_status_sequence_retries_instead_of_accepting_torn_value();
     return 0;
 }

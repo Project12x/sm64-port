@@ -68,3 +68,26 @@ ABI/transport slice only.
   carry that identity before FINISHED can mutate source policy. Production
   MC68000 publication, source service, package commit, target/Ymir/manual/
   audible evidence remain open.
+
+### Wave 2 fix round 1
+
+- [x] Pending two-lap entries store the exact expected opcode, not a boolean;
+  a wrong same-class completion cannot advance the completion consumer or
+  retire the ticket.
+- [x] Legacy control/SFX enqueue is explicitly no-ack, yet uses the same cursor
+  reservation check and cannot overwrite a still-pending ticket after wrap.
+- [x] Split status publication uses an advancing encoded sequence:
+  stable-even -> writing-odd -> next stable-even. The bounded reader requires
+  the same stable-even value before and after; an observer-driven interleaving
+  proves a mixed generation is retried rather than accepted.
+  Bits 2..15 hold the sequence, bit 1 is the odd/write marker, and the producer
+  contract forbids wrapping 16384 publications within one three-attempt read.
+- [x] Live control/SFX saturation counters call the saturating helper and stay
+  at `0xffff` under another full-ring enqueue.
+- [x] One legality matrix is shared by completion polling and required-capacity
+  classification. FINISHED is illegal in this command-ack wave, DROPPED_SFX is
+  PLAY_REFRESH-only, PREPARED/COMMITTED are exact package opcode terminals,
+  and package prepare/commit cannot use generic ACCEPTED.
+- [x] The six focused DLL/MSYS-preflight host gates pass serially, including
+  publication order and sound-CPU ownership 2/2.
+- [ ] Scoped rereview remains required. No production or audible gate changes.

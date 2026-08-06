@@ -76,6 +76,8 @@ enum {
     SM64_SATURN_PCM_STATUS_READY = 2U,
     SM64_SATURN_PCM_ABI_FLAG_COMPLETION = 0x0001U,
     SM64_SATURN_PCM_ABI_FLAG_STATUS_WRITING = 0x0002U,
+    SM64_SATURN_PCM_ABI_STATUS_SEQUENCE_MASK = 0xFFFCU,
+    SM64_SATURN_PCM_ABI_STATUS_PUBLICATION_STEP = 0x0004U,
     SM64_SATURN_PCM_COMPLETION_CONTROL_RESERVE = 8U,
 
     /* Historical v1 proof constants. They document the owner-heard artifact;
@@ -280,6 +282,23 @@ sm64_saturn_pcm_counter_saturating_increment(uint16_t value)
     return value == 0xFFFFU ? 0xFFFFU : (uint16_t)(value + 1U);
 }
 
+/* ABI flag publication uses bits 2..15 as a bounded sequence, bit 1 as the
+ * odd/in-progress marker, and bit 0 as capability. A
+ * writer advances stable-even -> writing-odd -> next stable-even; wrap returns
+ * to sequence zero only after 16384 complete publications. The writer must not
+ * wrap that bounded sequence during one reader's three-attempt snapshot. */
+static inline uint16_t
+sm64_saturn_pcm_status_publication_begin(uint16_t stable_flags)
+{
+    return (uint16_t)(stable_flags + 2U);
+}
+
+static inline uint16_t
+sm64_saturn_pcm_status_publication_finish(uint16_t writing_flags)
+{
+    return (uint16_t)(writing_flags + 2U);
+}
+
 /* The single FIFO reserves its final eight slots for required acknowledgments.
  * This is a producer policy contract only; Wave 2 does not link an MC68000
  * publisher. Nonessential SFX ACCEPTED records stop at occupancy 24. */
@@ -291,6 +310,43 @@ static inline bool sm64_saturn_audio_completion_publication_allowed(
                    SM64_SATURN_PCM_COMPLETION_CONTROL_RESERVE);
     return required ? occupancy < SM64_SATURN_PCM_COMPLETION_RING_COUNT
                     : occupancy < nonessential_limit;
+}
+
+/* Closed command-ack matrix for this ABI wave. FINISHED deliberately remains
+ * illegal until a versioned event record carries its semantic identity. */
+static inline bool sm64_saturn_audio_completion_status_opcode_is_legal(
+    uint16_t source_ring, sm64_saturn_audio_opcode_t opcode, uint16_t status)
+{
+    const bool control = source_ring == SM64_SATURN_AUDIO_RING_CONTROL &&
+                         sm64_saturn_audio_opcode_is_control(opcode);
+    const bool sfx = source_ring == SM64_SATURN_AUDIO_RING_SFX &&
+                     sm64_saturn_audio_opcode_is_sfx(opcode);
+
+    if ((!control && !sfx) ||
+        !sm64_saturn_audio_completion_status_is_valid(status)) {
+        return false;
+    }
+    switch ((sm64_saturn_audio_completion_status_t)status) {
+        case SM64_SATURN_AUDIO_COMPLETION_ACCEPTED:
+            return opcode != SM64_SATURN_AUDIO_OPCODE_PACKAGE_PREPARE &&
+                   opcode != SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT;
+        case SM64_SATURN_AUDIO_COMPLETION_REJECTED:
+        case SM64_SATURN_AUDIO_COMPLETION_STALE:
+        case SM64_SATURN_AUDIO_COMPLETION_FAULT:
+            return true;
+        case SM64_SATURN_AUDIO_COMPLETION_DROPPED_SFX:
+            return sfx && opcode == SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH;
+        case SM64_SATURN_AUDIO_COMPLETION_FINISHED:
+            return false;
+        case SM64_SATURN_AUDIO_COMPLETION_COMMITTED:
+            return control &&
+                   opcode == SM64_SATURN_AUDIO_OPCODE_PACKAGE_COMMIT;
+        case SM64_SATURN_AUDIO_COMPLETION_PREPARED:
+            return control &&
+                   opcode == SM64_SATURN_AUDIO_OPCODE_PACKAGE_PREPARE;
+        default:
+            return false;
+    }
 }
 
 #endif

@@ -239,7 +239,6 @@ verify-audio-completion-abi:
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/audio" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/audio_completion_abi_test.c" \
-	  "$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_pcm_transport.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-completion-abi-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-completion-abi-test$(HOST_EXEEXT)']).returncode)"
 

@@ -49,8 +49,8 @@ typedef struct sm64_saturn_pcm_transport {
     uint32_t ticket_busy;
     uint16_t control_high_water;
     uint16_t sfx_high_water;
-    bool control_ticket_pending[SM64_SATURN_PCM_CONTROL_RING_COUNT * 2U];
-    bool sfx_ticket_pending[SM64_SATURN_PCM_SFX_RING_COUNT * 2U];
+    uint16_t control_ticket_pending[SM64_SATURN_PCM_CONTROL_RING_COUNT * 2U];
+    uint16_t sfx_ticket_pending[SM64_SATURN_PCM_SFX_RING_COUNT * 2U];
 } sm64_saturn_pcm_transport_t;
 
 void sm64_saturn_pcm_transport_init(sm64_saturn_pcm_transport_t *transport,
@@ -62,6 +62,8 @@ bool sm64_saturn_audio_control_enqueue(sm64_saturn_pcm_transport_t *transport,
 bool sm64_saturn_audio_sfx_enqueue(sm64_saturn_pcm_transport_t *transport,
                                    sm64_saturn_audio_opcode_t opcode,
                                    const uint16_t words[7]);
+/* These legacy functions are explicit no-ack paths. They do not reserve a
+ * ticket, but cannot reuse a cursor held by a completion-aware command. */
 bool sm64_saturn_audio_control_enqueue_ticket(
     sm64_saturn_pcm_transport_t *transport,
     sm64_saturn_audio_opcode_t opcode, const uint16_t words[7],
