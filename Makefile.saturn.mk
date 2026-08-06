@@ -444,13 +444,14 @@ verify-ztreme-frustum:
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/ztreme-frustum-smoke$(HOST_EXEEXT)']).returncode)"
 
-verify-bob-bsp-header: compile-bob-bsp
+verify-bob-bsp-header: compile-bob-scene
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/build/saturn/sourceboot/generated" \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/bob_bsp_header_smoke.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/bob-bsp-header-smoke$(HOST_EXEEXT)"
-	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/bob-bsp-header-smoke$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/bob-bsp-header-smoke$(HOST_EXEEXT)']).returncode)"
 
 verify-visible-position-set:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

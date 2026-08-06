@@ -28,6 +28,9 @@
   coverage, node containment, endpoint-only portal ownership, and zeroed
   reserved fields, while mandatory clusters are retained even when their node
   is outside the current frustum.
+  Generated render-cluster records now explicitly initialize the optional scene
+  identity fields, keeping the generated-header Werror smoke gate aligned with
+  the generalized ABI.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed

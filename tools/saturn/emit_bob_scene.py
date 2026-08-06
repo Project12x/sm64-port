@@ -214,7 +214,7 @@ def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
         "static const sm64_saturn_render_cluster_t sm64_saturn_bob_render_clusters[SM64_SATURN_BOB_CLUSTER_COUNT] = {",
     ]
     for cluster in clusters:
-        lines.append("    {{%s}, {%s}, %dU, %dU, {%dU, %dU, %dU}, {%dU, %dU, %dU}, %dU, %dU, %dU, {0U, 0U, 0U}}," % (
+        lines.append("    {{%s}, {%s}, %dU, %dU, {%dU, %dU, %dU}, {%dU, %dU, %dU}, %dU, %dU, %dU, {0U, 0U, 0U}, 0U, 0U}," % (
             ", ".join(str(value * 65536) for value in cluster["bounds"]["min"]),
             ", ".join(str(value * 65536) for value in cluster["bounds"]["max"]),
             cluster["primitive_first"], cluster["primitive_count"],

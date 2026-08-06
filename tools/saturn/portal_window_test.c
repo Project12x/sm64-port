@@ -68,7 +68,6 @@ int main(void)
     assert(sm64_saturn_scene_admit(&scene, &view, &output, &stats));
     assert(output.portal_count == 0U && stats.portals_rejected_frustum == 1U);
     nodes[2].portal_ref_count = 1U;
-    nodes[2].portal_ref_count = 1U;
     output.cluster_count = output.portal_count = 0U;
     assert(!sm64_saturn_scene_admit(&scene, &view, &output, &stats));
     return 0;
