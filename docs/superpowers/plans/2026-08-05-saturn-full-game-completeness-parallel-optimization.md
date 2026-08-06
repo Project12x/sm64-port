@@ -43,6 +43,7 @@
 - 2026-08-05 scene-admission integration correction: Task 13's production sourceboot path now links `saturn_scene_admission.c` and consumes regenerated BOB admission metadata rather than a hand-assembled runtime table. The queued bounded worklist handles the real 1183-node BOB graph; immutable view orientation takes precedence, zero lateral rows use a conservative depth-only fallback, and validation rejects reserved fields, non-endpoint portal ownership, missing global cluster coverage, and node-containment violations while retaining mandatory clusters. The generic path is source-complete, but target/Ymir/manual/FPS evidence and whole-game closure remain open.
 - 2026-08-06 actor-snapshot review correction: Task 14's production seam now brackets the authoritative geo walk and publishes per-bank generation tickets with P2/fence handoff, but it deliberately rejects unresolved family/scene-package/bank identities rather than fabricating actors. Full-pool identity/capacity, typed visibility/switch/range/held/effect fields, package-bound budget, wrap/overlap cleanup, and target sourceboot compilation remain open; host fixtures are not source-complete evidence.
 - 2026-08-06 actor-queue review correction: Task 16's `0549f7af` queue is a useful generic exact-once infrastructure seam, but not the production dual-SH2 actor renderer. Its repair must account for the fixed 65,536-byte actor arena (including aligned banks, observer, queue, batches, and output records), use P2-safe metadata reads, test output overflow/exact-fit boundaries, and keep actor-meshlet/production drain, target, Ymir, manual, and FPS gates open.
+- 2026-08-06 actor-queue repair acceptance: `d4efe0e9` closes the infrastructure-slice review findings. One Task 14 bank container (both snapshot generations), observer, queue, batches, alignment, and 2,806 eight-byte output records fit exactly in the fixed 65,536-byte actor arena; 2,807 and output-count overflow fail closed, valid instance 64 is covered, and batch count uses a generation-checked P2 accessor. This does not promote Task 16: actor-meshlet preparation, production drain/cutover, manifest drawable bound, target retirement race, and target/Ymir/manual/FPS remain open.
 
 ## Prior art and reuse mode
 
@@ -809,16 +810,16 @@ bool sm64_saturn_actor_meshlets_prepare_bank(
 
 Each queue descriptor owns exactly one admitted instance and a disjoint claimant-lane output span; it performs early bounds, selected-pose evaluation, meshlet admission/classification, and terminal publication. Either SH-2 may claim it. Master final merge preserves source/painter order. Queue capacity and output storage derive from the validated scene manifest maximum, with a compile-time global ceiling and exact memory report.
 
-- [ ] RED cases: zero instances, one/many instances, master/slave stealing, same family batching, different materials, stale instance/bank/generation, duplicate claim, output overlap, overflow, claimant failure, pool-incarnation mismatch, translucent order, and quarantining only the failed instance.
+- [x] RED cases for the infrastructure slice: zero instances, one/many instances, master/slave claiming, same-family batching, different materials, stale instance/bank/generation, duplicate claim, output overlap, output overflow, claimant failure, pool-incarnation mismatch, and quarantining only the failed instance. Exact 64-instance and 2,806/2,807 output-arena boundaries are covered. Concurrent target claiming remains open.
 - [ ] Keep existing Mario functions as feature-off wrappers. `ACTOR_ADMIT/ACTOR_LOWER` world graph behavior remains unchanged until the integration cutover replaces the single Mario pair deliberately.
-- [ ] Run GREEN:
+- [x] Run GREEN for the infrastructure slice:
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-instance-queue verify-actor-batches verify-actor-meshlets verify-dual-actor-worker verify-render-overlap-integration
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_actor_runtime_neutrality.py
   ```
 
-- [ ] Commit as `feat(saturn): queue descriptor-owned actor instances`; review P2 publication, exact-once claims, output disjointness, memory ceiling, and final master ordering.
+- [x] Commit infrastructure as `0549f7af` (`feat(saturn): add generic actor instance queue`) with repair `d4efe0e9` (`fix(saturn): bound actor runtime storage`). Repair rereview is SPEC PASS / QUALITY PASS, C0/I0/M0. The broader task remains unchecked: generic actor-meshlet preparation, production publication/drain/cutover, manifest drawable-count proof, target retirement race, target/Ymir/manual/FPS evidence, and final master merge remain open.
 
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
