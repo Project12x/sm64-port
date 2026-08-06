@@ -300,17 +300,26 @@ def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
             raise AssertionError(f"{label} mutation escaped source gate")
 
 
+def assert_no_post_acquire_recycle(handoff: str, post_acquire: str) -> None:
+    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in handoff
+    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in post_acquire
+
+
 def test_pre_acquire_recycle_does_not_enter_post_acquire_owners() -> None:
     handoff = (GFX / "saturn_actor_runtime_handoff.c").read_text(encoding="utf-8")
     sourceboot = SOURCEBOOT.read_text(encoding="utf-8")
-    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in handoff
     post_acquire = body_text(sourceboot, "sourceboot_frame_service_render")
-    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in post_acquire
+    assert_no_post_acquire_recycle(handoff, post_acquire)
     mutated = handoff.replace(
         "sm64_saturn_actor_instance_bank_quarantine",
         "sm64_saturn_actor_instance_bank_recycle_pre_acquire", 1)
     assert mutated != handoff
-    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" in mutated
+    try:
+        assert_no_post_acquire_recycle(mutated, post_acquire)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("handoff recycle mutation escaped source gate")
 
 
 def assert_capture_uses_cache_through_payload(text: str) -> None:
