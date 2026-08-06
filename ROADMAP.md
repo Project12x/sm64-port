@@ -18,6 +18,22 @@ and measured. After the full-feature build measures at least 4.0 mean
 presentation FPS in the pinned setup (4--6 FPS is the accepted band), the
 next sprint pursues 12--15 FPS against the representative workload.
 
+### Current execution lane — temporary stability prerequisite
+
+The current implementation wave is deliberately Saturn-shaped and bounded:
+repair the memory/exception instability, then cut the production geo walk over
+to its generated LWRAM continuation arena and enter/dispatch/leave callbacks.
+This is an execution lane inside the full-game roadmap, not a new milestone or
+a BOB-only target. The accepted dual-SH2 BOB rollback remains the comparison
+point, and no target/FPS claim is promoted until the current image is stable.
+
+After that gate, resume the larger sequence rather than restarting planning:
+Task 21 production MC68000/sourceboot audio integration; Tasks 22--23 complete
+BOB actor/effect and music/SFX closure; Tasks 24--26 command, job-granularity,
+and VDP1-transfer overlap; Task 27 Whomp's Fortress package transition; and
+Tasks 28--29 the four-feature matrix and all-features recovery to at least
+4.0 mean FPS. Only then does the representative 12--15 FPS sprint begin.
+
 ## Inherited — Task 10 source hardening and full-game publication
 
 The A9 compatibility adapter is reviewed and exact-target green: it restores

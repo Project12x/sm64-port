@@ -20,6 +20,25 @@ closure. The accepted rollback remains BOB with live input, Q16 camera,
 reviewed tasks, immediate plan/ledger updates at every transition, and
 serialized `-j1` build/Ymir gates for the busy host.
 
+## Current stability lane within the larger track
+
+The active short-term lane is **not a scope reset**: it is the Saturn-shaped
+stability prerequisite for the same full-game sprint. The uncommitted/current
+work is repairing memory/exception behavior and replacing the production
+recursive geo walk with a bounded dual-SH2 enter/dispatch/leave traversal.
+These changes must preserve the accepted 4--6 FPS BOB rollback and the
+full-game ownership model; they do not turn the project into a BOB-only or
+geo-only fork.
+
+Once the current image is stable and the geo source-policy gate reaches zero
+direct recursive calls, return to the larger track at the still-open
+production audio bridge and package residency (Task 21), generated BOB
+dynamic closure and semantic audio (Tasks 22--23), final-draw and transfer
+overlap (Tasks 24--26), Whomp's Fortress portability (Task 27), the complete
+feature matrix (Task 28), and all-features FPS recovery/publication (Task 29).
+The 12--15 FPS sprint remains downstream of that sequence, not replaced by
+the stability lane.
+
 Task 9A/A9A is **rebuilt, exact-map green, independently reviewed, and captured
 at runtime**. Specification is PASS; code-quality review found no
 implementation defect. Its sole documentation-only Important—stale guidance
