@@ -60,8 +60,12 @@ def test_capture_copies_source_values_and_rejects_bad_identity() -> None:
     assert "capacity_overflow_count++" in capture
     assert "overflow_latched" in capture
     assert "source->pool_slot >= observer->capacity" in capture
+    assert "pool_slot_overflow_count" in capture
     assert "instance_key = ((uint32_t)observer->incarnation" in capture
     assert "sm64_saturn_actor_instance_bank_capture" in implementation
+    assert "CPU_CACHE_THROUGH" in implementation
+    assert "actor_bank_fence" in implementation
+    assert "sm64_saturn_render_generation_next" in implementation
 
 
 def test_observer_only_records_geo_decisions_at_source_boundary() -> None:
@@ -80,7 +84,10 @@ def test_observer_only_records_geo_decisions_at_source_boundary() -> None:
     assert "saturn_source_observe_object_begin" in rendering
     assert "sm64_saturn_geo_state_observer_end_object" in rendering
     assert "saturn_source_model_id" in rendering
-    assert "family/bank identity is deliberately unresolved" in rendering
+    capture = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
+    assert "source->family_id == 0U" in capture
+    assert "source->actor_bank_id == 0U" in capture
+    assert "scene_package_generation == 0U" in capture
 
 
 def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
@@ -103,6 +110,8 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
     )
     assert "sourceboot_actor_instances" in sourceboot
     assert "sm64_saturn_actor_instance_bank_capture" in sourceboot
+    assert "sourceboot_actor_bank_generation[2]" in sourceboot
+    assert "actor_instance_bank_valid" in sourceboot
     assert tick.index("sm64_saturn_geo_state_observer_begin_frame") < tick.index(
         "game_loop_one_iteration"
     )

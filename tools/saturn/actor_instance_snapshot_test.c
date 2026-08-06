@@ -200,6 +200,8 @@ static void test_capacity_and_two_bank_lifecycle(void)
     uint16_t count;
     uint8_t index0, index1, first_index;
 
+    assert(sizeof(bank) + sizeof(observer) <= 0x00100000U);
+
     sm64_saturn_geo_state_observer_init(&observer, 2U);
     sm64_saturn_actor_instances_set_observer(&observer);
     sm64_saturn_geo_state_observer_begin_frame(&observer, 20U);
@@ -261,6 +263,14 @@ static void test_observer_overflow_latches_and_bounds_fail_closed(void)
     assert(sm64_saturn_actor_instances_capture(
         &output, 1U, 31U, &count, &telemetry));
     assert(count == 0U && telemetry.malformed_count == 1U);
+
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 32U);
+    source = observation(32U, observer.capacity);
+    assert(!sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(observer.pool_slot_overflow_count == 1U);
+    assert(sm64_saturn_actor_instances_capture(
+        &output, 1U, 32U, &count, &telemetry));
+    assert(count == 0U && telemetry.pool_slot_overflow_count == 1U);
 }
 
 static void test_bank_rejects_stale_and_duplicate_generations(void)

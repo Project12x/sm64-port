@@ -136,8 +136,11 @@ static bool saturn_source_observe_object_begin(struct Object *node)
     source.area_index = node->header.gfx.areaIndex;
     source.active = 1U;
     source.render_active = 1U;
-    /* scene/family/bank identity is deliberately unresolved until the
-     * generated actor registry is authoritative for this source object. */
+    /* Visibility/range/switch/opacity/held/parent/effect fields are not
+     * source-owned at this narrow object seam, so their zero/default values
+     * (and render_active=1) are never admitted. Scene/family/bank identity is
+     * deliberately unresolved until the generated actor registry is
+     * authoritative for this source object. */
     return sm64_saturn_geo_state_observer_begin_object(observer, &source);
 }
 

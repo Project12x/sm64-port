@@ -46,7 +46,7 @@ typedef struct sm64_saturn_render_snapshot {
     uint32_t actor_generation;
     uint16_t actor_instance_count;
     uint8_t actor_instance_bank;
-    uint8_t actor_instance_reserved;
+    uint8_t actor_instance_bank_valid;
     uint32_t scene_id;
     uint32_t area_id;
     uint32_t geometry_bank_id;

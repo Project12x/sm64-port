@@ -203,8 +203,10 @@ static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
 static sm64_saturn_geo_state_observer_t sourceboot_actor_observer;
 static sm64_saturn_actor_instance_bank_t sourceboot_actor_instances;
-static uint8_t sourceboot_active_actor_bank;
-static bool sourceboot_actor_bank_active;
+/* Each physical actor bank carries its own render-generation ticket.  A
+ * later source tick may acquire the other bank while an earlier generation is
+ * still rendering; no single global "active bank" may be overwritten. */
+static uint32_t sourceboot_actor_bank_generation[2];
 static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -339,12 +341,12 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
             actor_count = 0U;
         } else {
             actor_count = acquired_count;
-            sourceboot_active_actor_bank = actor_bank;
-            sourceboot_actor_bank_active = true;
+            sourceboot_actor_bank_generation[actor_bank] = generation;
         }
     }
     snapshot->actor_instance_count = actor_count;
     snapshot->actor_instance_bank = actor_bank == 0xffU ? 0U : actor_bank;
+    snapshot->actor_instance_bank_valid = actor_bank == 0xffU ? 0U : 1U;
     if (!sm64_saturn_mario_actor_snapshot(&snapshot->mario)) {
         snapshot->mario.valid = 0U;
     }
@@ -410,10 +412,11 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
                                              snapshot)) {
         (void)sm64_saturn_render_snapshot_quarantine(&sourceboot_render_snapshots,
                                                       generation);
-        if (sourceboot_actor_bank_active) {
+        if (actor_bank != 0xffU &&
+            sourceboot_actor_bank_generation[actor_bank] == generation) {
             (void)sm64_saturn_actor_instance_bank_quarantine(
                 &sourceboot_actor_instances, generation);
-            sourceboot_actor_bank_active = false;
+            sourceboot_actor_bank_generation[actor_bank] = 0U;
         }
     }
 }
@@ -1066,16 +1069,24 @@ static void sourceboot_frame_service_render(uint32_t generation)
             &sourceboot_render_snapshots, sourceboot_active_render_snapshot)) {
         sourceboot_fast3d.profile.pipeline_faults++;
     }
-    if (sourceboot_actor_bank_active) {
-        if (!sm64_saturn_actor_instance_bank_complete(
-                &sourceboot_actor_instances, sourceboot_active_actor_bank) ||
+    if (sourceboot_active_render_snapshot->actor_instance_bank_valid != 0U) {
+        const uint8_t actor_bank =
+            sourceboot_active_render_snapshot->actor_instance_bank;
+        if (actor_bank >= 2U ||
+            sourceboot_actor_bank_generation[actor_bank] != generation ||
+            !sm64_saturn_actor_instance_bank_complete(
+                &sourceboot_actor_instances, actor_bank) ||
             !sm64_saturn_actor_instance_bank_retire(
-                &sourceboot_actor_instances, sourceboot_active_actor_bank)) {
-            (void)sm64_saturn_actor_instance_bank_quarantine(
-                &sourceboot_actor_instances, generation);
+                &sourceboot_actor_instances, actor_bank)) {
+            if (actor_bank < 2U &&
+                sourceboot_actor_bank_generation[actor_bank] == generation)
+                (void)sm64_saturn_actor_instance_bank_quarantine(
+                    &sourceboot_actor_instances, generation);
             sourceboot_fast3d.profile.pipeline_faults++;
         }
-        sourceboot_actor_bank_active = false;
+        if (actor_bank < 2U &&
+            sourceboot_actor_bank_generation[actor_bank] == generation)
+            sourceboot_actor_bank_generation[actor_bank] = 0U;
     }
     sourceboot_active_render_snapshot = NULL;
     sourceboot_active_build_bank = NULL;
@@ -1094,10 +1105,16 @@ failed:
             sourceboot_active_build_bank);
     (void)sm64_saturn_render_snapshot_quarantine(
         &sourceboot_render_snapshots, generation);
-    if (sourceboot_actor_bank_active) {
-        (void)sm64_saturn_actor_instance_bank_quarantine(
-            &sourceboot_actor_instances, generation);
-        sourceboot_actor_bank_active = false;
+    if (sourceboot_active_render_snapshot != NULL &&
+        sourceboot_active_render_snapshot->actor_instance_bank_valid != 0U) {
+        const uint8_t actor_bank =
+            sourceboot_active_render_snapshot->actor_instance_bank;
+        if (actor_bank < 2U &&
+            sourceboot_actor_bank_generation[actor_bank] == generation) {
+            (void)sm64_saturn_actor_instance_bank_quarantine(
+                &sourceboot_actor_instances, generation);
+            sourceboot_actor_bank_generation[actor_bank] = 0U;
+        }
     }
     sourceboot_active_render_snapshot = NULL;
     sourceboot_active_build_bank = NULL;

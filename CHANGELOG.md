@@ -15,7 +15,13 @@
   remains an explicit package-evidence gate rather than an assumed claim. The
   DLL-safe inherited gate also now checks the worker context's current inline
   references instead of requiring primitive/material pointers that were
-  deliberately removed from that context.
+  deliberately removed from that context. Rereview accounting now places the
+  Task 14 two-generation bank container, observer, queue, 64 master batches,
+  and 2,806 eight-byte output records in one 16-byte-aligned 65,536-byte actor
+  arena; record 2,807 fails closed. Batch construction reads its count through
+  the queue's P2 alias. This remains infrastructure source-incomplete until
+  generic actor-meshlet preparation and a production drain/cutover exist; the
+  concurrent retirement race and all target evidence remain open.
 
 - Added the scene-neutral admission boundary for validated render packages.
   Generic cluster/node/portal views now reject malformed metadata before
@@ -61,12 +67,21 @@
 
 - Hardened actor snapshot publication after lifecycle review: observer
   overflow now latches for the frame, capture bounds-checks every source pool
-  slot before reading incarnation state, and telemetry resets per source frame
-  so despawn/reuse counts are attributable. Actor banks reject stale or
-  duplicate generations even after retirement and the LWRAM assertion counts
-  the bank container once (it already owns both physical banks). The linked
-  sourceboot gate remains open until the Yaul/MSYS make wrapper is repaired and
-  the generated actor-family registry is bound at the production geo seam.
+  slot before reading incarnation state, and separately reports legal source
+  pool slots that exceed the bounded observer capacity instead of silently
+  dropping them. Telemetry resets per source frame so despawn/reuse and
+  capacity failures remain attributable. Actor banks reject stale or duplicate
+  generations with the shared wrap-safe helper, retain independent generation
+  tickets per physical bank, and publish/acquire lifecycle state through the
+  SH-2 cache-through alias with compiler fences. The physical bank/observer
+  assertion now binds to Yaul's target-declared `LWRAM_SIZE`; the Task 16
+  fixed actor-arena cap remains a separate queue contract. Production source
+  fields without an authoritative generated registry (family, scene package,
+  bank, visibility/range/switch/opacity/held-parent/effect state) remain
+  explicitly zero/default and are rejected by capture rather than fabricated.
+  The linked sourceboot gate remains open until the Yaul/MSYS make wrapper is
+  repaired and the generated actor-family registry is bound at the production
+  geo seam.
 
 - Connected actor capture to the real two-bank sourceboot handoff. A published
   bank is claimed for the render overlap window and is retired only at the

@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(__sh__)
+#include <yaul/scu/map.h>
+#endif
+
 /* The generated scene package supplies the live bound.  This ceiling is only
  * a compile-time safety rail for malformed or not-yet-generated packages. */
 #define SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE 64U
@@ -60,6 +64,7 @@ typedef struct sm64_saturn_actor_capture_telemetry {
     uint16_t observed_count, published_count, rejected_count;
     uint16_t stale_generation_count, unknown_family_count;
     uint16_t malformed_count, capacity_overflow_count;
+    uint16_t pool_slot_overflow_count;
     uint16_t despawned_count, pool_reuse_count;
     uint32_t identity_hash, generation_hash;
 } sm64_saturn_actor_capture_telemetry_t;
@@ -73,7 +78,7 @@ typedef struct sm64_saturn_geo_state_observer {
     uint16_t capacity, count;
     uint32_t source_generation;
     uint32_t geo_evaluation_count, geo_rendered_count, geo_rejected_count;
-    uint16_t despawned_count, pool_reuse_count;
+    uint16_t despawned_count, pool_reuse_count, pool_slot_overflow_count;
     uint8_t overflow_latched;
     uint8_t reserved[3];
 } sm64_saturn_geo_state_observer_t;
@@ -152,16 +157,17 @@ bool sm64_saturn_actor_instance_bank_retire(
 bool sm64_saturn_actor_instance_bank_quarantine(
     sm64_saturn_actor_instance_bank_t *bank, uint32_t generation);
 
-/* Two complete banks plus the observer must stay below the package-declared
- * CPU-only LWRAM budget.  This is intentionally a compile-time bound. */
-#define SM64_SATURN_ACTOR_INSTANCE_LWRAM_BUDGET 65536U
+/* Two complete banks plus the observer must stay below the platform/package
+ * LWRAM bound.  The target assertion consumes Yaul's declared physical
+ * LWRAM_SIZE; linker-side sourceboot margins remain a separate gate. */
 _Static_assert(sizeof(sm64_saturn_actor_instance_snapshot_t) == 188U,
                "actor instance ABI size changed");
 _Static_assert(_Alignof(sm64_saturn_actor_instance_snapshot_t) == 4U,
                "actor instance ABI alignment changed");
+#if defined(__sh__)
 _Static_assert(sizeof(sm64_saturn_actor_instance_bank_t) +
-                   sizeof(sm64_saturn_geo_state_observer_t) <=
-                   SM64_SATURN_ACTOR_INSTANCE_LWRAM_BUDGET,
-               "actor snapshot banks exceed declared LWRAM budget");
+                   sizeof(sm64_saturn_geo_state_observer_t) <= LWRAM_SIZE,
+               "actor snapshot banks exceed declared LWRAM bound");
+#endif
 
 #endif

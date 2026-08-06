@@ -1,8 +1,41 @@
 #include "saturn_actor_instance.h"
+#include "saturn_render_cluster.h"
 
 #include <string.h>
 
+#if defined(__sh__)
+#include <cpu/cache.h>
+#endif
+
 static sm64_saturn_geo_state_observer_t *s_bound_observer;
+
+static inline void actor_bank_fence(void)
+{
+#if defined(__GNUC__)
+    __asm__ volatile("" ::: "memory");
+#endif
+}
+
+static inline sm64_saturn_actor_instance_bank_t *actor_bank_uncached(
+    sm64_saturn_actor_instance_bank_t *bank)
+{
+    if (bank == NULL) return NULL;
+#if defined(__sh__)
+    return (sm64_saturn_actor_instance_bank_t *)(CPU_CACHE_THROUGH |
+                                                  (uintptr_t)bank);
+#else
+    return bank;
+#endif
+}
+
+static bool actor_generation_after(uint32_t candidate, uint32_t reference)
+{
+    if (candidate == 0U) return false;
+    if (reference == 0U) return true;
+    if (candidate == reference) return false;
+    return candidate == sm64_saturn_render_generation_next(reference) ||
+           (uint32_t)(candidate - reference) < 0x80000000U;
+}
 
 static uint32_t fold_hash(uint32_t hash, uint32_t value)
 {
@@ -138,6 +171,7 @@ bool sm64_saturn_actor_instances_capture(
     if (stats != NULL) {
         stats->published_count = accepted;
         stats->rejected_count = (uint16_t)(observer->count - accepted);
+        stats->pool_slot_overflow_count = observer->pool_slot_overflow_count;
         stats->despawned_count = observer->despawned_count;
         stats->pool_reuse_count = observer->pool_reuse_count;
         stats->identity_hash = identity_hash;
@@ -154,27 +188,31 @@ void sm64_saturn_actor_instance_bank_init(
     memset(bank, 0, sizeof(*bank));
     bank->state[0] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
     bank->state[1] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
+    actor_bank_fence();
 }
 
 bool sm64_saturn_actor_instance_bank_begin_write(
     sm64_saturn_actor_instance_bank_t *bank, uint32_t generation,
     uint8_t *index)
 {
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
     uint8_t i;
     if (index != NULL) *index = 0xffU;
-    if (bank == NULL || index == NULL || generation == 0U ||
-        generation <= bank->last_published_generation)
+    if (shared == NULL || index == NULL || generation == 0U ||
+        !actor_generation_after(generation, shared->last_published_generation))
         return false;
     for (i = 0U; i < 2U; i++) {
-        if (bank->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
-            bank->generation[i] == generation)
+        if (shared->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+            shared->generation[i] == generation)
             return false;
     }
     for (i = 0U; i < 2U; i++) {
-        if (bank->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE) continue;
-        bank->state[i] = SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING;
-        bank->generation[i] = generation;
-        bank->count[i] = 0U;
+        if (shared->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE) continue;
+        shared->state[i] = SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING;
+        shared->generation[i] = generation;
+        shared->count[i] = 0U;
+        actor_bank_fence();
         *index = i;
         return true;
     }
@@ -185,19 +223,24 @@ bool sm64_saturn_actor_instance_bank_publish(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index, uint16_t count,
     uint32_t generation)
 {
-    if (bank == NULL || index >= 2U || count > SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE ||
-        bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING ||
-        bank->generation[index] != generation || generation == 0U ||
-        generation <= bank->last_published_generation)
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
+    if (shared == NULL || index >= 2U ||
+        count > SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE ||
+        shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING ||
+        shared->generation[index] != generation || generation == 0U ||
+        !actor_generation_after(generation, shared->last_published_generation))
         return false;
-    if ((index == 0U && bank->state[1] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
-         bank->generation[1] == generation) ||
-        (index == 1U && bank->state[0] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
-         bank->generation[0] == generation))
+    if ((index == 0U && shared->state[1] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+         shared->generation[1] == generation) ||
+        (index == 1U && shared->state[0] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+         shared->generation[0] == generation))
         return false;
-    bank->count[index] = count;
-    bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_READY;
-    bank->last_published_generation = generation;
+    shared->count[index] = count;
+    actor_bank_fence();
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_READY;
+    shared->last_published_generation = generation;
+    actor_bank_fence();
     return true;
 }
 
@@ -231,50 +274,66 @@ sm64_saturn_actor_instance_bank_acquire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
     uint32_t generation, uint16_t *count)
 {
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
     if (count != NULL) *count = 0U;
-    if (bank == NULL || index >= 2U || count == NULL ||
-        bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_READY ||
-        bank->generation[index] != generation || generation == 0U)
+    if (shared == NULL || index >= 2U || count == NULL ||
+        shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_READY ||
+        shared->generation[index] != generation || generation == 0U)
         return NULL;
-    bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING;
-    *count = bank->count[index];
-    bank->active_index = index;
-    return bank->snapshots[index];
+    actor_bank_fence();
+    *count = shared->count[index];
+    shared->active_index = index;
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING;
+    actor_bank_fence();
+    return shared->snapshots[index];
 }
 
 bool sm64_saturn_actor_instance_bank_complete(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index)
 {
-    if (bank == NULL || index >= 2U ||
-        bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING)
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
+    if (shared == NULL || index >= 2U ||
+        shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING)
         return false;
-    bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE;
+    actor_bank_fence();
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE;
+    actor_bank_fence();
     return true;
 }
 
 bool sm64_saturn_actor_instance_bank_retire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index)
 {
-    if (bank == NULL || index >= 2U ||
-        bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE)
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
+    if (shared == NULL || index >= 2U ||
+        shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE)
         return false;
-    memset(bank->snapshots[index], 0, sizeof(bank->snapshots[index]));
-    bank->count[index] = 0U;
-    bank->generation[index] = 0U;
-    bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
+    memset(shared->snapshots[index], 0, sizeof(shared->snapshots[index]));
+    shared->count[index] = 0U;
+    shared->generation[index] = 0U;
+    actor_bank_fence();
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
+    actor_bank_fence();
     return true;
 }
 
 bool sm64_saturn_actor_instance_bank_quarantine(
     sm64_saturn_actor_instance_bank_t *bank, uint32_t generation)
 {
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
     uint8_t index;
-    if (bank == NULL || generation == 0U) return false;
+    if (shared == NULL || generation == 0U) return false;
     for (index = 0U; index < 2U; index++) {
-        if (bank->generation[index] == generation &&
-            bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
-            bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED) {
-            bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED;
+        if (shared->generation[index] == generation &&
+            shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+            shared->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED) {
+            actor_bank_fence();
+            shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED;
+            actor_bank_fence();
             return true;
         }
     }
