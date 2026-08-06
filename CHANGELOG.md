@@ -1293,6 +1293,17 @@
 
 ### Fixed
 
+- Corrected Task 14 actor snapshot publication so capture writes the bulk
+  payload through the existing SH-2 cache-through bank alias before the
+  unchanged publish transition. Previously capture addressed the cached bank
+  parameter while publish/acquire used the uncached alias, allowing READY to
+  become observable before dirty payload bytes reached shared memory. The
+  188-byte ABI, two-bank lifecycle, observer capacity/generation validation,
+  quarantine behavior, and fixed actor-arena accounting are unchanged. The
+  new exact acquire fixture and cached-destination mutation gate are host-only
+  evidence; target cache-race, sourceboot, Ymir/manual, and FPS evidence remain
+  open.
+
 - Failed post-BIOS trace captures now still write a bounded JSON evidence
   report containing any raw `mem.peek` bytes/words, Ymir protocol
   notifications, and capped stderr before returning failure. This preserves

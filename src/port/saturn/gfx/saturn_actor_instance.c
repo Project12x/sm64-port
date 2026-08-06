@@ -249,16 +249,18 @@ bool sm64_saturn_actor_instance_bank_capture(
     uint16_t capacity, uint8_t *index, uint16_t *count,
     sm64_saturn_actor_capture_telemetry_t *stats)
 {
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
     uint8_t selected = 0xffU;
     uint16_t captured = 0U;
     if (count != NULL) *count = 0U;
     if (index != NULL) *index = 0xffU;
-    if (bank == NULL || index == NULL || count == NULL ||
+    if (shared == NULL || index == NULL || count == NULL ||
         !sm64_saturn_actor_instance_bank_begin_write(bank, generation,
                                                      &selected))
         return false;
     if (!sm64_saturn_actor_instances_capture(
-            bank->snapshots[selected], capacity, generation, &captured, stats) ||
+            shared->snapshots[selected], capacity, generation, &captured, stats) ||
         !sm64_saturn_actor_instance_bank_publish(
             bank, selected, captured, generation)) {
         (void)sm64_saturn_actor_instance_bank_quarantine(bank, generation);

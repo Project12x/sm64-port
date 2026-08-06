@@ -10,7 +10,10 @@ SOURCEBOOT = ROOT / "src/port/saturn/sourceboot/main.c"
 
 
 def body(path: Path, symbol: str) -> str:
-    text = path.read_text(encoding="utf-8")
+    return body_text(path.read_text(encoding="utf-8"), symbol)
+
+
+def body_text(text: str, symbol: str) -> str:
     start = text.index(symbol)
     opening = text.index("{", start)
     depth = 0
@@ -66,6 +69,28 @@ def test_capture_copies_source_values_and_rejects_bad_identity() -> None:
     assert "CPU_CACHE_THROUGH" in implementation
     assert "actor_bank_fence" in implementation
     assert "sm64_saturn_render_generation_next" in implementation
+
+
+def assert_capture_uses_cache_through_payload(text: str) -> None:
+    capture = body_text(text, "sm64_saturn_actor_instance_bank_capture")
+    assert "actor_bank_uncached(bank)" in capture
+    assert "shared->snapshots[selected]" in capture
+    assert "bank->snapshots[selected]" not in capture
+
+
+def test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation() -> None:
+    source = GFX / "saturn_actor_instance.c"
+    implementation = source.read_text(encoding="utf-8")
+    assert_capture_uses_cache_through_payload(implementation)
+    mutation = implementation.replace(
+        "shared->snapshots[selected]", "bank->snapshots[selected]", 1
+    )
+    try:
+        assert_capture_uses_cache_through_payload(mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("cached payload-write mutation escaped the source gate")
 
 
 def test_observer_only_records_geo_decisions_at_source_boundary() -> None:
@@ -128,5 +153,6 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
 if __name__ == "__main__":
     test_snapshot_and_observation_are_pointer_free()
     test_capture_copies_source_values_and_rejects_bad_identity()
+    test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation()
     test_observer_only_records_geo_decisions_at_source_boundary()
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()

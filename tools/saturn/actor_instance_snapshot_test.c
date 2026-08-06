@@ -287,6 +287,41 @@ static void test_bank_rejects_stale_and_duplicate_generations(void)
     assert(!sm64_saturn_actor_instance_bank_publish(&bank, second, 0U, 40U));
 }
 
+static void test_bank_capture_acquires_exact_published_payload(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source = observation(50U, 3U);
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_capture_telemetry_t telemetry;
+    const sm64_saturn_actor_instance_snapshot_t *acquired;
+    uint8_t index;
+    uint16_t count;
+
+    source.position_q16[0] = 0x13579;
+    source.effect_params_q16[3] = 0x2468a;
+    source.animation_frame = 0x3456U;
+    source.switch_state[1] = 0x5a5aU;
+    sm64_saturn_geo_state_observer_init(&observer, 8U);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 50U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    sm64_saturn_actor_instance_bank_init(&bank);
+    assert(sm64_saturn_actor_instance_bank_capture(
+        &bank, 50U, 8U, &index, &count, &telemetry));
+    assert(count == 1U && telemetry.published_count == 1U);
+    acquired = sm64_saturn_actor_instance_bank_acquire(&bank, index, 50U,
+                                                        &count);
+    assert(acquired != NULL && count == 1U);
+    assert(acquired[0].instance_key == ((uint32_t)1U << 16 | source.pool_slot));
+    assert(acquired[0].position_q16[0] == source.position_q16[0]);
+    assert(acquired[0].effect_params_q16[3] == source.effect_params_q16[3]);
+    assert(acquired[0].animation_frame == source.animation_frame);
+    assert(acquired[0].switch_state[1] == source.switch_state[1]);
+    assert(sm64_saturn_actor_instance_bank_complete(&bank, index));
+    assert(sm64_saturn_actor_instance_bank_retire(&bank, index));
+}
+
 int main(void)
 {
     test_all_typed_fields_and_model_none();
@@ -296,5 +331,6 @@ int main(void)
     test_capacity_and_two_bank_lifecycle();
     test_observer_overflow_latches_and_bounds_fail_closed();
     test_bank_rejects_stale_and_duplicate_generations();
+    test_bank_capture_acquires_exact_published_payload();
     return 0;
 }
