@@ -655,7 +655,9 @@ bool sm64_saturn_actor_family_bank_validate_expected(
             (uint32_t)index * SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE;
         uint16_t prior;
         uint32_t family_id = read_be32(record);
-        if (family_id == 0U || (read_be32(record + 16U) &
+        if (family_id == 0U || (read_be32(record + 4U) &
+                               ~SM64_SATURN_ACTOR_CAPABILITY_MASK) != 0U ||
+            (read_be32(record + 16U) &
                                ~(SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED |
                                  SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY)) != 0U ||
             (read_be32(record + 52U) &
@@ -732,6 +734,13 @@ bool sm64_saturn_actor_family_capability_supported(
             required_runtime_capability_mask) == required_runtime_capability_mask;
 }
 
+bool sm64_saturn_actor_family_capability_mask_supported(
+    uint32_t required_capability_mask)
+{
+    return (required_capability_mask &
+            ~SM64_SATURN_ACTOR_CAPABILITY_MASK) == 0U;
+}
+
 int sm64_saturn_actor_family_bank_select(
     const sm64_saturn_actor_family_bank_view_t *view,
     uint32_t required_capability_mask, uint32_t multiplicity)
@@ -740,7 +749,8 @@ int sm64_saturn_actor_family_bank_select(
     int selected = -1;
     uint32_t selected_bits = UINT32_MAX, selected_capacity = UINT32_MAX,
              selected_id = UINT32_MAX;
-    if (view == NULL)
+    if (view == NULL || !sm64_saturn_actor_family_capability_mask_supported(
+                           required_capability_mask))
         return -1;
     for (index = 0U; index < view->family_count; index++) {
         sm64_saturn_actor_family_record_t record;

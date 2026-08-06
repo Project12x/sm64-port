@@ -4,6 +4,20 @@
 
 ### Changed
 
+- Added the bounded Task 19 articulated/enemy capability admission slice.
+  Closure-derived ANIMATED, SWITCH, PARENTED, HELD, MODEL_MUTATION, and LOD
+  masks now have named C ABI constants, unknown required masks fail closed, and
+  generic family selection admits only supported geometry with the requested
+  capability. The generated BOB diagnostic covers 86 closure records and 47
+  family representatives: animation is 8 records/7 representatives with no
+  unresolved source families; SWITCH is 33/22 with 5 unresolved records;
+  PARENTED is 52/34 with 8 unresolved records; MODEL_MUTATION is 34/23 with 5
+  unresolved records; HELD and LOD have zero authoritative records. Existing
+  geo-node gaps remain named rather than bypassed. The host C/Python gates
+  reuse the Task 10 pose evaluator and Task 14 pointer-free snapshot/queue
+  contracts only; no enemy-specific renderer, BOB/WF branch, target/Ymir,
+  manual, or FPS claim is made.
+
 - Added closure-derived generic actor capability records for the bounded Task
   18 slice. Rigid/opaque/static-transform/platform/collectible class bits and
   transform/scale/material/surface/lifecycle runtime masks now travel in the

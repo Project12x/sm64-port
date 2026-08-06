@@ -15,6 +15,25 @@
 #define SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE 56U
 #define SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED (1U << 0)
 #define SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY (1U << 1)
+#define SM64_SATURN_ACTOR_CAP_ANIMATED (1U << 0)
+#define SM64_SATURN_ACTOR_CAP_SWITCH (1U << 1)
+#define SM64_SATURN_ACTOR_CAP_BILLBOARD (1U << 2)
+#define SM64_SATURN_ACTOR_CAP_ALPHA (1U << 3)
+#define SM64_SATURN_ACTOR_CAP_TRANSLUCENT (1U << 4)
+#define SM64_SATURN_ACTOR_CAP_SHADOW (1U << 5)
+#define SM64_SATURN_ACTOR_CAP_PARENTED (1U << 6)
+#define SM64_SATURN_ACTOR_CAP_HELD (1U << 7)
+#define SM64_SATURN_ACTOR_CAP_MODEL_MUTATION (1U << 8)
+#define SM64_SATURN_ACTOR_CAP_SURFACE (1U << 9)
+#define SM64_SATURN_ACTOR_CAP_LOD (1U << 10)
+#define SM64_SATURN_ACTOR_CAP_PARTICLE (1U << 11)
+#define SM64_SATURN_ACTOR_CAP_EFFECT (1U << 12)
+#define SM64_SATURN_ACTOR_CAP_RIGID (1U << 13)
+#define SM64_SATURN_ACTOR_CAP_OPAQUE (1U << 14)
+#define SM64_SATURN_ACTOR_CAP_STATIC_TRANSFORM (1U << 15)
+#define SM64_SATURN_ACTOR_CAP_PLATFORM (1U << 16)
+#define SM64_SATURN_ACTOR_CAP_COLLECTIBLE (1U << 17)
+#define SM64_SATURN_ACTOR_CAPABILITY_MASK ((1U << 18) - 1U)
 #define SM64_SATURN_ACTOR_RUNTIME_CAP_TRANSFORM (1U << 0)
 #define SM64_SATURN_ACTOR_RUNTIME_CAP_SCALE (1U << 1)
 #define SM64_SATURN_ACTOR_RUNTIME_CAP_MATERIAL (1U << 2)
@@ -124,6 +143,8 @@ bool sm64_saturn_actor_family_bank_validate_expected(
 bool sm64_saturn_actor_family_bank_record(
     const sm64_saturn_actor_family_bank_view_t *view, uint16_t index,
     sm64_saturn_actor_family_record_t *out);
+bool sm64_saturn_actor_family_capability_mask_supported(
+    uint32_t required_capability_mask);
 bool sm64_saturn_actor_family_capability_supported(
     const sm64_saturn_actor_family_record_t *record,
     uint32_t required_runtime_capability_mask);
