@@ -7,7 +7,11 @@ _Static_assert(sizeof(sm64_saturn_build_identity_t) ==
                "Saturn build identity ABI drift");
 
 const sm64_saturn_build_identity_t saturn_build_identity
-    __attribute__((used, section(".rodata.saturn_build_identity"))) =
+    /* The guard runs before source_cart_load(), so this immutable tuple must
+     * stay in the HWRAM bootdata segment rather than the cart-resident
+     * .rodata collection.  A cart VMA here makes the pre-cart guard read
+     * non-resident bytes and spin forever on a black screen. */
+    __attribute__((used, section(".bootdata"))) =
         SATURN_BUILD_IDENTITY_INITIALIZER;
 
 bool sm64_saturn_build_identity_is_valid(

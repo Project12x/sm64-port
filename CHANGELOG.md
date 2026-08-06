@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Sourceboot now keeps the immutable build-identity tuple in HWRAM `.bootdata`
+  instead of cart-resident `.rodata`. The pre-cart guard therefore validates
+  before `source_cart_load()` can safely read the DRAM cart; the previous
+  placement dereferenced a non-resident cart VMA and spun at `main.c:1423`,
+  presenting as a black screen. The new identity-residency test and a fresh
+  Pipe-4 BOB image preserve the existing profile-managed DRAM launch contract.
+
 - Sourceboot now places the CPU-only Fast3D frontend state in the NOLOAD
   LWRAM work arena and initializes it before the bootstrap VDP2 profile read.
   This reclaims 44,616 bytes of HWRAM for the remaining link-capacity gate
