@@ -163,6 +163,31 @@ static void refresh_active_source_positions(void)
             &s_policy, state->source_token, state->package_generation,
             params.volume, params.pan, params.pitch, params.priority_score);
     }
+    for (i = 0U; i < s_policy.pending_request_count; ++i) {
+        sm64_saturn_audio_pending_request_t *pending =
+            &s_policy.pending_requests[i];
+        const f32 *pos = sm64_saturn_audio_spatial_resolve(
+            &s_spatial, pending->refresh.source_token,
+            pending->refresh.package_generation);
+        sm64_saturn_audio_spatial_params_t params;
+        u8 bank;
+        if (pos == NULL) {
+            continue;
+        }
+        bank = (u8)((pending->refresh.sound_bits & SOUNDARGS_MASK_BANK) >>
+                    SOUNDARGS_SHIFT_BANK);
+        if (bank >= SM64_SATURN_AUDIO_BANK_COUNT) {
+            continue;
+        }
+        sm64_saturn_audio_spatial_quantize(
+            pending->refresh.sound_bits, bank, s_moving_speed[bank],
+            source_level_acoustic_reach(), gAudioRandom,
+            pos[0], pos[1], pos[2], &params);
+        pending->refresh.volume = params.volume;
+        pending->refresh.pan = params.pan;
+        pending->refresh.pitch = params.pitch;
+        pending->priority_score = params.priority_score;
+    }
 }
 
 static void consume_driver_completions(void)
