@@ -405,6 +405,20 @@ The focused policy test fails as intended with 24 direct
 `geo_process_node_and_siblings()` handler calls remaining. It also requires
 the production source to name the runtime frame owner and the LWRAM section.
 No handler conversion was written before this failure.
+
+Iterative geo-walk Task 3 runtime RED (2026-08-06): added
+`tools/saturn/geo_walk_runtime_contract_test.c` for explicit node/sibling
+cursor preservation and fail-closed runtime overflow. The focused C compile
+correctly fails because `saturn_geo_walk_runtime.h/.c` do not exist yet. No
+runtime implementation was written before this failure.
+
+Iterative geo-walk Task 3a GREEN/source-complete (2026-08-06): commit
+`937f0043` adds `saturn_geo_walk_runtime.h/.c` with bounded node/sibling
+enter/leave events, explicit overflow latching, and a serial host C gate
+(`verify-saturn-geo-walk-runtime`). The runtime seam compiles and passes its
+cursor/overflow contract, and sourceboot now links it beside the generated
+LWRAM owner. The production handler policy remains red at 24 direct recursive
+calls; no source cutover, target link, Ymir/manual, or FPS evidence is claimed.
 Task 20 fix round 1 `f161491a` is committed with canonical nonzero actor-bank hash admission, compact bank ID/token propagation through descriptor/lowering, one shared fail-closed descriptor validator for lower/order, and direct zero-hash/stale-token/crafted-field mutation coverage. Fresh serialized evidence passes: `verify-actor-effects` 57.5s and `verify-actor-batches verify-actor-capability-bank verify-actor-family-bank verify-actor-instance-queue` 58.8s. The plan’s individual Task20 test/GREEN steps are checked; scoped independent rereview is pending. Production observer capture, the two geo prerequisites, final closure, target/Ymir/manual/FPS remain open.
 Task 20 fix round 1 rereview is SPEC/QUALITY FAIL, C0/I1/M1. Bank identity, shared validation, plan wording, and exact oracle binding pass. Remaining I1 is self-referential generation/package validation in the public lower API, which cannot reject an old descriptor; M1 is stale 64-byte/16-byte wording in the report. Fix round 2 is dispatched to repair the lower contract, add direct stale generation/package mutations, and correct all ABI-size evidence before rereview.
 Task 20 fix round 2 `e61d3e8a` is committed. `sm64_saturn_actor_effect_lower()` now receives trusted current frame/package generations, and direct stale-frame/stale-package mutations fail closed; the report and brief consistently state the 68-byte descriptor/24-byte output ABI. Focused `verify-actor-effects` passes in 58.2s and the serialized actor regression wave passes in 59.3s. Scoped rereview is pending; production observer/geo/cross-stream/target/Ymir/manual/FPS gates remain open.

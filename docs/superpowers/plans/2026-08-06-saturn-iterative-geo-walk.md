@@ -81,6 +81,11 @@ ABI remains a separate contract fixture. Task 3 is active. Its RED source
 policy currently reports 24 direct recursive dispatcher calls, so no source
 conversion or target claim is implied yet.
 
+Task 3a runtime seam is source-complete in `937f0043`: the production runtime
+API now owns bounded node/sibling enter/leave events and overflow latching, and
+the sourceboot object list links it beside the LWRAM owner. The source-policy
+gate remains intentionally red until the handlers are converted.
+
 ### Task 3: Convert the Saturn source graph handlers to enter/leave dispatch
 
 **Files:**
