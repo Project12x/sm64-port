@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added the source-authoritative S64A audio catalog compiler.  It consumes the
+  35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
+  records source/package hashes, emits aligned big-endian AUDIO.DAT chunks and
+  BOB/WF closure manifests, and converts PCM16 to deterministic Saturn PCM8.
+  The bounded residency contract retains an active generation until the
+  MC68000 acknowledgement and rejects post-boot whole-RAM clears; generated
+  catalog data stays untracked and target playback/transport integration remains
+  a later gate.
+
 - Closed the remaining S64F admission-integrity gaps: runtime capability
   selection now ranks total family capability bits, the host validator rejects
   empty/unknown-flag banks, and the C validator recomputes and optionally

@@ -11,6 +11,7 @@ DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PCM68K_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/audio68k
 SOUNDTEST_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/soundtest
 PCM_PROOF_GENERATED := $(SATURN_REPO_ROOT)/build/saturn/soundtest/generated
+AUDIO_GENERATED := $(SATURN_REPO_ROOT)/build/saturn/audio/generated
 MARIO_ACTOR_BANK_DIR := $(SATURN_REPO_ROOT)/build/saturn/actors/mario
 MARIO_ACTOR_BANK := $(MARIO_ACTOR_BANK_DIR)/mario.s64b
 MARIO_ACTOR_BANK_REPORT := $(MARIO_ACTOR_BANK_DIR)/mario-actor-bank.json
@@ -84,7 +85,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-policy verify-audio-spatial verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-policy verify-audio-spatial verify-audio-residency compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-render-snapshot-bank verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -238,6 +239,22 @@ verify-audio-spatial:
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_audio_spatial.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-spatial-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-spatial-test$(HOST_EXEEXT)'], check=True)"
+
+compile-saturn-audio: check-host-tools
+	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" tools/saturn/compile_saturn_audio.py \
+		--root "$(SATURN_REPO_ROOT)" --output-dir "$(AUDIO_GENERATED)"
+
+verify-audio-residency: compile-saturn-audio
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+		-I"$(SATURN_REPO_ROOT)/src/port/saturn/audio" \
+		-I"$(PCM68K_DIR)" \
+		"$(SATURN_REPO_ROOT)/tools/saturn/audio_residency_test.c" \
+		"$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_audio_package.c" \
+		"$(PCM68K_DIR)/audio_package.c" \
+		-o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)'], check=True)"
+	@"$(SATURN_TOOLS_PYTHON)" -c "import hashlib, pathlib, shutil, subprocess, tempfile; root=pathlib.Path(r'$(SATURN_REPO_ROOT)'); py=r'$(SATURN_TOOLS_PYTHON)'; a=pathlib.Path(tempfile.mkdtemp(prefix='s64a-a-')); b=pathlib.Path(tempfile.mkdtemp(prefix='s64a-b-')); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(a)], check=True); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(b)], check=True); names=['AUDIO.DAT','audio_manifest.json','bob_audio_closure.json','wf_audio_closure.json']; assert all(hashlib.sha256((a/n).read_bytes()).digest()==hashlib.sha256((b/n).read_bytes()).digest() for n in names); print('audio deterministic hashes: PASS')"
 
 verify-pcm-transport:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
