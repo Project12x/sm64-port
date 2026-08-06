@@ -148,13 +148,35 @@ def _sourceboot_generated_asset_inputs(root: Path) -> tuple[str, ...]:
         root, _sourceboot_asset_sources(root), "build/us_pc", {"VERSION_US", "VERSION_JP_US"}
     )
     targets.append("build/us_pc/include/text_strings.h")
-    for relative in targets:
+    pending = [Path(relative) for relative in targets]
+    closure: set[str] = set()
+    generated_root = (root / "build/us_pc").resolve()
+    while pending:
+        relative = pending.pop()
+        path = root / relative
         if not (root / relative).is_file():
             raise ValueError(
                 f"source_hash generated source asset is not a file: {relative}; "
                 "run sourceboot identity-assets before sealing"
             )
-    return tuple(sorted(targets))
+        rendered = relative.as_posix()
+        if rendered in closure:
+            continue
+        closure.add(rendered)
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = prepare_sourceboot_assets.INCLUDE.match(line)
+            if match is None:
+                continue
+            candidate = path.parent / match.group(1)
+            if generated_root in candidate.resolve().parents:
+                if not candidate.is_file():
+                    raise ValueError(
+                        f"source_hash generated source asset is not a file: "
+                        f"{candidate.relative_to(root).as_posix()}; "
+                        "run sourceboot identity-assets before sealing"
+                    )
+                pending.append(candidate.relative_to(root))
+    return tuple(sorted(closure))
 
 
 def all_input_paths() -> tuple[str, ...]:

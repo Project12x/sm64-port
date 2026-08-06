@@ -69,6 +69,11 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         generated_asset = self.root / "build/us_pc/actors/traversal.ia16.inc.c"
         generated_asset.parent.mkdir(parents=True, exist_ok=True)
         generated_asset.write_text("generated asset\n", encoding="utf-8")
+        text_strings = self.root / "build/us_pc/include/text_strings.h"
+        text_strings.write_text('#include "text_menu_strings.h"\n', encoding="utf-8")
+        (text_strings.parent / "text_menu_strings.h").write_text(
+            "generated menu strings\n", encoding="utf-8"
+        )
         self.output = self.root / "build/generated/saturn_build_identity_spec.json"
 
     def tearDown(self) -> None:
@@ -105,6 +110,7 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             "textures/skyboxes/water.png",
             *REQUIRED_COMPILED_GENERATED_INPUTS,
             "build/us_pc/actors/traversal.ia16.inc.c",
+            "build/us_pc/include/text_menu_strings.h",
         ):
             before = json.loads(self.output.read_text(encoding="utf-8"))
             path = self.root / relative
@@ -168,6 +174,18 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             bootstrap.ACTOR_BANK_C_PAYLOAD,
             {item["path"] for item in manifest["inputs"]},
         )
+        actor_c = self.root / bootstrap.ACTOR_BANK_C_PAYLOAD
+        before = json.loads(self.output.read_text(encoding="utf-8"))
+        actor_c.write_bytes(actor_c.read_bytes() + b"actor-bank-change")
+        bootstrap.write_spec(self.root, self.output, animation)
+        after = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertNotEqual(
+            before["artifacts"]["source_hash"]["sha256"],
+            after["artifacts"]["source_hash"]["sha256"],
+        )
+        actor_c.unlink()
+        with self.assertRaisesRegex(ValueError, "feature-selected actor bank"):
+            bootstrap.write_spec(self.root, self.output, animation)
 
     def test_rejects_invalid_input_before_reusing_a_stale_spec(self) -> None:
         valid = config()
@@ -200,6 +218,11 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         for relative in bootstrap.GENERATED_IMAGE_INPUTS:
             (self.root / relative).unlink()
         with self.assertRaisesRegex(ValueError, "run sourceboot identity-assets before sealing"):
+            bootstrap.write_spec(self.root, self.output, config())
+
+    def test_generated_header_transitive_include_is_required(self) -> None:
+        (self.root / "build/us_pc/include/text_menu_strings.h").unlink()
+        with self.assertRaisesRegex(ValueError, "text_menu_strings.h"):
             bootstrap.write_spec(self.root, self.output, config())
 
 

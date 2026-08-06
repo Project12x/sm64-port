@@ -33,6 +33,10 @@
   and includes text strings. Feature-on Mario animation additionally requires
   and seals the generated actor-bank C source. Multiword stage values now fail
   before Make can treat them as a bypass request.
+  Generated host headers are now followed transitively from the discovered
+  asset targets, so `text_menu_strings.h` and any future quoted generated
+  header include are sealed or cause a clean fail-closed diagnostic. Feature-on
+  actor-bank-C absence and byte mutation are covered explicitly.
 
 - Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
   owner in sourceboot, replacing standalone actor observer/bank storage and
