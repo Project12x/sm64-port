@@ -1343,7 +1343,8 @@ transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
   dispatch) is now the active transition; frame refinement `98d9cce2` gives
   the production owner node and sibling cursors. Its RED policy currently
   reports 24 direct recursive dispatcher calls. Runtime seam `937f0043` is
-  source-complete, but handler conversion is not; the source-policy gate is
+  source-complete, refined by `a48e5aac` with depth-first/deferred-dispatch
+  callbacks, but handler conversion is not; the source-policy gate is
   intentionally red until all enter/leave restorations are implemented. Linked
   SH-2 sizes, target stability, textures, audio, and FPS remain unchecked.
 

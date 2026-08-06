@@ -86,6 +86,11 @@ API now owns bounded node/sibling enter/leave events and overflow latching, and
 the sourceboot object list links it beside the LWRAM owner. The source-policy
 gate remains intentionally red until the handlers are converted.
 
+Runtime scheduling refinement `a48e5aac` adds depth-first child/sibling order,
+deferred children-first dispatch, explicit leave callbacks, and the synthetic
+differential trace. This remains infrastructure; the source policy still
+reports 24 recursive handler edges.
+
 ### Task 3: Convert the Saturn source graph handlers to enter/leave dispatch
 
 **Files:**
