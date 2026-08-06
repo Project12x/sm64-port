@@ -17,6 +17,7 @@ typedef struct sm64_saturn_audio_source_entry {
     uint16_t package_generation;
     uint16_t token_generation;
     bool active;
+    bool retired;
 } sm64_saturn_audio_source_entry_t;
 
 typedef struct sm64_saturn_audio_spatial_table {
@@ -25,6 +26,7 @@ typedef struct sm64_saturn_audio_spatial_table {
 } sm64_saturn_audio_spatial_table_t;
 
 typedef struct sm64_saturn_audio_spatial_params {
+    uint32_t priority_score;
     uint8_t volume;
     uint8_t pan;
     uint16_t pitch;
@@ -40,10 +42,13 @@ bool sm64_saturn_audio_spatial_release(sm64_saturn_audio_spatial_table_t *table,
                                        const float *identity);
 uint16_t sm64_saturn_audio_spatial_generation(
     const sm64_saturn_audio_spatial_table_t *table, uint16_t token);
-void sm64_saturn_audio_spatial_quantize(uint32_t sound_bits, uint8_t bank,
-                                        uint8_t moving_speed, float x, float y,
-                                        float z,
-                                        sm64_saturn_audio_spatial_params_t *out);
+const float *sm64_saturn_audio_spatial_resolve(
+    const sm64_saturn_audio_spatial_table_t *table, uint16_t token,
+    uint16_t package_generation);
+void sm64_saturn_audio_spatial_quantize(
+    uint32_t sound_bits, uint8_t bank, uint8_t moving_speed,
+    uint16_t acoustic_reach, uint32_t audio_random, float x, float y, float z,
+    sm64_saturn_audio_spatial_params_t *out);
 void sm64_saturn_audio_spatial_encode_play_refresh(
     const sm64_saturn_audio_play_refresh_t *refresh, uint16_t words[7]);
 

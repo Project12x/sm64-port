@@ -16,7 +16,8 @@
 enum {
     SM64_SATURN_AUDIO_BACKGROUND_QUEUE_CAPACITY = 6U,
     SM64_SATURN_AUDIO_BANK_COUNT = 10U,
-    SM64_SATURN_AUDIO_SFX_PER_BANK = 40U,
+    /* external.c has 40 entries, but indices 0 and 39 are list sentinels. */
+    SM64_SATURN_AUDIO_SFX_PER_BANK = 38U,
     SM64_SATURN_AUDIO_SFX_CAPACITY =
         SM64_SATURN_AUDIO_BANK_COUNT * SM64_SATURN_AUDIO_SFX_PER_BANK,
     SM64_SATURN_AUDIO_SEQUENCE_NONE = 0xFFU,
@@ -54,6 +55,7 @@ typedef struct sm64_saturn_audio_sfx_state {
     uint16_t package_generation;
     uint16_t last_refresh_generation;
     uint16_t restart_generation;
+    uint32_t priority_score;
     uint8_t volume;
     uint8_t pan;
     uint16_t pitch;
@@ -70,6 +72,7 @@ typedef struct sm64_saturn_audio_policy {
     uint16_t disabled_bank_mask;
     uint16_t lowering_bank_mask;
     uint16_t freshness_generation;
+    uint16_t environment_generation;
     uint16_t active_sfx_count;
     uint8_t background_queue_size;
     uint8_t background_target_volume;
@@ -106,6 +109,9 @@ bool sm64_saturn_audio_policy_play_jingle(sm64_saturn_audio_policy_t *policy,
                                           uint8_t max_background_volume);
 bool sm64_saturn_audio_policy_environment_complete(
     sm64_saturn_audio_policy_t *policy);
+bool sm64_saturn_audio_policy_environment_complete_matching(
+    sm64_saturn_audio_policy_t *policy, uint8_t seq_id,
+    uint16_t environment_generation);
 bool sm64_saturn_audio_policy_lower(sm64_saturn_audio_policy_t *policy,
                                     uint8_t player, uint16_t fade_timer,
                                     uint8_t percentage);
@@ -119,11 +125,20 @@ void sm64_saturn_audio_policy_enable_banks(sm64_saturn_audio_policy_t *policy,
                                            uint16_t bank_mask);
 bool sm64_saturn_audio_policy_play_refresh(
     sm64_saturn_audio_policy_t *policy,
-    const sm64_saturn_audio_play_refresh_t *refresh);
+    const sm64_saturn_audio_play_refresh_t *refresh,
+    uint32_t priority_score);
+bool sm64_saturn_audio_policy_sound_id_valid(uint32_t sound_bits);
 bool sm64_saturn_audio_policy_stop_handle(sm64_saturn_audio_policy_t *policy,
                                           uint32_t sound_bits,
                                           uint16_t source_token,
                                           uint16_t package_generation);
+bool sm64_saturn_audio_policy_complete_handle(
+    sm64_saturn_audio_policy_t *policy, uint32_t sound_bits,
+    uint16_t source_token, uint16_t package_generation);
+bool sm64_saturn_audio_policy_update_spatial(
+    sm64_saturn_audio_policy_t *policy, uint16_t source_token,
+    uint16_t package_generation, uint8_t volume, uint8_t pan,
+    uint16_t pitch, uint32_t priority_score);
 bool sm64_saturn_audio_policy_stop_source(sm64_saturn_audio_policy_t *policy,
                                           uint16_t source_token,
                                           uint16_t package_generation);
@@ -138,6 +153,9 @@ bool sm64_saturn_audio_policy_fade_player(sm64_saturn_audio_policy_t *policy,
                                           uint16_t fade_timer);
 bool sm64_saturn_audio_policy_fade_channels(
     sm64_saturn_audio_policy_t *policy, uint8_t player, uint8_t target,
+    uint16_t fade_timer);
+bool sm64_saturn_audio_policy_fade_sfx_banks(
+    sm64_saturn_audio_policy_t *policy, uint16_t bank_mask, uint8_t target,
     uint16_t fade_timer);
 bool sm64_saturn_audio_policy_mute(sm64_saturn_audio_policy_t *policy,
                                    bool muted);

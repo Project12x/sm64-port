@@ -11,10 +11,21 @@
   queue, priority/duplicate handling, secondary music, jingles, fades,
   lower/unlower constraints, bank masks, one published SFX per bank,
   continuous freshness, stops, getters, and moving-source spatial updates on
-  the SH-2.  Protocol-v2 `PLAY_REFRESH` records carry only fixed-width
+  the SH-2.  Admission uses the inherited requested-priority plus exact
+  distance/front weighting, and volume/pitch retain per-level acoustic reach,
+  bank range, moving-speed, constant-frequency, and vibrato rules before
+  quantization.  Active source positions are reevaluated each game-audio
+  tick; waiting discrete requests expire after the inherited countdown,
+  published requests retire through generation-matched completion feedback,
+  and invalid per-bank sound IDs fail before consuming an identity slot.
+  Jingle/secondary completion, published-SFX lowering, and global fades now
+  produce bounded aggregate semantic actions; the latter uses one non-menu
+  bank-mask record instead of nine indistinguishable channel records.
+  Protocol-v2 `PLAY_REFRESH` records carry only fixed-width
   `soundBits`, generation-tagged source tokens, package/freshness generations,
   and quantized volume/pan/pitch; raw `f32 *pos` identities stay in a bounded
-  SH-2 table.  The task deliberately does not add a 68000 sequence VM, sample
+  SH-2 table, and exhausted token slots retire instead of wrapping into an
+  ABA collision.  The task deliberately does not add a 68000 sequence VM, sample
   packages, SCSP voice integration, or claim target/Ymir audio.
 
 - Added a static source audit and an illustrative digest model for the proposed

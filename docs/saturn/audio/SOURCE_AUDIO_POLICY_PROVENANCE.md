@@ -42,12 +42,31 @@ later source movement does not erase the provenance.
   existing silent stub remains the complete, mutually exclusive feature-off
   rollback owner.
 - The SH-2 holds a bounded 64-entry pointer-identity table.  A 16-bit token
-  encodes both slot and reuse generation, so a delayed stop cannot target a
-  new pointer that reused the slot.
+  encodes both slot and reuse generation.  A slot retires when its 9-bit
+  generation is exhausted instead of wrapping, and package-generation
+  mismatches fail closed, so a delayed stop cannot target a later occupant.
 - `PLAY_REFRESH` contains the original 32-bit `soundBits`, source token,
   package generation, packed quantized volume/pan, quantized pitch, and
   freshness generation in the seven protocol-v2 payload words.  No pointer or
   native-width C structure crosses CPUs.
+- The non-wire admission score retains the source `distance + positive-z/6 +
+  0x4c * (0xff - requestedPriority)` rule (or requested priority alone for
+  `SOUND_NO_PRIORITY_LOSS`).  Level acoustic reach, bank volume range,
+  moving-speed, constant-frequency, and vibrato inputs are applied on SH-2
+  before volume/pan/pitch quantization.  Active source pointers are resolved
+  and reevaluated every source-audio tick; they remain SH-2-local.
+- The inherited US catalog limits and 38 usable list nodes per bank are
+  retained.  Waiting discrete requests use the exact ten-count post-decrement
+  lifetime; published discrete requests retire on preemption or
+  generation-matched driver completion.  Continuous requests retain their
+  two-frame refresh grace.
+- ENV completion feedback is sequence- and generation-matched.  It clears the
+  jingle constraint, restores the aggregate background fade, and resumes only
+  the inherited Merry-Go-Round or Piranha Plant secondary sequences.
+- SFX-driven lowering begins only when a sound is published and emits the
+  inherited 50-frame aggregate background adjustment.  Global fade carries a
+  single non-menu SFX bank mask, keeping the whole transition to three bounded
+  control records.
 - Background/music policy and SFX admission remain on the SH-2.  Sequence
   bytecode timing, notes, envelopes, and SCSP voice ownership remain outside
   this task and belong to the MC68000 lane.

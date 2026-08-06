@@ -5,8 +5,12 @@
 
 enum {
     SOUND_NO_VOLUME_LOSS_BITS = 0x01000000U,
+    SOUND_VIBRATO_BITS = 0x02000000U,
+    SOUND_NO_PRIORITY_LOSS_BITS = 0x04000000U,
     SOUND_CONSTANT_FREQUENCY_BITS = 0x08000000U,
     SOUND_BANK_MOVING_VALUE = 1U,
+    SOUND_BANK_MENU_VALUE = 7U,
+    SOUND_MOVING_FLYING_ID = 0x17U,
 };
 
 #define AUDIO_MAX_DISTANCE 22000.0f
@@ -88,22 +92,25 @@ uint16_t sm64_saturn_audio_spatial_acquire(
 
     token = sm64_saturn_audio_spatial_find(table, identity);
     if (token != 0U) {
-        return token;
+        return table->entries[source_token_slot(token)].package_generation ==
+                       package_generation
+                   ? token
+                   : 0U;
     }
     if (table == NULL || identity == NULL) {
         return 0U;
     }
     for (i = 0U; i < SM64_SATURN_AUDIO_SOURCE_CAPACITY; ++i) {
         sm64_saturn_audio_source_entry_t *entry = &table->entries[i];
-        if (!entry->active) {
+        if (!entry->active && !entry->retired) {
+            if (entry->token_generation == SOURCE_TOKEN_GENERATION_MAX) {
+                entry->retired = true;
+                continue;
+            }
             entry->active = true;
             entry->identity = identity;
             entry->package_generation = package_generation;
             entry->token_generation = (uint16_t)(entry->token_generation + 1U);
-            if (entry->token_generation == 0U ||
-                entry->token_generation > SOURCE_TOKEN_GENERATION_MAX) {
-                entry->token_generation = 1U;
-            }
             return source_token(i, entry->token_generation);
         }
     }
@@ -145,10 +152,25 @@ uint16_t sm64_saturn_audio_spatial_generation(
     return generation;
 }
 
-void sm64_saturn_audio_spatial_quantize(uint32_t sound_bits, uint8_t bank,
-                                        uint8_t moving_speed, float x, float y,
-                                        float z,
-                                        sm64_saturn_audio_spatial_params_t *out)
+const float *sm64_saturn_audio_spatial_resolve(
+    const sm64_saturn_audio_spatial_table_t *table, uint16_t token,
+    uint16_t package_generation)
+{
+    uint16_t slot;
+    if (sm64_saturn_audio_spatial_generation(table, token) == 0U) {
+        return NULL;
+    }
+    slot = source_token_slot(token);
+    if (table->entries[slot].package_generation != package_generation) {
+        return NULL;
+    }
+    return table->entries[slot].identity;
+}
+
+void sm64_saturn_audio_spatial_quantize(
+    uint32_t sound_bits, uint8_t bank, uint8_t moving_speed,
+    uint16_t acoustic_reach, uint32_t audio_random, float x, float y, float z,
+    sm64_saturn_audio_spatial_params_t *out)
 {
     const float abs_x = spatial_abs(x) > AUDIO_MAX_DISTANCE
                             ? AUDIO_MAX_DISTANCE
@@ -160,18 +182,39 @@ void sm64_saturn_audio_spatial_quantize(uint32_t sound_bits, uint8_t bank,
     float volume;
     float pan;
     float pitch;
+    float intensity;
+    float max_sound_distance;
+    float volume_range;
+    const uint8_t requested_priority = (uint8_t)(sound_bits >> 8);
+    const uint8_t sound_identifier = (uint8_t)(sound_bits >> 16);
 
     if (out == NULL) {
         return;
     }
     distance = spatial_sqrt(x * x + y * y + z * z);
+    volume_range = bank < 3U ? 0.9f : 0.8f;
     if ((sound_bits & SOUND_NO_VOLUME_LOSS_BITS) != 0U) {
-        volume = 1.0f;
-    } else if (distance >= AUDIO_MAX_DISTANCE) {
-        volume = 0.0f;
+        intensity = 1.0f;
+    } else if (distance > AUDIO_MAX_DISTANCE) {
+        intensity = 0.0f;
     } else {
-        volume = 1.0f - distance / AUDIO_MAX_DISTANCE;
+        if (acoustic_reach == 0U) {
+            acoustic_reach = 20000U;
+        }
+        max_sound_distance = (float)acoustic_reach /
+                             (bank < 3U ? 2.0f : 3.0f);
+        if (max_sound_distance < distance) {
+            intensity = ((AUDIO_MAX_DISTANCE - distance) /
+                         (AUDIO_MAX_DISTANCE - max_sound_distance)) *
+                        (1.0f - volume_range);
+        } else {
+            intensity = 1.0f - distance / max_sound_distance * volume_range;
+        }
+        if ((sound_bits & SOUND_VIBRATO_BITS) != 0U && intensity >= 0.08f) {
+            intensity -= (float)(audio_random & 0x0FU) / 192.0f;
+        }
     }
+    volume = volume_range * intensity * intensity + 1.0f - volume_range;
 
     if (x == 0.0f && z == 0.0f) {
         pan = 0.5f;
@@ -190,12 +233,28 @@ void sm64_saturn_audio_spatial_quantize(uint32_t sound_bits, uint8_t bank,
         pan = 1.0f;
     }
 
-    if ((sound_bits & SOUND_CONSTANT_FREQUENCY_BITS) != 0U) {
+    if (bank == SOUND_BANK_MENU_VALUE ||
+        (bank == SOUND_BANK_MOVING_VALUE &&
+         (sound_bits & SOUND_CONSTANT_FREQUENCY_BITS) != 0U)) {
+        volume = 1.0f;
+        pan = 0.5f;
+        pitch = 1.0f;
+    } else if ((sound_bits & SOUND_CONSTANT_FREQUENCY_BITS) != 0U) {
         pitch = 1.0f;
     } else {
-        pitch = 1.0f + distance / AUDIO_MAX_DISTANCE / 15.0f;
+        float amount = distance / AUDIO_MAX_DISTANCE;
+        if ((sound_bits & SOUND_VIBRATO_BITS) != 0U) {
+            amount += (float)(audio_random & 0xFFU) / 64.0f;
+        }
+        pitch = 1.0f + amount / 15.0f;
         if (bank == SOUND_BANK_MOVING_VALUE) {
-            pitch += (float)moving_speed / 400.0f;
+            pitch += (float)moving_speed /
+                     (sound_identifier == SOUND_MOVING_FLYING_ID
+                          ? 80.0f
+                          : 400.0f);
+            if (moving_speed <= 8U) {
+                volume *= ((float)moving_speed + 8.0f) / 16.0f;
+            }
         }
     }
     if (pitch < 0.0f) {
@@ -207,6 +266,14 @@ void sm64_saturn_audio_spatial_quantize(uint32_t sound_bits, uint8_t bank,
     out->volume = quantize_u8(volume, 255.0f);
     out->pan = quantize_u8(pan, 127.0f);
     out->pitch = (uint16_t)(pitch * 4096.0f + 0.5f);
+    out->priority_score =
+        (uint32_t)(0x4CU * (uint32_t)(0xFFU - requested_priority));
+    if ((sound_bits & SOUND_NO_PRIORITY_LOSS_BITS) == 0U) {
+        out->priority_score += (uint32_t)distance;
+        if (z > 0.0f) {
+            out->priority_score += (uint32_t)(z / 6.0f);
+        }
+    }
 }
 
 void sm64_saturn_audio_spatial_encode_play_refresh(
