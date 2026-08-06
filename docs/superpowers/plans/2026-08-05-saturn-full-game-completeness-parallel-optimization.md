@@ -1166,6 +1166,17 @@ reclaim, never by weakening the linker margin or hiding a section.
 - [ ] Implement only after the preflight identifies a sufficient legal target;
   run a serialized fresh link and inspect HWRAM/LWRAM symbols/margins. Target,
   P2/concurrent-SH2, Ymir/manual, and FPS remain unchecked.
+- [ ] Current disposition: implementation is blocked/deferred. The fresh
+  partial map identifies `gObjectPool` 0x23A00, VDP1 command staging 0x20000,
+  `gGfxPools` 0xC84C, `sourceboot_fast3d` 0xAE48, `s_bob_hot_workarea` 0xAB00,
+  Yaul private pool 0xA000, Gouraud staging 0x6000, and cart staging 0x4000;
+  the source audit found no legal sufficient relocation yet. Moving the object
+  pool or shrinking the 0x60000 main pool is not authorized without explicit
+  SH-2/P2/SCU-DMA ownership and BOB/full-game high-water evidence. The next
+  bounded investigation is HWRAM CPU-only work-area ownership/relocation
+  feasibility; `s_bob_hot_workarea` is currently ordinary HWRAM, not an already
+  approved LWRAM reclaim. No linker margin, command-capacity, or VDP1-DMA rule
+  may be weakened.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
