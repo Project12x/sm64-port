@@ -71,3 +71,34 @@ therefore run directly through the same MSYS/DLL-preflight environment.
 Task 14 registry/typed-field defects, generic meshlet preparation, production
 queue drain, target retirement race, sourceboot integration, target/Ymir/manual
 evidence, and FPS claims remain open.
+
+## Fix round 1 — review findings C1/C2/I1/I2/I3
+
+- C1: zero-count now publishes the existing queue with count zero, owns that
+  exact generation through finalize, and resets it before bank retirement.
+  A live queue rejects publication and leaves its generation untouched while
+  quarantining the newly acquired bank.
+- C2: begin rejects `batch_capacity < descriptor_count` before bank acquire;
+  this is the worst-case one-batch-per-descriptor bound. Finalize no longer
+  drops ownership on unexpected batch/complete failure, so the owner remains
+  available for deterministic retry.
+- I1: each descriptor must now have `snapshot_index == descriptor ordinal` and
+  `source_order == descriptor ordinal`, in addition to factory reconstruction.
+  The unique two-index swap fixture fails closed.
+- I2: symbolic fixtures prove exact 64-instance admission, 65 rejection,
+  exact output-record ceiling admission, ceiling+1 rejection, and rejected
+  insufficient worst-case batch storage.
+- I3: successful queue reset is recorded before bank retirement. A forced
+  first retirement failure then restores COMPLETE and retries bank retirement
+  without resetting the already-zeroed queue.
+- Finalize retains the `TERMINAL` owner state after an unexpected batch or
+  bank-complete failure; it accepts a deterministic retry rather than dropping
+  a live queue/bank. The host fixture forces a failed bank-complete transition,
+  checks the queue remains owned, restores the prior rendering state, and
+  proves finalize retry reaches BATCHED.
+
+Fix verification: PASS `with-msys-toolchain.ps1 make -f Makefile.saturn.mk
+verify-actor-runtime-handoff -j1`; PASS
+`with-msys-toolchain.ps1 python tools/saturn/test_actor_runtime_neutrality.py`
+(2/2). This remains host-only; no P2 concurrency, sourceboot, target/Ymir,
+manual, or FPS claim is added.

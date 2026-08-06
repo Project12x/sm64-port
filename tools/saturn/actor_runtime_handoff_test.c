@@ -89,11 +89,32 @@ static void test_zero_count_lifecycle(void)
         &handoff, &bank, &queue, bank_index, generation, NULL, 0U, 1U, 0U,
         NULL, 0U));
     assert(handoff.state == SM64_SATURN_ACTOR_HANDOFF_QUEUED);
+    assert(queue.generation == generation);
     assert(sm64_saturn_actor_runtime_handoff_finalize(&handoff));
     assert(handoff.summary.batch_count == 0U);
     assert(sm64_saturn_actor_runtime_handoff_acknowledge_consumed(&handoff));
     assert(sm64_saturn_actor_runtime_handoff_retire(&handoff));
+    assert(queue.generation == 0U);
     assert(bank.state[bank_index] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
+}
+
+static void test_zero_count_rejects_live_queue(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    uint8_t bank_index;
+    publish_bank(&bank, 0U, &bank_index);
+    sm64_saturn_actor_instance_queue_init(&queue);
+    assert(sm64_saturn_actor_instance_queue_publish(
+        &queue, 99U, 1U, 0U, NULL, 0U));
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(!sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, NULL, 0U, 1U, 0U,
+        NULL, 0U));
+    assert(queue.generation == 99U);
+    assert(bank.state[bank_index] ==
+           SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED);
 }
 
 static void test_exact_lifecycle_and_consumer_ack(void)
@@ -158,6 +179,26 @@ static void test_identity_mutations_quarantine_after_acquire(void)
                SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED);
         assert(queue.generation == 0U);
     }
+}
+
+static void test_snapshot_swap_is_rejected(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    sm64_saturn_actor_instance_descriptor_t descriptors[2];
+    sm64_saturn_actor_batch_t batches[2];
+    uint8_t bank_index;
+    publish_bank(&bank, 2U, &bank_index);
+    descriptors_from_bank(&bank, bank_index, descriptors, 2U);
+    descriptors[0].snapshot_index = 1U;
+    descriptors[1].snapshot_index = 0U;
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(!begin_two(&handoff, &bank, &queue, bank_index, descriptors,
+                      batches));
+    assert(bank.state[bank_index] ==
+           SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED);
 }
 
 static void test_caller_output_fields_are_preserved(void)
@@ -244,6 +285,96 @@ static void test_generation_wrap_refusal(void)
         &batch, 1U));
 }
 
+static void test_exact_capacity_boundaries(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    sm64_saturn_actor_instance_descriptor_t descriptors[
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    sm64_saturn_actor_batch_t batches[SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    uint16_t index;
+    uint8_t bank_index;
+    publish_bank(&bank, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE, &bank_index);
+    for (index = 0U; index < SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE; index++) {
+        const uint16_t capacity = index + 1U ==
+            SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE
+            ? (uint16_t)(SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING - index)
+            : 1U;
+        assert(sm64_saturn_actor_instance_descriptor_from_snapshot(
+            &bank.snapshots[bank_index][index], index, index, index + 1U,
+            SM64_SATURN_ACTOR_OUTPUT_OPAQUE, index, capacity,
+            &descriptors[index]));
+    }
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, descriptors,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
+        SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING, batches,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE));
+    publish_bank(&bank, 1U, &bank_index);
+    descriptors_from_bank(&bank, bank_index, descriptors, 1U);
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(!sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, descriptors,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE + 1U,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE + 1U, 1U, batches,
+        SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE));
+    assert(bank.state[bank_index] == SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
+    assert(!sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, descriptors, 1U,
+        1U, SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING + 1U, batches, 1U));
+    assert(bank.state[bank_index] == SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
+    assert(!sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, descriptors, 1U,
+        1U, 1U, NULL, 0U));
+    assert(bank.state[bank_index] == SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
+}
+
+static void test_retire_retry_after_bank_failure(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    uint8_t bank_index;
+    publish_bank(&bank, 0U, &bank_index);
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, NULL, 0U, 1U, 0U,
+        NULL, 0U));
+    assert(sm64_saturn_actor_runtime_handoff_finalize(&handoff));
+    assert(sm64_saturn_actor_runtime_handoff_acknowledge_consumed(&handoff));
+    bank.state[bank_index] = SM64_SATURN_ACTOR_INSTANCE_BANK_READY;
+    assert(!sm64_saturn_actor_runtime_handoff_retire(&handoff));
+    assert(handoff.queue_reset_completed != 0U && queue.generation == 0U);
+    bank.state[bank_index] = SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE;
+    assert(sm64_saturn_actor_runtime_handoff_retire(&handoff));
+}
+
+static void test_finalize_retry_after_bank_complete_failure(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    sm64_saturn_actor_instance_queue_t queue;
+    sm64_saturn_actor_runtime_handoff_t handoff;
+    uint8_t bank_index;
+    publish_bank(&bank, 0U, &bank_index);
+    sm64_saturn_actor_instance_queue_init(&queue);
+    sm64_saturn_actor_runtime_handoff_init(&handoff);
+    assert(sm64_saturn_actor_runtime_handoff_begin(
+        &handoff, &bank, &queue, bank_index, generation, NULL, 0U, 1U, 0U,
+        NULL, 0U));
+    bank.state[bank_index] = SM64_SATURN_ACTOR_INSTANCE_BANK_READY;
+    assert(!sm64_saturn_actor_runtime_handoff_finalize(&handoff));
+    assert(handoff.state == SM64_SATURN_ACTOR_HANDOFF_TERMINAL &&
+           queue.generation == generation);
+    bank.state[bank_index] = SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING;
+    assert(sm64_saturn_actor_runtime_handoff_finalize(&handoff));
+}
+
 static void test_preacquire_refusal_is_immutable(void)
 {
     sm64_saturn_actor_instance_bank_t bank;
@@ -302,12 +433,17 @@ static void test_stale_bank_live_queue_and_capacity_refusals(void)
 int main(void)
 {
     test_zero_count_lifecycle();
+    test_zero_count_rejects_live_queue();
     test_exact_lifecycle_and_consumer_ack();
     test_identity_mutations_quarantine_after_acquire();
+    test_snapshot_swap_is_rejected();
     test_caller_output_fields_are_preserved();
     test_count_and_output_capacity_fail_after_acquire();
     test_preacquire_refusal_is_immutable();
     test_stale_bank_live_queue_and_capacity_refusals();
     test_generation_wrap_refusal();
+    test_exact_capacity_boundaries();
+    test_retire_retry_after_bank_failure();
+    test_finalize_retry_after_bank_complete_failure();
     return 0;
 }

@@ -14,6 +14,12 @@
   a production-safe no-op. This deliberately does not attach the handoff to
   sourceboot, change the feature-off Mario wrapper, introduce meshlet work, or
   claim target/Ymir/manual/FPS evidence.
+  Review hardening makes zero-count publish and own an explicit terminal queue
+  generation, binds descriptor and source ordinals to their captured snapshot
+  order, rejects insufficient worst-case batch storage before acquisition, and
+  records queue-reset completion so a transient bank-retire failure can be
+  retried without a destructive second reset. Symbolic boundary fixtures cover
+  the exact actor, output, and batch ceilings.
 
 - Added the Task 16 feature-off actor compatibility boundary. The existing
   ACTOR_ADMIT/ACTOR_LOWER world-graph descriptors now route through explicit

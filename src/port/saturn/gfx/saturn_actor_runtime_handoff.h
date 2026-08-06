@@ -31,6 +31,7 @@ typedef struct sm64_saturn_actor_runtime_handoff {
     uint8_t state;
     uint8_t output_consumer_acknowledged;
     uint8_t queue_published;
+    uint8_t queue_reset_completed;
 } sm64_saturn_actor_runtime_handoff_t;
 
 void sm64_saturn_actor_runtime_handoff_init(
