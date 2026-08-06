@@ -1132,10 +1132,17 @@ license, renderer, or target-performance result.
   feature-on `mario_actor_bank.c` mutation/absence are covered. Bootstrap 7/7,
   generator 9/9, source identity 5/5, and the DLL-preflighted expanded
   top-level assets→seal dry-run pass.
-- [ ] Independently rereview `f9611fc0..46162df5`, then run a clean serialized
-  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
-  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
-  pass; do not launch an older artifact.
+- [x] Independently rereview `f9611fc0..46162df5`: SPEC/QUALITY PASS C0/I0/M0.
+  Recursive generated-header closure covers all 1,022 observed `build/us_pc`
+  compiler dependencies (1,021 recursive plus separately sealed water sky,
+  zero missing); producer roots/defines/prefix/traversal match; feature-on
+  actor-bank-C membership/mutation/absence and one-token stage negatives pass.
+  Focused tests are 7/7, 9/9, and 5/5. Clean link/ELF/CUE/ISO, target/P2,
+  Ymir/manual, and FPS evidence remain open.
+- [ ] Run the clean serialized current-head sourceboot build through the
+  DLL-preflight wrapper, inspect the identity-bearing ELF/map and exact HWRAM/
+  LWRAM margins, then stage only a source-attested HWRAM repair if the known
+  overflow recurs. Do not launch any pre-`46162df5` artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
