@@ -4,6 +4,39 @@
 
 ### Changed
 
+- Added the bounded Saturn geo-walk scheduler contract and host gate that will
+  carry source scene-graph continuation state outside the SH-2 call stack. The
+  contract records enter/leave phases, matrix/context tokens, high-water usage,
+  and fail-closed capacity overflow; production source traversal is not yet
+  switched over, so this change does not claim target stability or FPS.
+
+- Reconciled the current no-texture manual image with its build identity:
+  `SATURN_DEMO_PATH=0` intentionally uses the source Fast3D RGB-only VDP1
+  emitter, while `SATURN_DEMO_MARIO_TEXTURES=1` only covers the Mario demo
+  assets. A fresh `SATURN_DEMO_PATH=1` dual-SH2 BOB image is kept as a
+  textured visual diagnostic; the full-game source route still requires
+  texture residency and texture-aware VDP1 lowering. This preserves the
+  DRAM/profile contract and avoids hiding the gap by changing the default.
+
+- Added source-owned SH-2 exception capture to the dual-SH2 sourceboot path:
+  both master and slave vector tables now preserve a register frame in a
+  linked HWRAM record before delegating to Yaul's normal green-reset/debug
+  handler. This corrects the earlier desktop evidence that over-attributed the
+  blank-green screen to master-stack exhaustion; the runtime gate remains open
+  until the current `.ymir-profile` desktop launch either stays stable or yields
+  a decoded frame. No single-SH2 fallback, texture bypass, or linker-margin
+  relaxation is introduced.
+
+- The dual-SH2 sourceboot image now places the downward-growing slave stack in
+  an explicitly reserved 16 KiB tail of LWRAM instead of the small HWRAM
+  window at `0x06001E00`. The old placement could exhaust during nested render
+  callbacks and let an exception frame descend below HWRAM, producing the
+  observed desktop black-screen crash. Linker assertions keep static LWRAM
+  arenas below the reservation; VDP1/Gouraud transport ownership and the
+  dual-SH2 requirement are unchanged. Host/link evidence and a bounded Ymir
+  stack probe pass, while target stability, manual visuals, and FPS remain
+  open.
+
 - The production sourceboot link now preserves the dual-SH2 configuration
   (`SATURN_SLAVE_RENDER=1`) while making CPU-only renderer scratch explicitly
   LWRAM-owned. Scene-admission traversal borrows caller-supplied scratch from
