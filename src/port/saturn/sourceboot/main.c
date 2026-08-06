@@ -639,6 +639,11 @@ static void sourceboot_capture_route_checkpoint(void) {
 static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
     __attribute__((section(".lwram_bss"))) __aligned(16);
 
+void *sm64_saturn_source_cart_phase_workspace(void)
+{
+    return sourceboot_main_pool;
+}
+
 #define SOURCEBOOT_VDP1_COMMAND_CAPACITY 2048U
 #if defined(SATURN_DEMO_BSP_FRAGMENTS) && SATURN_DEMO_BSP_FRAGMENTS
 #define SOURCEBOOT_BOB_TEXTURE_BYTES 261248U

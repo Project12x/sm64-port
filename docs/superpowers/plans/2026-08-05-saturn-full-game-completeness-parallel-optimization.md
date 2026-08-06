@@ -42,6 +42,16 @@
 - 2026-08-05 audio-catalog review correction: Task 12's hardened ABI/SHA/signed-PCM/metadata/residency slices are retained, but the task is blocked rather than promoted. The repository lacks the real expanded `00_sound_player` payload, BOB/WF closures are still music-only, S64P `AUDIO_DEPENDENCIES` and closure-selectable S64A chunks are not emitted, and the 68K active-plan validation plus general m64 control-flow parser remain incomplete. Synthetic fixtures must not be presented as full-game audio evidence.
 - 2026-08-05 scene-admission integration correction: Task 13's production sourceboot path now links `saturn_scene_admission.c` and consumes regenerated BOB admission metadata rather than a hand-assembled runtime table. The queued bounded worklist handles the real 1183-node BOB graph; immutable view orientation takes precedence, zero lateral rows use a conservative depth-only fallback, and validation rejects reserved fields, non-endpoint portal ownership, missing global cluster coverage, and node-containment violations while retaining mandatory clusters. The generic path is source-complete, but target/Ymir/manual/FPS evidence and whole-game closure remain open.
 - 2026-08-06 actor-snapshot review correction: Task 14's production seam now brackets the authoritative geo walk and publishes per-bank generation tickets with P2/fence handoff, but it deliberately rejects unresolved family/scene-package/bank identities rather than fabricating actors. Full-pool identity/capacity, typed visibility/switch/range/held/effect fields, package-bound budget, wrap/overlap cleanup, and target sourceboot compilation remain open; host fixtures are not source-complete evidence.
+- 2026-08-06 dual-SH2 memory-ownership correction: the production render configuration is
+  dual-SH2 (`SATURN_SLAVE_RENDER=1`); a single-SH2 link or launch is diagnostic only and
+  must not be used as a performance or completeness baseline. CPU-only renderer work
+  arrays now live in `.lwram_bss`, while VDP1 command banks, Gouraud/SCU-visible staging,
+  and other uncached transport storage remain in their existing HWRAM owners. Scene
+  admission receives caller-supplied scratch from a phase-owned terrain command bank,
+  and CD staging/file-list storage borrows the prefix of the pre-initialization LWRAM
+  main pool before `main_pool_init()` reclaims the entire pool. This is a permanent
+  lifetime/ownership design, not a temporary screen-enabling workaround; target/P2,
+  concurrent-SH2, Ymir/manual, texture, audio, and FPS evidence remain open.
 - 2026-08-06 actor-queue review correction: Task 16's `0549f7af` queue is a useful generic exact-once infrastructure seam, but not the production dual-SH2 actor renderer. Its repair must account for the fixed 65,536-byte actor arena (including aligned banks, observer, queue, batches, and output records), use P2-safe metadata reads, test output overflow/exact-fit boundaries, and keep actor-meshlet/production drain, target, Ymir, manual, and FPS gates open.
 - 2026-08-06 actor-queue repair acceptance: `d4efe0e9` closes the infrastructure-slice review findings. One Task 14 bank container (both snapshot generations), observer, queue, batches, alignment, and 2,806 eight-byte output records fit exactly in the fixed 65,536-byte actor arena; 2,807 and output-count overflow fail closed, valid instance 64 is covered, and batch count uses a generation-checked P2 accessor. This does not promote Task 16: actor-meshlet preparation, production drain/cutover, manifest drawable bound, target retirement race, and target/Ymir/manual/FPS remain open.
 - 2026-08-06 sequence-VM scope correction: Task 15 reuses the pinned Project12x sequence/layer timing and control-flow semantics by close-port at the semantic boundary, while replacing N64 pointer/RSP assumptions with bounded offsets and scalar events. The repository contains disassembled source shape but no expanded seq00 binary, so the VM scaffold proves malformed/control-flow behavior and source timing only; full 35-sequence coverage, S64P linkage, MC68000 image, SCSP transport, target, Ymir, and audible evidence remain blocked.
@@ -1220,6 +1230,39 @@ reclaim, never by weakening the linker margin or hiding a section.
   overflow and packaged the current-head ELF/CUE/ISO in
   `e2-bob-identity-id-6dab6eed50bb94dd`; the HWRAM/LWRAM map gate is green,
   while target/P2, Ymir/manual, and FPS gates remain open.
+
+#### Task 14 bounded implementation: make CPU work storage phase-owned
+
+The first successful dual-SH2 link exposed the remaining capacity risk as
+ordinary lifetime ownership, not as a reason to weaken the HWRAM/TLSF or LWRAM
+floor assertions. CPU-only renderer arrays are now explicitly LWRAM-owned, and
+short-lived scene/CD preparation storage borrows already-owned phase banks. The
+transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
+
+- [x] RED/GREEN source contract: `tools/saturn/test_dual_sh2_work_storage_contract.py`
+  first failed before the ownership annotations, then passed 2/2 after the
+  CPU-only renderer arrays moved to `.lwram_bss` and scene admission accepted a
+  caller-supplied scratch bank.
+- [x] Scene admission now uses `sm64_saturn_scene_admit_with_scratch()` with the
+  phase-owned terrain master-command bank; the host wrapper retains compatibility,
+  while `SATURN_SOURCEBOOT` requires an explicit phase bank and cannot silently
+  allocate a permanent work arena.
+- [x] CD source-cart staging and the file-list table now borrow the first
+  `SOURCE_CART_STAGE_BYTES` bytes of the LWRAM `sourceboot_main_pool` before
+  `main_pool_init()`, which resets the full pool after the cart copy. No HWRAM
+  staging or VDP transport storage was moved.
+- [x] DLL-preflighted serialized Pipe-4 BOB link completed with
+  `SATURN_SLAVE_RENDER=1` in identity `e2-bob-identity-id-bd57c0a81635606c`.
+  Linker assertions pass with HWRAM margin `0x1BC8` (required `0x1B00`) and
+  full-section LWRAM margin `0x4780` (required `0x4000`). The map verifier now
+  binds short identity-directory paths to the generated identity spec and accepts
+  the exported HWRAM VDP1 command owner, so this exact ELF validates directly.
+  This is source/link evidence only; target/P2, concurrent-SH2, Ymir/manual,
+  texture, audio, and FPS gates remain unchecked.
+- [ ] Inspect the fresh image under the repository Ymir profile with DRAM/CUE,
+  then prove P2/cache ownership and real concurrent-SH2 execution before claiming
+  a manual or performance improvement. A single-SH2 build is not an accepted
+  substitute.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 

@@ -169,6 +169,13 @@ static sm64_saturn_visible_position_set_t s_visible_position_set;
  * an uncached release record plus cache-through peer reads; tools/saturn/
  * verify_dual_cpu_coherency.py pins these placements at build time. */
 #define DEMO_CROSS_CPU_SHARED __attribute__((section(".uncached")))
+/* CPU-only renderer state is not a VDP1/SCU transport object.  Keep it in
+ * the LWRAM work partition so enabling the textured demo path cannot consume
+ * the HWRAM margin needed by the dual-SH2 release records and command staging.
+ * The arrays below are either master-owned or disjoint lane-owned; payloads
+ * that cross the worker boundary still use the explicit cache-through records
+ * and LWRAM banks declared separately. */
+#define DEMO_CPU_WORK_CACHE __attribute__((section(".lwram_bss")))
 static sm64_saturn_dual_frame_bank_t s_transform_frame_bank
     DEMO_CROSS_CPU_SHARED;
 /* Mario's bounded second phase uses the exact same release protocol as the
@@ -188,20 +195,29 @@ static sm64_saturn_terrain_result_spans_t s_terrain_spans_shared
 /* This compact first-reference-wins bitset replaces the former 867-byte
  * admission array. It is reset as a fixed number of words and never scanned:
  * traversal alone appends generated spans to the bounded work list. */
-static uint32_t s_spatial_ref_seen[DEMO_SPATIAL_REF_SEEN_WORDS];
+static uint32_t s_spatial_ref_seen[DEMO_SPATIAL_REF_SEEN_WORDS]
+    DEMO_CPU_WORK_CACHE;
 /* The generated BSP is expected to be a tree, but the runtime must not turn
  * a malformed/self-referential bake into unbounded recursion.  Z-Treme's
  * fixed-capacity traversal has the same safety property: each node is visited
  * at most once per frame. */
-static uint8_t s_spatial_node_seen[SM64_SATURN_BOB_BSP_NODE_COUNT];
-static uint16_t s_render_work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_spatial_node_seen[SM64_SATURN_BOB_BSP_NODE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint16_t s_render_work_order[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 static uint16_t s_render_work_count;
-static uint16_t s_primitive_leaf_id[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint16_t s_primitive_work_weight[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_recovery[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_corner_count[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint16_t s_primitive_leaf_id[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint16_t s_primitive_work_weight[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint8_t s_primitive_visible[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint8_t s_primitive_clipped[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint8_t s_primitive_recovery[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint8_t s_primitive_corner_count[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 /* Tier and cluster hysteresis are bulk CPU-only work state. Keep one physical
  * LWRAM owner and make both SH-2s use its P2 cache-through alias; retaining a
  * cached P1 owner beside that alias would make scene reset/select incoherent.
@@ -221,10 +237,12 @@ static demo_lod_storage_t *demo_lod_storage_cache_through(void)
         sm64_saturn_dual_frame_cache_through(&s_lod_storage);
 }
 
-static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_lod_transition[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint8_t s_primitive_lod_suppressed[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 static uint8_t s_primitive_lod_texture_downgraded[
-    SM64_SATURN_BOB_PRIMITIVE_COUNT];
+    SM64_SATURN_BOB_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
 /* Compatibility names retained for the compact actor-bank contract: the
  * generalized scene admission path consumes the same selected tier stream
  * that the former Mario-only path exposed as
@@ -239,9 +257,12 @@ static sm64_saturn_lod_lifetime_t s_lod_lifetime DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_projected_vertex_t s_clipped_projected[
     SM64_SATURN_BOB_PRIMITIVE_COUNT][5]
     __attribute__((section(".lwram_bss")));
-static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT];
-static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT];
+static uint8_t s_primitive_buckets[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static int32_t s_primitive_depth[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint16_t s_primitive_slots[SM64_SATURN_BOB_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 static sm64_saturn_terrain_result_t s_terrain_master_results[
     DEMO_TERRAIN_RESULT_CAPACITY] __attribute__((section(".lwram_bss")));
 static sm64_saturn_terrain_result_t s_terrain_slave_results[
@@ -306,9 +327,10 @@ typedef struct demo_terrain_queue_merge_spans {
     uint32_t generation;
     uint32_t sequence;
 } demo_terrain_queue_merge_spans_t;
-static demo_terrain_queue_merge_spans_t s_terrain_queue_merge_spans;
+static demo_terrain_queue_merge_spans_t s_terrain_queue_merge_spans
+    DEMO_CPU_WORK_CACHE;
 static sm64_saturn_render_job_result_identity_t s_terrain_queue_merge_ids[
-    DEMO_TERRAIN_RESULT_CAPACITY];
+    DEMO_TERRAIN_RESULT_CAPACITY] DEMO_CPU_WORK_CACHE;
 typedef struct demo_actor_vertex_result {
     sm64_saturn_projected_vertex_t projected;
     uint8_t valid;
@@ -363,7 +385,7 @@ static demo_actor_queue_metadata_t s_actor_admit_metadata[
 static demo_actor_queue_metadata_t s_actor_result_metadata[
     SM64_SATURN_RENDER_JOB_QUEUE_CAPACITY] DEMO_CROSS_CPU_SHARED;
 static sm64_saturn_render_job_result_identity_t s_actor_queue_merge_ids[
-    SM64_MARIO_PRIMITIVE_COUNT];
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
 static uint16_t s_actor_draw_order[SM64_MARIO_PRIMITIVE_COUNT]
     DEMO_TERRAIN_TRANSFORM_CACHE;
 static uint16_t s_actor_transform_refs[SM64_MARIO_VERTEX_COUNT]
@@ -372,8 +394,10 @@ static sm64_saturn_actor_draw_ref_t s_actor_opaque_refs[
     SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
 static sm64_saturn_actor_draw_ref_t s_actor_translucent_refs[
     SM64_MARIO_PRIMITIVE_COUNT] DEMO_TERRAIN_TRANSFORM_CACHE;
-static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT];
-static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT];
+static uint16_t s_actor_slots[SM64_MARIO_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
+static uint16_t s_actor_texture_slots[SM64_MARIO_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 
 static const sm64_saturn_render_job_callback_table_t *
 demo_render_job_callbacks(void);
@@ -382,8 +406,9 @@ static uint8_t s_render_job_runtime_active;
 static uint16_t s_actor_texture_count;
 static uint16_t s_actor_command_count;
 static sm64_saturn_gouraud_table_t *s_actor_gouraud[
-    SM64_MARIO_PRIMITIVE_COUNT];
-static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT];
+    SM64_MARIO_PRIMITIVE_COUNT] DEMO_CPU_WORK_CACHE;
+static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT]
+    DEMO_CPU_WORK_CACHE;
 static const uint8_t *s_actor_light_intensity;
 static uint16_t s_actor_draw_count;
 static uint16_t s_actor_transform_ref_count;
@@ -406,7 +431,7 @@ static sm64_saturn_terrain_resolved_command_t s_bob_terrain_resolved_templates[
     DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY][DEMO_TERRAIN_TEMPLATE_VARIANT_COUNT]
     __attribute__((section(".lwram_bss")));
 static uint8_t s_bob_terrain_template_valid[
-    DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY];
+    DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY] DEMO_CPU_WORK_CACHE;
 static uint8_t s_bob_terrain_templates_resolved;
 static uint8_t s_bob_terrain_templates_enabled;
 _Static_assert(sizeof(vdp1_cmdt_t) == SM64_SATURN_VDP1_COMMAND_BYTES,
@@ -755,8 +780,15 @@ static void demo_spatial_admit(
         .cluster_capacity = SM64_SATURN_BOB_PRIMITIVE_COUNT,
         .portal_indices = portal_indices,
         .portal_capacity = 0U};
-    if (sm64_saturn_scene_admit(&scene, &render_view, &admission_output,
-                                &admission_stats)) {
+    _Static_assert(sizeof(s_terrain_master_commands) >=
+                       sizeof(sm64_saturn_scene_admission_scratch_t),
+                   "scene admission phase scratch must fit the reusable terrain bank");
+    sm64_saturn_scene_admission_scratch_t *const admission_scratch =
+        (sm64_saturn_scene_admission_scratch_t *)(void *)
+            &s_terrain_master_commands[0][0];
+    if (sm64_saturn_scene_admit_with_scratch(
+            &scene, &render_view, &admission_output, &admission_stats,
+            admission_scratch)) {
         s_render_work_count = admission_output.cluster_count;
         profile->demo_bob_primitives_spatial_admitted +=
             admission_stats.clusters_admitted;

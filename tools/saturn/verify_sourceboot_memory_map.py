@@ -131,9 +131,21 @@ def _tag_gate(layout: ElfLayout, route: int, stage_sectors: int) -> None:
     text = str(layout.path).replace("\\", "/")
     if "e2-bob" not in text:
         return
-    for tag in (f"camroute{route}", f"stage{stage_sectors}"):
-        if tag not in text:
-            raise ValueError(f"ELF path lacks role tag {tag}")
+    missing = [tag for tag in (f"camroute{route}", f"stage{stage_sectors}")
+               if tag not in text]
+    if not missing:
+        return
+    # Identity-directory outputs intentionally use a short hash tag to stay
+    # within Windows path limits. Bind the omitted role fields to the exact
+    # generated identity spec instead of accepting an unlabelled ELF.
+    spec = layout.path.parents[2] / "generated" / "saturn_build_identity_spec.json"
+    try:
+        values = json.loads(spec.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError("ELF path lacks role tags and identity spec is unavailable") from error
+    if values.get("camera_route") != route or \
+            values.get("cart_stage_sectors") != stage_sectors:
+        raise ValueError("ELF identity spec does not match requested role")
 
 
 def _c_symbol(layout: ElfLayout, name: str) -> Symbol | None:
@@ -163,8 +175,19 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
             uncached_physical_end != end.address:
         raise ValueError("ELF uncached section end disagrees with ___end")
     stage = _c_symbol(layout, "s_source_cart_stage")
-    if stage is None or stage.size != stage_sectors * 2048:
-        raise ValueError("ELF cart-stage symbol size is wrong")
+    stage_bytes = stage_sectors * 2048
+    if stage is not None:
+        if stage.size != stage_bytes:
+            raise ValueError("ELF cart-stage symbol size is wrong")
+    else:
+        # Current sourceboot lends the first phase-local slice of the future
+        # LWRAM main pool to the CD reader, then reinitializes that pool before
+        # game allocations. This removes a permanent HWRAM staging bank while
+        # retaining an auditable physical storage owner in the ELF.
+        pool = _c_symbol(layout, "sourceboot_main_pool")
+        if pool is None or pool.address < LWRAM_BASE or \
+                pool.address + stage_bytes > LWRAM_TOP:
+            raise ValueError("ELF cart-stage phase workspace is outside LWRAM")
     route_marker = _c_symbol(layout, "sm64_saturn_camera_route_marker")
     variant_marker = _c_symbol(layout, "sm64_saturn_camera_variant_marker")
     if route_marker is None or route_marker.address != route:
@@ -172,7 +195,20 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
     if variant_marker is None or variant_marker.address not in CAMERA_VARIANT_ROLES:
         raise ValueError("ELF camera variant marker is not a Phase A camera role")
     command_banks = layout.sections.get(".lwram_cmdts")
-    if command_banks is None or command_banks.kind != "NOBITS" or \
+    if command_banks is None:
+        # Current sourceboot keeps the two CPU-DMAC command banks in HWRAM.
+        # The linker forbids the legacy .lwram_cmdts input; use the exported
+        # owner symbol so this gate describes the actual transport placement.
+        command_owner = _c_symbol(layout, "sourceboot_vdp1_cmdts")
+        if command_owner is None or command_owner.size != VDP1_COMMAND_BANK_BYTES or \
+                command_owner.address % 32 != 0 or \
+                command_owner.address < HWRAM_BASE or \
+                command_owner.address + command_owner.size > HWRAM_TOP:
+            raise ValueError("ELF command banks are not the exact aligned HWRAM range")
+        command_banks = Section(
+            "sourceboot_vdp1_cmdts", command_owner.address,
+            command_owner.size, "NOBITS")
+    elif command_banks.kind != "NOBITS" or \
             command_banks.size != VDP1_COMMAND_BANK_BYTES or \
             command_banks.address % 32 != 0 or \
             command_banks.address < LWRAM_BASE or \
@@ -204,25 +240,30 @@ def validate_layout(layout: ElfLayout, *, route: int, stage_sectors: int,
             raise ValueError("route 1 SCC1 symbol layout is wrong")
         if capture.address + capture.size != SCC_END:
             raise ValueError("route 1 SCC1 end address is wrong")
-        for name in (".lwram_cmdts", ".lwram_bss"):
-            section = layout.sections.get(name)
+        for section in (command_banks, layout.sections.get(".lwram_bss")):
             if section is None:
-                raise ValueError(f"ELF lacks {name}")
+                raise ValueError("ELF lacks LWRAM bulk section")
             if _ranges_overlap(capture, section):
-                raise ValueError(f"SCC1 overlaps {name}")
+                raise ValueError(f"SCC1 overlaps {section.name}")
         if LWRAM_TOP - SCC_END < 0x4000:
             raise ValueError("SCC1 leaves less than the LWRAM floor")
     lwram_end = max(
-        command_banks.address + command_banks.size,
+        command_banks.address + command_banks.size
+        if command_banks.address < LWRAM_TOP else LWRAM_BASE,
         lwram_bulk.address + lwram_bulk.size,
         capture.address + capture.size if capture is not None else LWRAM_BASE,
+        *(
+            section.address + section.size
+            for name in (".lwram_actor_runtime", ".lwram_camera_capture")
+            if (section := layout.sections.get(name)) is not None
+        ),
     )
     if LWRAM_TOP - lwram_end < MINIMUM_LWRAM_MARGIN:
         raise ValueError("ELF LWRAM margin is below required final floor")
     return {
         "path": str(layout.path), "elf_sha256": layout.sha256,
         "end": end.address, "hwram_margin": HWRAM_TOP - end.address,
-        "stage_bytes": stage.size,
+        "stage_bytes": stage_bytes,
         "capture_address": capture.address if capture else None,
         "capture_size": capture.size if capture else 0,
         "command_bank_address": command_banks.address,

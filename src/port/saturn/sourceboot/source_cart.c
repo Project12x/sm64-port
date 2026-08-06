@@ -40,10 +40,6 @@ static const char s_source_cart_cd_text[] __attribute__((section(".bootdata"))) 
 static const char s_source_cart_image_text[] __attribute__((section(".bootdata"))) =
     "sourceboot: SOURCE.DAT is missing or invalid\n";
 
-static uint8_t s_source_cart_stage[SOURCE_CART_STAGE_BYTES] __aligned(16);
-static cdfs_filelist_entry_t
-    s_source_cart_file_entries[SOURCE_CART_FILELIST_ENTRIES] __aligned(4);
-
 volatile sm64_saturn_source_cart_probe_t g_sm64_saturn_source_cart_probe;
 
 static sm64_saturn_source_cart_status_t source_cart_finish(
@@ -102,6 +98,16 @@ sm64_saturn_source_cart_status_t sm64_saturn_source_cart_load(void) {
     fad_t fad;
     dram_cart_id_t cart_id;
     size_t cart_size;
+    uint8_t *const phase_workspace =
+        (uint8_t *)sm64_saturn_source_cart_phase_workspace();
+    uint8_t *stage;
+    cdfs_filelist_entry_t *file_entries;
+
+    if (phase_workspace == NULL) return source_cart_finish(
+        SM64_SATURN_SOURCE_CART_READ_FAILED);
+    stage = phase_workspace;
+    file_entries = (cdfs_filelist_entry_t *)(void *)(phase_workspace +
+                                                     SOURCE_CART_STAGE_BYTES);
 
     g_sm64_saturn_source_cart_probe.magic = SM64_SATURN_SOURCE_CART_PROBE_MAGIC;
     g_sm64_saturn_source_cart_probe.stage = SM64_SATURN_SOURCE_CART_STAGE_RESET;
@@ -126,7 +132,7 @@ sm64_saturn_source_cart_status_t sm64_saturn_source_cart_load(void) {
     g_sm64_saturn_source_cart_probe.stage = SM64_SATURN_SOURCE_CART_STAGE_CD_READY;
 
     cdfs_init();
-    cdfs_filelist_init(&filelist, s_source_cart_file_entries,
+    cdfs_filelist_init(&filelist, file_entries,
                        SOURCE_CART_FILELIST_ENTRIES);
     cdfs_filelist_root_read(&filelist);
     entry = source_cart_file_find(&filelist);
@@ -144,10 +150,10 @@ sm64_saturn_source_cart_status_t sm64_saturn_source_cart_load(void) {
         const size_t chunk_size =
             (remaining < SOURCE_CART_STAGE_BYTES) ? remaining : SOURCE_CART_STAGE_BYTES;
 
-        if (cd_block_sectors_read(fad, s_source_cart_stage,
+        if (cd_block_sectors_read(fad, stage,
                                   (uint32_t)chunk_size) != 0)
             return source_cart_finish(SM64_SATURN_SOURCE_CART_READ_FAILED);
-        source_cart_copy(destination, s_source_cart_stage, chunk_size);
+        source_cart_copy(destination, stage, chunk_size);
         destination += chunk_size;
         remaining -= chunk_size;
         fad += (fad_t)(chunk_size / CDFS_SECTOR_SIZE);

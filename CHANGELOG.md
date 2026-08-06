@@ -4,6 +4,18 @@
 
 ### Changed
 
+- The production sourceboot link now preserves the dual-SH2 configuration
+  (`SATURN_SLAVE_RENDER=1`) while making CPU-only renderer scratch explicitly
+  LWRAM-owned. Scene-admission traversal borrows caller-supplied scratch from
+  the phase-owned terrain command bank, and CD staging/file-list storage borrows
+  the prefix of the pre-initialization LWRAM main pool before `main_pool_init()`
+  resets it. VDP1 command banks, Gouraud/SCU-visible staging, and other uncached
+  transport storage remain in their existing HWRAM owners. The fresh serialized
+  BOB link (`e2-bob-identity-id-bd57c0a81635606c`) passes with HWRAM margin
+  `0x1BC8` and full-section LWRAM margin `0x4780`; this is source/link evidence only and
+  does not claim target/P2, Ymir/manual, texture, audio, or FPS closure. A
+  single-SH2 build is not a production substitute.
+
 - Sourceboot now keeps the immutable build-identity tuple in HWRAM `.bootdata`
   instead of cart-resident `.rodata`. The pre-cart guard therefore validates
   before `source_cart_load()` can safely read the DRAM cart; the previous

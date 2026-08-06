@@ -47,6 +47,11 @@ enum {
 
 extern volatile sm64_saturn_source_cart_probe_t g_sm64_saturn_source_cart_probe;
 
+/* The CD reader runs before main_pool_init(). Sourceboot lends the first
+ * phase-local slice of that future LWRAM pool as its staging bank, then
+ * reinitializes the entire pool before game allocations begin. */
+void *sm64_saturn_source_cart_phase_workspace(void);
+
 /* Must run before any original source data is dereferenced. */
 sm64_saturn_source_cart_status_t sm64_saturn_source_cart_load(void);
 

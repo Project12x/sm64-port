@@ -54,6 +54,29 @@ class VerifySourcebootMemoryMapTest(unittest.TestCase):
 
         self.assertEqual(result["uncached_size"], 0x1000)
 
+    def test_accepts_current_hardware_command_owner_and_phase_cart_workspace(self) -> None:
+        layout = image("current-sourceboot", end=0x060FE438, stage=4, scc=False)
+        layout.symbols.pop("s_source_cart_stage")
+        layout.symbols["sourceboot_main_pool"] = verify.Symbol(
+            "sourceboot_main_pool", 0x00280A30, 0x60000
+        )
+        layout.symbols["sourceboot_vdp1_cmdts"] = verify.Symbol(
+            "sourceboot_vdp1_cmdts", 0x060CFF80, 0x20000
+        )
+        layout.sections.pop(".lwram_cmdts")
+        layout.sections[".lwram_actor_runtime"] = verify.Section(
+            ".lwram_actor_runtime", 0x002EB880, 0x10000, "NOBITS"
+        )
+
+        result = verify.validate_layout(
+            layout, route=0, stage_sectors=4,
+            required_final_margin=0x1B00,
+        )
+
+        self.assertEqual(result["command_bank_address"], 0x060CFF80)
+        self.assertEqual(result["lwram_end"], 0x002FB880)
+        self.assertEqual(result["lwram_margin"], 0x4780)
+
     def test_rejects_uncached_nobits_that_would_omit_slave_entry_bytes(self) -> None:
         layout = image("missing-uncached-bytes", end=0x060F9000, stage=8, scc=False)
         layout.sections[".uncached"] = verify.Section(

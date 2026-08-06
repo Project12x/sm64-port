@@ -3,10 +3,15 @@
 #include <limits.h>
 #include <string.h>
 
-static uint8_t s_admission_visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
-static uint8_t s_admission_queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
-static uint16_t s_admission_queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
-static uint8_t s_admission_cluster_seen[SM64_SATURN_SCENE_ADMISSION_MAX_REFS];
+/* Admission is completed by the master before either SH-2 receives the
+ * render job. Its bounded traversal scratch is supplied by the caller so the
+ * sourceboot renderer can reuse an otherwise-dead LWRAM result bank during
+ * this phase instead of reserving another permanent 12 KiB allocation. */
+static sm64_saturn_scene_admission_scratch_t *s_admission_scratch;
+#define s_admission_visited (s_admission_scratch->visited)
+#define s_admission_queued (s_admission_scratch->queued)
+#define s_admission_queue (s_admission_scratch->queue)
+#define s_admission_cluster_seen (s_admission_scratch->cluster_seen)
 
 static int32_t floor_q16(int32_t value)
 {
@@ -263,16 +268,19 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
     return true;
 }
 
-bool sm64_saturn_scene_admit(
+bool sm64_saturn_scene_admit_with_scratch(
     const sm64_saturn_scene_admission_view_t *scene,
     const sm64_saturn_render_view_t *view,
     sm64_saturn_scene_admission_output_t *output,
-    sm64_saturn_scene_admission_stats_t *stats)
+    sm64_saturn_scene_admission_stats_t *stats,
+    sm64_saturn_scene_admission_scratch_t *scratch)
 {
     sm64_saturn_ztreme_frustum_t frustum;
     uint16_t queue_head = 0U, queue_tail = 0U;
     uint16_t index;
     bool success = true;
+    if (scratch == NULL) return false;
+    s_admission_scratch = scratch;
     if (stats != NULL) memset(stats, 0, sizeof(*stats));
     if (output != NULL) {
         output->cluster_count = 0U;
@@ -394,4 +402,27 @@ bool sm64_saturn_scene_admit(
         stats->mandatory_clusters_admitted++;
     }
     return success && output->cluster_count != 0U;
+}
+
+#ifndef SATURN_SOURCEBOOT
+static sm64_saturn_scene_admission_scratch_t s_admission_compat_scratch;
+#endif
+
+bool sm64_saturn_scene_admit(
+    const sm64_saturn_scene_admission_view_t *scene,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_scene_admission_output_t *output,
+    sm64_saturn_scene_admission_stats_t *stats)
+{
+#ifdef SATURN_SOURCEBOOT
+    (void)scene;
+    (void)view;
+    (void)output;
+    (void)stats;
+    /* Sourceboot must pass a phase-owned bank explicitly. */
+    return false;
+#else
+    return sm64_saturn_scene_admit_with_scratch(
+        scene, view, output, stats, &s_admission_compat_scratch);
+#endif
 }

@@ -85,6 +85,24 @@ typedef struct sm64_saturn_scene_admission_stats {
     uint8_t reserved;
 } sm64_saturn_scene_admission_stats_t;
 
+/* Bounded traversal scratch is phase-local. Sourceboot supplies a slice of
+ * its LWRAM frame workspace while admission runs, then reuses that storage
+ * for render results after the admission call returns. Host callers may keep
+ * using sm64_saturn_scene_admit(), which owns a private compatibility bank. */
+typedef struct sm64_saturn_scene_admission_scratch {
+    uint8_t visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+    uint8_t queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+    uint16_t queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+    uint8_t cluster_seen[SM64_SATURN_SCENE_ADMISSION_MAX_REFS];
+} sm64_saturn_scene_admission_scratch_t;
+
+bool sm64_saturn_scene_admit_with_scratch(
+    const sm64_saturn_scene_admission_view_t *scene,
+    const sm64_saturn_render_view_t *view,
+    sm64_saturn_scene_admission_output_t *output,
+    sm64_saturn_scene_admission_stats_t *stats,
+    sm64_saturn_scene_admission_scratch_t *scratch);
+
 bool sm64_saturn_scene_admit(
     const sm64_saturn_scene_admission_view_t *scene,
     const sm64_saturn_render_view_t *view,
