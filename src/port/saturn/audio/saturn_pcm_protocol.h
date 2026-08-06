@@ -37,6 +37,19 @@ enum {
     SM64_SATURN_PCM_SFX_SATURATED_OFFSET = 0x04020U,
     SM64_SATURN_PCM_CONTROL_CONSUMED_OFFSET = 0x04022U,
     SM64_SATURN_PCM_SFX_CONSUMED_OFFSET = 0x04024U,
+    SM64_SATURN_PCM_COMPLETION_PRODUCER_OFFSET = 0x04026U,
+    SM64_SATURN_PCM_COMPLETION_CONSUMER_OFFSET = 0x04028U,
+    SM64_SATURN_PCM_COMPLETION_SATURATED_OFFSET = 0x0402AU,
+    SM64_SATURN_PCM_COMPLETION_PROTOCOL_FAULTS_OFFSET = 0x0402CU,
+    SM64_SATURN_PCM_ACTIVE_GENERATION_HIGH_OFFSET = 0x0402EU,
+    SM64_SATURN_PCM_ACTIVE_GENERATION_LOW_OFFSET = 0x04030U,
+    SM64_SATURN_PCM_PREPARED_GENERATION_HIGH_OFFSET = 0x04032U,
+    SM64_SATURN_PCM_PREPARED_GENERATION_LOW_OFFSET = 0x04034U,
+    SM64_SATURN_PCM_LAST_COMPLETION_STATUS_OFFSET = 0x04036U,
+    SM64_SATURN_PCM_LAST_COMPLETION_DETAIL_OFFSET = 0x04038U,
+    SM64_SATURN_PCM_SOUND_SERVICE_TICK_OFFSET = 0x0403AU,
+    SM64_SATURN_PCM_ACTIVE_VOICE_COUNT_OFFSET = 0x0403CU,
+    SM64_SATURN_PCM_ABI_FLAGS_OFFSET = 0x0403EU,
 
     SM64_SATURN_PCM_CONTROL_RING_OFFSET = 0x04040U,
     SM64_SATURN_PCM_CONTROL_RING_COUNT = 8U,
@@ -47,6 +60,12 @@ enum {
     SM64_SATURN_PCM_SFX_RING_COUNT = 24U,
     SM64_SATURN_PCM_SFX_RING_BYTES =
         SM64_SATURN_PCM_SFX_RING_COUNT * SM64_SATURN_PCM_COMMAND_BYTES,
+    SM64_SATURN_PCM_COMPLETION_RING_OFFSET = 0x04240U,
+    SM64_SATURN_PCM_COMPLETION_RING_COUNT = 32U,
+    SM64_SATURN_PCM_COMPLETION_BYTES = 16U,
+    SM64_SATURN_PCM_COMPLETION_RING_BYTES =
+        SM64_SATURN_PCM_COMPLETION_RING_COUNT *
+        SM64_SATURN_PCM_COMPLETION_BYTES,
 
     SM64_SATURN_PCM_RESERVE_OFFSET = 0x05000U,
     SM64_SATURN_PCM_BANK_OFFSET = 0x08000U,
@@ -55,6 +74,9 @@ enum {
     SM64_SATURN_PCM_PROTOCOL_VERSION = 2U,
     SM64_SATURN_PCM_STATUS_BOOTING = 1U,
     SM64_SATURN_PCM_STATUS_READY = 2U,
+    SM64_SATURN_PCM_ABI_FLAG_COMPLETION = 0x0001U,
+    SM64_SATURN_PCM_ABI_FLAG_STATUS_WRITING = 0x0002U,
+    SM64_SATURN_PCM_COMPLETION_CONTROL_RESERVE = 8U,
 
     /* Historical v1 proof constants. They document the owner-heard artifact;
      * no v2 producer or consumer accepts this layout. */
@@ -94,12 +116,28 @@ typedef enum sm64_saturn_audio_opcode {
     SM64_SATURN_AUDIO_OPCODE_STOP_BANK = 0x0103U,
 } sm64_saturn_audio_opcode_t;
 
+typedef enum sm64_saturn_audio_ring_kind {
+    SM64_SATURN_AUDIO_RING_CONTROL = 0U,
+    SM64_SATURN_AUDIO_RING_SFX = 1U,
+} sm64_saturn_audio_ring_kind_t;
+
+typedef enum sm64_saturn_audio_completion_status {
+    SM64_SATURN_AUDIO_COMPLETION_ACCEPTED = 1U,
+    SM64_SATURN_AUDIO_COMPLETION_REJECTED = 2U,
+    SM64_SATURN_AUDIO_COMPLETION_STALE = 3U,
+    SM64_SATURN_AUDIO_COMPLETION_FAULT = 4U,
+    SM64_SATURN_AUDIO_COMPLETION_DROPPED_SFX = 5U,
+    SM64_SATURN_AUDIO_COMPLETION_FINISHED = 6U,
+    SM64_SATURN_AUDIO_COMPLETION_COMMITTED = 7U,
+    SM64_SATURN_AUDIO_COMPLETION_PREPARED = 8U,
+} sm64_saturn_audio_completion_status_t;
+
 _Static_assert(SM64_SATURN_PCM_DRIVER_END == SM64_SATURN_PCM_MAILBOX_OFFSET,
                "driver must end at mailbox");
 _Static_assert(SM64_SATURN_PCM_CONTROL_RING_OFFSET >=
                    SM64_SATURN_PCM_MAILBOX_OFFSET,
                "control ring must begin in mailbox");
-_Static_assert(SM64_SATURN_PCM_SFX_CONSUMED_OFFSET + 2U <=
+_Static_assert(SM64_SATURN_PCM_ABI_FLAGS_OFFSET + 2U <=
                    SM64_SATURN_PCM_CONTROL_RING_OFFSET,
                "status header must end before rings");
 _Static_assert(SM64_SATURN_PCM_CONTROL_RING_OFFSET +
@@ -107,7 +145,11 @@ _Static_assert(SM64_SATURN_PCM_CONTROL_RING_OFFSET +
                    SM64_SATURN_PCM_SFX_RING_OFFSET,
                "control and SFX rings must be contiguous");
 _Static_assert(SM64_SATURN_PCM_SFX_RING_OFFSET +
-                       SM64_SATURN_PCM_SFX_RING_BYTES <=
+                       SM64_SATURN_PCM_SFX_RING_BYTES ==
+                   SM64_SATURN_PCM_COMPLETION_RING_OFFSET,
+               "completion ring must follow command rings");
+_Static_assert(SM64_SATURN_PCM_COMPLETION_RING_OFFSET +
+                       SM64_SATURN_PCM_COMPLETION_RING_BYTES <=
                    SM64_SATURN_PCM_MAILBOX_OFFSET +
                        SM64_SATURN_PCM_MAILBOX_BYTES,
                "rings must fit in mailbox");
@@ -133,6 +175,23 @@ sm64_saturn_pcm_get_be16(const volatile uint8_t *base, uint16_t offset)
 {
     return (uint16_t)(((uint16_t)base[offset] << 8) |
                       (uint16_t)base[(uint16_t)(offset + 1U)]);
+}
+
+static inline void
+sm64_saturn_pcm_put_be32(volatile uint8_t *base, uint16_t high_offset,
+                         uint32_t value)
+{
+    sm64_saturn_pcm_put_be16(base, high_offset, (uint16_t)(value >> 16));
+    sm64_saturn_pcm_put_be16(base, (uint16_t)(high_offset + 2U),
+                             (uint16_t)value);
+}
+
+static inline uint32_t
+sm64_saturn_pcm_get_be32(const volatile uint8_t *base, uint16_t high_offset)
+{
+    return ((uint32_t)sm64_saturn_pcm_get_be16(base, high_offset) << 16) |
+           (uint32_t)sm64_saturn_pcm_get_be16(
+               base, (uint16_t)(high_offset + 2U));
 }
 
 /* Cursors range over two laps. Equal cursors are empty; a distance of count
@@ -184,6 +243,54 @@ sm64_saturn_audio_opcode_is_sfx(sm64_saturn_audio_opcode_t opcode)
 {
     return opcode >= SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH &&
            opcode <= SM64_SATURN_AUDIO_OPCODE_STOP_BANK;
+}
+
+static inline bool
+sm64_saturn_audio_completion_status_is_valid(uint16_t status)
+{
+    return status >= SM64_SATURN_AUDIO_COMPLETION_ACCEPTED &&
+           status <= SM64_SATURN_AUDIO_COMPLETION_PREPARED;
+}
+
+/* Package generations never wrap within a boot. Zero, duplicates, older
+ * values, and an attempted UINT32_MAX -> 1 transition are rejected. */
+static inline bool sm64_saturn_audio_generation_advances(
+    uint32_t active_generation, uint32_t candidate_generation)
+{
+    return active_generation != 0U && candidate_generation != 0U &&
+           candidate_generation > active_generation;
+}
+
+/* PLAY_REFRESH word 3 remains the existing 16-bit, non-wrapping per-boot
+ * package epoch. Callers with a 32-bit package generation must use this
+ * checked conversion; silent truncation would alias an old package. */
+static inline bool sm64_saturn_audio_play_refresh_epoch_from_generation(
+    uint32_t generation, uint16_t *epoch)
+{
+    if (epoch == 0 || generation == 0U || generation > 0xFFFFU) {
+        return false;
+    }
+    *epoch = (uint16_t)generation;
+    return true;
+}
+
+static inline uint16_t
+sm64_saturn_pcm_counter_saturating_increment(uint16_t value)
+{
+    return value == 0xFFFFU ? 0xFFFFU : (uint16_t)(value + 1U);
+}
+
+/* The single FIFO reserves its final eight slots for required acknowledgments.
+ * This is a producer policy contract only; Wave 2 does not link an MC68000
+ * publisher. Nonessential SFX ACCEPTED records stop at occupancy 24. */
+static inline bool sm64_saturn_audio_completion_publication_allowed(
+    uint16_t occupancy, bool required)
+{
+    const uint16_t nonessential_limit =
+        (uint16_t)(SM64_SATURN_PCM_COMPLETION_RING_COUNT -
+                   SM64_SATURN_PCM_COMPLETION_CONTROL_RESERVE);
+    return required ? occupancy < SM64_SATURN_PCM_COMPLETION_RING_COUNT
+                    : occupancy < nonessential_limit;
 }
 
 #endif

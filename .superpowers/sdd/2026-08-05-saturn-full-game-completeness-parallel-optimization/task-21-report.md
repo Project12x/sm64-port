@@ -126,3 +126,52 @@ PASS (3.0 s; ownership 2/2)
 
 No sourceboot service/package/residency/completion, MC68000 semantic linkage,
 target, Ymir, hardware, manual, audible, or performance gate is reclassified.
+
+## Wave 2 — host completion/ack ABI
+
+Wave 2 extends only the SH-2-side mailbox contract and transport. It reserves
+the unused v2 header through `0x403f` plus a 32-entry, 16-byte completion ring
+at `0x4240`. Existing control/SFX records and PLAY_REFRESH words are unchanged.
+The transport returns pointer-free ring/cursor/opcode tickets, validates the
+same two-lap arithmetic on completion, blocks ticket ABA reuse until terminal
+retirement, requires an advertised completion capability, and rejects corrupt,
+wrong-ring, wrong-opcode, wrong-lap, duplicate, zero-generation, or unsupported
+status records without advancing the consumer.
+
+The header exposes full 32-bit active/prepared package generations. Status
+reads use a bounded stable-flags/write-in-progress check to avoid accepting a
+split-field publication. The producer-side ABI reserves eight of 32 completion
+slots for required acknowledgments and defines saturating 16-bit telemetry;
+this is a contract only, not an MC68000 producer claim. ACCEPTED and COMMITTED
+are application acknowledgments; FINISHED is explicitly not acceptance.
+
+Review found that the command-ack record cannot also carry the complete
+sequence/player/source identity required for asynchronous FINISHED events.
+Wave 2 therefore does not permit FINISHED to mutate source policy. That needs
+a separately reviewed tagged semantic-event record/version. Likewise, no
+PACKAGE_PREPARE/COMMIT payload, producer linkage, source service, or real
+residency transaction is claimed here.
+
+TDD RED was observed twice: first on all absent layout/status/ticket APIs, then
+on the absent capability, cursor-retirement, control-reserve, saturating
+counter, stable-status, and typed PLAY_REFRESH protections. The typed
+PLAY_REFRESH entry point treats zero as reserved, generation 1 as the initial
+boot epoch, and `0xffff` as terminal; larger 32-bit generations are rejected
+before any sound-RAM write rather than silently truncated.
+
+Focused serialized GREEN:
+
+```text
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 \
+  mingw32-make -f Makefile.saturn.mk -j1 \
+  verify-pcm-protocol verify-audio-protocol-v2 \
+  verify-audio-completion-abi verify-pcm-transport \
+  verify-audio-sound-cpu-boot verify-soundtest-boot
+PASS (4.1 s; sound-CPU ownership 2/2)
+```
+
+The PCM transport/publication executables now use the same Python subprocess
+launcher as the earlier soundtest/protocol repair, closing the inherited MSYS
+quoted-path GUI-launch failure without changing test semantics. Independent
+review remains required before the bounded slice is marked accepted. Target,
+Ymir, hardware, manual, audible, and FPS evidence remain open.

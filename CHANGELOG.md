@@ -4,6 +4,21 @@
 
 ### Changed
 
+- Added the host-only Task 21 completion/ack ABI slice without changing any
+  existing 16-byte command word meaning. The v2 mailbox now reserves a
+  pointer-free 32-entry completion ring, full 32-bit active/prepared package
+  status, explicit accepted/rejected/stale/fault/dropped/finished/prepared/
+  committed results, and ticket-returning enqueue APIs. Completion-aware
+  callers require an advertised capability; pending two-lap cursor tickets
+  cannot be reused before a terminal acknowledgment, malformed or duplicate
+  completions fail closed, status reads are bounded by a stable publication
+  flag, and the final eight completion slots are reserved for required
+  acknowledgments. A typed PLAY_REFRESH enqueue rejects zero or greater-than-
+  16-bit package generations before any sound-RAM write because its existing
+  word 3 remains a non-wrapping per-boot epoch. This does not add an MC68000
+  producer, source service, package commit, target/Ymir, or audible behavior;
+  asynchronous FINISHED identity remains deferred to a versioned tagged-event
+  extension and may not yet mutate source policy.
 - Added the bounded Task 21 project-owned sound-CPU boot contract. Cold boot
   and explicit recovery now have a host-proven order from staged-byte
   validation through generic SMPC stop, bounded stopped-state proof, then

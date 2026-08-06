@@ -12,21 +12,33 @@ static void publish_v2_header(uint8_t *ram)
                             SM64_SATURN_PCM_PROTOCOL_MAGIC);
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_VERSION_OFFSET,
                             SM64_SATURN_PCM_PROTOCOL_VERSION);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET,
+                             SM64_SATURN_PCM_ABI_FLAG_COMPLETION);
 }
 
 static void test_control_and_sfx_encode_big_endian_in_disjoint_rings(void)
 {
     uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
     sm64_saturn_pcm_transport_t transport;
+    sm64_saturn_audio_ticket_t control_ticket;
+    sm64_saturn_audio_ticket_t sfx_ticket;
     const uint16_t words[7] = {2U, 0x1234U, 0xFF80U, 7U, 8U, 9U, 10U};
     uint16_t i;
 
     publish_v2_header(ram);
     sm64_saturn_pcm_transport_init(&transport, ram);
-    assert(sm64_saturn_audio_control_enqueue(
-        &transport, SM64_SATURN_AUDIO_OPCODE_SEQ_START, words));
-    assert(sm64_saturn_audio_sfx_enqueue(
-        &transport, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, words));
+    assert(sm64_saturn_audio_control_enqueue_ticket(
+        &transport, SM64_SATURN_AUDIO_OPCODE_SEQ_START, words,
+        &control_ticket));
+    assert(sm64_saturn_audio_sfx_enqueue_ticket(
+        &transport, SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH, words,
+        &sfx_ticket));
+    assert(control_ticket.source_ring == SM64_SATURN_AUDIO_RING_CONTROL);
+    assert(control_ticket.cursor == 0U);
+    assert(control_ticket.opcode == SM64_SATURN_AUDIO_OPCODE_SEQ_START);
+    assert(sfx_ticket.source_ring == SM64_SATURN_AUDIO_RING_SFX);
+    assert(sfx_ticket.cursor == 0U);
+    assert(sfx_ticket.opcode == SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH);
 
     assert(sm64_saturn_pcm_get_be16(ram,
         SM64_SATURN_PCM_CONTROL_RING_OFFSET) ==
