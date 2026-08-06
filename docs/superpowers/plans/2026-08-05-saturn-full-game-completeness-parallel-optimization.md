@@ -1075,9 +1075,17 @@ license, renderer, or target-performance result.
   the three-file source whitelist with a conservative source/config/linker/tool
   closure, binds exact current feature-off BOB/actor/animation payload bytes,
   and fails closed for missing actor or semantic-audio payloads. Its bootstrap
-  5/5, identity 9/9, and source-identity 5/5 gates pass; independent fix
-  rereview is pending after the prior SPEC/QUALITY FAIL C1/I1/M0. No
-  current-head image is authorized until rereview passes.
+  5/5, identity 9/9, and source-identity 5/5 gates pass, but the independent
+  fix rereview is SPEC/QUALITY FAIL C2/I1/M0: parse-time bootstrap requires
+  generated payloads before the producer rules can create them, and the
+  closure still omits image-affecting skybox/texture inputs and generated
+  outputs. The focused fixture also masks clean ordering and lacks real
+  path/precedence/tag coverage. Repair is active; no current-head image is
+  authorized until a rereview passes.
+- [ ] Rework bootstrap to use only pre-Make source/config inputs, then bind the
+  complete image-affecting source/generated closure (including the skybox and
+  texture `incbin` chain) after those producers run; add a real clean-build
+  ordering/path/precedence mutation gate and independently rereview the repair.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
