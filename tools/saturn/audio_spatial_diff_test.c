@@ -4,6 +4,10 @@
 
 #include "saturn_audio_spatial.h"
 
+/* Pinned source-trace oracle: expected quantized values are transcribed from
+ * the US formulas at src/audio/external.c:1032-1056 and 1171-1297 at Task 9
+ * base db7c9569, rather than calculated by the implementation under test. */
+
 static void test_pointer_identity_tokens_are_bounded_stable_and_reused(void)
 {
     sm64_saturn_audio_spatial_table_t table;

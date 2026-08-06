@@ -58,17 +58,23 @@ later source movement does not erase the provenance.
   embedding a second iterative implementation.  Active source pointers are resolved
   and reevaluated every source-audio tick; they remain SH-2-local.
 - The inherited US catalog limits and 38 usable list nodes per bank are
-  retained.  Waiting discrete requests use the exact ten-count post-decrement
+  retained.  Same-frame requests are admitted before a single per-bank
+  selection, matching the source request queue.  Waiting discrete requests use the exact ten-count post-decrement
   lifetime; published discrete requests retire on preemption or
   generation-matched driver completion.  Continuous requests retain their
   two-frame refresh grace.
 - ENV completion feedback is sequence- and generation-matched.  It clears the
-  jingle constraint, restores the aggregate background fade, and resumes only
+  jingle constraint only after the Saturn/SH two-tick guard, restores the
+  aggregate background fade (including the `0xFF` normal-volume sentinel), and resumes only
   the inherited Merry-Go-Round or Piranha Plant secondary sequences.
 - SFX-driven lowering begins only when a sound is published and emits the
   inherited 50-frame aggregate background adjustment.  Global fade carries a
   single non-menu SFX bank mask, keeping the whole transition to three bounded
   control records.
+
+The host fixtures pin their oracle provenance to the source ranges above.
+Expected state/event traces are transcribed independently from the inherited
+implementation and are not calculated by the policy under test.
 - Background/music policy and SFX admission remain on the SH-2.  Sequence
   bytecode timing, notes, envelopes, and SCSP voice ownership remain outside
   this task and belong to the MC68000 lane.

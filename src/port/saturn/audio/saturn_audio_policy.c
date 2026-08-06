@@ -362,22 +362,25 @@ bool sm64_saturn_audio_policy_play_secondary(
     uint8_t background_volume, uint8_t volume, uint16_t fade_timer)
 {
     bool emitted;
+    const bool first_secondary =
+        policy != NULL &&
+        policy->background_target_volume == SM64_SATURN_AUDIO_VOLUME_UNSET;
     if (policy == NULL || policy->background_queue_size == 0U ||
         policy->background_queue[0].seq_id == 2U) {
         return false;
     }
-    policy->background_target_volume = background_volume;
-    emitted = emit_control(
-        policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE, 0U,
-        sm64_saturn_audio_policy_effective_background_volume(policy),
-        fade_timer);
-    if (policy->environment_seq_id == SM64_SATURN_AUDIO_SEQUENCE_NONE) {
+    if (first_secondary) {
         if (!advance_environment_generation(policy)) {
             return false;
         }
+        policy->background_target_volume = background_volume;
         policy->secondary_seq_id = seq_id;
         policy->secondary_volume = volume;
         policy->environment_seq_id = seq_id;
+        emitted = emit_control(
+            policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE, 0U,
+            sm64_saturn_audio_policy_effective_background_volume(policy),
+            fade_timer);
         emitted = emit_control(policy, SM64_SATURN_AUDIO_OPCODE_SEQ_START, 1U,
                                seq_id, (uint16_t)(fade_timer >> 1)) && emitted;
         if (volume < 0x80U) {
@@ -387,11 +390,17 @@ bool sm64_saturn_audio_policy_play_secondary(
         return emitted;
     }
     if (volume != SM64_SATURN_AUDIO_VOLUME_UNSET) {
+        policy->background_target_volume = background_volume;
         policy->secondary_volume = volume;
-        emitted = emit_control(policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE, 1U,
-                               volume, fade_timer) && emitted;
+        emitted = emit_control(
+            policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE, 0U,
+            sm64_saturn_audio_policy_effective_background_volume(policy),
+            fade_timer);
+        emitted = emit_control(policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE,
+                               1U, volume, fade_timer) && emitted;
+        return emitted;
     }
-    return emitted;
+    return true;
 }
 
 bool sm64_saturn_audio_policy_stop_secondary(
@@ -427,6 +436,7 @@ bool sm64_saturn_audio_policy_play_jingle(sm64_saturn_audio_policy_t *policy,
     }
     policy->environment_seq_id = seq_id;
     policy->background_max_volume = max_background_volume;
+    policy->environment_completion_guard = 2U;
     emitted = emit_control(policy, SM64_SATURN_AUDIO_OPCODE_SEQ_START, 1U,
                            seq_id, 0U);
     return emit_control(
@@ -453,6 +463,7 @@ bool sm64_saturn_audio_policy_environment_complete_matching(
     if (policy == NULL ||
         policy->environment_seq_id != seq_id ||
         policy->environment_generation != environment_generation ||
+        policy->environment_completion_guard != 0U ||
         policy->background_max_volume == SM64_SATURN_AUDIO_VOLUME_UNSET) {
         return false;
     }
@@ -497,8 +508,8 @@ bool sm64_saturn_audio_policy_unlower(sm64_saturn_audio_policy_t *policy,
     if (policy == NULL) {
         return false;
     }
+    policy->lower_background_music = false;
     if (player == 0U) {
-        policy->lower_background_music = false;
         return emit_control(
             policy, SM64_SATURN_AUDIO_OPCODE_SEQ_FADE, player,
             sm64_saturn_audio_policy_effective_background_volume(policy),
@@ -515,17 +526,18 @@ uint8_t sm64_saturn_audio_policy_effective_background_volume(
     if (policy == NULL) {
         return 0U;
     }
-    target = policy->background_target_volume == SM64_SATURN_AUDIO_VOLUME_UNSET
-                 ? 127U
-                 : policy->background_target_volume;
+    target = policy->background_target_volume;
     if (policy->background_max_volume != SM64_SATURN_AUDIO_VOLUME_UNSET &&
-        target > policy->background_max_volume) {
+        (target == SM64_SATURN_AUDIO_VOLUME_UNSET ||
+         target > policy->background_max_volume)) {
         target = policy->background_max_volume;
     }
-    if (policy->lower_background_music && target > 40U) {
+    if (policy->lower_background_music &&
+        (target == SM64_SATURN_AUDIO_VOLUME_UNSET || target > 40U)) {
         target = 40U;
     }
-    if (policy->lowering_bank_mask != 0U && target > 20U) {
+    if (policy->lowering_bank_mask != 0U &&
+        (target == SM64_SATURN_AUDIO_VOLUME_UNSET || target > 20U)) {
         target = 20U;
     }
     return target;
@@ -600,7 +612,7 @@ bool sm64_saturn_audio_policy_play_refresh(
     state->volume = refresh->volume;
     state->pan = refresh->pan;
     state->pitch = refresh->pitch;
-    return publish_bank(policy, bank, refresh->source_token);
+    return true;
 }
 
 bool sm64_saturn_audio_policy_stop_handle(sm64_saturn_audio_policy_t *policy,
@@ -727,7 +739,9 @@ bool sm64_saturn_audio_policy_stop_bank(sm64_saturn_audio_policy_t *policy,
     }
     if (found) {
         const uint16_t words[7] = {bank, 0U, 0U, 0U, 0U, 0U, 0U};
-        return emit_words(policy, SM64_SATURN_AUDIO_OPCODE_STOP_BANK, words);
+        const bool emitted =
+            emit_words(policy, SM64_SATURN_AUDIO_OPCODE_STOP_BANK, words);
+        return recompute_lowering_bank(policy, bank) && emitted;
     }
     return false;
 }
@@ -738,6 +752,9 @@ void sm64_saturn_audio_policy_tick(sm64_saturn_audio_policy_t *policy)
     uint8_t bank;
     if (policy == NULL) {
         return;
+    }
+    if (policy->environment_completion_guard != 0U) {
+        policy->environment_completion_guard--;
     }
     policy->freshness_generation++;
     for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {

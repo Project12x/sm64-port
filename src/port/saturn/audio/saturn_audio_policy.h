@@ -80,6 +80,7 @@ typedef struct sm64_saturn_audio_policy {
     uint8_t environment_seq_id;
     uint8_t secondary_seq_id;
     uint8_t secondary_volume;
+    uint8_t environment_completion_guard;
     uint8_t sound_mode;
     bool lower_background_music;
     bool muted;
