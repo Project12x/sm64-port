@@ -6,6 +6,7 @@
 
 #include "saturn_pcm_protocol.h"
 #include "saturn_pcm_transport.h"
+#include "saturn_sound_cpu.h"
 #include "soundtest_boot.h"
 
 #define SOUND_RAM ((volatile uint8_t *)0x25A00000UL)
@@ -21,14 +22,16 @@ static bool controls_ready;
 
 static bool sound_off(void *context __unused)
 {
-    (void)smpc_smc_sndoff_call();
-    return true;
+    return sm64_saturn_sound_cpu_yaul_command(
+               NULL, SM64_SATURN_SOUND_CPU_COMMAND_OFF) ==
+           SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
 }
 
 static bool sound_on(void *context __unused)
 {
-    (void)smpc_smc_sndon_call();
-    return true;
+    return sm64_saturn_sound_cpu_yaul_command(
+               NULL, SM64_SATURN_SOUND_CPU_COMMAND_ON) ==
+           SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
 }
 
 static bool copy_region(void *context __unused,

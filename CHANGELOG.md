@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Added the bounded Task 21 project-owned sound-CPU boot contract. Cold boot
+  and explicit recovery now have a host-proven order from staged-byte
+  validation through 512-KiB selection, generic SMPC stop, bounded stop wait,
+  owner-validated clear/copy/mailbox publication, restart, and bounded READY
+  plus heartbeat advance. Warned Yaul sound convenience calls are prohibited;
+  the generic call's undocumented OREG31 byte is telemetry rather than a
+  boolean shortcut, and every modeled failure returns a named fault without an
+  unbounded wait. This does not enable sourceboot audio or claim package,
+  target, Ymir, hardware, manual, audible, or performance completion.
+- Routed the soundtest and PCM protocol host executables through Python
+  subprocess launch so MSYS quoted-path/DLL resolution cannot create GUI
+  missing-DLL failures; protocol and proof semantics are unchanged.
+
 - Added bounded BOB actor-effect infrastructure derived from the generated
   closure rather than runtime behavior-name branches. An exact pinned oracle
   covers billboard, alpha-cutout, translucent, shadow, particle, decal,

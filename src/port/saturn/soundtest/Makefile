@@ -11,6 +11,7 @@ PCM_BANK := $(GENERATED)/pcm_proof_bank.bin
 
 SH_PROGRAM := sm64-saturn-soundtest
 SH_SRCS := main.c soundtest_boot.c \
+  $(REPO_ROOT)/src/port/saturn/audio/saturn_sound_cpu.c \
   $(REPO_ROOT)/src/port/saturn/audio/saturn_pcm_transport.c \
   $(ASSETS_SX)
 SH_BUILD_DIR := $(REPO_ROOT)/build/saturn/soundtest/obj
