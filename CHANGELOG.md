@@ -21,7 +21,8 @@
   same-frame bank masks/stops/getters observe the inherited pre-admission
   state; queued pointer-token positions are reevaluated at admission rather
   than frozen at `play_sound()`, and requests expire after the inherited
-  countdown,
+  countdown.  Pending requests also retain their token lease across
+  same-frame stop calls until they are admitted or rejected,
   published requests retire through generation-matched completion feedback,
   and invalid per-bank sound IDs fail before consuming an identity slot.
   Jingle/secondary completion, published-SFX lowering, and global fades now

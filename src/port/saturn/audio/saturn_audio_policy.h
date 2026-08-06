@@ -149,6 +149,9 @@ bool sm64_saturn_audio_policy_update_spatial(
     sm64_saturn_audio_policy_t *policy, uint16_t source_token,
     uint16_t package_generation, uint8_t volume, uint8_t pan,
     uint16_t pitch, uint32_t priority_score);
+bool sm64_saturn_audio_policy_token_is_active(
+    const sm64_saturn_audio_policy_t *policy, uint16_t source_token,
+    uint16_t package_generation);
 bool sm64_saturn_audio_policy_stop_source(sm64_saturn_audio_policy_t *policy,
                                           uint16_t source_token,
                                           uint16_t package_generation);

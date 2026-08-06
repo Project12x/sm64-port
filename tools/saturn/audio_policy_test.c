@@ -305,6 +305,36 @@ static void test_request_queue_is_bounded_and_drains_at_tick(void)
     assert(policy.active_sfx_count == 1U);
 }
 
+static void test_pending_request_retains_token_and_accepts_spatial_refresh(void)
+{
+    sm64_saturn_audio_policy_t policy;
+    event_log_t log;
+    sm64_saturn_audio_play_refresh_t refresh = {
+        0x00128001U, 7U, 3U, 255U, 64U, 4096U, 0U
+    };
+
+    init(&policy, &log);
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1000U));
+    assert(sm64_saturn_audio_policy_token_is_active(
+        &policy, refresh.source_token, refresh.package_generation));
+    assert(!sm64_saturn_audio_policy_stop_source(
+        &policy, refresh.source_token, refresh.package_generation));
+    assert(sm64_saturn_audio_policy_token_is_active(
+        &policy, refresh.source_token, refresh.package_generation));
+    assert(sm64_saturn_audio_policy_update_spatial(
+        &policy, refresh.source_token, refresh.package_generation,
+        77U, 31U, 5000U, 42U));
+    sm64_saturn_audio_policy_tick(&policy);
+    assert(policy.sfx[0].volume == 77U);
+    assert(policy.sfx[0].pan == 31U);
+    assert(policy.sfx[0].pitch == 5000U);
+    assert(policy.sfx[0].priority_score == 42U);
+    assert(sm64_saturn_audio_policy_stop_source(
+        &policy, refresh.source_token, refresh.package_generation));
+    assert(!sm64_saturn_audio_policy_token_is_active(
+        &policy, refresh.source_token, refresh.package_generation));
+}
+
 static void test_lowering_only_tracks_published_sound_and_emits_fades(void)
 {
     sm64_saturn_audio_policy_t policy;
@@ -541,6 +571,7 @@ int main(void)
     test_sound_id_catalog_bounds();
     test_bank_pool_matches_inherited_38_usable_nodes();
     test_request_queue_is_bounded_and_drains_at_tick();
+    test_pending_request_retains_token_and_accepts_spatial_refresh();
     test_lowering_only_tracks_published_sound_and_emits_fades();
     test_secondary_jingle_and_global_fade_publish_bounded_actions();
     test_same_source_priority_and_discrete_restart();

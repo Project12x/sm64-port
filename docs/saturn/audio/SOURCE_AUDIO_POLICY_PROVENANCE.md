@@ -62,7 +62,8 @@ later source movement does not erase the provenance.
   are admitted before a single per-bank selection, matching the source
   request queue and its control-operation interleavings.  Their SH-2-local
   pointer tokens are resolved again at admission so moving sources use the
-  current coordinates.  Waiting discrete requests use the exact ten-count
+  current coordinates, and pending records keep the token live across
+  same-frame source/bank stop operations.  Waiting discrete requests use the exact ten-count
   post-decrement lifetime; published discrete requests retire on preemption or
   generation-matched driver completion.  Continuous requests retain their
   two-frame refresh grace.

@@ -702,7 +702,45 @@ bool sm64_saturn_audio_policy_update_spatial(
             found = true;
         }
     }
+    for (i = 0U; i < policy->pending_request_count; ++i) {
+        sm64_saturn_audio_pending_request_t *pending =
+            &policy->pending_requests[i];
+        if (pending->refresh.source_token == source_token &&
+            pending->refresh.package_generation == package_generation) {
+            pending->refresh.volume = volume;
+            pending->refresh.pan = pan;
+            pending->refresh.pitch = pitch;
+            pending->priority_score = priority_score;
+            found = true;
+        }
+    }
     return found;
+}
+
+bool sm64_saturn_audio_policy_token_is_active(
+    const sm64_saturn_audio_policy_t *policy, uint16_t source_token,
+    uint16_t package_generation)
+{
+    uint16_t i;
+    if (policy == NULL || source_token == 0U) {
+        return false;
+    }
+    for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {
+        const sm64_saturn_audio_sfx_state_t *state = &policy->sfx[i];
+        if (state->active && state->source_token == source_token &&
+            state->package_generation == package_generation) {
+            return true;
+        }
+    }
+    for (i = 0U; i < policy->pending_request_count; ++i) {
+        const sm64_saturn_audio_pending_request_t *pending =
+            &policy->pending_requests[i];
+        if (pending->refresh.source_token == source_token &&
+            pending->refresh.package_generation == package_generation) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool sm64_saturn_audio_policy_stop_source(sm64_saturn_audio_policy_t *policy,

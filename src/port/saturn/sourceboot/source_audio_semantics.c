@@ -112,13 +112,8 @@ static u16 source_level_acoustic_reach(void)
 
 static bool token_is_active(u16 token)
 {
-    u16 i;
-    for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {
-        if (s_policy.sfx[i].active && s_policy.sfx[i].source_token == token) {
-            return true;
-        }
-    }
-    return false;
+    return sm64_saturn_audio_policy_token_is_active(
+        &s_policy, token, s_package_generation);
 }
 
 static void release_inactive_sources(void)
@@ -183,10 +178,10 @@ static void refresh_active_source_positions(void)
             pending->refresh.sound_bits, bank, s_moving_speed[bank],
             source_level_acoustic_reach(), gAudioRandom,
             pos[0], pos[1], pos[2], &params);
-        pending->refresh.volume = params.volume;
-        pending->refresh.pan = params.pan;
-        pending->refresh.pitch = params.pitch;
-        pending->priority_score = params.priority_score;
+        (void)sm64_saturn_audio_policy_update_spatial(
+            &s_policy, pending->refresh.source_token,
+            pending->refresh.package_generation, params.volume, params.pan,
+            params.pitch, params.priority_score);
     }
 }
 
@@ -347,7 +342,9 @@ void stop_sounds_from_source(f32 *pos)
     if (token != 0U) {
         (void)sm64_saturn_audio_policy_stop_source(
             &s_policy, token, s_package_generation);
-        (void)sm64_saturn_audio_spatial_release(&s_spatial, pos);
+        if (!token_is_active(token)) {
+            (void)sm64_saturn_audio_spatial_release(&s_spatial, pos);
+        }
     }
 }
 
