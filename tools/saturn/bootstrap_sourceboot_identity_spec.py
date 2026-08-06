@@ -26,6 +26,7 @@ import gen_build_identity as identity
 # exact bytes own the package-named fields below.
 SOURCE_CLOSURE_ROOTS = (
     "src", "include", "actors", "levels", "lib/src", "data", "bin", "tools/saturn",
+    "textures", "assets",
 )
 SOURCE_CLOSURE_FILES = (
     "Makefile.saturn.mk", "src/port/saturn/sourceboot/Makefile",
@@ -58,6 +59,20 @@ SCENE_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_compiled.json"
 SCENE_DEPENDENCY_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_bsp_report.json"
 ACTOR_PAYLOAD = "build/saturn/actors/mario/mario.s64b"
 ANIMATION_PAYLOAD = "build/saturn/sourceboot/generated/mario_anim_data.c"
+GENERATED_IMAGE_INPUTS = (
+    "build/saturn/sourceboot/generated/bob_area1_compiled.json",
+    "build/saturn/sourceboot/generated/bob_area1_bsp_report.json",
+    "build/saturn/sourceboot/generated/bob_tiles_clut16.bin",
+    "build/saturn/sourceboot/generated/bob_tiles_clut16.pal",
+    "build/saturn/sourceboot/generated/bob_bsp_fragments_clut16.bin",
+    "build/saturn/sourceboot/generated/bob_bsp_fragments_clut16.pal",
+    "build/saturn/sourceboot/generated/bob_sky_rgb1555.bin",
+    "build/saturn/sourceboot/generated/saturn_quad_map.c",
+    "build/saturn/sourceboot/generated/mario_anim_data.c",
+    "build/saturn/sourceboot/generated/sourceboot_collision_catalog.inc",
+    "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h",
+    "build/us_pc/bin/water_skybox.c",
+)
 
 
 def _route_input(camera_route: int) -> str:
@@ -96,6 +111,13 @@ def _source_closure_inputs(root: Path) -> tuple[str, ...]:
         if not (root / relative).is_file():
             raise ValueError(f"source_hash closure input is not a file: {relative}")
         paths.add(relative)
+    for relative in GENERATED_IMAGE_INPUTS:
+        if not (root / relative).is_file():
+            raise ValueError(
+                f"source_hash generated image input is not a file: {relative}; "
+                "run sourceboot identity-assets before sealing"
+            )
+        paths.add(relative)
     return tuple(sorted(paths))
 
 
@@ -106,7 +128,9 @@ def all_input_paths() -> tuple[str, ...]:
     paths.update((
         "src/port/saturn/sourceboot/main.c",
         "src/port/saturn/gfx/saturn_actor_instance.c",
+        "textures/skyboxes/water.png",
         SCENE_PAYLOAD, SCENE_DEPENDENCY_PAYLOAD, ACTOR_PAYLOAD, ANIMATION_PAYLOAD,
+        *GENERATED_IMAGE_INPUTS,
     ))
     paths.update((_route_input(0), _route_input(1)))
     paths.update(_audio_inputs(0))

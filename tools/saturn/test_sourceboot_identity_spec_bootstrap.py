@@ -81,6 +81,9 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             "src/port/saturn/sourceboot/sourceboot-cart.x",
             "src/port/saturn/gfx/saturn_actor_instance.c",
             "tools/saturn/bootstrap_sourceboot_identity_spec.py",
+            "textures/skyboxes/water.png",
+            "build/saturn/sourceboot/generated/bob_sky_rgb1555.bin",
+            "build/saturn/sourceboot/generated/saturn_quad_map.c",
         ):
             before = json.loads(self.output.read_text(encoding="utf-8"))
             path = self.root / relative
@@ -143,10 +146,20 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
 
     def test_makefile_requires_a_successful_bootstrap_not_a_wildcard_fallback(self) -> None:
         makefile = (TOOLS_DIR.parents[1] / "src/port/saturn/sourceboot/Makefile").read_text(encoding="utf-8")
+        outer_makefile = (TOOLS_DIR.parents[1] / "Makefile.saturn.mk").read_text(encoding="utf-8")
         self.assertIn("bootstrap_sourceboot_identity_spec.py", makefile)
         self.assertIn("SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_STATUS", makefile)
         self.assertIn("sourceboot build identity bootstrap failed", makefile)
+        self.assertIn("SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets", outer_makefile)
+        self.assertIn("identity-assets: source-assets", makefile)
+        self.assertIn("ifneq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),assets)", makefile)
         self.assertNotIn("ifneq ($(wildcard $(SOURCEBOOT_BUILD_IDENTITY_SPEC)),)", makefile)
+
+    def test_clean_seal_fails_closed_until_identity_assets_exist(self) -> None:
+        for relative in bootstrap.GENERATED_IMAGE_INPUTS:
+            (self.root / relative).unlink()
+        with self.assertRaisesRegex(ValueError, "run sourceboot identity-assets before sealing"):
+            bootstrap.write_spec(self.root, self.output, config())
 
 
 if __name__ == "__main__":

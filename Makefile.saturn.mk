@@ -185,7 +185,7 @@ verify-castleviewer: castleviewer
 	$(MAKE) -C "$(CASTLEVIEWER_DIR)" verify
 
 sourceboot: check-libyaul check-sdk
-	$(MAKE) -C "$(SOURCEBOOT_DIR)" source-assets
+	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets
 	$(MAKE) -C "$(SOURCEBOOT_DIR)"
 
 verify-sourceboot: sourceboot
