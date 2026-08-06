@@ -64,11 +64,16 @@ open under Tasks 2--5.
 - `sourceboot_geo_walk_frames[]` is aligned, NOLOAD, and placed in `.lwram_geo_traversal`.
 - Linker symbols `__lwram_geo_traversal_start/end` and assertions prove alignment, exact generated size, and non-overlap with `.lwram_actor_runtime`, camera capture, and the final 16-KiB slave stack.
 
-- [ ] Write RED manifest tests for missing inputs, duplicate identities, depth undercount, capacity mutation, and nondeterministic ordering.
-- [ ] Run the manifest tests before implementation and record the expected failures.
-- [ ] Implement deterministic depth extraction from every linked level geo layout, actor geo tree, shared-child edge, held-object edge, and generated callback declaration.
-- [ ] Add the storage section and linker assertions without changing the current master/slave stack addresses.
-- [ ] Run manifest, sourceboot memory-map, and section-owner mutation tests; leave target-link evidence unchecked until a fresh image is built.
+- [x] Write RED manifest tests for missing inputs, duplicate identities, depth undercount, capacity mutation, and nondeterministic ordering.
+- [x] Run the manifest tests before implementation and record the expected missing-generator failure.
+- [x] Implement deterministic depth extraction from every actor/level GeoLayout source, shared-child edge, held-object edge, and generated callback declaration; the current repository proof is 518 inputs, depth 172, capacity 256.
+- [x] Add the storage section and linker assertions without changing the current master/slave stack addresses.
+- [x] Run manifest, sourceboot memory-map, storage-owner, generated-linker-fragment, and host storage ABI tests; leave target-link evidence unchecked until a fresh image is built.
+
+**Task 2 status:** source-complete for generated capacity and LWRAM ownership in
+commit `6dbaea8d`. The generated header/linker fragment are build outputs, not
+checked-in artifacts; a target link must regenerate and consume them. The
+production renderer still does not dispatch through the arena.
 
 ### Task 3: Convert the Saturn source graph handlers to enter/leave dispatch
 

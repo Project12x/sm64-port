@@ -1335,10 +1335,13 @@ transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
   `837bd0b5`: the opaque enter/leave frame API, explicit
   fail-closed overflow latch, C/Python host gates, and sibling/children-first
   ordering fixture are complete. Host output is `frame=16`, `walk=32`; no
-  production source handler calls this scheduler yet. Task 2 (full-game
-  generated capacity and LWRAM section ownership) is the active next
-  transition. Linked SH-2 sizes, target stability, textures, audio, and FPS
-  remain unchecked.
+  production source handler calls this scheduler yet. Task 2 is
+  source-complete in `6dbaea8d`: the repository-wide manifest currently proves
+  518 actor/level inputs, depth 172, and capacity 256; the generated
+  header/linker fragment and `.lwram_geo_traversal` owner are guarded by
+  host/map contracts. Task 3 (source handler conversion to enter/leave
+  dispatch) is now the active transition. Linked SH-2 sizes, target
+  stability, textures, audio, and FPS remain unchecked.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 

@@ -371,6 +371,27 @@ source-complete only for this bounded scheduler seam. Task 2 is now active for
 the generated full-game depth manifest, SH-2-sized ABI/map proof, and dedicated
 LWRAM owner. No production traversal cutover, linked target, Ymir/manual, or
 FPS evidence is claimed.
+
+Iterative geo-walk Task 2 RED (2026-08-06): added
+`tools/saturn/test_geo_depth_manifest.py` before the generator. The focused
+test correctly fails because `tools/saturn/geo_depth_manifest.py` does not yet
+exist. The RED cases require deterministic source ordering, missing-input and
+duplicate-identity rejection, claimed-depth undercount rejection, and a
+fail-closed capacity mutation check. No linker/storage implementation was
+written before this failure.
+
+Iterative geo-walk Task 2 GREEN/source-complete (2026-08-06): commit
+`6dbaea8d` adds the repository-wide deterministic source scanner, generated
+header and linker fragment, aligned NOLOAD `sourceboot_geo_walk_frames[]`
+owner, linker size/alignment/arena-order assertions, and the host storage
+contract. The serial Make gate `verify-saturn-geo-depth-manifest` passes; the
+generator reports 518 actor/level inputs, `max_proven_depth=172`,
+`capacity=256`, and a reproducible input SHA. Host storage compilation passes
+with the generated header; SH-2 frame-size assertion is intentionally guarded
+to the 32-bit target ABI. The source scanner explicitly permits the upstream
+implicit-root close convention and rejects more than one unmatched close.
+Target link/map, Ymir, manual, production dispatcher, and FPS gates remain
+unchecked. Task 3 (source handler conversion) is now active.
 Task 20 fix round 1 `f161491a` is committed with canonical nonzero actor-bank hash admission, compact bank ID/token propagation through descriptor/lowering, one shared fail-closed descriptor validator for lower/order, and direct zero-hash/stale-token/crafted-field mutation coverage. Fresh serialized evidence passes: `verify-actor-effects` 57.5s and `verify-actor-batches verify-actor-capability-bank verify-actor-family-bank verify-actor-instance-queue` 58.8s. The plan’s individual Task20 test/GREEN steps are checked; scoped independent rereview is pending. Production observer capture, the two geo prerequisites, final closure, target/Ymir/manual/FPS remain open.
 Task 20 fix round 1 rereview is SPEC/QUALITY FAIL, C0/I1/M1. Bank identity, shared validation, plan wording, and exact oracle binding pass. Remaining I1 is self-referential generation/package validation in the public lower API, which cannot reject an old descriptor; M1 is stale 64-byte/16-byte wording in the report. Fix round 2 is dispatched to repair the lower contract, add direct stale generation/package mutations, and correct all ABI-size evidence before rereview.
 Task 20 fix round 2 `e61d3e8a` is committed. `sm64_saturn_actor_effect_lower()` now receives trusted current frame/package generations, and direct stale-frame/stale-package mutations fail closed; the report and brief consistently state the 68-byte descriptor/24-byte output ABI. Focused `verify-actor-effects` passes in 58.2s and the serialized actor regression wave passes in 59.3s. Scoped rereview is pending; production observer/geo/cross-stream/target/Ymir/manual/FPS gates remain open.
