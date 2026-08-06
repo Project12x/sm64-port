@@ -867,6 +867,24 @@ This repair is ABI- and arena-neutral and may proceed before the broader observe
 - [x] Run the serialized source/snapshot/queue/batch wave and actor-runtime neutrality 2/2; the inherited native-Python/POSIX executable-path runner defect is explicitly reported and remains unchecked, while direct DLL-preflighted binaries pass.
 - [x] Commit `ce542f35` and independent rereview SPEC/QUALITY PASS, C0/I0/M0; keep >64 source-pool slots, skip-zero generation, package reservation, target/P2 race, production drain, Ymir/manual, and FPS gates open.
 
+#### Task 14 bounded repair: full source-pool identity with compact drawable ceiling
+
+The source object pool has 240 legal slots while the compact actor snapshot/queue
+ceiling remains 64. Separate the identity-sidecar bound from the compact live
+observation bound: `seen`, `live`, and `incarnation` must cover source slots
+0..239, while `observations` and `count` remain capped at 64. A high pool slot
+must not consume compact capacity or be rejected merely for being above 63;
+the 65th compact drawable still latches overflow. Parent identity validation
+must use the 240-slot source bound. Reconcile the fixed 65,536-byte actor arena
+symbolically (observer growth reduces the output-record ceiling) and do not
+claim target placement or production generic geometry.
+
+- Modify `src/port/saturn/gfx/saturn_actor_instance.h/.c`, `src/port/saturn/gfx/saturn_geo_state_observer.c`, `tools/saturn/actor_instance_snapshot_test.c`, `tools/saturn/actor_instance_queue_test.c`, `tools/saturn/test_actor_snapshot_source.py`, `Makefile.saturn.mk`, and `CHANGELOG.md` as required by the symbolic bounds.
+- [ ] RED: prove slots 64 and 239 are rejected by the current implementation, then add GREEN coverage accepting both when compact capacity remains; prove distinct incarnation keys and despawn/reuse for slot 239, reject slot 240, retain the 65th compact-observation overflow latch, and update exact arena/output ceilings symbolically.
+- [ ] Implement separate source-pool and compact-observation bounds without changing the 188-byte snapshot ABI or queue descriptor ABI; preserve fail-closed unknown/stale/malformed behavior.
+- [ ] Run serialized snapshot/queue/batch/handoff gates plus `test_actor_snapshot_source.py` and `test_actor_runtime_neutrality.py`; host-only evidence must leave target P2, package reservation, sourceboot, production drain, Ymir/manual, and FPS unchecked.
+- [ ] Commit and independently review the repair; follow with the separate skip-zero generation repair rather than combining sourceboot timing changes here.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
