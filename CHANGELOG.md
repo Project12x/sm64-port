@@ -23,6 +23,10 @@
   silently borrowed from a dirty workspace. The sealed closure includes the
   source sky/texture roots and exact generated compile/`incbin` inputs,
   including `water.png` and its baked sky output.
+  The closure now also seals generated BOB scene/BSP/fragment and quad-map
+  headers used by compiled C sources. The asset-stage escape is restricted to
+  the sole `identity-assets` goal; invalid stage values and attempts to use
+  the asset stage for normal build/verify goals fail during Make parsing.
 
 - Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
   owner in sourceboot, replacing standalone actor observer/bank storage and

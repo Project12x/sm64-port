@@ -19,6 +19,21 @@ import bootstrap_sourceboot_identity_spec as bootstrap
 import gen_build_identity as identity
 
 
+# This list is derived from sourceboot's compiled includes and incbin rules,
+# not from bootstrap.GENERATED_IMAGE_INPUTS. It catches a bootstrap list that
+# forgets one of the concrete compiler/linker inputs.
+REQUIRED_COMPILED_GENERATED_INPUTS = (
+    "build/saturn/sourceboot/generated/bob_scene.h",
+    "build/saturn/sourceboot/generated/bob_bsp.h",
+    "build/saturn/sourceboot/generated/bob_bsp_fragments.h",
+    "build/saturn/sourceboot/generated/saturn_quad_map.h",
+    "build/saturn/sourceboot/generated/saturn_quad_map.c",
+    "build/saturn/sourceboot/generated/bob_sky_rgb1555.bin",
+    "build/saturn/sourceboot/generated/bob_tiles_clut16.bin",
+    "build/saturn/sourceboot/generated/bob_tiles_clut16.pal",
+)
+
+
 def config() -> dict[str, int]:
     return {
         "features.complete_mario_animation": 0,
@@ -82,8 +97,7 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             "src/port/saturn/gfx/saturn_actor_instance.c",
             "tools/saturn/bootstrap_sourceboot_identity_spec.py",
             "textures/skyboxes/water.png",
-            "build/saturn/sourceboot/generated/bob_sky_rgb1555.bin",
-            "build/saturn/sourceboot/generated/saturn_quad_map.c",
+            *REQUIRED_COMPILED_GENERATED_INPUTS,
         ):
             before = json.loads(self.output.read_text(encoding="utf-8"))
             path = self.root / relative
@@ -95,6 +109,15 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
                 after["artifacts"]["source_hash"]["sha256"],
                 relative,
             )
+
+        source_manifest = json.loads(
+            Path(second["artifacts"]["source_hash"]["path"]).read_text(encoding="utf-8")
+        )
+        self.assertTrue(
+            set(REQUIRED_COMPILED_GENERATED_INPUTS).issubset(
+                {item["path"] for item in source_manifest["inputs"]}
+            )
+        )
 
         route = self.root / "tools/saturn/routes/bob_parity_v1.json"
         route.write_text("changed route\n", encoding="utf-8")
@@ -152,7 +175,8 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         self.assertIn("sourceboot build identity bootstrap failed", makefile)
         self.assertIn("SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets", outer_makefile)
         self.assertIn("identity-assets: source-assets", makefile)
-        self.assertIn("ifneq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),assets)", makefile)
+        self.assertIn("SOURCEBOOT_BUILD_IDENTITY_STAGE=assets is only valid", makefile)
+        self.assertIn("$(MAKECMDGOALS),identity-assets", makefile)
         self.assertNotIn("ifneq ($(wildcard $(SOURCEBOOT_BUILD_IDENTITY_SPEC)),)", makefile)
 
     def test_clean_seal_fails_closed_until_identity_assets_exist(self) -> None:
