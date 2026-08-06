@@ -425,7 +425,7 @@ static void test_two_failed_captures_do_not_strand_both_banks(void)
 static void test_pre_acquire_recycle_enforces_exact_ready_ownership(void)
 {
     sm64_saturn_actor_instance_bank_t bank;
-    uint8_t index, other;
+    uint8_t index, other, freed_index;
     uint16_t count;
     sm64_saturn_actor_instance_snapshot_t value;
 
@@ -446,6 +446,7 @@ static void test_pre_acquire_recycle_enforces_exact_ready_ownership(void)
         &bank, index, 79U, SM64_SATURN_ACTOR_INSTANCE_BANK_READY));
     assert(!sm64_saturn_actor_instance_bank_recycle_pre_acquire(
         &bank, index, 80U, SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING));
+    freed_index = index;
     assert(sm64_saturn_actor_instance_bank_recycle_pre_acquire(
         &bank, index, 80U, SM64_SATURN_ACTOR_INSTANCE_BANK_READY));
     assert(bank.state[index] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
@@ -458,7 +459,8 @@ static void test_pre_acquire_recycle_enforces_exact_ready_ownership(void)
     assert(bank.generation[other] == 81U && bank.count[other] == 7U);
     assert(((const uint8_t *)bank.snapshots[other])[0] == 0xc3U);
     assert(!sm64_saturn_actor_instance_bank_recycle_pre_acquire(
-        &bank, index, 80U, SM64_SATURN_ACTOR_INSTANCE_BANK_READY));
+        &bank, freed_index, 80U, SM64_SATURN_ACTOR_INSTANCE_BANK_READY));
+    assert(bank.state[freed_index] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
 }
 
 static void test_pre_acquire_recycle_rejects_post_acquire_states(void)

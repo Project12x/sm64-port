@@ -159,6 +159,8 @@ bool sm64_saturn_actor_instance_bank_complete(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index);
 bool sm64_saturn_actor_instance_bank_retire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index);
+/* Producer-owned only: READY may be recycled only before the exact
+ * (index,generation) has been exposed to/acquired by a consumer. */
 bool sm64_saturn_actor_instance_bank_recycle_pre_acquire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
     uint32_t generation, uint8_t expected_state);

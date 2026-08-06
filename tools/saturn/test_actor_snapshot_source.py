@@ -267,8 +267,10 @@ def assert_pre_acquire_recycle_helper_contract(recycle: str) -> None:
 
 def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
     implementation = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
-    recycle = body_text(implementation,
-                        "sm64_saturn_actor_instance_bank_recycle_pre_acquire")
+    recycle = body_text(
+        implementation,
+        "bool sm64_saturn_actor_instance_bank_recycle_pre_acquire",
+    )
     assert_pre_acquire_recycle_helper_contract(recycle)
     broadened = recycle.replace(
         "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
@@ -292,10 +294,23 @@ def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
         assert mutation != recycle
         try:
             assert_pre_acquire_recycle_helper_contract(mutation)
-        except AssertionError:
+        except (AssertionError, ValueError):
             pass
         else:
             raise AssertionError(f"{label} mutation escaped source gate")
+
+
+def test_pre_acquire_recycle_does_not_enter_post_acquire_owners() -> None:
+    handoff = (GFX / "saturn_actor_runtime_handoff.c").read_text(encoding="utf-8")
+    sourceboot = SOURCEBOOT.read_text(encoding="utf-8")
+    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in handoff
+    post_acquire = body_text(sourceboot, "sourceboot_frame_service_render")
+    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" not in post_acquire
+    mutated = handoff.replace(
+        "sm64_saturn_actor_instance_bank_quarantine",
+        "sm64_saturn_actor_instance_bank_recycle_pre_acquire", 1)
+    assert mutated != handoff
+    assert "sm64_saturn_actor_instance_bank_recycle_pre_acquire" in mutated
 
 
 def assert_capture_uses_cache_through_payload(text: str) -> None:
@@ -383,6 +398,8 @@ if __name__ == "__main__":
     test_capture_copies_source_values_and_rejects_bad_identity()
     test_source_pool_identity_bound_stays_separate_from_compact_capacity()
     test_pre_acquire_failures_use_exact_producer_recycle()
+    test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free()
+    test_pre_acquire_recycle_does_not_enter_post_acquire_owners()
     test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation()
     test_observer_only_records_geo_decisions_at_source_boundary()
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()
