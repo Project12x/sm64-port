@@ -10,6 +10,8 @@
 #include "saturn_actor_bridge.h"
 #include "saturn_render_native_math.h"
 
+#include <string.h>
+
 #include "game/level_update.h"
 #include "game/camera.h"
 #include "game/mario.h"
@@ -27,10 +29,20 @@
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
 extern const uint8_t sm64_saturn_mario_actor_bank_data[];
 extern const uint32_t sm64_saturn_mario_actor_bank_size;
+#define COMPLETE_ACTOR_POSE_SLOT_COUNT 2U
+typedef struct complete_actor_pose_slot {
+    int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];
+    uint8_t lights[SM64_MARIO_VERTEX_COUNT];
+    int32_t joints[20U * 16U];
+    sm64_saturn_actor_pose_view_t evaluated;
+    uint16_t animation_id;
+    uint16_t animation_frame;
+    uint8_t valid;
+} complete_actor_pose_slot_t;
 static sm64_saturn_actor_bank_view_t complete_actor_bank;
-static int16_t complete_actor_vertices[SM64_MARIO_VERTEX_COUNT][3];
-static uint8_t complete_actor_lights[SM64_MARIO_VERTEX_COUNT];
-static int32_t complete_actor_joints[20U * 16U];
+static complete_actor_pose_slot_t complete_actor_pose_slots[
+    COMPLETE_ACTOR_POSE_SLOT_COUNT];
+static uint8_t complete_actor_next_pose_slot;
 static uint8_t complete_actor_bank_ready;
 static const sm64_saturn_actor_bank_view_t *complete_bank(void)
 {
@@ -39,6 +51,32 @@ static const sm64_saturn_actor_bank_view_t *complete_bank(void)
             sm64_saturn_mario_actor_bank_data, sm64_saturn_mario_actor_bank_size,
             &complete_actor_bank);
     return complete_actor_bank_ready != 0U ? &complete_actor_bank : NULL;
+}
+
+static uint8_t complete_actor_evaluate(
+    const sm64_saturn_mario_actor_snapshot_t *snapshot, uint8_t slot_index)
+{
+    complete_actor_pose_slot_t *const slot =
+        &complete_actor_pose_slots[slot_index];
+    sm64_saturn_actor_pose_work_t work = {
+        .vertices = slot->vertices,
+        .light_intensity = slot->lights,
+        .joint_matrices_q16 = slot->joints,
+        .vertex_capacity = SM64_MARIO_VERTEX_COUNT,
+        .joint_capacity = 20U,
+        .light_capacity = SM64_MARIO_VERTEX_COUNT,
+    };
+    const sm64_saturn_actor_bank_view_t *const bank = complete_bank();
+    if (bank == NULL || !sm64_saturn_actor_pose_evaluate(
+            bank, snapshot->animation_id, snapshot->animation_frame,
+            &work, &slot->evaluated)) {
+        slot->valid = 0U;
+        return 0U;
+    }
+    slot->animation_id = slot->evaluated.animation_id;
+    slot->animation_frame = slot->evaluated.frame;
+    slot->valid = 1U;
+    return 1U;
 }
 #endif
 
@@ -92,9 +130,7 @@ uint8_t sm64_saturn_mario_actor_snapshot(
         snapshot->animation_frame = 0;
         snapshot->area_index = -1;
     }
-#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
-    snapshot->walking_bank = 0U;
-#else
+#if !SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
     snapshot->walking_bank = is_walking_family(snapshot->animation_id);
 #endif
     snapshot->valid = 1U;
@@ -108,28 +144,19 @@ uint8_t sm64_saturn_mario_actor_pose(
     if (snapshot == NULL || pose == NULL || !snapshot->valid) {
         return 0U;
     }
+    memset(pose, 0, sizeof(*pose));
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
     {
-        const sm64_saturn_actor_bank_view_t *bank = complete_bank();
-        sm64_saturn_actor_pose_work_t work = {
-            .vertices = complete_actor_vertices,
-            .light_intensity = complete_actor_lights,
-            .joint_matrices_q16 = complete_actor_joints,
-            .vertex_capacity = SM64_MARIO_VERTEX_COUNT,
-            .joint_capacity = 20U,
-            .light_capacity = SM64_MARIO_VERTEX_COUNT,
-        };
-        sm64_saturn_actor_pose_view_t evaluated;
-        if (bank == NULL || !sm64_saturn_actor_pose_evaluate(
-                bank, snapshot->animation_id, snapshot->animation_frame,
-                &work, &evaluated))
+        const uint8_t slot = complete_actor_next_pose_slot++ %
+                             COMPLETE_ACTOR_POSE_SLOT_COUNT;
+        if (!complete_actor_evaluate(snapshot, slot))
             return 0U;
-        pose->vertices = evaluated.vertices;
-        pose->light_intensity = evaluated.light_intensity;
-        pose->frame = evaluated.frame;
-        pose->frame_count = evaluated.frame_count;
-        pose->vertex_count = evaluated.vertex_count;
-        pose->walking_bank = 0U;
+        pose->vertices = complete_actor_pose_slots[slot].evaluated.vertices;
+        pose->light_intensity =
+            complete_actor_pose_slots[slot].evaluated.light_intensity;
+        pose->frame = complete_actor_pose_slots[slot].evaluated.frame;
+        pose->frame_count = complete_actor_pose_slots[slot].evaluated.frame_count;
+        pose->vertex_count = complete_actor_pose_slots[slot].evaluated.vertex_count;
         return 1U;
     }
 #else
@@ -162,17 +189,20 @@ uint8_t sm64_saturn_mario_actor_pose_selector(
     sm64_saturn_mario_actor_pose_t pose;
 
     if (selector == NULL) return 0U;
+    memset(selector, 0, sizeof(*selector));
     selector->vertex_bank_id = 0U;
     selector->material_bank_id = 0U;
     selector->frame = 0U;
     selector->frame_count = 0U;
     selector->vertex_count = 0U;
-    selector->walking_bank = 0U;
-    selector->valid = 0U;
     if (!sm64_saturn_mario_actor_pose(snapshot, &pose)) return 0U;
 #if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
     selector->vertex_bank_id = SM64_SATURN_MARIO_VERTEX_BANK_COMPLETE;
+    selector->pose_slot = (uint8_t)((complete_actor_next_pose_slot +
+                                     COMPLETE_ACTOR_POSE_SLOT_COUNT - 1U) %
+                                    COMPLETE_ACTOR_POSE_SLOT_COUNT);
 #else
+    selector->walking_bank = 0U;
     selector->vertex_bank_id = pose.walking_bank ?
         SM64_SATURN_MARIO_VERTEX_BANK_WALKING :
         SM64_SATURN_MARIO_VERTEX_BANK_NEUTRAL;
@@ -181,7 +211,33 @@ uint8_t sm64_saturn_mario_actor_pose_selector(
     selector->frame = pose.frame;
     selector->frame_count = pose.frame_count;
     selector->vertex_count = pose.vertex_count;
+#if !SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
     selector->walking_bank = pose.walking_bank;
+#endif
     selector->valid = 1U;
     return 1U;
+}
+
+uint8_t sm64_saturn_mario_actor_pose_from_selector(
+    const sm64_saturn_mario_pose_selector_t *selector,
+    sm64_saturn_mario_actor_pose_t *pose)
+{
+    if (selector == NULL || pose == NULL || selector->valid == 0U) return 0U;
+    memset(pose, 0, sizeof(*pose));
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+    if (selector->pose_slot >= COMPLETE_ACTOR_POSE_SLOT_COUNT ||
+        !complete_actor_pose_slots[selector->pose_slot].valid)
+        return 0U;
+    pose->vertices = complete_actor_pose_slots[selector->pose_slot].evaluated.vertices;
+    pose->light_intensity =
+        complete_actor_pose_slots[selector->pose_slot].evaluated.light_intensity;
+    pose->frame = complete_actor_pose_slots[selector->pose_slot].evaluated.frame;
+    pose->frame_count =
+        complete_actor_pose_slots[selector->pose_slot].evaluated.frame_count;
+    pose->vertex_count =
+        complete_actor_pose_slots[selector->pose_slot].evaluated.vertex_count;
+    return 1U;
+#else
+    return 0U;
+#endif
 }

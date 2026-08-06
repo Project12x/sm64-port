@@ -92,12 +92,17 @@ bool sm64_saturn_actor_pose_evaluate(
                 return false;
             }
             angles[axis] = sample;
-            translation[axis] = (int32_t)source_joint.translation[axis] << 16;
-        }
-        if (joint == 0U) {
-            translation[0] += (int32_t)pose->root_translation[0] << 16;
-            translation[1] += (int32_t)pose->root_translation[1] << 16;
-            translation[2] += (int32_t)pose->root_translation[2] << 16;
+            {
+                int64_t translation_q16 =
+                    (int64_t)source_joint.translation[axis] << 16;
+                if (joint == 0U)
+                    translation_q16 +=
+                        (int64_t)pose->root_translation[axis] << 16;
+                if (translation_q16 > INT32_MAX ||
+                    translation_q16 < INT32_MIN)
+                    return false;
+                translation[axis] = (int32_t)translation_q16;
+            }
         }
         sm64_saturn_mtxq_rotate_xyz_and_translate(
             &local, translation, angles[0], angles[1], angles[2]);
@@ -107,13 +112,10 @@ bool sm64_saturn_actor_pose_evaluate(
             if ((uint16_t)source_joint.parent_ordinal >= joint) {
                 return false;
             }
-            /* The validated compact bank bounds source translations and the
-             * fixed-point constructor bounds rotations.  The helper's bool
-             * is diagnostic overflow telemetry for general scene matrices;
-             * actor poses retain their bounded result and fail closed only on
-             * malformed bank spans above. */
-            (void)sm64_saturn_matrix_mul(
-                &local, &matrices[source_joint.parent_ordinal], &matrices[joint]);
+            if (sm64_saturn_matrix_mul(
+                    &local, &matrices[source_joint.parent_ordinal],
+                    &matrices[joint]))
+                return false;
         }
     }
     for (vertex = 0U; vertex < bank->bank.vertex_count; vertex++) {

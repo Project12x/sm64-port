@@ -56,6 +56,9 @@
 #ifndef SATURN_DIAGNOSTIC_MODE
 #define SATURN_DIAGNOSTIC_MODE 0
 #endif
+#ifndef SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+#define SATURN_FEATURE_COMPLETE_MARIO_ANIMATION 0
+#endif
 
 #define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
 #define SOURCEBOOT_BOOT_TRACE_VERSION 1U
@@ -324,7 +327,11 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     const uint8_t pose_ok = sm64_saturn_mario_actor_pose_selector(
         &snapshot->mario, &snapshot->mario_pose);
 #if SATURN_DIAGNOSTIC_MODE == 1
-    if (pose_ok != 0U && sourceboot_animation_sweep.last_id < 209U) {
+    sm64_saturn_mario_actor_pose_t diagnostic_pose;
+    if (pose_ok != 0U &&
+        sm64_saturn_mario_actor_pose_from_selector(
+            &snapshot->mario_pose, &diagnostic_pose) != 0U &&
+        sourceboot_animation_sweep.last_id < 209U) {
         const uint16_t id = sourceboot_animation_sweep.last_id;
         const uint16_t word = (uint16_t)(id >> 5);
         const uint32_t mask = 1UL << (id & 31U);
@@ -333,9 +340,9 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
             sourceboot_animation_sweep.seen_count++;
         }
         uint32_t hash = 2166136261UL;
-        for (uint16_t vertex = 0U; vertex < snapshot->mario_pose.vertex_count; vertex++) {
+        for (uint16_t vertex = 0U; vertex < diagnostic_pose.vertex_count; vertex++) {
             for (uint16_t axis = 0U; axis < 3U; axis++) {
-                hash ^= (uint16_t)snapshot->mario_pose.vertices[vertex][axis];
+                hash ^= (uint16_t)diagnostic_pose.vertices[vertex][axis];
                 hash *= 16777619UL;
             }
         }
@@ -940,8 +947,14 @@ static void sourceboot_frame_service_render(uint32_t generation)
             goto failed;
 
         sourceboot_mario_snapshot = sourceboot_active_render_snapshot->mario;
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+        (void)sm64_saturn_mario_actor_pose_from_selector(
+            &sourceboot_active_render_snapshot->mario_pose,
+            &sourceboot_mario_pose);
+#else
         (void)sm64_saturn_mario_actor_pose(&sourceboot_mario_snapshot,
                                            &sourceboot_mario_pose);
+#endif
         sourceboot_fast3d.profile.demo_actor_snapshot_valid =
             sourceboot_mario_snapshot.valid;
         sourceboot_fast3d.profile.demo_actor_pose_vertices =

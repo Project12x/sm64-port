@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Hardened complete-animation promotion against extreme Q16.16 translation
+  sums and matrix overflow by failing closed before narrowing; sourceboot now
+  hands each selected pose through a two-slot immutable render buffer so frame
+  overlap cannot overwrite a worker's vertices.  The diagnostic sweep hashes
+  that selected pose without invoking a second evaluator, while the legacy
+  walking-bank compatibility fields remain feature-off only.
+
 - Added the feature-selectable compact Mario pose evaluator.  The enabled
   sourceboot path consumes the source-selected animation ID/frame after the
   authoritative geo tick, evaluates one bounded 20-joint pose from the

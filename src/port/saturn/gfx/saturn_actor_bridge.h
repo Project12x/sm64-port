@@ -39,6 +39,7 @@ typedef struct sm64_saturn_mario_pose_selector {
     uint16_t vertex_count;
     uint8_t walking_bank;
     uint8_t valid;
+    uint8_t pose_slot;
 } sm64_saturn_mario_pose_selector_t;
 
 enum {
@@ -60,5 +61,12 @@ uint8_t sm64_saturn_mario_actor_pose(
 uint8_t sm64_saturn_mario_actor_pose_selector(
     const sm64_saturn_mario_actor_snapshot_t *snapshot,
     sm64_saturn_mario_pose_selector_t *selector);
+
+/* Return the immutable pose selected for a complete-animation snapshot.
+ * Feature-on sourceboot uses this handoff so a render worker never rereads a
+ * shared scratch buffer while the next generation is being evaluated. */
+uint8_t sm64_saturn_mario_actor_pose_from_selector(
+    const sm64_saturn_mario_pose_selector_t *selector,
+    sm64_saturn_mario_actor_pose_t *pose);
 
 #endif

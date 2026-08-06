@@ -233,6 +233,40 @@ int main(int argc, char **argv)
             }
         }
     }
+    {
+        uint8_t *extreme = malloc(size);
+        sm64_saturn_actor_bank_view_t extreme_view;
+        int16_t extreme_vertices[424][3];
+        uint8_t extreme_lights[424];
+        int32_t extreme_joints[20 * 16];
+        sm64_saturn_actor_pose_work_t extreme_work = {
+            .vertices = extreme_vertices, .light_intensity = extreme_lights,
+            .joint_matrices_q16 = extreme_joints, .vertex_capacity = 424U,
+            .joint_capacity = 20U, .light_capacity = 424U,
+        };
+        sm64_saturn_actor_pose_view_t extreme_pose;
+        const uint32_t joint_table = view.meshlets_offset +
+            read_be32(bytes + view.meshlets_offset + 18U);
+        if (extreme == NULL) {
+            free(bytes);
+            return 1;
+        }
+        memcpy(extreme, bytes, size);
+        /* A root translation at INT16_MAX plus the source root channel is a
+         * valid-width field but not representable in Q16.16 int32. The
+         * evaluator must reject it without signed-wrap UB. */
+        extreme[joint_table + 2U] = 0x7FU;
+        extreme[joint_table + 3U] = 0xFFU;
+        if (!sm64_saturn_actor_bank_validate(extreme, size, &extreme_view) ||
+            sm64_saturn_actor_pose_evaluate(
+                &extreme_view, 0, 0, &extreme_work, &extreme_pose)) {
+            fprintf(stderr, "extreme Q16 translation was not rejected\n");
+            free(extreme);
+            free(bytes);
+            return 1;
+        }
+        free(extreme);
+    }
     memcpy(expected_source_hash, view.bank.source_hash_words,
            sizeof(expected_source_hash));
     if (!sm64_saturn_actor_bank_validate_expected(
