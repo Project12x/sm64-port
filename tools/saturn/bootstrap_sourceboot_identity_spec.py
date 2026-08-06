@@ -19,15 +19,26 @@ from typing import Mapping
 import gen_build_identity as identity
 
 
-# These are source/provenance boundaries until Task 22 replaces the provisional
-# package inputs with a final BOB root and payloads.  They are still real files,
-# never hand-written hashes or a stale generated identity.
+# All source roots that can contribute to sourceboot's SH-2 closure.  Hashing a
+# conservative superset is intentional: an unrelated source edit may reseal a
+# build, but an ELF-affecting source/header/linker/tool edit can never escape
+# its identity. Generated payloads are deliberately *not* listed here; their
+# exact bytes own the package-named fields below.
+SOURCE_CLOSURE_ROOTS = (
+    "src", "include", "actors", "levels", "lib/src", "data", "bin", "tools/saturn",
+)
+SOURCE_CLOSURE_FILES = (
+    "Makefile.saturn.mk", "src/port/saturn/sourceboot/Makefile",
+    "src/port/saturn/sourceboot/sourceboot.specs",
+    "src/port/saturn/sourceboot/sourceboot-cart.x",
+    "tools/mario_anims_converter.py",
+    "tools/saturn/bootstrap_sourceboot_identity_spec.py",
+    "tools/saturn/gen_build_identity.py",
+)
+
+# Non-package execution/input artifacts. Package-named fields below name and
+# hash their actual available payload bytes, never compiler recipes.
 STATIC_INPUTS: dict[str, tuple[str, ...]] = {
-    "source_hash": (
-        "src/port/saturn/sourceboot/Makefile",
-        "src/port/saturn/sourceboot/source_entry.c",
-        "src/port/saturn/runtime/saturn_source_runtime.c",
-    ),
     "input_artifact_hash": (
         "src/port/saturn/sourceboot/source_demo_data.c",
         "src/port/saturn/controller/controller_saturn.c",
@@ -41,27 +52,12 @@ STATIC_INPUTS: dict[str, tuple[str, ...]] = {
         "src/port/saturn/sourceboot/source_cart.h",
         "tools/saturn/launch_ymir_desktop.py",
     ),
-    "scene_package_hash": (
-        "tools/saturn/compile_scene_package.py",
-        "tools/saturn/scene_package_schema.py",
-        "levels/bob/script.c",
-    ),
-    "scene_dependency_set_hash": (
-        "tools/saturn/collect_scene_closure.py",
-        "tools/saturn/behavior_spawn_rules.json",
-        "levels/bob/areas/1/geo.inc.c",
-    ),
-    "actor_package_hash": (
-        "tools/saturn/compile_actor_bank.py",
-        "tools/saturn/manifests/actors/mario.json",
-        "actors/mario/geo.inc.c",
-    ),
-    "animation_package_hash": (
-        "tools/saturn/extract_mario_actor.py",
-        "tools/mario_anims_converter.py",
-        "assets/anims/anim_00.inc.c",
-    ),
 }
+
+SCENE_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_compiled.json"
+SCENE_DEPENDENCY_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_bsp_report.json"
+ACTOR_PAYLOAD = "build/saturn/actors/mario/mario.s64b"
+ANIMATION_PAYLOAD = "build/saturn/sourceboot/generated/mario_anim_data.c"
 
 
 def _route_input(camera_route: int) -> str:
@@ -71,11 +67,9 @@ def _route_input(camera_route: int) -> str:
 
 def _audio_inputs(semantic_audio: int) -> tuple[str, ...]:
     if semantic_audio:
-        return (
-            "src/port/saturn/sourceboot/source_audio_semantics.c",
-            "src/port/saturn/audio/saturn_audio_policy.c",
-            "src/port/saturn/audio/saturn_audio_spatial.c",
-            "tools/saturn/compile_saturn_audio.py",
+        raise ValueError(
+            "audio_package_hash requires a staged S64A/AUDIO.DAT and sound-CPU image; "
+            "semantic_audio=1 is blocked until Task 21/22 integrates exact payloads"
         )
     return ("src/port/saturn/sourceboot/source_audio_stub.c",)
 
@@ -89,12 +83,33 @@ def _animation_inputs(root: Path) -> tuple[str, ...]:
             *animations)
 
 
+def _source_closure_inputs(root: Path) -> tuple[str, ...]:
+    paths: set[str] = set()
+    for relative_root in SOURCE_CLOSURE_ROOTS:
+        directory = root / relative_root
+        if not directory.is_dir():
+            raise ValueError(f"source_hash closure root is missing: {relative_root}")
+        for path in directory.rglob("*"):
+            if path.is_file():
+                paths.add(path.relative_to(root).as_posix())
+    for relative in SOURCE_CLOSURE_FILES:
+        if not (root / relative).is_file():
+            raise ValueError(f"source_hash closure input is not a file: {relative}")
+        paths.add(relative)
+    return tuple(sorted(paths))
+
+
 def all_input_paths() -> tuple[str, ...]:
     """Return every possible canonical input so isolated tests can seed a repo."""
     paths = {path for values in STATIC_INPUTS.values() for path in values}
+    paths.update(SOURCE_CLOSURE_FILES)
+    paths.update((
+        "src/port/saturn/sourceboot/main.c",
+        "src/port/saturn/gfx/saturn_actor_instance.c",
+        SCENE_PAYLOAD, SCENE_DEPENDENCY_PAYLOAD, ACTOR_PAYLOAD, ANIMATION_PAYLOAD,
+    ))
     paths.update((_route_input(0), _route_input(1)))
     paths.update(_audio_inputs(0))
-    paths.update(_audio_inputs(1))
     return tuple(sorted(paths))
 
 
@@ -120,8 +135,15 @@ def _integer_config(config: Mapping[str, int]) -> dict[str, int]:
 
 def _artifact_inputs(root: Path, config: Mapping[str, int]) -> dict[str, tuple[str, ...]]:
     inputs = dict(STATIC_INPUTS)
-    inputs["animation_package_hash"] = _animation_inputs(root)
+    inputs["source_hash"] = _source_closure_inputs(root)
     inputs["route_artifact_hash"] = (_route_input(config["camera_route"]),)
+    # These are exact byte payloads currently consumed by the feature-off
+    # sourceboot comparator. Task 22 alone replaces them with final S64P roots
+    # and dependency packs. Missing payloads fail before label/build.
+    inputs["scene_package_hash"] = (SCENE_PAYLOAD,)
+    inputs["scene_dependency_set_hash"] = (SCENE_DEPENDENCY_PAYLOAD,)
+    inputs["actor_package_hash"] = (ACTOR_PAYLOAD,)
+    inputs["animation_package_hash"] = (ANIMATION_PAYLOAD,)
     inputs["audio_package_hash"] = _audio_inputs(config["features.semantic_audio"])
     return inputs
 

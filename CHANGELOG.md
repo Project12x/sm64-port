@@ -12,6 +12,12 @@
   identity or handwritten label. The descriptive identity label remains an
   emitted artifact, while the Yaul object directory now uses a validated short
   configuration-hash tag to stay within Windows path limits.
+  The bootstrap now seals a conservative full source/config/linker/tool closure
+  rather than a three-file whitelist. Its scene, dependency, actor, and
+  animation fields hash the exact generated feature-off comparator payloads;
+  semantic audio deliberately fails closed until a staged S64A/AUDIO.DAT and
+  sound-CPU image are integrated. This prevents provisional recipes from being
+  represented as final package bytes; Task 22 remains the final-package owner.
 
 - Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
   owner in sourceboot, replacing standalone actor observer/bank storage and

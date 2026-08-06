@@ -42,6 +42,8 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name) / "repo"
         self.root.mkdir()
+        for relative in bootstrap.SOURCE_CLOSURE_ROOTS:
+            (self.root / relative).mkdir(parents=True, exist_ok=True)
         for relative in bootstrap.all_input_paths():
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,7 +64,7 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         })
         identity.build_identity(spec)
 
-    def test_config_or_canonical_input_mutation_reseals_the_spec(self) -> None:
+    def test_config_source_closure_and_route_mutations_reseal_the_spec(self) -> None:
         baseline = config()
         bootstrap.write_spec(self.root, self.output, baseline)
         first = json.loads(self.output.read_text(encoding="utf-8"))
@@ -74,6 +76,23 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         self.assertEqual(second["polygon_tier"], 1)
         self.assertNotEqual(identity.build_identity(first).raw, identity.build_identity(second).raw)
 
+        for relative in (
+            "src/port/saturn/sourceboot/main.c",
+            "src/port/saturn/sourceboot/sourceboot-cart.x",
+            "src/port/saturn/gfx/saturn_actor_instance.c",
+            "tools/saturn/bootstrap_sourceboot_identity_spec.py",
+        ):
+            before = json.loads(self.output.read_text(encoding="utf-8"))
+            path = self.root / relative
+            path.write_text(path.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
+            bootstrap.write_spec(self.root, self.output, changed)
+            after = json.loads(self.output.read_text(encoding="utf-8"))
+            self.assertNotEqual(
+                before["artifacts"]["source_hash"]["sha256"],
+                after["artifacts"]["source_hash"]["sha256"],
+                relative,
+            )
+
         route = self.root / "tools/saturn/routes/bob_parity_v1.json"
         route.write_text("changed route\n", encoding="utf-8")
         bootstrap.write_spec(self.root, self.output, changed)
@@ -83,6 +102,30 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             third["artifacts"]["route_artifact_hash"]["sha256"],
         )
 
+    def test_exact_available_payload_mutations_reseal_named_package_fields(self) -> None:
+        baseline = config()
+        bootstrap.write_spec(self.root, self.output, baseline)
+        for field, relative in (
+            ("scene_package_hash", bootstrap.SCENE_PAYLOAD),
+            ("scene_dependency_set_hash", bootstrap.SCENE_DEPENDENCY_PAYLOAD),
+            ("actor_package_hash", bootstrap.ACTOR_PAYLOAD),
+            ("animation_package_hash", bootstrap.ANIMATION_PAYLOAD),
+        ):
+            before = json.loads(self.output.read_text(encoding="utf-8"))
+            path = self.root / relative
+            path.write_bytes(path.read_bytes() + b"payload-change")
+            bootstrap.write_spec(self.root, self.output, baseline)
+            after = json.loads(self.output.read_text(encoding="utf-8"))
+            self.assertNotEqual(
+                before["artifacts"][field]["sha256"],
+                after["artifacts"][field]["sha256"], field,
+            )
+
+        semantic = copy.deepcopy(baseline)
+        semantic["features.semantic_audio"] = 1
+        with self.assertRaisesRegex(ValueError, "staged S64A/AUDIO.DAT"):
+            bootstrap.write_spec(self.root, self.output, semantic)
+
     def test_rejects_invalid_input_before_reusing_a_stale_spec(self) -> None:
         valid = config()
         bootstrap.write_spec(self.root, self.output, valid)
@@ -91,6 +134,11 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         invalid["cart_mbit"] = 16
         with self.assertRaisesRegex(ValueError, "cart_mbit"):
             bootstrap.write_spec(self.root, self.output, invalid)
+        self.assertEqual(self.output.read_bytes(), preserved)
+
+        (self.root / bootstrap.ACTOR_PAYLOAD).unlink()
+        with self.assertRaisesRegex(ValueError, "actor_package_hash.*not a file"):
+            bootstrap.write_spec(self.root, self.output, valid)
         self.assertEqual(self.output.read_bytes(), preserved)
 
     def test_makefile_requires_a_successful_bootstrap_not_a_wildcard_fallback(self) -> None:
