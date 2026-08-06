@@ -9,6 +9,7 @@ or inventing HELD/LOD evidence that BOB does not currently provide.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -22,10 +23,17 @@ ROOT = Path(__file__).resolve().parents[2]
 RULES = ROOT / "tools/saturn/behavior_spawn_rules.json"
 DEFAULT_CLOSURE = ROOT / "build/saturn/packages/bob/1/closure.json"
 DEFAULT_REPORT = ROOT / "build/saturn/packages/bob/1/actors/actor-families.json"
+ORACLE = ROOT / "tools/saturn/fixtures/bob_articulated_capability_oracle_v1.json"
 
 CAPABILITY_CLASSES = (
     "ANIMATED", "SWITCH", "PARENTED", "HELD", "MODEL_MUTATION", "LOD",
 )
+ADMISSION_UNAVAILABLE = frozenset({"PARENTED", "HELD", "LOD"})
+ADMISSION_REASONS = {
+    "PARENTED": "unavailable:typed-parent-identity",
+    "HELD": "unavailable:no-source-evidence",
+    "LOD": "unavailable:no-source-evidence",
+}
 
 
 def _required(record: dict[str, object], candidate: dict[str, object],
@@ -78,6 +86,69 @@ def unresolved_records(
     })
 
 
+def admitted_records(
+    root: Path, closure: dict[str, object], report: dict[str, object],
+    class_name: str,
+) -> list[tuple[str, int]]:
+    """Return records eligible for runtime admission, not mere provenance."""
+    if class_name in ADMISSION_UNAVAILABLE:
+        return []
+    return [
+        (stable_id, family_id)
+        for stable_id, family_id, supported
+        in capability_records(root, closure, report, class_name)
+        if supported
+    ]
+
+
+def query_snapshot(
+    root: Path, closure: dict[str, object], report: dict[str, object],
+    class_name: str,
+) -> dict[str, object]:
+    records = capability_records(root, closure, report, class_name)
+    record_ids = sorted(
+        f"{stable_id}[{family_id:#010x}]"
+        for stable_id, family_id, _ in records
+    )
+    return {
+        "capability_bit": int(report["capability_bits"][class_name]),
+        "records": len(records),
+        "representatives": len({family_id for _, family_id, _ in records}),
+        "record_set_sha256": hashlib.sha256(
+            "\n".join(record_ids).encode("utf-8")
+        ).hexdigest(),
+        "unresolved": unresolved_records(root, closure, report, class_name),
+        "admitted": len(admitted_records(root, closure, report, class_name)),
+        "admission": ADMISSION_REASONS.get(class_name, "available"),
+    }
+
+
+def load_oracle() -> dict[str, object]:
+    oracle = json.loads(ORACLE.read_text(encoding="utf-8"))
+    if oracle.get("schema") != "sm64-saturn-articulated-capability-oracle-v1":
+        raise AssertionError("unexpected articulated capability oracle schema")
+    return oracle
+
+
+def assert_oracle(
+    root: Path, closure: dict[str, object], report: dict[str, object],
+) -> None:
+    oracle = load_oracle()
+    if oracle.get("closure_schema") != closure.get("schema"):
+        raise AssertionError("articulated oracle closure schema drift")
+    actual = {
+        class_name: query_snapshot(root, closure, report, class_name)
+        for class_name in CAPABILITY_CLASSES
+    }
+    expected = oracle.get("queries")
+    if actual != expected:
+        raise AssertionError(
+            "articulated capability oracle drift:\n"
+            f"expected={json.dumps(expected, sort_keys=True)}\n"
+            f"actual={json.dumps(actual, sort_keys=True)}"
+        )
+
+
 class BobArticulatedCapabilityTest(unittest.TestCase):
     def _real_report(self) -> tuple[dict[str, object], dict[str, object]]:
         closure = collect_scene_closure(ROOT, "bob", 1, RULES)
@@ -89,13 +160,14 @@ class BobArticulatedCapabilityTest(unittest.TestCase):
 
     def test_closure_queries_are_generic_and_source_derived(self) -> None:
         closure, report = self._real_report()
+        assert_oracle(ROOT, closure, report)
         for class_name in CAPABILITY_CLASSES:
             records = capability_records(ROOT, closure, report, class_name)
             unresolved = unresolved_records(ROOT, closure, report, class_name)
             for stable_id, family_id, supported in records:
                 if not supported:
                     self.assertNotEqual(family_id, 0, stable_id)
-            if class_name in {"ANIMATED", "SWITCH", "PARENTED", "MODEL_MUTATION"}:
+            if class_name in {"ANIMATED", "SWITCH", "MODEL_MUTATION"}:
                 self.assertGreater(len(records), 0, class_name)
             if unresolved:
                 families = {int(item["family_id"]): item for item in report["families"]}
@@ -105,8 +177,19 @@ class BobArticulatedCapabilityTest(unittest.TestCase):
                     for item in unresolved
                 ))
 
-        # Current BOB has no authoritative held-object or render-range facts;
-        # absence is a green, explicit zero-admission result, not a fallback.
+        # Spawn provenance is not a render-time parent identity.  Task 14's
+        # immutable snapshot currently publishes NO_PARENT, so parent/held/LOD
+        # are deliberately not runtime-admissible even when provenance exists.
+        self.assertEqual(len(capability_records(ROOT, closure, report, "PARENTED")), 52)
+        self.assertEqual(admitted_records(ROOT, closure, report, "PARENTED"), [])
+        self.assertIn(
+            ("bhvChainChompChainPart", 0xC8FF5F76, True),
+            capability_records(ROOT, closure, report, "PARENTED"),
+        )
+        self.assertIn(
+            ("bhvSpawnedStar", 0xAE675DF8, True),
+            capability_records(ROOT, closure, report, "PARENTED"),
+        )
         self.assertEqual(capability_records(ROOT, closure, report, "HELD"), [])
         self.assertEqual(capability_records(ROOT, closure, report, "LOD"), [])
 
@@ -128,9 +211,11 @@ class BobArticulatedCapabilityTest(unittest.TestCase):
         ])
 
 
-def main() -> None:
-    closure = json.loads(DEFAULT_CLOSURE.read_text(encoding="utf-8"))
-    report = json.loads(DEFAULT_REPORT.read_text(encoding="utf-8"))
+def main(closure_path: Path = DEFAULT_CLOSURE,
+         report_path: Path = DEFAULT_REPORT) -> None:
+    closure = json.loads(closure_path.read_text(encoding="utf-8"))
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert_oracle(ROOT, closure, report)
     print(
         "actor articulated capabilities: closure_records="
         f"{len(closure['records'])} family_representatives={len(report['families'])}"

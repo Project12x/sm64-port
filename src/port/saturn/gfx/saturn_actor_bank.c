@@ -738,7 +738,7 @@ bool sm64_saturn_actor_family_capability_mask_supported(
     uint32_t required_capability_mask)
 {
     return (required_capability_mask &
-            ~SM64_SATURN_ACTOR_CAPABILITY_MASK) == 0U;
+            ~SM64_SATURN_ACTOR_CAPABILITY_ADMISSION_MASK) == 0U;
 }
 
 int sm64_saturn_actor_family_bank_select(

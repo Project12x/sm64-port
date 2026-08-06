@@ -186,11 +186,16 @@ class BobActorCapabilityTest(unittest.TestCase):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--class", dest="class_name", choices=sorted(RUNTIME_FOR_CLASS),
+    parser.add_argument("--class", dest="class_name",
+                        choices=sorted((*RUNTIME_FOR_CLASS, "articulated")),
                         default="opaque")
     parser.add_argument("--closure", type=Path, default=DEFAULT_CLOSURE)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     args = parser.parse_args()
+    if args.class_name == "articulated":
+        from test_bob_articulated_capabilities import main as articulated_main
+        articulated_main(args.closure, args.report)
+        return
     closure = json.loads(args.closure.read_text(encoding="utf-8"))
     report = json.loads(args.report.read_text(encoding="utf-8"))
     unresolved = unresolved_family_ids(closure, report, args.class_name)

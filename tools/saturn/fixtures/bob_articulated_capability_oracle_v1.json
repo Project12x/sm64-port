@@ -1,0 +1,81 @@
+{
+  "schema": "sm64-saturn-articulated-capability-oracle-v1",
+  "closure_schema": "sm64-saturn-scene-closure-v1",
+  "queries": {
+    "ANIMATED": {
+      "capability_bit": 1,
+      "records": 8,
+      "representatives": 7,
+      "record_set_sha256": "55b82f84db109b86b5ef959fc501b0b6cea2f1facf84411efaacbad2123a8556",
+      "unresolved": [],
+      "admitted": 8,
+      "admission": "available"
+    },
+    "SWITCH": {
+      "capability_bit": 2,
+      "records": 33,
+      "representatives": 22,
+      "record_set_sha256": "619d17ad62d2e00a2b4d50d69fbd4810085c3fdebf9e617575789192880f41e5",
+      "unresolved": [
+        "bhvBreakBoxTriangle[0x08324fd7]",
+        "bhvBreakableBoxSmall[0xed463998]",
+        "bhvBreakableBox[0xb826b5f0]",
+        "bhvExclamationBox[0xcbaa8d1a]",
+        "bhvKoopaShellFlame[0x548d47cb]"
+      ],
+      "admitted": 28,
+      "admission": "available"
+    },
+    "PARENTED": {
+      "capability_bit": 64,
+      "records": 52,
+      "representatives": 34,
+      "record_set_sha256": "9eb9433aa62074db64e6c1bf3a9fbee2407113a985e865a7596afd6c67e22486",
+      "unresolved": [
+        "bhvBreakBoxTriangle[0x08324fd7]",
+        "bhvBreakableBoxSmall[0xed463998]",
+        "bhvCheckerboardPlatformSub[0xfc68327b]",
+        "bhvKoopaShellFlame[0x548d47cb]",
+        "bhvOpenableCageDoor[0x38d3445c]",
+        "bhvWaterBombShadow[0xc156e2f8]",
+        "bhvWaterBomb[0x8192ed5b]",
+        "bhvWoodenPost[0x3d85e20f]"
+      ],
+      "admitted": 0,
+      "admission": "unavailable:typed-parent-identity"
+    },
+    "HELD": {
+      "capability_bit": 128,
+      "records": 0,
+      "representatives": 0,
+      "record_set_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unresolved": [],
+      "admitted": 0,
+      "admission": "unavailable:no-source-evidence"
+    },
+    "MODEL_MUTATION": {
+      "capability_bit": 256,
+      "records": 34,
+      "representatives": 23,
+      "record_set_sha256": "73bf02c2329db0fc980014447e64efd926bae63c2e54aee8273b25d9dc02a27d",
+      "unresolved": [
+        "bhvBreakBoxTriangle[0x08324fd7]",
+        "bhvBreakableBoxSmall[0xed463998]",
+        "bhvBreakableBox[0xb826b5f0]",
+        "bhvExclamationBox[0xcbaa8d1a]",
+        "bhvKoopaShellFlame[0x548d47cb]"
+      ],
+      "admitted": 29,
+      "admission": "available"
+    },
+    "LOD": {
+      "capability_bit": 1024,
+      "records": 0,
+      "representatives": 0,
+      "record_set_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unresolved": [],
+      "admitted": 0,
+      "admission": "unavailable:no-source-evidence"
+    }
+  }
+}
