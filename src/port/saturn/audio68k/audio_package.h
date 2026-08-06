@@ -9,7 +9,7 @@
 /* MC68000 side observes only scalar package identities and bounded spans. */
 typedef struct sm64_saturn_audio_package_token {
     uint32_t generation;
-    uint32_t source_crc;
+    uint8_t source_sha256[32];
 } sm64_saturn_audio_package_token_t;
 
 bool sm64_saturn_audio68k_package_accept(

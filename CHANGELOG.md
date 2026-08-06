@@ -12,6 +12,8 @@
   signed PCM polarity and source metadata, rejects empty sequence inputs, and
   emits checkout-portable sample paths. These checks keep generated audio
   artifacts deterministic while leaving playback/transport integration open.
+  The MC68000 header and implementation now share the same full 32-byte source
+  digest field, so target compilation cannot silently validate a stale CRC ABI.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
