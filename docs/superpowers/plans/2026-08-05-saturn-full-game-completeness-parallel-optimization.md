@@ -72,6 +72,7 @@
 - 2026-08-06 actor-capability evidence acceptance: `0b65d1d1` records the missing serial `verify-actor-family-bank` PASS and exact categories: opaque 8 closure records/7 representatives (shared checkerboard `0xfc68327b`), rigid/static +5 representatives/+5 records, and non-rigid `bhvBreakBoxTriangle[0x08324fd7]`; total 13 unsupported representatives/reasons across 14 closure records. This is evidence reconciliation only; typed platform/collectible/surface fields and production actor cutover remain open.
 - 2026-08-06 actor source-pool repair acceptance: `c1e8e73e` separates the source-attested 240-slot object identity domain from the compact 64-entry snapshot/queue domain. `seen/live/incarnation` sidecars cover slots 0..239; compact count/capacity remains 64, the 65th observation latches overflow, and the fixed 65,536-byte arena derives a 2,718-record output ceiling. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This is host/source-complete only; sourceboot generation, package reservation, target P2, production drain, Ymir/manual, and FPS remain open.
 - 2026-08-06 generation-wrap design correction: the sourceboot observer, capture, profile, camera-bypass, idle-probe, and scheduler handoff must consume one local `source_tick_generation` returned by `sm64_saturn_frame_pipeline_next_generation()`. The existing frame-pipeline helper already defines `UINT32_MAX -> 1`; raw `sourceboot_sim_tick_count + 1U` is not an independent authority and must be mutation-rejected.
+- 2026-08-06 actor-bank lifecycle preflight: pre-publication failures require an exact producer-owned recycle keyed by `(bank index, nonzero generation, expected WRITING|READY state)`. It must clear the selected payload/count/generation through the P2 alias, fence before FREE, preserve the other bank, reject stale/wrong/double dispositions and all QUARANTINED/RENDERING/COMPLETE/FREE states, and never roll back `last_published_generation`. Post-acquire cleanup remains owned by the Task 16 handoff.
 
 ## Prior art and reuse mode
 
@@ -927,9 +928,10 @@ acquire failure and preserve Task 16 terminal/consume/retire ownership. Never
 permit arbitrary `QUARANTINED -> FREE`, generation-wide ambiguous cleanup, or
 release of live outputs.
 
-- [ ] Preflight the landed handoff and bank state machine; record exact
+- [x] Preflight the landed handoff and bank state machine; record exact
   generation/index ownership, retry, and stale/double-disposition cases before
-  implementation.
+  implementation. `task-14-pre-acquire-preflight-report.md` confirms both-bank
+  stranding and defines the exact WRITING/READY recycle contract.
 - [ ] RED must show both physical banks can be stranded by the current failure
   paths and that a guessed broad quarantine-to-free mutation is rejected.
 - [ ] Design an exact `abort_write`/pre-acquire discard contract with cleared
