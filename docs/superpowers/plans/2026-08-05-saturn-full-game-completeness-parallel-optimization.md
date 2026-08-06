@@ -166,7 +166,7 @@ all complete.
 - [ ] Task 18 — active/source-incomplete — generic capability slice `a319583c`, repair `929d100f`, evidence `0b65d1d1`; serial actor-family/capability/queue, Python capability 3/3, and generic actor-bank 4/4 gates pass. S64F/schema v2 binds 56-byte records; trusted v2/stale-v1 header digests, resealed mutation, exact oracle, analyzer-only hints, and family-bank evidence breakdown are covered. BOB remains 47 families/86 closure records, 13 unsupported representatives/reasons across 14 records, `complete_closure=false`; typed platform/collectible/surface evidence and production actor cutover remain open. Evidence rereview is SPEC/QUALITY PASS, C0/I0/M0; no full BOB/target/Ymir/manual/FPS claim.
 - [x] Task 19 — bounded slice source-complete; broader runtime source-incomplete — repair `2222c375`; scoped rereview SPEC/QUALITY PASS, C0/I0/M0. Exact six-query oracle, resealed stored-mask mutation, unavailable PARENTED/HELD/LOD masks, standardized target, and the full bounded serial wave are green. Runtime pose/queue/lane/parent/held/model/despawn/reward/stale-parent proof remains deferred until Task 14 typed immutable state exists; no production-capability or target/FPS claim is made.
 - [x] Task 20 — bounded slice source-complete; broader production closure source-incomplete — implementation `1c89a2bb`, repairs `f161491a`, `e61d3e8a`; scoped rereview SPEC/QUALITY PASS, C0/I0/M0. Bank identity, shared direct-descriptor validation, exact oracle, current generation/package lowering validation, 68-byte/24-byte ABI evidence, VDP1 mapping, stable 64-bin painter order, and serialized actor regressions are green. Nine geo-blocked records, production observer capture, final closure, cross-stream merge, target/Ymir replay, manual, and FPS remain open.
-- [x] Task 21 — Wave 0/1 bounded slice source-complete; broader Task21 source-incomplete — implementation `7a1bb170`, repair `1e56ce5f`; scoped rereview SPEC/QUALITY PASS, C0/I0/M0. The accepted slice uses SNDOFF→bounded stop wait→512-KiB selection/readback, soundtest invokes/verifies the mode callback, and persistent raw OREG31 diagnostics have a host seam covering `0x00`/`0xFF` without boolean interpretation. The serialized four-target wave is green. Real seq00/AUDIO.DAT/S64P inputs, completion/identity production linkage, sourceboot feature-on, target, Ymir, manual, and audible claims remain blocked.
+- [ ] Task 21 — Wave 2 active/source-incomplete; Wave 0/1 bounded slice source-complete — Wave 0/1 implementation `7a1bb170`, repair `1e56ce5f`, scoped rereview SPEC/QUALITY PASS, C0/I0/M0. Wave 2 is limited to host/ABI completion acknowledgments, ticket correlation, bounded status/generation fields, and RED coverage; it must not claim a live MC68000 producer or audible playback. Real seq00/AUDIO.DAT/S64P inputs, sourceboot feature-on, production MC68000 linkage, target, Ymir, manual, and audible claims remain blocked.
 - [ ] Task 22 — preflight complete; implementation not started — prove complete BOB visual/dynamic closure. Current closure is 86 records/47 families with unsupported geo/effect/runtime facts, only a provisional empty-dependency S64P, no final linker/replay tooling, and Mario-specific renderer cutover. No final root, target, Ymir, manual, or FPS claim is made.
 - [ ] Task 23 — preflight complete; implementation not started — prove audible BOB music/SFX semantic closure. Current blockers are the missing final root, real seq00/full AUDIO.DAT, strong sourceboot event bridge, production MC68000 semantic consumer, and completion/identity status channel. No target, Ymir, manual-audio, or audible claim is made.
 - [ ] Task 24 — reduce command, Gouraud, sort, and repeated-memory work
@@ -982,6 +982,21 @@ Wave 0/1 bounded status:
   DLL/MSYS preflight.
 - [ ] Sourceboot service/package/residency/completion production integration,
   target/Ymir/hardware/manual/audible evidence remain later waves.
+
+Wave 2 completion/ack ABI (active, host-only):
+
+- [ ] RED tests for reserved-header offsets, 32-entry completion-ring/two-lap
+  arithmetic, pointer-free big-endian status, ticket ring/opcode/lap
+  correlation, control-ack priority, stale/zero/wrap generation, and
+  ACCEPTED versus FINISHED/PREPARED/COMMITTED semantics.
+- [ ] Implement the bounded completion-ring reader/ticket ABI and full 32-bit
+  active/prepared generation status without changing PLAY_REFRESH field
+  meanings. The 16-bit PLAY_REFRESH generation remains a non-wrapping
+  per-boot epoch until a separately versioned payload extension is reviewed;
+  silent truncation is forbidden.
+- [ ] Run the focused serial ABI/transport/MC68000-model host gates and an
+  independent review. No production completion producer, source service,
+  package commit, target/Ymir, or audible evidence is claimed in this wave.
 
 - [ ] RED cases: feature-label drift, direct use of Yaul's warned `smpc_smc_sndoff_call`/`smpc_smc_sndon_call` outside the project wrapper, wrong SNDOFF/copy/SNDON ordering, missing barrier or bounded wait, READY without heartbeat advance, feature-on boot without 512-KiB mode, feature-on scene transition attempting a complete sound-RAM clear, writes into driver/mailbox/active-generation spans, missing/short CD read, package/hash/version mismatch, oversized BOB bundle, stale prepare/commit generation, active-block eviction, driver not READY, heartbeat stall, queue saturation, and duplicate public symbol definitions.
 - [ ] Implement one project-owned sound-CPU wrapper around the pinned Yaul generic SMPC command boundary. Pre-stage CD data in SH-2-visible memory before SNDOFF; on cold boot or explicit recovery only, stop and wait, select 512-KiB mode, clear validated owned regions, copy/verify driver and initial package, initialize the mailbox, publish with an explicit compiler/bus barrier, restart, then wait within a fixed budget for READY plus heartbeat advance. No other production file may issue sound-CPU commands directly.
