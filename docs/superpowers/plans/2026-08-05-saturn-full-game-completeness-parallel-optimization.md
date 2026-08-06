@@ -1126,9 +1126,16 @@ license, renderer, or target-performance result.
   so a mutation of the transitive generated header leaves identity unchanged.
   No current-head CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed;
   do not launch an older artifact.
-- [ ] Seal the transitive generated text header (and test missing/mutated
-  actor-bank-C plus transitive-header cases), then independently rereview before
-  any clean linked image is considered launchable.
+- [x] Seal the transitive generated text header in `46162df5`: the post-assets
+  closure recursively follows quoted includes under `build/us_pc` and fails
+  closed for missing children; `text_menu_strings.h` mutation/absence and
+  feature-on `mario_actor_bank.c` mutation/absence are covered. Bootstrap 7/7,
+  generator 9/9, source identity 5/5, and the DLL-preflighted expanded
+  top-level assets→seal dry-run pass.
+- [ ] Independently rereview `f9611fc0..46162df5`, then run a clean serialized
+  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
+  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
+  pass; do not launch an older artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
