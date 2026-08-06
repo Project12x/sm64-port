@@ -150,7 +150,8 @@ static void test_bounded_flow_and_output_guards(void)
         assert(sm64_saturn_sequence_vm_tick(&vm, zero_loop, sizeof(zero_loop),
                                             events, 8U, &count));
     }
-    assert(vm.halted != 0U && ticks > 250U && vm.faulted == 0U);
+    /* One setup tick plus one tick per loop iteration: zero means 256. */
+    assert(vm.halted != 0U && ticks == 257U && vm.faulted == 0U);
 }
 
 static void test_branch_polarity_and_channel_state(void)
