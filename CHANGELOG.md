@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Extended the iterative geo runtime seam with depth-first child/sibling
+  scheduling, deferred children-first dispatch, explicit leave actions, and a
+  callback-driven host trace. The new contract proves event order and state
+  tokens before source handlers are moved; the production recursive policy
+  remains red until that conversion is complete.
+
 - Added the production-oriented geo-walk runtime seam with explicit node and
   sibling cursors, bounded overflow latching, and a host C contract. It is
   linked into sourceboot alongside the LWRAM owner but is not yet selected by

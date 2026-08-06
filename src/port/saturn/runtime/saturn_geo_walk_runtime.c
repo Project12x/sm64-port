@@ -77,3 +77,70 @@ bool sm64_saturn_geo_walk_runtime_next(
     *event = walk->frames[--walk->depth];
     return true;
 }
+
+bool sm64_saturn_geo_walk_runtime_run(
+    sm64_saturn_geo_walk_runtime_t *walk,
+    uintptr_t root,
+    const sm64_saturn_geo_walk_runtime_ops_t *ops,
+    void *user)
+{
+    sm64_saturn_geo_walk_runtime_frame_t event;
+
+    if (walk == NULL || ops == NULL || ops->enter == NULL ||
+        ops->dispatch == NULL || ops->leave == NULL) {
+        return false;
+    }
+    if (root == 0U) return true;
+    if (!push(walk, root, 0U, SM64_SATURN_GEO_WALK_RUNTIME_ENTER,
+              0U, 0U, 0U)) return false;
+
+    while (sm64_saturn_geo_walk_runtime_next(walk, &event)) {
+        sm64_saturn_geo_walk_runtime_enter_t result = { 0 };
+        if (event.phase == SM64_SATURN_GEO_WALK_RUNTIME_ENTER) {
+            if (!ops->enter(event.node, &result, user)) return false;
+            if (!result.admitted) {
+                if (result.sibling != 0U &&
+                    !push(walk, result.sibling, 0U,
+                          SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U, 0U, 0U)) {
+                    return false;
+                }
+                continue;
+            }
+            /* The sibling continuation is below the entire child subtree. */
+            if (result.sibling != 0U &&
+                !push(walk, result.sibling, 0U,
+                      SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U, 0U, 0U)) {
+                return false;
+            }
+            if (result.leave_required &&
+                !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
+                      result.leave_action, result.matrix_depth,
+                      result.context_token)) {
+                return false;
+            }
+            if (result.defer_dispatch && result.child != 0U &&
+                !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH,
+                      0U, 0U, result.context_token)) {
+                return false;
+            }
+            if (result.child != 0U &&
+                !push(walk, result.child, 0U,
+                      SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
+                      result.matrix_depth, result.context_token)) {
+                return false;
+            }
+            if (result.child == 0U && result.defer_dispatch) {
+                ops->dispatch(event.node, user);
+            }
+        } else if (event.phase == SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH) {
+            ops->dispatch(event.node, user);
+        } else if (event.phase == SM64_SATURN_GEO_WALK_RUNTIME_LEAVE) {
+            ops->leave(event.node, event.leave_action, event.matrix_depth,
+                       event.context_token, user);
+        } else {
+            return false;
+        }
+        if (walk->fail_reason != SM64_SATURN_GEO_WALK_RUNTIME_NONE) return false;
+    }
+    return walk->fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_NONE;
+}
