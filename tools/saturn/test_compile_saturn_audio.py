@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import aifc
 import tempfile
 from pathlib import Path
 
@@ -27,6 +28,9 @@ def test_aiff_and_catalog() -> None:
     sample = next((ROOT / "sound/samples").glob("**/*.aiff"))
     parsed = parse_aiff(sample)
     assert parsed.frames > 0 and len(parsed.pcm8) == parsed.frames
+    with aifc.open(str(sample), "rb") as source:
+        first = int.from_bytes(source.readframes(1), "big", signed=True)
+    assert parsed.pcm8[0] == ((first >> 8) & 0xFF)
     with tempfile.TemporaryDirectory() as temp:
         out = Path(temp) / "AUDIO.DAT"
         manifest = Path(temp) / "audio_manifest.json"
@@ -35,6 +39,11 @@ def test_aiff_and_catalog() -> None:
         assert result["sequence_count"] == 35
         assert result["bank_count"] == 38
         assert result["sample_count"] == 219
+        assert any(item["path"] == "sound/sound_data.c"
+                   for item in result["source_inventory"])
+        assert all(sample["loop_source"] == "bank-metadata" and
+                   sample["loop_start"] is None and sample["tuning"] is None
+                   for sample in result["samples"])
         assert result["package_size"] == out.stat().st_size
         assert all(x["resident_bytes"] <= RESIDENT_LIMIT for x in result["closures"].values())
         raw = out.read_bytes()

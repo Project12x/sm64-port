@@ -73,10 +73,10 @@ def parse_aiff(path: Path) -> Sample:
         raise AudioPackageError(f"{path}: truncated PCM payload")
     pcm8 = bytearray(frames)
     for index in range(frames):
-        # AIFF is big-endian signed PCM.  Preserve the source waveform while
-        # making the Saturn driver's unsigned PCM8 contract explicit.
+        # AIFF is big-endian signed PCM.  Preserve the signed PCM8 polarity
+        # consumed by the SCSP driver; no DC-bias or unsigned reinterpretation.
         sample = int.from_bytes(raw[index * 2:index * 2 + 2], "big", signed=True)
-        pcm8[index] = (sample + 32768) >> 8
+        pcm8[index] = (sample >> 8) & 0xFF
     source = path.as_posix()
     # Basenames repeat across extracted sample banks (00..1C are common), so
     # the stable identity includes the source bank directory.
@@ -86,12 +86,14 @@ def parse_aiff(path: Path) -> Sample:
 
 def source_inventory(root: Path) -> tuple[list[Path], str]:
     sound = root / "sound"
-    required = [sound / "sequences.json"]
+    required = [sound / "sequences.json", sound / "sound_data.c"]
     required += sorted((sound / "sound_banks").glob("*.json"))
     required += sorted((sound / "sequences" / "us").glob("*.m64"))
     required += sorted((sound / "samples").glob("**/*.aiff"))
     if not (sound / "sequences.json").is_file():
         raise AudioPackageError("missing sound/sequences.json (user audio inputs required)")
+    if not (sound / "sound_data.c").is_file():
+        raise AudioPackageError("missing sound/sound_data.c for generated sequence 00")
     banks = sorted((sound / "sound_banks").glob("*.json"))
     samples = sorted((sound / "samples").glob("**/*.aiff"))
     if len(banks) != 38 or len(samples) != 219:
@@ -119,11 +121,15 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
         # its bank/control mapping is still captured, but it has no .m64 file.
         if path is None and seq_id != 0:
             raise AudioPackageError(f"missing extracted sequence asset: {name}.m64")
-        payload = b"" if path is None else path.read_bytes()
+        generated_source = root / "sound/sound_data.c"
+        payload = generated_source.read_bytes() if path is None else path.read_bytes()
         if path is not None and not payload:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
+        if path is None and seq_id == 0 and not generated_source.is_file():
+            raise AudioPackageError("missing sound/sound_data.c for generated sequence 00")
+        source_path = (generated_source if path is None else path)
         entries.append({"id": seq_id, "name": name, "banks": banks,
-                        "source": None if path is None else path.relative_to(root).as_posix(),
+                        "source": source_path.relative_to(root).as_posix(),
                         "bytes": len(payload), "sha256": _sha(payload),
                         "control_flow": "source-m64" if path else "source-generated"})
     if len(entries) != 35 or [x["id"] for x in entries] != list(range(35)):
@@ -200,9 +206,15 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
     resident_bytes = _align(pcm_bytes) + _align(metadata_bytes)
     if resident_bytes > RESIDENT_LIMIT:
         raise AudioPackageError(f"{name} resident closure exceeds {RESIDENT_LIMIT}: {resident_bytes}")
+    mappings = [mapping for mapping in _sfx_mappings(selected)]
+    identity = _canonical({"scene": name, "generation": 1,
+                           "sequence_ids": sequence_ids, "bank_names": bank_names,
+                           "sample_ids": [sample.stable_id for sample in selected_samples],
+                           "sfx_mappings": mappings})
     return {"scene": name, "generation": 1, "sequence_ids": sequence_ids,
             "bank_names": bank_names,
             "sample_ids": [sample.stable_id for sample in selected_samples],
+            "sfx_mappings": mappings, "payload_sha256": _sha(identity),
             "resident_bytes": resident_bytes, "resident_limit": RESIDENT_LIMIT,
             "active_generation_eviction": "rejected", "post_boot_sound_ram_clear": "rejected"}
 
@@ -214,8 +226,8 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
     samples = [parse_aiff(path) for path in sorted((root / "sound/samples").glob("**/*.aiff"))]
     sample_records = [{"id": s.stable_id, "source": s.source, "sha256": s.source_sha256,
                        "rate": s.rate, "frames": s.frames, "pcm8_bytes": len(s.pcm8),
-                       "loop_start": 0, "loop_end": s.frames, "root_key": 60,
-                       "tuning": 1.0} for s in samples]
+                       "loop_start": None, "loop_end": None, "root_key": None,
+                       "tuning": None, "loop_source": "bank-metadata"} for s in samples]
     sfx_mappings = _sfx_mappings(banks)
     closures = {"bob": _closure("bob", [3], sequences, banks, samples),
                 "wf": _closure("wf", [3], sequences, banks, samples)}
@@ -258,13 +270,32 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
               "version": VERSION, "package_size": len(package), "package_sha256": digest.hex(),
               "source_sha256": source_sha, "sequence_count": len(sequences),
               "bank_count": len(banks), "sample_count": len(samples), "chunk_count": chunk_count,
+              "samples": sample_records,
               "sfx_mappings": sfx_mappings,
+              "s64p_audio_dependencies": [
+                  {"scene": scene, "generation": closures[scene]["generation"],
+                   "stable_id": f"audio/{scene}",
+                   "content_sha256": closures[scene]["payload_sha256"]}
+                  for scene in ("bob", "wf")],
               "source_inventory": [{"path": p.relative_to(root).as_posix(), "sha256": _sha(p.read_bytes())} for p in files],
               "closures": closures}
     if manifest_output:
         manifest_output.parent.mkdir(parents=True, exist_ok=True)
         manifest_output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return result
+
+
+def validate_audio_dependency(manifest: dict[str, object], dependency: dict[str, object]) -> bool:
+    """Validate an S64P AUDIO_DEPENDENCIES binding against this catalog."""
+    if not isinstance(manifest, dict) or not isinstance(dependency, dict):
+        return False
+    for candidate in manifest.get("s64p_audio_dependencies", []):
+        if (candidate.get("scene") == dependency.get("scene") and
+                candidate.get("generation") == dependency.get("generation") and
+                candidate.get("stable_id") == dependency.get("stable_id") and
+                candidate.get("content_sha256") == dependency.get("content_sha256")):
+            return True
+    return False
 
 
 def main() -> None:
