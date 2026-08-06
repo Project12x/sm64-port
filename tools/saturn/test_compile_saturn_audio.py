@@ -10,7 +10,8 @@ import tempfile
 from pathlib import Path
 
 from saturn_audio_package import (AudioPackageError, CHUNK_ALIGNMENT, HEADER,
-                                  RESIDENT_LIMIT, compile_catalog, parse_aiff)
+                                  RESIDENT_LIMIT, compile_catalog, parse_aiff,
+                                  validate_audio_dependency)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -62,6 +63,11 @@ def test_source_fail_closed() -> None:
         sample = next((root / "sound/samples").glob("**/*.aiff"))
         sample.unlink()
         expect_failure(lambda: compile_catalog(root, Path(temp) / "x"), "stale sample")
+        shutil.copy(ROOT / "sound/samples" / "instruments/00.aiff", sample)
+        sequence = root / "sound/sequences/us/03_level_grass.m64"
+        sequence.write_bytes(b"")
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "x"),
+                       "empty sequence")
 
 
 def test_alignment_hash_drift_and_duplicate() -> None:
@@ -94,6 +100,14 @@ def test_residency_safety_contract() -> None:
         root = Path(temp) / "repo"
         shutil.copytree(ROOT / "sound", root / "sound")
         result = compile_catalog(root, Path(temp) / "AUDIO.DAT")
+        dependencies = result["s64p_audio_dependencies"]
+        assert dependencies and all(validate_audio_dependency(result, item)
+                                    for item in dependencies)
+        tampered = dict(dependencies[0])
+        tampered["content_sha256"] = "0" * 64
+        assert not validate_audio_dependency(result, tampered)
+        assert all(not Path(sample["source"]).is_absolute()
+                   for sample in result["samples"])
         for closure in result["closures"].values():
             assert closure["generation"] == 1
             assert closure["active_generation_eviction"] == "rejected"

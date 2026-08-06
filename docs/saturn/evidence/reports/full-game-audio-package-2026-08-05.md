@@ -14,17 +14,19 @@ The serial DLL-preflight gate generated untracked outputs under
 
 | Output | Result |
 | --- | ---: |
-| `AUDIO.DAT` | 4,504,158 bytes |
+| `AUDIO.DAT` | 4,498,411 bytes |
 | catalog format | S64A v1, 77 aligned chunks |
 | source inventory | 35 sequences / 38 banks / 219 AIFFs |
-| source SHA-256 | `89079e7bcf934b584cfb1f1f008fe38200344f425519bf625174ee0298d00203` |
-| package SHA-256 (zeroed package-digest field) | `18cb777c668e72fcfe4e6a4ba015dfcd03057e94e68b7532692bc73a86b69823` |
+| source SHA-256 | `00e0871f6ef78fb657666335472034d1a67c09086334ed3ee5c482d81c9efb33` |
+| package SHA-256 (zeroed package-digest field) | `42ce539739263a88d11c8dd1a07580e110114d27b16110faca1ab4bfbaba72a2` |
 | BOB closure | bank 22, 253,952 / 491,520 bytes |
 | WF closure | bank 22, 253,952 / 491,520 bytes |
 
 `audio_manifest.json`, `bob_audio_closure.json`, and `wf_audio_closure.json`
 are generated and intentionally untracked. The catalog rejects missing/stale
 inputs and changes its source/package hashes when an input byte changes.
+Manifest sample paths are repository-relative so the same source tree produces
+identical metadata across checkout locations.
 
 ## Residency contract
 

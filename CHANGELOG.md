@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Hardened the Saturn audio package boundary after ABI review: chunk and
+  package SHA-256 values are recomputed by the C residency validator, malformed
+  replacement generations fail closed without mutating the active plan, and
+  the MC68000 token retains the complete source digest. The catalog binds
+  BOB/WF closures through content-addressed S64P dependency records, preserves
+  signed PCM polarity and source metadata, rejects empty sequence inputs, and
+  emits checkout-portable sample paths. These checks keep generated audio
+  artifacts deterministic while leaving playback/transport integration open.
+
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
   records source/package hashes, emits aligned big-endian AUDIO.DAT chunks and

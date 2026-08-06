@@ -223,7 +223,15 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
     files, source_sha = source_inventory(root)
     sequences = _load_sequences(root)
     banks = _load_banks(root)
-    samples = [parse_aiff(path) for path in sorted((root / "sound/samples").glob("**/*.aiff"))]
+    # Keep generated manifests checkout-portable.  parse_aiff is intentionally
+    # usable on an arbitrary path for the small unit test, but package records
+    # must never embed an absolute developer checkout path.
+    samples = []
+    for path in sorted((root / "sound/samples").glob("**/*.aiff")):
+        parsed = parse_aiff(path)
+        samples.append(Sample(parsed.stable_id, path.relative_to(root).as_posix(),
+                              parsed.source_sha256, parsed.rate, parsed.frames,
+                              parsed.pcm8))
     sample_records = [{"id": s.stable_id, "source": s.source, "sha256": s.source_sha256,
                        "rate": s.rate, "frames": s.frames, "pcm8_bytes": len(s.pcm8),
                        "loop_start": None, "loop_end": None, "root_key": None,
