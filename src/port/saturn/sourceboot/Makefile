@@ -299,6 +299,7 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gfx/saturn_vdp2_frame.c \
   $(ROOT)/src/port/saturn/gfx/saturn_terrain_command_template.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_scene_admission.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_terrain_clip.c \
   $(ROOT)/src/port/saturn/gpl/slavedriver_terrain_worker.c \
   $(ROOT)/src/port/saturn/gfx/saturn_ir_transform.c \

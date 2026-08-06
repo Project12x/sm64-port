@@ -17,6 +17,10 @@
   view; frame-owned orientation overrides static metadata, portal endpoints
   must agree in both adjacency lists, and queued nodes are marked before
   enqueue to keep bounded traversal deterministic.
+  The sourceboot link list now includes the admission implementation, and the
+  generated BOB header emits the generic admission node/ref section consumed
+  by render prep; the 1,183-node source BSP remains available to the fallback
+  painter without forcing the generic bounded worklist to truncate it.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed

@@ -117,6 +117,7 @@ def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
             "textured": 1 if tile else 0,
         })
     clusters = build_render_clusters(mesh, manifest)
+    admission = build_scene_admission_metadata(clusters, bsp)
     cluster_position_refs: list[int] = []
     for cluster in clusters:
         firsts: list[int] = []
@@ -178,6 +179,8 @@ def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
         "/* bob_bsp.h owns the node-span arrays; identity must match exactly. */",
         f"#define SM64_SATURN_BOB_SCENE_NODE_SPAN_COUNT {node_span_count}U",
         f"#define SM64_SATURN_BOB_SCENE_PRIMITIVE_REF_COUNT {primitive_ref_count}U",
+        f"#define SM64_SATURN_BOB_ADMISSION_NODE_COUNT {len(admission['nodes'])}U",
+        f"#define SM64_SATURN_BOB_ADMISSION_CLUSTER_REF_COUNT {len(admission['cluster_refs'])}U",
         f"#define SM64_SATURN_BOB_SCENE_BSP_CONTENT_ID 0x{digest[:16]}ULL",
         f"#define SM64_SATURN_BOB_SCENE_BSP_CONTENT_SHA256 \"{digest}\"",
         "typedef struct sm64_saturn_bob_primitive {",
@@ -218,6 +221,21 @@ def emit_scene(mesh: dict[str, object], manifest: dict[str, object],
             *cluster["position_ref_first"], *cluster["position_ref_count"],
             cluster["material_partition"], cluster["source_ordinal"],
             1 if cluster["mandatory"] else 0))
+    lines += [
+        "};",
+        "static const sm64_saturn_scene_admission_node_t sm64_saturn_bob_scene_admission_nodes[SM64_SATURN_BOB_ADMISSION_NODE_COUNT] = {",
+    ]
+    for node in admission["nodes"]:
+        lines.append("    {{%s}, {%s}, %dU, %dU, %dU, %dU, 0U}," % (
+            ", ".join(str(value * 65536) for value in node["bounds_min"]),
+            ", ".join(str(value * 65536) for value in node["bounds_max"]),
+            node["cluster_ref_first"], node["cluster_ref_count"],
+            node["portal_ref_first"], node["portal_ref_count"]))
+    lines += [
+        "};",
+        "static const uint16_t sm64_saturn_bob_scene_admission_cluster_refs[SM64_SATURN_BOB_ADMISSION_CLUSTER_REF_COUNT] = {",
+    ]
+    lines.extend(c_array(admission["cluster_refs"], width=16))
     lines += [
         "};",
         "/* Compact, sorted unique position references for near/mid/far. The",

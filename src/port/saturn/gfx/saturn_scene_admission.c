@@ -3,6 +3,10 @@
 #include <limits.h>
 #include <string.h>
 
+static uint8_t s_admission_visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+static uint8_t s_admission_queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+static uint16_t s_admission_queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+
 static int32_t floor_q16(int32_t value)
 {
     if (value >= 0) return value >> 16;
@@ -158,6 +162,22 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
             stats->malformed_metadata = 1U;
             return false;
         }
+        for (uint16_t ref = 0U; ref < node->cluster_ref_count; ref++) {
+            const uint16_t cluster_index = scene->cluster_refs[
+                node->cluster_ref_first + ref];
+            if (cluster_index >= scene->cluster_count) {
+                stats->malformed_metadata = 1U;
+                return false;
+            }
+            const sm64_saturn_render_cluster_t *cluster =
+                &scene->clusters[cluster_index];
+            for (uint8_t axis = 0U; axis < 3U; axis++)
+                if (cluster->bounds_min_q16[axis] < node->bounds_min_q16[axis] ||
+                    cluster->bounds_max_q16[axis] > node->bounds_max_q16[axis]) {
+                    stats->malformed_metadata = 1U;
+                    return false;
+                }
+        }
     }
     for (index = 0U; index < scene->cluster_ref_count; index++)
         if (scene->cluster_refs[index] >= scene->cluster_count) {
@@ -216,9 +236,6 @@ bool sm64_saturn_scene_admit(
     sm64_saturn_scene_admission_stats_t *stats)
 {
     sm64_saturn_ztreme_frustum_t frustum;
-    uint8_t visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
-    uint16_t queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
-    uint8_t queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
     uint16_t queue_head = 0U, queue_tail = 0U;
     uint16_t index;
     bool success = true;
@@ -237,20 +254,20 @@ bool sm64_saturn_scene_admit(
         return false;
     }
     if (!metadata_valid(scene, stats)) return false;
-    memset(visited, 0, sizeof(visited));
-    memset(queued, 0, sizeof(queued));
+    memset(s_admission_visited, 0, sizeof(s_admission_visited));
+    memset(s_admission_queued, 0, sizeof(s_admission_queued));
     frustum = admission_frustum(scene, view);
-    queue[queue_tail++] = scene->root_node;
-    queued[scene->root_node] = 1U;
+    s_admission_queue[queue_tail++] = scene->root_node;
+    s_admission_queued[scene->root_node] = 1U;
     while (queue_head < queue_tail) {
-        const uint16_t node_index = queue[queue_head++];
+        const uint16_t node_index = s_admission_queue[queue_head++];
         const sm64_saturn_scene_admission_node_t *node;
         sm64_saturn_ztreme_frustum_result_t node_state;
-        if (visited[node_index] != 0U) {
+        if (s_admission_visited[node_index] != 0U) {
             stats->cycle_edges++;
             continue;
         }
-        visited[node_index] = 1U;
+        s_admission_visited[node_index] = 1U;
         node = &scene->nodes[node_index];
         stats->nodes_tested++;
         node_state = test_bounds(&frustum, node->bounds_min_q16,
@@ -315,14 +332,15 @@ bool sm64_saturn_scene_admit(
             }
             destination = portal->node_a == node_index ? portal->node_b :
                          portal->node_a;
-            if (visited[destination] != 0U || queued[destination] != 0U) {
+            if (s_admission_visited[destination] != 0U ||
+                s_admission_queued[destination] != 0U) {
                 stats->cycle_edges++;
             } else if (queue_tail >= SM64_SATURN_SCENE_ADMISSION_MAX_NODES) {
                 stats->output_exhausted = 1U;
                 success = false;
             } else {
-                queue[queue_tail++] = destination;
-                queued[destination] = 1U;
+                s_admission_queue[queue_tail++] = destination;
+                s_admission_queued[destination] = 1U;
             }
         }
     }
