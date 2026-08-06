@@ -136,13 +136,22 @@ static void test_bank_masks_continuous_freshness_stop_and_getter(void)
     uint8_t sound_id;
 
     init(&policy, &log);
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
+    assert(policy.pending_request_count == 1U);
+    sm64_saturn_audio_policy_get_playing(&policy, 1U, &playing, &in_bank,
+                                         &sound_id);
+    assert(playing == 0U);
+    assert(in_bank == 0U);
+    assert(!sm64_saturn_audio_policy_stop_source(
+        &policy, refresh.source_token, refresh.package_generation));
     sm64_saturn_audio_policy_disable_banks(&policy, (uint16_t)(1U << 1));
-    assert(!sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
+    sm64_saturn_audio_policy_tick(&policy);
+    assert(policy.active_sfx_count == 0U);
     sm64_saturn_audio_policy_enable_banks(&policy, (uint16_t)(1U << 1));
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
-    assert(policy.active_sfx_count == 1U);
     sm64_saturn_audio_policy_tick(&policy);
+    assert(policy.active_sfx_count == 1U);
     assert(log.events[log.count - 1U].opcode == SM64_SATURN_AUDIO_OPCODE_PLAY_REFRESH);
 
     sm64_saturn_audio_policy_get_playing(&policy, 1U, &playing, &in_bank, &sound_id);
@@ -189,11 +198,11 @@ static void test_discrete_waiting_expires_and_published_completion_promotes(void
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &high, 100U));
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &waiting, 1000U));
     assert(log.count == 0U);
-    assert(policy.active_sfx_count == 2U);
-    assert(!policy.sfx[0].published);
-    assert(!policy.sfx[1].published);
+    assert(policy.active_sfx_count == 0U);
+    assert(policy.pending_request_count == 2U);
     sm64_saturn_audio_policy_tick(&policy);
     assert(log.count == 1U);
+    assert(policy.active_sfx_count == 2U);
     assert(policy.sfx[0].published);
     assert(!policy.sfx[1].published);
     for (i = 1U; i < SM64_SATURN_AUDIO_DISCRETE_FRESHNESS; ++i) {
@@ -241,12 +250,15 @@ static void test_sound_id_catalog_bounds(void)
                              ((uint32_t)(sizes[bank] - 1U) << 16) |
                              0x00008081U;
         assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1U));
+        sm64_saturn_audio_policy_tick(&policy);
         assert(sm64_saturn_audio_policy_stop_source(
             &policy, refresh.source_token, refresh.package_generation));
         refresh.sound_bits = ((uint32_t)bank << 28) |
                              ((uint32_t)sizes[bank] << 16) |
                              0x00008081U;
-        assert(!sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1U));
+        assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1U));
+        sm64_saturn_audio_policy_tick(&policy);
+        assert(policy.active_sfx_count == 0U);
     }
 }
 
@@ -268,8 +280,29 @@ static void test_bank_pool_matches_inherited_38_usable_nodes(void)
     }
     refresh.source_token = 39U;
     refresh.sound_bits = 0x30262001U;
-    assert(!sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 200U));
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 200U));
+    sm64_saturn_audio_policy_tick(&policy);
     assert(policy.active_sfx_count == 38U);
+}
+
+static void test_request_queue_is_bounded_and_drains_at_tick(void)
+{
+    sm64_saturn_audio_policy_t policy;
+    event_log_t log;
+    sm64_saturn_audio_play_refresh_t refresh = {
+        0x00128001U, 1U, 1U, 255U, 64U, 4096U, 0U
+    };
+    uint16_t i;
+
+    init(&policy, &log);
+    for (i = 0U; i < SM64_SATURN_AUDIO_REQUEST_CAPACITY; ++i) {
+        assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1U));
+    }
+    assert(!sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 1U));
+    assert(policy.pending_request_count == SM64_SATURN_AUDIO_REQUEST_CAPACITY);
+    sm64_saturn_audio_policy_tick(&policy);
+    assert(policy.pending_request_count == 0U);
+    assert(policy.active_sfx_count == 1U);
 }
 
 static void test_lowering_only_tracks_published_sound_and_emits_fades(void)
@@ -293,6 +326,7 @@ static void test_lowering_only_tracks_published_sound_and_emits_fades(void)
                                                   1000U));
     assert(policy.lowering_bank_mask == 0U);
     assert(log.count == before);
+    sm64_saturn_audio_policy_tick(&policy);
     assert(sm64_saturn_audio_policy_complete_handle(
         &policy, high.sound_bits, high.source_token,
         high.package_generation));
@@ -489,10 +523,10 @@ static void test_same_source_priority_and_discrete_restart(void)
     init(&policy, &log);
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
     refresh.sound_bits = 0x30114001U;
-    assert(!sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
-    assert(policy.sfx[0].sound_bits == 0x30128001U);
+    assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
     refresh.sound_bits = 0x3013A081U;
     assert(sm64_saturn_audio_policy_play_refresh(&policy, &refresh, 100U));
+    sm64_saturn_audio_policy_tick(&policy);
     assert(policy.sfx[0].sound_bits == 0x3013A081U);
     assert(policy.sfx[0].restart_generation == 1U);
 }
@@ -506,6 +540,7 @@ int main(void)
     test_discrete_waiting_expires_and_published_completion_promotes();
     test_sound_id_catalog_bounds();
     test_bank_pool_matches_inherited_38_usable_nodes();
+    test_request_queue_is_bounded_and_drains_at_tick();
     test_lowering_only_tracks_published_sound_and_emits_fades();
     test_secondary_jingle_and_global_fade_publish_bounded_actions();
     test_same_source_priority_and_discrete_restart();

@@ -20,6 +20,7 @@ enum {
     SM64_SATURN_AUDIO_SFX_PER_BANK = 38U,
     SM64_SATURN_AUDIO_SFX_CAPACITY =
         SM64_SATURN_AUDIO_BANK_COUNT * SM64_SATURN_AUDIO_SFX_PER_BANK,
+    SM64_SATURN_AUDIO_REQUEST_CAPACITY = 256U,
     SM64_SATURN_AUDIO_SEQUENCE_NONE = 0xFFU,
     SM64_SATURN_AUDIO_VOLUME_UNSET = 0xFFU,
     SM64_SATURN_AUDIO_DISCRETE_FRESHNESS = 10U,
@@ -63,17 +64,25 @@ typedef struct sm64_saturn_audio_sfx_state {
     bool published;
 } sm64_saturn_audio_sfx_state_t;
 
+typedef struct sm64_saturn_audio_pending_request {
+    sm64_saturn_audio_play_refresh_t refresh;
+    uint32_t priority_score;
+} sm64_saturn_audio_pending_request_t;
+
 typedef struct sm64_saturn_audio_policy {
     sm64_saturn_audio_emit_fn emit;
     void *emit_context;
     sm64_saturn_audio_queue_item_t
         background_queue[SM64_SATURN_AUDIO_BACKGROUND_QUEUE_CAPACITY];
     sm64_saturn_audio_sfx_state_t sfx[SM64_SATURN_AUDIO_SFX_CAPACITY];
+    sm64_saturn_audio_pending_request_t
+        pending_requests[SM64_SATURN_AUDIO_REQUEST_CAPACITY];
     uint16_t disabled_bank_mask;
     uint16_t lowering_bank_mask;
     uint16_t freshness_generation;
     uint16_t environment_generation;
     uint16_t active_sfx_count;
+    uint16_t pending_request_count;
     uint8_t background_queue_size;
     uint8_t background_target_volume;
     uint8_t background_max_volume;

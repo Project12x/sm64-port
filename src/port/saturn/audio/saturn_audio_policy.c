@@ -563,7 +563,7 @@ void sm64_saturn_audio_policy_enable_banks(sm64_saturn_audio_policy_t *policy,
     }
 }
 
-bool sm64_saturn_audio_policy_play_refresh(
+static bool admit_play_refresh(
     sm64_saturn_audio_policy_t *policy,
     const sm64_saturn_audio_play_refresh_t *refresh,
     uint32_t priority_score)
@@ -612,6 +612,22 @@ bool sm64_saturn_audio_policy_play_refresh(
     state->volume = refresh->volume;
     state->pan = refresh->pan;
     state->pitch = refresh->pitch;
+    return true;
+}
+
+bool sm64_saturn_audio_policy_play_refresh(
+    sm64_saturn_audio_policy_t *policy,
+    const sm64_saturn_audio_play_refresh_t *refresh,
+    uint32_t priority_score)
+{
+    sm64_saturn_audio_pending_request_t *pending;
+    if (policy == NULL || refresh == NULL || refresh->source_token == 0U ||
+        policy->pending_request_count == SM64_SATURN_AUDIO_REQUEST_CAPACITY) {
+        return false;
+    }
+    pending = &policy->pending_requests[policy->pending_request_count++];
+    pending->refresh = *refresh;
+    pending->priority_score = priority_score;
     return true;
 }
 
@@ -749,12 +765,21 @@ bool sm64_saturn_audio_policy_stop_bank(sm64_saturn_audio_policy_t *policy,
 void sm64_saturn_audio_policy_tick(sm64_saturn_audio_policy_t *policy)
 {
     uint16_t i;
+    uint16_t pending_count;
     uint8_t bank;
     if (policy == NULL) {
         return;
     }
     if (policy->environment_completion_guard != 0U) {
         policy->environment_completion_guard--;
+    }
+    pending_count = policy->pending_request_count;
+    policy->pending_request_count = 0U;
+    for (i = 0U; i < pending_count; ++i) {
+        const sm64_saturn_audio_pending_request_t *pending =
+            &policy->pending_requests[i];
+        (void)admit_play_refresh(policy, &pending->refresh,
+                                 pending->priority_score);
     }
     policy->freshness_generation++;
     for (i = 0U; i < SM64_SATURN_AUDIO_SFX_CAPACITY; ++i) {

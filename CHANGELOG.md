@@ -17,14 +17,18 @@
   quantization; distance uses the repository's existing target `sqrtf`
   service instead of a duplicate 24-iteration divider loop.  Active source
   positions are reevaluated each game-audio tick; waiting discrete requests
-  are batched before one per-bank selection and expire after the inherited countdown,
+  enter a bounded 256-record request queue before one per-bank selection, so
+  same-frame bank masks/stops/getters observe the inherited pre-admission
+  state, and expire after the inherited countdown,
   published requests retire through generation-matched completion feedback,
   and invalid per-bank sound IDs fail before consuming an identity slot.
   Jingle/secondary completion, published-SFX lowering, and global fades now
   produce bounded aggregate semantic actions; the latter uses one non-menu
   bank-mask record instead of nine indistinguishable channel records.  The
   Saturn/SH two-tick jingle guard, secondary `0xFF` no-op, normal-volume
-  sentinel, and stop-bank lowering restoration remain source-compatible.
+  sentinel, and stop-bank lowering restoration remain source-compatible;
+  early generation-matched ENV completion is retained until the guard drains
+  rather than being lost.
   Protocol-v2 `PLAY_REFRESH` records carry only fixed-width
   `soundBits`, generation-tagged source tokens, package/freshness generations,
   and quantized volume/pan/pitch; raw `f32 *pos` identities stay in a bounded

@@ -58,15 +58,18 @@ later source movement does not erase the provenance.
   embedding a second iterative implementation.  Active source pointers are resolved
   and reevaluated every source-audio tick; they remain SH-2-local.
 - The inherited US catalog limits and 38 usable list nodes per bank are
-  retained.  Same-frame requests are admitted before a single per-bank
-  selection, matching the source request queue.  Waiting discrete requests use the exact ten-count post-decrement
+  retained.  Same-frame requests first enter a 256-record bounded queue and
+  are admitted before a single per-bank selection, matching the source
+  request queue and its control-operation interleavings.  Waiting discrete requests use the exact ten-count post-decrement
   lifetime; published discrete requests retire on preemption or
   generation-matched driver completion.  Continuous requests retain their
   two-frame refresh grace.
 - ENV completion feedback is sequence- and generation-matched.  It clears the
   jingle constraint only after the Saturn/SH two-tick guard, restores the
   aggregate background fade (including the `0xFF` normal-volume sentinel), and resumes only
-  the inherited Merry-Go-Round or Piranha Plant secondary sequences.
+  the inherited Merry-Go-Round or Piranha Plant secondary sequences.  An
+  early one-shot completion is retained and retried after the guard decrement,
+  so tick two—not tick three—can complete it.
 - SFX-driven lowering begins only when a sound is published and emits the
   inherited 50-frame aggregate background adjustment.  Global fade carries a
   single non-menu SFX bank mask, keeping the whole transition to three bounded

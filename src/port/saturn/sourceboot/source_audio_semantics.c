@@ -29,6 +29,9 @@ static sm64_saturn_audio_spatial_table_t s_spatial;
 static u8 s_moving_speed[SM64_SATURN_AUDIO_BANK_COUNT];
 static u16 s_package_generation = 1U;
 static u32 s_audio_frame_count;
+static u8 s_pending_environment_seq_id;
+static u16 s_pending_environment_generation;
+static bool s_environment_completion_pending;
 static u8 s_initialized;
 
 #define STUB_LEVEL(_0, _1, _2, volume, _4, _5, _6, _7, _8) volume,
@@ -176,14 +179,17 @@ static void consume_driver_completions(void)
         (void)sm64_saturn_audio_policy_complete_handle(
             &s_policy, sound_bits, source_token, package_generation);
     }
-    {
-        u8 seq_id;
-        u16 environment_generation;
-        if (sm64_saturn_source_audio_poll_environment_completion(
-                &seq_id, &environment_generation)) {
-            (void)sm64_saturn_audio_policy_environment_complete_matching(
-                &s_policy, seq_id, environment_generation);
-        }
+    if (!s_environment_completion_pending &&
+        sm64_saturn_source_audio_poll_environment_completion(
+            &s_pending_environment_seq_id,
+            &s_pending_environment_generation)) {
+        s_environment_completion_pending = true;
+    }
+    if (s_environment_completion_pending &&
+        sm64_saturn_audio_policy_environment_complete_matching(
+            &s_policy, s_pending_environment_seq_id,
+            s_pending_environment_generation)) {
+        s_environment_completion_pending = false;
     }
 }
 
@@ -237,9 +243,9 @@ void play_sound(s32 soundBits, f32 *pos)
 void audio_signal_game_loop_tick(void)
 {
     source_audio_ensure_initialized();
-    consume_driver_completions();
     refresh_active_source_positions();
     sm64_saturn_audio_policy_tick(&s_policy);
+    consume_driver_completions();
     release_inactive_sources();
 }
 
