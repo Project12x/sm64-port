@@ -1146,7 +1146,12 @@ license, renderer, or target-performance result.
   identity directory/map `e2-bob-identity-id-634477a207617cf6`, but link failed
   with HWRAM overflow `143888` bytes. The map is usable for source-attested
   inventory; no ELF/CUE/ISO or launchable image exists. Do not launch any
-  pre-`46162df5` artifact.
+  pre-`46162df5` artifact. A follow-up current-head run with
+  `SATURN_SOURCE_CART_STAGE_SECTORS=4` and `SATURN_DEMO_HOT_PROMOTION=0`
+  reached the link and reduced the overflow to `14352` bytes in identity
+  directory/map `e2-bob-identity-id-25e54779ec0ace25` (a `129536`-byte
+  reduction), but still produced no ELF/CUE/ISO; the linked-map/margin gate
+  therefore remains unchecked.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
@@ -1194,6 +1199,16 @@ reclaim, never by weakening the linker margin or hiding a section.
   source/host gate is green; the current-head link still has the independent
   HWRAM-capacity overflow, so no target, P2/concurrent-SH2, Ymir/manual, or FPS
   evidence is claimed.
+
+- [ ] **Fresh HWRAM-pressure follow-up (2026-08-06):** the DLL-preflighted
+  serialized Pipe-4 BOB build used the Yaul cross-toolchain through sourced
+  `.yaul.env` with cart staging reduced to 4 sectors and hot promotion off.
+  It compiled cleanly enough to reach the linker; the map records HWRAM
+  `___bss_end=0x06103810`, `___end=0x0610391c`, and the physical top
+  `0x06100000`, so the exact failure is `14352` bytes after the required
+  `0x1B00` TLSF margin. The run is a measurable `129536`-byte improvement
+  over the prior `143888`-byte overflow, but no ELF/CUE/ISO exists and the
+  HWRAM/LWRAM, target/P2, Ymir/manual, and FPS gates remain open.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
