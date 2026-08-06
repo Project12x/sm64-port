@@ -92,18 +92,19 @@ bool sm64_saturn_audio_residency_plans_disjoint(
     const sm64_saturn_audio_residency_plan_t *active,
     const sm64_saturn_audio_residency_plan_t *replacement)
 {
-    const uint32_t active_offsets[4] = {active->driver_offset, active->mailbox_offset,
-                                        active->sample_offset, active->scratch_offset};
-    const uint32_t active_sizes[4] = {active->driver_size, active->mailbox_size,
-                                      active->sample_size, active->scratch_size};
-    const uint32_t replacement_offsets[4] = {replacement->driver_offset,
-                                             replacement->mailbox_offset,
-                                             replacement->sample_offset,
-                                             replacement->scratch_offset};
-    const uint32_t replacement_sizes[4] = {replacement->driver_size, replacement->mailbox_size,
-                                           replacement->sample_size, replacement->scratch_size};
+    uint32_t active_offsets[4], active_sizes[4], replacement_offsets[4], replacement_sizes[4];
     unsigned i, j;
     if (active == 0 || replacement == 0) return false;
+    active_offsets[0] = active->driver_offset; active_offsets[1] = active->mailbox_offset;
+    active_offsets[2] = active->sample_offset; active_offsets[3] = active->scratch_offset;
+    active_sizes[0] = active->driver_size; active_sizes[1] = active->mailbox_size;
+    active_sizes[2] = active->sample_size; active_sizes[3] = active->scratch_size;
+    replacement_offsets[0] = replacement->driver_offset;
+    replacement_offsets[1] = replacement->mailbox_offset;
+    replacement_offsets[2] = replacement->sample_offset;
+    replacement_offsets[3] = replacement->scratch_offset;
+    replacement_sizes[0] = replacement->driver_size; replacement_sizes[1] = replacement->mailbox_size;
+    replacement_sizes[2] = replacement->sample_size; replacement_sizes[3] = replacement->scratch_size;
     for (i = 0U; i < 4U; ++i) for (j = 0U; j < 4U; ++j)
         if (active_offsets[i] < replacement_offsets[j] + replacement_sizes[j] &&
             replacement_offsets[j] < active_offsets[i] + active_sizes[i]) return false;

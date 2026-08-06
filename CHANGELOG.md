@@ -28,6 +28,7 @@
   closed, and C package validation rejects overlapping descriptor payloads.
   MC68000 acceptance now receives both active and replacement plans and rejects
   cross-generation span overlap before acknowledging a replacement.
+  The disjointness helper is null-safe before inspecting either plan.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
