@@ -425,6 +425,12 @@ runner for depth-first child/sibling order, deferred children-first dispatch,
 explicit leave actions, and fail-closed callback/overflow termination. The
 serial runtime gate remains green. This does not change the production source
 dispatcher; its 24 direct recursive calls remain the next implementation gate.
+Design correction recorded (2026-08-06): the production continuation frame is
+explicitly 16-byte SH-2 state (`node`, `sibling`, phase/action, and saved
+matrix/context tokens), while the original host scheduler frame remains only a
+contract fixture. The runtime callback runner owns child/sibling/dispatch/leave
+phase ordering; source handlers must bind their existing global restoration to
+that runner rather than use a node-filtering shortcut.
 Task 20 fix round 1 `f161491a` is committed with canonical nonzero actor-bank hash admission, compact bank ID/token propagation through descriptor/lowering, one shared fail-closed descriptor validator for lower/order, and direct zero-hash/stale-token/crafted-field mutation coverage. Fresh serialized evidence passes: `verify-actor-effects` 57.5s and `verify-actor-batches verify-actor-capability-bank verify-actor-family-bank verify-actor-instance-queue` 58.8s. The plan’s individual Task20 test/GREEN steps are checked; scoped independent rereview is pending. Production observer capture, the two geo prerequisites, final closure, target/Ymir/manual/FPS remain open.
 Task 20 fix round 1 rereview is SPEC/QUALITY FAIL, C0/I1/M1. Bank identity, shared validation, plan wording, and exact oracle binding pass. Remaining I1 is self-referential generation/package validation in the public lower API, which cannot reject an old descriptor; M1 is stale 64-byte/16-byte wording in the report. Fix round 2 is dispatched to repair the lower contract, add direct stale generation/package mutations, and correct all ABI-size evidence before rereview.
 Task 20 fix round 2 `e61d3e8a` is committed. `sm64_saturn_actor_effect_lower()` now receives trusted current frame/package generations, and direct stale-frame/stale-package mutations fail closed; the report and brief consistently state the 68-byte descriptor/24-byte output ABI. Focused `verify-actor-effects` passes in 58.2s and the serialized actor regression wave passes in 59.3s. Scoped rereview is pending; production observer/geo/cross-stream/target/Ymir/manual/FPS gates remain open.
