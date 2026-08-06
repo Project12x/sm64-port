@@ -351,6 +351,26 @@ master-owned and the slave consumes immutable jobs. Design and execution plan
 are recorded in `docs/superpowers/specs/2026-08-06-saturn-iterative-geo-walk-design.md`
 and `docs/superpowers/plans/2026-08-06-saturn-iterative-geo-walk.md`. No code,
 build, target, Ymir, manual, or FPS evidence is claimed for this transition.
+
+Iterative geo-walk Task 1 RED (2026-08-06): added
+`tools/saturn/geo_walk_contract_test.c` for enter/leave LIFO ordering, saved
+tokens, high-water accounting, and fail-closed exact-capacity overflow. The
+focused MinGW compile correctly fails because the production
+`saturn_geo_walk.h` contract does not exist yet. No implementation code was
+written before this failure; next step is the minimal scheduler contract.
+
+Iterative geo-walk Task 1 GREEN/source-complete (2026-08-06): commit
+`837bd0b5` adds the pointer-free opaque enter/leave scheduler, explicit
+fail-closed overflow latch, Make gate `verify-saturn-geo-walk-contract`, and
+the C/Python source contract. The focused Make gate passes serially with
+`geo walk contract: PASS (frame=16 walk=32)` and `geo walk source contract:
+PASS`; the C fixture covers LIFO leave-before-enter ordering, sibling
+continuation, children-first scheduling, matrix/context tokens, high-water,
+exact-capacity overflow, and stale-event suppression after failure. Task 1 is
+source-complete only for this bounded scheduler seam. Task 2 is now active for
+the generated full-game depth manifest, SH-2-sized ABI/map proof, and dedicated
+LWRAM owner. No production traversal cutover, linked target, Ymir/manual, or
+FPS evidence is claimed.
 Task 20 fix round 1 `f161491a` is committed with canonical nonzero actor-bank hash admission, compact bank ID/token propagation through descriptor/lowering, one shared fail-closed descriptor validator for lower/order, and direct zero-hash/stale-token/crafted-field mutation coverage. Fresh serialized evidence passes: `verify-actor-effects` 57.5s and `verify-actor-batches verify-actor-capability-bank verify-actor-family-bank verify-actor-instance-queue` 58.8s. The plan’s individual Task20 test/GREEN steps are checked; scoped independent rereview is pending. Production observer capture, the two geo prerequisites, final closure, target/Ymir/manual/FPS remain open.
 Task 20 fix round 1 rereview is SPEC/QUALITY FAIL, C0/I1/M1. Bank identity, shared validation, plan wording, and exact oracle binding pass. Remaining I1 is self-referential generation/package validation in the public lower API, which cannot reject an old descriptor; M1 is stale 64-byte/16-byte wording in the report. Fix round 2 is dispatched to repair the lower contract, add direct stale generation/package mutations, and correct all ABI-size evidence before rereview.
 Task 20 fix round 2 `e61d3e8a` is committed. `sm64_saturn_actor_effect_lower()` now receives trusted current frame/package generations, and direct stale-frame/stale-package mutations fail closed; the report and brief consistently state the 68-byte descriptor/24-byte output ABI. Focused `verify-actor-effects` passes in 58.2s and the serialized actor regression wave passes in 59.3s. Scoped rereview is pending; production observer/geo/cross-stream/target/Ymir/manual/FPS gates remain open.

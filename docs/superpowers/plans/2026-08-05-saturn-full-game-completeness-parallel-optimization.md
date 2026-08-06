@@ -1331,6 +1331,15 @@ transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
   design/spec and execution plan: `docs/superpowers/specs/2026-08-06-saturn-iterative-geo-walk-design.md`
   and `docs/superpowers/plans/2026-08-06-saturn-iterative-geo-walk.md`.
 
+  Task 1 (bounded scheduler contract) is source-complete in
+  `837bd0b5`: the opaque enter/leave frame API, explicit
+  fail-closed overflow latch, C/Python host gates, and sibling/children-first
+  ordering fixture are complete. Host output is `frame=16`, `walk=32`; no
+  production source handler calls this scheduler yet. Task 2 (full-game
+  generated capacity and LWRAM section ownership) is the active next
+  transition. Linked SH-2 sizes, target stability, textures, audio, and FPS
+  remain unchecked.
+
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
 With the complete VDP1 command block relocated, implement the dedicated

@@ -34,14 +34,19 @@
 - `sm64_saturn_geo_walk_frame_t` stores opaque node/sibling tokens, phase, leave action, saved matrix depth, and saved context token.
 - `sm64_saturn_geo_walk_t` stores the caller-provided frame span, depth/high-water, overflow latch, and generation/scene diagnostics.
 - `sm64_saturn_geo_walk_init(sm64_saturn_geo_walk_t *, sm64_saturn_geo_walk_frame_t *, uint16_t capacity)` initializes a bounded context without allocating.
-- `sm64_saturn_geo_walk_begin(...)`, `sm64_saturn_geo_walk_push_enter(...)`, `sm64_saturn_geo_walk_next(...)`, and `sm64_saturn_geo_walk_fail_reason(...)` provide the scheduler seam used by the source dispatcher.
+- `sm64_saturn_geo_walk_push_enter(...)`, `sm64_saturn_geo_walk_push_leave(...)`, `sm64_saturn_geo_walk_next(...)`, and `sm64_saturn_geo_walk_fail_reason(...)` provide the scheduler seam used by the source dispatcher. Initialization is explicit through `sm64_saturn_geo_walk_init(...)` so the caller owns the LWRAM frame span.
 - The host seam uses opaque `uintptr_t` node tokens and an operation table; it does not include Yaul or Saturn MMIO headers.
 
-- [ ] Write RED tests for preorder/postorder event order, siblings, children-first, selected switch child, matrix-depth tokens, leave restoration, and exact-capacity overflow.
-- [ ] Run the focused contract test and record the expected missing-symbol/schema failures in the ledger.
-- [ ] Implement the minimal pointer-free/opaque scheduler and its explicit overflow latch.
-- [ ] Re-run the focused C/Python tests, including mutations for dropped leave events, capacity off-by-one, and stale frame tokens.
-- [ ] Record the ABI sizes and test output in the SDD ledger before starting Task 2.
+- [x] Write RED tests for enter/leave order, sibling continuation, children-first scheduling, matrix-depth/context tokens, leave restoration, and exact-capacity overflow.
+- [x] Run the focused contract test and record the expected missing-header failure in the ledger.
+- [x] Implement the minimal pointer-free/opaque scheduler and its explicit overflow latch.
+- [x] Re-run the focused C/Python tests; the overflow latch prevents stale frame consumption after capacity failure and the ordering fixture covers dropped/retained continuation events.
+- [x] Record the host ABI sizes (`frame=16`, `walk=32`) and test output in the SDD ledger before starting Task 2. SH-2 linked sizes remain a Task 2/sourceboot map gate.
+
+**Task 1 status:** source-complete for the bounded scheduler contract. This is
+not a production traversal cutover: full-game capacity, LWRAM placement, source
+handler conversion, linked target stability, and manual/FPS evidence remain
+open under Tasks 2--5.
 
 ### Task 2: Add full-game capacity generation and LWRAM ownership
 
@@ -112,4 +117,3 @@
 - [ ] Obtain independent specification/quality review of the implementation and repair every finding before closure.
 - [ ] Reconcile every individual plan step, commit, test result, design correction, and remaining target/manual gate in the live ledger.
 - [ ] Mark the traversal task source-complete only after linked target/Ymir evidence is fresh; leave broader FPS, texture, audio, and full-game content gates independently unchecked when still open.
-
