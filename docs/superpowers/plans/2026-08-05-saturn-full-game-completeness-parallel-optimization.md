@@ -74,6 +74,7 @@
 - 2026-08-06 generation-wrap design correction: the sourceboot observer, capture, profile, camera-bypass, idle-probe, and scheduler handoff must consume one local `source_tick_generation` returned by `sm64_saturn_frame_pipeline_next_generation()`. The existing frame-pipeline helper already defines `UINT32_MAX -> 1`; raw `sourceboot_sim_tick_count + 1U` is not an independent authority and must be mutation-rejected.
 - 2026-08-06 actor-bank lifecycle preflight: pre-publication failures require an exact producer-owned recycle keyed by `(bank index, nonzero generation, expected WRITING|READY state)`. It must clear the selected payload/count/generation through the P2 alias, fence before FREE, preserve the other bank, reject stale/wrong/double dispositions and all QUARANTINED/RENDERING/COMPLETE/FREE states, and never roll back `last_published_generation`. Post-acquire cleanup remains owned by the Task 16 handoff.
 - 2026-08-06 generation-wrap repair acceptance: `8517d63f` computes one frame-pipeline successor before the geo walk and propagates it through observer/capture/profile/camera/idle/scheduler consumers. Fix `089a41a4` closes the review gap with a full idle-probe matcher and idle-only global-count mutation. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This remains host/source-complete only; target/sourceboot-image/Ymir/manual/FPS are open.
+- 2026-08-06 pre-acquire recycle acceptance: `dd781b2c..abcd4655` adds exact producer-owned WRITING/READY recycle, two-bank recovery, P2 payload scrub/fence ordering, stale/double/state/index/generation checks, and post-acquire ownership exclusion. Fixes `52e3ce61` and `abcd4655` wire and mutation-prove the helper suite; independent rereview is SPEC/QUALITY PASS, C0/I0/M0. Host-only; target/P2, concurrent SH-2, Ymir/manual, and FPS remain open.
 
 ## Prior art and reuse mode
 
@@ -936,13 +937,19 @@ release of live outputs.
   generation/index ownership, retry, and stale/double-disposition cases before
   implementation. `task-14-pre-acquire-preflight-report.md` confirms both-bank
   stranding and defines the exact WRITING/READY recycle contract.
-- [ ] RED must show both physical banks can be stranded by the current failure
-  paths and that a guessed broad quarantine-to-free mutation is rejected.
-- [ ] Design an exact `abort_write`/pre-acquire discard contract with cleared
-  payload/count/generation and explicit retry semantics; leave post-acquire
-  cleanup to the handoff owner.
-- [ ] Implementation, serialized gates, independent review, target/P2, and
-  Ymir/manual/FPS evidence remain separate unchecked transitions.
+- [x] RED/GREEN shows both physical banks can be stranded by the old failure
+  paths; the repaired capture failures leave both FREE and generation 103 can
+  reserve. Broad quarantine-to-free, stale/double, wrong-state, wrong
+  index/generation, missing scrub/fence, and publication-rollback mutations are
+  rejected by the source gate.
+- [x] Design and implement the exact producer-owned pre-acquire recycle
+  contract with cleared payload/count/generation and explicit retry semantics;
+  post-acquire cleanup remains with the handoff owner. Public READY ownership
+  is documented as unexposed/pre-acquire only.
+- [x] Serialized/direct host gates and independent rereview pass; commits are
+  `dd781b2c`, `0af6acb1`, `6058b1ca`, `0bd848d4`, `52e3ce61`, and `abcd4655`.
+  Target/P2, concurrent SH-2, sourceboot image, Ymir/manual, and FPS evidence
+  remain unchecked.
 
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
