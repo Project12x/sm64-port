@@ -15,6 +15,11 @@
   `GEO_CULLING_RADIUS`/`GEO_BRANCH_AND_LINK` records and all production
   observer effect fields remain explicitly unresolved, so this host-only slice
   does not claim target/Ymir/manual output, complete BOB effects, or FPS gain.
+  The effect ABI requires the canonical nonzero actor-bank hash at admission
+  and carries a compact trusted bank token through descriptor and lowering
+  output. One shared validator protects direct lowering and master ordering
+  from stale bank identity, crafted unknown bits, and unresolved source state
+  instead of assuming every public descriptor came from admission.
 
 - Added the bounded Task 19 actor-capability admission infrastructure. The
   generated BOB closure now has an independent exact oracle for ANIMATED,

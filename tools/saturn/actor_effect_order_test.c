@@ -4,6 +4,15 @@
 
 #include "saturn_actor_effect.h"
 
+static const uint32_t BANK_HASH[8] = {
+    1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U,
+};
+
+static uint32_t bank_token(void)
+{
+    return sm64_saturn_actor_effect_bank_token(9U, BANK_HASH);
+}
+
 static sm64_saturn_actor_effect_descriptor_t item(
     uint16_t source_order, uint8_t depth_bin)
 {
@@ -12,7 +21,13 @@ static sm64_saturn_actor_effect_descriptor_t item(
     value.generation = 41U;
     value.scene_package_generation = 6U;
     value.instance_key = 0x10000U + source_order;
+    value.actor_bank_id = 9U;
+    value.actor_bank_token = bank_token();
+    value.capability_mask = SM64_SATURN_ACTOR_CAP_TRANSLUCENT;
     value.source_order = source_order;
+    value.family_id = 7U;
+    value.model_id = 11U;
+    value.opacity = 128U;
     value.depth_bin = depth_bin;
     value.material_class = SM64_SATURN_EFFECT_MATERIAL_TRANSLUCENT;
     value.vdp1_mode = SM64_SATURN_EFFECT_VDP1_HALF_TRANSPARENT;
@@ -28,7 +43,8 @@ static void test_far_to_near_bins_preserve_equal_depth_source_order(void)
     uint16_t order[5], count = 0U;
     sm64_saturn_actor_effect_telemetry_t telemetry;
     assert(sm64_saturn_actor_effect_order(
-        descriptors, 5U, 41U, 6U, order, 5U, &count, &telemetry));
+        descriptors, 5U, 41U, 6U, 9U, bank_token(), order, 5U, &count,
+        &telemetry));
     assert(count == 5U);
     assert(order[0] == 3U);
     assert(order[1] == 1U && order[2] == 4U);
@@ -43,11 +59,13 @@ static void test_budget_overflow_is_atomic_and_counted(void)
     uint16_t order[2] = {0xaaaaU, 0xbbbbU}, count = 9U;
     sm64_saturn_actor_effect_telemetry_t telemetry;
     assert(!sm64_saturn_actor_effect_order(
-        descriptors, 2U, 41U, 6U, order, 0U, &count, &telemetry));
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 0U, &count,
+        &telemetry));
     assert(count == 0U && telemetry.zero_budget_count == 1U);
     assert(order[0] == 0xaaaaU && order[1] == 0xbbbbU);
     assert(!sm64_saturn_actor_effect_order(
-        descriptors, 2U, 41U, 6U, order, 1U, &count, &telemetry));
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 1U, &count,
+        &telemetry));
     assert(count == 0U && telemetry.capacity_overflow_count == 1U);
     assert(order[0] == 0xaaaaU && order[1] == 0xbbbbU);
 }
@@ -61,12 +79,29 @@ static void test_stale_and_unknown_descriptor_reject_the_whole_order(void)
     sm64_saturn_actor_effect_telemetry_t telemetry;
     descriptors[1].generation = 40U;
     assert(!sm64_saturn_actor_effect_order(
-        descriptors, 2U, 41U, 6U, order, 2U, &count, &telemetry));
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 2U, &count,
+        &telemetry));
     assert(count == 0U && telemetry.stale_count == 1U);
     descriptors[1] = item(1U, 2U);
     descriptors[1].material_class = 255U;
     assert(!sm64_saturn_actor_effect_order(
-        descriptors, 2U, 41U, 6U, order, 2U, &count, &telemetry));
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 2U, &count,
+        &telemetry));
+    assert(count == 0U && telemetry.unknown_count == 1U);
+
+    descriptors[1] = item(1U, 2U);
+    descriptors[1].actor_bank_token ^= 1U;
+    assert(!sm64_saturn_actor_effect_order(
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 2U, &count,
+        &telemetry));
+    assert(count == 0U && telemetry.stale_count == 1U);
+
+    descriptors[1] = item(1U, 2U);
+    descriptors[1].effect_flags =
+        (uint16_t)(SM64_SATURN_EFFECT_FLAG_MASK + 1U);
+    assert(!sm64_saturn_actor_effect_order(
+        descriptors, 2U, 41U, 6U, 9U, bank_token(), order, 2U, &count,
+        &telemetry));
     assert(count == 0U && telemetry.unknown_count == 1U);
 }
 
@@ -84,8 +119,8 @@ static void test_fixed_descriptor_capacity_rejects_atomically(void)
     }
     assert(!sm64_saturn_actor_effect_order(
         descriptors, SM64_SATURN_EFFECT_DESCRIPTOR_CAPACITY + 1U, 41U, 6U,
-        ordered, SM64_SATURN_EFFECT_DESCRIPTOR_CAPACITY + 1U, &count,
-        &telemetry));
+        9U, bank_token(), ordered,
+        SM64_SATURN_EFFECT_DESCRIPTOR_CAPACITY + 1U, &count, &telemetry));
     assert(count == 0U && telemetry.capacity_overflow_count == 1U);
     assert(ordered[0] == 0xaaaaU);
 }

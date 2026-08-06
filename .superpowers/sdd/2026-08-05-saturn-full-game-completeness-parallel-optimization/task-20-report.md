@@ -13,7 +13,9 @@ The authoritative inputs are the generated BOB Area 1 closure
 `build/saturn/packages/bob/1/closure.json` (86 records) and S64F v2 family
 report `build/saturn/packages/bob/1/actors/actor-families.json` (47 family
 representatives). The independent checked-in oracle pins both family source
-digests and every record in the following classes:
+digests and every exact class/role array. The named evidence is
+`tools/saturn/fixtures/bob_actor_effect_oracle_v1.json`, file SHA-256
+`5360cec67ed0a183a20eade3ed720a1b5b4c240b42904d5e552db125eeb748e7`:
 
 ```text
 BILLBOARD=5  ALPHA=30  TRANSLUCENT=18  SHADOW=34
@@ -91,3 +93,42 @@ uses an explicit path insertion and is the authoritative green invocation.
   command/Gouraud reservation, and sourceboot cutover.
 - Target compile/link, DRAM artifact, Ymir replay, hardware/manual validation,
   zero-overflow runtime telemetry, visual parity, and FPS evidence.
+
+## Fix round 1 — bank identity and shared descriptor validation
+
+Independent review of `1c89a2bb` was SPEC/QUALITY FAIL, C0/I2/M2. The repair
+requires the full canonical nonzero eight-word actor-bank hash at admission,
+then carries a compact immutable FNV-derived bank ID/token through the 68-byte
+pointer-free descriptor and 24-byte lowering output. Order and lower receive
+the current trusted bank identity and call one shared descriptor validator.
+The validator rejects stale generation/package/bank identity, unknown
+capability/effect bits, missing instance/family/model/opacity identity,
+material/mode/depth mismatch, invalid billboard basis, unresolved shadow
+receiver, and expired/unresolved effect source state. Direct crafted
+descriptors can no longer bypass admission invariants.
+
+New mutations prove zero canonical bank hash fails admission, a changed
+trusted bank token fails lower/order as stale, and direct unknown capability,
+effect-flag, material, and unresolved-opacity descriptors fail closed. The
+live plan and brief now use `verify-actor-effects` / `--class effect`, bind the
+exact digest-pinned oracle arrays, and preserve the nine unsupported records.
+
+Fresh serial DLL/MSYS-preflight evidence:
+
+```text
+verify-actor-effects: PASS (57.5 s)
+  strict C11/pedantic/Wall/Wextra/Werror admission/order: PASS
+  exact effect inventory: PASS (5/30/18/34/0/0; unsupported=9)
+  exact Python oracle/mutations: 3/3 PASS
+
+verify-actor-batches verify-actor-capability-bank verify-actor-family-bank
+verify-actor-instance-queue: PASS (58.8 s)
+  actor batches/runtime neutrality: PASS (2/2)
+  capability bank: PASS
+  family bank: PASS (47 families; 13 representatives / 14 records)
+  instance queue: PASS
+```
+
+Production observer capture, the two geo-node prerequisites, cross-stream
+production merge, target/Ymir/hardware/manual/visual parity, and FPS evidence
+remain open and are not reclassified by this host repair.

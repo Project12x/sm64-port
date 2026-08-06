@@ -39,6 +39,83 @@ static uint8_t material_mode(uint8_t material)
         : SM64_SATURN_EFFECT_VDP1_REPLACE;
 }
 
+static bool hash_nonzero(const uint32_t words[8])
+{
+    uint32_t combined = 0U;
+    if (words == NULL) return false;
+    for (uint32_t index = 0U; index < 8U; index++) combined |= words[index];
+    return combined != 0U;
+}
+
+uint32_t sm64_saturn_actor_effect_bank_token(
+    uint32_t actor_bank_id, const uint32_t actor_bank_hash_words[8])
+{
+    uint32_t token = 2166136261U;
+    if (actor_bank_id == 0U || !hash_nonzero(actor_bank_hash_words)) return 0U;
+    token = (token ^ actor_bank_id) * 16777619U;
+    for (uint32_t index = 0U; index < 8U; index++)
+        token = (token ^ actor_bank_hash_words[index]) * 16777619U;
+    return token != 0U ? token : 2166136261U;
+}
+
+typedef enum descriptor_status {
+    DESCRIPTOR_VALID = 0,
+    DESCRIPTOR_STALE,
+    DESCRIPTOR_UNKNOWN,
+} descriptor_status_t;
+
+static descriptor_status_t descriptor_validate(
+    const sm64_saturn_actor_effect_descriptor_t *descriptor,
+    uint32_t generation, uint32_t scene_package_generation,
+    uint32_t actor_bank_id, uint32_t actor_bank_token)
+{
+    if (descriptor == NULL || generation == 0U ||
+        scene_package_generation == 0U || actor_bank_id == 0U ||
+        actor_bank_token == 0U)
+        return DESCRIPTOR_UNKNOWN;
+    if (descriptor->generation != generation ||
+        descriptor->scene_package_generation != scene_package_generation ||
+        descriptor->actor_bank_id != actor_bank_id ||
+        descriptor->actor_bank_token != actor_bank_token)
+        return DESCRIPTOR_STALE;
+    if (descriptor->instance_key == 0U || descriptor->family_id == 0U ||
+        descriptor->model_id == SM64_SATURN_ACTOR_INSTANCE_MODEL_NONE ||
+        descriptor->opacity == 0U ||
+        (descriptor->capability_mask & ~SM64_SATURN_ACTOR_CAPABILITY_MASK) != 0U ||
+        (descriptor->effect_flags & ~SM64_SATURN_EFFECT_FLAG_MASK) != 0U ||
+        !material_valid(descriptor->material_class) ||
+        !material_matches(descriptor->capability_mask,
+                          descriptor->material_class) ||
+        descriptor->depth_bin >= SM64_SATURN_EFFECT_DEPTH_BIN_COUNT ||
+        descriptor->vdp1_mode != material_mode(descriptor->material_class) ||
+        descriptor->basis_kind >
+            SM64_SATURN_EFFECT_BASIS_EXISTING_MTXQ_BILLBOARD)
+        return DESCRIPTOR_UNKNOWN;
+    if ((descriptor->capability_mask & SM64_SATURN_ACTOR_CAP_BILLBOARD) != 0U) {
+        if (descriptor->billboard_state == 0U ||
+            descriptor->basis_kind !=
+                SM64_SATURN_EFFECT_BASIS_EXISTING_MTXQ_BILLBOARD)
+            return DESCRIPTOR_UNKNOWN;
+    } else if (descriptor->basis_kind != SM64_SATURN_EFFECT_BASIS_MODEL) {
+        return DESCRIPTOR_UNKNOWN;
+    }
+    if ((descriptor->capability_mask & SM64_SATURN_ACTOR_CAP_SHADOW) != 0U &&
+        (descriptor->shadow_type == 0U || descriptor->shadow_scale == 0U ||
+         descriptor->shadow_solidity == 0U ||
+         (descriptor->effect_flags &
+          SM64_SATURN_EFFECT_FLAG_RECEIVER_RESOLVED) == 0U))
+        return DESCRIPTOR_UNKNOWN;
+    if ((descriptor->capability_mask & (SM64_SATURN_ACTOR_CAP_EFFECT |
+                                        SM64_SATURN_ACTOR_CAP_PARTICLE)) != 0U &&
+        (descriptor->effect_kind == 0U || descriptor->effect_lifetime == 0U ||
+         (descriptor->effect_flags & (SM64_SATURN_EFFECT_FLAG_SOURCE_VISIBLE |
+                                      SM64_SATURN_EFFECT_FLAG_SOURCE_LIVE)) !=
+             (SM64_SATURN_EFFECT_FLAG_SOURCE_VISIBLE |
+              SM64_SATURN_EFFECT_FLAG_SOURCE_LIVE)))
+        return DESCRIPTOR_UNKNOWN;
+    return DESCRIPTOR_VALID;
+}
+
 bool sm64_saturn_actor_effect_admit(
     const sm64_saturn_actor_instance_snapshot_t *snapshot,
     uint32_t capability_mask, uint8_t material_class,
@@ -68,7 +145,9 @@ bool sm64_saturn_actor_effect_admit(
         telemetry->inactive_count = 1U;
         return false;
     }
-    if (snapshot->actor_bank_id == 0U || snapshot->family_id == 0U ||
+    if (snapshot->actor_bank_id == 0U ||
+        !hash_nonzero(snapshot->actor_bank_hash_words) ||
+        snapshot->family_id == 0U ||
         snapshot->model_id == SM64_SATURN_ACTOR_INSTANCE_MODEL_NONE ||
         snapshot->opacity == 0U || !material_matches(capability_mask,
                                                      material_class)) {
@@ -103,6 +182,9 @@ bool sm64_saturn_actor_effect_admit(
     descriptor->generation = generation;
     descriptor->scene_package_generation = scene_package_generation;
     descriptor->instance_key = snapshot->instance_key;
+    descriptor->actor_bank_id = snapshot->actor_bank_id;
+    descriptor->actor_bank_token = sm64_saturn_actor_effect_bank_token(
+        snapshot->actor_bank_id, snapshot->actor_bank_hash_words);
     descriptor->capability_mask = capability_mask;
     memcpy(descriptor->effect_params_q16, snapshot->effect_params_q16,
            sizeof(descriptor->effect_params_q16));
@@ -123,22 +205,31 @@ bool sm64_saturn_actor_effect_admit(
         : SM64_SATURN_EFFECT_BASIS_MODEL;
     descriptor->vdp1_mode = material_mode(material_class);
     descriptor->depth_bin = depth_bin;
+    if (descriptor_validate(descriptor, generation, scene_package_generation,
+                            descriptor->actor_bank_id,
+                            descriptor->actor_bank_token) != DESCRIPTOR_VALID) {
+        memset(descriptor, 0, sizeof(*descriptor));
+        telemetry->unresolved_source_count = 1U;
+        return false;
+    }
     telemetry->emitted_count = 1U;
     return true;
 }
 
 bool sm64_saturn_actor_effect_lower(
     const sm64_saturn_actor_effect_descriptor_t *descriptor,
+    uint32_t actor_bank_id, uint32_t actor_bank_token,
     sm64_saturn_actor_effect_output_t *output)
 {
-    if (descriptor == NULL || output == NULL ||
-        !material_valid(descriptor->material_class) ||
-        descriptor->vdp1_mode != material_mode(descriptor->material_class) ||
-        descriptor->basis_kind >
-            SM64_SATURN_EFFECT_BASIS_EXISTING_MTXQ_BILLBOARD)
+    if (output == NULL || descriptor_validate(
+            descriptor, descriptor != NULL ? descriptor->generation : 0U,
+            descriptor != NULL ? descriptor->scene_package_generation : 0U,
+            actor_bank_id, actor_bank_token) != DESCRIPTOR_VALID)
         return false;
     memset(output, 0, sizeof(*output));
     output->instance_key = descriptor->instance_key;
+    output->actor_bank_id = descriptor->actor_bank_id;
+    output->actor_bank_token = descriptor->actor_bank_token;
     output->source_order = descriptor->source_order;
     output->opacity = descriptor->opacity;
     output->effect_kind = descriptor->effect_kind;
@@ -155,7 +246,8 @@ bool sm64_saturn_actor_effect_lower(
 bool sm64_saturn_actor_effect_order(
     const sm64_saturn_actor_effect_descriptor_t *descriptors,
     uint16_t descriptor_count, uint32_t generation,
-    uint32_t scene_package_generation, uint16_t *ordered_indices,
+    uint32_t scene_package_generation, uint32_t actor_bank_id,
+    uint32_t actor_bank_token, uint16_t *ordered_indices,
     uint16_t output_capacity, uint16_t *output_count,
     sm64_saturn_actor_effect_telemetry_t *telemetry)
 {
@@ -164,7 +256,8 @@ bool sm64_saturn_actor_effect_order(
     if (output_count != NULL) *output_count = 0U;
     if (telemetry != NULL) memset(telemetry, 0, sizeof(*telemetry));
     if (telemetry == NULL || output_count == NULL || generation == 0U ||
-        scene_package_generation == 0U ||
+        scene_package_generation == 0U || actor_bank_id == 0U ||
+        actor_bank_token == 0U ||
         (descriptor_count != 0U &&
          (descriptors == NULL || ordered_indices == NULL)))
         return false;
@@ -181,14 +274,14 @@ bool sm64_saturn_actor_effect_order(
     }
     for (uint16_t index = 0U; index < descriptor_count; index++) {
         const sm64_saturn_actor_effect_descriptor_t *item = &descriptors[index];
-        if (item->generation != generation ||
-            item->scene_package_generation != scene_package_generation) {
+        descriptor_status_t status = descriptor_validate(
+            item, generation, scene_package_generation, actor_bank_id,
+            actor_bank_token);
+        if (status == DESCRIPTOR_STALE) {
             telemetry->stale_count++;
             return false;
         }
-        if (!material_valid(item->material_class) ||
-            item->depth_bin >= SM64_SATURN_EFFECT_DEPTH_BIN_COUNT ||
-            item->vdp1_mode != material_mode(item->material_class)) {
+        if (status != DESCRIPTOR_VALID) {
             telemetry->unknown_count++;
             return false;
         }

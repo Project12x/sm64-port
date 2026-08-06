@@ -46,6 +46,8 @@ typedef struct sm64_saturn_actor_effect_descriptor {
     uint32_t generation;
     uint32_t scene_package_generation;
     uint32_t instance_key;
+    uint32_t actor_bank_id;
+    uint32_t actor_bank_token;
     uint32_t capability_mask;
     int32_t effect_params_q16[4];
     uint32_t effect_lifetime;
@@ -63,11 +65,12 @@ typedef struct sm64_saturn_actor_effect_descriptor {
     uint8_t basis_kind;
     uint8_t vdp1_mode;
     uint8_t depth_bin;
-    uint8_t reserved[4];
 } sm64_saturn_actor_effect_descriptor_t;
 
 typedef struct sm64_saturn_actor_effect_output {
     uint32_t instance_key;
+    uint32_t actor_bank_id;
+    uint32_t actor_bank_token;
     uint16_t source_order;
     uint16_t opacity;
     uint16_t effect_kind;
@@ -89,10 +92,16 @@ typedef struct sm64_saturn_actor_effect_telemetry {
     uint16_t capacity_overflow_count;
 } sm64_saturn_actor_effect_telemetry_t;
 
-_Static_assert(sizeof(sm64_saturn_actor_effect_descriptor_t) == 64U,
+_Static_assert(sizeof(sm64_saturn_actor_effect_descriptor_t) == 68U,
                "actor effect descriptor ABI changed");
-_Static_assert(sizeof(sm64_saturn_actor_effect_output_t) == 16U,
+_Static_assert(sizeof(sm64_saturn_actor_effect_output_t) == 24U,
                "actor effect output ABI changed");
+
+/* Compact immutable token derived from the canonical generated bank ID/hash.
+ * The full hash remains source-owned; order/lower compare this token against
+ * the current trusted registry identity before consuming a descriptor. */
+uint32_t sm64_saturn_actor_effect_bank_token(
+    uint32_t actor_bank_id, const uint32_t actor_bank_hash_words[8]);
 
 bool sm64_saturn_actor_effect_admit(
     const sm64_saturn_actor_instance_snapshot_t *snapshot,
@@ -104,6 +113,7 @@ bool sm64_saturn_actor_effect_admit(
 
 bool sm64_saturn_actor_effect_lower(
     const sm64_saturn_actor_effect_descriptor_t *descriptor,
+    uint32_t actor_bank_id, uint32_t actor_bank_token,
     sm64_saturn_actor_effect_output_t *output);
 
 /* Master-only. depth_bin is produced by the existing actor meshlet
@@ -113,7 +123,8 @@ bool sm64_saturn_actor_effect_lower(
 bool sm64_saturn_actor_effect_order(
     const sm64_saturn_actor_effect_descriptor_t *descriptors,
     uint16_t descriptor_count, uint32_t generation,
-    uint32_t scene_package_generation, uint16_t *ordered_indices,
+    uint32_t scene_package_generation, uint32_t actor_bank_id,
+    uint32_t actor_bank_token, uint16_t *ordered_indices,
     uint16_t output_capacity, uint16_t *output_count,
     sm64_saturn_actor_effect_telemetry_t *telemetry);
 
