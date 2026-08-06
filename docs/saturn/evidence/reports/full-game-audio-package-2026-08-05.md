@@ -5,7 +5,7 @@ invoking a PC game build. The source-authoritative catalog contains 35 stable
 sequence IDs, 38 sound banks, 219 AIFF sample records, all source SHA-256
 identities, and canonical bank metadata (including instrument/percussion splits,
 tuning and envelope/release fields). AIFF PCM16 is converted to deterministic
-unsigned Saturn PCM8; source sequence bytes remain unchanged in S64A chunks.
+signed Saturn PCM8; source sequence bytes remain unchanged in S64A chunks.
 
 ## Package evidence
 

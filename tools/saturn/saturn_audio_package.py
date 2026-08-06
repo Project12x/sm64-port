@@ -4,7 +4,7 @@
 The compiler consumes the repository's user-extracted sound tree directly.  It
 never invokes the PC build: source JSON, m64 and AIFF identities are hashed
 before packaging and a missing input is a hard error.  Sample PCM is reduced to
-unsigned Saturn PCM8; all sequence/bank metadata is retained as canonical
+signed Saturn PCM8; all sequence/bank metadata is retained as canonical
 JSON so tuning, envelopes and control-flow bytes remain inspectable.
 """
 from __future__ import annotations
