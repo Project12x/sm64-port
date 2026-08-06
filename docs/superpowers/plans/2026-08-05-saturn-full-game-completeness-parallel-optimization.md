@@ -918,7 +918,7 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 
 ### Task 20: Close BOB billboard, translucent, shadow, and effect capabilities
 
-**Lane:** actor capabilities. **Depends on:** Tasks 13, 16, 18, and 19. **Produces:** zero unsupported visual-effect records in the generated BOB closure.
+**Lane:** actor capabilities. **Depends on:** Tasks 13, 16, 18, and 19. **Produces:** the bounded source-derived effect inventory, pointer-free descriptor/lowering helpers, and fail-closed painter-order/capacity contract; nine geo-blocked records and production observer capture remain open for later closure.
 
 **Files:**
 
@@ -929,17 +929,17 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 - Extend: `tools/saturn/test_bob_actor_capabilities.py`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`
 
-- [ ] RED report must name BILLBOARD, ALPHA, TRANSLUCENT, SHADOW, PARTICLE, PROJECTILE, DECAL, and reward/effect records still unsupported. Include capacity overflow and unknown feature-bit mutations.
-- [ ] Implement generic camera-facing basis, alpha/translucent material classes, stable far-to-near bins, bounded shadow descriptors, and closure-declared particle/effect lifetimes. Preserve VDP2/VDP1 layer ownership and master painter merge.
-- [ ] Test camera yaw/pitch, near-plane billboard, opaque/translucent interleave, equal-depth stability, shadow receiver/depth, effect expiration, projectile multiplicity, zero effect budget, and overflow fail-closed telemetry.
+- [ ] RED report must name the exact BILLBOARD, ALPHA, TRANSLUCENT, SHADOW, PARTICLE, PROJECTILE, DECAL, reward, and effect arrays from the checked-in oracle, preserving the nine geo-blocked records and their reasons. Include capacity overflow and unknown feature-bit mutations.
+- [ ] Implement generic camera-facing basis, alpha/translucent material classes, stable far-to-near bins, bounded shadow descriptors, and closure-declared particle/effect lifetimes as pointer-free helpers. Preserve VDP2/VDP1 layer ownership and master painter merge; production observer capture remains a later gate.
+- [ ] Test near-plane billboard basis, opaque/translucent interleave, equal-depth stability, master-resolved shadow receiver/depth, effect expiration without renderer-side timer advancement, projectile/reward/effect oracle multiplicity, zero effect budget, stale identity, unknown fields, and overflow fail-closed telemetry.
 - [ ] Run GREEN:
 
   ```powershell
-  powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-capability-effects verify-actor-effect-order verify-actor-batches
-  .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_actor_capabilities.py --class effects
+  powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-actor-effects verify-actor-effect-order verify-actor-batches
+  .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_actor_capabilities.py --class effect
   ```
 
-- [ ] Commit as `feat(saturn): close BOB actor effect capabilities`; review painter order, effect budgets, source lifetimes, and no family names in runtime.
+- [ ] Commit as `feat(saturn): add bounded BOB actor effect infrastructure`; review painter order, effect budgets, source lifetimes, source identity validation, and no family names in runtime. Final closure/target evidence remains open.
 
 ### Task 21: Integrate bounded audio package boot and residency in sourceboot
 
