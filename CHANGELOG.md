@@ -32,6 +32,16 @@
   identity fields, keeping the generated-header Werror smoke gate aligned with
   the generalized ABI.
 
+- Added the generic source-resolved actor-instance seam. The geo observer records
+  only authoritative scalar decisions, while two bounded snapshot banks publish
+  pointer-free actor state with pool-slot/incarnation identity, package/bank
+  hashes, parent/held offsets, switch/render/shadow/effect fields, and
+  fail-closed stale-family, malformed-source, and capacity handling. The
+  sourceboot capture is ordered after the authoritative tick; host gates cover
+  typed-field mutations, model-less controllers, despawn/reuse, and immutable
+  bank lifecycle. The render-snapshot gate now launches its Windows host test
+  through Python subprocess to avoid the inherited MSYS quoted-path EOF error.
+
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed
   replacement generations fail closed without mutating the active plan, and

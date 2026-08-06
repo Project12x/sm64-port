@@ -1,0 +1,108 @@
+#include "saturn_geo_state_observer.h"
+
+#include <string.h>
+
+static sm64_saturn_geo_state_observer_t *s_observer;
+static sm64_saturn_actor_source_observation_t *s_current;
+
+void sm64_saturn_geo_state_observer_init(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t capacity)
+{
+    if (observer == NULL) return;
+    memset(observer, 0, sizeof(*observer));
+    observer->capacity = capacity > SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE
+        ? SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE : capacity;
+}
+
+void sm64_saturn_geo_state_observer_begin_frame(
+    sm64_saturn_geo_state_observer_t *observer, uint32_t generation)
+{
+    if (observer == NULL) return;
+    memset(observer->seen, 0, sizeof(observer->seen));
+    observer->count = 0U;
+    observer->source_generation = generation;
+    observer->geo_evaluation_count = 0U;
+    observer->geo_rendered_count = 0U;
+    observer->geo_rejected_count = 0U;
+    s_current = NULL;
+    s_observer = observer;
+}
+
+bool sm64_saturn_geo_state_observer_begin_object(
+    sm64_saturn_geo_state_observer_t *observer,
+    const sm64_saturn_actor_source_observation_t *observation)
+{
+    uint16_t slot, incarnation;
+    if (observer == NULL || observation == NULL ||
+        observer != s_observer || observer->capacity == 0U ||
+        observation->pool_slot >= observer->capacity ||
+        observer->count >= observer->capacity || observation->active == 0U ||
+        observer->seen[observation->pool_slot] != 0U)
+        return false;
+    slot = observation->pool_slot;
+    incarnation = observer->incarnation[slot];
+    if (!observer->live[slot]) {
+        if (incarnation != 0U) observer->pool_reuse_count++;
+        incarnation++;
+        if (incarnation == 0U) incarnation = 1U;
+        observer->incarnation[slot] = incarnation;
+    }
+    observer->observations[observer->count] = *observation;
+    observer->observations[observer->count].pool_slot = slot;
+    s_current = &observer->observations[observer->count];
+    observer->seen[slot] = 1U;
+    observer->live[slot] = 1U;
+    observer->count++;
+    return true;
+}
+
+bool sm64_saturn_geo_state_observer_record_switch(
+    sm64_saturn_geo_state_observer_t *observer, uint16_t ordinal,
+    uint16_t state)
+{
+    if (observer == NULL || observer != s_observer || s_current == NULL ||
+        ordinal >= SM64_SATURN_ACTOR_MAX_SWITCHES)
+        return false;
+    s_current->switch_state[ordinal] = state;
+    if (s_current->switch_count <= ordinal)
+        s_current->switch_count = (uint8_t)(ordinal + 1U);
+    return true;
+}
+
+bool sm64_saturn_geo_state_observer_end_object(
+    sm64_saturn_geo_state_observer_t *observer)
+{
+    if (observer == NULL || observer != s_observer || s_current == NULL)
+        return false;
+    s_current = NULL;
+    return true;
+}
+
+void sm64_saturn_geo_state_observer_end_frame(
+    sm64_saturn_geo_state_observer_t *observer)
+{
+    uint16_t slot;
+    if (observer == NULL) return;
+    for (slot = 0U; slot < observer->capacity; slot++) {
+        if (!observer->seen[slot]) {
+            if (observer->live[slot]) observer->despawned_count++;
+            observer->live[slot] = 0U;
+        }
+    }
+    s_current = NULL;
+}
+
+void sm64_saturn_geo_state_observer_record_geo_decision(
+    sm64_saturn_geo_state_observer_t *observer, bool rendered)
+{
+    if (observer == NULL) return;
+    observer->geo_evaluation_count++;
+    if (rendered) observer->geo_rendered_count++;
+    else observer->geo_rejected_count++;
+}
+
+void sm64_saturn_geo_state_observer_record_authoritative_geo_decision(
+    bool rendered)
+{
+    sm64_saturn_geo_state_observer_record_geo_decision(s_observer, rendered);
+}

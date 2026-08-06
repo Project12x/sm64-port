@@ -45,6 +45,7 @@ Mtx *gMatStackFixed[32];
 
 #include "port/saturn/gfx/saturn_matrix.h"
 #include "port/saturn/gfx/saturn_matrix_ctors.h"
+#include "port/saturn/gfx/saturn_geo_state_observer.h"
 
 #ifndef SATURN_MTX_IS_Q16
 /* This TU's Saturn path is a Q16.16 WIRE PRODUCER (saturn_mtxq_write_wire
@@ -1184,7 +1185,16 @@ static void geo_process_object(struct Object *node) {
         if (node->header.gfx.animInfo.curAnim != NULL) {
             geo_set_animation_globals(&node->header.gfx.animInfo, hasAnimation);
         }
-        if (obj_is_in_view(&node->header.gfx, gMatStack[gMatStackIndex])) {
+        const s32 saturn_geo_visible =
+            obj_is_in_view(&node->header.gfx, gMatStack[gMatStackIndex]);
+#ifdef TARGET_SATURN
+        /* Observe the already-authoritative culling decision only.  The
+         * observer cannot select children, mutate the object, or replace the
+         * normal geo walk; it is a scalar telemetry seam for snapshots. */
+        sm64_saturn_geo_state_observer_record_authoritative_geo_decision(
+            saturn_geo_visible != 0);
+#endif
+        if (saturn_geo_visible) {
             Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
 #ifdef TARGET_SATURN

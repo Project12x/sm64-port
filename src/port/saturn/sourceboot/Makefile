@@ -280,6 +280,8 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/runtime/saturn_camera_role.c \
   $(ROOT)/src/port/saturn/runtime/saturn_camera_fixed.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_instance.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_geo_state_observer.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_pose.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \

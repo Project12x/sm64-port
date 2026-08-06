@@ -10,6 +10,7 @@
 #include "saturn_fast3d_frontend.h"
 #include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_instance.h"
 #include "saturn_render_snapshot.h"
 #include "saturn_transform.h"
 #include "saturn_demo_render.h"
@@ -200,6 +201,9 @@ static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
+static sm64_saturn_geo_state_observer_t sourceboot_actor_observer;
+static sm64_saturn_actor_instance_snapshot_t sourceboot_actor_capture[
+    SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
 static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -307,12 +311,26 @@ static int32_t sourceboot_world_to_q16(int32_t value)
 static void sourceboot_capture_render_snapshot(uint32_t generation)
 {
     sm64_saturn_render_snapshot_t *snapshot = NULL;
+    sm64_saturn_actor_capture_telemetry_t actor_stats;
+    uint16_t actor_count = 0U;
     uint32_t axis;
 
     if (!sm64_saturn_render_snapshot_begin_write(&sourceboot_render_snapshots,
                                                  generation, &snapshot)) {
         return;
     }
+    /* Capture only after the authoritative source tick has completed.  The
+     * observer contains scalar geo decisions and never selects or mutates
+     * gameplay state; actor queue publication will consume this bank later. */
+    sm64_saturn_geo_state_observer_begin_frame(&sourceboot_actor_observer,
+                                               generation);
+    sm64_saturn_actor_instances_set_observer(&sourceboot_actor_observer);
+    (void)sm64_saturn_actor_instances_capture(
+        sourceboot_actor_capture, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
+        generation, &actor_count, &actor_stats);
+    sm64_saturn_geo_state_observer_end_frame(&sourceboot_actor_observer);
+    snapshot->actor_instance_count = actor_count;
+    snapshot->actor_instance_bank = 0U;
     if (!sm64_saturn_mario_actor_snapshot(&snapshot->mario)) {
         snapshot->mario.valid = 0U;
     }
@@ -1380,6 +1398,8 @@ int main(void) {
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED, 0U);
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_render_snapshot_reset(&sourceboot_render_snapshots);
+    sm64_saturn_geo_state_observer_init(
+        &sourceboot_actor_observer, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
      * IR bridge below. Keep the original exec_display_list symbol reachable

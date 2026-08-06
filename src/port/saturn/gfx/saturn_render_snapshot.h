@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "saturn_actor_bridge.h"
+#include "saturn_actor_instance.h"
 
 #if defined(__sh__)
 #include <cpu/cache.h>
@@ -43,6 +44,9 @@ typedef struct sm64_saturn_render_snapshot {
     sm64_saturn_mario_pose_selector_t mario_pose;
     uint32_t generation;
     uint32_t actor_generation;
+    uint16_t actor_instance_count;
+    uint8_t actor_instance_bank;
+    uint8_t actor_instance_reserved;
     uint32_t scene_id;
     uint32_t area_id;
     uint32_t geometry_bank_id;

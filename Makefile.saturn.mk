@@ -500,8 +500,19 @@ verify-render-snapshot-bank:
 	  "$(SATURN_REPO_ROOT)/tools/saturn/render_snapshot_bank_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
-	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/render-snapshot-bank-test$(HOST_EXEEXT)']).returncode)"
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_render_snapshot_source.py"
+
+verify-actor-instance-snapshot:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
+	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_instance_snapshot_test.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_instance.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_geo_state_observer.c" \
+	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-snapshot-test$(HOST_EXEEXT)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-instance-snapshot-test$(HOST_EXEEXT)']).returncode)"
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_actor_snapshot_source.py"
 
 verify-dual-frame-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
