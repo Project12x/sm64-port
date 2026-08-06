@@ -1185,6 +1185,15 @@ reclaim, never by weakening the linker margin or hiding a section.
   launchable, reconcile the frame-bank source predicate with the selected
   transfer path and add a mutation gate; do not treat a map-only relief as a
   runtime fix.
+- [x] **Runtime-contract correction implementation (2026-08-06, `e5cff564`):** the frame
+  bank now validates command storage against the selected CPU-DMAC transport,
+  accepting bounded LWRAM or HWRAM ranges while retaining the narrower LWRAM
+  classifier for diagnostics. Both initialization and deferred submission use
+  the transport predicate, and a host mutation fixture proves HWRAM command
+  banks are admitted while DRAM-cart sources remain rejected. The direct
+  source/host gate is green; the current-head link still has the independent
+  HWRAM-capacity overflow, so no target, P2/concurrent-SH2, Ymir/manual, or FPS
+  evidence is claimed.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
