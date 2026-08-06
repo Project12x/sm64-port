@@ -18,7 +18,12 @@ $requiredDlls = @(
     (Join-Path $usrBin 'msys-gcc_s-seh-1.dll'),
     (Join-Path $mingwBin 'libgmp-10.dll'),
     (Join-Path $mingwBin 'libmpfr-6.dll'),
-    (Join-Path $mingwBin 'libisl-23.dll')
+    (Join-Path $mingwBin 'libisl-23.dll'),
+    (Join-Path $mingwBin 'libwinpthread-1.dll'),
+    (Join-Path $mingwBin 'libgcc_s_seh-1.dll'),
+    (Join-Path $mingwBin 'zlib1.dll'),
+    (Join-Path $mingwBin 'libiconv-2.dll'),
+    (Join-Path $mingwBin 'libintl-8.dll')
 )
 
 $missing = @($requiredDlls | Where-Object { -not (Test-Path -LiteralPath $_) })

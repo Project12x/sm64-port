@@ -852,7 +852,7 @@ verify-actor-pose-bank: compile-mario-actor-bank
 
 verify-dma-queue:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -DSATURN_DMA_QUEUE_INITIAL_SEQUENCE=4294967294U \
 	  -DSATURN_DMA_QUEUE_HOST_TEST=1 \
 	  -I"$(SATURN_REPO_ROOT)/tools/saturn/host_stubs" \
@@ -1051,7 +1051,7 @@ verify-demo-render-overlap: verify-render-overlap-integration
 
 verify-vdp1-frame-bank:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/vdp1_frame_bank_test.c" \
@@ -1062,7 +1062,7 @@ verify-vdp1-frame-bank:
 
 verify-vdp1-transfer-pipeline: verify-dma-queue
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/vdp1_transfer_pipeline_test.c" \
@@ -1074,7 +1074,7 @@ verify-vdp1-transfer-pipeline: verify-dma-queue
 
 verify-gouraud-transfer:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
-	$(HOST_CC) -std=c11 -Wall -Wextra -Werror \
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gpl" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/gouraud_transfer_test.c" \

@@ -137,8 +137,9 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
 }
 
 /* Per-frame command-table upload. Two transfer paths, selected at
- * compile time by SM64_SATURN_VDP1_LWRAM_STAGING (defined by the one
- * target -- sourceboot -- whose staging array is LWRAM-resident):
+ * compile time by SM64_SATURN_VDP1_LWRAM_STAGING (defined by sourceboot's
+ * CPU-DMAC command path; its current double buffer is HWRAM-resident after
+ * the actor-arena reclaim correction):
  *
  * HWRAM (heap) staging -- castleviewer/marioturntable -- keeps libyaul's
  * stock vdp1_sync_cmdt_list_put(): _vdp1_sync_put() flag arming plus an
@@ -163,8 +164,9 @@ sm64_saturn_vdp1_backend_finish(sm64_saturn_vdp1_backend_t *backend)
  * the macro), so the failure mode is a loud assert instead of a silent
  * on-hardware lockup.
  *
- * LWRAM staging (sourceboot's .lwram_cmdts array) must NOT take that
- * path: SCU DMA cannot touch LWRAM. Three independent sources agree:
+ * The sourceboot CPU-DMAC path must NOT take the SCU path when a future
+ * profile puts command staging back in LWRAM: SCU DMA cannot touch LWRAM.
+ * Three independent sources agree:
  *   - libyaul's own scu/dma.h:32: "Reading from or writing to LWRAM
  *     locks up the machine."
  *   - Sega's SGL 3.02j release notes (SGL020A.TXT): PCM data placed in

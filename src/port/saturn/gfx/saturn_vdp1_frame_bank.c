@@ -61,6 +61,19 @@ bool sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
                            SM64_SATURN_LWRAM_TOP);
 }
 
+bool sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
+    const void *source, size_t bytes)
+{
+    /* CPU-DMAC is the selected command transport for both the original
+     * LWRAM staging layout and the HWRAM fallback used when the two command
+     * banks would otherwise exhaust the linker-owned LWRAM margin.  The
+     * SCU-only Gouraud path remains HWRAM-restricted below. */
+    return range_in_region(source, bytes, SM64_SATURN_LWRAM_BASE,
+                           SM64_SATURN_LWRAM_TOP) ||
+        range_in_region(source, bytes, SM64_SATURN_HWRAM_BASE,
+                        SM64_SATURN_HWRAM_TOP);
+}
+
 bool sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
     const void *source, size_t bytes)
 {
@@ -104,9 +117,9 @@ bool sm64_saturn_vdp1_frame_bank_set_init(
     const size_t gouraud_bytes_1 = gouraud_bank_1->capacity > 0U
         ? (size_t)gouraud_bank_1->capacity *
             sizeof(sm64_saturn_gouraud_table_t) : 1U;
-    if (!sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
+    if (!sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
             command_bank_0, command_bytes) ||
-        !sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
+        !sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
             command_bank_1, command_bytes) ||
         normalized_address(command_bank_0) % 32U != 0U ||
         normalized_address(command_bank_1) % 32U != 0U ||
@@ -250,7 +263,7 @@ bool sm64_saturn_vdp1_frame_bank_submit_transfers(
                          targets->command_capacity_bytes,
                          SM64_SATURN_VDP1_VRAM_BASE,
                          SM64_SATURN_VDP1_VRAM_TOP) ||
-        !sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
+        !sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
             bank->command_storage, command_bytes) ||
         (bank->gouraud_count > 0U &&
          (targets->gouraud_vram == NULL ||

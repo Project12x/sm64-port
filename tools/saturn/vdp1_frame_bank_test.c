@@ -45,6 +45,12 @@ static void test_region_contract(void)
         (const void *)(uintptr_t)0x06010000U, 0x10000U));
     assert(!sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
         (const void *)(uintptr_t)0x002F0000U, 0x20000U));
+    assert(sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
+        (const void *)(uintptr_t)0x06010000U, 0x10000U));
+    assert(sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
+        (const void *)(uintptr_t)0x00200000U, 0x10000U));
+    assert(!sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
+        (const void *)(uintptr_t)0x22400000U, 0x10000U));
 
     assert(sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
         (const void *)(uintptr_t)0x06010000U, 0x3000U));
@@ -54,6 +60,21 @@ static void test_region_contract(void)
         (const void *)(uintptr_t)0x00210000U, 0x3000U));
     assert(!sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
         (const void *)(uintptr_t)0x060FF000U, 0x3000U));
+}
+
+static void test_hardware_command_banks_use_cpu_dmac_contract(void)
+{
+    sm64_saturn_vdp1_frame_bank_set_t set;
+    sm64_saturn_gouraud_bank_t gouraud[2];
+    sm64_saturn_gouraud_bank_init(
+        &gouraud[0], (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06010000U,
+        1536U, 0x25C40000U);
+    sm64_saturn_gouraud_bank_init(
+        &gouraud[1], (sm64_saturn_gouraud_table_t *)(uintptr_t)0x06013000U,
+        1536U, 0x25C40000U);
+    assert(sm64_saturn_vdp1_frame_bank_set_init(
+        &set, (void *)(uintptr_t)0x06050000U,
+        (void *)(uintptr_t)0x06070000U, 2048U, &gouraud[0], &gouraud[1]));
 }
 
 static void init_set(sm64_saturn_vdp1_frame_bank_set_t *set,
@@ -257,6 +278,7 @@ static void test_failed_build_is_quarantined_and_previous_bank_survives(void)
 int main(void)
 {
     test_region_contract();
+    test_hardware_command_banks_use_cpu_dmac_contract();
     test_lifecycle_and_ticket_retirement();
     test_init_rejects_alias_overlap_and_misalignment();
     test_late_completion_cannot_regress_publication();

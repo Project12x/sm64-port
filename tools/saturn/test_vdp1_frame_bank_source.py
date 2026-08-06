@@ -6,6 +6,23 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class Vdp1FrameBankSourceTests(unittest.TestCase):
+    def test_command_source_contract_matches_cpu_dmac_hardware_path(self) -> None:
+        source = (ROOT / "src/port/saturn/gfx/saturn_vdp1_frame_bank.c").read_text()
+        self.assertIn(
+            "bool sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(",
+            source,
+        )
+        set_init = source[source.index("bool sm64_saturn_vdp1_frame_bank_set_init("):]
+        submit = source[source.index("bool sm64_saturn_vdp1_frame_bank_submit_transfers("):]
+        self.assertIn(
+            "sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(",
+            set_init,
+        )
+        self.assertIn(
+            "sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(",
+            submit,
+        )
+
     def test_stale_publication_is_quarantined_before_assignment(self) -> None:
         source = (ROOT / "src/port/saturn/gfx/saturn_vdp1_frame_bank.c").read_text()
         publish = source[source.index("bool sm64_saturn_vdp1_frame_bank_publish("):]

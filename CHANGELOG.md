@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Reconciled sourceboot's HWRAM VDP1 command-bank placement with the deferred
+  frame-bank runtime contract: command sources are now admitted only when they
+  lie in the bounded HWRAM/LWRAM ranges legal for CPU-DMAC, while SCU Gouraud
+  staging remains HWRAM-only. The host gate covers both HWRAM initialization and
+  cart rejection. Host compiler recipes now inherit `HOST_CC_ENV`, and the
+  MSYS2 launcher preflights the transitive GCC/binutils DLL closure and puts
+  both runtime directories first on `PATH`, preventing bare helper launches
+  from producing missing-DLL dialogs.
+
 - Sourceboot now bootstraps its generated build-identity spec from canonical
   route, input, camera, cart, scene, actor, animation, and feature-selected
   audio provenance before selecting an output directory. Each manifest is

@@ -198,6 +198,15 @@ With a locally installed Yaul SDK, the complete fallback verification gate is:
 make -f Makefile.saturn.mk verify-all
 ```
 
+On Windows, the repository's `tools/saturn/with-msys-toolchain.ps1` wrapper
+preflights the MSYS2 runtime closure and prepends both `C:\msys64\usr\bin`
+and `C:\msys64\mingw64\bin` (or `MSYS2_ROOT`) before launching Make, GCC,
+objdump, or their helper processes. The verified user PATH should contain the
+same two directories for desktop tools launched outside Make; restart existing
+terminals/apps after changing PATH because Windows does not refresh an already
+running process. Do not copy DLLs beside individual executables or launch
+`sh-elf-*` tools from a bare PowerShell environment.
+
 The command uses `python3` by default. If the MSYS2 shell does not expose a
 Python executable on `PATH`, set the repository's host Python explicitly, for
 example:

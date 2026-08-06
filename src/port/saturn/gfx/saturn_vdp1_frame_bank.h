@@ -69,6 +69,11 @@ typedef struct sm64_saturn_vdp1_frame_bank_set {
 
 bool sm64_saturn_vdp1_frame_bank_command_source_is_lwram(
     const void *source, size_t bytes);
+/* Command transfers use CPU-DMAC, which is legal for either LWRAM or HWRAM.
+ * Keep the narrower LWRAM classifier above for diagnostics and mutation
+ * tests; callers validating the selected transport must use this predicate. */
+bool sm64_saturn_vdp1_frame_bank_command_source_is_cpu_dmac(
+    const void *source, size_t bytes);
 bool sm64_saturn_vdp1_frame_bank_gouraud_source_is_hwram(
     const void *source, size_t bytes);
 bool sm64_saturn_vdp1_frame_bank_set_init(
