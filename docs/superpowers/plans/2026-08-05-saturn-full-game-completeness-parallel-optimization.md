@@ -961,12 +961,17 @@ the exact sourceboot globals, linker sections, alignment, package manifest
 capacity, and initialization/ownership path before implementation. It must not
 change linker placement or claim target visibility.
 
-- [ ] Inspect the active sourceboot/linker/map and actor queue/arena types; write
+- [x] Inspect the active sourceboot/linker/map and actor queue/arena types; write
   `task-14-arena-reservation-preflight-report.md` with exact ranges and a
-  minimal owner/reservation seam.
-- [ ] RED must show that moving/removing the proposed reservation or replacing
-  its owner with separate statics currently escapes the source/linker gates;
-  identify the precise mutation tests needed for implementation.
+  minimal owner/reservation seam. The report confirms the 65,536-byte type is
+  arithmetic only; sourceboot has separate HWRAM observer/bank statics and no
+  combined owner/section/map gate, while production queue/batch/output storage
+  is absent.
+- [x] RED shows the current 15/15 memory-map tests pass despite removing the
+  proposed owner; latest route-0 LWRAM leaves only `0x74F0`, while the arena
+  plus required `0x4000` floor needs `0x14000`. The report identifies the
+  required source/linker/package mutation tests and at least `0xCB10` reclaim or
+  relocation before reservation.
 - [ ] Keep implementation, linked target, Ymir/manual, concurrent SH-2, and FPS
   evidence as later unchecked transitions.
 
