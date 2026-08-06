@@ -47,6 +47,7 @@
 - 2026-08-06 sequence-VM scope correction: Task 15 reuses the pinned Project12x sequence/layer timing and control-flow semantics by close-port at the semantic boundary, while replacing N64 pointer/RSP assumptions with bounded offsets and scalar events. The repository contains disassembled source shape but no expanded seq00 binary, so the VM scaffold proves malformed/control-flow behavior and source timing only; full 35-sequence coverage, S64P linkage, MC68000 image, SCSP transport, target, Ymir, and audible evidence remain blocked.
 - 2026-08-06 sequence-VM parity repair (superseded by `b004fe7b`): the first repair added persistent small-layer state, reserve operands, branch polarity, channel state, and bounded-flow tests; review then found the large-note/d7/format-scope defects recorded and closed by the acceptance amendment below.
 - 2026-08-06 sequence-VM repair acceptance: `b004fe7b` closes the bounded-slice findings. Large-layer note0→note1 resets local/persistent duration, d7 ORs selected active bits and clears only selected finished bits, EU/SH layer f4 uses bounded signed-relative flow, and EU/SH sequence da/dc fail closed immediately after opcode fetch before incompatible operand consumption. Rereview is SPEC/QUALITY PASS, C0/I0/M0 for the bounded host VM slice; full catalog/S64P/MC68000/SCSP/target/Ymir/manual gates remain open.
+- 2026-08-06 voice-scheduler scope correction: Task 17 is source-complete only for bounded MC68000-shaped allocator/timer/desired-voice/slot-shadow infrastructure. It preserves Project12x priority/lifetime/ADSR/tuning/pan semantics and uses PoneSound/Yaul only at the documented hardware/order boundary, but remains outside the heartbeat image until Task 12 supplies real sequence/sample/residency data and a later task wires the production timer/drain path.
 
 ## Prior art and reuse mode
 
@@ -145,7 +146,7 @@ all complete.
 - [ ] Task 14 — active/source-incomplete — implementation `56c33d76`; repairs `7cb28651`, `508a8da1`; independent rereviews remain SPEC/QUALITY FAIL (latest C2/I3). Authoritative observation ordering, pool-slot overflow telemetry, per-bank tickets, wrap-aware handoff, P2/fence metadata, and target-LWRAM assertion are hardened, but unresolved family/scene/bank registry, full-pool identity, typed source fields, payload cache visibility, overlap cleanup, package-bound budget, and sourceboot target gates remain open. No nonzero production actor claim.
 - [ ] Task 15 — active/source-incomplete — commits `df95a107`, `52d45d5e`, `211158ea`, `b004fe7b`; bounded pointer-free VM scaffold and `verify-sequence-vm` are green, with Project12x ranges/provenance and source-parity repairs recorded. Bounded-slice rereview is SPEC/QUALITY PASS, C0/I0/M0. Full seq00/35-sequence/S64P/MC68000 image/SCSP/target/Ymir/manual audio gates remain blocked by Task 12 assets and later integration.
 - [ ] Task 16 — active/source-incomplete — infrastructure `0549f7af`; independent rereview SPEC/QUALITY FAIL. Exact-once queue/batching, stale-generation quarantine, and host mutation gates pass, but the 64-instance arena/accounting/P2/output-boundary repair is in progress and actor-meshlet/production renderer cutover remains open.
-- [ ] Task 17 — implement timer-driven SCSP voices and allocation
+- [ ] Task 17 — active/source-incomplete — infrastructure commit `5b74081c`; serial allocator/slot-shadow/timer/SCSP-PCM8/sequence-VM/freestanding-module gates pass, but independent review, full envelope/package data, heartbeat/MC68000 drain, target image, Ymir/tempo/manual/FPS evidence remain open.
 - [ ] Task 18 — close BOB rigid/opaque/platform/collectible capabilities
 - [ ] Task 19 — close BOB articulated/enemy/boss capabilities
 - [ ] Task 20 — close BOB billboard/translucent/shadow/effect capabilities
@@ -845,15 +846,15 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 
 **Reference-code-first boundary:** Close-port priority, note lifetime, ADSR/release, pitch/tuning, pan, and layer ownership semantics from the exact pinned in-tree Project12x functions inspected for this task. Adapt only the hardware execution boundary: N64 synthesis/task/RSP command production cannot drive SCSP slots, so register programming, timer service, slot allocation, and sound-RAM residency are Saturn-native modules informed by the pinned Yaul and PoneSound files. Record every inspected range, retained semantic, rewritten boundary, notice, and material change.
 
-- [ ] RED cases: timer divider/cadence, start/release/key-off order, pitch word, pan, volume, loop points, attack/decay/sustain/release, protected music, priority stealing, equal-priority age, slot exhaustion, SFX drop telemetry, stalled timer, invalid sample residency, unchanged desired voice causing zero SCSP writes, a one-field change causing only its required write set, slot reassignment forcing key-off-before-program/key-execute-last, stale package generation failing closed, and deterministic shadow output across repeated traces.
-- [ ] Expand the four-voice proof without breaking its slot/pitch regression. Keep desired voices, slot shadows, and all register ownership on the 68K; SH-2 never writes SCSP slots after boot and never publishes a native voice-state structure. Preserve explicit byte-order/version/publication rules only at the semantic command and package boundaries.
-- [ ] Run GREEN and linked driver verification:
+- [x] RED/GREEN infrastructure cases: timer cadence, start/release/key-off order, pitch/pan/volume/loop words, ADSR phases, protected music, priority/age stealing, slot exhaustion/drop telemetry, stalled timer, invalid residency, zero/minimal shadow writes, reassignment ordering, stale generation, and deterministic repeated traces. Full source envelope-table/package cases remain blocked.
+- [x] Expand the four-voice proof into bounded 20-note allocator/32-slot shadow infrastructure without breaking the slot/pitch regression. Desired voices, shadows, and register ownership remain MC68000-local; SH-2 does not publish a native voice-state structure. `scsp_pcm8` remains the sole explicit MMIO executor.
+- [x] Run GREEN for the bounded infrastructure and freestanding module:
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-audio-voice-allocator verify-audio-scsp-timer verify-scsp-pcm8 verify-pcm68k-image
   ```
 
-- [ ] Commit as `feat(saturn): schedule SCSP voices on the MC68000`; review interrupt/shared-state safety, priority invariants, envelope math, and image/stack bounds. Tempo correctness remains a Ymir gate in Task 23.
+- [x] Commit bounded infrastructure as `5b74081c`; independent review pending. Production heartbeat/MC68000 wiring, full package/residency, target image, tempo/Ymir/manual/FPS evidence remain open; tempo correctness remains a later target gate.
 
 ### Task 18: Close BOB rigid, opaque, platform, and collectible capabilities
 
