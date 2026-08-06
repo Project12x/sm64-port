@@ -10,7 +10,9 @@
   an accidental feature-on build fails closed until the source-derived generic
   actor cutover is separately reviewed. This preserves the current Mario
   renderer and does not claim generic actor meshes, target/Ymir output, or FPS
-  improvement.
+  improvement. The wrapper contract gate now parses each preprocessor branch
+  separately and mutation-proves both feature polarity and each callback's
+  exact delegation, preventing an inverted branch from appearing green.
 
 - Added the host-only Task 21 completion/ack ABI slice without changing any
   existing 16-byte command word meaning. The v2 mailbox now reserves a

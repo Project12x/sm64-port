@@ -34,6 +34,21 @@ def extract_function(source: str, name: str) -> str:
     raise AssertionError(f"unterminated function {name}")
 
 
+def split_feature_branches(function: str) -> tuple[str, str]:
+    """Return (feature_on, feature_off) source for one wrapper."""
+    marker = "#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE"
+    start = function.find(marker)
+    if start < 0:
+        raise AssertionError("wrapper is missing the canonical feature branch")
+    else_marker = function.find("#else", start + len(marker))
+    end_marker = function.find("#endif", else_marker + len("#else"))
+    if else_marker < 0 or end_marker < 0:
+        raise AssertionError("wrapper feature branch is not a complete #if/#else/#endif")
+    return function[start + len(marker) : else_marker], function[
+        else_marker + len("#else") : end_marker
+    ]
+
+
 def assert_contract(source: str) -> None:
     if not re.search(
         r"#ifndef\s+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE\s*"
@@ -46,12 +61,15 @@ def assert_contract(source: str) -> None:
     lower = extract_function(source, "demo_actor_lower_compat_wrapper")
     for function, legacy in ((admit, "demo_actor_queue_transform"),
                              (lower, "demo_actor_queue_classify")):
-        if "#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE" not in function:
-            raise AssertionError("wrapper must branch on the canonical feature")
-        if "return false;" not in function:
+        feature_on, feature_off = split_feature_branches(function)
+        if "return false;" not in feature_on:
             raise AssertionError("feature-on actor path must fail closed")
-        if f"return {legacy}(job, claimed_state, context);" not in function:
+        if legacy in feature_on:
+            raise AssertionError("feature-on branch delegates to Mario callback")
+        if f"return {legacy}(job, claimed_state, context);" not in feature_off:
             raise AssertionError("feature-off wrapper changed the Mario callback")
+        if "return false;" in feature_off:
+            raise AssertionError("feature-off branch fails instead of preserving Mario")
         if "sm64_saturn_actor_instance_queue" in function:
             raise AssertionError("feature-off wrapper may not enter generic queue")
 
@@ -83,6 +101,33 @@ class ActorFeatureOffWrapperTests(unittest.TestCase):
         mutated = self.source.replace(
             "return demo_actor_queue_transform(job, claimed_state, context);",
             "return false;",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_contract(mutated)
+
+    def test_feature_on_delegation_regression_is_caught(self) -> None:
+        mutated = self.source.replace(
+            "    return false;\n#else\n    return demo_actor_queue_transform",
+            "    return demo_actor_queue_transform(job, claimed_state, context);\n#else\n    return demo_actor_queue_transform",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_contract(mutated)
+
+    def test_feature_off_failure_regression_is_caught(self) -> None:
+        mutated = self.source.replace(
+            "#else\n    return demo_actor_queue_transform(job, claimed_state, context);",
+            "#else\n    return false;",
+            1,
+        )
+        with self.assertRaises(AssertionError):
+            assert_contract(mutated)
+
+    def test_lower_wrapper_delegation_change_is_caught(self) -> None:
+        mutated = self.source.replace(
+            "return demo_actor_queue_classify(job, claimed_state, context);",
+            "return demo_actor_queue_transform(job, claimed_state, context);",
             1,
         )
         with self.assertRaises(AssertionError):
