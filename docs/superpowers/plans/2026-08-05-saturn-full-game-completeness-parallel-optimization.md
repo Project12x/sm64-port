@@ -75,6 +75,7 @@
 - 2026-08-06 actor-bank lifecycle preflight: pre-publication failures require an exact producer-owned recycle keyed by `(bank index, nonzero generation, expected WRITING|READY state)`. It must clear the selected payload/count/generation through the P2 alias, fence before FREE, preserve the other bank, reject stale/wrong/double dispositions and all QUARANTINED/RENDERING/COMPLETE/FREE states, and never roll back `last_published_generation`. Post-acquire cleanup remains owned by the Task 16 handoff.
 - 2026-08-06 generation-wrap repair acceptance: `8517d63f` computes one frame-pipeline successor before the geo walk and propagates it through observer/capture/profile/camera/idle/scheduler consumers. Fix `089a41a4` closes the review gap with a full idle-probe matcher and idle-only global-count mutation. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This remains host/source-complete only; target/sourceboot-image/Ymir/manual/FPS are open.
 - 2026-08-06 pre-acquire recycle acceptance: `dd781b2c..abcd4655` adds exact producer-owned WRITING/READY recycle, two-bank recovery, P2 payload scrub/fence ordering, stale/double/state/index/generation checks, and post-acquire ownership exclusion. Fixes `52e3ce61` and `abcd4655` wire and mutation-prove the helper suite; independent rereview is SPEC/QUALITY PASS, C0/I0/M0. Host-only; target/P2, concurrent SH-2, Ymir/manual, and FPS remain open.
+- 2026-08-06 actor-arena reservation staging: the fixed 65,536-byte arithmetic and output ceiling are not a linker/package reservation. A future lane must prove one aligned sourceboot-owned arena symbol, exact bank/observer/queue/batch/output spans, linker/map bounds, initialization through that owner, and manifest-derived capacity before any target or production-drain claim.
 
 ## Prior art and reuse mode
 
@@ -950,6 +951,24 @@ release of live outputs.
   `dd781b2c`, `0af6acb1`, `6058b1ca`, `0bd848d4`, `52e3ce61`, and `abcd4655`.
   Target/P2, concurrent SH-2, sourceboot image, Ymir/manual, and FPS evidence
   remain unchecked.
+
+#### Task 14 bounded preflight: explicit actor-arena/package reservation
+
+The actor runtime currently has a correct symbolic 65,536-byte ceiling but
+sourceboot still owns ordinary static bank/observer objects and the linker
+verifier checks only aggregate LWRAM usage. This read-only preflight must map
+the exact sourceboot globals, linker sections, alignment, package manifest
+capacity, and initialization/ownership path before implementation. It must not
+change linker placement or claim target visibility.
+
+- [ ] Inspect the active sourceboot/linker/map and actor queue/arena types; write
+  `task-14-arena-reservation-preflight-report.md` with exact ranges and a
+  minimal owner/reservation seam.
+- [ ] RED must show that moving/removing the proposed reservation or replacing
+  its owner with separate statics currently escapes the source/linker gates;
+  identify the precise mutation tests needed for implementation.
+- [ ] Keep implementation, linked target, Ymir/manual, concurrent SH-2, and FPS
+  evidence as later unchecked transitions.
 
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
