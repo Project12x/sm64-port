@@ -86,7 +86,8 @@ def parse_aiff(path: Path) -> Sample:
 
 def source_inventory(root: Path) -> tuple[list[Path], str]:
     sound = root / "sound"
-    required = [sound / "sequences.json", sound / "sound_data.c"]
+    expanded_seq0 = sound / "sequences.bin.inc.c"
+    required = [sound / "sequences.json", sound / "sound_data.c", expanded_seq0]
     required += sorted((sound / "sound_banks").glob("*.json"))
     required += sorted((sound / "sequences" / "us").glob("*.m64"))
     required += sorted((sound / "samples").glob("**/*.aiff"))
@@ -94,6 +95,10 @@ def source_inventory(root: Path) -> tuple[list[Path], str]:
         raise AudioPackageError("missing sound/sequences.json (user audio inputs required)")
     if not (sound / "sound_data.c").is_file():
         raise AudioPackageError("missing sound/sound_data.c for generated sequence 00")
+    if not expanded_seq0.is_file() or expanded_seq0.stat().st_size <= 1024:
+        raise AudioPackageError(
+            "missing expanded sequence-00 payload: sound/sequences.bin.inc.c "
+            "(the 338-byte sound_data.c wrapper is not package data)")
     banks = sorted((sound / "sound_banks").glob("*.json"))
     samples = sorted((sound / "samples").glob("**/*.aiff"))
     if len(banks) != 38 or len(samples) != 219:
@@ -121,12 +126,12 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
         # its bank/control mapping is still captured, but it has no .m64 file.
         if path is None and seq_id != 0:
             raise AudioPackageError(f"missing extracted sequence asset: {name}.m64")
-        generated_source = root / "sound/sound_data.c"
+        generated_source = root / "sound/sequences.bin.inc.c"
         payload = generated_source.read_bytes() if path is None else path.read_bytes()
         if path is not None and not payload:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
-        if path is None and seq_id == 0 and not generated_source.is_file():
-            raise AudioPackageError("missing sound/sound_data.c for generated sequence 00")
+        if path is None and seq_id == 0 and len(payload) <= 1024:
+            raise AudioPackageError("expanded sequence-00 payload is too small")
         source_path = (generated_source if path is None else path)
         entries.append({"id": seq_id, "name": name, "banks": banks,
                         "source": source_path.relative_to(root).as_posix(),

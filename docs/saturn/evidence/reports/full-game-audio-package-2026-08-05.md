@@ -9,8 +9,12 @@ signed Saturn PCM8; source sequence bytes remain unchanged in S64A chunks.
 
 ## Package evidence
 
-The serial DLL-preflight gate generated untracked outputs under
-`build/saturn/audio/generated/`:
+The complete serial DLL-preflight gate is intentionally **blocked** until the
+expanded sequence-00 source asset is supplied. The tracked
+`sound/sound_data.c` is only a 338-byte wrapper around generated include files;
+the compiler now fails closed instead of packaging that wrapper as sequence
+data. The previously generated values below are historical pre-hardening
+evidence and are not a claim of a complete package.
 
 | Output | Result |
 | --- | ---: |
@@ -24,7 +28,10 @@ The serial DLL-preflight gate generated untracked outputs under
 
 `audio_manifest.json`, `bob_audio_closure.json`, and `wf_audio_closure.json`
 are generated and intentionally untracked. The catalog rejects missing/stale
-inputs and changes its source/package hashes when an input byte changes.
+inputs—including the expanded sequence-00 payload—and changes its
+source/package hashes when an input byte changes. Manifest sample paths are
+repository-relative; BOB/WF dependency roots carry framed sequence, bank, and
+PCM chunk hashes.
 Manifest sample paths are repository-relative so the same source tree produces
 identical metadata across checkout locations.
 
@@ -41,10 +48,12 @@ publishes only scalar generation/source identities.
 ## Gates
 
 * `tools/saturn/test_compile_saturn_audio.py`: **4/4**.
-* DLL-preflight `mingw32-make -f Makefile.saturn.mk -j1 compile-saturn-audio verify-audio-residency`: **PASS**.
+* DLL-preflight `mingw32-make -f Makefile.saturn.mk -j1 compile-saturn-audio verify-audio-residency`:
+  **BLOCKED** at `compile-saturn-audio` with the explicit missing expanded
+  sequence-00 payload error above.
 * Compiler run twice; complete hashes for `AUDIO.DAT`, manifest, and both scene
   closures: **identical**.
 
-Still open by design: sequence VM execution, MC68000 voice scheduling/SCSP
+Still open by design: expanded sequence-00 source extraction, sequence VM execution, MC68000 voice scheduling/SCSP
 playback, transport integration, S64P `AUDIO_DEPENDENCIES` final reseal,
 target artifact/Ymir boot, hardware audio, and manual FPS/performance evidence.

@@ -17,6 +17,9 @@
   Scene dependency digests now hash framed sequence, bank, and PCM bytes and
   publish an explicit `audio/bob` or `audio/wf` root with its selected chunk
   hashes.
+  Sequence 00 now requires the expanded generated payload; a wrapper-only
+  `sound_data.c` input fails closed and blocks the complete package gate until
+  the real source asset is supplied.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,

@@ -17,6 +17,16 @@ from saturn_audio_package import (AudioPackageError, CHUNK_ALIGNMENT, HEADER,
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def copy_complete_sound(temp: str | Path) -> Path:
+    root = Path(temp) / "repo"
+    shutil.copytree(ROOT / "sound", root / "sound")
+    # The checked-in wrapper intentionally has no generated include.  Tests
+    # that exercise the complete package contract provide a clearly synthetic
+    # expanded payload; the real asset remains a required user input.
+    (root / "sound/sequences.bin.inc.c").write_bytes(bytes(range(256)) * 8)
+    return root
+
+
 def expect_failure(fn, text: str) -> None:
     try:
         fn()
@@ -33,9 +43,10 @@ def test_aiff_and_catalog() -> None:
         first = int.from_bytes(source.readframes(1), "big", signed=True)
     assert parsed.pcm8[0] == ((first >> 8) & 0xFF)
     with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
         out = Path(temp) / "AUDIO.DAT"
         manifest = Path(temp) / "audio_manifest.json"
-        result = compile_catalog(ROOT, out, manifest)
+        result = compile_catalog(root, out, manifest)
         assert result["format"] == "S64A"
         assert result["sequence_count"] == 35
         assert result["bank_count"] == 38
@@ -55,8 +66,11 @@ def test_aiff_and_catalog() -> None:
 
 def test_source_fail_closed() -> None:
     with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp) / "repo"
-        shutil.copytree(ROOT / "sound", root / "sound")
+        incomplete = Path(temp) / "incomplete"
+        shutil.copytree(ROOT / "sound", incomplete / "sound")
+        expect_failure(lambda: compile_catalog(incomplete, Path(temp) / "missing-expanded"),
+                       "missing expanded sequence 00")
+        root = copy_complete_sound(temp)
         (root / "sound/sequences.json").unlink()
         expect_failure(lambda: compile_catalog(root, Path(temp) / "x"), "missing catalog")
         shutil.copy(ROOT / "sound/sequences.json", root / "sound/sequences.json")
@@ -72,8 +86,7 @@ def test_source_fail_closed() -> None:
 
 def test_alignment_hash_drift_and_duplicate() -> None:
     with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp) / "repo"
-        shutil.copytree(ROOT / "sound", root / "sound")
+        root = copy_complete_sound(temp)
         # A changed source must change the source identity and package digest.
         first = Path(temp) / "one"
         one = compile_catalog(root, first)
@@ -103,8 +116,7 @@ def test_alignment_hash_drift_and_duplicate() -> None:
 
 def test_residency_safety_contract() -> None:
     with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp) / "repo"
-        shutil.copytree(ROOT / "sound", root / "sound")
+        root = copy_complete_sound(temp)
         result = compile_catalog(root, Path(temp) / "AUDIO.DAT")
         dependencies = result["s64p_audio_dependencies"]
         assert dependencies and all(validate_audio_dependency(result, item)
