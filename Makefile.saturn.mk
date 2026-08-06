@@ -472,6 +472,12 @@ verify-saturn-geo-depth-manifest:
 verify-saturn-geo-walk-source-policy:
 	$(SATURN_TOOLS_PYTHON) $(SATURN_REPO_ROOT)/tools/saturn/geo_walk_source_policy_test.py
 
+.PHONY: verify-saturn-geo-walk-runtime
+verify-saturn-geo-walk-runtime:
+	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
+	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror -I$(SATURN_REPO_ROOT)/src/port/saturn/runtime $(SATURN_REPO_ROOT)/tools/saturn/geo_walk_runtime_contract_test.c $(SATURN_REPO_ROOT)/src/port/saturn/runtime/saturn_geo_walk_runtime.c -o $(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-runtime-contract-test$(HOST_EXEEXT)
+	$(SATURN_REPO_ROOT)/build/saturn/host-tests/geo-walk-runtime-contract-test$(HOST_EXEEXT)
+
 verify-sourceboot-presentation-boundary:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_presentation_boundary.py"
 

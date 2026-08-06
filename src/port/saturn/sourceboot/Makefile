@@ -293,6 +293,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_cart.c source_q16_kernel_probe.c \
   source_exception_record.c source_exception_trampolines.sx \
   $(ROOT)/src/port/saturn/runtime/saturn_geo_walk.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_geo_walk_runtime.c \
   $(ROOT)/src/port/saturn/runtime/saturn_geo_walk_storage.c \
   $(ROOT)/src/port/saturn/platform/saturn_build_identity.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \

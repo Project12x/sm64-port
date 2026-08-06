@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Added the production-oriented geo-walk runtime seam with explicit node and
+  sibling cursors, bounded overflow latching, and a host C contract. It is
+  linked into sourceboot alongside the LWRAM owner but is not yet selected by
+  `rendering_graph_node.c`; the recursive source-policy gate intentionally
+  remains red until every handler has an enter/leave conversion.
+
 - Refined the generated traversal owner to use a dedicated 16-byte SH-2
   continuation frame with both node and sibling cursors. The original 12-byte
   host scheduler frame remains a contract fixture; production storage now has
