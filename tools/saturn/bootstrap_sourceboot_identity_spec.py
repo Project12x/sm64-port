@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Mapping
 
 import gen_build_identity as identity
+import prepare_sourceboot_assets
 
 
 # All source roots that can contribute to sourceboot's SH-2 closure.  Hashing a
@@ -59,6 +60,7 @@ SCENE_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_compiled.json"
 SCENE_DEPENDENCY_PAYLOAD = "build/saturn/sourceboot/generated/bob_area1_bsp_report.json"
 ACTOR_PAYLOAD = "build/saturn/actors/mario/mario.s64b"
 ANIMATION_PAYLOAD = "build/saturn/sourceboot/generated/mario_anim_data.c"
+ACTOR_BANK_C_PAYLOAD = "build/saturn/sourceboot/generated/mario_actor_bank.c"
 GENERATED_IMAGE_INPUTS = (
     "build/saturn/sourceboot/generated/bob_area1_compiled.json",
     "build/saturn/sourceboot/generated/bob_area1_bsp_report.json",
@@ -76,6 +78,11 @@ GENERATED_IMAGE_INPUTS = (
     "build/saturn/sourceboot/generated/sourceboot_collision_catalog.inc",
     "build/saturn/marioturntable/generated/mario_eye_uv_tiles.h",
     "build/us_pc/bin/water_skybox.c",
+)
+SOURCEBOOT_ASSET_FIXED_SOURCES = (
+    "src/goddard/renderer.c", "levels/bob/script.c", "levels/bob/geo.c",
+    "levels/bob/leveldata.c", "levels/menu/leveldata.c",
+    "levels/castle_grounds/leveldata.c", "levels/ttc/leveldata.c",
 )
 
 
@@ -125,15 +132,42 @@ def _source_closure_inputs(root: Path) -> tuple[str, ...]:
     return tuple(sorted(paths))
 
 
+def _sourceboot_asset_sources(root: Path) -> list[Path]:
+    relative = [
+        *(path.relative_to(root) for path in sorted((root / "bin").glob("*.c"))),
+        *(Path(path) for path in SOURCEBOOT_ASSET_FIXED_SOURCES[:1]),
+        *(path.relative_to(root) for path in sorted((root / "actors").glob("*.c"))),
+        *(Path(path) for path in SOURCEBOOT_ASSET_FIXED_SOURCES[1:]),
+    ]
+    return [root / path for path in relative]
+
+
+def _sourceboot_generated_asset_inputs(root: Path) -> tuple[str, ...]:
+    """Use the same traversal/source roots as sourceboot's asset Make recipe."""
+    targets = prepare_sourceboot_assets.collect_targets(
+        root, _sourceboot_asset_sources(root), "build/us_pc", {"VERSION_US", "VERSION_JP_US"}
+    )
+    targets.append("build/us_pc/include/text_strings.h")
+    for relative in targets:
+        if not (root / relative).is_file():
+            raise ValueError(
+                f"source_hash generated source asset is not a file: {relative}; "
+                "run sourceboot identity-assets before sealing"
+            )
+    return tuple(sorted(targets))
+
+
 def all_input_paths() -> tuple[str, ...]:
     """Return every possible canonical input so isolated tests can seed a repo."""
     paths = {path for values in STATIC_INPUTS.values() for path in values}
     paths.update(SOURCE_CLOSURE_FILES)
+    paths.update(SOURCEBOOT_ASSET_FIXED_SOURCES)
     paths.update((
         "src/port/saturn/sourceboot/main.c",
         "src/port/saturn/gfx/saturn_actor_instance.c",
         "textures/skyboxes/water.png",
         SCENE_PAYLOAD, SCENE_DEPENDENCY_PAYLOAD, ACTOR_PAYLOAD, ANIMATION_PAYLOAD,
+        ACTOR_BANK_C_PAYLOAD, "build/us_pc/include/text_strings.h",
         *GENERATED_IMAGE_INPUTS,
     ))
     paths.update((_route_input(0), _route_input(1)))
@@ -163,7 +197,17 @@ def _integer_config(config: Mapping[str, int]) -> dict[str, int]:
 
 def _artifact_inputs(root: Path, config: Mapping[str, int]) -> dict[str, tuple[str, ...]]:
     inputs = dict(STATIC_INPUTS)
-    inputs["source_hash"] = _source_closure_inputs(root)
+    source_inputs = set(_source_closure_inputs(root))
+    source_inputs.update(_sourceboot_generated_asset_inputs(root))
+    if config["features.complete_mario_animation"]:
+        actor_bank_c = root / ACTOR_BANK_C_PAYLOAD
+        if not actor_bank_c.is_file():
+            raise ValueError(
+                "source_hash feature-selected actor bank is not a file: "
+                f"{ACTOR_BANK_C_PAYLOAD}; run sourceboot identity-assets before sealing"
+            )
+        source_inputs.add(ACTOR_BANK_C_PAYLOAD)
+    inputs["source_hash"] = tuple(sorted(source_inputs))
     inputs["route_artifact_hash"] = (_route_input(config["camera_route"]),)
     # These are exact byte payloads currently consumed by the feature-off
     # sourceboot comparator. Task 22 alone replaces them with final S64P roots

@@ -12,6 +12,9 @@ SOURCEBOOT_BUILD_IDENTITY_BIN := $(SOURCEBOOT_GENERATED)/saturn_build_identity.b
 SOURCEBOOT_BUILD_IDENTITY_JSON := $(SOURCEBOOT_GENERATED)/saturn_build_identity.json
 SOURCEBOOT_BUILD_IDENTITY_LABEL := $(SOURCEBOOT_GENERATED)/saturn_build_identity.label
 SOURCEBOOT_BUILD_IDENTITY_STAGE ?= seal
+ifneq ($(words $(SOURCEBOOT_BUILD_IDENTITY_STAGE)),1)
+  $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be exactly one token: seal or assets)
+endif
 ifneq ($(filter $(SOURCEBOOT_BUILD_IDENTITY_STAGE),seal assets),$(SOURCEBOOT_BUILD_IDENTITY_STAGE))
   $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be seal or assets)
 endif
@@ -649,7 +652,8 @@ source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp
 # outputs or on the identity spec it is about to create.
 .PHONY: identity-assets
 identity-assets: source-assets $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
-  $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK)
+  $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
+  $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
 
 $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
     $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_SOURCES)

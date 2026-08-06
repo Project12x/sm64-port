@@ -27,6 +27,12 @@
   headers used by compiled C sources. The asset-stage escape is restricted to
   the sole `identity-assets` goal; invalid stage values and attempts to use
   the asset stage for normal build/verify goals fail during Make parsing.
+  Identity sealing now derives the complete sourceboot host-generated include
+  closure through the same `prepare_sourceboot_assets.py` traversal and source
+  roots as the asset producer, validates every selected `build/us_pc` target,
+  and includes text strings. Feature-on Mario animation additionally requires
+  and seals the generated actor-bank C source. Multiword stage values now fail
+  before Make can treat them as a bypass request.
 
 - Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
   owner in sourceboot, replacing standalone actor observer/bank storage and

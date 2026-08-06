@@ -63,6 +63,12 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(relative + "\n", encoding="utf-8")
+        (self.root / "actors/traversal.c").write_text(
+            '#include "actors/traversal.ia16.inc.c"\n', encoding="utf-8"
+        )
+        generated_asset = self.root / "build/us_pc/actors/traversal.ia16.inc.c"
+        generated_asset.parent.mkdir(parents=True, exist_ok=True)
+        generated_asset.write_text("generated asset\n", encoding="utf-8")
         self.output = self.root / "build/generated/saturn_build_identity_spec.json"
 
     def tearDown(self) -> None:
@@ -98,6 +104,7 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             "tools/saturn/bootstrap_sourceboot_identity_spec.py",
             "textures/skyboxes/water.png",
             *REQUIRED_COMPILED_GENERATED_INPUTS,
+            "build/us_pc/actors/traversal.ia16.inc.c",
         ):
             before = json.loads(self.output.read_text(encoding="utf-8"))
             path = self.root / relative
@@ -151,6 +158,16 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
         semantic["features.semantic_audio"] = 1
         with self.assertRaisesRegex(ValueError, "staged S64A/AUDIO.DAT"):
             bootstrap.write_spec(self.root, self.output, semantic)
+
+        animation = copy.deepcopy(baseline)
+        animation["features.complete_mario_animation"] = 1
+        bootstrap.write_spec(self.root, self.output, animation)
+        manifest = json.loads(Path(json.loads(self.output.read_text(encoding="utf-8"))[
+            "artifacts"]["source_hash"]["path"]).read_text(encoding="utf-8"))
+        self.assertIn(
+            bootstrap.ACTOR_BANK_C_PAYLOAD,
+            {item["path"] for item in manifest["inputs"]},
+        )
 
     def test_rejects_invalid_input_before_reusing_a_stale_spec(self) -> None:
         valid = config()
