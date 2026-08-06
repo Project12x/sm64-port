@@ -106,7 +106,8 @@ bool sm64_saturn_audio_residency_plans_disjoint(
     replacement_sizes[0] = replacement->driver_size; replacement_sizes[1] = replacement->mailbox_size;
     replacement_sizes[2] = replacement->sample_size; replacement_sizes[3] = replacement->scratch_size;
     for (i = 0U; i < 4U; ++i) for (j = 0U; j < 4U; ++j)
-        if (active_offsets[i] < replacement_offsets[j] + replacement_sizes[j] &&
+        if (active_sizes[i] != 0U && replacement_sizes[j] != 0U &&
+            active_offsets[i] < replacement_offsets[j] + replacement_sizes[j] &&
             replacement_offsets[j] < active_offsets[i] + active_sizes[i]) return false;
     return true;
 }
