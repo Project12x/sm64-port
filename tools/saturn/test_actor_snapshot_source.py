@@ -236,29 +236,66 @@ def test_pre_acquire_failures_use_exact_producer_recycle() -> None:
         raise AssertionError("sourceboot quarantine mutation escaped source gate")
 
 
-def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
-    implementation = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
-    recycle = body_text(implementation,
-                        "sm64_saturn_actor_instance_bank_recycle_pre_acquire")
+def assert_pre_acquire_recycle_helper_contract(recycle: str) -> None:
     for state in (
         "SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING",
         "SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
     ):
         assert state in recycle
+    assert re.search(
+        r"expected_state\s*!=\s*SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING\s*&&\s*"
+        r"expected_state\s*!=\s*SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
+        recycle,
+        re.S,
+    ) is not None
     assert "shared->state[index] != expected_state" in recycle
     assert "shared->generation[index] != generation" in recycle
     assert "index >= 2U" in recycle and "generation == 0U" in recycle
+    assert "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED" not in recycle
+    assert "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_RENDERING" not in recycle
+    assert "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_COMPLETE" not in recycle
+    assert "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE" not in recycle
     clear = recycle.index("memset(shared->snapshots[index], 0")
+    assert "shared->count[index] = 0U;" in recycle
+    assert "shared->generation[index] = 0U;" in recycle
     fence = recycle.index("actor_bank_fence();", clear)
     free = recycle.index("SM64_SATURN_ACTOR_INSTANCE_BANK_FREE", fence)
     assert clear < fence < free
+    assert "last_published_generation =" not in recycle
+    assert "sm64_saturn_actor_instance_bank_quarantine" not in recycle
+
+
+def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
+    implementation = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
+    recycle = body_text(implementation,
+                        "sm64_saturn_actor_instance_bank_recycle_pre_acquire")
+    assert_pre_acquire_recycle_helper_contract(recycle)
     broadened = recycle.replace(
         "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
         "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED",
         1,
     )
     assert broadened != recycle
-    assert "SM64_SATURN_ACTOR_INSTANCE_BANK_READY" not in broadened
+    for mutation, label in (
+        (broadened, "quarantine acceptance"),
+        (recycle.replace("shared->generation[index] != generation", "false", 1),
+         "generation validation removal"),
+        (recycle.replace("index >= 2U", "false", 1), "index validation removal"),
+        (recycle.replace("memset(shared->snapshots[index], 0", "/* missing clear */ memset(shared->snapshots[index], 1", 1),
+         "payload clear removal"),
+        (recycle.replace("actor_bank_fence();\n    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;",
+                         "shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;", 1),
+         "pre-free fence removal"),
+        (recycle.replace("shared->generation[index] = 0U;", "shared->last_published_generation = 0U;", 1),
+         "publication rollback"),
+    ):
+        assert mutation != recycle
+        try:
+            assert_pre_acquire_recycle_helper_contract(mutation)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError(f"{label} mutation escaped source gate")
 
 
 def assert_capture_uses_cache_through_payload(text: str) -> None:
