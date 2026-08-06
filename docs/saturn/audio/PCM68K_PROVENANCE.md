@@ -48,6 +48,31 @@ The shared ABI intentionally differs from the reference:
 
 No Nintendo sample, sequence, or prebuilt driver data is included.
 
+## Task 17 bounded scheduler increment
+
+The bounded allocator, desired-voice, timer, and slot-shadow modules inspected
+the following pinned sources before implementation:
+
+| Source | Revision / license | Exact inspected ranges | Reuse mode |
+| --- | --- | --- | --- |
+| In-tree Project12x SM64 audio | repository pin `36d015fb`; inherited tree has no root license file | `src/audio/playback.c:1199-1372`, `src/audio/effects.c:345-457`, `src/audio/seqplayer.c:712-764,783-921,1403-1450,1971-2014` | Bounded semantic adaptation of release/priority allocation, note lifetime, envelope phases, tuning/pan, and note priority. No N64 heap, pointer, mixer, RSP, or task code copied. Existing notices remain unchanged. |
+| `ponut64/SCSP_poneSound` | `31782e4c61337327f23eb9aa45ecd37fe0944ea0`; MIT | `PROJ/main.c:116-156,507-577`, `jo_demo/pcmsys.c:250-272` | Close-port of the already-approved slot-word/key-order and pitch boundary only. The mutable control structs, VBlank scheduling, driver loop, assets, ADX, and CDDA paths remain excluded. |
+| `yaul-org/libyaul-examples` | `66b648eb059bb8bb7392eac70821605a68205b85`; repository license unclear at this pin | `scsp-ponesound-pcm8/ponesound.c:63-92,118-121`, `scsp-ponesound-pcm8/scsp-ponesound-pcm8.c:47-71` | Pattern/validation only; no source or binary copied. Its VBlank-driven `start` publication is explicitly not the Task 17 timer contract. |
+
+Task 17 keeps `sm64_saturn_sequence_vm_event_t` as the input scalar contract.
+Package residency and ADSR defaults are MC68000-local scalar bindings; desired
+voices and 32-slot shadows are never shared-memory ABIs. The shadow emits
+four-byte `(value, slot, field)` commands and performs no MMIO. Only
+`sm64_saturn_scsp_apply_slot_command()` translates a validated command to a
+native SCSP word write. The 20 semantic notes currently map deterministically
+to slots 0-19; the remaining hardware slots stay unowned until production
+layer/residency policy is available.
+
+The freestanding gate builds a relocatable MC68000 module and rejects every
+undefined symbol. It does not link these modules into the heartbeat image and
+does not establish a production timer IRQ, package residency, complete source
+envelope-table playback, or target audio result.
+
 ## Heartbeat image increment
 
 `src/port/saturn/audio68k/start.S` and `linker.ld` closely port only the

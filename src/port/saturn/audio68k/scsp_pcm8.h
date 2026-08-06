@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "pcm_voice.h"
+#include "slot_shadow.h"
 
 enum {
     SM64_SATURN_SCSP_SLOT_BYTES = 0x20U,
@@ -30,5 +31,9 @@ bool sm64_saturn_scsp_pcm8_start(volatile uint8_t *registers, uint16_t slot,
 bool sm64_saturn_scsp_pcm8_stop(volatile uint8_t *registers, uint16_t slot);
 bool sm64_saturn_scsp_set_master(volatile uint8_t *registers,
                                  uint16_t volume);
+/* Sole raw-MMIO boundary for pointer-free slot-shadow commands. */
+bool sm64_saturn_scsp_apply_slot_command(
+    volatile uint8_t *registers,
+    const sm64_saturn_slot_command_t *command);
 
 #endif

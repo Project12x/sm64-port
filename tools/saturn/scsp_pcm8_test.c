@@ -101,11 +101,32 @@ static void test_master_volume_is_clamped(void)
     assert(!sm64_saturn_scsp_set_master(NULL, 1U));
 }
 
+static void test_pointer_free_shadow_command_has_one_explicit_mmio_boundary(void)
+{
+    uint16_t register_words[SM64_SATURN_SCSP_REGISTER_BYTES / 2U] = {0};
+    uint8_t *registers = (uint8_t *)register_words;
+    sm64_saturn_slot_command_t command = {
+        0x4321U, 31U, SM64_SATURN_SLOT_FIELD_PITCH
+    };
+    write_count = 0U;
+    assert(sm64_saturn_scsp_apply_slot_command(registers, &command));
+    assert(write_count == 1U);
+    assert(writes[0].offset == 31U * SM64_SATURN_SCSP_SLOT_BYTES +
+                               SM64_SATURN_SCSP_SLOT_PITCH);
+    assert(writes[0].value == 0x4321U);
+    command.slot = SM64_SATURN_SCSP_SLOT_COUNT;
+    assert(!sm64_saturn_scsp_apply_slot_command(registers, &command));
+    command.slot = 0U;
+    command.field = 0xffU;
+    assert(!sm64_saturn_scsp_apply_slot_command(registers, &command));
+}
+
 int main(void)
 {
     test_pitch_words_are_bounded_and_exact();
     test_pcm8_start_writes_native_68k_words_and_keys_last();
     test_loop_stop_and_invalid_requests_fail_closed();
     test_master_volume_is_clamped();
+    test_pointer_free_shadow_command_has_one_explicit_mmio_boundary();
     return 0;
 }

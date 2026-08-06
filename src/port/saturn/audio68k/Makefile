@@ -11,6 +11,7 @@ CC := $(M68K_TOOL_PREFIX)-gcc
 OBJCOPY := $(M68K_TOOL_PREFIX)-objcopy
 NM := $(M68K_TOOL_PREFIX)-nm
 OBJDUMP := $(M68K_TOOL_PREFIX)-objdump
+LD := $(M68K_TOOL_PREFIX)-ld
 PYTHON ?= python3
 
 ROOT := ../../../..
@@ -19,6 +20,10 @@ ELF := $(BUILD)/pcm68k-heartbeat.elf
 BIN := $(BUILD)/pcm68k-heartbeat.bin
 MAP := $(BUILD)/pcm68k-heartbeat.map
 OBJECTS := $(BUILD)/start.o $(BUILD)/main.o $(BUILD)/pcm_voice.o $(BUILD)/scsp_pcm8.o
+TASK17_OBJECTS := $(BUILD)/audio_engine.o $(BUILD)/voice_allocator.o \
+	$(BUILD)/desired_voice.o $(BUILD)/slot_shadow.o $(BUILD)/scsp_timer.o \
+	$(BUILD)/audio_freestanding.o
+TASK17_RELOC := $(BUILD)/task17-audio-modules.o
 PROTOCOL_HEADER := ../audio/saturn_pcm_protocol.h
 
 CPPFLAGS := -I. -I../audio
@@ -28,9 +33,11 @@ CFLAGS := -mc68000 -Os -std=c11 -ffreestanding -fno-builtin -fno-common \
 ASFLAGS := -mc68000
 LDFLAGS := -mc68000 -nostdlib -Wl,--no-undefined,-Map,$(MAP) -T linker.ld
 
-.PHONY: all verify clean
+.PHONY: all modules verify clean
 
 all: $(ELF) $(BIN)
+
+modules: $(TASK17_RELOC)
 
 $(BUILD):
 	mkdir -p $@
@@ -44,8 +51,30 @@ $(BUILD)/main.o: main.c pcm68k_heartbeat.h pcm_voice.h $(PROTOCOL_HEADER) | $(BU
 $(BUILD)/pcm_voice.o: pcm_voice.c pcm_voice.h $(PROTOCOL_HEADER) | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/scsp_pcm8.o: scsp_pcm8.c scsp_pcm8.h pcm_voice.h | $(BUILD)
+$(BUILD)/scsp_pcm8.o: scsp_pcm8.c scsp_pcm8.h pcm_voice.h slot_shadow.h desired_voice.h | $(BUILD)
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/audio_engine.o: audio_engine.c audio_engine.h voice_allocator.h desired_voice.h sequence_vm.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/voice_allocator.o: voice_allocator.c voice_allocator.h desired_voice.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/desired_voice.o: desired_voice.c desired_voice.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/slot_shadow.o: slot_shadow.c slot_shadow.h desired_voice.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/scsp_timer.o: scsp_timer.c scsp_timer.h | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/audio_freestanding.o: audio_freestanding.c | $(BUILD)
+	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(TASK17_RELOC): $(TASK17_OBJECTS)
+	$(LD) -r $(TASK17_OBJECTS) -o $@
+	$(PYTHON) -c "import subprocess; out=subprocess.check_output([r'$(NM)', '-u', r'$(TASK17_RELOC)'], text=True); assert not out.strip(), out"
 
 $(ELF): $(OBJECTS) linker.ld
 	$(CC) $(M68K_EXEC_PREFIX_FLAG) $(LDFLAGS) $(OBJECTS) -o $@
@@ -60,4 +89,4 @@ verify: all
 		--elf $(ELF) --objdump $(OBJDUMP)
 
 clean:
-	rm -f $(OBJECTS) $(ELF) $(BIN) $(MAP)
+	rm -f $(OBJECTS) $(TASK17_OBJECTS) $(TASK17_RELOC) $(ELF) $(BIN) $(MAP)

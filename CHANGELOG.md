@@ -4,6 +4,22 @@
 
 ### Changed
 
+- Added a bounded MC68000-local audio scheduling infrastructure slice that
+  consumes Task 15's pointer-free note events without exposing native voice
+  state to either SH-2. A 20-note allocator protects music from ordinary SFX,
+  steals the lowest-priority/oldest eligible SFX deterministically, preserves
+  source note-duration, tuning, pan, and release inputs, and reports drops and
+  malformed or duplicate generations. Timer-driven integer envelopes feed a
+  32-slot desired-voice shadow that emits only changed scalar register commands,
+  with key-off before reassignment and key-execute last. Raw SCSP writes remain
+  confined to an explicit `scsp_pcm8` command executor. Serialized host gates
+  and a freestanding MC68000 relocatable-module/undefined-symbol gate pass;
+  the modules are deliberately not linked into the heartbeat image or runtime
+  loop because Task 12's real package/sequence assets and residency bindings
+  are absent. Production timer IRQ wiring, complete source envelope tables,
+  full PCM68K image/package, target, Ymir, hardware, manual, and tempo evidence
+  remain open rather than inferred from this infrastructure result.
+
 - Added a bounded, pointer-free M64 sequence VM scaffold for the MC68000
   audio lane. It preserves Project12x compressed-delay, tempo-accumulator,
   call/return, loop, branch, and note timing semantics while emitting scalar

@@ -162,3 +162,31 @@ bool sm64_saturn_scsp_set_master(volatile uint8_t *registers,
              (uint16_t)(0x0200U | volume));
     return true;
 }
+
+bool sm64_saturn_scsp_apply_slot_command(
+    volatile uint8_t *registers,
+    const sm64_saturn_slot_command_t *command)
+{
+    static const uint8_t field_offsets[] = {
+        SM64_SATURN_SCSP_SLOT_KEYS,
+        SM64_SATURN_SCSP_SLOT_SA_LOW,
+        SM64_SATURN_SCSP_SLOT_LSA,
+        SM64_SATURN_SCSP_SLOT_LEA,
+        SM64_SATURN_SCSP_SLOT_EG,
+        SM64_SATURN_SCSP_SLOT_RELEASE,
+        SM64_SATURN_SCSP_SLOT_ATTENUATION,
+        SM64_SATURN_SCSP_SLOT_PITCH,
+        SM64_SATURN_SCSP_SLOT_PAN_SEND,
+    };
+    uint16_t offset;
+    if (registers == 0 || command == 0 ||
+        ((uintptr_t)registers & 1U) != 0U ||
+        command->slot >= SM64_SATURN_SCSP_SLOT_COUNT ||
+        command->field > SM64_SATURN_SLOT_FIELD_PAN_SEND)
+        return false;
+    offset = (uint16_t)(command->slot * SM64_SATURN_SCSP_SLOT_BYTES +
+                        field_offsets[command->field]);
+    if (offset >= SM64_SATURN_SCSP_MASTER_OFFSET) return false;
+    put_word(registers, offset, command->value);
+    return true;
+}
