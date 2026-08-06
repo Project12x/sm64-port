@@ -1,10 +1,13 @@
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "../../src/port/saturn/audio/saturn_audio_package.h"
 #include "../../src/port/saturn/audio68k/audio_package.h"
 
-int main(void)
+int main(int argc, char **argv)
 {
     uint8_t raw[2200];
     sm64_saturn_audio_residency_plan_t active = {1U, 0U, 8192U, 8192U, 0U,
@@ -21,7 +24,21 @@ int main(void)
     raw[107] = 4U;
     raw[110] = 8U; raw[111] = 0U;
     raw[2048] = 0x12U;
-    assert(sm64_saturn_audio_package_validate_header(raw, sizeof(raw), &package));
+    assert(!sm64_saturn_audio_package_validate_header(raw, sizeof(raw), &package));
+    if (argc > 1) {
+        FILE *file = fopen(argv[1], "rb");
+        long size;
+        uint8_t *bytes;
+        assert(file != NULL);
+        assert(fseek(file, 0L, SEEK_END) == 0);
+        size = ftell(file); assert(size > 0L);
+        assert(fseek(file, 0L, SEEK_SET) == 0);
+        bytes = (uint8_t *)malloc((size_t)size); assert(bytes != NULL);
+        assert(fread(bytes, 1U, (size_t)size, file) == (size_t)size);
+        fclose(file);
+        assert(sm64_saturn_audio_package_validate_header(bytes, (uint32_t)size, &package));
+        free(bytes);
+    }
     memset(&package, 0, sizeof(package));
     package.sequence_count = 35U;
     package.bank_count = 38U;

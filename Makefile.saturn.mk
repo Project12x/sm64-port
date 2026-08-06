@@ -253,7 +253,7 @@ verify-audio-residency: compile-saturn-audio
 		"$(SATURN_REPO_ROOT)/src/port/saturn/audio/saturn_audio_package.c" \
 		"$(PCM68K_DIR)/audio_package.c" \
 		-o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)"
-	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)'], check=True)"
+	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)', r'$(AUDIO_GENERATED)/AUDIO.DAT'], check=True)"
 	@"$(SATURN_TOOLS_PYTHON)" -c "import hashlib, pathlib, shutil, subprocess, tempfile; root=pathlib.Path(r'$(SATURN_REPO_ROOT)'); py=r'$(SATURN_TOOLS_PYTHON)'; a=pathlib.Path(tempfile.mkdtemp(prefix='s64a-a-')); b=pathlib.Path(tempfile.mkdtemp(prefix='s64a-b-')); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(a)], check=True); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(b)], check=True); names=['AUDIO.DAT','audio_manifest.json','bob_audio_closure.json','wf_audio_closure.json']; assert all(hashlib.sha256((a/n).read_bytes()).digest()==hashlib.sha256((b/n).read_bytes()).digest() for n in names); print('audio deterministic hashes: PASS')"
 
 verify-pcm-transport:

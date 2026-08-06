@@ -13,9 +13,8 @@ bool sm64_saturn_audio68k_package_accept(
         return false;
     }
     token->generation = plan->generation;
-    token->source_crc = ((uint32_t)package->source_sha256[0] << 24) |
-                        ((uint32_t)package->source_sha256[1] << 16) |
-                        ((uint32_t)package->source_sha256[2] << 8) |
-                        (uint32_t)package->source_sha256[3];
+    for (uint32_t i = 0U; i < 32U; ++i) {
+        token->source_sha256[i] = package->source_sha256[i];
+    }
     return true;
 }
