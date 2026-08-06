@@ -916,6 +916,28 @@ change simulation cadence, skip a source tick, or alter the observer ABI.
 - [ ] Commit and independently review the repair. Do not combine it with
   pre-acquire bank cleanup or package reservation/placement work.
 
+#### Task 14 bounded repair: recyclable pre-acquire bank failure
+
+This is a lifecycle-design lane after the source-pool and skip-zero repairs.
+`sm64_saturn_actor_instance_bank_capture()` can leave a WRITING bank
+QUARANTINED after capture/publish failure, and a READY bank can be stranded when
+acquire fails; the current state machine has no legal path back to FREE. The
+repair must distinguish exact pre-publication abort from post-publication
+acquire failure and preserve Task 16 terminal/consume/retire ownership. Never
+permit arbitrary `QUARANTINED -> FREE`, generation-wide ambiguous cleanup, or
+release of live outputs.
+
+- [ ] Preflight the landed handoff and bank state machine; record exact
+  generation/index ownership, retry, and stale/double-disposition cases before
+  implementation.
+- [ ] RED must show both physical banks can be stranded by the current failure
+  paths and that a guessed broad quarantine-to-free mutation is rejected.
+- [ ] Design an exact `abort_write`/pre-acquire discard contract with cleared
+  payload/count/generation and explicit retry semantics; leave post-acquire
+  cleanup to the handoff owner.
+- [ ] Implementation, serialized gates, independent review, target/P2, and
+  Ymir/manual/FPS evidence remain separate unchecked transitions.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
