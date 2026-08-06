@@ -1,5 +1,6 @@
 #include "saturn_audio_spatial.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -31,21 +32,6 @@ static uint16_t source_token_slot(uint16_t token)
 static float spatial_abs(float value)
 {
     return value < 0.0f ? -value : value;
-}
-
-static float spatial_sqrt(float value)
-{
-    float estimate;
-    uint8_t i;
-
-    if (value <= 0.0f) {
-        return 0.0f;
-    }
-    estimate = value > 1.0f ? value : 1.0f;
-    for (i = 0U; i < 24U; ++i) {
-        estimate = 0.5f * (estimate + value / estimate);
-    }
-    return estimate;
 }
 
 static uint8_t quantize_u8(float value, float scale)
@@ -191,7 +177,7 @@ void sm64_saturn_audio_spatial_quantize(
     if (out == NULL) {
         return;
     }
-    distance = spatial_sqrt(x * x + y * y + z * z);
+    distance = sqrtf(x * x + y * y + z * z);
     volume_range = bank < 3U ? 0.9f : 0.8f;
     if ((sound_bits & SOUND_NO_VOLUME_LOSS_BITS) != 0U) {
         intensity = 1.0f;

@@ -53,7 +53,9 @@ later source movement does not erase the provenance.
   0x4c * (0xff - requestedPriority)` rule (or requested priority alone for
   `SOUND_NO_PRIORITY_LOSS`).  Level acoustic reach, bank volume range,
   moving-speed, constant-frequency, and vibrato inputs are applied on SH-2
-  before volume/pan/pitch quantization.  Active source pointers are resolved
+  before volume/pan/pitch quantization.  Distance calls the existing
+  Saturn-target `sqrtf` service used by inherited source paths rather than
+  embedding a second iterative implementation.  Active source pointers are resolved
   and reevaluated every source-audio tick; they remain SH-2-local.
 - The inherited US catalog limits and 38 usable list nodes per bank are
   retained.  Waiting discrete requests use the exact ten-count post-decrement

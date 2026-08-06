@@ -14,8 +14,10 @@
   the SH-2.  Admission uses the inherited requested-priority plus exact
   distance/front weighting, and volume/pitch retain per-level acoustic reach,
   bank range, moving-speed, constant-frequency, and vibrato rules before
-  quantization.  Active source positions are reevaluated each game-audio
-  tick; waiting discrete requests expire after the inherited countdown,
+  quantization; distance uses the repository's existing target `sqrtf`
+  service instead of a duplicate 24-iteration divider loop.  Active source
+  positions are reevaluated each game-audio tick; waiting discrete requests
+  expire after the inherited countdown,
   published requests retire through generation-matched completion feedback,
   and invalid per-bank sound IDs fail before consuming an identity slot.
   Jingle/secondary completion, published-SFX lowering, and global fades now
