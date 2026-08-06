@@ -13,6 +13,9 @@ from typing import Iterable
 
 from actor_source import (
     ACTOR_CAPABILITY_NAMES,
+    ACTOR_CAPABILITY_BITS,
+    ACTOR_RUNTIME_CAPABILITY_BITS,
+    ACTOR_RUNTIME_CAPABILITY_NAMES,
     analyze_actor_capabilities,
     load_animation_inventory,
     parse_mario_skeleton,
@@ -60,9 +63,11 @@ PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
 FAMILY_MAGIC = b"S64F"
 FAMILY_VERSION = 1
 FAMILY_HEADER_STRUCT = struct.Struct(">4sHHIIII32s")
-FAMILY_RECORD_STRUCT = struct.Struct(">13I")
+FAMILY_RECORD_STRUCT = struct.Struct(">14I")
 FAMILY_FLAG_SUPPORTED = 1 << 0
 FAMILY_FLAG_GEOMETRY = 1 << 1
+FAMILY_RUNTIME_CAPABILITY_MASK = sum(
+    1 << index for index in range(len(ACTOR_RUNTIME_CAPABILITY_NAMES)))
 
 PINNED_MARIO_ANIMATION_SOURCE_ROOT = "assets/anims"
 PINNED_MARIO_ANIMATION_SOURCE_COUNT = 193
@@ -133,6 +138,10 @@ def _family_record(root: Path, record: dict[str, object]) -> dict[str, object]:
     material = tuple(record.get("material_feature_bits", ()))
     roots = tuple(record.get("object_roots", ()))
     effects = tuple(record.get("effects", ()))
+    capability_hints = tuple(record.get("capability_hints", ()))
+    required_capabilities = tuple(
+        str(item).upper() for item in record.get("capability_requirements", ())
+    )
     analysis = analyze_actor_capabilities(
         geo_source,
         material_feature_bits=material,
@@ -140,8 +149,15 @@ def _family_record(root: Path, record: dict[str, object]) -> dict[str, object]:
         model_variants=variants,
         object_roots=roots,
         effects=effects,
+        capability_hints=capability_hints,
     )
     unsupported = [f"UNSUPPORTED_GEO_NODE:{node}" for node in analysis.unsupported]
+    for capability in required_capabilities:
+        bit = ACTOR_CAPABILITY_BITS.get(capability)
+        if bit is None:
+            unsupported.append(f"UNKNOWN_CAPABILITY:{capability}")
+        elif analysis.mask & bit == 0:
+            unsupported.append(f"UNRESOLVED_CAPABILITY:{capability}")
     sources = list(record.get("sources", ()))
     # Closure hashes are authoritative.  A stale checkout is a named
     # unsupported fact, never silently accepted as current geometry.
@@ -173,6 +189,9 @@ def _family_record(root: Path, record: dict[str, object]) -> dict[str, object]:
         "family_id": _family_stable_hash(family_key),
         "capability_mask": analysis.mask,
         "capabilities": list(analysis.names),
+        "runtime_capability_mask": analysis.runtime_mask,
+        "runtime_capabilities": list(analysis.runtime_names),
+        "required_capabilities": sorted(set(required_capabilities)),
         "geo_nodes": list(analysis.geo_nodes),
         "unsupported": unsupported,
         "supported": not unsupported,
@@ -206,6 +225,8 @@ def _pack_family_bank(families: list[dict[str, object]]) -> bytes:
             "capabilities": family["capabilities"], "geo_nodes": family["geo_nodes"],
             "animation_table": family["animation_table"],
             "model_variants": family["model_variants"], "effects": family["effects"],
+            "runtime_capabilities": family["runtime_capabilities"],
+            "required_capabilities": family["required_capabilities"],
         }
         metadata_off, metadata_size = span(_canonical_json(metadata))
         flags = (FAMILY_FLAG_SUPPORTED if family["supported"] else 0) | (
@@ -214,7 +235,8 @@ def _pack_family_bank(families: list[dict[str, object]]) -> bytes:
             int(family["family_id"]), int(family["capability_mask"]),
             int(family["maximum_live_instances"]), int(family["actor_count"]), flags,
             name_off, name_size, source_off, source_size,
-            unsupported_off, unsupported_size, metadata_off, metadata_size))
+            unsupported_off, unsupported_size, metadata_off, metadata_size,
+            int(family["runtime_capability_mask"])))
     records_offset = FAMILY_HEADER_STRUCT.size
     blob_offset = records_offset + len(records)
     header = FAMILY_HEADER_STRUCT.pack(
@@ -249,7 +271,8 @@ def validate_family_bank_payload(payload: bytes) -> None:
         fields = FAMILY_RECORD_STRUCT.unpack_from(payload, records_offset + index * FAMILY_RECORD_STRUCT.size)
         family_id = fields[0]
         if (family_id == 0 or family_id in seen or
-                fields[4] & ~(FAMILY_FLAG_SUPPORTED | FAMILY_FLAG_GEOMETRY)):
+                fields[4] & ~(FAMILY_FLAG_SUPPORTED | FAMILY_FLAG_GEOMETRY) or
+                fields[13] & ~FAMILY_RUNTIME_CAPABILITY_MASK):
             raise ValueError("duplicate or empty family ID")
         seen.add(family_id)
         for offset, size in ((fields[5], fields[6]), (fields[7], fields[8]),
@@ -284,6 +307,9 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
                 int(existing["maximum_live_instances"]) +
                 int(family["maximum_live_instances"]))
             existing["capability_mask"] = int(existing["capability_mask"]) | int(family["capability_mask"])
+            existing["runtime_capability_mask"] = (
+                int(existing["runtime_capability_mask"]) |
+                int(family["runtime_capability_mask"]))
             existing["capabilities"] = sorted(set(existing["capabilities"]) |
                                                 set(family["capabilities"]),
                                                 key=ACTOR_CAPABILITY_NAMES.index)
@@ -292,6 +318,9 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
             existing["unsupported"] = sorted(set(existing["unsupported"]) | set(family["unsupported"]))
             existing["supported"] = not existing["unsupported"]
             existing["effects"] = sorted(set(existing["effects"]) | set(family["effects"]))
+            existing["required_capabilities"] = sorted(
+                set(existing["required_capabilities"]) |
+                set(family["required_capabilities"]))
             source_by_path = {str(item["path"]): item for item in existing["sources"]}
             for source in family["sources"]:
                 path = str(source["path"])
@@ -320,6 +349,9 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
         "payload_sha256": payload_sha, "payload_size": len(payload),
         "payload": payload_path.as_posix(),
         "capability_bits": {name: 1 << index for index, name in enumerate(ACTOR_CAPABILITY_NAMES)},
+        "runtime_capability_bits": {
+            name: 1 << index for index, name in enumerate(ACTOR_RUNTIME_CAPABILITY_NAMES)
+        },
         "families": families,
     }
     # Runtime family selection is generic and evidence-bearing.  Required

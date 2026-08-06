@@ -12,9 +12,20 @@
 #define SM64_SATURN_ACTOR_FAMILY_BANK_MAGIC 0x53363446UL
 #define SM64_SATURN_ACTOR_FAMILY_BANK_VERSION 1U
 #define SM64_SATURN_ACTOR_FAMILY_BANK_HEADER_SIZE 56U
-#define SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE 52U
+#define SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE 56U
 #define SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED (1U << 0)
 #define SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY (1U << 1)
+#define SM64_SATURN_ACTOR_RUNTIME_CAP_TRANSFORM (1U << 0)
+#define SM64_SATURN_ACTOR_RUNTIME_CAP_SCALE (1U << 1)
+#define SM64_SATURN_ACTOR_RUNTIME_CAP_MATERIAL (1U << 2)
+#define SM64_SATURN_ACTOR_RUNTIME_CAP_SURFACE (1U << 3)
+#define SM64_SATURN_ACTOR_RUNTIME_CAP_LIFECYCLE (1U << 4)
+#define SM64_SATURN_ACTOR_RUNTIME_CAPABILITY_MASK \
+    (SM64_SATURN_ACTOR_RUNTIME_CAP_TRANSFORM | \
+     SM64_SATURN_ACTOR_RUNTIME_CAP_SCALE | \
+     SM64_SATURN_ACTOR_RUNTIME_CAP_MATERIAL | \
+     SM64_SATURN_ACTOR_RUNTIME_CAP_SURFACE | \
+     SM64_SATURN_ACTOR_RUNTIME_CAP_LIFECYCLE)
 
 typedef struct sm64_saturn_actor_animation_record {
     uint32_t values_offset, indices_offset;
@@ -83,6 +94,7 @@ typedef struct sm64_saturn_actor_family_record {
     uint32_t unsupported_size;
     uint32_t metadata_offset;
     uint32_t metadata_size;
+    uint32_t runtime_capability_mask;
 } sm64_saturn_actor_family_record_t;
 
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
@@ -112,6 +124,9 @@ bool sm64_saturn_actor_family_bank_validate_expected(
 bool sm64_saturn_actor_family_bank_record(
     const sm64_saturn_actor_family_bank_view_t *view, uint16_t index,
     sm64_saturn_actor_family_record_t *out);
+bool sm64_saturn_actor_family_capability_supported(
+    const sm64_saturn_actor_family_record_t *record,
+    uint32_t required_runtime_capability_mask);
 int sm64_saturn_actor_family_bank_select(
     const sm64_saturn_actor_family_bank_view_t *view,
     uint32_t required_capability_mask, uint32_t multiplicity);

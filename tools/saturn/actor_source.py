@@ -40,14 +40,32 @@ ACTOR_CAP_SURFACE = 1 << 9
 ACTOR_CAP_LOD = 1 << 10
 ACTOR_CAP_PARTICLE = 1 << 11
 ACTOR_CAP_EFFECT = 1 << 12
+ACTOR_CAP_RIGID = 1 << 13
+ACTOR_CAP_OPAQUE = 1 << 14
+ACTOR_CAP_STATIC_TRANSFORM = 1 << 15
+ACTOR_CAP_PLATFORM = 1 << 16
+ACTOR_CAP_COLLECTIBLE = 1 << 17
 
 ACTOR_CAPABILITY_NAMES = (
     "ANIMATED", "SWITCH", "BILLBOARD", "ALPHA", "TRANSLUCENT", "SHADOW",
     "PARENTED", "HELD", "MODEL_MUTATION", "SURFACE", "LOD", "PARTICLE",
-    "EFFECT",
+    "EFFECT", "RIGID", "OPAQUE", "STATIC_TRANSFORM", "PLATFORM",
+    "COLLECTIBLE",
 )
 ACTOR_CAPABILITY_BITS = {
     name: 1 << index for index, name in enumerate(ACTOR_CAPABILITY_NAMES)
+}
+
+ACTOR_RUNTIME_CAP_TRANSFORM = 1 << 0
+ACTOR_RUNTIME_CAP_SCALE = 1 << 1
+ACTOR_RUNTIME_CAP_MATERIAL = 1 << 2
+ACTOR_RUNTIME_CAP_SURFACE = 1 << 3
+ACTOR_RUNTIME_CAP_LIFECYCLE = 1 << 4
+ACTOR_RUNTIME_CAPABILITY_NAMES = (
+    "TRANSFORM", "SCALE", "MATERIAL", "SURFACE", "LIFECYCLE",
+)
+ACTOR_RUNTIME_CAPABILITY_BITS = {
+    name: 1 << index for index, name in enumerate(ACTOR_RUNTIME_CAPABILITY_NAMES)
 }
 
 
@@ -59,6 +77,8 @@ class ActorCapabilityReport:
     names: tuple[str, ...]
     unsupported: tuple[str, ...]
     geo_nodes: tuple[str, ...]
+    runtime_mask: int
+    runtime_names: tuple[str, ...]
 
 
 def analyze_actor_capabilities(
@@ -69,6 +89,7 @@ def analyze_actor_capabilities(
     model_variants: tuple[dict[str, object], ...] = (),
     object_roots: tuple[str, ...] = (),
     effects: tuple[str, ...] = (),
+    capability_hints: tuple[str, ...] = (),
 ) -> ActorCapabilityReport:
     """Derive generic capabilities without matching a family name.
 
@@ -89,6 +110,7 @@ def analyze_actor_capabilities(
     if "GEO_BILLBOARD" in nodes:
         mask |= ACTOR_CAP_BILLBOARD
     features = {item.lower() for item in material_feature_bits}
+    hints = {item.upper() for item in capability_hints}
     if "alpha" in features:
         mask |= ACTOR_CAP_ALPHA
     if "transparent" in features or "translucent" in features:
@@ -111,8 +133,30 @@ def analyze_actor_capabilities(
         mask |= ACTOR_CAP_PARTICLE
     if effects:
         mask |= ACTOR_CAP_EFFECT
+    rigid = (bool(text) and not animation_table and
+             "GEO_ANIMATED_PART" not in nodes and len(model_variants) <= 1)
+    if rigid:
+        mask |= ACTOR_CAP_RIGID | ACTOR_CAP_STATIC_TRANSFORM
+    if text and not ({"alpha", "transparent", "translucent"} & features):
+        mask |= ACTOR_CAP_OPAQUE
+    if "PLATFORM" in hints:
+        mask |= ACTOR_CAP_PLATFORM
+    if "COLLECTIBLE" in hints:
+        mask |= ACTOR_CAP_COLLECTIBLE
+    runtime_mask = 0
+    if text:
+        runtime_mask |= (ACTOR_RUNTIME_CAP_TRANSFORM |
+                         ACTOR_RUNTIME_CAP_SCALE |
+                         ACTOR_RUNTIME_CAP_MATERIAL)
+    if "surface" in features or "GEO_SURFACE" in nodes:
+        runtime_mask |= ACTOR_RUNTIME_CAP_SURFACE
+    if object_roots:
+        runtime_mask |= ACTOR_RUNTIME_CAP_LIFECYCLE
     names = tuple(name for name in ACTOR_CAPABILITY_NAMES if mask & ACTOR_CAPABILITY_BITS[name])
-    return ActorCapabilityReport(mask, names, tuple(unsupported), nodes)
+    runtime_names = tuple(name for name in ACTOR_RUNTIME_CAPABILITY_NAMES
+                          if runtime_mask & ACTOR_RUNTIME_CAPABILITY_BITS[name])
+    return ActorCapabilityReport(mask, names, tuple(unsupported), nodes,
+                                 runtime_mask, runtime_names)
 
 
 @dataclass(frozen=True)
