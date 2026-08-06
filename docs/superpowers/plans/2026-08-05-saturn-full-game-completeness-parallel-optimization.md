@@ -70,6 +70,8 @@
 - 2026-08-06 actor-capability second review correction: S64F version/schema is still `v1` despite the incompatible 56-byte record; platform/collectible bits come from an optional unowned `capability_hints` dictionary rather than generated schema-validated closure evidence and therefore remain unavailable/fail-closed; and the diagnostic test/report needs an independent exact-family oracle (including UNKNOWN_CAPABILITY and stable ID `0x9322461f`) rather than self-derived unresolved lists. The ABI/hash/mutation/terminology repair remains active.
 - 2026-08-06 actor-capability repair: `929d100f` bumps S64F/schema to v2 for 56-byte records, binds trusted external v2/stale-v1 header digests, reseals the runtime-mask mutation before validation, distinguishes 13 unsupported family representatives from 14 closure records, and adds an independent exact oracle for `bhv1Up[0x9322461f]`, UNKNOWN_CAPABILITY, and unresolved PLATFORM/SURFACE. Capability hints are analyzer-only/unverified; platform/collectible/surface runtime evidence remains unavailable until typed schema fields exist. Independent rereview is pending.
 - 2026-08-06 actor-capability evidence acceptance: `0b65d1d1` records the missing serial `verify-actor-family-bank` PASS and exact categories: opaque 8 closure records/7 representatives (shared checkerboard `0xfc68327b`), rigid/static +5 representatives/+5 records, and non-rigid `bhvBreakBoxTriangle[0x08324fd7]`; total 13 unsupported representatives/reasons across 14 closure records. This is evidence reconciliation only; typed platform/collectible/surface fields and production actor cutover remain open.
+- 2026-08-06 actor source-pool repair acceptance: `c1e8e73e` separates the source-attested 240-slot object identity domain from the compact 64-entry snapshot/queue domain. `seen/live/incarnation` sidecars cover slots 0..239; compact count/capacity remains 64, the 65th observation latches overflow, and the fixed 65,536-byte arena derives a 2,718-record output ceiling. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This is host/source-complete only; sourceboot generation, package reservation, target P2, production drain, Ymir/manual, and FPS remain open.
+- 2026-08-06 generation-wrap design correction: the sourceboot observer, capture, profile, camera-bypass, idle-probe, and scheduler handoff must consume one local `source_tick_generation` returned by `sm64_saturn_frame_pipeline_next_generation()`. The existing frame-pipeline helper already defines `UINT32_MAX -> 1`; raw `sourceboot_sim_tick_count + 1U` is not an independent authority and must be mutation-rejected.
 
 ## Prior art and reuse mode
 
@@ -880,10 +882,39 @@ symbolically (observer growth reduces the output-record ceiling) and do not
 claim target placement or production generic geometry.
 
 - Modify `src/port/saturn/gfx/saturn_actor_instance.h/.c`, `src/port/saturn/gfx/saturn_geo_state_observer.c`, `tools/saturn/actor_instance_snapshot_test.c`, `tools/saturn/actor_instance_queue_test.c`, `tools/saturn/test_actor_snapshot_source.py`, `Makefile.saturn.mk`, and `CHANGELOG.md` as required by the symbolic bounds.
-- [ ] RED: prove slots 64 and 239 are rejected by the current implementation, then add GREEN coverage accepting both when compact capacity remains; prove distinct incarnation keys and despawn/reuse for slot 239, reject slot 240, retain the 65th compact-observation overflow latch, and update exact arena/output ceilings symbolically.
-- [ ] Implement separate source-pool and compact-observation bounds without changing the 188-byte snapshot ABI or queue descriptor ABI; preserve fail-closed unknown/stale/malformed behavior.
-- [ ] Run serialized snapshot/queue/batch/handoff gates plus `test_actor_snapshot_source.py` and `test_actor_runtime_neutrality.py`; host-only evidence must leave target P2, package reservation, sourceboot, production drain, Ymir/manual, and FPS unchecked.
-- [ ] Commit and independently review the repair; follow with the separate skip-zero generation repair rather than combining sourceboot timing changes here.
+- [x] RED: prove slots 64 and 239 are rejected by the current implementation, then add GREEN coverage accepting both when compact capacity remains; prove distinct incarnation keys and despawn/reuse for slot 239, reject slot 240, retain the 65th compact-observation overflow latch, and update exact arena/output ceilings symbolically.
+- [x] Implement separate source-pool and compact-observation bounds without changing the 188-byte snapshot ABI or queue descriptor ABI; preserve fail-closed unknown/stale/malformed behavior.
+- [x] Run serialized snapshot/queue/batch/handoff gates plus `test_actor_snapshot_source.py` and `test_actor_runtime_neutrality.py`; host-only evidence leaves target P2, package reservation, sourceboot, production drain, Ymir/manual, and FPS unchecked. Direct DLL-preflighted binaries pass; the inherited native-Python `/d/...exe` runner defect remains open.
+- [x] Commit `c1e8e73e`; independent rereview is SPEC/QUALITY PASS, C0/I0/M0. Follow with the separate skip-zero generation repair rather than combining sourceboot timing changes here.
+
+#### Task 14 bounded repair: skip-zero sourceboot generation handoff
+
+This is a separate sourceboot timing repair after the source-pool identity
+slice. `sourceboot_run_source_tick()` currently opens the observer with a raw
+`sourceboot_sim_tick_count + 1U`, while the authoritative frame pipeline
+advances with `sm64_saturn_frame_pipeline_next_generation()`. At the `UINT32_MAX`
+boundary the raw expression publishes generation zero even though the pipeline
+successor is one. The repair must use one named successor for observer begin,
+source-tick validation, capture, and the frame-pipeline handoff; it must not
+change simulation cadence, skip a source tick, or alter the observer ABI.
+
+- Modify only `src/port/saturn/sourceboot/main.c`,
+  `tools/saturn/test_actor_snapshot_source.py`,
+  `tools/saturn/test_a9_frame_pipeline_integration_contract.py`,
+  `tools/saturn/frame_pipeline_test.c`, `Makefile.saturn.mk`, and
+  `CHANGELOG.md` as required by the source contract.
+- [ ] RED: mutate the source tick back to raw `+ 1U` (including a wrap fixture)
+  and prove the source-contract gate rejects it; prove the expected successor
+  remains nonzero at `UINT32_MAX` and is used consistently at observer begin,
+  source-tick validation, capture, profile, camera bypass, idle probe, and
+  scheduler/presentation boundaries.
+- [ ] Implement the named-successor repair without adding a second generation
+  authority or changing frame cadence.
+- [ ] Run serialized sourceboot/frame-pipeline/actor-snapshot neutrality gates;
+  host-only evidence leaves target P2, sourceboot image, Ymir/manual, and FPS
+  unchecked.
+- [ ] Commit and independently review the repair. Do not combine it with
+  pre-acquire bank cleanup or package reservation/placement work.
 
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
