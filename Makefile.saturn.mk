@@ -468,6 +468,10 @@ verify-saturn-geo-depth-manifest:
 	$(SATURN_TOOLS_PYTHON) $(SATURN_REPO_ROOT)/tools/saturn/test_geo_depth_manifest.py
 	$(SATURN_TOOLS_PYTHON) $(SATURN_REPO_ROOT)/tools/saturn/test_geo_walk_storage_contract.py
 
+.PHONY: verify-saturn-geo-walk-source-policy
+verify-saturn-geo-walk-source-policy:
+	$(SATURN_TOOLS_PYTHON) $(SATURN_REPO_ROOT)/tools/saturn/geo_walk_source_policy_test.py
+
 verify-sourceboot-presentation-boundary:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_sourceboot_presentation_boundary.py"
 

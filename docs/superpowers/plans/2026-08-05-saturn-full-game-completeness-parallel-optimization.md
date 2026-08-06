@@ -1340,8 +1340,11 @@ transport-visible VDP1/Gouraud/SCU buffers are deliberately unchanged.
   518 actor/level inputs, depth 172, and capacity 256; the generated
   header/linker fragment and `.lwram_geo_traversal` owner are guarded by
   host/map contracts. Task 3 (source handler conversion to enter/leave
-  dispatch) is now the active transition. Linked SH-2 sizes, target
-  stability, textures, audio, and FPS remain unchecked.
+  dispatch) is now the active transition; frame refinement `98d9cce2` gives
+  the production owner node and sibling cursors. Its RED policy currently
+  reports 24 direct recursive dispatcher calls, so conversion is not yet
+  source-complete. Linked SH-2 sizes, target stability, textures, audio, and
+  FPS remain unchecked.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 

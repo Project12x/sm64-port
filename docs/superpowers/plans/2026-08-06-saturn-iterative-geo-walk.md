@@ -75,6 +75,12 @@ commit `6dbaea8d`. The generated header/linker fragment are build outputs, not
 checked-in artifacts; a target link must regenerate and consume them. The
 production renderer still does not dispatch through the arena.
 
+Task 2 frame refinement `98d9cce2` gives the production owner a 16-byte SH-2
+continuation record with node and sibling cursors; the original host scheduler
+ABI remains a separate contract fixture. Task 3 is active. Its RED source
+policy currently reports 24 direct recursive dispatcher calls, so no source
+conversion or target claim is implied yet.
+
 ### Task 3: Convert the Saturn source graph handlers to enter/leave dispatch
 
 **Files:**
