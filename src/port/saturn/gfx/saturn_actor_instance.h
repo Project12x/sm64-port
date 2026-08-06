@@ -159,6 +159,9 @@ bool sm64_saturn_actor_instance_bank_complete(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index);
 bool sm64_saturn_actor_instance_bank_retire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index);
+bool sm64_saturn_actor_instance_bank_recycle_pre_acquire(
+    sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
+    uint32_t generation, uint8_t expected_state);
 bool sm64_saturn_actor_instance_bank_quarantine(
     sm64_saturn_actor_instance_bank_t *bank, uint32_t generation);
 

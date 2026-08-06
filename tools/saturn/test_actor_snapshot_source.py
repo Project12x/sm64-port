@@ -194,6 +194,48 @@ def test_source_pool_identity_bound_stays_separate_from_compact_capacity() -> No
     assert "source->parent_index >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY" in validation
 
 
+def assert_pre_acquire_recycle_contract(capture: str, source_capture: str) -> None:
+    assert re.search(
+        r"sm64_saturn_actor_instance_bank_recycle_pre_acquire\s*\(\s*"
+        r"bank\s*,\s*selected\s*,\s*generation\s*,\s*"
+        r"SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING\s*\)", capture, re.S
+    )
+    assert "sm64_saturn_actor_instance_bank_quarantine(bank, generation)" not in capture
+    assert re.search(
+        r"sm64_saturn_actor_instance_bank_recycle_pre_acquire\s*\(\s*"
+        r"&sourceboot_actor_instances\s*,\s*actor_bank\s*,\s*generation\s*,\s*"
+        r"SM64_SATURN_ACTOR_INSTANCE_BANK_READY\s*\)", source_capture, re.S
+    )
+
+
+def test_pre_acquire_failures_use_exact_producer_recycle() -> None:
+    implementation = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
+    sourceboot = SOURCEBOOT.read_text(encoding="utf-8")
+    capture = body_text(implementation, "sm64_saturn_actor_instance_bank_capture")
+    source_capture = body_text(sourceboot, "sourceboot_capture_render_snapshot")
+    assert_pre_acquire_recycle_contract(capture, source_capture)
+    capture_mutation = capture.replace(
+        "sm64_saturn_actor_instance_bank_recycle_pre_acquire",
+        "sm64_saturn_actor_instance_bank_quarantine", 1)
+    assert capture_mutation != capture
+    try:
+        assert_pre_acquire_recycle_contract(capture_mutation, source_capture)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("capture quarantine mutation escaped source gate")
+    source_mutation = source_capture.replace(
+        "sm64_saturn_actor_instance_bank_recycle_pre_acquire",
+        "sm64_saturn_actor_instance_bank_quarantine", 1)
+    assert source_mutation != source_capture
+    try:
+        assert_pre_acquire_recycle_contract(capture, source_mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("sourceboot quarantine mutation escaped source gate")
+
+
 def assert_capture_uses_cache_through_payload(text: str) -> None:
     capture = body_text(text, "sm64_saturn_actor_instance_bank_capture")
     assert "actor_bank_uncached(bank)" in capture
@@ -278,6 +320,7 @@ if __name__ == "__main__":
     test_snapshot_and_observation_are_pointer_free()
     test_capture_copies_source_values_and_rejects_bad_identity()
     test_source_pool_identity_bound_stays_separate_from_compact_capacity()
+    test_pre_acquire_failures_use_exact_producer_recycle()
     test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation()
     test_observer_only_records_geo_decisions_at_source_boundary()
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()

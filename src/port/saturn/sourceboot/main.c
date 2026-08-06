@@ -335,8 +335,9 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
         if (sm64_saturn_actor_instance_bank_acquire(
                 &sourceboot_actor_instances, actor_bank, generation,
                 &acquired_count) == NULL) {
-            (void)sm64_saturn_actor_instance_bank_quarantine(
-                &sourceboot_actor_instances, generation);
+            (void)sm64_saturn_actor_instance_bank_recycle_pre_acquire(
+                &sourceboot_actor_instances, actor_bank, generation,
+                SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
             actor_bank = 0xffU;
             actor_count = 0U;
         } else {

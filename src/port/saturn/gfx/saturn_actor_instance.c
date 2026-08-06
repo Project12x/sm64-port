@@ -262,7 +262,8 @@ bool sm64_saturn_actor_instance_bank_capture(
             shared->snapshots[selected], capacity, generation, &captured, stats) ||
         !sm64_saturn_actor_instance_bank_publish(
             bank, selected, captured, generation)) {
-        (void)sm64_saturn_actor_instance_bank_quarantine(bank, generation);
+        (void)sm64_saturn_actor_instance_bank_recycle_pre_acquire(
+            bank, selected, generation, SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING);
         return false;
     }
     *index = selected;
@@ -315,6 +316,32 @@ bool sm64_saturn_actor_instance_bank_retire(
     memset(shared->snapshots[index], 0, sizeof(shared->snapshots[index]));
     shared->count[index] = 0U;
     shared->generation[index] = 0U;
+    actor_bank_fence();
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
+    actor_bank_fence();
+    return true;
+}
+
+bool sm64_saturn_actor_instance_bank_recycle_pre_acquire(
+    sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
+    uint32_t generation, uint8_t expected_state)
+{
+    sm64_saturn_actor_instance_bank_t *const shared =
+        actor_bank_uncached(bank);
+    if (shared == NULL || index >= 2U || generation == 0U ||
+        (expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING &&
+         expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_READY) ||
+        shared->state[index] != expected_state ||
+        shared->generation[index] != generation)
+        return false;
+    /* Exact producer ownership has been checked. Keep the bank non-acquirable
+     * while its cache-through payload is scrubbed before FREE publication. */
+    shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED;
+    actor_bank_fence();
+    memset(shared->snapshots[index], 0, sizeof(shared->snapshots[index]));
+    shared->count[index] = 0U;
+    shared->generation[index] = 0U;
+    if (shared->active_index == index) shared->active_index = 0U;
     actor_bank_fence();
     shared->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_FREE;
     actor_bank_fence();

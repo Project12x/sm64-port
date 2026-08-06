@@ -387,6 +387,22 @@ static void test_bank_capture_acquires_exact_published_payload(void)
     assert(sm64_saturn_actor_instance_bank_retire(&bank, index));
 }
 
+static void test_pre_acquire_recycle_releases_stranded_writing_bank(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    uint8_t index;
+
+    sm64_saturn_actor_instance_bank_init(&bank);
+    assert(sm64_saturn_actor_instance_bank_begin_write(&bank, 70U, &index));
+    memset(bank.snapshots[index], 0xa5, sizeof(bank.snapshots[index]));
+    assert(sm64_saturn_actor_instance_bank_recycle_pre_acquire(
+        &bank, index, 70U, SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING));
+    assert(bank.state[index] == SM64_SATURN_ACTOR_INSTANCE_BANK_FREE);
+    assert(bank.generation[index] == 0U && bank.count[index] == 0U);
+    for (uint16_t byte = 0U; byte < sizeof(bank.snapshots[index]); byte++)
+        assert(((const uint8_t *)bank.snapshots[index])[byte] == 0U);
+}
+
 int main(void)
 {
     test_all_typed_fields_and_model_none();
@@ -399,5 +415,6 @@ int main(void)
     test_observer_overflow_latches_and_bounds_fail_closed();
     test_bank_rejects_stale_and_duplicate_generations();
     test_bank_capture_acquires_exact_published_payload();
+    test_pre_acquire_recycle_releases_stranded_writing_bank();
     return 0;
 }

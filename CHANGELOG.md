@@ -4,6 +4,15 @@
 
 ### Changed
 
+- Added an exact producer-owned pre-acquire actor-bank recycle path for
+  stranded WRITING and unacquired READY generations. It validates bank index,
+  nonzero generation, and expected phase; clears the full cache-through
+  snapshot payload and metadata before publishing FREE; preserves the other
+  bank and monotonic last-published generation; and rejects quarantine,
+  rendering, complete, free, stale, or double dispositions. Capture and the
+  immediate sourceboot acquire-refusal path now use this narrow recovery path,
+  while post-acquire handoff quarantine behavior remains unchanged.
+
 - Repaired sourceboot's actor-observer generation handoff so a source tick
   computes the frame pipeline's nonzero successor once, before its geo walk,
   and uses that value for observer opening, source-tick publication, actor
