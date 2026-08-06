@@ -266,7 +266,7 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # This is intentionally a source closure, not a Castle viewer dependency list.
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
-SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_platform.c source_cart.c source_q16_kernel_probe.c \
+SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_cart.c source_q16_kernel_probe.c \
   $(ROOT)/src/port/saturn/platform/saturn_build_identity.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
@@ -315,6 +315,14 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_audio_stub.c source_p
   $(SOURCEBOOT_MATH_SRCS) $(ROOT)/levels/scripts.c \
   $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C)
+
+ifeq ($(SATURN_FEATURE_SEMANTIC_AUDIO),1)
+SH_SRCS += source_audio_semantics.c \
+  $(ROOT)/src/port/saturn/audio/saturn_audio_policy.c \
+  $(ROOT)/src/port/saturn/audio/saturn_audio_spatial.c
+else
+SH_SRCS += source_audio_stub.c
+endif
 
 ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)
 SH_SRCS += source_camera_acceptance_route.c source_camera_idle_probe.c

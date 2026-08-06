@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Replaced sourceboot's optional silent-audio path with a feature-selected,
+  source-authoritative SH-2 policy adapter while preserving every public
+  `src/audio/external.h` signature and retaining the silent translation unit
+  as the feature-off rollback.  The adapter keeps the six-entry background
+  queue, priority/duplicate handling, secondary music, jingles, fades,
+  lower/unlower constraints, bank masks, one published SFX per bank,
+  continuous freshness, stops, getters, and moving-source spatial updates on
+  the SH-2.  Protocol-v2 `PLAY_REFRESH` records carry only fixed-width
+  `soundBits`, generation-tagged source tokens, package/freshness generations,
+  and quantized volume/pan/pitch; raw `f32 *pos` identities stay in a bounded
+  SH-2 table.  The task deliberately does not add a 68000 sequence VM, sample
+  packages, SCSP voice integration, or claim target/Ymir audio.
+
 - Added a static source audit and an illustrative digest model for the proposed
   state-only source-geo optimization, while leaving it deliberately disabled.
   The audit identifies animation, painting, water/moving-texture,

@@ -55,3 +55,7 @@ void play_toads_jingle(void) {}
 void sound_reset(UNUSED u8 presetId) {}
 void audio_set_sound_mode(UNUSED u8 arg0) {}
 void audio_init(void) {}
+
+#if defined(VERSION_EU) || defined(VERSION_SH)
+struct SPTask *unused_80321460(void) { return NULL; }
+#endif
