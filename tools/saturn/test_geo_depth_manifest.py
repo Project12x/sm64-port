@@ -72,7 +72,7 @@ def test_source_depth_and_determinism() -> None:
         report = json.loads(report_a.read_text(encoding="utf-8"))
         assert report["max_proven_depth"] == 5
         assert report["capacity"] == 8
-        assert "expected_size = 0x60" in link_a.read_text(encoding="utf-8")
+        assert "expected_size = 0x80" in link_a.read_text(encoding="utf-8")
         assert report["inputs"] == sorted(report["inputs"], key=lambda item: item["identity"])
 
 

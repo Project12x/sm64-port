@@ -21,7 +21,7 @@ from typing import Iterable, Mapping
 
 SCHEMA = "sm64-saturn-geo-depth-manifest-v1"
 INPUT_SCHEMA = "sm64-saturn-geo-depth-input-v1"
-FRAME_BYTES = 12
+FRAME_BYTES = 16
 DEFAULT_SAFETY_MARGIN = 16
 
 

@@ -4,6 +4,12 @@
 
 ### Changed
 
+- Refined the generated traversal owner to use a dedicated 16-byte SH-2
+  continuation frame with both node and sibling cursors. The original 12-byte
+  host scheduler frame remains a contract fixture; production storage now has
+  the state required for the upcoming enter/leave dispatcher without changing
+  the recursive source path yet.
+
 - Added the deterministic full-game geo-depth manifest and linker-owned
   `.lwram_geo_traversal` arena. The generator scans all actor/level GeoLayout
   sources (518 current inputs), accounts for structural nesting plus shared,
