@@ -76,6 +76,7 @@
 - 2026-08-06 generation-wrap repair acceptance: `8517d63f` computes one frame-pipeline successor before the geo walk and propagates it through observer/capture/profile/camera/idle/scheduler consumers. Fix `089a41a4` closes the review gap with a full idle-probe matcher and idle-only global-count mutation. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This remains host/source-complete only; target/sourceboot-image/Ymir/manual/FPS are open.
 - 2026-08-06 pre-acquire recycle acceptance: `dd781b2c..abcd4655` adds exact producer-owned WRITING/READY recycle, two-bank recovery, P2 payload scrub/fence ordering, stale/double/state/index/generation checks, and post-acquire ownership exclusion. Fixes `52e3ce61` and `abcd4655` wire and mutation-prove the helper suite; independent rereview is SPEC/QUALITY PASS, C0/I0/M0. Host-only; target/P2, concurrent SH-2, Ymir/manual, and FPS remain open.
 - 2026-08-06 actor-arena reservation staging: the fixed 65,536-byte arithmetic and output ceiling are not a linker/package reservation. A future lane must prove one aligned sourceboot-owned arena symbol, exact bank/observer/queue/batch/output spans, linker/map bounds, initialization through that owner, and manifest-derived capacity before any target or production-drain claim.
+- 2026-08-06 actor-owner scope correction: the first accepted source slice may reserve and clear the single owner without inventing package-capacity APIs or a production queue/batch/output handoff. Manifest-derived 64/2718 bounds and peer-visible member binding remain separate unchecked gates until their authoritative package/production seams exist.
 - 2026-08-06 LWRAM reclaim preflight correction: `sourceboot_vdp1_cmdts[2][2048]` is `2 * 2048 * 32 = 0x20000` bytes, not `0x10000`; the complete 32-byte-aligned block relocated to HWRAM `.bss` exceeds the required `0xCB10` by `0x34F0` and leaves route-0 LWRAM at `0x74F0`, above the `0x4000` floor. This arithmetic correction is source/layout evidence only; DMA/cache/target proof remains open.
 
 ## Prior art and reuse mode
@@ -1052,13 +1053,18 @@ sourceboot actor-runtime owner identified by the preflight. This lane replaces
 the separate observer/instance statics; it does not duplicate them or claim
 that production actor admission is complete.
 
-- [ ] RED: mutation tests reject a missing/duplicate owner, wrong section or
-  alignment, omitted NOLOAD initialization, cached peer-visible access, and
-  capacities above 64 instances or 2718 output records.
-- [ ] Implement one 16-byte-aligned `used` `.lwram_actor_runtime` owner with
-  exported linker start/end symbols, exact 0x10000 size/non-overlap assertions,
-  P2/cache-through zero/init, and bindings for observer, banks, queue, batches,
-  and output spans. Preserve feature-off zero-count behavior.
+- [x] RED/GREEN bounded owner contract: `39008658` plus
+  `19168671` prove one 16-byte-aligned `used` `.lwram_actor_runtime` owner,
+  exact 0x10000 linker section/symbol contract, NOLOAD P2/cache-through clear,
+  and no standalone observer/instance declarations. This bounded slice does
+  not fabricate package-capacity APIs or claim production queue binding.
+- [ ] Integrate the owner members through the production queue/batch/output
+  handoff and add identity-bound package capacity checks (accept 64/2718,
+  reject 0/65/2719, stale, or absent values). This is deliberately deferred
+  until those production package APIs exist.
+- [ ] Extend the owner with exported linker start/end non-overlap assertions,
+  P2/cache-through bindings for every peer-visible member, and feature-off
+  zero-count behavior once the production handoff is wired.
 - [ ] Run focused source/map gates and a serialized route-0 build after the
   Make repair; inspect exact owner offsets, LWRAM >= `0x4000`, and HWRAM TLSF
   floor >= `0x1B00`. Target/P2/concurrent-SH2/Ymir/manual/FPS remain unchecked.
