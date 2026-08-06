@@ -1086,9 +1086,18 @@ license, renderer, or target-performance result.
   texture outputs. Bootstrap 6/6, identity 9/9, feature identity 5/5, and a
   DLL-preflighted top-level `make -n -j1 sourceboot` command-order gate pass.
 - [ ] Independently rereview `a32913cb..7a641f48`, then run a clean serialized
-  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
-  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
-  pass; do not launch an older artifact.
+  sourceboot build and inspect the new identity-bearing ELF/map. The rereview
+  is SPEC/QUALITY FAIL C1/I2/M0: `bob_scene.h`, `bob_bsp.h`,
+  `bob_bsp_fragments.h`, and `saturn_quad_map.h` remain outside the sealed
+  closure; the assets-stage selector is not restricted to the identity-assets
+  target; and the tests/report overclaim clean/exact closure from substring and
+  self-whitelist checks. No current-head CUE/ISO, Ymir/manual, target/P2, or FPS
+  evidence is claimed until those gates pass; do not launch an older artifact.
+- [ ] Add the four generated headers and every other exact compiled/incbin
+  prerequisite to the post-assets closure, restrict `SOURCEBOOT_BUILD_IDENTITY_STAGE`
+  to the explicit identity-assets pass, and replace self-whitelist assertions
+  with a clean-order/closure mutation gate. Independently rereview before any
+  fresh linked image is considered launchable.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
