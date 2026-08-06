@@ -1043,8 +1043,10 @@ silently substitute a host-only map.
   floor >= `0x1B00`. The repaired invocation now reaches the next missing
   generated `saturn_build_identity_spec.json` prerequisite before compile/link;
   target/P2/concurrent-SH2/Ymir/manual/FPS remain unchecked.
-- [ ] Commit and independently review the make-variable/Windows-tool
-  boundary; do not promote this lane if it only makes a host gate green.
+- [x] Commit `eeaa3fbb` and independently rereview the make-variable/
+  Windows-tool boundary. The scoped rereview is SPEC/QUALITY PASS, C0/I0/M0;
+  it confirms the repair is not merely a host-green workaround. The linked
+  ELF/map and all target evidence remain open.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
