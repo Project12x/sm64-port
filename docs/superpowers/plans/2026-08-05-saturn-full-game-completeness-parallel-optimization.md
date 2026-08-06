@@ -73,6 +73,7 @@
 - 2026-08-06 actor source-pool repair acceptance: `c1e8e73e` separates the source-attested 240-slot object identity domain from the compact 64-entry snapshot/queue domain. `seen/live/incarnation` sidecars cover slots 0..239; compact count/capacity remains 64, the 65th observation latches overflow, and the fixed 65,536-byte arena derives a 2,718-record output ceiling. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This is host/source-complete only; sourceboot generation, package reservation, target P2, production drain, Ymir/manual, and FPS remain open.
 - 2026-08-06 generation-wrap design correction: the sourceboot observer, capture, profile, camera-bypass, idle-probe, and scheduler handoff must consume one local `source_tick_generation` returned by `sm64_saturn_frame_pipeline_next_generation()`. The existing frame-pipeline helper already defines `UINT32_MAX -> 1`; raw `sourceboot_sim_tick_count + 1U` is not an independent authority and must be mutation-rejected.
 - 2026-08-06 actor-bank lifecycle preflight: pre-publication failures require an exact producer-owned recycle keyed by `(bank index, nonzero generation, expected WRITING|READY state)`. It must clear the selected payload/count/generation through the P2 alias, fence before FREE, preserve the other bank, reject stale/wrong/double dispositions and all QUARANTINED/RENDERING/COMPLETE/FREE states, and never roll back `last_published_generation`. Post-acquire cleanup remains owned by the Task 16 handoff.
+- 2026-08-06 generation-wrap repair acceptance: `8517d63f` computes one frame-pipeline successor before the geo walk and propagates it through observer/capture/profile/camera/idle/scheduler consumers. Fix `089a41a4` closes the review gap with a full idle-probe matcher and idle-only global-count mutation. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This remains host/source-complete only; target/sourceboot-image/Ymir/manual/FPS are open.
 
 ## Prior art and reuse mode
 
@@ -904,17 +905,20 @@ change simulation cadence, skip a source tick, or alter the observer ABI.
   `tools/saturn/test_a9_frame_pipeline_integration_contract.py`,
   `tools/saturn/frame_pipeline_test.c`, `Makefile.saturn.mk`, and
   `CHANGELOG.md` as required by the source contract.
-- [ ] RED: mutate the source tick back to raw `+ 1U` (including a wrap fixture)
+- [x] RED: mutate the source tick back to raw `+ 1U` (including a wrap fixture)
   and prove the source-contract gate rejects it; prove the expected successor
   remains nonzero at `UINT32_MAX` and is used consistently at observer begin,
   source-tick validation, capture, profile, camera bypass, idle probe, and
   scheduler/presentation boundaries.
-- [ ] Implement the named-successor repair without adding a second generation
+- [x] Implement the named-successor repair without adding a second generation
   authority or changing frame cadence.
-- [ ] Run serialized sourceboot/frame-pipeline/actor-snapshot neutrality gates;
+- [x] Run serialized sourceboot/frame-pipeline/actor-snapshot neutrality gates;
   host-only evidence leaves target P2, sourceboot image, Ymir/manual, and FPS
-  unchecked.
-- [ ] Commit and independently review the repair. Do not combine it with
+  unchecked. `verify-frame-pipeline -j1`, A9/actor source contracts, direct
+  DLL-preflighted snapshot/render-bank/handoff binaries, runtime-neutrality,
+  and scoped diff checks pass; the native `/d/...exe` runner caveat remains.
+- [x] Commit `8517d63f` plus test-gate fix `089a41a4`; independent rereview is
+  SPEC/QUALITY PASS, C0/I0/M0. Do not combine it with
   pre-acquire bank cleanup or package reservation/placement work.
 
 #### Task 14 bounded repair: recyclable pre-acquire bank failure
