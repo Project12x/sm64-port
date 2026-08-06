@@ -202,8 +202,9 @@ static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
 static sm64_saturn_geo_state_observer_t sourceboot_actor_observer;
-static sm64_saturn_actor_instance_snapshot_t sourceboot_actor_capture[
-    SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+static sm64_saturn_actor_instance_bank_t sourceboot_actor_instances;
+static uint8_t sourceboot_active_actor_bank;
+static bool sourceboot_actor_bank_active;
 static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot;
 static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
@@ -313,24 +314,37 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     sm64_saturn_render_snapshot_t *snapshot = NULL;
     sm64_saturn_actor_capture_telemetry_t actor_stats;
     uint16_t actor_count = 0U;
+    uint8_t actor_bank = 0xffU;
     uint32_t axis;
 
     if (!sm64_saturn_render_snapshot_begin_write(&sourceboot_render_snapshots,
                                                  generation, &snapshot)) {
         return;
     }
-    /* Capture only after the authoritative source tick has completed.  The
-     * observer contains scalar geo decisions and never selects or mutates
-     * gameplay state; actor queue publication will consume this bank later. */
-    sm64_saturn_geo_state_observer_begin_frame(&sourceboot_actor_observer,
-                                               generation);
-    sm64_saturn_actor_instances_set_observer(&sourceboot_actor_observer);
-    (void)sm64_saturn_actor_instances_capture(
-        sourceboot_actor_capture, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE,
-        generation, &actor_count, &actor_stats);
+    /* The observer frame was opened before the authoritative source tick.
+     * Capture only after that tick has completed; the observer contains
+     * scalar geo decisions and never selects or mutates gameplay state. */
     sm64_saturn_geo_state_observer_end_frame(&sourceboot_actor_observer);
+    if (sm64_saturn_actor_instance_bank_capture(
+            &sourceboot_actor_instances, generation,
+            SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE, &actor_bank, &actor_count,
+            &actor_stats)) {
+        uint16_t acquired_count = 0U;
+        if (sm64_saturn_actor_instance_bank_acquire(
+                &sourceboot_actor_instances, actor_bank, generation,
+                &acquired_count) == NULL) {
+            (void)sm64_saturn_actor_instance_bank_quarantine(
+                &sourceboot_actor_instances, generation);
+            actor_bank = 0xffU;
+            actor_count = 0U;
+        } else {
+            actor_count = acquired_count;
+            sourceboot_active_actor_bank = actor_bank;
+            sourceboot_actor_bank_active = true;
+        }
+    }
     snapshot->actor_instance_count = actor_count;
-    snapshot->actor_instance_bank = 0U;
+    snapshot->actor_instance_bank = actor_bank == 0xffU ? 0U : actor_bank;
     if (!sm64_saturn_mario_actor_snapshot(&snapshot->mario)) {
         snapshot->mario.valid = 0U;
     }
@@ -396,12 +410,22 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
                                              snapshot)) {
         (void)sm64_saturn_render_snapshot_quarantine(&sourceboot_render_snapshots,
                                                       generation);
+        if (sourceboot_actor_bank_active) {
+            (void)sm64_saturn_actor_instance_bank_quarantine(
+                &sourceboot_actor_instances, generation);
+            sourceboot_actor_bank_active = false;
+        }
     }
 }
 
 static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
+    /* Open the source-owned observation window before any game-loop geo walk.
+     * The capture after this function must consume exactly this generation;
+     * opening the frame in the capture routine would erase every object. */
+    sm64_saturn_geo_state_observer_begin_frame(&sourceboot_actor_observer,
+                                               sourceboot_sim_tick_count + 1U);
 #if SATURN_DEMO_PATH
     /* Keep final display submission suppressed while the IR demo owns the
      * frame.  Do not enable scene-graph suppression here: geo_process_root()
@@ -1042,6 +1066,17 @@ static void sourceboot_frame_service_render(uint32_t generation)
             &sourceboot_render_snapshots, sourceboot_active_render_snapshot)) {
         sourceboot_fast3d.profile.pipeline_faults++;
     }
+    if (sourceboot_actor_bank_active) {
+        if (!sm64_saturn_actor_instance_bank_complete(
+                &sourceboot_actor_instances, sourceboot_active_actor_bank) ||
+            !sm64_saturn_actor_instance_bank_retire(
+                &sourceboot_actor_instances, sourceboot_active_actor_bank)) {
+            (void)sm64_saturn_actor_instance_bank_quarantine(
+                &sourceboot_actor_instances, generation);
+            sourceboot_fast3d.profile.pipeline_faults++;
+        }
+        sourceboot_actor_bank_active = false;
+    }
     sourceboot_active_render_snapshot = NULL;
     sourceboot_active_build_bank = NULL;
     sourceboot_render_started = false;
@@ -1059,6 +1094,11 @@ failed:
             sourceboot_active_build_bank);
     (void)sm64_saturn_render_snapshot_quarantine(
         &sourceboot_render_snapshots, generation);
+    if (sourceboot_actor_bank_active) {
+        (void)sm64_saturn_actor_instance_bank_quarantine(
+            &sourceboot_actor_instances, generation);
+        sourceboot_actor_bank_active = false;
+    }
     sourceboot_active_render_snapshot = NULL;
     sourceboot_active_build_bank = NULL;
     sourceboot_vdp1_render_ready = NULL;
@@ -1400,6 +1440,8 @@ int main(void) {
     sm64_saturn_render_snapshot_reset(&sourceboot_render_snapshots);
     sm64_saturn_geo_state_observer_init(
         &sourceboot_actor_observer, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
+    sm64_saturn_actor_instance_bank_init(&sourceboot_actor_instances);
+    sm64_saturn_actor_instances_set_observer(&sourceboot_actor_observer);
 #if SATURN_DEMO_PATH
     /* The demo renderer consumes the authoritative source state through its
      * IR bridge below. Keep the original exec_display_list symbol reachable

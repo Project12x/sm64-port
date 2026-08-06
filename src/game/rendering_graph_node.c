@@ -45,7 +45,11 @@ Mtx *gMatStackFixed[32];
 
 #include "port/saturn/gfx/saturn_matrix.h"
 #include "port/saturn/gfx/saturn_matrix_ctors.h"
+#include "port/saturn/gfx/saturn_render_native_math.h"
 #include "port/saturn/gfx/saturn_geo_state_observer.h"
+#include "object_fields.h"
+#include "object_list_processor.h"
+#include "model_ids.h"
 
 #ifndef SATURN_MTX_IS_Q16
 /* This TU's Saturn path is a Q16.16 WIRE PRODUCER (saturn_mtxq_write_wire
@@ -70,6 +74,72 @@ Mtx *gMatStackFixed[32];
  * frontend's matching native-Q16 decode (SATURN_MTX_IS_Q16, a later
  * task). */
 static sm64_saturn_mtx_t gMatStackQ[32];
+
+/* Resolve only source-owned scalar identity at the geo seam.  The generated
+ * actor-family registry is not linked into this source closure yet, so the
+ * family/bank fields intentionally remain zero and capture fails closed.  A
+ * future registry binding can fill those fields without changing the object
+ * walk or snapshot ABI. */
+static uint16_t saturn_source_object_pool_slot(const struct Object *object)
+{
+    uint16_t slot;
+    if (object == NULL) return UINT16_MAX;
+    for (slot = 0U; slot < OBJECT_POOL_CAPACITY; slot++) {
+        if (&gObjectPool[slot] == object) return slot;
+    }
+    return UINT16_MAX;
+}
+
+static uint16_t saturn_source_model_id(const struct GraphNode *shared_child)
+{
+    uint16_t model;
+    if (shared_child == NULL || gLoadedGraphNodes == NULL) return MODEL_NONE;
+    for (model = 1U; model < 0x100U; model++) {
+        if (gLoadedGraphNodes[model] == shared_child) return model;
+    }
+    return MODEL_NONE;
+}
+
+static bool saturn_source_observe_object_begin(struct Object *node)
+{
+    sm64_saturn_actor_source_observation_t source;
+    sm64_saturn_geo_state_observer_t *const observer =
+        sm64_saturn_geo_state_observer_bound();
+    uint16_t axis;
+    const uint16_t pool_slot = saturn_source_object_pool_slot(node);
+    if (pool_slot == UINT16_MAX) return false;
+    memset(&source, 0, sizeof(source));
+    source.source_generation = sm64_saturn_geo_state_observer_generation(
+        observer);
+    source.pool_slot = pool_slot;
+    source.model_id = saturn_source_model_id(node->header.gfx.sharedChild);
+    source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    source.parent_node_ordinal = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    source.position_q16[0] = sm64_saturn_float_to_q16(
+        node->header.gfx.pos[0]);
+    source.position_q16[1] = sm64_saturn_float_to_q16(
+        node->header.gfx.pos[1]);
+    source.position_q16[2] = sm64_saturn_float_to_q16(
+        node->header.gfx.pos[2]);
+    source.scale_q16[0] = sm64_saturn_float_to_q16(
+        node->header.gfx.scale[0]);
+    source.scale_q16[1] = sm64_saturn_float_to_q16(
+        node->header.gfx.scale[1]);
+    source.scale_q16[2] = sm64_saturn_float_to_q16(
+        node->header.gfx.scale[2]);
+    for (axis = 0U; axis < 3U; axis++)
+        source.angle[axis] = node->header.gfx.angle[axis];
+    source.animation_id = node->header.gfx.animInfo.animID;
+    source.animation_frame = node->header.gfx.animInfo.animFrame;
+    source.animation_accel = node->header.gfx.animInfo.animAccel;
+    source.anim_state = ((struct Object *)node)->oAnimState;
+    source.area_index = node->header.gfx.areaIndex;
+    source.active = 1U;
+    source.render_active = 1U;
+    /* scene/family/bank identity is deliberately unresolved until the
+     * generated actor registry is authoritative for this source object. */
+    return sm64_saturn_geo_state_observer_begin_object(observer, &source);
+}
 
 /* The camera's look-at matrix is exposed to descendants (shadow nodes)
  * through GraphNodeCamera::matrixPtr, a `Mat4 *` into gMatStack. This
@@ -1112,9 +1182,13 @@ static s32 obj_is_in_view(struct GraphNodeObject *node, Mat4 matrix) {
 static void geo_process_object(struct Object *node) {
     UNUSED Mat4 mtxf;
     s32 hasAnimation = (node->header.gfx.node.flags & GRAPH_RENDER_HAS_ANIMATION) != 0;
+#ifdef TARGET_SATURN
+    bool saturn_actor_observed = false;
+#endif
 
     if (node->header.gfx.areaIndex == gCurGraphNodeRoot->areaIndex) {
 #ifdef TARGET_SATURN
+        saturn_actor_observed = saturn_source_observe_object_begin(node);
         if (node->header.gfx.throwMatrix != NULL) {
             /* throwMatrix here is always gameplay-owned float data
              * living OUTSIDE gMatStack at this read (mario.c quicksand,
@@ -1216,6 +1290,11 @@ static void geo_process_object(struct Object *node) {
         }
 
         gMatStackIndex--;
+#ifdef TARGET_SATURN
+        if (saturn_actor_observed)
+            (void)sm64_saturn_geo_state_observer_end_object(
+                sm64_saturn_geo_state_observer_bound());
+#endif
         gCurAnimType = ANIM_TYPE_NONE;
         node->header.gfx.throwMatrix = NULL;
     }

@@ -24,8 +24,22 @@ void sm64_saturn_geo_state_observer_begin_frame(
     observer->geo_evaluation_count = 0U;
     observer->geo_rendered_count = 0U;
     observer->geo_rejected_count = 0U;
+    observer->despawned_count = 0U;
+    observer->pool_reuse_count = 0U;
+    observer->overflow_latched = 0U;
     s_current = NULL;
     s_observer = observer;
+}
+
+uint32_t sm64_saturn_geo_state_observer_generation(
+    const sm64_saturn_geo_state_observer_t *observer)
+{
+    return observer != NULL ? observer->source_generation : 0U;
+}
+
+sm64_saturn_geo_state_observer_t *sm64_saturn_geo_state_observer_bound(void)
+{
+    return s_observer;
 }
 
 bool sm64_saturn_geo_state_observer_begin_object(
@@ -35,9 +49,15 @@ bool sm64_saturn_geo_state_observer_begin_object(
     uint16_t slot, incarnation;
     if (observer == NULL || observation == NULL ||
         observer != s_observer || observer->capacity == 0U ||
-        observation->pool_slot >= observer->capacity ||
-        observer->count >= observer->capacity || observation->active == 0U ||
-        observer->seen[observation->pool_slot] != 0U)
+        observation->active == 0U)
+        return false;
+    if (observation->pool_slot >= observer->capacity)
+        return false;
+    if (observer->count >= observer->capacity) {
+        observer->overflow_latched = 1U;
+        return false;
+    }
+    if (observer->seen[observation->pool_slot] != 0U)
         return false;
     slot = observation->pool_slot;
     incarnation = observer->incarnation[slot];

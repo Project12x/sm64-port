@@ -73,7 +73,7 @@ bool sm64_saturn_actor_instances_capture(
     if (out == NULL || count == NULL || observer == NULL || capacity == 0U ||
         capacity > SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE || generation == 0U)
         return false;
-    if (observer->count > capacity) {
+    if (observer->overflow_latched != 0U || observer->count > capacity) {
         if (stats != NULL) stats->capacity_overflow_count++;
         return false;
     }
@@ -83,6 +83,11 @@ bool sm64_saturn_actor_instances_capture(
             &observer->observations[i];
         sm64_saturn_actor_instance_snapshot_t *destination;
         uint16_t word;
+        if (source->pool_slot >= observer->capacity ||
+            source->pool_slot >= SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE) {
+            if (stats != NULL) stats->malformed_count++;
+            continue;
+        }
         if (!valid_observation(source, generation, stats)) continue;
         destination = &out[accepted];
         memset(destination, 0, sizeof(*destination));
@@ -157,7 +162,14 @@ bool sm64_saturn_actor_instance_bank_begin_write(
 {
     uint8_t i;
     if (index != NULL) *index = 0xffU;
-    if (bank == NULL || index == NULL || generation == 0U) return false;
+    if (bank == NULL || index == NULL || generation == 0U ||
+        generation <= bank->last_published_generation)
+        return false;
+    for (i = 0U; i < 2U; i++) {
+        if (bank->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+            bank->generation[i] == generation)
+            return false;
+    }
     for (i = 0U; i < 2U; i++) {
         if (bank->state[i] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE) continue;
         bank->state[i] = SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING;
@@ -175,10 +187,42 @@ bool sm64_saturn_actor_instance_bank_publish(
 {
     if (bank == NULL || index >= 2U || count > SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE ||
         bank->state[index] != SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING ||
-        bank->generation[index] != generation || generation == 0U)
+        bank->generation[index] != generation || generation == 0U ||
+        generation <= bank->last_published_generation)
+        return false;
+    if ((index == 0U && bank->state[1] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+         bank->generation[1] == generation) ||
+        (index == 1U && bank->state[0] != SM64_SATURN_ACTOR_INSTANCE_BANK_FREE &&
+         bank->generation[0] == generation))
         return false;
     bank->count[index] = count;
     bank->state[index] = SM64_SATURN_ACTOR_INSTANCE_BANK_READY;
+    bank->last_published_generation = generation;
+    return true;
+}
+
+bool sm64_saturn_actor_instance_bank_capture(
+    sm64_saturn_actor_instance_bank_t *bank, uint32_t generation,
+    uint16_t capacity, uint8_t *index, uint16_t *count,
+    sm64_saturn_actor_capture_telemetry_t *stats)
+{
+    uint8_t selected = 0xffU;
+    uint16_t captured = 0U;
+    if (count != NULL) *count = 0U;
+    if (index != NULL) *index = 0xffU;
+    if (bank == NULL || index == NULL || count == NULL ||
+        !sm64_saturn_actor_instance_bank_begin_write(bank, generation,
+                                                     &selected))
+        return false;
+    if (!sm64_saturn_actor_instances_capture(
+            bank->snapshots[selected], capacity, generation, &captured, stats) ||
+        !sm64_saturn_actor_instance_bank_publish(
+            bank, selected, captured, generation)) {
+        (void)sm64_saturn_actor_instance_bank_quarantine(bank, generation);
+        return false;
+    }
+    *index = selected;
+    *count = captured;
     return true;
 }
 

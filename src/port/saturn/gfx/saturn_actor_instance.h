@@ -74,6 +74,8 @@ typedef struct sm64_saturn_geo_state_observer {
     uint32_t source_generation;
     uint32_t geo_evaluation_count, geo_rendered_count, geo_rejected_count;
     uint16_t despawned_count, pool_reuse_count;
+    uint8_t overflow_latched;
+    uint8_t reserved[3];
 } sm64_saturn_geo_state_observer_t;
 
 typedef struct sm64_saturn_actor_instance_bank {
@@ -84,6 +86,7 @@ typedef struct sm64_saturn_actor_instance_bank {
     uint8_t state[2];
     uint8_t active_index;
     uint8_t reserved[3];
+    uint32_t last_published_generation;
 } sm64_saturn_actor_instance_bank_t;
 
 enum {
@@ -99,6 +102,9 @@ void sm64_saturn_geo_state_observer_init(
     sm64_saturn_geo_state_observer_t *observer, uint16_t capacity);
 void sm64_saturn_geo_state_observer_begin_frame(
     sm64_saturn_geo_state_observer_t *observer, uint32_t generation);
+uint32_t sm64_saturn_geo_state_observer_generation(
+    const sm64_saturn_geo_state_observer_t *observer);
+sm64_saturn_geo_state_observer_t *sm64_saturn_geo_state_observer_bound(void);
 bool sm64_saturn_geo_state_observer_begin_object(
     sm64_saturn_geo_state_observer_t *observer,
     const sm64_saturn_actor_source_observation_t *observation);
@@ -131,6 +137,10 @@ bool sm64_saturn_actor_instance_bank_begin_write(
 bool sm64_saturn_actor_instance_bank_publish(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index, uint16_t count,
     uint32_t generation);
+bool sm64_saturn_actor_instance_bank_capture(
+    sm64_saturn_actor_instance_bank_t *bank, uint32_t generation,
+    uint16_t capacity, uint8_t *index, uint16_t *count,
+    sm64_saturn_actor_capture_telemetry_t *stats);
 const sm64_saturn_actor_instance_snapshot_t *
 sm64_saturn_actor_instance_bank_acquire(
     sm64_saturn_actor_instance_bank_t *bank, uint8_t index,
@@ -149,7 +159,7 @@ _Static_assert(sizeof(sm64_saturn_actor_instance_snapshot_t) == 188U,
                "actor instance ABI size changed");
 _Static_assert(_Alignof(sm64_saturn_actor_instance_snapshot_t) == 4U,
                "actor instance ABI alignment changed");
-_Static_assert(2U * sizeof(sm64_saturn_actor_instance_bank_t) +
+_Static_assert(sizeof(sm64_saturn_actor_instance_bank_t) +
                    sizeof(sm64_saturn_geo_state_observer_t) <=
                    SM64_SATURN_ACTOR_INSTANCE_LWRAM_BUDGET,
                "actor snapshot banks exceed declared LWRAM budget");

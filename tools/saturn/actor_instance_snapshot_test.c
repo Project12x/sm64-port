@@ -142,13 +142,17 @@ static void test_identity_reuse_and_despawn(void)
     assert(sm64_saturn_actor_instances_capture(&second, 1U, 11U, &count, &telemetry));
     assert(count == 0U);
     sm64_saturn_geo_state_observer_end_frame(&observer);
+    assert(sm64_saturn_actor_instances_capture(&second, 1U, 11U, &count,
+                                               &telemetry));
+    assert(count == 0U);
+    assert(telemetry.despawned_count == 1U);
     sm64_saturn_geo_state_observer_begin_frame(&observer, 12U);
     source.source_generation = 12U;
     assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
     assert(sm64_saturn_geo_state_observer_end_object(&observer));
     assert(sm64_saturn_actor_instances_capture(&second, 1U, 12U, &count, &telemetry));
     assert(count == 1U && second.instance_key != first.instance_key);
-    assert(telemetry.pool_reuse_count == 0U || telemetry.pool_reuse_count == 1U);
+    assert(telemetry.pool_reuse_count == 1U);
 }
 
 static void test_fail_closed_cases(void)
@@ -218,6 +222,59 @@ static void test_capacity_and_two_bank_lifecycle(void)
     assert(sm64_saturn_actor_instance_bank_retire(&bank, first_index));
     assert(sm64_saturn_actor_instance_bank_quarantine(&bank, 2U));
     assert(!sm64_saturn_actor_instance_bank_acquire(&bank, index1, 2U, &count));
+
+    sm64_saturn_actor_instance_bank_init(&bank);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 21U);
+    source = observation(21U, 0U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    sm64_saturn_actor_instances_set_observer(&observer);
+    assert(sm64_saturn_actor_instance_bank_capture(
+        &bank, 21U, 2U, &index0, &count, &telemetry));
+    assert(count == 1U && bank.state[index0] ==
+           SM64_SATURN_ACTOR_INSTANCE_BANK_READY);
+}
+
+static void test_observer_overflow_latches_and_bounds_fail_closed(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source = observation(30U, 0U);
+    sm64_saturn_actor_instance_snapshot_t output;
+    sm64_saturn_actor_capture_telemetry_t telemetry;
+    uint16_t count;
+
+    sm64_saturn_geo_state_observer_init(&observer, 1U);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 30U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    assert(!sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(observer.overflow_latched != 0U);
+    assert(!sm64_saturn_actor_instances_capture(
+        &output, 1U, 30U, &count, &telemetry));
+    assert(count == 0U && telemetry.capacity_overflow_count == 1U);
+
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 31U);
+    source = observation(31U, 0U);
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    observer.observations[0].pool_slot = observer.capacity;
+    assert(sm64_saturn_actor_instances_capture(
+        &output, 1U, 31U, &count, &telemetry));
+    assert(count == 0U && telemetry.malformed_count == 1U);
+}
+
+static void test_bank_rejects_stale_and_duplicate_generations(void)
+{
+    sm64_saturn_actor_instance_bank_t bank;
+    uint8_t first, second;
+
+    sm64_saturn_actor_instance_bank_init(&bank);
+    assert(sm64_saturn_actor_instance_bank_begin_write(&bank, 40U, &first));
+    assert(!sm64_saturn_actor_instance_bank_begin_write(&bank, 40U, &second));
+    assert(sm64_saturn_actor_instance_bank_publish(&bank, first, 0U, 40U));
+    assert(!sm64_saturn_actor_instance_bank_begin_write(&bank, 40U, &second));
+    assert(sm64_saturn_actor_instance_bank_begin_write(&bank, 41U, &second));
+    assert(!sm64_saturn_actor_instance_bank_publish(&bank, second, 0U, 40U));
 }
 
 int main(void)
@@ -227,5 +284,7 @@ int main(void)
     test_identity_reuse_and_despawn();
     test_fail_closed_cases();
     test_capacity_and_two_bank_lifecycle();
+    test_observer_overflow_latches_and_bounds_fail_closed();
+    test_bank_rejects_stale_and_duplicate_generations();
     return 0;
 }

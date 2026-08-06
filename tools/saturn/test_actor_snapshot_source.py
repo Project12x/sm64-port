@@ -58,7 +58,10 @@ def test_capture_copies_source_values_and_rejects_bad_identity() -> None:
     ):
         assert field in capture, f"source field {field} is not copied"
     assert "capacity_overflow_count++" in capture
+    assert "overflow_latched" in capture
+    assert "source->pool_slot >= observer->capacity" in capture
     assert "instance_key = ((uint32_t)observer->incarnation" in capture
+    assert "sm64_saturn_actor_instance_bank_capture" in implementation
 
 
 def test_observer_only_records_geo_decisions_at_source_boundary() -> None:
@@ -74,12 +77,17 @@ def test_observer_only_records_geo_decisions_at_source_boundary() -> None:
     assert "gLoadedGraphNodes" not in observer
     assert "struct Object" not in observer
     assert "obj_is_in_view" in rendering
+    assert "saturn_source_observe_object_begin" in rendering
+    assert "sm64_saturn_geo_state_observer_end_object" in rendering
+    assert "saturn_source_model_id" in rendering
+    assert "family/bank identity is deliberately unresolved" in rendering
 
 
 def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
     header = (GFX / "saturn_actor_instance.h").read_text(encoding="utf-8")
     sourceboot = SOURCEBOOT.read_text(encoding="utf-8")
     assert "snapshots[2][" in header
+    assert "sm64_saturn_actor_instance_bank_capture" in header
     for state in (
         "SM64_SATURN_ACTOR_INSTANCE_BANK_FREE",
         "SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING",
@@ -92,6 +100,19 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
     tick = sourceboot[sourceboot.index("static void sourceboot_run_source_tick") :]
     assert tick.index("sourceboot_sim_tick_count =") < tick.index(
         "sourceboot_capture_render_snapshot(sourceboot_sim_tick_count);"
+    )
+    assert "sourceboot_actor_instances" in sourceboot
+    assert "sm64_saturn_actor_instance_bank_capture" in sourceboot
+    assert tick.index("sm64_saturn_geo_state_observer_begin_frame") < tick.index(
+        "game_loop_one_iteration"
+    )
+    capture = sourceboot[
+        sourceboot.index("static void sourceboot_capture_render_snapshot"):
+        sourceboot.index("static void sourceboot_run_source_tick")
+    ]
+    assert "begin_frame" not in capture
+    assert capture.index("sm64_saturn_geo_state_observer_end_frame") < capture.index(
+        "sm64_saturn_actor_instance_bank_capture"
     )
 
 

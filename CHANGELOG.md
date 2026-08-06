@@ -50,10 +50,29 @@
   pointer-free actor state with pool-slot/incarnation identity, package/bank
   hashes, parent/held offsets, switch/render/shadow/effect fields, and
   fail-closed stale-family, malformed-source, and capacity handling. The
-  sourceboot capture is ordered after the authoritative tick; host gates cover
-  typed-field mutations, model-less controllers, despawn/reuse, and immutable
-  bank lifecycle. The render-snapshot gate now launches its Windows host test
-  through Python subprocess to avoid the inherited MSYS quoted-path EOF error.
+  sourceboot capture is ordered after the authoritative tick while the
+  observation window opens before that tick; host gates cover typed-field
+  mutations, model-less controllers, despawn/reuse, and immutable bank
+  lifecycle. Production geo hooks resolve bounded pool/model scalars, but
+  unresolved generated family/scene/bank identity is deliberately rejected
+  rather than fabricated. The render-snapshot gate now launches its Windows
+  host test through Python subprocess to avoid the inherited MSYS quoted-path
+  EOF error.
+
+- Hardened actor snapshot publication after lifecycle review: observer
+  overflow now latches for the frame, capture bounds-checks every source pool
+  slot before reading incarnation state, and telemetry resets per source frame
+  so despawn/reuse counts are attributable. Actor banks reject stale or
+  duplicate generations even after retirement and the LWRAM assertion counts
+  the bank container once (it already owns both physical banks). The linked
+  sourceboot gate remains open until the Yaul/MSYS make wrapper is repaired and
+  the generated actor-family registry is bound at the production geo seam.
+
+- Connected actor capture to the real two-bank sourceboot handoff. A published
+  bank is claimed for the render overlap window and is retired only at the
+  terminal boundary; failed publication or rendering quarantines that exact
+  generation. This keeps actor state immutable while preserving the bounded
+  64-instance package ceiling.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed
