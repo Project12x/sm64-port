@@ -63,9 +63,16 @@ def assert_source_tick_generation_contract(tick: str) -> None:
         "sourceboot_fast3d.profile.sim_tick_count = source_tick_generation;",
         "sourceboot_capture_render_snapshot(source_tick_generation);",
         "sm64_saturn_camera_bypass_arm(source_tick_generation);",
-        "source_tick_generation);",
     ):
         assert consumer in tick, f"same-tick consumer escaped named successor: {consumer}"
+    idle_probe = re.search(
+        r"sm64_saturn_sourceboot_camera_idle_probe_record\s*\(\s*"
+        r"sm64_saturn_source_runtime_state\s*\(\s*\)\s*,\s*"
+        r"source_tick_generation\s*\)",
+        tick,
+        re.S,
+    )
+    assert idle_probe, "idle probe must use the named successor"
     assert declaration.start() < observer.start() < game_loop < assignment.start()
     assert assignment.start() < tick.index("sourceboot_capture_render_snapshot(")
     assert "sourceboot_sim_tick_count + 1U" not in tick
@@ -116,6 +123,23 @@ def test_sourceboot_uses_one_skip_zero_generation_for_observer_and_consumers() -
         pass
     else:
         raise AssertionError("global camera mutation escaped source gate")
+
+    idle_probe_mutation, changed = re.subn(
+        r"(sm64_saturn_sourceboot_camera_idle_probe_record\s*\(\s*"
+        r"sm64_saturn_source_runtime_state\s*\(\s*\)\s*,\s*)"
+        r"source_tick_generation",
+        r"\1sourceboot_sim_tick_count",
+        tick,
+        count=1,
+        flags=re.S,
+    )
+    assert changed == 1
+    try:
+        assert_source_tick_generation_contract(idle_probe_mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("global idle-probe mutation escaped source gate")
 
 
 def test_snapshot_and_observation_are_pointer_free() -> None:

@@ -66,9 +66,15 @@ def assert_source_tick_generation_contract(body: str) -> None:
         "sourceboot_fast3d.profile.sim_tick_count = source_tick_generation;",
         "sourceboot_capture_render_snapshot(source_tick_generation);",
         "sm64_saturn_camera_bypass_arm(source_tick_generation);",
-        "source_tick_generation);",
     ):
         assert consumer in body
+    assert re.search(
+        r"sm64_saturn_sourceboot_camera_idle_probe_record\s*\(\s*"
+        r"sm64_saturn_source_runtime_state\s*\(\s*\)\s*,\s*"
+        r"source_tick_generation\s*\)",
+        body,
+        re.S,
+    ) is not None
     assert declaration.start() < observer.start() < body.index("game_loop_one_iteration()")
     assert body.index("game_loop_one_iteration()") < assignment.start()
     assert assignment.start() < body.index("sourceboot_capture_render_snapshot(")
