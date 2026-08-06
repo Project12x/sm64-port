@@ -56,6 +56,9 @@ def test_aiff_and_catalog() -> None:
         assert all(sample["loop_source"] == "bank-metadata" and
                    sample["loop_start"] is None and sample["tuning"] is None
                    for sample in result["samples"])
+        assert any(binding.get("tuning") is not None
+                   for sample in result["samples"]
+                   for binding in sample["bank_bindings"])
         assert result["package_size"] == out.stat().st_size
         assert all(x["resident_bytes"] <= RESIDENT_LIMIT for x in result["closures"].values())
         raw = out.read_bytes()
@@ -82,6 +85,9 @@ def test_source_fail_closed() -> None:
         sequence.write_bytes(b"")
         expect_failure(lambda: compile_catalog(root, Path(temp) / "x"),
                        "empty sequence")
+        sequence.write_bytes(b"\0" * 8)
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "x"),
+                       "invalid sequence control flow")
 
 
 def test_alignment_hash_drift_and_duplicate() -> None:

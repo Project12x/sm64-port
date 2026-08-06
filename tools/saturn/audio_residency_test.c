@@ -42,6 +42,9 @@ int main(int argc, char **argv)
         assert(fread(bytes, 1U, (size_t)size, file) == (size_t)size);
         fclose(file);
         assert(sm64_saturn_audio_package_validate_header(bytes, (uint32_t)size, &package));
+        /* A descriptor alias must fail independently of package provenance. */
+        memcpy(bytes + 96U + 56U + 4U, bytes + 96U + 4U, 4U);
+        assert(!sm64_saturn_audio_package_validate_header(bytes, (uint32_t)size, &package));
         free(bytes);
     }
     memset(&package, 0, sizeof(package));

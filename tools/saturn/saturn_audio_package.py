@@ -41,6 +41,7 @@ class Sample:
     rate: int
     frames: int
     pcm8: bytes
+    aiff_metadata: dict[str, object]
 
 
 def _canonical(value: object) -> bytes:
@@ -54,6 +55,45 @@ def _sha(data: bytes) -> str:
 
 def _align(value: int, alignment: int = CHUNK_ALIGNMENT) -> int:
     return (value + alignment - 1) & -alignment
+
+
+def _aiff_metadata(raw: bytes) -> dict[str, object]:
+    """Preserve AIFF MARK/INST loop facts instead of discarding them in aifc."""
+    metadata: dict[str, object] = {"markers": [], "instrument": None}
+    cursor = 12
+    while cursor + 8 <= len(raw):
+        kind = raw[cursor:cursor + 4]
+        size = int.from_bytes(raw[cursor + 4:cursor + 8], "big")
+        payload = raw[cursor + 8:cursor + 8 + size]
+        if len(payload) != size:
+            break
+        if kind == b"MARK" and len(payload) >= 2:
+            count = int.from_bytes(payload[:2], "big")
+            pos = 2
+            markers = []
+            for _ in range(count):
+                if pos + 7 > len(payload): break
+                marker_id = int.from_bytes(payload[pos:pos + 2], "big")
+                marker_pos = int.from_bytes(payload[pos + 2:pos + 6], "big")
+                name_len = payload[pos + 6]
+                name = payload[pos + 7:pos + 7 + name_len].decode("latin1", "replace")
+                markers.append({"id": marker_id, "position": marker_pos, "name": name})
+                pos += 7 + name_len + ((name_len + 1) & 1)
+            metadata["markers"] = markers
+        elif kind == b"INST" and len(payload) >= 20:
+            metadata["instrument"] = {
+                "base_note": payload[0], "detune": int.from_bytes(payload[1:2], "big", signed=True),
+                "low_note": payload[2], "high_note": payload[3],
+                "low_velocity": payload[4], "high_velocity": payload[5],
+                "gain": int.from_bytes(payload[6:8], "big", signed=True),
+                "sustain_loop": {"play_mode": int.from_bytes(payload[8:10], "big"),
+                                  "begin_marker": int.from_bytes(payload[10:12], "big"),
+                                  "end_marker": int.from_bytes(payload[12:14], "big")},
+                "release_loop": {"play_mode": int.from_bytes(payload[14:16], "big"),
+                                  "begin_marker": int.from_bytes(payload[16:18], "big"),
+                                  "end_marker": int.from_bytes(payload[18:20], "big")}}
+        cursor += 8 + size + (size & 1)
+    return metadata
 
 
 def parse_aiff(path: Path) -> Sample:
@@ -81,7 +121,8 @@ def parse_aiff(path: Path) -> Sample:
     # Basenames repeat across extracted sample banks (00..1C are common), so
     # the stable identity includes the source bank directory.
     stable_id = "/".join(path.parts[-2:]).rsplit(".", 1)[0]
-    return Sample(stable_id, source, _sha(path.read_bytes()), rate, frames, bytes(pcm8))
+    return Sample(stable_id, source, _sha(path.read_bytes()), rate, frames, bytes(pcm8),
+                  _aiff_metadata(path.read_bytes()))
 
 
 def source_inventory(root: Path) -> tuple[list[Path], str]:
@@ -130,6 +171,8 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
         payload = generated_source.read_bytes() if path is None else path.read_bytes()
         if path is not None and not payload:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
+        if path is not None and (len(payload) < 4 or not any(payload)):
+            raise AudioPackageError(f"invalid control flow in extracted sequence asset: {name}.m64")
         if path is None and seq_id == 0 and len(payload) <= 1024:
             raise AudioPackageError("expanded sequence-00 payload is too small")
         source_path = (generated_source if path is None else path)
@@ -191,6 +234,35 @@ def _sfx_mappings(banks: list[dict[str, object]]) -> list[dict[str, object]]:
             mappings.append({"bank_id": bank["id"], "sound_id": 0x7F,
                              "instrument": "percussion"})
     return mappings
+
+
+def _sample_bindings(banks: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    """Retain bank-side tuning/envelope/pan facts without inventing sample loops."""
+    bindings: dict[str, list[dict[str, object]]] = {}
+    for bank in banks:
+        prefix = str(bank["sample_bank"])
+        def visit(value: object) -> None:
+            if isinstance(value, dict):
+                sound = value.get("sound")
+                sample_name = sound if isinstance(sound, str) else (
+                    sound.get("sample") if isinstance(sound, dict) else None)
+                if isinstance(sample_name, str):
+                    facts = {key: value[key] for key in
+                             ("tuning", "key", "pan", "release_rate", "envelope",
+                              "loop_start", "loop_end") if key in value}
+                    if isinstance(sound, dict):
+                        facts.update({key: sound[key] for key in
+                                      ("tuning", "key", "loop_start", "loop_end")
+                                      if key in sound})
+                    bindings.setdefault(f"{prefix}/{sample_name}", []).append(
+                        {"bank": bank["name"], **facts})
+                for child in value.values():
+                    visit(child)
+            elif isinstance(value, list):
+                for child in value:
+                    visit(child)
+        visit(bank["metadata"].get("instruments", bank["metadata"]))
+    return bindings
 
 
 def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, object]],
@@ -256,11 +328,14 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
         parsed = parse_aiff(path)
         samples.append(Sample(parsed.stable_id, path.relative_to(root).as_posix(),
                               parsed.source_sha256, parsed.rate, parsed.frames,
-                              parsed.pcm8))
+                              parsed.pcm8, parsed.aiff_metadata))
+    sample_bindings = _sample_bindings(banks)
     sample_records = [{"id": s.stable_id, "source": s.source, "sha256": s.source_sha256,
                        "rate": s.rate, "frames": s.frames, "pcm8_bytes": len(s.pcm8),
                        "loop_start": None, "loop_end": None, "root_key": None,
-                       "tuning": None, "loop_source": "bank-metadata"} for s in samples]
+                       "tuning": None, "loop_source": "bank-metadata",
+                       "aiff_metadata": s.aiff_metadata,
+                       "bank_bindings": sample_bindings.get(s.stable_id, [])} for s in samples]
     sfx_mappings = _sfx_mappings(banks)
     closures = {"bob": _closure("bob", [3], sequences, banks, samples, root),
                 "wf": _closure("wf", [3], sequences, banks, samples, root)}

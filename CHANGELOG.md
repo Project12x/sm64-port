@@ -23,6 +23,9 @@
   Residency plans now model a bounded scratch/work span, reject all overlaps
   through a shared public validator, and require validated active/replacement
   plans at commit and MC68000 acceptance rather than trusting caller spans.
+  AIFF MARK/INST loop markers and bank-side tuning/envelope/pan bindings are
+  retained in the manifest, invalid all-zero/short `.m64` control streams fail
+  closed, and C package validation rejects overlapping descriptor payloads.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,

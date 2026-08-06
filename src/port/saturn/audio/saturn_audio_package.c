@@ -124,6 +124,16 @@ bool sm64_saturn_audio_package_validate_header(
             offset % alignment != 0U || offset > byte_count || size > byte_count - offset) {
             return false;
         }
+        for (uint32_t prior = 0U; prior < i; ++prior) {
+            const uint8_t *previous = raw + SM64_SATURN_AUDIO_PACKAGE_HEADER_SIZE +
+                                      prior * SM64_SATURN_AUDIO_PACKAGE_CHUNK_SIZE;
+            const uint32_t previous_offset = be32(previous + 4);
+            const uint32_t previous_size = be32(previous + 8);
+            if (offset < previous_offset + previous_size &&
+                previous_offset < offset + size) {
+                return false;
+            }
+        }
         {
             sha256_ctx_t chunk_hash;
             uint8_t digest[32];
