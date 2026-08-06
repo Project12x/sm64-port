@@ -70,6 +70,7 @@ static void test_all_typed_fields_and_model_none(void)
     sm64_saturn_geo_state_observer_init(&observer, 8U);
     sm64_saturn_actor_instances_set_observer(&observer);
     sm64_saturn_geo_state_observer_begin_frame(&observer, 5U);
+    source.parent_index = 239U;
     assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
     assert(sm64_saturn_geo_state_observer_record_switch(&observer, 3U, 0x7777U));
     assert(sm64_saturn_geo_state_observer_end_object(&observer));
@@ -153,6 +154,70 @@ static void test_identity_reuse_and_despawn(void)
     assert(sm64_saturn_actor_instances_capture(&second, 1U, 12U, &count, &telemetry));
     assert(count == 1U && second.instance_key != first.instance_key);
     assert(telemetry.pool_reuse_count == 1U);
+}
+
+static void test_source_pool_slots_are_independent_from_compact_capacity(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source = observation(13U, 64U);
+    sm64_saturn_actor_instance_snapshot_t output[2];
+    sm64_saturn_actor_capture_telemetry_t telemetry;
+    uint16_t count;
+
+    sm64_saturn_geo_state_observer_init(&observer, 2U);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 13U);
+    source.parent_index = 239U;
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    source = observation(13U, 239U);
+    source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    assert(sm64_saturn_actor_instances_capture(output, 2U, 13U, &count,
+                                               &telemetry));
+    assert(count == 2U && output[0].instance_key ==
+           ((uint32_t)1U << 16 | 64U));
+    assert(output[1].instance_key == ((uint32_t)1U << 16 | 239U));
+    assert(output[0].parent_index == 239U);
+
+    sm64_saturn_geo_state_observer_end_frame(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 14U);
+    sm64_saturn_geo_state_observer_end_frame(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 15U);
+    source = observation(15U, 239U);
+    source.parent_index = SM64_SATURN_ACTOR_INSTANCE_NO_PARENT;
+    assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    assert(sm64_saturn_actor_instances_capture(output, 2U, 15U, &count,
+                                               &telemetry));
+    assert(count == 1U && output[0].instance_key ==
+           ((uint32_t)2U << 16 | 239U));
+    assert(telemetry.pool_reuse_count == 1U);
+
+    source = observation(15U, SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY);
+    assert(!sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(observer.pool_slot_overflow_count == 1U);
+}
+
+static void test_compact_observation_overflow_remains_latched_at_65(void)
+{
+    sm64_saturn_geo_state_observer_t observer;
+    sm64_saturn_actor_source_observation_t source;
+    uint16_t slot;
+
+    sm64_saturn_geo_state_observer_init(
+        &observer, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
+    sm64_saturn_actor_instances_set_observer(&observer);
+    sm64_saturn_geo_state_observer_begin_frame(&observer, 14U);
+    for (slot = 0U; slot < SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE; slot++) {
+        source = observation(14U, slot);
+        assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+        assert(sm64_saturn_geo_state_observer_end_object(&observer));
+    }
+    source = observation(14U, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
+    assert(!sm64_saturn_geo_state_observer_begin_object(&observer, &source));
+    assert(observer.overflow_latched != 0U);
 }
 
 static void test_fail_closed_cases(void)
@@ -259,13 +324,13 @@ static void test_observer_overflow_latches_and_bounds_fail_closed(void)
     sm64_saturn_geo_state_observer_begin_frame(&observer, 31U);
     source = observation(31U, 0U);
     assert(sm64_saturn_geo_state_observer_begin_object(&observer, &source));
-    observer.observations[0].pool_slot = observer.capacity;
+    observer.observations[0].pool_slot = SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY;
     assert(sm64_saturn_actor_instances_capture(
         &output, 1U, 31U, &count, &telemetry));
     assert(count == 0U && telemetry.malformed_count == 1U);
 
     sm64_saturn_geo_state_observer_begin_frame(&observer, 32U);
-    source = observation(32U, observer.capacity);
+    source = observation(32U, SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY);
     assert(!sm64_saturn_geo_state_observer_begin_object(&observer, &source));
     assert(observer.pool_slot_overflow_count == 1U);
     assert(sm64_saturn_actor_instances_capture(
@@ -327,6 +392,8 @@ int main(void)
     test_all_typed_fields_and_model_none();
     test_mutation_is_observed_and_parent_is_pointer_free();
     test_identity_reuse_and_despawn();
+    test_source_pool_slots_are_independent_from_compact_capacity();
+    test_compact_observation_overflow_remains_latched_at_65();
     test_fail_closed_cases();
     test_capacity_and_two_bank_lifecycle();
     test_observer_overflow_latches_and_bounds_fail_closed();

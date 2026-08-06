@@ -73,7 +73,7 @@ static bool valid_observation(const sm64_saturn_actor_source_observation_t *sour
         source->draw_distance_q16 < 0 || source->opacity > 255U ||
         source->parent_index == source->pool_slot ||
         (source->parent_index != SM64_SATURN_ACTOR_INSTANCE_NO_PARENT &&
-         source->parent_index >= SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE)) {
+         source->parent_index >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY)) {
         if (stats != NULL) stats->malformed_count++;
         return false;
     }
@@ -116,8 +116,7 @@ bool sm64_saturn_actor_instances_capture(
             &observer->observations[i];
         sm64_saturn_actor_instance_snapshot_t *destination;
         uint16_t word;
-        if (source->pool_slot >= observer->capacity ||
-            source->pool_slot >= SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE) {
+        if (source->pool_slot >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY) {
             if (stats != NULL) stats->malformed_count++;
             continue;
         }

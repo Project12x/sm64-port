@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Separated Task 14's source object-pool identity domain from its compact
+  drawable snapshot domain. The observer now accepts and tracks all 240
+  source-attested `OBJECT_POOL_CAPACITY` slots (including parent identities
+  and incarnation reuse) while its immutable 188-byte snapshots and 64-byte
+  queue descriptors retain the existing 64-observation ceiling. This grows
+  the fixed observer sidecars from 12,320 to 13,024 bytes; the fixed 65,536
+  byte actor arena remains unchanged by reducing the derived output-record
+  ceiling from 2,806 to 2,718 records. Slots outside the 240-entry source
+  pool still fail closed, and a 65th compact observation still latches
+  overflow. This host-only repair does not alter sourceboot timing, package
+  reservation, renderer cutover, target/Ymir behavior, or FPS claims.
+
 - Added a bounded, host-only Task 16 lifecycle handoff from the authoritative
   actor snapshot bank to the existing actor queue and stable batch builder.
   It acquires one exact ready bank generation, regenerates each descriptor's

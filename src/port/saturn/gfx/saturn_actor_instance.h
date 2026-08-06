@@ -12,6 +12,11 @@
 /* The generated scene package supplies the live bound.  This ceiling is only
  * a compile-time safety rail for malformed or not-yet-generated packages. */
 #define SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE 64U
+/* Source-attested from src/game/object_list_processor.h: OBJECT_POOL_CAPACITY.
+ * This identity domain deliberately outlives the compact drawable snapshot
+ * domain above: source slots 0..239 can be observed without enlarging queue
+ * or snapshot payloads beyond 64 entries. */
+#define SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY 240U
 #define SM64_SATURN_ACTOR_MAX_SWITCHES 8U
 #define SM64_SATURN_ACTOR_INSTANCE_MODEL_NONE 0U
 #define SM64_SATURN_ACTOR_INSTANCE_NO_PARENT 0xffffU
@@ -72,9 +77,9 @@ typedef struct sm64_saturn_actor_capture_telemetry {
 typedef struct sm64_saturn_geo_state_observer {
     sm64_saturn_actor_source_observation_t observations[
         SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
-    uint8_t seen[SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
-    uint8_t live[SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
-    uint16_t incarnation[SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE];
+    uint8_t seen[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY];
+    uint8_t live[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY];
+    uint16_t incarnation[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY];
     uint16_t capacity, count;
     uint32_t source_generation;
     uint32_t geo_evaluation_count, geo_rendered_count, geo_rejected_count;

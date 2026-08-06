@@ -62,13 +62,31 @@ def test_capture_copies_source_values_and_rejects_bad_identity() -> None:
         assert field in capture, f"source field {field} is not copied"
     assert "capacity_overflow_count++" in capture
     assert "overflow_latched" in capture
-    assert "source->pool_slot >= observer->capacity" in capture
+    assert "source->pool_slot >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY" in capture
     assert "pool_slot_overflow_count" in capture
     assert "instance_key = ((uint32_t)observer->incarnation" in capture
     assert "sm64_saturn_actor_instance_bank_capture" in implementation
     assert "CPU_CACHE_THROUGH" in implementation
     assert "actor_bank_fence" in implementation
     assert "sm64_saturn_render_generation_next" in implementation
+
+
+def test_source_pool_identity_bound_stays_separate_from_compact_capacity() -> None:
+    header = (GFX / "saturn_actor_instance.h").read_text(encoding="utf-8")
+    observer = body(GFX / "saturn_geo_state_observer.c",
+                    "sm64_saturn_geo_state_observer_begin_object")
+    capture = body(GFX / "saturn_actor_instance.c",
+                   "sm64_saturn_actor_instances_capture")
+    validation = body(GFX / "saturn_actor_instance.c", "valid_observation")
+    assert "SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY 240U" in header
+    assert "OBJECT_POOL_CAPACITY" in header
+    assert "seen[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY]" in header
+    assert "live[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY]" in header
+    assert "incarnation[SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY]" in header
+    assert "observation->pool_slot >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY" in observer
+    assert "observer->count >= observer->capacity" in observer
+    assert "source->pool_slot >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY" in capture
+    assert "source->parent_index >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY" in validation
 
 
 def assert_capture_uses_cache_through_payload(text: str) -> None:
@@ -153,6 +171,7 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
 if __name__ == "__main__":
     test_snapshot_and_observation_are_pointer_free()
     test_capture_copies_source_values_and_rejects_bad_identity()
+    test_source_pool_identity_bound_stays_separate_from_compact_capacity()
     test_bank_capture_payload_uses_cache_through_alias_and_rejects_cached_mutation()
     test_observer_only_records_geo_decisions_at_source_boundary()
     test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture()

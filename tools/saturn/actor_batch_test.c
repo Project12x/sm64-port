@@ -139,7 +139,8 @@ static void test_runtime_storage_exactly_fits_the_actor_lwram_budget(void)
     assert(_Alignof(sm64_saturn_actor_runtime_storage_t) == 16U);
     assert(sizeof(sm64_saturn_actor_runtime_storage_t) == 65536U);
     assert(sizeof(((sm64_saturn_actor_runtime_storage_t *)0)->outputs) ==
-           22448U);
+           SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING *
+               sizeof(sm64_saturn_actor_output_record_t));
 }
 
 int main(void)

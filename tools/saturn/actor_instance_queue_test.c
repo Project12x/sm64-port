@@ -301,15 +301,18 @@ static void test_memory_report_accounts_for_the_complete_actor_arena(void)
     assert(report.result_bytes == 768U);
     assert(report.queue_bytes == sizeof(sm64_saturn_actor_instance_queue_t));
     assert(report.actor_bank_bytes == 24088U);
-    assert(report.observer_bytes == 12320U);
+    assert(report.observer_bytes == sizeof(sm64_saturn_geo_state_observer_t));
     assert(report.batch_bytes == 1024U);
     assert(report.output_record_bytes == 8U);
-    assert(report.output_storage_bytes == 22448U);
+    assert(report.output_storage_bytes ==
+           SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING *
+               sizeof(sm64_saturn_actor_output_record_t));
     assert(report.alignment_padding_bytes == 12U);
     assert(report.runtime_alignment == 16U);
     assert(report.runtime_bytes == 65536U);
     assert(report.lwram_budget_bytes == 65536U);
-    assert(report.output_record_ceiling == 2806U);
+    assert(report.output_record_ceiling ==
+           SM64_SATURN_ACTOR_OUTPUT_RECORD_CEILING);
 }
 
 typedef struct processor_context {

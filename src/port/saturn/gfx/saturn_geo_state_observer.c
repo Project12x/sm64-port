@@ -52,7 +52,7 @@ bool sm64_saturn_geo_state_observer_begin_object(
         observer != s_observer || observer->capacity == 0U ||
         observation->active == 0U)
         return false;
-    if (observation->pool_slot >= observer->capacity) {
+    if (observation->pool_slot >= SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY) {
         if (observer->pool_slot_overflow_count != UINT16_MAX)
             observer->pool_slot_overflow_count++;
         return false;
@@ -107,7 +107,7 @@ void sm64_saturn_geo_state_observer_end_frame(
 {
     uint16_t slot;
     if (observer == NULL) return;
-    for (slot = 0U; slot < observer->capacity; slot++) {
+    for (slot = 0U; slot < SM64_SATURN_ACTOR_SOURCE_POOL_CAPACITY; slot++) {
         if (!observer->seen[slot]) {
             if (observer->live[slot]) observer->despawned_count++;
             observer->live[slot] = 0U;
