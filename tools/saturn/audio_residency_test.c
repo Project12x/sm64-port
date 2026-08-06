@@ -10,8 +10,13 @@
 int main(int argc, char **argv)
 {
     uint8_t raw[2200];
-    sm64_saturn_audio_residency_plan_t active = {1U, 0U, 8192U, 8192U, 0U,
-                                                  16384U, 32768U, 65536U, true, true};
+    sm64_saturn_audio_residency_plan_t active = {
+        .generation = 1U, .driver_offset = 0U, .driver_size = 8192U,
+        .mailbox_offset = 8192U, .mailbox_size = 0U,
+        .sample_offset = 16384U, .sample_size = 32768U,
+        .scratch_offset = 49152U, .scratch_size = 0U,
+        .total_bytes = 65536U, .active_generation_retained = true,
+        .post_boot_clear_rejected = true};
     sm64_saturn_audio_residency_plan_t replacement;
     sm64_saturn_audio_package_view_t package;
     sm64_saturn_audio_package_token_t token;
@@ -44,15 +49,15 @@ int main(int argc, char **argv)
     package.bank_count = 38U;
     package.sample_count = 219U;
     assert(sm64_saturn_audio_residency_prepare(&active, 2U, 8192U, 4096U,
-                                                256U * 1024U, &replacement));
+                                                256U * 1024U, 0U, &replacement));
     assert(replacement.active_generation_retained);
     assert(!sm64_saturn_audio_residency_commit(&active, &replacement, 1U));
     assert(sm64_saturn_audio_residency_commit(&active, &replacement, 2U));
     assert(!sm64_saturn_audio_residency_clear_sound_ram(&active, true));
-    assert(!sm64_saturn_audio_residency_prepare(&active, 1U, 1U, 1U, 1U,
+    assert(!sm64_saturn_audio_residency_prepare(&active, 1U, 1U, 1U, 1U, 0U,
                                                  &replacement));
     assert(!sm64_saturn_audio_residency_prepare(&active, 3U, 400000U, 400000U,
-                                                 400000U, &replacement));
+                                                 400000U, 400000U, &replacement));
     assert(sm64_saturn_audio68k_package_accept(&package, &replacement, &token));
     return 0;
 }

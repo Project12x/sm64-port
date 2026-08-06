@@ -8,7 +8,7 @@ bool sm64_saturn_audio68k_package_accept(
     if (package == 0 || plan == 0 || token == 0 ||
         package->sequence_count != 35U || package->bank_count != 38U ||
         package->sample_count != 219U || plan->generation == 0U ||
-        !plan->active_generation_retained || !plan->post_boot_clear_rejected ||
+        !sm64_saturn_audio_residency_validate_plan(plan) ||
         plan->total_bytes > SM64_SATURN_AUDIO_RESIDENT_LIMIT) {
         return false;
     }

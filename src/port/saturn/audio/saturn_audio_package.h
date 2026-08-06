@@ -35,6 +35,8 @@ typedef struct sm64_saturn_audio_residency_plan {
     uint32_t mailbox_size;
     uint32_t sample_offset;
     uint32_t sample_size;
+    uint32_t scratch_offset;
+    uint32_t scratch_size;
     uint32_t total_bytes;
     bool active_generation_retained;
     bool post_boot_clear_rejected;
@@ -46,8 +48,11 @@ typedef struct sm64_saturn_audio_residency_plan {
 bool sm64_saturn_audio_residency_prepare(
     const sm64_saturn_audio_residency_plan_t *active,
     uint32_t replacement_generation, uint32_t driver_size,
-    uint32_t mailbox_size, uint32_t sample_size,
+    uint32_t mailbox_size, uint32_t sample_size, uint32_t scratch_size,
     sm64_saturn_audio_residency_plan_t *replacement);
+
+bool sm64_saturn_audio_residency_validate_plan(
+    const sm64_saturn_audio_residency_plan_t *plan);
 
 bool sm64_saturn_audio_residency_commit(
     const sm64_saturn_audio_residency_plan_t *active,

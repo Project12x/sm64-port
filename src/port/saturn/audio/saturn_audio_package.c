@@ -60,26 +60,32 @@ static bool span_ok(uint32_t offset, uint32_t size, uint32_t limit)
            offset <= limit && size <= limit - offset;
 }
 
-static bool plan_valid(const sm64_saturn_audio_residency_plan_t *plan)
+bool sm64_saturn_audio_residency_validate_plan(const sm64_saturn_audio_residency_plan_t *plan)
 {
     uint32_t driver_end;
     uint32_t mailbox_end;
     uint32_t sample_end;
+    uint32_t scratch_end;
     if (plan == 0 || plan->generation == 0U || !plan->active_generation_retained ||
         !plan->post_boot_clear_rejected || plan->total_bytes > SM64_SATURN_AUDIO_RESIDENT_LIMIT ||
         !span_ok(plan->driver_offset, plan->driver_size, plan->total_bytes) ||
         !span_ok(plan->mailbox_offset, plan->mailbox_size, plan->total_bytes) ||
-        !span_ok(plan->sample_offset, plan->sample_size, plan->total_bytes)) {
+        !span_ok(plan->sample_offset, plan->sample_size, plan->total_bytes) ||
+        !span_ok(plan->scratch_offset, plan->scratch_size, plan->total_bytes)) {
         return false;
     }
     driver_end = plan->driver_offset + plan->driver_size;
     mailbox_end = plan->mailbox_offset + plan->mailbox_size;
     sample_end = plan->sample_offset + plan->sample_size;
+    scratch_end = plan->scratch_offset + plan->scratch_size;
     if (driver_end > plan->mailbox_offset && mailbox_end > plan->driver_offset) return false;
     if (driver_end > plan->sample_offset && sample_end > plan->driver_offset) return false;
     if (mailbox_end > plan->sample_offset && sample_end > plan->mailbox_offset) return false;
+    if (driver_end > plan->scratch_offset && scratch_end > plan->driver_offset) return false;
+    if (mailbox_end > plan->scratch_offset && scratch_end > plan->mailbox_offset) return false;
+    if (sample_end > plan->scratch_offset && scratch_end > plan->sample_offset) return false;
     return driver_end <= plan->total_bytes && mailbox_end <= plan->total_bytes &&
-           sample_end <= plan->total_bytes;
+           sample_end <= plan->total_bytes && scratch_end <= plan->total_bytes;
 }
 
 bool sm64_saturn_audio_package_validate_header(
@@ -142,12 +148,12 @@ bool sm64_saturn_audio_package_validate_header(
 bool sm64_saturn_audio_residency_prepare(
     const sm64_saturn_audio_residency_plan_t *active,
     uint32_t replacement_generation, uint32_t driver_size,
-    uint32_t mailbox_size, uint32_t sample_size,
+    uint32_t mailbox_size, uint32_t sample_size, uint32_t scratch_size,
     sm64_saturn_audio_residency_plan_t *replacement)
 {
     uint32_t cursor;
     sm64_saturn_audio_residency_plan_t candidate;
-    if (active == 0 || replacement == 0 || !plan_valid(active) ||
+    if (active == 0 || replacement == 0 || !sm64_saturn_audio_residency_validate_plan(active) ||
         replacement_generation == 0U || replacement_generation <= active->generation ||
         active->total_bytes > SM64_SATURN_AUDIO_RESIDENT_LIMIT) {
         return false;
@@ -166,7 +172,11 @@ bool sm64_saturn_audio_residency_prepare(
     candidate.sample_offset = cursor;
     candidate.sample_size = sample_size;
     if (sample_size > SM64_SATURN_AUDIO_RESIDENT_LIMIT - cursor) return false;
-    candidate.total_bytes = cursor + sample_size;
+    cursor = align2048(cursor + sample_size);
+    candidate.scratch_offset = cursor;
+    candidate.scratch_size = scratch_size;
+    if (scratch_size > SM64_SATURN_AUDIO_RESIDENT_LIMIT - cursor) return false;
+    candidate.total_bytes = cursor + scratch_size;
     candidate.active_generation_retained = true;
     candidate.post_boot_clear_rejected = true;
     /* Both generations must coexist until an MC68000 acknowledgement. */
@@ -183,6 +193,8 @@ bool sm64_saturn_audio_residency_commit(
     uint32_t acknowledged_generation)
 {
     return active != 0 && replacement != 0 &&
+           sm64_saturn_audio_residency_validate_plan(active) &&
+           sm64_saturn_audio_residency_validate_plan(replacement) &&
            replacement->generation > active->generation &&
            acknowledged_generation == replacement->generation &&
            replacement->active_generation_retained &&

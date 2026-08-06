@@ -20,6 +20,9 @@
   Sequence 00 now requires the expanded generated payload; a wrapper-only
   `sound_data.c` input fails closed and blocks the complete package gate until
   the real source asset is supplied.
+  Residency plans now model a bounded scratch/work span, reject all overlaps
+  through a shared public validator, and require validated active/replacement
+  plans at commit and MC68000 acceptance rather than trusting caller spans.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
