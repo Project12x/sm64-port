@@ -93,6 +93,12 @@ def test_alignment_hash_drift_and_duplicate() -> None:
         for i in range(chunk_count):
             offset = CHUNK.unpack_from(package, HEADER_SIZE + i * CHUNK_SIZE)[1]
             assert offset % CHUNK_ALIGNMENT == 0
+        # Preserve the inventory cardinality while creating an actual duplicate
+        # two-digit bank ID; the loader must reject the identity collision.
+        bank_one = root / "sound/sound_banks/03.json"
+        bank_one.rename(root / "sound/sound_banks/00_duplicate.json")
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "duplicate"),
+                       "duplicate bank ID")
 
 
 def test_residency_safety_contract() -> None:
