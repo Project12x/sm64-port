@@ -1041,6 +1041,27 @@ silently substitute a host-only map.
 - [ ] Commit and independently review the make-variable/Windows-tool
   boundary; do not promote this lane if it only makes a host gate green.
 
+#### Task 14 bounded implementation: reserve the actor runtime owner
+
+With the complete VDP1 command block relocated, implement the dedicated
+sourceboot actor-runtime owner identified by the preflight. This lane replaces
+the separate observer/instance statics; it does not duplicate them or claim
+that production actor admission is complete.
+
+- [ ] RED: mutation tests reject a missing/duplicate owner, wrong section or
+  alignment, omitted NOLOAD initialization, cached peer-visible access, and
+  capacities above 64 instances or 2718 output records.
+- [ ] Implement one 16-byte-aligned `used` `.lwram_actor_runtime` owner with
+  exported linker start/end symbols, exact 0x10000 size/non-overlap assertions,
+  P2/cache-through zero/init, and bindings for observer, banks, queue, batches,
+  and output spans. Preserve feature-off zero-count behavior.
+- [ ] Run focused source/map gates and a serialized route-0 build after the
+  Make repair; inspect exact owner offsets, LWRAM >= `0x4000`, and HWRAM TLSF
+  floor >= `0x1B00`. Target/P2/concurrent-SH2/Ymir/manual/FPS remain unchecked.
+- [ ] Commit and independently review owner uniqueness, NOLOAD initialization,
+  alias/fence ownership, package-capacity derivation, and no production actor
+  cutover claim.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
