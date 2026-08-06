@@ -189,7 +189,7 @@ def _sfx_mappings(banks: list[dict[str, object]]) -> list[dict[str, object]]:
 
 
 def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, object]],
-             banks: list[dict[str, object]], samples: list[Sample]) -> dict[str, object]:
+             banks: list[dict[str, object]], samples: list[Sample], root: Path) -> dict[str, object]:
     seqs = [x for x in sequences if x["id"] in sequence_ids]
     bank_names = sorted({bank for seq in seqs for bank in seq["banks"] if isinstance(bank, str)})
     selected = [bank for bank in banks if bank["name"] in bank_names]
@@ -207,14 +207,34 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
     if resident_bytes > RESIDENT_LIMIT:
         raise AudioPackageError(f"{name} resident closure exceeds {RESIDENT_LIMIT}: {resident_bytes}")
     mappings = [mapping for mapping in _sfx_mappings(selected)]
-    identity = _canonical({"scene": name, "generation": 1,
-                           "sequence_ids": sequence_ids, "bank_names": bank_names,
-                           "sample_ids": [sample.stable_id for sample in selected_samples],
-                           "sfx_mappings": mappings})
+    chunk_hashes = []
+    identity = hashlib.sha256()
+    def add_chunk(kind: str, stable_id: str, payload: bytes) -> None:
+        identity.update(kind.encode("ascii"))
+        identity.update(struct.pack(">I", len(payload)))
+        identity.update(payload)
+        chunk_hashes.append({"kind": kind, "id": stable_id,
+                             "bytes": len(payload), "sha256": _sha(payload)})
+    for sequence in seqs:
+        payload = (root / str(sequence["source"])).read_bytes()
+        add_chunk("SEQU", str(sequence["id"]), payload)
+    for bank in selected:
+        add_chunk("BANK", str(bank["name"]), _canonical(bank["metadata"]))
+    for sample in selected_samples:
+        add_chunk("SAMP", sample.stable_id, sample.pcm8)
+    # The dependency digest covers framed source bytes, not merely IDs or a
+    # metadata summary.  Any selected sequence, bank, or sample mutation must
+    # therefore invalidate the scene root.
+    identity.update(_canonical({"scene": name, "generation": 1,
+                                "sequence_ids": sequence_ids,
+                                "bank_names": bank_names,
+                                "sample_ids": [sample.stable_id for sample in selected_samples],
+                                "sfx_mappings": mappings}))
     return {"scene": name, "generation": 1, "sequence_ids": sequence_ids,
             "bank_names": bank_names,
             "sample_ids": [sample.stable_id for sample in selected_samples],
-            "sfx_mappings": mappings, "payload_sha256": _sha(identity),
+            "sfx_mappings": mappings, "chunk_hashes": chunk_hashes,
+            "payload_sha256": identity.hexdigest(),
             "resident_bytes": resident_bytes, "resident_limit": RESIDENT_LIMIT,
             "active_generation_eviction": "rejected", "post_boot_sound_ram_clear": "rejected"}
 
@@ -237,8 +257,8 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
                        "loop_start": None, "loop_end": None, "root_key": None,
                        "tuning": None, "loop_source": "bank-metadata"} for s in samples]
     sfx_mappings = _sfx_mappings(banks)
-    closures = {"bob": _closure("bob", [3], sequences, banks, samples),
-                "wf": _closure("wf", [3], sequences, banks, samples)}
+    closures = {"bob": _closure("bob", [3], sequences, banks, samples, root),
+                "wf": _closure("wf", [3], sequences, banks, samples, root)}
     chunks: list[tuple[bytes, bytes]] = []
     chunks.append((b"META", _canonical({"schema": "S64A", "version": VERSION,
                                          "source_sha256": source_sha, "sequences": sequences,
@@ -281,9 +301,11 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
               "samples": sample_records,
               "sfx_mappings": sfx_mappings,
               "s64p_audio_dependencies": [
-                  {"scene": scene, "generation": closures[scene]["generation"],
+                  {"scene": scene, "root": f"audio/{scene}",
+                   "generation": closures[scene]["generation"],
                    "stable_id": f"audio/{scene}",
-                   "content_sha256": closures[scene]["payload_sha256"]}
+                   "content_sha256": closures[scene]["payload_sha256"],
+                   "chunk_hashes": closures[scene]["chunk_hashes"]}
                   for scene in ("bob", "wf")],
               "source_inventory": [{"path": p.relative_to(root).as_posix(), "sha256": _sha(p.read_bytes())} for p in files],
               "closures": closures}

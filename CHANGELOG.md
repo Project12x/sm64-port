@@ -14,6 +14,9 @@
   artifacts deterministic while leaving playback/transport integration open.
   The MC68000 header and implementation now share the same full 32-byte source
   digest field, so target compilation cannot silently validate a stale CRC ABI.
+  Scene dependency digests now hash framed sequence, bank, and PCM bytes and
+  publish an explicit `audio/bob` or `audio/wf` root with its selected chunk
+  hashes.
 
 - Added the source-authoritative S64A audio catalog compiler.  It consumes the
   35 sequence mappings, 38 banks, and 219 user-extracted AIFF samples directly,
