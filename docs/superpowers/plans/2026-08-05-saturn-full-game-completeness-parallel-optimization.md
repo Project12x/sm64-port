@@ -54,6 +54,7 @@
 - 2026-08-06 actor-capability scope correction: Task 18's generic slice derives class bits from closure records and runtime masks from fields actually present in the actor ABI. It can validate rigid/opaque/static-transform/platform/collectible class requirements without a family whitelist, but surface/collectible source fields remain unresolved and fail closed; BOB still reports 13 unsupported records and `complete_closure=false`.
 - 2026-08-06 actor-capability review correction: Task 18's first rereview is SPEC/QUALITY FAIL, C0/I2/M1. The 52→56-byte S64F layout needs a version/record-size compatibility boundary and trusted external hash; the runtime-mask mutation must reseal its payload to exercise the intended unknown-bit validator; and reports must distinguish 13 unsupported family representatives/reasons from 14 closure actor records. Capability hints are derived facts while requirements validate them; schema-v1 typed-field gaps remain open.
 - 2026-08-06 Task 20 preflight correction: effect work cannot be renderer-only. The production observer currently publishes reserved opacity/billboard/shadow/effect fields as unresolved, and nine effect-related BOB records remain blocked by `GEO_CULLING_RADIUS` or `GEO_BRANCH_AND_LINK`. Task 20 must first assign/close those geo prerequisites and capture source-owned state, then add generated material/role metadata, bounded descriptors, master painter ordering, and explicit VDP1 lowering. Its acceptance is split into source-complete host/target contracts versus target-complete DRAM/Ymir replay evidence; VDP2 remains sky/HUD/composition only.
+- 2026-08-06 Task 19 scope correction: Task 14 still publishes `NO_PARENT` and has no typed immutable held/parent/switch identity, so Task 19 cannot honestly claim the full articulated runtime evaluator or dual-SH2 parent/child proof. The accepted slice is narrowed to source-derived ANIMATED/SWITCH/MODEL_MUTATION admission, explicit unavailable/fail-closed PARENTED/HELD/LOD masks, exact independent BOB query oracles, and resealed stored-mask mutation coverage. Runtime pose/queue/lane/parent/held/model/despawn/reward integration remains owned by the later actor cutover/closure gates; no synthetic host fixture may be promoted as production evidence.
 - 2026-08-06 actor-capability second review correction: S64F version/schema is still `v1` despite the incompatible 56-byte record; platform/collectible bits come from an optional unowned `capability_hints` dictionary rather than generated schema-validated closure evidence and therefore remain unavailable/fail-closed; and the diagnostic test/report needs an independent exact-family oracle (including UNKNOWN_CAPABILITY and stable ID `0x9322461f`) rather than self-derived unresolved lists. The ABI/hash/mutation/terminology repair remains active.
 - 2026-08-06 actor-capability repair: `929d100f` bumps S64F/schema to v2 for 56-byte records, binds trusted external v2/stale-v1 header digests, reseals the runtime-mask mutation before validation, distinguishes 13 unsupported family representatives from 14 closure records, and adds an independent exact oracle for `bhv1Up[0x9322461f]`, UNKNOWN_CAPABILITY, and unresolved PLATFORM/SURFACE. Capability hints are analyzer-only/unverified; platform/collectible/surface runtime evidence remains unavailable until typed schema fields exist. Independent rereview is pending.
 - 2026-08-06 actor-capability evidence acceptance: `0b65d1d1` records the missing serial `verify-actor-family-bank` PASS and exact categories: opaque 8 closure records/7 representatives (shared checkerboard `0xfc68327b`), rigid/static +5 representatives/+5 records, and non-rigid `bhvBreakBoxTriangle[0x08324fd7]`; total 13 unsupported representatives/reasons across 14 closure records. This is evidence reconciliation only; typed platform/collectible/surface fields and production actor cutover remain open.
@@ -891,7 +892,7 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 
 ### Task 19: Close BOB articulated, enemy, and boss capabilities
 
-**Lane:** actor capabilities. **Depends on:** Tasks 10, 11, 14, 16, and 18. **Produces:** zero unsupported animated/switch/held/parented/model-mutation records for BOB.
+**Lane:** actor capabilities. **Depends on:** Tasks 10, 11, 14, 16, and 18. **Produces:** a source-derived, fail-closed admission slice for BOB ANIMATED/SWITCH/MODEL_MUTATION records plus explicit unavailable PARENTED/HELD/LOD masks and independent exact query evidence. The full runtime articulation evaluator and dual-SH2 parent/held/lane proof is deferred to actor cutover/closure once Task 14 publishes typed immutable state.
 
 **Files:**
 
@@ -900,9 +901,9 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
 - Extend: `tools/saturn/test_bob_actor_capabilities.py`
 - Modify: `Makefile.saturn.mk`, `CHANGELOG.md`
 
-- [ ] RED report must name every still-unsupported ANIMATED, SWITCH, PARENTED, HELD, MODEL_MUTATION, and LOD/render-range closure record, including behavior-spawned children and boss rewards.
-- [ ] Reuse the same compact joint/channel evaluator as Mario. Consume source-selected animation/switch/parent state from immutable snapshots; do not port enemy behavior or advance animation in the renderer.
-- [ ] Prove multiple same-family actors on both SH-2 claimant lanes, different animation frames, parent-before-child merge identity, held-object transforms, model changes, despawn/reward transition, zero visible, and stale parent failure.
+- [ ] RED report must name every still-unsupported ANIMATED, SWITCH, PARENTED, HELD, MODEL_MUTATION, and LOD/render-range closure record, including behavior-spawned children and boss rewards; PARENTED/HELD/LOD remain explicit unavailable results until typed snapshot evidence exists.
+- [ ] Reuse the same compact joint/channel evaluator as Mario only at the later runtime cutover; this slice must not port enemy behavior, infer runtime parent state from spawn provenance, or advance animation in the renderer.
+- [ ] Keep the full two-lane pose/queue/parent/held/model/despawn/reward/stale-parent proof unchecked and owned by the later actor cutover/closure gate; synthetic capability admission must not be described as that runtime proof.
 - [ ] Run GREEN:
 
   ```powershell
@@ -910,7 +911,7 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_actor_capabilities.py --class articulated
   ```
 
-- [ ] Commit as `feat(saturn): close BOB articulated actor capabilities`; review source authority, parent/child ordering, scratch reuse, and no Mario/enemy duplicate evaluators.
+- [ ] Commit as `feat(saturn): close BOB articulated actor capabilities`; review source authority, exact oracle/mutation coverage, fail-closed unavailable masks, and no Mario/enemy duplicate evaluators. Runtime articulation remains an explicit open gate.
 
 ### Task 20: Close BOB billboard, translucent, shadow, and effect capabilities
 
