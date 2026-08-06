@@ -23,6 +23,11 @@
   painter without forcing the generic bounded worklist to truncate it.
   Generated scene headers now include the admission ABI directly, so emitted
   node/ref records are compile-time type checked at the consumer boundary.
+  Zero lateral view rows now force a depth-only conservative fallback instead
+  of inheriting stale package axes; package validation requires global cluster
+  coverage, node containment, endpoint-only portal ownership, and zeroed
+  reserved fields, while mandatory clusters are retained even when their node
+  is outside the current frustum.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed

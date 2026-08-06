@@ -6,9 +6,9 @@
 int main(void)
 {
     sm64_saturn_render_cluster_t cluster = {0};
-    sm64_saturn_scene_admission_node_t nodes[2] = {0};
+    sm64_saturn_scene_admission_node_t nodes[3] = {0};
     sm64_saturn_scene_admission_portal_window_t portal = {0};
-    uint16_t cluster_ref[1] = {0U}, portal_ref[1] = {0U};
+    uint16_t cluster_ref[1] = {0U}, portal_ref[3] = {0U};
     uint16_t clusters_out[2], portals_out[2];
     sm64_saturn_scene_admission_view_t scene = {0};
     sm64_saturn_scene_admission_output_t output = {
@@ -29,6 +29,9 @@ int main(void)
     nodes[1] = nodes[0];
     nodes[1].cluster_ref_first = 0U;
     nodes[1].portal_ref_first = 0U;
+    nodes[2] = nodes[0];
+    nodes[2].portal_ref_first = 2U;
+    nodes[2].portal_ref_count = 0U;
     portal.bounds_min_q16[0] = -2 * 65536;
     portal.bounds_max_q16[0] = 2 * 65536;
     portal.bounds_min_q16[2] = 4 * 65536;
@@ -37,10 +40,10 @@ int main(void)
     scene.metadata_version = SM64_SATURN_SCENE_ADMISSION_VERSION;
     scene.metadata_valid = 1U;
     scene.clusters = &cluster; scene.cluster_count = 1U;
-    scene.nodes = nodes; scene.node_count = 2U;
+    scene.nodes = nodes; scene.node_count = 3U;
     scene.cluster_refs = cluster_ref; scene.cluster_ref_count = 1U;
     scene.portals = &portal; scene.portal_count = 1U;
-    scene.portal_refs = portal_ref; scene.portal_ref_count = 1U;
+    scene.portal_refs = portal_ref; scene.portal_ref_count = 3U;
     scene.frustum.forward[2] = 65536;
     scene.frustum.right[0] = 65536;
     scene.frustum.up[1] = 65536;
@@ -48,6 +51,8 @@ int main(void)
     scene.frustum.half_width = 100; scene.frustum.half_height = 100;
     scene.frustum.focal_length = 100;
     view.view_forward_q16[2] = 65536; view.generation = 1U;
+    view.view_projection_q16[0][0] = 65536;
+    view.view_projection_q16[1][1] = 65536;
 
     portal.open = 0U;
     assert(sm64_saturn_scene_admit(&scene, &view, &output, &stats));
@@ -62,5 +67,9 @@ int main(void)
     output.cluster_count = output.portal_count = 0U;
     assert(sm64_saturn_scene_admit(&scene, &view, &output, &stats));
     assert(output.portal_count == 0U && stats.portals_rejected_frustum == 1U);
+    nodes[2].portal_ref_count = 1U;
+    nodes[2].portal_ref_count = 1U;
+    output.cluster_count = output.portal_count = 0U;
+    assert(!sm64_saturn_scene_admit(&scene, &view, &output, &stats));
     return 0;
 }

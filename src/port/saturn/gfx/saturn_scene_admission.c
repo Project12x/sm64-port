@@ -6,6 +6,7 @@
 static uint8_t s_admission_visited[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
 static uint8_t s_admission_queued[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
 static uint16_t s_admission_queue[SM64_SATURN_SCENE_ADMISSION_MAX_NODES];
+static uint8_t s_admission_cluster_seen[SM64_SATURN_SCENE_ADMISSION_MAX_REFS];
 
 static int32_t floor_q16(int32_t value)
 {
@@ -72,6 +73,14 @@ static sm64_saturn_ztreme_frustum_t admission_frustum(
         frustum.up[1] = view->view_projection_q16[1][1];
         frustum.up[2] = view->view_projection_q16[1][2];
     }
+    if (view->view_projection_q16[0][0] == 0 &&
+        view->view_projection_q16[0][1] == 0 &&
+        view->view_projection_q16[0][2] == 0)
+        memset(frustum.right, 0, sizeof(frustum.right));
+    if (view->view_projection_q16[1][0] == 0 &&
+        view->view_projection_q16[1][1] == 0 &&
+        view->view_projection_q16[1][2] == 0)
+        memset(frustum.up, 0, sizeof(frustum.up));
     if (frustum.near_depth <= 0) frustum.near_depth = 1;
     if (frustum.far_depth <= frustum.near_depth)
         frustum.far_depth = INT32_MAX;
@@ -125,6 +134,7 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
     uint16_t index;
     if (scene->metadata_version != SM64_SATURN_SCENE_ADMISSION_VERSION ||
         scene->metadata_valid == 0U || scene->cluster_count == 0U ||
+        scene->reserved0 != 0U || scene->reserved1 != 0U ||
         scene->cluster_count > SM64_SATURN_SCENE_ADMISSION_MAX_REFS ||
         scene->node_count == 0U ||
         scene->node_count > SM64_SATURN_SCENE_ADMISSION_MAX_NODES ||
@@ -144,6 +154,8 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
         const sm64_saturn_render_cluster_t *cluster = &scene->clusters[index];
         if (!bounds_valid(cluster->bounds_min_q16, cluster->bounds_max_q16) ||
             cluster->primitive_count == 0U ||
+            cluster->reserved[0] != 0U || cluster->reserved[1] != 0U ||
+            cluster->reserved[2] != 0U ||
             (cluster->position_ref_count[SATURN_LOD_NEAR] == 0U &&
              cluster->mandatory == 0U)) {
             stats->malformed_metadata = 1U;
@@ -184,6 +196,14 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
             stats->malformed_metadata = 1U;
             return false;
         }
+    memset(s_admission_cluster_seen, 0, scene->cluster_count);
+    for (index = 0U; index < scene->cluster_ref_count; index++)
+        s_admission_cluster_seen[scene->cluster_refs[index]] = 1U;
+    for (index = 0U; index < scene->cluster_count; index++)
+        if (s_admission_cluster_seen[index] == 0U) {
+            stats->malformed_metadata = 1U;
+            return false;
+        }
     for (index = 0U; index < scene->portal_count; index++) {
         const sm64_saturn_scene_admission_portal_window_t *portal =
             &scene->portals[index];
@@ -201,6 +221,20 @@ static bool metadata_valid(const sm64_saturn_scene_admission_view_t *scene,
         if (scene->portal_refs[index] >= scene->portal_count) {
             stats->malformed_metadata = 1U;
             return false;
+        }
+    for (index = 0U; index < scene->node_count; index++) {
+        const sm64_saturn_scene_admission_node_t *node = &scene->nodes[index];
+        uint16_t ref;
+        for (ref = 0U; ref < node->portal_ref_count; ref++) {
+            const uint16_t portal_index = scene->portal_refs[
+                node->portal_ref_first + ref];
+            const sm64_saturn_scene_admission_portal_window_t *portal =
+                &scene->portals[portal_index];
+            if (index != portal->node_a && index != portal->node_b) {
+                stats->malformed_metadata = 1U;
+                return false;
+            }
+        }
     }
     /* Every edge must be represented by both endpoint adjacency lists. This
      * removes the old traversal guess where a ref was interpreted as the
@@ -343,6 +377,21 @@ bool sm64_saturn_scene_admit(
                 s_admission_queued[destination] = 1U;
             }
         }
+    }
+    /* Mandatory records are unconditional package obligations. They are
+     * retained even when their owning node is outside the current frustum. */
+    for (index = 0U; index < scene->cluster_count; index++) {
+        const sm64_saturn_render_cluster_t *cluster = &scene->clusters[index];
+        if (cluster->mandatory == 0U || output_has_cluster(output, index))
+            continue;
+        if (output->cluster_count >= output->cluster_capacity) {
+            stats->output_exhausted = 1U;
+            success = false;
+            continue;
+        }
+        output->cluster_indices[output->cluster_count++] = index;
+        stats->clusters_admitted++;
+        stats->mandatory_clusters_admitted++;
     }
     return success && output->cluster_count != 0U;
 }

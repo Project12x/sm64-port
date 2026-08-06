@@ -79,6 +79,8 @@ static void setup_scene(sm64_saturn_scene_admission_view_t *scene,
 static sm64_saturn_render_view_t view(void)
 {
     sm64_saturn_render_view_t result = {0};
+    result.view_projection_q16[0][0] = 65536;
+    result.view_projection_q16[1][1] = 65536;
     result.view_forward_q16[2] = 65536;
     result.generation = 1U;
     return result;
@@ -149,6 +151,12 @@ int main(void)
     portals[0].node_b = 9U;
     assert(!sm64_saturn_scene_admit(&scene, &camera, &output, &stats));
     portals[0].node_b = 1U;
+    cluster_refs[2] = 1U;
+    assert(!sm64_saturn_scene_admit(&scene, &camera, &output, &stats));
+    cluster_refs[2] = 2U;
+    clusters[0].reserved[0] = 1U;
+    assert(!sm64_saturn_scene_admit(&scene, &camera, &output, &stats));
+    clusters[0].reserved[0] = 0U;
     scene.cluster_count = 0U;
     assert(!sm64_saturn_scene_admit(&scene, &camera, &output, &stats));
     scene.cluster_count = 3U;
