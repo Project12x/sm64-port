@@ -1078,11 +1078,13 @@ sourceboot actor-runtime owner identified by the preflight. This lane replaces
 the separate observer/instance statics; it does not duplicate them or claim
 that production actor admission is complete.
 
-- [x] RED/GREEN bounded owner contract: `39008658` plus
-  `19168671` prove one 16-byte-aligned `used` `.lwram_actor_runtime` owner,
-  exact 0x10000 linker section/symbol contract, NOLOAD P2/cache-through clear,
-  and no standalone observer/instance declarations. This bounded slice does
-  not fabricate package-capacity APIs or claim production queue binding.
+- [ ] RED/GREEN bounded owner contract: `39008658` plus
+  `19168671` implement one 16-byte-aligned `used` `.lwram_actor_runtime`
+  owner, exact 0x10000 linker/source contract, NOLOAD P2/cache-through clear,
+  and no standalone observer/instance declarations. The focused gate passes,
+  but the independent rereview is SPEC/QUALITY FAIL (C0/I1/M0): four required
+  mutations false-green (NOLOAD removal, align16->8, partial clear, duplicate
+  owner). Repair is active; this slice is not accepted.
 - [ ] Integrate the owner members through the production queue/batch/output
   handoff and add identity-bound package capacity checks (accept 64/2718,
   reject 0/65/2719, stale, or absent values). This is deliberately deferred
