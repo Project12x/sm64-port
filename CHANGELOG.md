@@ -14,10 +14,13 @@
   the unknown-runtime-bit branch. Platform/collectible hints are analyzer
   vocabulary only and are marked unverified; schema v1 has no typed evidence
   field, so those classes and runtime surface remain unavailable/fail-closed.
-  The host gate and independent RED oracle distinguish 13 unsupported family
-  representatives from 14 closure actor records (the checkerboard family is
-  shared), with no family allow-list or fabricated source field. This is host
-  evidence only and does not claim target/Ymir/manual/FPS completion.
+  The serial family-bank gate and independent RED oracle distinguish the eight
+  opaque closure records as seven representatives (the checkerboard behaviors
+  share one family), five additional rigid/static-transform representatives,
+  and one non-rigid `bhvBreakBoxTriangle` representative: 13 unsupported
+  representatives/reasons covering 14 closure records. No family allow-list
+  or fabricated source field is used. This is host evidence only and does not
+  claim target/Ymir/manual/FPS completion.
 
 - Hardened the bounded SCSP scheduler after rereview. Stale package correction
   is now transactional for the caller: an emitted key-off returns applied
