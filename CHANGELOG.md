@@ -4,6 +4,14 @@
 
 ### Changed
 
+- Added the Task 16 feature-off actor compatibility boundary. The existing
+  ACTOR_ADMIT/ACTOR_LOWER world-graph descriptors now route through explicit
+  Mario callback wrappers when `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0`, while
+  an accidental feature-on build fails closed until the source-derived generic
+  actor cutover is separately reviewed. This preserves the current Mario
+  renderer and does not claim generic actor meshes, target/Ymir output, or FPS
+  improvement.
+
 - Added the host-only Task 21 completion/ack ABI slice without changing any
   existing 16-byte command word meaning. The v2 mailbox now reserves a
   pointer-free 32-entry completion ring, full 32-bit active/prepared package

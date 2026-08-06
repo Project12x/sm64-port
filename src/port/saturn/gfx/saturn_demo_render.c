@@ -4,6 +4,16 @@
 #define SATURN_DEMO_BSP_FRAGMENT_FLAT 0
 #endif
 
+/* The generic actor-instance queue is infrastructure-only until the
+ * production actor cutover has a source-derived family/meshlet package. Keep
+ * the feature switch visible at this boundary so feature-off builds prove
+ * that ACTOR_ADMIT/ACTOR_LOWER still execute the established Mario callbacks.
+ * Feature-on is intentionally fail-closed here; it must not silently
+ * reinterpret the Mario pair as a generic actor renderer. */
+#ifndef SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+#define SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE 0
+#endif
+
 #include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -2873,14 +2883,47 @@ static bool __attribute__((unused)) demo_terrain_queue_world_lower(
         job, claimed_state, output.writer_lane, arena.count, compact.sequence);
 }
 
+/* Compatibility wrappers for the existing four-entry world graph. These are
+ * deliberately adjacent to the Mario callbacks so a later generic cutover
+ * has one auditable replacement point. Feature-off retains the exact callback
+ * functions and descriptor/payload contract; feature-on does not pretend that
+ * the generic actor package is ready and quarantines the actor job instead. */
+static bool demo_actor_admit_compat_wrapper(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *context)
+{
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    (void)job;
+    (void)claimed_state;
+    (void)context;
+    return false;
+#else
+    return demo_actor_queue_transform(job, claimed_state, context);
+#endif
+}
+
+static bool demo_actor_lower_compat_wrapper(
+    const sm64_saturn_render_job_t *job,
+    sm64_saturn_render_job_state_t claimed_state, void *context)
+{
+#if SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE
+    (void)job;
+    (void)claimed_state;
+    (void)context;
+    return false;
+#else
+    return demo_actor_queue_classify(job, claimed_state, context);
+#endif
+}
+
 static const sm64_saturn_render_job_callback_table_t *
 demo_render_job_callbacks(void)
 {
     static const sm64_saturn_render_job_callback_table_t callbacks = {{
         demo_terrain_queue_world_admit,
         demo_terrain_queue_world_lower,
-        demo_actor_queue_transform,
-        demo_actor_queue_classify,
+        demo_actor_admit_compat_wrapper,
+        demo_actor_lower_compat_wrapper,
     }};
     return &callbacks;
 }
