@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Added a dedicated 16-byte-aligned, NOLOAD `0x10000` LWRAM actor-runtime
+  owner in sourceboot, replacing standalone actor observer/bank storage and
+  explicitly clearing it through the cache-through alias before binding the
+  existing lifecycle. Linker symbols and exact-size/alignment assertions make
+  the reservation visible. This source-only step leaves linked route, target,
+  Ymir/manual, and FPS evidence open.
+
 - Relocated the complete 32-byte-aligned sourceboot VDP1 command double-buffer
   from LWRAM to ordinary HWRAM `.bss`, preserving its explicit backend
   initialization and frame-bank lifetime while reclaiming `0x20000` LWRAM

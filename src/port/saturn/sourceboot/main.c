@@ -11,6 +11,7 @@
 #include "saturn_fast3d_vdp1_emit.h"
 #include "saturn_actor_bridge.h"
 #include "saturn_actor_instance.h"
+#include "saturn_actor_batch.h"
 #include "saturn_render_snapshot.h"
 #include "saturn_transform.h"
 #include "saturn_demo_render.h"
@@ -201,8 +202,12 @@ static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
 static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
 static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
 static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
-static sm64_saturn_geo_state_observer_t sourceboot_actor_observer;
-static sm64_saturn_actor_instance_bank_t sourceboot_actor_instances;
+/* One NOLOAD actor owner: initialized explicitly through the P2 alias before
+ * publication; do not restore standalone observer/bank storage. */
+static sm64_saturn_actor_runtime_storage_t sourceboot_actor_runtime
+    __attribute__((section(".lwram_actor_runtime"), used)) __aligned(16);
+#define sourceboot_actor_observer sourceboot_actor_runtime.observer
+#define sourceboot_actor_instances sourceboot_actor_runtime.instances
 /* Each physical actor bank carries its own render-generation ticket.  A
  * later source tick may acquire the other bank while an earlier generation is
  * still rendering; no single global "active bank" may be overwritten. */
@@ -1457,6 +1462,8 @@ int main(void) {
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED, 0U);
     sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_render_snapshot_reset(&sourceboot_render_snapshots);
+    memset((void *)(CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_actor_runtime),
+           0, sizeof(sourceboot_actor_runtime));
     sm64_saturn_geo_state_observer_init(
         &sourceboot_actor_observer, SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE);
     sm64_saturn_actor_instance_bank_init(&sourceboot_actor_instances);

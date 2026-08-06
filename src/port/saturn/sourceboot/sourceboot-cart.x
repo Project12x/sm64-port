@@ -164,6 +164,18 @@ SECTIONS
     *(.lwram_bss)
   } > lwram
 
+  .lwram_actor_runtime (NOLOAD) :
+  {
+    . = ALIGN (16);
+    __lwram_actor_runtime_start = .;
+    KEEP(*(.lwram_actor_runtime))
+    __lwram_actor_runtime_end = .;
+  } > lwram
+  ASSERT (SIZEOF(.lwram_actor_runtime) == 0x10000,
+          "actor runtime must remain exactly 0x10000 bytes")
+  ASSERT ((__lwram_actor_runtime_start & 0xF) == 0,
+          "actor runtime must be 16-byte aligned")
+
   .lwram_camera_capture (NOLOAD) :
   {
     /* Do not align an empty optional section: GNU ld counts the alignment
