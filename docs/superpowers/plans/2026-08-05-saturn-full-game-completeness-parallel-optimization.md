@@ -1139,8 +1139,8 @@ license, renderer, or target-performance result.
   actor-bank-C membership/mutation/absence and one-token stage negatives pass.
   Focused tests are 7/7, 9/9, and 5/5. Clean link/ELF/CUE/ISO, target/P2,
   Ymir/manual, and FPS evidence remain open.
-- [ ] Run the clean serialized current-head sourceboot build through the
-  DLL-preflight wrapper, inspect the identity-bearing ELF/map and exact HWRAM/
+- [x] Run the fresh serialized current-head sourceboot build through the
+  DLL-preflighted sourced MSYS/Yaul environment, inspect the identity-bearing ELF/map and exact HWRAM/
   LWRAM margins, then stage only a source-attested HWRAM repair if the known
   overflow recurs. This run reached compilation and produced the current
   identity directory/map `e2-bob-identity-id-634477a207617cf6`, but link failed
@@ -1150,8 +1150,12 @@ license, renderer, or target-performance result.
   `SATURN_SOURCE_CART_STAGE_SECTORS=4` and `SATURN_DEMO_HOT_PROMOTION=0`
   reached the link and reduced the overflow to `14352` bytes in identity
   directory/map `e2-bob-identity-id-25e54779ec0ace25` (a `129536`-byte
-  reduction), but still produced no ELF/CUE/ISO; the linked-map/margin gate
-  therefore remains unchecked.
+  reduction). After the CPU-only Fast3D owner was moved to LWRAM, the current
+  head linked and packaged identity directory
+  `e2-bob-identity-id-6dab6eed50bb94dd`: ELF/CUE/ISO exist, and the map leaves
+  HWRAM margin `0x7524` and LWRAM margin `0x851B0`. The target/P2,
+  concurrent-SH2, Ymir/manual, and FPS gates remain unchecked; no older
+  identity may be launched in their place.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
@@ -1168,20 +1172,25 @@ reclaim, never by weakening the linker margin or hiding a section.
   rollback boundaries. The report keeps VDP1 command staging, actor LWRAM
   ownership, and HWRAM TLSF floor requirements explicit; no legal sufficient
   target is selected yet.
-- [ ] Implement only after the preflight identifies a sufficient legal target;
-  run a serialized fresh link and inspect HWRAM/LWRAM symbols/margins. Target,
-  P2/concurrent-SH2, Ymir/manual, and FPS remain unchecked.
-- [ ] Current disposition: implementation is blocked/deferred. The fresh
+- [x] Implemented the sufficient legal target in `4d20620d`: the CPU-only
+  `sourceboot_fast3d` owner now resides in NOLOAD `.lwram_bss`, and its
+  explicit frontend initialization was moved before the first bootstrap
+  VDP2 profile read. The source RED/GREEN gate is
+  `tools/saturn/test_sourceboot_fast3d_relocation.py`; the fresh linked map
+  reports HWRAM `___end=0x060f8adc` (margin `0x7524`) and LWRAM camera end
+  `0x0027ae50` (margin `0x851B0`), with the 0x10000 actor owner aligned at
+  `0x0026ae50`. VDP1 command/Gouraud staging and SCU-visible buffers were not
+  moved. Target/P2/concurrent-SH2/Ymir/manual/FPS remain unchecked.
+- [x] Current disposition: implementation is source/build-complete for this
+  bounded reclaim. The fresh
   partial map identifies `gObjectPool` 0x23A00, VDP1 command staging 0x20000,
   `gGfxPools` 0xC84C, `sourceboot_fast3d` 0xAE48, `s_bob_hot_workarea` 0xAB00,
   Yaul private pool 0xA000, Gouraud staging 0x6000, and cart staging 0x4000;
-  the source audit found no legal sufficient relocation yet. Moving the object
-  pool or shrinking the 0x60000 main pool is not authorized without explicit
-  SH-2/P2/SCU-DMA ownership and BOB/full-game high-water evidence. The next
-  bounded investigation is HWRAM CPU-only work-area ownership/relocation
-  feasibility; `s_bob_hot_workarea` is currently ordinary HWRAM, not an already
-  approved LWRAM reclaim. No linker margin, command-capacity, or VDP1-DMA rule
-  may be weakened.
+  and the source-attested CPU-only Fast3D owner now reclaims 0xAE48 in LWRAM.
+  Moving the object pool or shrinking the 0x60000 main pool remains
+  unauthorized without explicit SH-2/P2/SCU-DMA ownership and BOB/full-game
+  high-water evidence. No linker margin, command-capacity, or VDP1-DMA rule
+  was weakened.
 - [ ] **Runtime-contract correction (2026-08-06):** sourceboot now declares
   `sourceboot_vdp1_cmdts[2][2048]` in HWRAM, but
   `sm64_saturn_vdp1_frame_bank_set_init()` still requires both command banks to
@@ -1200,15 +1209,16 @@ reclaim, never by weakening the linker margin or hiding a section.
   HWRAM-capacity overflow, so no target, P2/concurrent-SH2, Ymir/manual, or FPS
   evidence is claimed.
 
-- [ ] **Fresh HWRAM-pressure follow-up (2026-08-06):** the DLL-preflighted
+- [x] **Fresh HWRAM-pressure follow-up (2026-08-06):** the DLL-preflighted
   serialized Pipe-4 BOB build used the Yaul cross-toolchain through sourced
   `.yaul.env` with cart staging reduced to 4 sectors and hot promotion off.
   It compiled cleanly enough to reach the linker; the map records HWRAM
   `___bss_end=0x06103810`, `___end=0x0610391c`, and the physical top
-  `0x06100000`, so the exact failure is `14352` bytes after the required
-  `0x1B00` TLSF margin. The run is a measurable `129536`-byte improvement
-  over the prior `143888`-byte overflow, but no ELF/CUE/ISO exists and the
-  HWRAM/LWRAM, target/P2, Ymir/manual, and FPS gates remain open.
+  `0x06100000`, so the exact failure was `14352` bytes after the required
+  `0x1B00` TLSF margin. The subsequent `4d20620d` reclaim removed that
+  overflow and packaged the current-head ELF/CUE/ISO in
+  `e2-bob-identity-id-6dab6eed50bb94dd`; the HWRAM/LWRAM map gate is green,
+  while target/P2, Ymir/manual, and FPS gates remain open.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
