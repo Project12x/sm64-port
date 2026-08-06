@@ -20,6 +20,9 @@
   output. One shared validator protects direct lowering and master ordering
   from stale bank identity, crafted unknown bits, and unresolved source state
   instead of assuming every public descriptor came from admission.
+  Lowering also requires the caller's current frame and scene-package
+  generations, closing a self-referential check that could otherwise accept an
+  old descriptor after ordering or across a direct-lower call.
 
 - Added the bounded Task 19 actor-capability admission infrastructure. The
   generated BOB closure now has an independent exact oracle for ANIMATED,

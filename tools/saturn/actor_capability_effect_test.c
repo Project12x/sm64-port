@@ -40,7 +40,8 @@ static void test_cutout_and_translucent_modes_are_distinct(void)
         &telemetry));
     assert(descriptor.depth_bin == 27U);
     assert(sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, bank_token(&value), &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, bank_token(&value),
+        &output));
     assert(output.actor_bank_id == value.actor_bank_id);
     assert(output.actor_bank_token == bank_token(&value));
     assert(output.vdp1_mode == SM64_SATURN_EFFECT_VDP1_REPLACE);
@@ -52,7 +53,8 @@ static void test_cutout_and_translucent_modes_are_distinct(void)
         SM64_SATURN_EFFECT_MATERIAL_TRANSLUCENT, 71U, 19U, 4U, 28U, &descriptor,
         &telemetry));
     assert(sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, bank_token(&value), &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, bank_token(&value),
+        &output));
     assert(output.vdp1_mode == SM64_SATURN_EFFECT_VDP1_HALF_TRANSPARENT);
     assert(output.transparent_pixel_enable == 1U);
 }
@@ -173,18 +175,22 @@ static void test_lower_rejects_stale_bank_and_direct_descriptor_mutations(void)
         SM64_SATURN_EFFECT_MATERIAL_CUTOUT, 71U, 19U, 1U, 3U, &descriptor,
         &telemetry));
     assert(!sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, token ^ 1U, &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, token ^ 1U, &output));
+    assert(!sm64_saturn_actor_effect_lower(
+        &descriptor, 70U, 19U, value.actor_bank_id, token, &output));
+    assert(!sm64_saturn_actor_effect_lower(
+        &descriptor, 71U, 18U, value.actor_bank_id, token, &output));
     descriptor.capability_mask |= 1U << 31;
     assert(!sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, token, &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, token, &output));
     descriptor.capability_mask &= ~(1U << 31);
     descriptor.effect_flags |= (uint16_t)(SM64_SATURN_EFFECT_FLAG_MASK + 1U);
     assert(!sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, token, &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, token, &output));
     descriptor.effect_flags = 0U;
     descriptor.opacity = 0U;
     assert(!sm64_saturn_actor_effect_lower(
-        &descriptor, value.actor_bank_id, token, &output));
+        &descriptor, 71U, 19U, value.actor_bank_id, token, &output));
 }
 
 int main(void)

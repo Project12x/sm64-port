@@ -113,6 +113,7 @@ bool sm64_saturn_actor_effect_admit(
 
 bool sm64_saturn_actor_effect_lower(
     const sm64_saturn_actor_effect_descriptor_t *descriptor,
+    uint32_t generation, uint32_t scene_package_generation,
     uint32_t actor_bank_id, uint32_t actor_bank_token,
     sm64_saturn_actor_effect_output_t *output);
 

@@ -218,13 +218,13 @@ bool sm64_saturn_actor_effect_admit(
 
 bool sm64_saturn_actor_effect_lower(
     const sm64_saturn_actor_effect_descriptor_t *descriptor,
+    uint32_t generation, uint32_t scene_package_generation,
     uint32_t actor_bank_id, uint32_t actor_bank_token,
     sm64_saturn_actor_effect_output_t *output)
 {
     if (output == NULL || descriptor_validate(
-            descriptor, descriptor != NULL ? descriptor->generation : 0U,
-            descriptor != NULL ? descriptor->scene_package_generation : 0U,
-            actor_bank_id, actor_bank_token) != DESCRIPTOR_VALID)
+            descriptor, generation, scene_package_generation, actor_bank_id,
+            actor_bank_token) != DESCRIPTOR_VALID)
         return false;
     memset(output, 0, sizeof(*output));
     output->instance_key = descriptor->instance_key;

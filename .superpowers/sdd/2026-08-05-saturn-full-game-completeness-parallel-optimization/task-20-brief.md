@@ -2,6 +2,9 @@
 
 **Lane:** actor capabilities. **Depends on:** Tasks 13, 16, 18, and the accepted Task 19 admission slice. **Produces:** source-derived BOB effect-class inventory and pointer-free descriptor/lowering infrastructure with explicit fail-closed handling for unsupported geo constructs. This slice must not claim production observer capture, final closure, target/Ymir replay, manual playability, or FPS.
 
+**ABI:** the repaired bounded contract is a 68-byte pointer-free effect
+descriptor and a 24-byte pointer-free lowering output.
+
 **Files:**
 
 - Extend actor compiler/bank/batch modules from Tasks 11/16 only where the generated ABI remains source-hashed and backward-compatible.

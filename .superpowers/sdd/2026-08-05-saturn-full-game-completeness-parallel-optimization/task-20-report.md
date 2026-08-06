@@ -34,7 +34,7 @@ branch. PARTICLE and DECAL remain explicit empty source-derived sets.
 
 ## Implementation and ownership
 
-- Added a bounded 64-byte pointer-free effect descriptor and 16-byte lowering
+- Added a bounded 68-byte pointer-free effect descriptor and 24-byte lowering
   output. Admission rejects stale generations, unknown capability/source bits,
   zero or unresolved source fields, invalid material/depth values, expired
   effects, and unresolved shadow receivers.
@@ -132,3 +132,34 @@ verify-actor-instance-queue: PASS (58.8 s)
 Production observer capture, the two geo-node prerequisites, cross-stream
 production merge, target/Ymir/hardware/manual/visual parity, and FPS evidence
 remain open and are not reclassified by this host repair.
+
+## Fix round 2 — trusted lowering generation
+
+The fix-round-1 scoped rereview was SPEC/QUALITY FAIL, C0/I1/M1. Lowering no
+longer supplies its descriptor's own generation/package generation back to the
+shared validator. Its public API now requires the caller's trusted current
+frame generation and scene-package generation alongside the trusted bank
+ID/token. Direct stale-frame and stale-package mutations prove that `lower()`
+rejects both identities independently. The brief and report consistently bind
+the repaired ABI as a 68-byte pointer-free descriptor and 24-byte pointer-free
+output.
+
+Fresh serialized DLL/MSYS-preflight evidence:
+
+```text
+verify-actor-effects: PASS (58.2 s)
+  strict C11/pedantic/Wall/Wextra/Werror admission/order: PASS
+  direct stale frame/package lower mutations: PASS
+  exact effect inventory: PASS (5/30/18/34/0/0; unsupported=9)
+  exact Python oracle/mutations: 3/3 PASS
+
+verify-actor-batches verify-actor-capability-bank verify-actor-family-bank
+verify-actor-instance-queue: PASS (59.3 s)
+  actor batches/runtime neutrality: PASS (2/2)
+  capability bank: PASS
+  family bank: PASS (47 families; 13 representatives / 14 records)
+  instance queue: PASS
+```
+
+Production observer capture, geo-node prerequisites, cross-stream production
+merge, target/Ymir/hardware/manual/visual parity, and FPS evidence remain open.
