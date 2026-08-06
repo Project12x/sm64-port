@@ -21,6 +21,18 @@
   layer transpose consumes the source unsigned byte representation. The
   focused VM gate covers the special portamento operand shape.
 
+- Hardened the bounded sequence VM's source contract after review. Layer
+  velocity and short-note duration now persist across delayed ticks (including
+  the source `0x80` initial duration); an explicit US versus EU/SH format
+  selector disambiguates the reserve/unreserve opcodes and EU/SH relative
+  branch predicates; channel init/disable/test commands maintain bounded
+  active/finished masks; and RED tests cover stack overflow/underflow,
+  zero-count 256 loops, output overflow, invalid complete targets, branch
+  polarity, layer call/loop, format-specific reserve operands, and persistent
+  short-note state. This remains a host-only VM slice: no target compiler,
+  SCSP/PCM driver, expanded seq00 payload, full sequence catalog/S64P closure,
+  Ymir, hardware, or manual audio evidence is claimed.
+
 - Added a dedicated, bounded actor-instance queue and master-only batch merge
   without expanding the proven eight-entry world graph. Each pointer-free job
   owns one Task 14 snapshot identity and a disjoint output span, either SH-2

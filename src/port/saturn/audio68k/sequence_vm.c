@@ -201,7 +201,9 @@ static bool vm_flow(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence,
         if (!vm_read_u8(sequence, length, &vm->pc, &displacement)) return false;
         signed_displacement = vm_s8(displacement);
         if ((cmd == 0xf3U && vm->value != 0U) ||
-            (cmd == 0xf2U && vm->value < 0))
+            /* seq_bltz is taken only for a negative value; non-negative
+             * values leave the instruction's relative target untouched. */
+            (cmd == 0xf2U && vm->value >= 0))
             return true;
         if (signed_displacement < 0 &&
             (uint16_t)(-signed_displacement) > vm->pc)
@@ -231,12 +233,38 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
         if (!vm_read_u8(sequence, length, &vm->pc, &cmd)) return false;
         vm->instruction_count++;
         if (cmd >= 0xc0U) {
+            /* US/JPN reserve-notes is F2 + u8; EU/SH uses F1 + u8 and
+             * reserves F2/F3/F4 for conditional relative branches. */
+            if (cmd == 0xf0U || cmd == 0xf1U ||
+                (cmd == 0xf2U && vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_US)) {
+                if (vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_US) {
+                    if (cmd == 0xf0U) return false;
+                    if (cmd == 0xf2U) {
+                        if (!vm_read_u8(sequence, length, &vm->pc, &value8))
+                            return false;
+                        if (!vm_emit(vm, events, event_capacity, event_count,
+                                     SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
+                                     value8, 0U, 0U, 0, source_offset)) return false;
+                    } else if (!vm_emit(vm, events, event_capacity, event_count,
+                                       SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
+                                       0U, 0U, 0U, 0, source_offset)) return false;
+                } else if (cmd == 0xf1U) {
+                    if (!vm_read_u8(sequence, length, &vm->pc, &value8))
+                        return false;
+                    if (!vm_emit(vm, events, event_capacity, event_count,
+                                 SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
+                                 value8, 0U, 0U, 0, source_offset)) return false;
+                } else if (!vm_emit(vm, events, event_capacity, event_count,
+                                   SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
+                                   0U, 0U, 0U, 0, source_offset)) return false;
+                continue;
+            }
             if (cmd == 0xccU || cmd == 0xc8U || cmd == 0xc9U || cmd == 0xdbU ||
                 cmd == 0xdaU || cmd == 0xddU || cmd == 0xdcU || cmd == 0xdeU ||
                 cmd == 0xdfU || cmd == 0xd3U || cmd == 0xd5U || cmd == 0xd0U ||
                 cmd == 0xd7U || cmd == 0xd6U || cmd == 0xd2U || cmd == 0xd1U ||
-                cmd == 0xd4U || cmd == 0xf1U || cmd == 0xf0U) {
-                if (cmd == 0xf1U || cmd == 0xf0U || cmd == 0xd4U) {
+                cmd == 0xd4U) {
+                if (cmd == 0xd4U) {
                     if (cmd == 0xd4U) vm->muted = 1U;
                     if (!vm_emit(vm, events, event_capacity, event_count,
                                  SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
@@ -245,23 +273,45 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
                            cmd == 0xd1U) {
                     if (!vm_read_be16(sequence, length, &vm->pc, &value16))
                         return false;
+                    if (cmd == 0xd7U) {
+                        vm->channel_active_mask = value16;
+                        vm->channel_finished_mask = (uint16_t)~value16;
+                    } else if (cmd == 0xd6U) {
+                        vm->channel_active_mask =
+                            (uint16_t)(vm->channel_active_mask & ~value16);
+                        vm->channel_finished_mask =
+                            (uint16_t)(vm->channel_finished_mask | value16);
+                    }
                     if (!vm_emit(vm, events, event_capacity, event_count,
                                  SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd,
                                  value16, 0U, 0U, 0, source_offset)) return false;
                 } else {
                     if (!vm_read_u8(sequence, length, &vm->pc, &value8))
                         return false;
-                    if (cmd == 0xccU) vm->value = value8;
-                    else if (cmd == 0xc8U) vm->value = (int16_t)(vm->value - value8);
-                    else if (cmd == 0xc9U) vm->value = (int16_t)(vm->value & value8);
-                    else if (cmd == 0xddU) vm->tempo = (uint16_t)value8 * 48U;
-                    else if (cmd == 0xdcU) vm->tempo = (uint16_t)((int16_t)vm->tempo + (vm_s8(value8) * 48));
-                    if (vm->tempo > vm->tempo_limit) vm->tempo = vm->tempo_limit;
-                    if (vm->tempo == 0U) vm->tempo = 1U;
-                    else if (cmd == 0xdeU) vm->transpose = (int16_t)(vm->transpose + vm_s8(value8));
-                    else if (cmd == 0xdfU) vm->transpose = vm_s8(value8);
-                    else if (cmd == 0xdbU) vm->volume = value8;
-                    else if (cmd == 0xdaU) vm->volume = (uint8_t)(vm->volume + vm_s8(value8));
+                    if (cmd == 0xccU) {
+                        vm->value = value8;
+                    } else if (cmd == 0xc8U) {
+                        vm->value = (int16_t)(vm->value - value8);
+                    } else if (cmd == 0xc9U) {
+                        vm->value = (int16_t)(vm->value & value8);
+                    } else if (cmd == 0xddU || cmd == 0xdcU) {
+                        if (cmd == 0xddU)
+                            vm->tempo = (uint16_t)value8 * 48U;
+                        else
+                            vm->tempo = (uint16_t)((int16_t)vm->tempo +
+                                                   (vm_s8(value8) * 48));
+                        if (vm->tempo > vm->tempo_limit)
+                            vm->tempo = vm->tempo_limit;
+                        if (vm->tempo == 0U) vm->tempo = 1U;
+                    } else if (cmd == 0xdeU) {
+                        vm->transpose = (int16_t)(vm->transpose + vm_s8(value8));
+                    } else if (cmd == 0xdfU) {
+                        vm->transpose = vm_s8(value8);
+                    } else if (cmd == 0xdbU) {
+                        vm->volume = value8;
+                    } else if (cmd == 0xdaU) {
+                        vm->volume = (uint8_t)(vm->volume + vm_s8(value8));
+                    }
                     if (cmd == 0xddU || cmd == 0xdcU) {
                         if (!vm_emit(vm, events, event_capacity, event_count,
                                      SM64_SATURN_SEQUENCE_VM_EVENT_TEMPO, cmd,
@@ -281,7 +331,9 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
             } else if (cmd == 0xf8U || cmd == 0xf7U || cmd == 0xfbU ||
                        cmd == 0xfcU || cmd == 0xfaU || cmd == 0xf9U ||
                        cmd == 0xf5U || cmd == 0xfdU || cmd == 0xfeU ||
-                       cmd == 0xf4U || cmd == 0xf3U || cmd == 0xf2U ||
+                       (cmd == 0xf4U && vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH) ||
+                       (cmd == 0xf3U && vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH) ||
+                       (cmd == 0xf2U && vm->format == SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH) ||
                        cmd == 0xffU) {
                 if (!vm_flow(vm, sequence, length, cmd, source_offset, events,
                              event_capacity, event_count, &stopped)) return false;
@@ -291,12 +343,20 @@ static bool vm_tick_sequence(sm64_saturn_sequence_vm_t *vm,
             }
         } else {
             const uint8_t family = cmd & 0xf0U;
-            if (family == 0x50U) vm->value = (int16_t)(vm->value - vm->variation);
+            if (family == 0x00U) {
+                vm->value = (vm->channel_finished_mask &
+                             (uint16_t)(1U << (cmd & 0x0fU))) != 0U ? 1 : 0;
+            } else if (family == 0x50U) {
+                vm->value = (int16_t)(vm->value - vm->variation);
+            }
             else if (family == 0x70U) vm->variation = vm->value;
             else if (family == 0x80U) vm->value = vm->variation;
             else if (family == 0x90U) {
                 if (!vm_read_target(sequence, length, &vm->pc, &target)) return false;
                 vm->channel_active_mask |= (uint16_t)(1U << (cmd & 0x0fU));
+                vm->channel_finished_mask = (uint16_t)(
+                    vm->channel_finished_mask &
+                    ~(uint16_t)(1U << (cmd & 0x0fU)));
                 if (!vm_emit(vm, events, event_capacity, event_count,
                              SM64_SATURN_SEQUENCE_VM_EVENT_CHANNEL_START, cmd,
                              (uint16_t)(cmd & 0x0fU), target, 0U, 0,
@@ -321,7 +381,8 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
                           uint8_t event_capacity, uint8_t *event_count)
 {
     uint16_t source_offset, play_percentage;
-    uint8_t cmd, velocity = 0U, duration = 0U, value8;
+    uint8_t cmd, velocity = vm->layer_velocity;
+    uint8_t duration = vm->layer_note_duration, value8;
     uint16_t value16;
     uint16_t steps = 0U;
     bool stopped = false;
@@ -365,9 +426,15 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
             } else if (cmd == 0xc1U || cmd == 0xc2U || cmd == 0xc6U ||
                        cmd == 0xc9U || cmd == 0xcaU) {
                 if (!vm_read_u8(sequence, length, &vm->pc, &value8)) return false;
-                if (cmd == 0xc1U) velocity = value8;
+                if (cmd == 0xc1U) {
+                    velocity = value8;
+                    vm->layer_velocity = value8;
+                }
                 else if (cmd == 0xc2U) vm->transpose = value8;
-                else if (cmd == 0xc9U) duration = value8;
+                else if (cmd == 0xc9U) {
+                    duration = value8;
+                    vm->layer_note_duration = value8;
+                }
                 if (!vm_emit(vm, events, event_capacity, event_count,
                              cmd == 0xc2U ? SM64_SATURN_SEQUENCE_VM_EVENT_TRANSPOSE :
                              SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd, value8,
@@ -389,6 +456,8 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
             if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE) {
                 if (!vm_read_u8(sequence, length, &vm->pc, &velocity) ||
                     !vm_read_u8(sequence, length, &vm->pc, &duration)) return false;
+                vm->layer_velocity = velocity;
+                vm->layer_note_duration = duration;
             }
         } else if ((cmd & 0xc0U) == 0x40U) {
             play_percentage = vm->default_play_percentage;
@@ -396,11 +465,19 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
                 !vm_read_var_u16(sequence, length, &vm->pc, &play_percentage)) return false;
             if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE &&
                 !vm_read_u8(sequence, length, &vm->pc, &velocity)) return false;
+            if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE) {
+                vm->layer_velocity = velocity;
+                vm->layer_note_duration = 0U;
+            }
         } else {
             play_percentage = vm->play_percentage;
             if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE &&
                 (!vm_read_u8(sequence, length, &vm->pc, &velocity) ||
                  !vm_read_u8(sequence, length, &vm->pc, &duration))) return false;
+            if (vm->mode == SM64_SATURN_SEQUENCE_VM_LAYER_LARGE) {
+                vm->layer_velocity = velocity;
+                vm->layer_note_duration = duration;
+            }
         }
         vm->delay = play_percentage;
         if (!vm_emit(vm, events, event_capacity, event_count,
@@ -417,19 +494,33 @@ void sm64_saturn_sequence_vm_init(sm64_saturn_sequence_vm_t *vm,
                                   uint16_t data_length, uint16_t entry_offset,
                                   sm64_saturn_sequence_vm_mode_t mode)
 {
+    sm64_saturn_sequence_vm_init_ex(
+        vm, data_length, entry_offset, mode,
+        SM64_SATURN_SEQUENCE_VM_FORMAT_US);
+}
+
+void sm64_saturn_sequence_vm_init_ex(
+    sm64_saturn_sequence_vm_t *vm, uint16_t data_length,
+    uint16_t entry_offset, sm64_saturn_sequence_vm_mode_t mode,
+    sm64_saturn_sequence_vm_format_t format)
+{
     uint8_t i;
     if (vm == 0) return;
     *vm = (sm64_saturn_sequence_vm_t){0};
     vm->data_length = data_length;
     vm->pc = entry_offset;
     vm->mode = (uint8_t)mode;
+    vm->format = (uint8_t)format;
+    vm->channel_finished_mask = 0xffffU;
     vm->tempo = SM64_SATURN_SEQUENCE_VM_DEFAULT_TEMPO;
     vm->tempo_limit = SM64_SATURN_SEQUENCE_VM_DEFAULT_TEMPO;
     vm->default_play_percentage = SM64_SATURN_SEQUENCE_VM_DEFAULT_PLAY_PERCENTAGE;
     vm->play_percentage = SM64_SATURN_SEQUENCE_VM_DEFAULT_PLAY_PERCENTAGE;
     vm->volume = 127U;
+    vm->layer_note_duration = 0x80U;
     vm->enabled = (data_length != 0U && entry_offset < data_length &&
-                   mode <= SM64_SATURN_SEQUENCE_VM_LAYER_LARGE) ? 1U : 0U;
+                   mode <= SM64_SATURN_SEQUENCE_VM_LAYER_LARGE &&
+                   format <= SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH) ? 1U : 0U;
     for (i = 0U; i < SM64_SATURN_SEQUENCE_VM_STACK_DEPTH; i++) {
         vm->frame_kind[i] = 0U;
         vm->loop_remaining[i] = 0U;

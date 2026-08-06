@@ -25,6 +25,11 @@ typedef enum sm64_saturn_sequence_vm_mode {
     SM64_SATURN_SEQUENCE_VM_LAYER_LARGE = 2,
 } sm64_saturn_sequence_vm_mode_t;
 
+typedef enum sm64_saturn_sequence_vm_format {
+    SM64_SATURN_SEQUENCE_VM_FORMAT_US = 0,
+    SM64_SATURN_SEQUENCE_VM_FORMAT_EU_SH = 1,
+} sm64_saturn_sequence_vm_format_t;
+
 typedef enum sm64_saturn_sequence_vm_event_type {
     SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL = 1,
     SM64_SATURN_SEQUENCE_VM_EVENT_DELAY = 2,
@@ -57,7 +62,9 @@ typedef struct sm64_saturn_sequence_vm {
     uint16_t default_play_percentage;
     uint16_t play_percentage;
     uint16_t channel_active_mask;
+    uint16_t channel_finished_mask;
     uint8_t mode;
+    uint8_t format;
     uint8_t enabled;
     uint8_t faulted;
     uint8_t halted;
@@ -66,6 +73,8 @@ typedef struct sm64_saturn_sequence_vm {
     uint8_t variation;
     uint8_t volume;
     uint8_t muted;
+    uint8_t layer_velocity;
+    uint8_t layer_note_duration;
     int16_t transpose;
     uint16_t stack[SM64_SATURN_SEQUENCE_VM_STACK_DEPTH];
     uint8_t frame_kind[SM64_SATURN_SEQUENCE_VM_STACK_DEPTH];
@@ -77,6 +86,11 @@ typedef struct sm64_saturn_sequence_vm {
 void sm64_saturn_sequence_vm_init(sm64_saturn_sequence_vm_t *vm,
                                   uint16_t data_length, uint16_t entry_offset,
                                   sm64_saturn_sequence_vm_mode_t mode);
+
+void sm64_saturn_sequence_vm_init_ex(
+    sm64_saturn_sequence_vm_t *vm, uint16_t data_length,
+    uint16_t entry_offset, sm64_saturn_sequence_vm_mode_t mode,
+    sm64_saturn_sequence_vm_format_t format);
 
 bool sm64_saturn_sequence_vm_tick(
     sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence,
