@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Relocated the complete 32-byte-aligned sourceboot VDP1 command double-buffer
+  from LWRAM to ordinary HWRAM `.bss`, preserving its explicit backend
+  initialization and frame-bank lifetime while reclaiming `0x20000` LWRAM
+  bytes for the separately planned actor arena. The linker now rejects any
+  future `.lwram_cmdts` input. This source/link preparation does not claim
+  target transfer, P2, Ymir/manual, or FPS evidence.
+
 - Added an exact producer-owned pre-acquire actor-bank recycle path for
   stranded WRITING and unacquired READY generations. It validates bank index,
   nonzero generation, and expected phase; clears the full cache-through

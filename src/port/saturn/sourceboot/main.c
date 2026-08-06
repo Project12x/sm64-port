@@ -655,19 +655,19 @@ extern const uint8_t sm64_saturn_bob_texture_bank[];
 extern const uint8_t sm64_saturn_bob_clut_bank[];
 #endif
 
-/* LWRAM-resident command staging -- see sourceboot-cart.x's new lwram
- * MEMORY region/.lwram_cmdts section. Zeroed explicitly by
+/* HWRAM-resident command staging. Zeroed explicitly by
  * sm64_saturn_vdp1_backend_init_with_storage below, since this section
  * is not .bss and crt0 never visits it.
  *
  * Capacity raised 512 -> 2048 (2026-07-22) to track
  * SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES's 192 -> 1536 increase 1:1
  * (saturn_fast3d_vdp1_emit.c emits exactly one vdp1_cmdt_t per resolved
- * triangle). 2048 * 32 bytes = 64 KiB, trivial against the ~1 MiB free
- * in the lwram region (sourceboot-cart.x) -- no linker script change
- * needed. */
+ * triangle). Both 2048-command banks occupy 0x20000 bytes, aligned to the
+ * VDP1 command layout. This ordinary HWRAM storage keeps the established
+ * CPU-DMAC/VDP1 transfer addresses and cache behavior; do not reintroduce a
+ * `.lwram_cmdts` attribute (the linker rejects that legacy section). */
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
-    __attribute__((section(".lwram_cmdts")));
+    __aligned(32);
 static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
 static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
 static sm64_saturn_vdp1_transfer_targets_t sourceboot_vdp1_transfer_targets;

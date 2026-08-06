@@ -137,12 +137,8 @@ SECTIONS
   ASSERT (ORIGIN (ram) + LENGTH (ram) - ___end >= __sourceboot_required_hwram_margin,
           "HWRAM margin below libyaul's TLSF control-block floor: the heap libyaul builds at ___end would overrun the top of HWRAM and mirror into low memory. Shrink a static HWRAM consumer.")
 
-  /* VDP1 command staging array (vdp1_cmdt_t[]), resident in LWRAM rather
-   * than HWRAM so it doesn't compete with SM64 game state for cache-backed
-   * work RAM.  NOLOAD: holds no initialized data -- zeroed explicitly at
-   * runtime by sm64_saturn_vdp1_backend_init_with_storage's memset, since
-   * this region (unlike .bss) is never crt0-zeroed.
-   *
+  /* Legacy sink: command staging is ordinary HWRAM .bss. Keep this output
+   * section solely to turn a future `.lwram_cmdts` input into a link error.
    * LWRAM coordination note: castleviewer (a separate binary, never
    * co-linked with sourceboot) already claims a fixed LWRAM range via a
    * raw pointer at 0x000C0000 (src/port/saturn/castleviewer/collision_pool.c),
@@ -153,9 +149,10 @@ SECTIONS
    * source of truth for LWRAM allocation across this codebase's binaries. */
   .lwram_cmdts (NOLOAD) :
   {
-    . = ALIGN (32); /* vdp1_cmdt_t is __aligned(32) */
     *(.lwram_cmdts)
   } > lwram
+  ASSERT (SIZEOF(.lwram_cmdts) == 0,
+          "VDP1 command staging must remain in HWRAM; .lwram_cmdts is forbidden")
 
   /* LWRAM-resident bulk work data (SM64 main pool). CPU access only --
    * SCU DMA cannot touch LWRAM (see SGL_REFERENCE_NOTES.md); nothing may
