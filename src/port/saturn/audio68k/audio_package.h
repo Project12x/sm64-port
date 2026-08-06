@@ -14,6 +14,7 @@ typedef struct sm64_saturn_audio_package_token {
 
 bool sm64_saturn_audio68k_package_accept(
     const sm64_saturn_audio_package_view_t *package,
+    const sm64_saturn_audio_residency_plan_t *active,
     const sm64_saturn_audio_residency_plan_t *plan,
     sm64_saturn_audio_package_token_t *token);
 

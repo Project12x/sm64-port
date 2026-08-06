@@ -88,6 +88,12 @@ def test_source_fail_closed() -> None:
         sequence.write_bytes(b"\0" * 8)
         expect_failure(lambda: compile_catalog(root, Path(temp) / "x"),
                        "invalid sequence control flow")
+        original = (ROOT / "sound/sequences/us/03_level_grass.m64").read_bytes()
+        malformed = bytearray(original)
+        malformed[128:131] = b"\xfc\xff\xff"
+        sequence.write_bytes(malformed)
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "x"),
+                       "out-of-range sequence control flow")
 
 
 def test_alignment_hash_drift_and_duplicate() -> None:

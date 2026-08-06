@@ -88,6 +88,28 @@ bool sm64_saturn_audio_residency_validate_plan(const sm64_saturn_audio_residency
            sample_end <= plan->total_bytes && scratch_end <= plan->total_bytes;
 }
 
+bool sm64_saturn_audio_residency_plans_disjoint(
+    const sm64_saturn_audio_residency_plan_t *active,
+    const sm64_saturn_audio_residency_plan_t *replacement)
+{
+    const uint32_t active_offsets[4] = {active->driver_offset, active->mailbox_offset,
+                                        active->sample_offset, active->scratch_offset};
+    const uint32_t active_sizes[4] = {active->driver_size, active->mailbox_size,
+                                      active->sample_size, active->scratch_size};
+    const uint32_t replacement_offsets[4] = {replacement->driver_offset,
+                                             replacement->mailbox_offset,
+                                             replacement->sample_offset,
+                                             replacement->scratch_offset};
+    const uint32_t replacement_sizes[4] = {replacement->driver_size, replacement->mailbox_size,
+                                           replacement->sample_size, replacement->scratch_size};
+    unsigned i, j;
+    if (active == 0 || replacement == 0) return false;
+    for (i = 0U; i < 4U; ++i) for (j = 0U; j < 4U; ++j)
+        if (active_offsets[i] < replacement_offsets[j] + replacement_sizes[j] &&
+            replacement_offsets[j] < active_offsets[i] + active_sizes[i]) return false;
+    return true;
+}
+
 bool sm64_saturn_audio_package_validate_header(
     const void *bytes, uint32_t byte_count,
     sm64_saturn_audio_package_view_t *view)
@@ -205,6 +227,7 @@ bool sm64_saturn_audio_residency_commit(
     return active != 0 && replacement != 0 &&
            sm64_saturn_audio_residency_validate_plan(active) &&
            sm64_saturn_audio_residency_validate_plan(replacement) &&
+           sm64_saturn_audio_residency_plans_disjoint(active, replacement) &&
            replacement->generation > active->generation &&
            acknowledged_generation == replacement->generation &&
            replacement->active_generation_retained &&

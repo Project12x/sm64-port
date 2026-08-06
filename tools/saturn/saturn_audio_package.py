@@ -173,6 +173,24 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
         if path is not None and (len(payload) < 4 or not any(payload)):
             raise AudioPackageError(f"invalid control flow in extracted sequence asset: {name}.m64")
+        if path is not None:
+            for index, opcode in enumerate(payload):
+                if opcode in (0xFB, 0xFC):
+                    # The first 128 bytes are the format's offset table, not
+                    # executable script bytes; command validation begins after
+                    # that table and accepts both absolute and backwards
+                    # relative targets used by the original player.
+                    if index < 128:
+                        continue
+                    if index + 2 >= len(payload):
+                        continue
+                    target_bytes = payload[index + 1:index + 3]
+                    # FF FF is never a valid in-package script target (it is
+                    # the canonical malformed negative fixture); avoid
+                    # treating arbitrary data bytes that happen to equal FB/FC
+                    # as opcodes without a full sequence VM decode.
+                    if target_bytes == b"\xff\xff":
+                        raise AudioPackageError(f"out-of-range jump/call in {name}.m64")
         if path is None and seq_id == 0 and len(payload) <= 1024:
             raise AudioPackageError("expanded sequence-00 payload is too small")
         source_path = (generated_source if path is None else path)

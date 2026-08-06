@@ -54,6 +54,10 @@ bool sm64_saturn_audio_residency_prepare(
 bool sm64_saturn_audio_residency_validate_plan(
     const sm64_saturn_audio_residency_plan_t *plan);
 
+bool sm64_saturn_audio_residency_plans_disjoint(
+    const sm64_saturn_audio_residency_plan_t *active,
+    const sm64_saturn_audio_residency_plan_t *replacement);
+
 bool sm64_saturn_audio_residency_commit(
     const sm64_saturn_audio_residency_plan_t *active,
     const sm64_saturn_audio_residency_plan_t *replacement,

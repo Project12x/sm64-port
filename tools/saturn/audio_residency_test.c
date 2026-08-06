@@ -61,6 +61,9 @@ int main(int argc, char **argv)
                                                  &replacement));
     assert(!sm64_saturn_audio_residency_prepare(&active, 3U, 400000U, 400000U,
                                                  400000U, 400000U, &replacement));
-    assert(sm64_saturn_audio68k_package_accept(&package, &replacement, &token));
+    assert(sm64_saturn_audio68k_package_accept(&package, &active, &replacement, &token));
+    replacement.driver_offset = active.driver_offset;
+    assert(!sm64_saturn_audio_residency_commit(&active, &replacement, 2U));
+    assert(!sm64_saturn_audio68k_package_accept(&package, &active, &replacement, &token));
     return 0;
 }
