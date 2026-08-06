@@ -13,6 +13,8 @@ RUNTIME_FILES = (
     ROOT / "src/port/saturn/gfx/saturn_actor_instance_queue.c",
     ROOT / "src/port/saturn/gfx/saturn_actor_batch.h",
     ROOT / "src/port/saturn/gfx/saturn_actor_batch.c",
+    ROOT / "src/port/saturn/gfx/saturn_actor_runtime_handoff.h",
+    ROOT / "src/port/saturn/gfx/saturn_actor_runtime_handoff.c",
 )
 
 

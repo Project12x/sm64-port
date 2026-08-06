@@ -4,6 +4,17 @@
 
 ### Changed
 
+- Added a bounded, host-only Task 16 lifecycle handoff from the authoritative
+  actor snapshot bank to the existing actor queue and stable batch builder.
+  It acquires one exact ready bank generation, regenerates each descriptor's
+  snapshot-derived identity while preserving caller-owned material/output
+  fields, quarantines post-acquire mismatches, requires terminal queue state
+  before batch/complete, and requires an explicit output-consumer
+  acknowledgement before queue reset then bank retirement. Zero snapshots are
+  a production-safe no-op. This deliberately does not attach the handoff to
+  sourceboot, change the feature-off Mario wrapper, introduce meshlet work, or
+  claim target/Ymir/manual/FPS evidence.
+
 - Added the Task 16 feature-off actor compatibility boundary. The existing
   ACTOR_ADMIT/ACTOR_LOWER world-graph descriptors now route through explicit
   Mario callback wrappers when `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=0`, while
