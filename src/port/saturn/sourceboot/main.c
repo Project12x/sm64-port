@@ -172,7 +172,12 @@ volatile sm64_saturn_sourceboot_cadence_trace_t sourceboot_cadence_trace = {
     .version = SOURCEBOOT_CADENCE_TRACE_VERSION,
 };
 
-static sm64_saturn_fast3d_frontend_t sourceboot_fast3d;
+/* The Fast3D interpreter owns CPU-only matrix/vertex/resolve/profile state;
+ * keep it in the NOLOAD LWRAM work arena rather than consuming HWRAM needed
+ * by the VDP1 command banks.  It is explicitly initialized before the first
+ * bootstrap profile read because .lwram_bss is not crt0-zeroed. */
+static sm64_saturn_fast3d_frontend_t sourceboot_fast3d
+    __attribute__((section(".lwram_bss"), used));
 static uint32_t sourceboot_sim_ticks_accum;
 static uint32_t sourceboot_sim_tick_count;
 static uint32_t sourceboot_render_ticks_accum;
@@ -1451,6 +1456,7 @@ int main(void) {
     dbgio_flush();
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_BEFORE, 0U);
+    sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_vdp2_frame_begin(&sourceboot_vdp2_frame, NULL,
                                  &sourceboot_fast3d.profile,
                                  NULL,
@@ -1460,7 +1466,6 @@ int main(void) {
     vdp2_sync_wait();
     sourceboot_boot_trace_write(
         SOURCEBOOT_BOOT_TRACE_STAGE_BOOTSTRAP_RETIRED, 0U);
-    sm64_saturn_fast3d_frontend_init(&sourceboot_fast3d);
     sm64_saturn_render_snapshot_reset(&sourceboot_render_snapshots);
     memset((void *)(CPU_CACHE_THROUGH | (uintptr_t)&sourceboot_actor_runtime),
            0, sizeof(sourceboot_actor_runtime));

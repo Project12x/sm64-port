@@ -4,6 +4,13 @@
 
 ### Changed
 
+- Sourceboot now places the CPU-only Fast3D frontend state in the NOLOAD
+  LWRAM work arena and initializes it before the bootstrap VDP2 profile read.
+  This reclaims 44,616 bytes of HWRAM for the remaining link-capacity gate
+  without moving VDP1 command/Gouraud staging or any SCU-DMA-visible buffer;
+  the explicit init ordering preserves startup semantics for the un-zeroed
+  LWRAM section.
+
 - Reconciled sourceboot's HWRAM VDP1 command-bank placement with the deferred
   frame-bank runtime contract: command sources are now admitted only when they
   lie in the bounded HWRAM/LWRAM ranges legal for CPU-DMAC, while SCU Gouraud
