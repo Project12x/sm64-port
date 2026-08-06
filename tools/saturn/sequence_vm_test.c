@@ -29,6 +29,7 @@ static void test_loop_and_note_events(void)
 {
     static const uint8_t loop_script[] = {0xf8, 2, 0xdd, 60, 0xf7, 0xff};
     static const uint8_t note_script[] = {0x41, 0xc0, 1, 0xff};
+    static const uint8_t portamento_script[] = {0xc7, 0x80, 40, 5, 0xff};
     sm64_saturn_sequence_vm_t vm;
     sm64_saturn_sequence_vm_event_t events[8];
     uint8_t count;
@@ -47,6 +48,16 @@ static void test_loop_and_note_events(void)
                                         events, 8U, &count));
     assert(count == 1U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_NOTE);
     assert(events[0].signed_value == 1);
+    sm64_saturn_sequence_vm_init(
+        &vm, (uint16_t)sizeof(portamento_script), 0U,
+        SM64_SATURN_SEQUENCE_VM_LAYER_SMALL);
+    assert(sm64_saturn_sequence_vm_tick(&vm, portamento_script,
+                                        sizeof(portamento_script), events, 8U,
+                                        &count));
+    assert(count == 2U && events[0].type == SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL &&
+           events[0].arg0 == 0x80U && events[0].arg1 == 40U &&
+           events[0].arg2 == 5U &&
+           events[1].type == SM64_SATURN_SEQUENCE_VM_EVENT_END);
 }
 
 static void test_fail_closed_inputs(void)

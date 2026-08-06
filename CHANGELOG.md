@@ -16,6 +16,11 @@
   present, so full sequence/catalog, S64P, target, Ymir, and manual audio
   claims remain open.
 
+- Tightened the sequence VM's source parity at the layer boundary: portamento
+  uses the source's special one-byte timing form when its mode bit is set, and
+  layer transpose consumes the source unsigned byte representation. The
+  focused VM gate covers the special portamento operand shape.
+
 - Added a dedicated, bounded actor-instance queue and master-only batch merge
   without expanding the proven eight-entry world graph. Each pointer-free job
   owns one Task 14 snapshot identity and a disjoint output span, either SH-2

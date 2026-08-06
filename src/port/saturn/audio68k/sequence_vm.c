@@ -351,8 +351,13 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
             } else if (cmd == 0xc7U) {
                 uint8_t mode, note;
                 if (!vm_read_u8(sequence, length, &vm->pc, &mode) ||
-                    !vm_read_u8(sequence, length, &vm->pc, &note) ||
-                    !vm_read_var_u16(sequence, length, &vm->pc, &value16)) return false;
+                    !vm_read_u8(sequence, length, &vm->pc, &note)) return false;
+                if ((mode & 0x80U) != 0U) {
+                    if (!vm_read_u8(sequence, length, &vm->pc, &value8)) return false;
+                    value16 = value8;
+                } else if (!vm_read_var_u16(sequence, length, &vm->pc, &value16)) {
+                    return false;
+                }
                 if (!vm_emit(vm, events, event_capacity, event_count,
                              SM64_SATURN_SEQUENCE_VM_EVENT_CONTROL, cmd, mode,
                              note, value16, 0, source_offset)) return false;
@@ -361,7 +366,7 @@ static bool vm_tick_layer(sm64_saturn_sequence_vm_t *vm, const uint8_t *sequence
                        cmd == 0xc9U || cmd == 0xcaU) {
                 if (!vm_read_u8(sequence, length, &vm->pc, &value8)) return false;
                 if (cmd == 0xc1U) velocity = value8;
-                else if (cmd == 0xc2U) vm->transpose = vm_s8(value8);
+                else if (cmd == 0xc2U) vm->transpose = value8;
                 else if (cmd == 0xc9U) duration = value8;
                 if (!vm_emit(vm, events, event_capacity, event_count,
                              cmd == 0xc2U ? SM64_SATURN_SEQUENCE_VM_EVENT_TRANSPOSE :
