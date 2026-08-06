@@ -1057,19 +1057,22 @@ but the sourceboot Make/variant path does not currently materialize the spec
 needed by its own grouped output rule. This is a build-input seam, not a
 license, renderer, or target-performance result.
 
-- [ ] RED: reproduce the missing-spec failure from the documented serialized
+- [x] RED: reproduce the missing-spec failure from the documented serialized
   route command and trace every producer/consumer of the spec; add an isolated
   mutation gate that rejects a build which silently falls back to a label or
   stale generated identity.
-- [ ] Implement the smallest deterministic bootstrap that derives the spec
+- [x] Implement the smallest deterministic bootstrap that derives the spec
   from the canonical variant/config inputs before Make parses the grouped
-  identity outputs. Preserve exact hashes, serialized `-j1`, feature-off
-  semantics, and no ad-hoc checked-in generated identity.
-- [ ] Run the identity tests plus one fresh route-0 linked build through the
+  identity outputs (`730346c9`). Preserve exact hashes, serialized `-j1`,
+  feature-off semantics, and no ad-hoc checked-in generated identity.
+- [x] Run the identity tests plus one fresh route-0 linked build through the
   DLL-preflight wrapper; inspect the resulting identity label and only then
-  continue to HWRAM/LWRAM map assertions. Target/P2/concurrent-SH2/Ymir/manual
-  and FPS evidence remain unchecked.
-- [ ] Commit/review the build-input boundary separately from actor/audio code.
+  continue to HWRAM/LWRAM map assertions. Bootstrap, identity, and feature
+  gates pass; compilation completes, but link stops on HWRAM overflow by
+  `159664` bytes. No ELF/map or target/P2/concurrent-SH2/Ymir/manual/FPS
+  evidence is claimed.
+- [ ] Commit/review the build-input boundary separately from actor/audio code;
+  independent rereview is pending.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
@@ -1079,11 +1082,13 @@ expected next memory-layout gate after moving the complete 0x20000 VDP1 command
 double buffer out of LWRAM; it must be solved by source-attested relocation or
 reclaim, never by weakening the linker margin or hiding a section.
 
-- [ ] RED: capture the route-0 link/map failure and inventory the largest HWRAM
-  sections plus every reader/writer, cache/DMA requirement, and lifetime.
-- [ ] Produce a ranked reclaim/relocation preflight with exact byte totals and
-  rollback boundaries. Keep VDP1 command staging, actor LWRAM ownership, and
-  HWRAM TLSF floor requirements explicit.
+- [x] RED: capture the route-0 link failure (`ram overflowed by 159664`) and
+  inventory the largest source-attested HWRAM claimant/readers, cache/DMA
+  requirements, and lifetime.
+- [x] Produce a ranked reclaim/relocation preflight with exact byte totals and
+  rollback boundaries. The report keeps VDP1 command staging, actor LWRAM
+  ownership, and HWRAM TLSF floor requirements explicit; no legal sufficient
+  target is selected yet.
 - [ ] Implement only after the preflight identifies a sufficient legal target;
   run a serialized fresh link and inspect HWRAM/LWRAM symbols/margins. Target,
   P2/concurrent-SH2, Ymir/manual, and FPS remain unchecked.
