@@ -17,10 +17,102 @@ from pathlib import Path
 
 SUPPORTED_GEO_NODES = frozenset({
     "GEO_ANIMATED_PART", "GEO_ASM", "GEO_BRANCH", "GEO_CLOSE_NODE",
+    "GEO_BILLBOARD",
     "GEO_DISPLAY_LIST", "GEO_END", "GEO_HELD_OBJECT", "GEO_NODE_START",
     "GEO_OPEN_NODE", "GEO_RENDER_RANGE", "GEO_RETURN", "GEO_ROTATION_NODE",
     "GEO_SCALE", "GEO_SHADOW", "GEO_SWITCH_CASE", "GEO_TRANSLATE_ROTATE",
 })
+
+# Generic actor-family capability bits.  These are deliberately renderer
+# neutral: they describe facts observed in source geo/closure data, not a
+# family-specific implementation choice.  Keep the bit positions stable once
+# a family bank has been emitted because they are part of the S64F ABI.
+ACTOR_CAP_ANIMATED = 1 << 0
+ACTOR_CAP_SWITCH = 1 << 1
+ACTOR_CAP_BILLBOARD = 1 << 2
+ACTOR_CAP_ALPHA = 1 << 3
+ACTOR_CAP_TRANSLUCENT = 1 << 4
+ACTOR_CAP_SHADOW = 1 << 5
+ACTOR_CAP_PARENTED = 1 << 6
+ACTOR_CAP_HELD = 1 << 7
+ACTOR_CAP_MODEL_MUTATION = 1 << 8
+ACTOR_CAP_SURFACE = 1 << 9
+ACTOR_CAP_LOD = 1 << 10
+ACTOR_CAP_PARTICLE = 1 << 11
+ACTOR_CAP_EFFECT = 1 << 12
+
+ACTOR_CAPABILITY_NAMES = (
+    "ANIMATED", "SWITCH", "BILLBOARD", "ALPHA", "TRANSLUCENT", "SHADOW",
+    "PARENTED", "HELD", "MODEL_MUTATION", "SURFACE", "LOD", "PARTICLE",
+    "EFFECT",
+)
+ACTOR_CAPABILITY_BITS = {
+    name: 1 << index for index, name in enumerate(ACTOR_CAPABILITY_NAMES)
+}
+
+
+@dataclass(frozen=True)
+class ActorCapabilityReport:
+    """Source-owned capability facts for one closure actor record."""
+
+    mask: int
+    names: tuple[str, ...]
+    unsupported: tuple[str, ...]
+    geo_nodes: tuple[str, ...]
+
+
+def analyze_actor_capabilities(
+    geo_source: str | None,
+    *,
+    material_feature_bits: tuple[str, ...] = (),
+    animation_table: tuple[str, ...] = (),
+    model_variants: tuple[dict[str, object], ...] = (),
+    object_roots: tuple[str, ...] = (),
+    effects: tuple[str, ...] = (),
+) -> ActorCapabilityReport:
+    """Derive generic capabilities without matching a family name.
+
+    The closure collector owns the source/model bindings.  This helper merely
+    classifies the bound geo vocabulary and closure facts, and records every
+    unsupported node instead of silently flattening it.  A model-less actor is
+    represented by an empty node set and therefore remains inspectable with a
+    zero geometry capability mask.
+    """
+    text = geo_source or ""
+    nodes = tuple(sorted(set(re.findall(r"\b(GEO_[A-Z0-9_]+)\s*\(", text))))
+    unsupported = sorted(set(nodes) - SUPPORTED_GEO_NODES)
+    mask = 0
+    if animation_table or "GEO_ANIMATED_PART" in nodes:
+        mask |= ACTOR_CAP_ANIMATED
+    if "GEO_SWITCH_CASE" in nodes:
+        mask |= ACTOR_CAP_SWITCH
+    if "GEO_BILLBOARD" in nodes:
+        mask |= ACTOR_CAP_BILLBOARD
+    features = {item.lower() for item in material_feature_bits}
+    if "alpha" in features:
+        mask |= ACTOR_CAP_ALPHA
+    if "transparent" in features or "translucent" in features:
+        mask |= ACTOR_CAP_TRANSLUCENT
+    if "GEO_SHADOW" in nodes or "shadow" in features:
+        mask |= ACTOR_CAP_SHADOW
+    if any(root.startswith("spawn:") for root in object_roots):
+        mask |= ACTOR_CAP_PARENTED
+    # GEO_HELD_OBJECT is the authoritative source indication.  Do not infer
+    # held semantics from a behavior name or model name.
+    if "GEO_HELD_OBJECT" in nodes:
+        mask |= ACTOR_CAP_HELD
+    if len(model_variants) > 1 or "GEO_SWITCH_CASE" in nodes:
+        mask |= ACTOR_CAP_MODEL_MUTATION
+    if "surface" in features or "GEO_SURFACE" in nodes:
+        mask |= ACTOR_CAP_SURFACE
+    if "GEO_RENDER_RANGE" in nodes:
+        mask |= ACTOR_CAP_LOD
+    if "particle" in features:
+        mask |= ACTOR_CAP_PARTICLE
+    if effects:
+        mask |= ACTOR_CAP_EFFECT
+    names = tuple(name for name in ACTOR_CAPABILITY_NAMES if mask & ACTOR_CAPABILITY_BITS[name])
+    return ActorCapabilityReport(mask, names, tuple(unsupported), nodes)
 
 
 @dataclass(frozen=True)

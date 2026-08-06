@@ -11,8 +11,13 @@ import struct
 from pathlib import Path
 from typing import Iterable
 
-from actor_source import (load_animation_inventory, parse_mario_skeleton,
-                          validate_geo_node_vocabulary)
+from actor_source import (
+    ACTOR_CAPABILITY_NAMES,
+    analyze_actor_capabilities,
+    load_animation_inventory,
+    parse_mario_skeleton,
+    validate_geo_node_vocabulary,
+)
 from extract_mario_actor import (
     animation_rotations,
     animation_translation,
@@ -50,6 +55,15 @@ MATERIAL_RECORD_STRUCT = struct.Struct(">BBBB")
 MESHLET_RECORD_STRUCT = struct.Struct(">HHBB6h12I")
 PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
 
+# Generic family-bank container.  It intentionally carries JSON metadata as
+# bounded byte spans; the Saturn runtime never publishes pointers into it.
+FAMILY_MAGIC = b"S64F"
+FAMILY_VERSION = 1
+FAMILY_HEADER_STRUCT = struct.Struct(">4sHHIIII32s")
+FAMILY_RECORD_STRUCT = struct.Struct(">13I")
+FAMILY_FLAG_SUPPORTED = 1 << 0
+FAMILY_FLAG_GEOMETRY = 1 << 1
+
 PINNED_MARIO_ANIMATION_SOURCE_ROOT = "assets/anims"
 PINNED_MARIO_ANIMATION_SOURCE_COUNT = 193
 PINNED_MARIO_ANIMATION_PATH_CANONICALIZATION = (
@@ -82,9 +96,237 @@ def _canonical_json(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
 
 
+def _family_source_digest(sources: list[dict[str, object]]) -> str:
+    canonical = b"S64F-SOURCES\x00\x01" + b"".join(
+        str(item["path"]).encode("utf-8") + b"\x00" +
+        bytes.fromhex(str(item["sha256"]))
+        for item in sorted(sources, key=lambda item: str(item["path"]))
+    )
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _family_stable_hash(key: str) -> int:
+    return int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:4], "big") or 1
+
+
+def _geo_source_for_record(root: Path, record: dict[str, object]) -> tuple[str | None, str | None]:
+    model = str(record.get("model", "MODEL_NONE"))
+    provenance = record.get("root_provenance", {})
+    models = provenance.get("models", {}) if isinstance(provenance, dict) else {}
+    binding = models.get(model, {}) if isinstance(models, dict) else {}
+    if not isinstance(binding, dict):
+        return None, None
+    path = binding.get("geo_source")
+    if not path:
+        return None, None
+    relative = str(path).replace("\\", "/")
+    source_path = root / relative
+    if not source_path.is_file():
+        return relative, None
+    return relative, source_path.read_text(encoding="utf-8")
+
+
+def _family_record(root: Path, record: dict[str, object]) -> dict[str, object]:
+    geo_path, geo_source = _geo_source_for_record(root, record)
+    variants = tuple(record.get("model_variants", ()))
+    animation = tuple(record.get("animation_table", ()))
+    material = tuple(record.get("material_feature_bits", ()))
+    roots = tuple(record.get("object_roots", ()))
+    effects = tuple(record.get("effects", ()))
+    analysis = analyze_actor_capabilities(
+        geo_source,
+        material_feature_bits=material,
+        animation_table=animation,
+        model_variants=variants,
+        object_roots=roots,
+        effects=effects,
+    )
+    unsupported = [f"UNSUPPORTED_GEO_NODE:{node}" for node in analysis.unsupported]
+    sources = list(record.get("sources", ()))
+    # Closure hashes are authoritative.  A stale checkout is a named
+    # unsupported fact, never silently accepted as current geometry.
+    for source in sources:
+        path = str(source.get("path", "")).replace("\\", "/")
+        expected = str(source.get("sha256", ""))
+        candidate = root / path
+        if candidate.is_file():
+            actual = _closure_source_hash(candidate)
+            if actual != expected:
+                unsupported.append(f"SOURCE_HASH_DRIFT:{path}")
+        else:
+            unsupported.append(f"SOURCE_MISSING:{path}")
+    key_obj = {
+        "model": str(record.get("model", "MODEL_NONE")),
+        "geo_source": geo_path,
+        "geo_root": str(record.get("geo_root", "none")),
+        "animation_table": sorted(animation),
+        "model_variants": sorted(variants, key=lambda item: _canonical_json(item)),
+    }
+    family_key = _canonical_json(key_obj).decode("utf-8").rstrip("\n")
+    unsupported = sorted(set(unsupported))
+    return {
+        "stable_id": str(record.get("stable_id", "")),
+        "model": str(record.get("model", "MODEL_NONE")),
+        "geo_root": str(record.get("geo_root", "none")),
+        "geo_source": geo_path,
+        "family_key": family_key,
+        "family_id": _family_stable_hash(family_key),
+        "capability_mask": analysis.mask,
+        "capabilities": list(analysis.names),
+        "geo_nodes": list(analysis.geo_nodes),
+        "unsupported": unsupported,
+        "supported": not unsupported,
+        "maximum_live_instances": int(record.get("maximum_live_instances", 0)),
+        "actor_count": 1,
+        "animation_table": sorted(animation),
+        "model_variants": sorted(variants, key=lambda item: _canonical_json(item)),
+        "effects": sorted(effects),
+        "sources": sorted(sources, key=lambda item: str(item.get("path", ""))),
+    }
+
+
+def _pack_family_bank(families: list[dict[str, object]]) -> bytes:
+    """Pack a deterministic S64F bank with only integer offsets/counts."""
+    families = sorted(families, key=lambda item: (int(item["family_id"]), str(item["family_key"])))
+    blob = bytearray()
+    records = bytearray()
+
+    def span(data: bytes) -> tuple[int, int]:
+        offset = len(blob)
+        blob.extend(data)
+        return offset, len(data)
+
+    for family in families:
+        name_off, name_size = span(str(family["stable_id"]).encode("utf-8"))
+        source_off, source_size = span(_canonical_json(family["sources"]))
+        unsupported_off, unsupported_size = span(_canonical_json(family["unsupported"]))
+        metadata = {
+            "family_key": family["family_key"], "model": family["model"],
+            "geo_root": family["geo_root"], "geo_source": family["geo_source"],
+            "capabilities": family["capabilities"], "geo_nodes": family["geo_nodes"],
+            "animation_table": family["animation_table"],
+            "model_variants": family["model_variants"], "effects": family["effects"],
+        }
+        metadata_off, metadata_size = span(_canonical_json(metadata))
+        flags = (FAMILY_FLAG_SUPPORTED if family["supported"] else 0) | (
+            FAMILY_FLAG_GEOMETRY if family["geo_source"] else 0)
+        records.extend(FAMILY_RECORD_STRUCT.pack(
+            int(family["family_id"]), int(family["capability_mask"]),
+            int(family["maximum_live_instances"]), int(family["actor_count"]), flags,
+            name_off, name_size, source_off, source_size,
+            unsupported_off, unsupported_size, metadata_off, metadata_size))
+    records_offset = FAMILY_HEADER_STRUCT.size
+    blob_offset = records_offset + len(records)
+    header = FAMILY_HEADER_STRUCT.pack(
+        FAMILY_MAGIC, FAMILY_VERSION, len(families), records_offset, len(records),
+        blob_offset, len(blob), bytes(32))
+    payload = bytearray(header + records + blob)
+    digest = hashlib.sha256(payload).digest()
+    payload[:FAMILY_HEADER_STRUCT.size] = FAMILY_HEADER_STRUCT.pack(
+        FAMILY_MAGIC, FAMILY_VERSION, len(families), records_offset, len(records),
+        blob_offset, len(blob), digest)
+    return bytes(payload)
+
+
+def validate_family_bank_payload(payload: bytes) -> None:
+    if len(payload) < FAMILY_HEADER_STRUCT.size:
+        raise ValueError("family bank is shorter than its header")
+    magic, version, count, records_offset, records_size, blob_offset, blob_size, digest = FAMILY_HEADER_STRUCT.unpack_from(payload)
+    if magic != FAMILY_MAGIC or version != FAMILY_VERSION:
+        raise ValueError("invalid family bank identity")
+    if records_offset != FAMILY_HEADER_STRUCT.size or records_size != count * FAMILY_RECORD_STRUCT.size:
+        raise ValueError("invalid family record span")
+    if blob_offset != records_offset + records_size or blob_offset + blob_size != len(payload):
+        raise ValueError("invalid family blob span")
+    shadow = bytearray(payload)
+    shadow[FAMILY_HEADER_STRUCT.size - 32:FAMILY_HEADER_STRUCT.size] = bytes(32)
+    # The content hash covers the complete immutable payload with its hash
+    # field zeroed, avoiding a self-referential digest.
+    if hashlib.sha256(shadow).digest() != digest:
+        raise ValueError("family payload hash mismatch")
+    seen: set[int] = set()
+    for index in range(count):
+        fields = FAMILY_RECORD_STRUCT.unpack_from(payload, records_offset + index * FAMILY_RECORD_STRUCT.size)
+        family_id = fields[0]
+        if family_id == 0 or family_id in seen:
+            raise ValueError("duplicate or empty family ID")
+        seen.add(family_id)
+        for offset, size in ((fields[5], fields[6]), (fields[7], fields[8]),
+                             (fields[9], fields[10]), (fields[11], fields[12])):
+            if offset > blob_size or size > blob_size - offset:
+                raise ValueError("family record span escapes payload")
+
+
+def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path) -> dict[str, object]:
+    """Compile every drawable and model-less BOB closure record generically."""
+    closure = json.loads(closure_path.read_text(encoding="utf-8"))
+    if closure.get("schema") != "sm64-saturn-scene-closure-v1":
+        raise ValueError("actor family compiler requires a scene closure")
+    records = closure.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("scene closure has no actor records")
+    families_by_key: dict[str, dict[str, object]] = {}
+    for record in records:
+        family = _family_record(root, record)
+        key = str(family["family_key"])
+        existing = families_by_key.get(key)
+        if existing is None:
+            families_by_key[key] = family
+        else:
+            existing["actor_count"] = int(existing["actor_count"]) + 1
+            existing["maximum_live_instances"] = max(
+                int(existing["maximum_live_instances"]), int(family["maximum_live_instances"]))
+            existing["unsupported"] = sorted(set(existing["unsupported"]) | set(family["unsupported"]))
+            existing["supported"] = not existing["unsupported"]
+    families = sorted(families_by_key.values(), key=lambda item: (int(item["family_id"]), str(item["family_key"])))
+    payload = _pack_family_bank(families)
+    validate_family_bank_payload(payload)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload_sha = hashlib.sha256(payload).hexdigest()
+    payload_path = output_dir / f"families-{payload_sha[:16]}.s64f"
+    payload_path.write_bytes(payload)
+    unsupported_count = sum(len(item["unsupported"]) for item in families)
+    report = {
+        "schema": "sm64-saturn-actor-family-bank-v1", "version": FAMILY_VERSION,
+        "scene": {"level": closure.get("level"), "area": closure.get("area")},
+        "family_count": len(families),
+        "closure_record_count": len(records),
+        "unsupported_required_capability_count": unsupported_count,
+        "complete_closure": unsupported_count == 0,
+        "payload_sha256": payload_sha, "payload_size": len(payload),
+        "payload": payload_path.as_posix(),
+        "capability_bits": {name: 1 << index for index, name in enumerate(ACTOR_CAPABILITY_NAMES)},
+        "families": families,
+    }
+    # Runtime family selection is generic and evidence-bearing.  Required
+    # capability/multiplicity are inputs, never a Goomba/model branch.
+    report["selection_examples"] = {
+        "minimum_supported": select_actor_family(families, 0, 1),
+        "minimum_animated": select_actor_family(families, 1, 1),
+    }
+    return report
+
+
+def select_actor_family(families: list[dict[str, object]], required_mask: int, multiplicity: int) -> str | None:
+    candidates = [item for item in families if item["supported"] and
+                  int(item["capability_mask"]) & required_mask == required_mask and
+                  int(item["maximum_live_instances"]) >= multiplicity]
+    if not candidates:
+        return None
+    selected = min(candidates, key=lambda item: (
+        (int(item["capability_mask"]) & required_mask).bit_count(),
+        int(item["maximum_live_instances"]), int(item["family_id"]), str(item["family_key"])))
+    return str(selected["stable_id"])
+
+
 def _canonical_source_hash(path: Path) -> str:
     """Hash UTF-8 source with universal newlines for checkout-independent IDs."""
     return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+
+
+def _closure_source_hash(path: Path) -> str:
+    """Match collect_scene_closure's byte-preserving provenance hash."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _source_digest(sources: Iterable[dict[str, object]]) -> bytes:
@@ -607,10 +849,25 @@ def verify_legacy_pose_differential(root: Path, document: dict[str, object],
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path("."))
-    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--family-closure", type=Path,
+                        help="compile a generic S64F family bank from a scene closure")
+    parser.add_argument("--family-output-dir", type=Path,
+                        help="directory for the immutable S64F payload")
     args = parser.parse_args()
+    if args.family_closure is not None:
+        if args.family_output_dir is None:
+            raise SystemExit("--family-output-dir is required with --family-closure")
+        report = compile_actor_family_banks(args.root.resolve(), args.family_closure.resolve(),
+                                            args.family_output_dir.resolve())
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
+                               encoding="utf-8")
+        return
+    if args.manifest is None:
+        raise SystemExit("--manifest is required for the Mario actor bank")
     document, payload = compile_mario_actor_bank(args.root, args.manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(payload)

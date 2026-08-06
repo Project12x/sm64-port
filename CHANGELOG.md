@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Added a generic, content-addressed S64F actor-family bank compiler for every
+  BOB closure record.  Source geo vocabulary, material flags, animation,
+  multiplicity, effects, and model variants become stable capability records;
+  unsupported geo nodes and stale closure hashes remain explicit so supported
+  families can still be inspected without pretending the closure is complete.
+  Family payloads use bounded offsets and source provenance, and the C ABI
+  selects the smallest supported capability/capacity record without a
+  Goomba- or scene-specific runtime branch.  Target/Ymir activation and final
+  scene-package linkage remain intentionally open.
+
 - Hardened complete-animation promotion against extreme Q16.16 translation
   sums and matrix overflow by failing closed before narrowing; sourceboot now
   hands each selected pose through a two-slot immutable render buffer so frame

@@ -9,6 +9,12 @@
 #define SM64_SATURN_ACTOR_BANK_VERSION 1U
 #define SM64_SATURN_ACTOR_BANK_HEADER_SIZE 104U
 #define SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE 16U
+#define SM64_SATURN_ACTOR_FAMILY_BANK_MAGIC 0x53363446UL
+#define SM64_SATURN_ACTOR_FAMILY_BANK_VERSION 1U
+#define SM64_SATURN_ACTOR_FAMILY_BANK_HEADER_SIZE 56U
+#define SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE 52U
+#define SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED (1U << 0)
+#define SM64_SATURN_ACTOR_FAMILY_FLAG_GEOMETRY (1U << 1)
 
 typedef struct sm64_saturn_actor_animation_record {
     uint32_t values_offset, indices_offset;
@@ -49,6 +55,36 @@ typedef struct sm64_saturn_actor_vertex {
     uint16_t branch_ordinal;
 } sm64_saturn_actor_vertex_t;
 
+/* Generic immutable family-bank metadata.  Every span is an offset/count
+ * relative to the validated S64F payload; no runtime pointer crosses this
+ * boundary. */
+typedef struct sm64_saturn_actor_family_bank_view {
+    const uint8_t *bytes;
+    size_t byte_count;
+    uint16_t version;
+    uint16_t family_count;
+    uint32_t records_offset;
+    uint32_t records_size;
+    uint32_t blob_offset;
+    uint32_t blob_size;
+} sm64_saturn_actor_family_bank_view_t;
+
+typedef struct sm64_saturn_actor_family_record {
+    uint32_t family_id;
+    uint32_t capability_mask;
+    uint32_t maximum_live_instances;
+    uint32_t actor_count;
+    uint32_t flags;
+    uint32_t name_offset;
+    uint32_t name_size;
+    uint32_t source_offset;
+    uint32_t source_size;
+    uint32_t unsupported_offset;
+    uint32_t unsupported_size;
+    uint32_t metadata_offset;
+    uint32_t metadata_size;
+} sm64_saturn_actor_family_record_t;
+
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view);
 bool sm64_saturn_actor_bank_validate_expected(
@@ -66,5 +102,15 @@ bool sm64_saturn_actor_bank_joint(
 bool sm64_saturn_actor_bank_vertex(
     const sm64_saturn_actor_bank_view_t *view, uint16_t vertex,
     sm64_saturn_actor_vertex_t *out);
+
+bool sm64_saturn_actor_family_bank_validate(
+    const void *data, size_t byte_count,
+    sm64_saturn_actor_family_bank_view_t *view);
+bool sm64_saturn_actor_family_bank_record(
+    const sm64_saturn_actor_family_bank_view_t *view, uint16_t index,
+    sm64_saturn_actor_family_record_t *out);
+int sm64_saturn_actor_family_bank_select(
+    const sm64_saturn_actor_family_bank_view_t *view,
+    uint32_t required_capability_mask, uint32_t multiplicity);
 
 #endif

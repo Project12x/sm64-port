@@ -1,5 +1,6 @@
 #include "saturn_actor_bank.h"
 
+#include <limits.h>
 #include <string.h>
 
 #define GEOMETRY_HEADER_SIZE 46U
@@ -478,4 +479,122 @@ bool sm64_saturn_actor_bank_vertex(
     out->joint_ordinal = read_be16(view->bytes + offset + 6U);
     out->branch_ordinal = read_be16(view->bytes + offset + 8U);
     return out->joint_ordinal < view->bank.joint_count;
+}
+
+static bool family_span(uint32_t offset, uint32_t size, uint32_t blob_size)
+{
+    return offset <= blob_size && size <= blob_size - offset;
+}
+
+bool sm64_saturn_actor_family_bank_validate(
+    const void *data, size_t byte_count,
+    sm64_saturn_actor_family_bank_view_t *view)
+{
+    const uint8_t *bytes = (const uint8_t *)data;
+    uint16_t count;
+    uint32_t records_offset, records_size, blob_offset, blob_size;
+    uint16_t index;
+    if (bytes == NULL || view == NULL || byte_count < SM64_SATURN_ACTOR_FAMILY_BANK_HEADER_SIZE ||
+        read_be32(bytes) != SM64_SATURN_ACTOR_FAMILY_BANK_MAGIC ||
+        read_be16(bytes + 4U) != SM64_SATURN_ACTOR_FAMILY_BANK_VERSION)
+        return false;
+    count = read_be16(bytes + 6U);
+    records_offset = read_be32(bytes + 8U);
+    records_size = read_be32(bytes + 12U);
+    blob_offset = read_be32(bytes + 16U);
+    blob_size = read_be32(bytes + 20U);
+    if (records_offset != SM64_SATURN_ACTOR_FAMILY_BANK_HEADER_SIZE ||
+        records_size != (uint32_t)count * SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE ||
+        blob_offset != records_offset + records_size ||
+        blob_offset > byte_count || blob_size != byte_count - blob_offset)
+        return false;
+    for (index = 0U; index < count; index++) {
+        const uint8_t *record = bytes + records_offset +
+            (uint32_t)index * SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE;
+        uint16_t prior;
+        uint32_t family_id = read_be32(record);
+        if (family_id == 0U)
+            return false;
+        for (prior = 0U; prior < index; prior++) {
+            const uint8_t *other = bytes + records_offset +
+                (uint32_t)prior * SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE;
+            if (read_be32(other) == family_id)
+                return false;
+        }
+        if (!family_span(read_be32(record + 20U), read_be32(record + 24U), blob_size) ||
+            !family_span(read_be32(record + 28U), read_be32(record + 32U), blob_size) ||
+            !family_span(read_be32(record + 36U), read_be32(record + 40U), blob_size) ||
+            !family_span(read_be32(record + 44U), read_be32(record + 48U), blob_size))
+            return false;
+    }
+    view->bytes = bytes;
+    view->byte_count = byte_count;
+    view->version = SM64_SATURN_ACTOR_FAMILY_BANK_VERSION;
+    view->family_count = count;
+    view->records_offset = records_offset;
+    view->records_size = records_size;
+    view->blob_offset = blob_offset;
+    view->blob_size = blob_size;
+    return true;
+}
+
+bool sm64_saturn_actor_family_bank_record(
+    const sm64_saturn_actor_family_bank_view_t *view, uint16_t index,
+    sm64_saturn_actor_family_record_t *out)
+{
+    const uint8_t *record;
+    if (view == NULL || out == NULL || index >= view->family_count)
+        return false;
+    record = view->bytes + view->records_offset +
+        (uint32_t)index * SM64_SATURN_ACTOR_FAMILY_RECORD_SIZE;
+    out->family_id = read_be32(record);
+    out->capability_mask = read_be32(record + 4U);
+    out->maximum_live_instances = read_be32(record + 8U);
+    out->actor_count = read_be32(record + 12U);
+    out->flags = read_be32(record + 16U);
+    out->name_offset = read_be32(record + 20U);
+    out->name_size = read_be32(record + 24U);
+    out->source_offset = read_be32(record + 28U);
+    out->source_size = read_be32(record + 32U);
+    out->unsupported_offset = read_be32(record + 36U);
+    out->unsupported_size = read_be32(record + 40U);
+    out->metadata_offset = read_be32(record + 44U);
+    out->metadata_size = read_be32(record + 48U);
+    return family_span(out->name_offset, out->name_size, view->blob_size) &&
+           family_span(out->source_offset, out->source_size, view->blob_size) &&
+           family_span(out->unsupported_offset, out->unsupported_size, view->blob_size) &&
+           family_span(out->metadata_offset, out->metadata_size, view->blob_size);
+}
+
+int sm64_saturn_actor_family_bank_select(
+    const sm64_saturn_actor_family_bank_view_t *view,
+    uint32_t required_capability_mask, uint32_t multiplicity)
+{
+    uint16_t index;
+    int selected = -1;
+    uint32_t selected_bits = UINT32_MAX, selected_capacity = UINT32_MAX,
+             selected_id = UINT32_MAX;
+    if (view == NULL)
+        return -1;
+    for (index = 0U; index < view->family_count; index++) {
+        sm64_saturn_actor_family_record_t record;
+        uint32_t bits;
+        if (!sm64_saturn_actor_family_bank_record(view, index, &record) ||
+            (record.flags & SM64_SATURN_ACTOR_FAMILY_FLAG_SUPPORTED) == 0U ||
+            (record.capability_mask & required_capability_mask) != required_capability_mask ||
+            record.maximum_live_instances < multiplicity)
+            continue;
+        bits = (record.capability_mask & required_capability_mask);
+        bits = bits == 0U ? 0U : (uint32_t)__builtin_popcount(bits);
+        if (bits < selected_bits ||
+            (bits == selected_bits && record.maximum_live_instances < selected_capacity) ||
+            (bits == selected_bits && record.maximum_live_instances == selected_capacity &&
+             record.family_id < selected_id)) {
+            selected = (int)index;
+            selected_bits = bits;
+            selected_capacity = record.maximum_live_instances;
+            selected_id = record.family_id;
+        }
+    }
+    return selected;
 }
