@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 RULES = ROOT / "tools/saturn/behavior_spawn_rules.json"
 DEFAULT_CLOSURE = ROOT / "build/saturn/packages/bob/1/closure.json"
 DEFAULT_REPORT = ROOT / "build/saturn/packages/bob/1/actors/actor-families.json"
+ORACLE = ROOT / "tools/saturn/fixtures/bob_actor_capability_oracle_v1.json"
 
 RUNTIME_FOR_CLASS = {
     "rigid": ("TRANSFORM", "SCALE", "MATERIAL", "LIFECYCLE"),
@@ -103,17 +104,40 @@ def unresolved_family_ids(
 class BobActorCapabilityTest(unittest.TestCase):
     def test_unknown_source_requirement_names_exact_family(self) -> None:
         closure = collect_scene_closure(ROOT, "bob", 1, RULES)
+        oracle = json.loads(ORACLE.read_text(encoding="utf-8"))
+        self.assertEqual(oracle["schema"], "sm64-saturn-actor-capability-oracle-v1")
+        self.assertEqual(oracle["closure_schema"], closure["schema"])
+        fixture_oracle = oracle["fixture"]
         fixture = copy.deepcopy(closure)
         fixture["records"] = [copy.deepcopy(closure["records"][0])]
-        fixture["records"][0]["capability_requirements"] = ["surface"]
+        fixture["records"][0]["capability_requirements"] = fixture_oracle[
+            "capability_requirements"
+        ]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "closure.json"
             path.write_text(json.dumps(fixture, sort_keys=True), encoding="utf-8")
             report = compile_actor_family_banks(ROOT, path, Path(directory) / "actors")
         family = report["families"][0]
         self.assertFalse(family["supported"])
-        self.assertEqual(family["stable_id"], "bhv1Up")
-        self.assertIn("UNRESOLVED_CAPABILITY:SURFACE", family["unsupported"])
+        self.assertEqual(family["stable_id"], fixture_oracle["stable_id"])
+        self.assertEqual(family["family_id"], int(fixture_oracle["family_id"], 16))
+        self.assertEqual(family["unsupported"], fixture_oracle["unsupported"])
+
+    def test_unverified_capability_hints_fail_closed(self) -> None:
+        closure = collect_scene_closure(ROOT, "bob", 1, RULES)
+        fixture = copy.deepcopy(closure)
+        fixture["records"] = [copy.deepcopy(closure["records"][0])]
+        fixture["records"][0]["capability_hints"] = ["platform", "collectible"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "closure.json"
+            path.write_text(json.dumps(fixture, sort_keys=True), encoding="utf-8")
+            report = compile_actor_family_banks(ROOT, path, Path(directory) / "actors")
+        family = report["families"][0]
+        self.assertFalse(family["supported"])
+        self.assertEqual(family["unsupported"], [
+            "UNVERIFIED_CAPABILITY_HINT:COLLECTIBLE",
+            "UNVERIFIED_CAPABILITY_HINT:PLATFORM",
+        ])
 
     def test_real_bob_capability_requirements_are_closure_derived(self) -> None:
         closure = collect_scene_closure(ROOT, "bob", 1, RULES)
@@ -150,6 +174,14 @@ class BobActorCapabilityTest(unittest.TestCase):
         # adding one must fail with the exact family ID above.
         self.assertEqual(unresolved_family_ids(closure, report, "surface"), [])
         self.assertEqual(unresolved_family_ids(closure, report, "collectible"), [])
+        platform_bit = report["capability_bits"]["PLATFORM"]
+        collectible_bit = report["capability_bits"]["COLLECTIBLE"]
+        surface_runtime_bit = report["runtime_capability_bits"]["SURFACE"]
+        for family in report["families"]:
+            self.assertEqual(int(family["capability_mask"]) &
+                             (platform_bit | collectible_bit), 0)
+            self.assertEqual(int(family["runtime_capability_mask"]) &
+                             surface_runtime_bit, 0)
 
 
 def main() -> None:

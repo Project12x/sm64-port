@@ -148,8 +148,10 @@ def analyze_actor_capabilities(
         runtime_mask |= (ACTOR_RUNTIME_CAP_TRANSFORM |
                          ACTOR_RUNTIME_CAP_SCALE |
                          ACTOR_RUNTIME_CAP_MATERIAL)
-    if "surface" in features or "GEO_SURFACE" in nodes:
-        runtime_mask |= ACTOR_RUNTIME_CAP_SURFACE
+    # Runtime surface ownership is deliberately unavailable until the scene
+    # closure carries a schema-validated typed evidence field.  The legacy
+    # actor capability bit above remains source-vocabulary-compatible for
+    # existing host tests; it is not sufficient to admit a Saturn family.
     if object_roots:
         runtime_mask |= ACTOR_RUNTIME_CAP_LIFECYCLE
     names = tuple(name for name in ACTOR_CAPABILITY_NAMES if mask & ACTOR_CAPABILITY_BITS[name])

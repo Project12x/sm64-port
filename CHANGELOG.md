@@ -7,15 +7,17 @@
 - Added closure-derived generic actor capability records for the bounded Task
   18 slice. Rigid/opaque/static-transform/platform/collectible class bits and
   transform/scale/material/surface/lifecycle runtime masks now travel in the
-  pointer-free S64F family bank; the family record grows from 52 to 56 bytes,
-  and the C validator rejects unknown or unsupported masks. Requirements are
-  accepted only from generated closure fields, so surface/collectible remain
-  unresolved when the current Task 14 snapshot/queue has no authoritative
-  typed field. The host gate and RED closure test name the eight opaque and
-  thirteen rigid/static-transform families still blocked by existing
-  unsupported geo nodes; no family allow-list or fabricated source field is
-  used. This is host evidence only and does not claim target/Ymir/manual/FPS
-  completion.
+  pointer-free S64F v2 family bank; the family record grows from 52 to 56
+  bytes, and the C validator rejects unknown or unsupported masks. The pinned
+  BOB Area 1 header-content digest is externally asserted, while the pre-change
+  v1 digest is rejected; the mutation test reseals its payload before checking
+  the unknown-runtime-bit branch. Platform/collectible hints are analyzer
+  vocabulary only and are marked unverified; schema v1 has no typed evidence
+  field, so those classes and runtime surface remain unavailable/fail-closed.
+  The host gate and independent RED oracle distinguish 13 unsupported family
+  representatives from 14 closure actor records (the checkerboard family is
+  shared), with no family allow-list or fabricated source field. This is host
+  evidence only and does not claim target/Ymir/manual/FPS completion.
 
 - Hardened the bounded SCSP scheduler after rereview. Stale package correction
   is now transactional for the caller: an emitted key-off returns applied

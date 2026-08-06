@@ -757,7 +757,7 @@ compile-actor-banks: compile-scene-closure check-host-tools
 	  --report "$(ACTOR_FAMILY_BANK_REPORT)"
 
 verify-actor-family-bank: compile-actor-banks
-	@"$(SATURN_TOOLS_PYTHON)" -c "import json; from pathlib import Path; p=Path(r'$(ACTOR_FAMILY_BANK_REPORT)'); d=json.loads(p.read_text()); assert d['payload_sha256'] and d['family_count'] > 0 and d['unsupported_required_capability_count'] == 13 and not d['complete_closure']; print('actor family report: PASS', d['family_count'], 'families', d['unsupported_required_capability_count'], 'unsupported')"
+	@"$(SATURN_TOOLS_PYTHON)" -c "import json; from pathlib import Path; p=Path(r'$(ACTOR_FAMILY_BANK_REPORT)'); d=json.loads(p.read_text()); assert d['payload_sha256'] and d['family_count'] > 0 and d['unsupported_required_capability_count'] == 13 and d['unsupported_family_representative_count'] == 13 and d['unsupported_closure_record_count'] == 14 and not d['complete_closure']; print('actor family report: PASS', d['family_count'], 'families', d['unsupported_family_representative_count'], 'unsupported representatives across', d['unsupported_closure_record_count'], 'records')"
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
 	$(HOST_CC_ENV) $(HOST_CC) -std=c11 -Wall -Wextra -Werror \
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \

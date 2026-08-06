@@ -1,0 +1,18 @@
+{
+  "schema": "sm64-saturn-actor-capability-oracle-v1",
+  "closure_schema": "sm64-saturn-scene-closure-v1",
+  "fixture": {
+    "stable_id": "bhv1Up",
+    "family_id": "0x9322461f",
+    "capability_requirements": [
+      "surface",
+      "platform",
+      "MYSTERY"
+    ],
+    "unsupported": [
+      "UNKNOWN_CAPABILITY:MYSTERY",
+      "UNRESOLVED_CAPABILITY:PLATFORM",
+      "UNRESOLVED_CAPABILITY:SURFACE"
+    ]
+  }
+}

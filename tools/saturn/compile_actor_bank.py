@@ -61,13 +61,14 @@ PRIMITIVE_RECORD_STRUCT = struct.Struct(">5H")
 # Generic family-bank container.  It intentionally carries JSON metadata as
 # bounded byte spans; the Saturn runtime never publishes pointers into it.
 FAMILY_MAGIC = b"S64F"
-FAMILY_VERSION = 1
+FAMILY_VERSION = 2
 FAMILY_HEADER_STRUCT = struct.Struct(">4sHHIIII32s")
 FAMILY_RECORD_STRUCT = struct.Struct(">14I")
 FAMILY_FLAG_SUPPORTED = 1 << 0
 FAMILY_FLAG_GEOMETRY = 1 << 1
 FAMILY_RUNTIME_CAPABILITY_MASK = sum(
     1 << index for index in range(len(ACTOR_RUNTIME_CAPABILITY_NAMES)))
+UNAVAILABLE_CLOSURE_CAPABILITIES = {"PLATFORM", "COLLECTIBLE", "SURFACE"}
 
 PINNED_MARIO_ANIMATION_SOURCE_ROOT = "assets/anims"
 PINNED_MARIO_ANIMATION_SOURCE_COUNT = 193
@@ -152,9 +153,16 @@ def _family_record(root: Path, record: dict[str, object]) -> dict[str, object]:
         capability_hints=capability_hints,
     )
     unsupported = [f"UNSUPPORTED_GEO_NODE:{node}" for node in analysis.unsupported]
+    if capability_hints:
+        unsupported.extend(
+            f"UNVERIFIED_CAPABILITY_HINT:{str(item).upper()}"
+            for item in capability_hints
+        )
     for capability in required_capabilities:
         bit = ACTOR_CAPABILITY_BITS.get(capability)
-        if bit is None:
+        if capability in UNAVAILABLE_CLOSURE_CAPABILITIES:
+            unsupported.append(f"UNRESOLVED_CAPABILITY:{capability}")
+        elif bit is None:
             unsupported.append(f"UNKNOWN_CAPABILITY:{capability}")
         elif analysis.mask & bit == 0:
             unsupported.append(f"UNRESOLVED_CAPABILITY:{capability}")
@@ -290,9 +298,11 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
     if not isinstance(records, list) or not records:
         raise ValueError("scene closure has no actor records")
     families_by_key: dict[str, dict[str, object]] = {}
+    closure_family_keys: list[str] = []
     for record in records:
         family = _family_record(root, record)
         key = str(family["family_key"])
+        closure_family_keys.append(key)
         existing = families_by_key.get(key)
         if existing is None:
             families_by_key[key] = family
@@ -339,14 +349,21 @@ def compile_actor_family_banks(root: Path, closure_path: Path, output_dir: Path)
     payload_path = output_dir / f"families-{payload_sha[:16]}.s64f"
     payload_path.write_bytes(payload)
     unsupported_count = sum(len(item["unsupported"]) for item in families)
+    unsupported_family_count = sum(1 for item in families if item["unsupported"])
+    unsupported_record_count = sum(
+        1 for key in closure_family_keys if families_by_key[key]["unsupported"]
+    )
     report = {
-        "schema": "sm64-saturn-actor-family-bank-v1", "version": FAMILY_VERSION,
+        "schema": "sm64-saturn-actor-family-bank-v2", "version": FAMILY_VERSION,
         "scene": {"level": closure.get("level"), "area": closure.get("area")},
         "family_count": len(families),
         "closure_record_count": len(records),
         "unsupported_required_capability_count": unsupported_count,
+        "unsupported_family_representative_count": unsupported_family_count,
+        "unsupported_closure_record_count": unsupported_record_count,
         "complete_closure": unsupported_count == 0,
-        "payload_sha256": payload_sha, "payload_size": len(payload),
+        "payload_sha256": payload_sha, "header_content_sha256": payload[24:56].hex(),
+        "payload_size": len(payload),
         "payload": payload_path.as_posix(),
         "capability_bits": {name: 1 << index for index, name in enumerate(ACTOR_CAPABILITY_NAMES)},
         "runtime_capability_bits": {
