@@ -155,7 +155,7 @@ all complete.
 - [ ] Task 15 — active/source-incomplete — commits `df95a107`, `52d45d5e`, `211158ea`, `b004fe7b`; bounded pointer-free VM scaffold and `verify-sequence-vm` are green, with Project12x ranges/provenance and source-parity repairs recorded. Bounded-slice rereview is SPEC/QUALITY PASS, C0/I0/M0. Full seq00/35-sequence/S64P/MC68000 image/SCSP/target/Ymir/manual audio gates remain blocked by Task 12 assets and later integration.
 - [ ] Task 16 — active/source-incomplete — infrastructure `0549f7af`; independent rereview SPEC/QUALITY FAIL. Exact-once queue/batching, stale-generation quarantine, and host mutation gates pass, but the 64-instance arena/accounting/P2/output-boundary repair is in progress and actor-meshlet/production renderer cutover remains open.
 - [ ] Task 17 — active/source-incomplete — infrastructure commits `5b74081c`, `144b4aa6`; serial allocator/slot-shadow/timer/SCSP-PCM8/sequence-VM and forced m68k provenance gates pass. Repair rereview is SPEC/QUALITY PASS, C0/I0/M0. Full envelope/package data, heartbeat/MC68000 drain, target image, Ymir/tempo/manual/FPS evidence remain open.
-- [ ] Task 18 — active/source-incomplete — generic capability slice `a319583c`, repair `929d100f`, evidence `0b65d1d1`; serial actor-family/capability/queue, Python capability 3/3, and generic actor-bank 4/4 gates pass. S64F/schema v2 binds 56-byte records; trusted v2/stale-v1 header digests, resealed mutation, exact oracle, analyzer-only hints, and family-bank evidence breakdown are covered. BOB remains 47 families/86 closure records, 13 unsupported representatives/reasons across 14 records, `complete_closure=false`; typed platform/collectible/surface evidence and production actor cutover remain open. Independent evidence rereview pending; no full BOB/target/Ymir/manual/FPS claim.
+- [ ] Task 18 — active/source-incomplete — generic capability slice `a319583c`, repair `929d100f`, evidence `0b65d1d1`; serial actor-family/capability/queue, Python capability 3/3, and generic actor-bank 4/4 gates pass. S64F/schema v2 binds 56-byte records; trusted v2/stale-v1 header digests, resealed mutation, exact oracle, analyzer-only hints, and family-bank evidence breakdown are covered. BOB remains 47 families/86 closure records, 13 unsupported representatives/reasons across 14 records, `complete_closure=false`; typed platform/collectible/surface evidence and production actor cutover remain open. Evidence rereview is SPEC/QUALITY PASS, C0/I0/M0; no full BOB/target/Ymir/manual/FPS claim.
 - [ ] Task 19 — close BOB articulated/enemy/boss capabilities
 - [ ] Task 20 — close BOB billboard/translucent/shadow/effect capabilities
 - [ ] Task 21 — integrate bounded audio package boot/residency in sourceboot
@@ -886,7 +886,7 @@ Each queue descriptor owns exactly one admitted instance and a disjoint claimant
   .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_bob_actor_capabilities.py --class opaque
   ```
 
-- [x] Commit generic slice as `a319583c`; independent review pending. BOB `complete_closure=false`, 13 unsupported records, and no target/Ymir/manual/FPS claim remain explicit.
+- [x] Commit generic slice as `a319583c` with ABI/evidence repair `929d100f`/`0b65d1d1`; evidence rereview is SPEC/QUALITY PASS, C0/I0/M0. BOB `complete_closure=false`, 13 unsupported representatives across 14 closure records, and no target/Ymir/manual/FPS claim remain explicit.
 
 ### Task 19: Close BOB articulated, enemy, and boss capabilities
 
