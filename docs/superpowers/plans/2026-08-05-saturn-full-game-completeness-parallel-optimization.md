@@ -1110,11 +1110,18 @@ license, renderer, or target-performance result.
   enum also accepts quoted multiword `seal assets`. No current-head CUE/ISO,
   Ymir/manual, target/P2, or FPS evidence is claimed; do not launch an older
   artifact.
-- [ ] Derive the exact generated asset closure from the same sourceboot
-  include traversal/depfiles used by `source-assets`, include feature-selected
-  actor-bank-C and every fragment/header/animation/collision/water input before
-  the seal parse, and reject any non-single stage token. Independently rereview
-  before a clean linked image is considered launchable.
+- [x] Derive the exact generated asset closure in `f9611fc0` from the same
+  `prepare_sourceboot_assets.collect_targets` traversal and US defines used by
+  `source-assets`; seal every generated `build/us_pc` target plus text strings,
+  include feature-selected `mario_actor_bank.c` and the fragment/header/
+  animation/collision/water inputs before sealing, and reject any non-single
+  stage token. Bootstrap 6/6, identity 9/9, source identity 5/5, feature
+  identity, independent generated-include mutation, and DLL-preflighted
+  top-level dry-run gates pass.
+- [ ] Independently rereview `ecefd288..f9611fc0`, then run a clean serialized
+  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
+  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
+  pass; do not launch an older artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
