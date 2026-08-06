@@ -1071,6 +1071,23 @@ license, renderer, or target-performance result.
   and FPS evidence remain unchecked.
 - [ ] Commit/review the build-input boundary separately from actor/audio code.
 
+#### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
+
+The identity bootstrap repair proves the current head reaches compilation, but
+the first link now reports `.bss` HWRAM overflow by `159664` bytes. This is the
+expected next memory-layout gate after moving the complete 0x20000 VDP1 command
+double buffer out of LWRAM; it must be solved by source-attested relocation or
+reclaim, never by weakening the linker margin or hiding a section.
+
+- [ ] RED: capture the route-0 link/map failure and inventory the largest HWRAM
+  sections plus every reader/writer, cache/DMA requirement, and lifetime.
+- [ ] Produce a ranked reclaim/relocation preflight with exact byte totals and
+  rollback boundaries. Keep VDP1 command staging, actor LWRAM ownership, and
+  HWRAM TLSF floor requirements explicit.
+- [ ] Implement only after the preflight identifies a sufficient legal target;
+  run a serialized fresh link and inspect HWRAM/LWRAM symbols/margins. Target,
+  P2/concurrent-SH2, Ymir/manual, and FPS remain unchecked.
+
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
 With the complete VDP1 command block relocated, implement the dedicated
