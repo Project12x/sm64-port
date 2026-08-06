@@ -236,6 +236,31 @@ def test_pre_acquire_failures_use_exact_producer_recycle() -> None:
         raise AssertionError("sourceboot quarantine mutation escaped source gate")
 
 
+def test_pre_acquire_recycle_is_state_bounded_and_scrubs_before_free() -> None:
+    implementation = (GFX / "saturn_actor_instance.c").read_text(encoding="utf-8")
+    recycle = body_text(implementation,
+                        "sm64_saturn_actor_instance_bank_recycle_pre_acquire")
+    for state in (
+        "SM64_SATURN_ACTOR_INSTANCE_BANK_WRITING",
+        "SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
+    ):
+        assert state in recycle
+    assert "shared->state[index] != expected_state" in recycle
+    assert "shared->generation[index] != generation" in recycle
+    assert "index >= 2U" in recycle and "generation == 0U" in recycle
+    clear = recycle.index("memset(shared->snapshots[index], 0")
+    fence = recycle.index("actor_bank_fence();", clear)
+    free = recycle.index("SM64_SATURN_ACTOR_INSTANCE_BANK_FREE", fence)
+    assert clear < fence < free
+    broadened = recycle.replace(
+        "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_READY",
+        "expected_state != SM64_SATURN_ACTOR_INSTANCE_BANK_QUARANTINED",
+        1,
+    )
+    assert broadened != recycle
+    assert "SM64_SATURN_ACTOR_INSTANCE_BANK_READY" not in broadened
+
+
 def assert_capture_uses_cache_through_payload(text: str) -> None:
     capture = body_text(text, "sm64_saturn_actor_instance_bank_capture")
     assert "actor_bank_uncached(bank)" in capture
