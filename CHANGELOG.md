@@ -21,6 +21,8 @@
   generated BOB header emits the generic admission node/ref section consumed
   by render prep; the 1,183-node source BSP remains available to the fallback
   painter without forcing the generic bounded worklist to truncate it.
+  Generated scene headers now include the admission ABI directly, so emitted
+  node/ref records are compile-time type checked at the consumer boundary.
 
 - Hardened the Saturn audio package boundary after ABI review: chunk and
   package SHA-256 values are recomputed by the C residency validator, malformed
