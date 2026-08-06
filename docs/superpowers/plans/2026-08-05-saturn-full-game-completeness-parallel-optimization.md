@@ -1177,6 +1177,14 @@ reclaim, never by weakening the linker margin or hiding a section.
   feasibility; `s_bob_hot_workarea` is currently ordinary HWRAM, not an already
   approved LWRAM reclaim. No linker margin, command-capacity, or VDP1-DMA rule
   may be weakened.
+- [ ] **Runtime-contract correction (2026-08-06):** sourceboot now declares
+  `sourceboot_vdp1_cmdts[2][2048]` in HWRAM, but
+  `sm64_saturn_vdp1_frame_bank_set_init()` still requires both command banks to
+  lie in LWRAM. A link-successful image would therefore fail closed at frame
+  bank initialization. Before any HWRAM, LWRAM, or DRAM-cart relocation can be
+  launchable, reconcile the frame-bank source predicate with the selected
+  transfer path and add a mutation gate; do not treat a map-only relief as a
+  runtime fix.
 
 #### Task 14 bounded implementation: reserve the actor runtime owner
 
