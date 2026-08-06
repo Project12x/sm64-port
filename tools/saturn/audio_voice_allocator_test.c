@@ -91,8 +91,11 @@ static void test_release_and_envelope_are_timer_driven(void)
         request(77U, SM64_SATURN_VOICE_CLASS_MUSIC, 8U);
     sm64_saturn_voice_allocator_init(&allocator);
     assert(sm64_saturn_voice_allocator_start(&allocator, &item, &result));
+    assert(allocator.voices[result.voice_index].desired.envelope_word == 31U);
+    assert(allocator.voices[result.voice_index].desired.release_word == 31U);
     sm64_saturn_voice_allocator_tick(&allocator);
     assert(allocator.voices[result.voice_index].desired.envelope_q15 == 0x7fffU);
+    assert(allocator.voices[result.voice_index].desired.attenuation == 0U);
     sm64_saturn_voice_allocator_tick(&allocator);
     assert(allocator.voices[result.voice_index].desired.envelope_q15 == 0x6000U);
     assert(sm64_saturn_voice_allocator_release(&allocator, 77U));

@@ -4,13 +4,27 @@
 
 ### Changed
 
+- Hardened the bounded SCSP scheduler after rereview. Stale package correction
+  is now transactional for the caller: an emitted key-off returns applied
+  success, while zero command capacity records a fault and retains the keyed
+  shadow for retry instead of forgetting hardware state. Software total-level
+  attenuation is the sole simplified envelope owner; SCSP EG remains at its
+  neutral immediate/full setting, and no source-faithful Project12x ADSR claim
+  is made without full envelope-table traces. The MC68000 gate now discovers
+  the pinned PoneSound bundle, force-rebuilds every Task 17 object, and attests
+  the PoneSound commit, exact GCC executable hash/version, fresh `elf32-m68k`
+  artifact, and empty undefined-symbol set, preventing cached host state from
+  masquerading as freestanding evidence.
+
 - Added a bounded MC68000-local audio scheduling infrastructure slice that
   consumes Task 15's pointer-free note events without exposing native voice
   state to either SH-2. A 20-note allocator protects music from ordinary SFX,
   steals the lowest-priority/oldest eligible SFX deterministically, preserves
   source note-duration, tuning, pan, and release inputs, and reports drops and
-  malformed or duplicate generations. Timer-driven integer envelopes feed a
-  32-slot desired-voice shadow that emits only changed scalar register commands,
+  malformed or duplicate generations. A simplified timer-driven linear
+  attack/decay/sustain/release model feeds software attenuation and is not a
+  trace-backed close-port of Project12x's arbitrary envelope tables. A
+  32-slot desired-voice shadow emits only changed scalar register commands,
   with key-off before reassignment and key-execute last. Raw SCSP writes remain
   confined to an explicit `scsp_pcm8` command executor. Serialized host gates
   and a freestanding MC68000 relocatable-module/undefined-symbol gate pass;

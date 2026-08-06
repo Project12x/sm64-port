@@ -1,9 +1,11 @@
 /*
  * MC68000-local desired voice construction. Source semantics are a bounded
- * integer adaptation of Project12x/sm64-port@36d015fb playback.c:1132-1372,
- * effects.c:345-457, and seqplayer.c:783-921,1403-1450,1971-2014. The N64
- * note pointers, heap ownership, floating-point mixer, and RSP command stream
- * are intentionally replaced by scalar package identities and SCSP words.
+ * integer infrastructure informed by Project12x/sm64-port@36d015fb
+ * playback.c:1132-1372, effects.c:345-543, and
+ * seqplayer.c:783-921,1403-1450,1971-2014. Its linear ADSR is deliberately
+ * simpler than Project12x's arbitrary envelope segments and is not claimed as
+ * source-faithful. N64 note pointers, heap ownership, floating-point mixer,
+ * and RSP commands are replaced by scalar package identities and SCSP words.
  */
 #include "desired_voice.h"
 
@@ -34,12 +36,6 @@ static uint32_t div_u32(uint32_t numerator, uint32_t denominator)
         }
     }
     return quotient;
-}
-
-static uint16_t rate_word(uint8_t ticks)
-{
-    uint8_t distance = ticks > 31U ? 31U : ticks;
-    return (uint16_t)(32U - distance);
 }
 
 static uint16_t pan_word(int16_t pan)
@@ -166,10 +162,10 @@ bool sm64_saturn_desired_voice_begin(sm64_saturn_desired_voice_t *desired,
     desired->start_address_low = (uint16_t)request->sound_ram_offset;
     desired->loop_start = request->loop != 0U ? request->loop_start : 0U;
     desired->loop_end = (uint16_t)(request->sample_count - 1U);
-    desired->envelope_word = (uint16_t)((rate_word(request->decay_ticks) << 6) |
-                                        rate_word(request->attack_ticks));
-    desired->release_word = (uint16_t)(((uint16_t)(31U -
-        (request->sustain_q15 >> 10)) << 5) | rate_word(request->release_ticks));
+    /* Software attenuation is the sole envelope owner. Keep SCSP EG at its
+     * immediate/full setting and key off only after the software release. */
+    desired->envelope_word = 31U;
+    desired->release_word = 31U;
     desired->pitch_word = pitch;
     send_level = (uint16_t)(request->velocity >> 4);
     if (send_level > 7U) send_level = 7U;
@@ -190,6 +186,7 @@ bool sm64_saturn_desired_voice_begin(sm64_saturn_desired_voice_t *desired,
     desired->decay_ticks = request->decay_ticks;
     desired->release_ticks = request->release_ticks;
     desired->velocity = request->velocity;
+    desired->sustain_q15 = request->sustain_q15;
     desired->active = true;
     refresh_attenuation(desired);
     return true;
@@ -222,9 +219,7 @@ void sm64_saturn_desired_voice_tick(sm64_saturn_desired_voice_t *desired)
             desired->envelope_q15 = (uint16_t)(desired->envelope_q15 + step);
         }
     } else if (desired->phase == SM64_SATURN_ENVELOPE_DECAY) {
-        const uint16_t sustain =
-            (uint16_t)((desired->release_word >> 5) >= 31U ? 0U :
-                       (31U - (desired->release_word >> 5)) << 10);
+        const uint16_t sustain = desired->sustain_q15;
         step = div_u32((uint32_t)0x7fffU - sustain +
                            desired->decay_ticks - 1U,
                        desired->decay_ticks);

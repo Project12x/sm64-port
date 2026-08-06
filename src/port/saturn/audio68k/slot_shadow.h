@@ -48,6 +48,9 @@ typedef struct sm64_saturn_slot_shadow {
 } sm64_saturn_slot_shadow_t;
 
 void sm64_saturn_slot_shadow_init(sm64_saturn_slot_shadow_t *shadow);
+/* On true, the shadow has advanced and the caller must apply every emitted
+ * command in order. On false, no command is emitted and keyed state is kept
+ * for retry; capacity failure is observable through capacity_faults. */
 bool sm64_saturn_slot_shadow_diff(
     sm64_saturn_slot_shadow_t *shadow, uint8_t slot,
     const sm64_saturn_desired_voice_t *desired,

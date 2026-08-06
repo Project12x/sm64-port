@@ -55,23 +55,31 @@ the following pinned sources before implementation:
 
 | Source | Revision / license | Exact inspected ranges | Reuse mode |
 | --- | --- | --- | --- |
-| In-tree Project12x SM64 audio | repository pin `36d015fb`; inherited tree has no root license file | `src/audio/playback.c:1199-1372`, `src/audio/effects.c:345-457`, `src/audio/seqplayer.c:712-764,783-921,1403-1450,1971-2014` | Bounded semantic adaptation of release/priority allocation, note lifetime, envelope phases, tuning/pan, and note priority. No N64 heap, pointer, mixer, RSP, or task code copied. Existing notices remain unchanged. |
+| In-tree Project12x SM64 audio | repository pin `36d015fb`; inherited tree has no root license file | `src/audio/playback.c:1199-1372`, `src/audio/effects.c:345-543`, `src/audio/seqplayer.c:712-764,783-921,1403-1450,1971-2014` | Bounded semantic adaptation of release/priority allocation, note lifetime, tuning/pan, and note priority. `effects.c:345-543` was studied for envelope state, decay/sustain/release transitions, and action ordering; Task 17's fixed linear ADSR is original simplified infrastructure, not a close-port of Project12x's arbitrary envelope segments, delay scaling, `GOTO`/`RESTART`/`HANG`, or trace-backed output. No N64 heap, pointer, mixer, RSP, or task code copied. Existing notices remain unchanged. |
 | `ponut64/SCSP_poneSound` | `31782e4c61337327f23eb9aa45ecd37fe0944ea0`; MIT | `PROJ/main.c:116-156,507-577`, `jo_demo/pcmsys.c:250-272` | Close-port of the already-approved slot-word/key-order and pitch boundary only. The mutable control structs, VBlank scheduling, driver loop, assets, ADX, and CDDA paths remain excluded. |
 | `yaul-org/libyaul-examples` | `66b648eb059bb8bb7392eac70821605a68205b85`; repository license unclear at this pin | `scsp-ponesound-pcm8/ponesound.c:63-92,118-121`, `scsp-ponesound-pcm8/scsp-ponesound-pcm8.c:47-71` | Pattern/validation only; no source or binary copied. Its VBlank-driven `start` publication is explicitly not the Task 17 timer contract. |
 
 Task 17 keeps `sm64_saturn_sequence_vm_event_t` as the input scalar contract.
 Package residency and ADSR defaults are MC68000-local scalar bindings; desired
-voices and 32-slot shadows are never shared-memory ABIs. The shadow emits
+voices and 32-slot shadows are never shared-memory ABIs. Software total-level
+attenuation is the sole envelope owner; SCSP EG/release words remain at the
+neutral immediate/full value `31`, and key-off occurs only after the bounded
+software release reaches zero. This is a simplified infrastructure contract,
+not source-faithful ADSR parity. The shadow emits
 four-byte `(value, slot, field)` commands and performs no MMIO. Only
 `sm64_saturn_scsp_apply_slot_command()` translates a validated command to a
 native SCSP word write. The 20 semantic notes currently map deterministically
 to slots 0-19; the remaining hardware slots stay unowned until production
 layer/residency policy is available.
 
-The freestanding gate builds a relocatable MC68000 module and rejects every
-undefined symbol. It does not link these modules into the heartbeat image and
-does not establish a production timer IRQ, package residency, complete source
-envelope-table playback, or target audio result.
+The freestanding gate discovers the local checkout at pinned PoneSound commit
+`31782e4c61337327f23eb9aa45ecd37fe0944ea0`, requires GCC 11.1.0 executable
+SHA-256 `e863c1bbcbf86e0493989721346dfa28450236505abbcbc5aeb79f48645a286b`,
+force-rebuilds all six objects and their relocatable MC68000 module, verifies
+`elf32-m68k`, freshness against every input object, the artifact SHA-256, and
+an empty undefined-symbol list. It does not link these modules into the
+heartbeat image and does not establish a production timer IRQ, package
+residency, complete source envelope-table playback, or target audio result.
 
 ## Heartbeat image increment
 

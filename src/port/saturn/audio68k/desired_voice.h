@@ -64,6 +64,7 @@ typedef struct sm64_saturn_desired_voice {
     uint16_t pan_send_word;
     uint16_t key_word;
     uint16_t envelope_q15;
+    uint16_t sustain_q15;
     uint16_t release_start_q15;
     uint8_t slot;
     uint8_t source_class;

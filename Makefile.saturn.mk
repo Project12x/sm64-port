@@ -9,6 +9,19 @@ SOURCEBOOT_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/sourceboot
 VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PCM68K_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/audio68k
+PONESOUND_ROOT ?= $(firstword $(realpath \
+	$(SATURN_REPO_ROOT)/work/upstream/SCSP_poneSound \
+	$(SATURN_REPO_ROOT)/../../work/upstream/SCSP_poneSound))
+M68K_BINDIR ?= $(PONESOUND_ROOT)/m68k-elf
+TASK17_AUDIO68K_BUILD := $(SATURN_REPO_ROOT)/build/saturn/audio68k
+TASK17_AUDIO68K_ARTIFACT := $(TASK17_AUDIO68K_BUILD)/task17-audio-modules.o
+TASK17_AUDIO68K_OBJECTS := \
+	$(TASK17_AUDIO68K_BUILD)/audio_engine.o \
+	$(TASK17_AUDIO68K_BUILD)/voice_allocator.o \
+	$(TASK17_AUDIO68K_BUILD)/desired_voice.o \
+	$(TASK17_AUDIO68K_BUILD)/slot_shadow.o \
+	$(TASK17_AUDIO68K_BUILD)/scsp_timer.o \
+	$(TASK17_AUDIO68K_BUILD)/audio_freestanding.o
 SOUNDTEST_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/soundtest
 PCM_PROOF_GENERATED := $(SATURN_REPO_ROOT)/build/saturn/soundtest/generated
 AUDIO_GENERATED := $(SATURN_REPO_ROOT)/build/saturn/audio/generated
@@ -338,6 +351,7 @@ verify-audio-slot-shadow:
 	  -I"$(PCM68K_DIR)" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/audio_slot_shadow_test.c" \
 	  "$(PCM68K_DIR)/desired_voice.c" "$(PCM68K_DIR)/slot_shadow.c" \
+	  "$(PCM68K_DIR)/scsp_pcm8.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-slot-shadow-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-slot-shadow-test$(HOST_EXEEXT)'], check=True)"
 
@@ -357,7 +371,15 @@ verify-pcm68k-image:
 	$(MAKE) -C "$(PCM68K_DIR)" verify
 
 verify-audio68k-modules:
-	$(MAKE) -C "$(PCM68K_DIR)" modules
+	@test -n "$(PONESOUND_ROOT)" || { echo "Pinned PoneSound checkout not found" >&2; exit 1; }
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_verify_audio68k_modules.py"
+	$(MAKE) -B -C "$(PCM68K_DIR)" \
+	  M68K_BINDIR="$(M68K_BINDIR)" PYTHON="$(SATURN_TOOLS_PYTHON)" modules
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/verify_audio68k_modules.py" \
+	  --ponesound-root "$(PONESOUND_ROOT)" \
+	  --m68k-bindir "$(M68K_BINDIR)" \
+	  --artifact "$(TASK17_AUDIO68K_ARTIFACT)" \
+	  $(foreach object,$(TASK17_AUDIO68K_OBJECTS),--object "$(object)")
 
 compile-pcm-proof-bank:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/gen_pcm_proof_bank.py" --output "$(PCM_PROOF_GENERATED)"

@@ -68,14 +68,17 @@ bool sm64_saturn_slot_shadow_diff(
     if (active_package_generation == 0U ||
         desired->package_generation != active_package_generation) {
         shadow->stale_generations++;
-        if (current->active && command_capacity >= 1U) {
-            emit(commands, command_count, slot,
-                 SM64_SATURN_SLOT_FIELD_KEY_CONTROL,
-                 SM64_SATURN_SLOT_KEY_EXECUTE);
-            *current = (sm64_saturn_slot_state_t){0};
-            shadow->commands_emitted++;
+        if (!current->active) return false;
+        if (command_capacity < 1U) {
+            shadow->capacity_faults++;
+            return false;
         }
-        return false;
+        emit(commands, command_count, slot,
+             SM64_SATURN_SLOT_FIELD_KEY_CONTROL,
+             SM64_SATURN_SLOT_KEY_EXECUTE);
+        *current = (sm64_saturn_slot_state_t){0};
+        shadow->commands_emitted++;
+        return true;
     }
     next = state_from_desired(desired);
     reassigned = !current->active || current->note_id != next.note_id ||
