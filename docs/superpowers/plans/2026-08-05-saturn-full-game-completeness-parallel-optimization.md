@@ -1030,14 +1030,18 @@ silently substitute a host-only map.
 - [x] RED preflight: capture the exact failing make expansion under the
   DLL-preflighted wrapper; the deferred alias cycle is reproduced before
   prerequisites. The isolated mutation/fixture is still a separate gate.
-- [ ] Add a mutation/fixture that rejects the recursive variable or Windows
-  `find` form before editing the invocation.
-- [ ] Implement the smallest source/build-only repair that preserves the
+- [x] Add the isolated five-case mutation/fixture
+  `tools/saturn/test_sourceboot_fragment_mode_make.py`; it rejects the
+  recursive `?=` mutation and does not execute sourceboot prerequisites.
+- [x] Implement the smallest source/build-only repair that preserves the
   sibling Yaul environment, `-j1` serialization, and all existing route-0
-  targets; keep the fix Saturn-only and record the inherited-environment reason.
+  targets (`eeaa3fbb`); keep the fix Saturn-only and record the
+  inherited-environment reason.
 - [ ] Run one fresh route-0 linked build and inspect the ELF/map for the
   HWRAM command bank, empty `.lwram_cmdts`, LWRAM >= `0x4000`, and HWRAM TLSF
-  floor >= `0x1B00`. Leave target/P2/concurrent-SH2/Ymir/manual/FPS unchecked.
+  floor >= `0x1B00`. The repaired invocation now reaches the next missing
+  generated `saturn_build_identity_spec.json` prerequisite before compile/link;
+  target/P2/concurrent-SH2/Ymir/manual/FPS remain unchecked.
 - [ ] Commit and independently review the make-variable/Windows-tool
   boundary; do not promote this lane if it only makes a host gate green.
 
