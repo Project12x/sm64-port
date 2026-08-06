@@ -44,6 +44,7 @@
 - 2026-08-06 actor-snapshot review correction: Task 14's production seam now brackets the authoritative geo walk and publishes per-bank generation tickets with P2/fence handoff, but it deliberately rejects unresolved family/scene-package/bank identities rather than fabricating actors. Full-pool identity/capacity, typed visibility/switch/range/held/effect fields, package-bound budget, wrap/overlap cleanup, and target sourceboot compilation remain open; host fixtures are not source-complete evidence.
 - 2026-08-06 actor-queue review correction: Task 16's `0549f7af` queue is a useful generic exact-once infrastructure seam, but not the production dual-SH2 actor renderer. Its repair must account for the fixed 65,536-byte actor arena (including aligned banks, observer, queue, batches, and output records), use P2-safe metadata reads, test output overflow/exact-fit boundaries, and keep actor-meshlet/production drain, target, Ymir, manual, and FPS gates open.
 - 2026-08-06 actor-queue repair acceptance: `d4efe0e9` closes the infrastructure-slice review findings. One Task 14 bank container (both snapshot generations), observer, queue, batches, alignment, and 2,806 eight-byte output records fit exactly in the fixed 65,536-byte actor arena; 2,807 and output-count overflow fail closed, valid instance 64 is covered, and batch count uses a generation-checked P2 accessor. This does not promote Task 16: actor-meshlet preparation, production drain/cutover, manifest drawable bound, target retirement race, and target/Ymir/manual/FPS remain open.
+- 2026-08-06 sequence-VM scope correction: Task 15 reuses the pinned Project12x sequence/layer timing and control-flow semantics by close-port at the semantic boundary, while replacing N64 pointer/RSP assumptions with bounded offsets and scalar events. The repository contains disassembled source shape but no expanded seq00 binary, so the VM scaffold proves malformed/control-flow behavior and source timing only; full 35-sequence coverage, S64P linkage, MC68000 image, SCSP transport, target, Ymir, and audible evidence remain blocked.
 
 ## Prior art and reuse mode
 
@@ -140,7 +141,7 @@ all complete.
 - [ ] Task 12 — blocked — hardened commits `48d6401c`, `628c8324`, `724aaa84`, `7c0bbb72`, `7b8aa224`, `cc092c69`, `fa0f1040`, `78d1f967`, `b06382c8`, `2da45926`, `90b152e6`, `583c3840`, `ac3b91b2`, `b937456e`; independent rereview remains SPEC/QUALITY FAIL for the broader task. ABI/SHA/signed-PCM/metadata/work-span slices are preserved, and the MC68000 active+replacement plan check is now implemented, but the official package gate is blocked by the absent real seq00 asset, music-only BOB/WF closures, missing S64P/closure-selectable payload linkage, and incomplete general m64 control-flow parsing. Task 13 may proceed independently; Task 12 must not claim a full catalog or target/Ymir/manual evidence.
 - [x] Task 13 — source-complete — implementation `33e06fb8`; repairs `280e1804`, `f6e0aa03`, `0d6707c8`, `d2e5b604`, `a888ff00`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Generic scene admission, regenerated BOB metadata, sourceboot linkage, queued 1183-node worklist, containment/coverage/reserved-field/portal checks, and depth-only orientation fallback are green in the focused serial gates. Target/Ymir/manual/FPS evidence remains open.
 - [ ] Task 14 — active/source-incomplete — implementation `56c33d76`; repairs `7cb28651`, `508a8da1`; independent rereviews remain SPEC/QUALITY FAIL (latest C2/I3). Authoritative observation ordering, pool-slot overflow telemetry, per-bank tickets, wrap-aware handoff, P2/fence metadata, and target-LWRAM assertion are hardened, but unresolved family/scene/bank registry, full-pool identity, typed source fields, payload cache visibility, overlap cleanup, package-bound budget, and sourceboot target gates remain open. No nonzero production actor claim.
-- [ ] Task 15 — implement the bounded MC68000 sequence VM
+- [ ] Task 15 — active/source-incomplete — commits `df95a107`, `52d45d5e`; bounded pointer-free VM scaffold and `verify-sequence-vm` are green, with Project12x ranges/provenance recorded. Full seq00/35-sequence/S64P/MC68000 image/SCSP/target/Ymir/manual audio gates remain blocked by Task 12 assets and later integration.
 - [ ] Task 16 — active/source-incomplete — infrastructure `0549f7af`; independent rereview SPEC/QUALITY FAIL. Exact-once queue/batching, stale-generation quarantine, and host mutation gates pass, but the 64-instance arena/accounting/P2/output-boundary repair is in progress and actor-meshlet/production renderer cutover remains open.
 - [ ] Task 17 — implement timer-driven SCSP voices and allocation
 - [ ] Task 18 — close BOB rigid/opaque/platform/collectible capabilities
@@ -771,16 +772,16 @@ The original geo walk records already selected switch/render-range/billboard/sha
 
 **Reference-code-first boundary:** Before implementation, inspect the pinned in-tree Project12x files named in Prior Art, record exact functions/ranges and material changes in provenance, and close-port their sequence/layer/note semantics. The interpreter itself is a Saturn-shaped rewrite only where the N64 pointer ABI, audio-task/RSP command stream, unbounded host assumptions, or MC68000/SCSP event boundary makes direct adaptation impossible; the task report must name which reason applies to each from-scratch module.
 
-- [ ] Generate an opcode-coverage report from all 35 sequences and write RED traces for BOB grass music, sound-player sequence, a star/puzzle jingle, nested loops/calls, tempo changes, and bank switches. Add malformed offset, stack overflow/underflow, unknown opcode, non-progress infinite loop, and instruction-budget exhaustion.
-- [ ] Implement a per-tick bounded interpreter that returns semantic note/control events to the allocator; no SCSP register writes in the VM.
-- [ ] Differentially compare package trace output with a host reference interpreter over fixed tick counts. Any unsupported opcode in full content fails `verify-audio-sequence-vm`.
-- [ ] Run GREEN:
+- [ ] Generate full opcode coverage from all 35 sequences and BOB/WF traces — blocked because the expanded seq00/full package bytes are absent. The available source-shape audit covers sequence/layer control flow and malformed offset, stack, unknown, non-progress, and budget cases only.
+- [x] Implement the bounded interpreter slice: pointer-free sequence/layer state, source timing/tempo accumulation, bounded loops/calls/returns, and scalar note/control events with no SCSP writes. Full-content unsupported-opcode closure remains open.
+- [ ] Differentially compare all package traces with a host reference interpreter — blocked until real package bytes exist; bounded fixture traces are covered by `verify-sequence-vm`.
+- [x] Run GREEN for the bounded slice:
 
   ```powershell
   powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 mingw32-make -f Makefile.saturn.mk -j1 verify-audio-sequence-vm verify-pcm68k-image
   ```
 
-- [ ] Commit as `feat(saturn): execute bounded SM64 sequence bytecode`; review instruction budget, call/loop bounds, exact timing state, and 68K code/data fit.
+- [x] Commit bounded scaffold as `df95a107` with edge-semantics repair `52d45d5e`; independent review pending. No MC68000 image, SCSP, target, Ymir, manual, or full-content claim is made.
 
 ### Task 16: Batch generic actor jobs through a dedicated shared queue
 
