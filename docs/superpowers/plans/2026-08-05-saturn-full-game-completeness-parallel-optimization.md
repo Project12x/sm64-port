@@ -1018,6 +1018,27 @@ must reject a section-attribute regression back to LWRAM.
   lifetime, and no hidden source-level LWRAM regression. Linked-map evidence is
   still an explicit open gate.
 
+#### Task 14 bounded continuation: repair the route-0 linked-build invocation
+
+The VDP1 source slice is accepted, but the required map/margin proof cannot
+start because the inherited MSYS invocation fails before compilation with
+`FIND: Parameter format not correct` and a recursive
+`SATURN_DEMO_BSP_FRAGMENTS` make variable. This lane repairs only the
+invocation/environment contract; it must not weaken the linker assertions or
+silently substitute a host-only map.
+
+- [ ] RED: capture the exact failing make expansion under the DLL-preflighted
+  wrapper and add a mutation/fixture that rejects the recursive variable or
+  Windows `find` form before editing the invocation.
+- [ ] Implement the smallest source/build-only repair that preserves the
+  sibling Yaul environment, `-j1` serialization, and all existing route-0
+  targets; keep the fix Saturn-only and record the inherited-environment reason.
+- [ ] Run one fresh route-0 linked build and inspect the ELF/map for the
+  HWRAM command bank, empty `.lwram_cmdts`, LWRAM >= `0x4000`, and HWRAM TLSF
+  floor >= `0x1B00`. Leave target/P2/concurrent-SH2/Ymir/manual/FPS unchecked.
+- [ ] Commit and independently review the make-variable/Windows-tool
+  boundary; do not promote this lane if it only makes a host gate green.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
@@ -1202,6 +1223,26 @@ Wave 2 completion/ack ABI (source-complete, host-only):
   ```
 
 - [ ] Commit as `feat(saturn): integrate semantic audio service`; review CDFS ownership, sound-CPU stop-window ordering, barriers, forbidden post-boot clears, bounded waits, feature-off rollback, package generation, DMA isolation, and fault isolation.
+
+#### Task 21 bounded continuation: custom MC68000 driver/image integration preflight
+
+The audited design keeps Yaul upstream and puts the project-specific SCSP
+driver, mailbox ABI, and asset packer beside it. Before implementation, pin the
+existing PoneSound/Yaul loader seams and inventory the current Saturn audio
+tree so the first source slice cannot accidentally duplicate a public symbol,
+claim full semantic audio, or make the SH-2 own MC68000 slot state.
+
+- [ ] Inventory the current Yaul SMPC/sound-RAM loader, PoneSound-derived
+  startup, mailbox fields, SCSP register definitions, and 68K build targets;
+  record exact files/commits/licenses and a reuse mode for every inspected
+  upstream range.
+- [ ] Define and mutation-test the smallest project-owned boundary:
+  `saturn_audio_init`, bank load, render-ready voice publication, stop-all,
+  and driver-alive, with a pointer-free voice table and no SequencePlayer
+  pointers crossing the mailbox.
+- [ ] Produce a source-only 68K image/linker/asset integration brief and
+  identify the first host/linked gates. No full music/SFX, target, audible, or
+  FPS claim is allowed in this preflight.
 
 ### Task 22: Prove complete BOB visual/dynamic closure
 
