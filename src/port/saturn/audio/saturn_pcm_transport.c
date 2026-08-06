@@ -62,6 +62,7 @@ void sm64_saturn_pcm_transport_init(sm64_saturn_pcm_transport_t *transport,
     transport->completions_drained = 0U;
     transport->completion_protocol_faults = 0U;
     transport->ticket_busy = 0U;
+    transport->completion_faulted = false;
     transport->control_high_water = 0U;
     transport->sfx_high_water = 0U;
     memset(transport->control_ticket_pending, 0,
@@ -92,6 +93,7 @@ static bool sm64_saturn_audio_enqueue(
     uint16_t base;
     uint16_t i;
     uint16_t *pending;
+    bool completion_mode;
 
     if (transport == NULL) {
         return false;
@@ -107,9 +109,12 @@ static bool sm64_saturn_audio_enqueue(
         transport->protocol_faults++;
         return false;
     }
-    if (ticket != NULL &&
+    completion_mode =
         (sm64_saturn_pcm_get_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET) &
-         SM64_SATURN_PCM_ABI_FLAG_COMPLETION) == 0U) {
+         SM64_SATURN_PCM_ABI_FLAG_COMPLETION) != 0U;
+    if ((completion_mode && ticket == NULL) ||
+        (!completion_mode && ticket != NULL) ||
+        (completion_mode && transport->completion_faulted)) {
         transport->protocol_faults++;
         return false;
     }
@@ -287,6 +292,14 @@ static bool sm64_saturn_audio_completion_record_is_valid(
         completion->ticket.source_ring, opcode, completion->status);
 }
 
+static bool sm64_saturn_audio_completion_fault(
+    sm64_saturn_pcm_transport_t *transport)
+{
+    transport->completion_protocol_faults++;
+    transport->completion_faulted = true;
+    return false;
+}
+
 bool sm64_saturn_audio_completion_poll(
     sm64_saturn_pcm_transport_t *transport,
     sm64_saturn_audio_completion_t *completion)
@@ -306,13 +319,11 @@ bool sm64_saturn_audio_completion_poll(
     ram = transport->sound_ram;
     if (ram == NULL || completion == NULL ||
         !sm64_saturn_pcm_protocol_is_v2(ram)) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
     if ((sm64_saturn_pcm_get_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET) &
          SM64_SATURN_PCM_ABI_FLAG_COMPLETION) == 0U) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
 
     producer = sm64_saturn_pcm_get_be16(
@@ -323,14 +334,12 @@ bool sm64_saturn_audio_completion_poll(
             producer, SM64_SATURN_PCM_COMPLETION_RING_COUNT) ||
         !sm64_saturn_pcm_ring_cursor_is_valid(
             consumer, SM64_SATURN_PCM_COMPLETION_RING_COUNT)) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
     occupancy = sm64_saturn_pcm_ring_occupancy(
         producer, consumer, SM64_SATURN_PCM_COMPLETION_RING_COUNT);
     if (occupancy > SM64_SATURN_PCM_COMPLETION_RING_COUNT) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
     if (occupancy == 0U) {
         return false;
@@ -355,14 +364,12 @@ bool sm64_saturn_audio_completion_poll(
         ram, (uint16_t)(base + 14U));
 
     if (!sm64_saturn_audio_completion_record_is_valid(&next_completion)) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
     pending = sm64_saturn_audio_pending_entry(transport,
                                               &next_completion.ticket);
     if (pending == NULL || *pending != next_completion.ticket.opcode) {
-        transport->completion_protocol_faults++;
-        return false;
+        return sm64_saturn_audio_completion_fault(transport);
     }
 
     *completion = next_completion;

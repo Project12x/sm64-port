@@ -236,6 +236,10 @@ static void test_capability_seqlock_and_play_refresh_rejection(void)
 
     publish_v2_header(ram);
     memcpy(before, ram, sizeof(ram));
+    assert(!sm64_saturn_audio_control_enqueue(
+        &transport, SM64_SATURN_AUDIO_OPCODE_RESET, words));
+    assert(memcmp(before, ram, sizeof(ram)) == 0);
+    memcpy(before, ram, sizeof(ram));
     assert(!sm64_saturn_audio_play_refresh_enqueue_ticket(
         &transport, words, 0U, &ticket));
     assert(memcmp(before, ram, sizeof(ram)) == 0);
@@ -255,6 +259,31 @@ static void test_capability_seqlock_and_play_refresh_rejection(void)
     assert(!sm64_saturn_audio_status_snapshot(&transport, &status));
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET, 0U);
     assert(!sm64_saturn_audio_status_snapshot(&transport, &status));
+}
+
+static void test_unmatched_old_ack_latches_fault_before_ticket_reuse(void)
+{
+    uint8_t ram[SM64_SATURN_PCM_SOUND_RAM_BYTES] = {0};
+    uint8_t before[SM64_SATURN_PCM_SOUND_RAM_BYTES];
+    const uint16_t words[7] = {0};
+    sm64_saturn_pcm_transport_t transport;
+    sm64_saturn_audio_completion_t completion;
+    sm64_saturn_audio_ticket_t ticket;
+
+    publish_v2_header(ram);
+    sm64_saturn_pcm_transport_init(&transport, ram);
+    publish_completion(ram, 0U, SM64_SATURN_AUDIO_RING_CONTROL, 0U,
+                       SM64_SATURN_AUDIO_OPCODE_RESET,
+                       SM64_SATURN_AUDIO_COMPLETION_ACCEPTED, 1U, 0U, 1U);
+    assert(!sm64_saturn_audio_completion_poll(&transport, &completion));
+    assert(transport.completion_faulted);
+    assert(sm64_saturn_pcm_get_be16(
+               ram, SM64_SATURN_PCM_COMPLETION_CONSUMER_OFFSET) == 0U);
+
+    memcpy(before, ram, sizeof(ram));
+    assert(!sm64_saturn_audio_control_enqueue_ticket(
+        &transport, SM64_SATURN_AUDIO_OPCODE_RESET, words, &ticket));
+    assert(memcmp(before, ram, sizeof(ram)) == 0);
 }
 
 static void test_pending_cursor_refuses_aba_until_completion(void)
@@ -279,7 +308,7 @@ static void test_pending_cursor_refuses_aba_until_completion(void)
     }
     assert(!sm64_saturn_audio_control_enqueue(
         &transport, SM64_SATURN_AUDIO_OPCODE_MUTE, words));
-    assert(transport.ticket_busy == 1U);
+    assert(transport.protocol_faults == 1U);
 
     publish_completion(ram, 0U, SM64_SATURN_AUDIO_RING_CONTROL,
                        tickets[0].cursor, tickets[0].opcode,
@@ -346,5 +375,6 @@ int main(void)
     test_pending_cursor_refuses_aba_until_completion();
     test_wrong_same_class_opcode_does_not_retire_ticket();
     test_status_sequence_retries_instead_of_accepting_torn_value();
+    test_unmatched_old_ack_latches_fault_before_ticket_reuse();
     return 0;
 }

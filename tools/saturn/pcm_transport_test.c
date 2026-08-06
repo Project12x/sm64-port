@@ -12,8 +12,6 @@ static void publish_v2_header(uint8_t *ram)
                             SM64_SATURN_PCM_PROTOCOL_MAGIC);
     sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_VERSION_OFFSET,
                             SM64_SATURN_PCM_PROTOCOL_VERSION);
-    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET,
-                             SM64_SATURN_PCM_ABI_FLAG_COMPLETION);
 }
 
 static void test_control_and_sfx_encode_big_endian_in_disjoint_rings(void)
@@ -26,6 +24,8 @@ static void test_control_and_sfx_encode_big_endian_in_disjoint_rings(void)
     uint16_t i;
 
     publish_v2_header(ram);
+    sm64_saturn_pcm_put_be16(ram, SM64_SATURN_PCM_ABI_FLAGS_OFFSET,
+                             SM64_SATURN_PCM_ABI_FLAG_COMPLETION);
     sm64_saturn_pcm_transport_init(&transport, ram);
     assert(sm64_saturn_audio_control_enqueue_ticket(
         &transport, SM64_SATURN_AUDIO_OPCODE_SEQ_START, words,

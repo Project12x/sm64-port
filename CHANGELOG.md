@@ -19,9 +19,13 @@
   producer, source service, package commit, target/Ymir, or audible behavior;
   asynchronous FINISHED identity remains deferred to a versioned tagged-event
   extension and may not yet mutate source policy.
-  Rereview repairs bind each pending cursor to its exact opcode, make legacy
-  enqueue an explicit no-ack path that still respects pending reservations,
-  replace the reusable writing flag with an advancing even/odd publication
+  Rereview repairs bind each pending cursor to its exact opcode. Legacy
+  enqueue remains an explicit no-ack path only while completion capability is
+  absent; capability mode rejects it before any wire write and requires every
+  command to reserve a ticket. An unmatched/corrupt completion latches the
+  transport fault so a delayed old acknowledgment cannot retire a later
+  same-cursor/opcode ticket. The repair also replaces the reusable writing
+  flag with an advancing even/odd publication
   sequence, saturate the live command-ring counters at `0xffff`, and use one
   closed status/opcode matrix. Wrong same-class acknowledgments, FINISHED as a
   command acknowledgment, dropped stop commands, and generic acceptance of

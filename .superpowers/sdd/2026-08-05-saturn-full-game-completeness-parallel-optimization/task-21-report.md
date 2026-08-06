@@ -215,3 +215,25 @@ powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 \
   verify-audio-sound-cpu-boot verify-soundtest-boot
 PASS (4.1 s; sound-CPU ownership 2/2)
 ```
+
+## Wave 2 fix round 2
+
+Rerereview of `59c2a014` resolved four findings but retained one important
+wire-mode ambiguity: local no-ack state was invisible to a future producer, so
+a late acknowledgment could head-block or match a later same-cursor/opcode
+ticket. RED added byte-for-byte no-write rejection for legacy enqueue under
+completion capability and an unmatched-old-ack fixture with no pending ticket.
+
+The modes are now mutually exclusive. Capability absent preserves the legacy
+no-ack compatibility path; capability advertised requires a ticket for every
+command and rejects legacy wrappers before touching sound RAM. Completion poll
+latches any malformed, duplicate, or unmatched record as a transport fault;
+subsequent ticketed enqueue fails closed until explicit transport recovery,
+preventing a delayed record from becoming valid after cursor reuse.
+
+This is still a host transport correction. It does not publish MC68000
+completions, link source service, commit packages, or add target/Ymir/manual/
+audible evidence.
+
+Fresh fix-round-2 GREEN used the same six-target serialized command and passed
+in 4.1 seconds, including sound-CPU ownership 2/2.

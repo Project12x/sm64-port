@@ -74,8 +74,9 @@ ABI/transport slice only.
 - [x] Pending two-lap entries store the exact expected opcode, not a boolean;
   a wrong same-class completion cannot advance the completion consumer or
   retire the ticket.
-- [x] Legacy control/SFX enqueue is explicitly no-ack, yet uses the same cursor
-  reservation check and cannot overwrite a still-pending ticket after wrap.
+- [x] Legacy control/SFX enqueue is explicitly no-ack only when completion
+  capability is absent. Capability mode rejects it before any wire write and
+  requires every command to reserve a ticket.
 - [x] Split status publication uses an advancing encoded sequence:
   stable-even -> writing-odd -> next stable-even. The bounded reader requires
   the same stable-even value before and after; an observer-driven interleaving
@@ -91,3 +92,15 @@ ABI/transport slice only.
 - [x] The six focused DLL/MSYS-preflight host gates pass serially, including
   publication order and sound-CPU ownership 2/2.
 - [ ] Scoped rereview remains required. No production or audible gate changes.
+
+### Wave 2 fix round 2
+
+- [x] Completion-mode/no-ack mixing is prohibited at the producer boundary;
+  a direct memory snapshot proves rejection leaves command bytes and producer
+  cursor unchanged.
+- [x] An unmatched, malformed, or duplicate completion latches a transport
+  fault. Ticketed enqueue remains fail-closed until explicit recovery, so a
+  delayed old completion cannot later match a reused ring/cursor/opcode.
+- [x] Capability-absent legacy tests continue to prove the no-ack compatibility
+  path; completion-aware tests advertise capability and use ticket APIs only.
+- [ ] Scoped rereview remains required; all production/audible gates stay open.

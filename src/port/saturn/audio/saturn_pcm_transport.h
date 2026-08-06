@@ -47,6 +47,7 @@ typedef struct sm64_saturn_pcm_transport {
     uint32_t completions_drained;
     uint32_t completion_protocol_faults;
     uint32_t ticket_busy;
+    bool completion_faulted;
     uint16_t control_high_water;
     uint16_t sfx_high_water;
     uint16_t control_ticket_pending[SM64_SATURN_PCM_CONTROL_RING_COUNT * 2U];
