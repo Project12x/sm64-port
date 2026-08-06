@@ -992,6 +992,27 @@ This is a read-only inventory lane; it must not move globals speculatively.
 - [ ] Keep linker edits, target image, P2/concurrent SH-2, Ymir/manual, and FPS
   evidence unchecked until the reservation owner is implemented and mapped.
 
+#### Task 14 bounded implementation: relocate VDP1 command staging to HWRAM
+
+Use the preflight's sole sufficient reclaim candidate: move the complete
+`sourceboot_vdp1_cmdts[2][2048]` (0x10000 bytes, 32-byte aligned) from
+`.lwram_cmdts` into ordinary HWRAM `.bss`. Preserve backend initialization,
+dual-bank lifetime/non-overlap, transfer address legality, and explicit zeroing.
+The linker must reject any future `.lwram_cmdts` input, while the source gate
+must reject a section-attribute regression back to LWRAM.
+
+- [ ] RED: current source/linker contracts still place command staging in
+  `.lwram_cmdts`; add a static mutation gate for section placement, alignment,
+  and forbidden linker input before changing the declaration.
+- [ ] Implement the HWRAM placement and empty/forbidden `.lwram_cmdts` linker
+  assertion without moving the main pool or camera capture.
+- [ ] Run the focused source/map gates and a serialized route-0 linked build;
+  inspect HWRAM/LWRAM symbols, command-bank alignment, LWRAM >= `0x4000`, and
+  HWRAM TLSF floor >= `0x1B00`. Leave target/P2/concurrent SH-2/Ymir/manual/FPS
+  unchecked unless independently observed.
+- [ ] Commit and independently review exact placement, cache/DMA legality,
+  bank lifetime, and no hidden LWRAM regression.
+
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
 **Lane:** audio. **Depends on:** Tasks 6, 12, and 15. **Produces:** frame-rate-independent notes, envelopes, priority stealing, and SCSP register control.
