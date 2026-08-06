@@ -69,7 +69,8 @@ later source movement does not erase the provenance.
   aggregate background fade (including the `0xFF` normal-volume sentinel), and resumes only
   the inherited Merry-Go-Round or Piranha Plant secondary sequences.  An
   early one-shot completion is retained and retried after the guard decrement,
-  so tick two—not tick three—can complete it.
+  so tick two—not tick three—can complete it.  A later ENV generation
+  invalidates the retained completion before the adapter polls again.
 - SFX-driven lowering begins only when a sound is published and emits the
   inherited 50-frame aggregate background adjustment.  Global fade carries a
   single non-menu SFX bank mask, keeping the whole transition to three bounded

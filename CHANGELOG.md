@@ -28,7 +28,8 @@
   Saturn/SH two-tick jingle guard, secondary `0xFF` no-op, normal-volume
   sentinel, and stop-bank lowering restoration remain source-compatible;
   early generation-matched ENV completion is retained until the guard drains
-  rather than being lost.
+  rather than being lost, while a completion made stale by a newer ENV
+  generation is discarded so it cannot block later feedback.
   Protocol-v2 `PLAY_REFRESH` records carry only fixed-width
   `soundBits`, generation-tagged source tokens, package/freshness generations,
   and quantized volume/pan/pitch; raw `f32 *pos` identities stay in a bounded

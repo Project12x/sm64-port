@@ -179,6 +179,12 @@ static void consume_driver_completions(void)
         (void)sm64_saturn_audio_policy_complete_handle(
             &s_policy, sound_bits, source_token, package_generation);
     }
+    if (s_environment_completion_pending &&
+        (s_pending_environment_seq_id != s_policy.environment_seq_id ||
+         s_pending_environment_generation !=
+             s_policy.environment_generation)) {
+        s_environment_completion_pending = false;
+    }
     if (!s_environment_completion_pending &&
         sm64_saturn_source_audio_poll_environment_completion(
             &s_pending_environment_seq_id,
