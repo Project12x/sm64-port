@@ -18,8 +18,8 @@ calls. Those failures named the missing wrapper and ownership boundary.
 accepts only cold boot or explicit recovery and requires this order:
 
 ```text
-pre-staged bytes validated -> SCSP 512-KiB mode -> generic SNDOFF
--> bounded stopped poll -> clear/copy/mailbox owner callbacks
+pre-staged bytes validated -> generic SNDOFF -> bounded stopped poll
+-> SCSP 512-KiB mode -> clear/copy/mailbox owner callbacks
 -> explicit publication barrier -> generic SNDON
 -> bounded protocol READY plus heartbeat advance
 ```
@@ -94,3 +94,35 @@ audio protocol v2 regression: PASS
   Task 15/17 MC68000 scheduler linkage.
 - Target compiler/link, DRAM artifact, Ymir/hardware/manual and owner-heard
   music/SFX evidence. Task 23 owns the first audible claim.
+
+## Fix round 1 — stopped-state ordering and retained diagnostics
+
+Independent review of `7a1bb170` was SPEC/QUALITY FAIL, C0/I2/M0. The repaired
+contract now encodes and tests the required order
+`stage→SNDOFF→bounded stopped wait→512-KiB select/verify→clear/copy/mailbox→`
+`barrier→SNDON→READY+heartbeat`. Soundtest's proof lifecycle invokes the same
+512-KiB target adapter after its synchronous generic SNDOFF and returns the
+named `512K_MODE_FAILED` result if verification fails.
+
+Soundtest also owns a persistent `sm64_saturn_sound_cpu_yaul_result_t` and
+publishes its completed-count, last-command, and raw OREG31 diagnostics. The
+target generic adapter routes every completed command through a host-testable
+recording seam. Tests prove raw `0x00` and `0xFF` are both retained with typed
+`COMPLETED` status, while an unsupported command is rejected without changing
+diagnostics; the byte is never cast to boolean.
+
+TDD RED was observed before the repair: strict compilation failed on the
+missing raw-completion seam and missing soundtest `set_512k_mode` member. Fresh
+GREEN evidence:
+
+```text
+strict direct wrapper and soundtest C11/Werror binaries: PASS
+powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 \
+  mingw32-make -f Makefile.saturn.mk -j1 \
+  verify-audio-sound-cpu-boot verify-soundtest-boot \
+  verify-pcm-protocol verify-audio-protocol-v2
+PASS (3.0 s; ownership 2/2)
+```
+
+No sourceboot service/package/residency/completion, MC68000 semantic linkage,
+target, Ymir, hardware, manual, audible, or performance gate is reclassified.

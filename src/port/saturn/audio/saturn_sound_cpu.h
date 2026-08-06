@@ -92,6 +92,10 @@ bool sm64_saturn_sound_cpu_boot(
  * Yaul's warned SNDON/SNDOFF convenience functions. */
 sm64_saturn_sound_cpu_command_result_t
 sm64_saturn_sound_cpu_yaul_command(void *context, uint8_t command);
+sm64_saturn_sound_cpu_command_result_t
+sm64_saturn_sound_cpu_record_generic_completion(
+    sm64_saturn_sound_cpu_yaul_result_t *result, uint8_t command,
+    uint8_t raw_oreg31);
 bool sm64_saturn_sound_cpu_yaul_set_512k(void *context);
 
 #endif

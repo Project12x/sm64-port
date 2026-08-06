@@ -6,13 +6,18 @@
 
 - Added the bounded Task 21 project-owned sound-CPU boot contract. Cold boot
   and explicit recovery now have a host-proven order from staged-byte
-  validation through 512-KiB selection, generic SMPC stop, bounded stop wait,
+  validation through generic SMPC stop, bounded stopped-state proof, then
+  512-KiB selection,
   owner-validated clear/copy/mailbox publication, restart, and bounded READY
   plus heartbeat advance. Warned Yaul sound convenience calls are prohibited;
   the generic call's undocumented OREG31 byte is telemetry rather than a
   boolean shortcut, and every modeled failure returns a named fault without an
   unbounded wait. This does not enable sourceboot audio or claim package,
   target, Ymir, hardware, manual, audible, or performance completion.
+  Soundtest now invokes and verifies that memory-mode callback and retains a
+  persistent command count, last command, and raw OREG31 diagnostic. Host
+  tests prove both `0x00` and `0xFF` are retained after typed completion rather
+  than interpreted as false/true.
 - Routed the soundtest and PCM protocol host executables through Python
   subprocess launch so MSYS quoted-path/DLL resolution cannot create GUI
   missing-DLL failures; protocol and proof semantics are unchanged.

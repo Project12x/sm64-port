@@ -11,6 +11,7 @@ typedef enum sm64_saturn_soundtest_boot_result {
     SM64_SATURN_SOUNDTEST_BOOT_BAD_CONFIG,
     SM64_SATURN_SOUNDTEST_BOOT_BAD_ASSETS,
     SM64_SATURN_SOUNDTEST_BOOT_SOUND_OFF_FAILED,
+    SM64_SATURN_SOUNDTEST_BOOT_512K_MODE_FAILED,
     SM64_SATURN_SOUNDTEST_BOOT_COPY_FAILED,
     SM64_SATURN_SOUNDTEST_BOOT_SOUND_ON_FAILED,
     SM64_SATURN_SOUNDTEST_BOOT_HEARTBEAT_TIMEOUT,
@@ -27,6 +28,7 @@ typedef struct sm64_saturn_soundtest_boot {
     uint16_t initial_master_volume;
     void *context;
     bool (*sound_off)(void *context);
+    bool (*set_512k_mode)(void *context);
     bool (*copy_region)(void *context, volatile uint8_t *destination,
                         const uint8_t *source, uint32_t bytes);
     bool (*sound_on)(void *context);

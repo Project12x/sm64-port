@@ -19,18 +19,24 @@ extern const uint8_t sm64_saturn_pcm_proof_bank_end[];
 static sm64_saturn_pcm_transport_t transport;
 static uint16_t master_volume = 12U;
 static bool controls_ready;
+static sm64_saturn_sound_cpu_yaul_result_t sound_cpu_diagnostics;
 
 static bool sound_off(void *context __unused)
 {
     return sm64_saturn_sound_cpu_yaul_command(
-               NULL, SM64_SATURN_SOUND_CPU_COMMAND_OFF) ==
+               &sound_cpu_diagnostics, SM64_SATURN_SOUND_CPU_COMMAND_OFF) ==
            SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
+}
+
+static bool set_512k_mode(void *context __unused)
+{
+    return sm64_saturn_sound_cpu_yaul_set_512k(NULL);
 }
 
 static bool sound_on(void *context __unused)
 {
     return sm64_saturn_sound_cpu_yaul_command(
-               NULL, SM64_SATURN_SOUND_CPU_COMMAND_ON) ==
+               &sound_cpu_diagnostics, SM64_SATURN_SOUND_CPU_COMMAND_ON) ==
            SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
 }
 
@@ -91,6 +97,7 @@ int main(void)
         .initial_master_volume = master_volume,
         .context = NULL,
         .sound_off = sound_off,
+        .set_512k_mode = set_512k_mode,
         .copy_region = copy_region,
         .sound_on = sound_on,
         .wait_vblank = wait_vblank,
@@ -136,6 +143,10 @@ int main(void)
         dbgio_printf("boot: %s (%u)\n",
             result == SM64_SATURN_SOUNDTEST_BOOT_READY ? "READY" : "FAILED",
             (unsigned int)result);
+        dbgio_printf("smpc: count=%u cmd=%02x oreg31=%02x\n",
+            (unsigned int)sound_cpu_diagnostics.completed_count,
+            (unsigned int)sound_cpu_diagnostics.last_command,
+            (unsigned int)sound_cpu_diagnostics.last_oreg31);
         dbgio_printf("heartbeat: %u  consumed: %u\n",
             sm64_saturn_pcm_get_be16(SOUND_RAM,
                 SM64_SATURN_PCM_HEARTBEAT_OFFSET),

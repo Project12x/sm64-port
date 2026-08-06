@@ -149,7 +149,7 @@ static void test_cold_boot_orders_staged_bytes_mode_stop_copy_publish_start(void
     sm64_saturn_sound_cpu_boot_t config = boot(&fixture);
     sm64_saturn_sound_cpu_state_t state;
     assert(sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCDIBNWW") == 0);
+    assert(strcmp(fixture.order, "GOwMCDIBNWW") == 0);
     assert(state.phase == SM64_SATURN_SOUND_CPU_PHASE_READY);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_NONE);
     assert(state.boot_attempts == 1U && state.ready_polls == 2U);
@@ -169,7 +169,7 @@ static void test_preflight_failures_never_stop_or_clear_sound_ram(void)
     config = boot(&fixture);
     fixture.mode_ok = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GM") == 0);
+    assert(strcmp(fixture.order, "GOwM") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_512K_MODE);
 }
 
@@ -180,7 +180,7 @@ static void test_stop_and_ready_waits_are_bounded_and_fail_closed(void)
     sm64_saturn_sound_cpu_state_t state;
     fixture.stop_seen = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwww") == 0);
+    assert(strcmp(fixture.order, "GOwww") == 0);
     assert(fixture.stop_polls == 3U);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_STOP_TIMEOUT);
 
@@ -188,7 +188,7 @@ static void test_stop_and_ready_waits_are_bounded_and_fail_closed(void)
     config = boot(&fixture);
     config.ready_wait_budget = 1U;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCDIBNW") == 0);
+    assert(strcmp(fixture.order, "GOwMCDIBNW") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_READY_TIMEOUT);
 }
 
@@ -222,7 +222,7 @@ static void test_only_cold_boot_and_explicit_recovery_may_clear(void)
     config = boot(&fixture);
     config.kind = SM64_SATURN_SOUND_CPU_BOOT_RECOVERY;
     assert(sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCDIBNWW") == 0);
+    assert(strcmp(fixture.order, "GOwMCDIBNWW") == 0);
 }
 
 static void test_command_copy_and_mailbox_failures_are_named(void)
@@ -232,29 +232,50 @@ static void test_command_copy_and_mailbox_failures_are_named(void)
     sm64_saturn_sound_cpu_state_t state;
     fixture.off_ok = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMO") == 0);
+    assert(strcmp(fixture.order, "GO") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_SOUND_OFF);
 
     memset(&fixture, 0, sizeof(fixture));
     config = boot(&fixture);
     fixture.copy_ok = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCD") == 0);
+    assert(strcmp(fixture.order, "GOwMCD") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_COPY);
 
     memset(&fixture, 0, sizeof(fixture));
     config = boot(&fixture);
     fixture.mailbox_ok = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCDI") == 0);
+    assert(strcmp(fixture.order, "GOwMCDI") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_MAILBOX);
 
     memset(&fixture, 0, sizeof(fixture));
     config = boot(&fixture);
     fixture.on_ok = false;
     assert(!sm64_saturn_sound_cpu_boot(&config, &state));
-    assert(strcmp(fixture.order, "GMOwCDIBN") == 0);
+    assert(strcmp(fixture.order, "GOwMCDIBN") == 0);
     assert(state.fault == SM64_SATURN_SOUND_CPU_FAULT_SOUND_ON);
+}
+
+static void test_generic_completion_retains_raw_oreg31_without_boolean_cast(void)
+{
+    sm64_saturn_sound_cpu_yaul_result_t diagnostics = {0};
+    assert(sm64_saturn_sound_cpu_record_generic_completion(
+               &diagnostics, SM64_SATURN_SOUND_CPU_COMMAND_OFF, 0x00U) ==
+           SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED);
+    assert(diagnostics.completed_count == 1U);
+    assert(diagnostics.last_command == SM64_SATURN_SOUND_CPU_COMMAND_OFF);
+    assert(diagnostics.last_oreg31 == 0x00U);
+    assert(sm64_saturn_sound_cpu_record_generic_completion(
+               &diagnostics, SM64_SATURN_SOUND_CPU_COMMAND_ON, 0xffU) ==
+           SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED);
+    assert(diagnostics.completed_count == 2U);
+    assert(diagnostics.last_command == SM64_SATURN_SOUND_CPU_COMMAND_ON);
+    assert(diagnostics.last_oreg31 == 0xffU);
+    assert(sm64_saturn_sound_cpu_record_generic_completion(
+               &diagnostics, 0x55U, 0x00U) ==
+           SM64_SATURN_SOUND_CPU_COMMAND_REJECTED);
+    assert(diagnostics.completed_count == 2U);
 }
 
 int main(void)
@@ -265,5 +286,6 @@ int main(void)
     test_ready_without_heartbeat_advance_is_not_ready();
     test_only_cold_boot_and_explicit_recovery_may_clear();
     test_command_copy_and_mailbox_failures_are_named();
+    test_generic_completion_retains_raw_oreg31_without_boolean_cast();
     return 0;
 }

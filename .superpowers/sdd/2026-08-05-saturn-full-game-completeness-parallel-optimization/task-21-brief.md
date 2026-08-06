@@ -25,13 +25,16 @@ a target, run Ymir/hardware, or claim audible output.
 
 - [x] RED proves the wrapper/header is absent and current production contains
   two warned convenience calls with no single generic-command owner.
-- [x] Cold boot and explicit recovery only: stage validation, 512-KiB mode,
-  generic SNDOFF, bounded stopped wait, manifest-owner callbacks for clear/
+- [x] Cold boot and explicit recovery only: stage validation, generic SNDOFF,
+  bounded stopped wait, 512-KiB mode, manifest-owner callbacks for clear/
   copy/mailbox, explicit barrier, generic SNDON, bounded READY plus advancing
   heartbeat.
 - [x] Named fail-closed state covers bad configuration, staging, memory mode,
   command rejection, stop timeout, clear/copy/mailbox failure, and READY/
   heartbeat timeout. OREG31 is telemetry, never a boolean success shortcut.
+- [x] Soundtest invokes/verifies the 512-KiB callback after SNDOFF and retains
+  persistent typed-command diagnostics. The host seam preserves raw `0x00`
+  and `0xFF` OREG31 values without boolean interpretation.
 - [x] Static ownership rejects warned calls and requires the wrapper as the
   sole production owner of `smpc_smc_call`.
 - [x] Serialized `verify-audio-sound-cpu-boot`, `verify-soundtest-boot`,

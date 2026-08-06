@@ -25,6 +25,7 @@ sm64_saturn_soundtest_boot_result_t sm64_saturn_soundtest_boot(
     uint16_t words[7] = {0};
     if (boot == 0 || transport == 0 || boot->sound_ram == 0 ||
         boot->driver == 0 || boot->bank == 0 || boot->sound_off == 0 ||
+        boot->set_512k_mode == 0 ||
         boot->copy_region == 0 || boot->sound_on == 0 ||
         boot->wait_vblank == 0 || boot->heartbeat_vblank_budget == 0U) {
         return SM64_SATURN_SOUNDTEST_BOOT_BAD_CONFIG;
@@ -38,6 +39,9 @@ sm64_saturn_soundtest_boot_result_t sm64_saturn_soundtest_boot(
     }
     if (!boot->sound_off(boot->context)) {
         return SM64_SATURN_SOUNDTEST_BOOT_SOUND_OFF_FAILED;
+    }
+    if (!boot->set_512k_mode(boot->context)) {
+        return SM64_SATURN_SOUNDTEST_BOOT_512K_MODE_FAILED;
     }
     for (offset = SM64_SATURN_PCM_MAILBOX_OFFSET;
          offset < SM64_SATURN_PCM_MAILBOX_OFFSET +

@@ -67,8 +67,6 @@ bool sm64_saturn_sound_cpu_boot(
     if (!boot->stage_ready(boot->context))
         return fail(state, SM64_SATURN_SOUND_CPU_FAULT_STAGE);
     state->phase = SM64_SATURN_SOUND_CPU_PHASE_STAGED;
-    if (!boot->set_512k_mode(boot->context))
-        return fail(state, SM64_SATURN_SOUND_CPU_FAULT_512K_MODE);
     state->phase = SM64_SATURN_SOUND_CPU_PHASE_STOPPING;
     if (boot->generic_smpc_command(
             boot->context, SM64_SATURN_SOUND_CPU_COMMAND_OFF) !=
@@ -82,6 +80,8 @@ bool sm64_saturn_sound_cpu_boot(
     if (poll == boot->stop_wait_budget)
         return fail(state, SM64_SATURN_SOUND_CPU_FAULT_STOP_TIMEOUT);
     state->phase = SM64_SATURN_SOUND_CPU_PHASE_STOPPED;
+    if (!boot->set_512k_mode(boot->context))
+        return fail(state, SM64_SATURN_SOUND_CPU_FAULT_512K_MODE);
     if (!boot->clear_owned_regions(boot->context))
         return fail(state, SM64_SATURN_SOUND_CPU_FAULT_CLEAR);
     if (!boot->copy_staged_regions(boot->context))
@@ -112,6 +112,26 @@ bool sm64_saturn_sound_cpu_boot(
 #if defined(__sh__)
 #include <yaul.h>
 
+#endif
+
+sm64_saturn_sound_cpu_command_result_t
+sm64_saturn_sound_cpu_record_generic_completion(
+    sm64_saturn_sound_cpu_yaul_result_t *result, uint8_t command,
+    uint8_t raw_oreg31)
+{
+    if (command != SM64_SATURN_SOUND_CPU_COMMAND_OFF &&
+        command != SM64_SATURN_SOUND_CPU_COMMAND_ON)
+        return SM64_SATURN_SOUND_CPU_COMMAND_REJECTED;
+    if (result != NULL) {
+        result->last_command = command;
+        result->last_oreg31 = raw_oreg31;
+        result->completed_count++;
+    }
+    return SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
+}
+
+#if defined(__sh__)
+
 sm64_saturn_sound_cpu_command_result_t
 sm64_saturn_sound_cpu_yaul_command(void *context, uint8_t command)
 {
@@ -124,12 +144,8 @@ sm64_saturn_sound_cpu_yaul_command(void *context, uint8_t command)
      * OREG31 has no documented boolean success contract for these commands,
      * so preserve it as telemetry and rely on bounded stopped/READY probes. */
     raw = smpc_smc_call((cpu_smpc_cmd_t)command);
-    if (result != NULL) {
-        result->last_command = command;
-        result->last_oreg31 = raw;
-        result->completed_count++;
-    }
-    return SM64_SATURN_SOUND_CPU_COMMAND_COMPLETED;
+    return sm64_saturn_sound_cpu_record_generic_completion(result, command,
+                                                            raw);
 }
 
 bool sm64_saturn_sound_cpu_yaul_set_512k(void *context __unused)

@@ -22,6 +22,12 @@ static bool record(fixture_t *fixture, char event)
 
 static bool sound_off(void *context) { return record(context, 'O'); }
 static bool sound_on(void *context) { return record(context, 'N'); }
+static bool set_512k(void *context) { return record(context, 'M'); }
+static bool set_512k_failed(void *context)
+{
+    record(context, 'M');
+    return false;
+}
 
 static bool copy_region(void *context, volatile uint8_t *destination,
                         const uint8_t *source, uint32_t bytes)
@@ -67,6 +73,7 @@ static sm64_saturn_soundtest_boot_t make_boot(fixture_t *fixture,
         .initial_master_volume = 12U,
         .context = fixture,
         .sound_off = sound_off,
+        .set_512k_mode = set_512k,
         .copy_region = copy_region,
         .sound_on = sound_on,
         .wait_vblank = wait_vblank,
@@ -85,7 +92,7 @@ static void test_boot_orders_copy_and_wait_then_enqueues_proof(void)
 
     assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
            SM64_SATURN_SOUNDTEST_BOOT_READY);
-    assert(strcmp(fixture.order, "ODBNWW") == 0);
+    assert(strcmp(fixture.order, "OMDBNWW") == 0);
     assert(memcmp(fixture.ram, driver, sizeof(driver)) == 0);
     assert(memcmp(fixture.ram + SM64_SATURN_PCM_BANK_OFFSET,
                   bank, sizeof(bank)) == 0);
@@ -113,13 +120,26 @@ static void test_oversize_and_timeout_fail_without_enqueue(void)
            SM64_SATURN_SOUNDTEST_BOOT_BAD_ASSETS);
     assert(fixture.order_count == 0U);
 
-    fixture = (fixture_t){0};
+    memset(&fixture, 0, sizeof(fixture));
+    boot = make_boot(&fixture, &byte, 1U, &byte, 1U);
+    boot.set_512k_mode = NULL;
+    assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
+           SM64_SATURN_SOUNDTEST_BOOT_BAD_CONFIG);
+
+    memset(&fixture, 0, sizeof(fixture));
+    boot = make_boot(&fixture, &byte, 1U, &byte, 1U);
+    boot.set_512k_mode = set_512k_failed;
+    assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
+           SM64_SATURN_SOUNDTEST_BOOT_512K_MODE_FAILED);
+    assert(strcmp(fixture.order, "OM") == 0);
+
+    memset(&fixture, 0, sizeof(fixture));
     boot = make_boot(&fixture, &byte, 1U, &byte, 1U);
     boot.wait_vblank = NULL;
     assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
            SM64_SATURN_SOUNDTEST_BOOT_BAD_CONFIG);
 
-    fixture = (fixture_t){0};
+    memset(&fixture, 0, sizeof(fixture));
     boot = make_boot(&fixture, &byte, 1U, &byte, 1U);
     boot.heartbeat_vblank_budget = 1U;
     assert(sm64_saturn_soundtest_boot(&boot, &transport) ==
