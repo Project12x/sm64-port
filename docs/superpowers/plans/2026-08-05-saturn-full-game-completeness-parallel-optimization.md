@@ -1101,9 +1101,20 @@ license, renderer, or target-performance result.
   Bootstrap 6/6, identity 9/9, source identity 5/5, the negative stage-bypass
   gate, and the DLL-preflighted top-level dry-run pass.
 - [ ] Independently rereview `7a641f48..ecefd288`, then run a clean serialized
-  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
-  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
-  pass; do not launch an older artifact.
+  sourceboot build and inspect the new identity-bearing ELF/map. The rereview is
+  SPEC/QUALITY FAIL C2/I2/M0: sourceboot depfiles reference 836 generated
+  `build/us_pc/**` compile inputs while the bootstrap seals only
+  `water_skybox.c`; feature-on `mario_actor_bank.c` is emitted after sealing;
+  and the mutation matrix omits the real fragment incbins, Mario texture,
+  animation/collision/water, build/us_pc, and actor-bank-C inputs. The stage
+  enum also accepts quoted multiword `seal assets`. No current-head CUE/ISO,
+  Ymir/manual, target/P2, or FPS evidence is claimed; do not launch an older
+  artifact.
+- [ ] Derive the exact generated asset closure from the same sourceboot
+  include traversal/depfiles used by `source-assets`, include feature-selected
+  actor-bank-C and every fragment/header/animation/collision/water input before
+  the seal parse, and reject any non-single stage token. Independently rereview
+  before a clean linked image is considered launchable.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
