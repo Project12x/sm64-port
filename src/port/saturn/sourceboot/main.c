@@ -424,11 +424,13 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
 static void sourceboot_run_source_tick(void)
 {
     const uint16_t sim_start = cpu_frt_count_get();
+    const uint32_t source_tick_generation =
+        sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count);
     /* Open the source-owned observation window before any game-loop geo walk.
      * The capture after this function must consume exactly this generation;
      * opening the frame in the capture routine would erase every object. */
     sm64_saturn_geo_state_observer_begin_frame(&sourceboot_actor_observer,
-                                               sourceboot_sim_tick_count + 1U);
+                                               source_tick_generation);
 #if SATURN_DEMO_PATH
     /* Keep final display submission suppressed while the IR demo owns the
      * frame.  Do not enable scene-graph suppression here: geo_process_root()
@@ -459,25 +461,24 @@ static void sourceboot_run_source_tick(void)
         sourceboot_frt_delta(sim_start, sim_end);
     sourceboot_sim_ticks_accum +=
         sourceboot_fast3d.profile.sim_frt_ticks_last;
-    sourceboot_sim_tick_count =
-        sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count);
+    sourceboot_sim_tick_count = source_tick_generation;
     sourceboot_fast3d.profile.sim_frt_ticks_accum =
         sourceboot_sim_ticks_accum;
-    sourceboot_fast3d.profile.sim_tick_count = sourceboot_sim_tick_count;
+    sourceboot_fast3d.profile.sim_tick_count = source_tick_generation;
     sourceboot_fast3d.profile.scene_graph_walks =
         sm64_saturn_source_runtime_state()->scene_graph_walks;
     sourceboot_fast3d.profile.scene_graph_walks_suppressed =
         sm64_saturn_source_runtime_state()->scene_graph_walks_suppressed;
-    sourceboot_capture_render_snapshot(sourceboot_sim_tick_count);
+    sourceboot_capture_render_snapshot(source_tick_generation);
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     if (sm64_saturn_source_runtime_state()->input_replay_complete) {
-        sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);
+        sm64_saturn_camera_bypass_arm(source_tick_generation);
     }
 #endif
 #if SATURN_SOURCEBOOT_CAMERA_ROUTE == 1 && !SATURN_SOURCEBOOT_LIVE_INPUT
     sm64_saturn_sourceboot_camera_idle_probe_record(
         sm64_saturn_source_runtime_state(),
-        sourceboot_sim_tick_count);
+        source_tick_generation);
 #endif
 }
 

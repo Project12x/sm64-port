@@ -37,6 +37,87 @@ def struct_body(text: str, name: str) -> str:
     return match.group("body")
 
 
+def assert_source_tick_generation_contract(tick: str) -> None:
+    declaration = re.search(
+        r"const\s+uint32_t\s+source_tick_generation\s*=\s*"
+        r"sm64_saturn_frame_pipeline_next_generation\(sourceboot_sim_tick_count\)\s*;",
+        tick,
+    )
+    assert declaration, "source tick must declare exactly one canonical successor"
+    assert len(re.findall(
+        r"sm64_saturn_frame_pipeline_next_generation\(sourceboot_sim_tick_count\)",
+        tick,
+    )) == 1
+    observer = re.search(
+        r"sm64_saturn_geo_state_observer_begin_frame\s*\(\s*"
+        r"&sourceboot_actor_observer\s*,\s*source_tick_generation\s*\)",
+        tick,
+    )
+    assert observer, "observer must open with the named successor"
+    game_loop = tick.index("game_loop_one_iteration()")
+    assignment = re.search(
+        r"sourceboot_sim_tick_count\s*=\s*source_tick_generation\s*;", tick
+    )
+    assert assignment, "source tick must publish the named successor"
+    for consumer in (
+        "sourceboot_fast3d.profile.sim_tick_count = source_tick_generation;",
+        "sourceboot_capture_render_snapshot(source_tick_generation);",
+        "sm64_saturn_camera_bypass_arm(source_tick_generation);",
+        "source_tick_generation);",
+    ):
+        assert consumer in tick, f"same-tick consumer escaped named successor: {consumer}"
+    assert declaration.start() < observer.start() < game_loop < assignment.start()
+    assert assignment.start() < tick.index("sourceboot_capture_render_snapshot(")
+    assert "sourceboot_sim_tick_count + 1U" not in tick
+    assert "sourceboot_sim_tick_count++" not in tick
+
+
+def test_sourceboot_uses_one_skip_zero_generation_for_observer_and_consumers() -> None:
+    sourceboot = SOURCEBOOT.read_text(encoding="utf-8")
+    tick = body(SOURCEBOOT, "sourceboot_run_source_tick")
+    assert_source_tick_generation_contract(tick)
+
+    observer_mutation, changed = re.subn(
+        r"(&sourceboot_actor_observer\s*,\s*)source_tick_generation",
+        r"\1sourceboot_sim_tick_count + 1U",
+        tick,
+        count=1,
+    )
+    assert changed == 1
+    try:
+        assert_source_tick_generation_contract(observer_mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("raw observer increment mutation escaped source gate")
+
+    capture_mutation = tick.replace(
+        "sourceboot_capture_render_snapshot(source_tick_generation);",
+        "sourceboot_capture_render_snapshot(sourceboot_sim_tick_count);",
+        1,
+    )
+    assert capture_mutation != tick
+    try:
+        assert_source_tick_generation_contract(capture_mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("global capture mutation escaped source gate")
+
+    camera_mutation = tick.replace(
+        "sm64_saturn_camera_bypass_arm(source_tick_generation);",
+        "sm64_saturn_camera_bypass_arm(sourceboot_sim_tick_count);",
+        1,
+    )
+    assert camera_mutation != tick
+    try:
+        assert_source_tick_generation_contract(camera_mutation)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("global camera mutation escaped source gate")
+
+
 def test_snapshot_and_observation_are_pointer_free() -> None:
     header = (GFX / "saturn_actor_instance.h").read_text(encoding="utf-8")
     for name in (
@@ -149,7 +230,7 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
     # after the source tick has advanced its generation and counters.
     tick = sourceboot[sourceboot.index("static void sourceboot_run_source_tick") :]
     assert tick.index("sourceboot_sim_tick_count =") < tick.index(
-        "sourceboot_capture_render_snapshot(sourceboot_sim_tick_count);"
+        "sourceboot_capture_render_snapshot(source_tick_generation);"
     )
     assert "sourceboot_actor_instances" in sourceboot
     assert "sm64_saturn_actor_instance_bank_capture" in sourceboot
@@ -169,6 +250,7 @@ def test_two_bank_lifecycle_is_explicit_and_sourceboot_orders_capture() -> None:
 
 
 if __name__ == "__main__":
+    test_sourceboot_uses_one_skip_zero_generation_for_observer_and_consumers()
     test_snapshot_and_observation_are_pointer_free()
     test_capture_copies_source_values_and_rejects_bad_identity()
     test_source_pool_identity_bound_stays_separate_from_compact_capacity()

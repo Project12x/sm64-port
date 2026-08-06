@@ -4,6 +4,16 @@
 
 ### Changed
 
+- Repaired sourceboot's actor-observer generation handoff so a source tick
+  computes the frame pipeline's nonzero successor once, before its geo walk,
+  and uses that value for observer opening, source-tick publication, actor
+  capture, profiling, camera bypass, and idle-probe publication. This prevents
+  the `UINT32_MAX -> 0` observer/capture mismatch while preserving scheduler
+  cadence, the existing action-generation validation, and all public ABIs.
+  Host source-contract mutations now reject raw increment, capture, and camera
+  consumers that bypass the named successor. Target visibility, sourceboot
+  image/BIOS handoff, Ymir/manual, and FPS evidence remain separate gates.
+
 - Separated Task 14's source object-pool identity domain from its compact
   drawable snapshot domain. The observer now accepts and tracks all 240
   source-attested `OBJECT_POOL_CAPACITY` slots (including parent identities

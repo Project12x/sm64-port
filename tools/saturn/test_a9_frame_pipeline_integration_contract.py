@@ -41,6 +41,41 @@ def call_uses_generation(body: str, function: str) -> bool:
     ) is not None
 
 
+def assert_source_tick_generation_contract(body: str) -> None:
+    declaration = re.search(
+        r"const\s+uint32_t\s+source_tick_generation\s*=\s*"
+        r"sm64_saturn_frame_pipeline_next_generation\(sourceboot_sim_tick_count\)\s*;",
+        body,
+    )
+    assert declaration is not None
+    assert len(re.findall(
+        r"sm64_saturn_frame_pipeline_next_generation\(sourceboot_sim_tick_count\)",
+        body,
+    )) == 1
+    observer = re.search(
+        r"sm64_saturn_geo_state_observer_begin_frame\s*\(\s*"
+        r"&sourceboot_actor_observer\s*,\s*source_tick_generation\s*\)",
+        body,
+    )
+    assert observer is not None
+    assignment = re.search(
+        r"sourceboot_sim_tick_count\s*=\s*source_tick_generation\s*;", body
+    )
+    assert assignment is not None
+    for consumer in (
+        "sourceboot_fast3d.profile.sim_tick_count = source_tick_generation;",
+        "sourceboot_capture_render_snapshot(source_tick_generation);",
+        "sm64_saturn_camera_bypass_arm(source_tick_generation);",
+        "source_tick_generation);",
+    ):
+        assert consumer in body
+    assert declaration.start() < observer.start() < body.index("game_loop_one_iteration()")
+    assert body.index("game_loop_one_iteration()") < assignment.start()
+    assert assignment.start() < body.index("sourceboot_capture_render_snapshot(")
+    assert "sourceboot_sim_tick_count + 1U" not in body
+    assert "sourceboot_sim_tick_count++" not in body
+
+
 class A9FramePipelineIntegrationContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.source = SOURCE_PATH.read_text(encoding="utf-8")
@@ -227,12 +262,7 @@ class A9FramePipelineIntegrationContractTests(unittest.TestCase):
 
     def test_source_tick_wrap_skips_reserved_zero_before_snapshot_capture(self) -> None:
         source_tick = extract_c_function(self.source, "sourceboot_run_source_tick")
-        successor = source_tick.index(
-            "sm64_saturn_frame_pipeline_next_generation(sourceboot_sim_tick_count)"
-        )
-        capture = source_tick.index("sourceboot_capture_render_snapshot(")
-        self.assertLess(successor, capture)
-        self.assertNotIn("sourceboot_sim_tick_count++;", source_tick)
+        assert_source_tick_generation_contract(source_tick)
 
     def test_reuse_never_changes_bank_ownership_or_creates_a_cadence_edge(self) -> None:
         reuse = extract_c_function(
