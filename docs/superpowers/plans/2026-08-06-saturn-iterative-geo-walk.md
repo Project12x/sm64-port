@@ -91,6 +91,12 @@ deferred children-first dispatch, explicit leave callbacks, and the synthetic
 differential trace. This remains infrastructure; the source policy still
 reports 24 recursive handler edges.
 
+The runtime seam exposes `sm64_saturn_geo_walk_runtime_ops_t`: enter callbacks
+return child/sibling continuations and saved tokens, while dispatch and leave
+callbacks run at explicit phases. The source conversion must bind these
+callbacks to the existing GraphNode globals; it must not bypass them with
+synthetic node filtering.
+
 ### Task 3: Convert the Saturn source graph handlers to enter/leave dispatch
 
 **Files:**
