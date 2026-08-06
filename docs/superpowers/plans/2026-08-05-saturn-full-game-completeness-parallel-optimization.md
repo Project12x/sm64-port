@@ -76,7 +76,7 @@
 - 2026-08-06 generation-wrap repair acceptance: `8517d63f` computes one frame-pipeline successor before the geo walk and propagates it through observer/capture/profile/camera/idle/scheduler consumers. Fix `089a41a4` closes the review gap with a full idle-probe matcher and idle-only global-count mutation. Independent rereview is SPEC/QUALITY PASS, C0/I0/M0. This remains host/source-complete only; target/sourceboot-image/Ymir/manual/FPS are open.
 - 2026-08-06 pre-acquire recycle acceptance: `dd781b2c..abcd4655` adds exact producer-owned WRITING/READY recycle, two-bank recovery, P2 payload scrub/fence ordering, stale/double/state/index/generation checks, and post-acquire ownership exclusion. Fixes `52e3ce61` and `abcd4655` wire and mutation-prove the helper suite; independent rereview is SPEC/QUALITY PASS, C0/I0/M0. Host-only; target/P2, concurrent SH-2, Ymir/manual, and FPS remain open.
 - 2026-08-06 actor-arena reservation staging: the fixed 65,536-byte arithmetic and output ceiling are not a linker/package reservation. A future lane must prove one aligned sourceboot-owned arena symbol, exact bank/observer/queue/batch/output spans, linker/map bounds, initialization through that owner, and manifest-derived capacity before any target or production-drain claim.
-- 2026-08-06 LWRAM reclaim preflight: the smallest source-attested reclaim is the complete `sourceboot_vdp1_cmdts`/`.lwram_cmdts` 0x10000-byte, 32-byte-aligned command staging block relocated to HWRAM `.bss`, exceeding the required `0xCB10` by `0x34F0` and leaving route-0 LWRAM at `0x74F0`, above the `0x4000` floor. This is a design candidate only; DMA/cache/target proof remains open.
+- 2026-08-06 LWRAM reclaim preflight correction: `sourceboot_vdp1_cmdts[2][2048]` is `2 * 2048 * 32 = 0x20000` bytes, not `0x10000`; the complete 32-byte-aligned block relocated to HWRAM `.bss` exceeds the required `0xCB10` by `0x34F0` and leaves route-0 LWRAM at `0x74F0`, above the `0x4000` floor. This arithmetic correction is source/layout evidence only; DMA/cache/target proof remains open.
 
 ## Prior art and reuse mode
 
@@ -987,7 +987,7 @@ This is a read-only inventory lane; it must not move globals speculatively.
   and writer, DMA/cache constraints, lifetime, and destination-class options.
 - [x] Produce `task-14-lwram-reclaim-preflight-report.md` with a ranked,
   source-attested reclaim set totaling at least `0xCB10`, exact risk/rollback
-  boundaries, and the smallest implementation sequence. The complete 0x10000
+  boundaries, and the smallest implementation sequence. The complete 0x20000
   command staging block is the only currently sufficient candidate.
 - [ ] Keep linker edits, target image, P2/concurrent SH-2, Ymir/manual, and FPS
   evidence unchecked until the reservation owner is implemented and mapped.
@@ -995,7 +995,7 @@ This is a read-only inventory lane; it must not move globals speculatively.
 #### Task 14 bounded implementation: relocate VDP1 command staging to HWRAM
 
 Use the preflight's sole sufficient reclaim candidate: move the complete
-`sourceboot_vdp1_cmdts[2][2048]` (0x10000 bytes, 32-byte aligned) from
+`sourceboot_vdp1_cmdts[2][2048]` (0x20000 bytes, 32-byte aligned) from
 `.lwram_cmdts` into ordinary HWRAM `.bss`. Preserve backend initialization,
 dual-bank lifetime/non-overlap, transfer address legality, and explicit zeroing.
 The linker must reject any future `.lwram_cmdts` input, while the source gate
