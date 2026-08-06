@@ -172,7 +172,7 @@ all complete.
 - [x] Task 11 — source-complete — implementation `52999c35`, repairs `acff11a8`, `7f0caa62`; independent final rereview SPEC/QUALITY PASS, C0/I0/M0. Generic suite 4/4, full-game source contract 4/4, serial `compile-actor-banks SCENE_LEVEL=bob SCENE_AREA=1`, strict actor-bank C11/Werror syntax, executable C tamper/hash and unequal-capability ranking checks, and scoped diff pass. BOB emits 47 deterministic S64F families (99,105 bytes, SHA `97dc231b…`) from 86 closure records/133 source hashes; 13 unsupported geo nodes keep `complete_closure=false`. S64P linkage, runtime cutover, target/Ymir/manual/FPS gates remain open.
 - [ ] Task 12 — blocked — hardened commits `48d6401c`, `628c8324`, `724aaa84`, `7c0bbb72`, `7b8aa224`, `cc092c69`, `fa0f1040`, `78d1f967`, `b06382c8`, `2da45926`, `90b152e6`, `583c3840`, `ac3b91b2`, `b937456e`; independent rereview remains SPEC/QUALITY FAIL for the broader task. ABI/SHA/signed-PCM/metadata/work-span slices are preserved, and the MC68000 active+replacement plan check is now implemented, but the official package gate is blocked by the absent real seq00 asset, music-only BOB/WF closures, missing S64P/closure-selectable payload linkage, and incomplete general m64 control-flow parsing. Task 13 may proceed independently; Task 12 must not claim a full catalog or target/Ymir/manual evidence.
 - [x] Task 13 — source-complete — implementation `33e06fb8`; repairs `280e1804`, `f6e0aa03`, `0d6707c8`, `d2e5b604`, `a888ff00`; independent rereview SPEC/QUALITY PASS, C0/I0/M0. Generic scene admission, regenerated BOB metadata, sourceboot linkage, queued 1183-node worklist, containment/coverage/reserved-field/portal checks, and depth-only orientation fallback are green in the focused serial gates. Target/Ymir/manual/FPS evidence remains open.
-- [ ] Task 14 — active/source-incomplete — implementation `56c33d76`; repairs `7cb28651`, `508a8da1`; independent rereviews remain SPEC/QUALITY FAIL (latest C2/I3). Authoritative observation ordering, pool-slot overflow telemetry, per-bank tickets, wrap-aware handoff, P2/fence metadata, and target-LWRAM assertion are hardened, but unresolved family/scene/bank registry, full-pool identity, typed source fields, payload cache visibility, overlap cleanup, package-bound budget, and sourceboot target gates remain open. No nonzero production actor claim.
+- [ ] Task 14 — active/source-incomplete — bounded actor-snapshot repairs through `c37feff1` are independently accepted source slices (P2 publication, 240-slot identity, skip-zero generation, pre-acquire recycle, corrected LWRAM reclaim arithmetic, and VDP1 staging relocation). The remaining production work is the dedicated actor-arena/package owner, route-linked map proof, unresolved family/scene/bank registry, typed source fields, overlap cleanup, sourceboot target gates, and production drain. No nonzero production actor, target, Ymir/manual, or FPS claim.
 - [ ] Task 15 — active/source-incomplete — commits `df95a107`, `52d45d5e`, `211158ea`, `b004fe7b`; bounded pointer-free VM scaffold and `verify-sequence-vm` are green, with Project12x ranges/provenance and source-parity repairs recorded. Bounded-slice rereview is SPEC/QUALITY PASS, C0/I0/M0. Full seq00/35-sequence/S64P/MC68000 image/SCSP/target/Ymir/manual audio gates remain blocked by Task 12 assets and later integration.
 - [ ] Task 16 — active/source-incomplete — infrastructure `0549f7af`; independent rereview SPEC/QUALITY FAIL. Exact-once queue/batching, stale-generation quarantine, and host mutation gates pass, but the 64-instance arena/accounting/P2/output-boundary repair is in progress and actor-meshlet/production renderer cutover remains open.
 - [ ] Task 17 — active/source-incomplete — infrastructure commits `5b74081c`, `144b4aa6`; serial allocator/slot-shadow/timer/SCSP-PCM8/sequence-VM and forced m68k provenance gates pass. Repair rereview is SPEC/QUALITY PASS, C0/I0/M0. Full envelope/package data, heartbeat/MC68000 drain, target image, Ymir/tempo/manual/FPS evidence remain open.
@@ -1001,17 +1001,22 @@ dual-bank lifetime/non-overlap, transfer address legality, and explicit zeroing.
 The linker must reject any future `.lwram_cmdts` input, while the source gate
 must reject a section-attribute regression back to LWRAM.
 
-- [ ] RED: current source/linker contracts still place command staging in
-  `.lwram_cmdts`; add a static mutation gate for section placement, alignment,
-  and forbidden linker input before changing the declaration.
-- [ ] Implement the HWRAM placement and empty/forbidden `.lwram_cmdts` linker
-  assertion without moving the main pool or camera capture.
+- [x] RED: `f04ee221` adds the static mutation gate for section placement,
+  align32, exact 2048-entry capacity/0x20000 arithmetic, and forbidden linker
+  input before the declaration change.
+- [x] Implement the HWRAM placement and empty/forbidden `.lwram_cmdts` linker
+  assertion without moving the main pool or camera capture (`69054eec`).
 - [ ] Run the focused source/map gates and a serialized route-0 linked build;
-  inspect HWRAM/LWRAM symbols, command-bank alignment, LWRAM >= `0x4000`, and
-  HWRAM TLSF floor >= `0x1B00`. Leave target/P2/concurrent SH-2/Ymir/manual/FPS
-  unchecked unless independently observed.
-- [ ] Commit and independently review exact placement, cache/DMA legality,
-  bank lifetime, and no hidden LWRAM regression.
+  the focused source/mutation gate is green, but the linked build stops before
+  compile/link on inherited MSYS `FIND`/recursive
+  `SATURN_DEMO_BSP_FRAGMENTS` errors. HWRAM/LWRAM symbols, command-bank
+  alignment, LWRAM >= `0x4000`, and HWRAM TLSF floor >= `0x1B00` therefore remain
+  unchecked. Target/P2/concurrent SH-2/Ymir/manual/FPS remain unchecked.
+- [x] Commit `69054eec` plus gate `f04ee221` and review fix `c37feff1`;
+  scoped independent rereview is SPEC/QUALITY PASS, C0/I0/M0. The review
+  confirms exact placement contract, cache/DMA legality preservation, bank
+  lifetime, and no hidden source-level LWRAM regression. Linked-map evidence is
+  still an explicit open gate.
 
 ### Task 17: Implement timer-driven SCSP voices and allocation
 
