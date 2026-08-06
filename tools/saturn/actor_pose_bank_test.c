@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "saturn_actor_pose.h"
 #include "saturn_actor_bank.h"
 
 static uint16_t read_be16(const uint8_t *data)
@@ -174,6 +175,63 @@ int main(int argc, char **argv)
         fprintf(stderr, "complete actor bank did not validate\n");
         free(bytes);
         return 1;
+    }
+
+    {
+        int16_t vertices[424][3];
+        uint8_t lights[424];
+        int32_t joints[20 * 16];
+        sm64_saturn_actor_pose_work_t work = {
+            .vertices = vertices, .light_intensity = lights,
+            .joint_matrices_q16 = joints, .vertex_capacity = 424U,
+            .joint_capacity = 20U, .light_capacity = 424U,
+        };
+        sm64_saturn_actor_pose_view_t pose;
+        uint8_t seen[209] = {0};
+        for (int16_t animation = 0; animation < 209; animation++) {
+            if (!sm64_saturn_actor_pose_evaluate(
+                    &view, animation, -3, &work, &pose) ||
+                pose.animation_id != (uint16_t)animation || pose.frame != 0U ||
+                pose.vertex_count != 424U || pose.joint_count != 20U ||
+                pose.vertices != (const int16_t (*)[3])vertices ||
+                lights[0] != 255U) {
+                fprintf(stderr,
+                        "complete evaluator rejected animation %d frame=%u "
+                        "verts=%u joints=%u lights=%u\n",
+                        animation, pose.frame, pose.vertex_count,
+                        pose.joint_count, lights[0]);
+                free(bytes);
+                return 1;
+            }
+            seen[animation] = 1U;
+        }
+        for (uint16_t animation = 0U; animation < 209U; animation++)
+            if (seen[animation] == 0U) {
+                fprintf(stderr, "animation ID %u was not evaluated\n", animation);
+                free(bytes);
+                return 1;
+            }
+        if (!sm64_saturn_actor_pose_evaluate(&view, 208, INT16_MAX,
+                                             &work, &pose) ||
+            pose.frame != pose.frame_count - 1U ||
+            sm64_saturn_actor_pose_evaluate(&view, -1, 0, &work, &pose) ||
+            sm64_saturn_actor_pose_evaluate(&view, 209, 0, &work, &pose) ||
+            sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, NULL)) {
+            fprintf(stderr, "evaluator bounds/overflow contract failed\n");
+            free(bytes);
+            return 1;
+        }
+        {
+            int16_t sample;
+            if (!sm64_saturn_actor_pose_evaluate(&view, 0, 0, &work, &pose) ||
+                !sm64_saturn_actor_bank_sample_channel(&view, 0U, 0U, 0U,
+                                                       &sample) ||
+                pose.root_translation[0] != sample) {
+                fprintf(stderr, "root translation was not published\n");
+                free(bytes);
+                return 1;
+            }
+        }
     }
     memcpy(expected_source_hash, view.bank.source_hash_words,
            sizeof(expected_source_hash));

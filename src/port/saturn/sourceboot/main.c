@@ -53,6 +53,9 @@
 #ifndef SATURN_SOURCEBOOT_LIVE_INPUT
 #define SATURN_SOURCEBOOT_LIVE_INPUT 0
 #endif
+#ifndef SATURN_DIAGNOSTIC_MODE
+#define SATURN_DIAGNOSTIC_MODE 0
+#endif
 
 #define SOURCEBOOT_BOOT_TRACE_MAGIC 0x53394254U
 #define SOURCEBOOT_BOOT_TRACE_VERSION 1U
@@ -94,6 +97,31 @@ typedef struct {
     uint32_t master_finalize_count;
     uint32_t sequence_end;
 } sm64_saturn_sourceboot_cadence_trace_t;
+
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint16_t last_id;
+    uint16_t last_frame;
+    uint16_t next_id;
+    uint16_t seen_count;
+    uint16_t reserved;
+    uint32_t fallback_count;
+    uint32_t corrupt_bounds_count;
+    uint32_t result_hash;
+    uint32_t seen_words[7];
+} sm64_saturn_sourceboot_animation_sweep_t;
+
+#define SOURCEBOOT_ANIMATION_SWEEP_MAGIC 0x53394153U
+#define SOURCEBOOT_ANIMATION_SWEEP_VERSION 1U
+_Static_assert(sizeof(sm64_saturn_sourceboot_animation_sweep_t) == 60U,
+               "animation sweep ABI must remain fifteen words");
+#if SATURN_DIAGNOSTIC_MODE == 1
+volatile sm64_saturn_sourceboot_animation_sweep_t sourceboot_animation_sweep = {
+    .magic = SOURCEBOOT_ANIMATION_SWEEP_MAGIC,
+    .version = SOURCEBOOT_ANIMATION_SWEEP_VERSION,
+};
+#endif
 
 _Static_assert(sizeof(sm64_saturn_sourceboot_cadence_trace_t) == 76U,
                "sourceboot cadence trace ABI must remain nineteen words");
@@ -285,8 +313,37 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     if (!sm64_saturn_mario_actor_snapshot(&snapshot->mario)) {
         snapshot->mario.valid = 0U;
     }
-    (void)sm64_saturn_mario_actor_pose_selector(&snapshot->mario,
-                                                &snapshot->mario_pose);
+#if SATURN_DIAGNOSTIC_MODE == 1
+    if (snapshot->mario.valid != 0U && sourceboot_animation_sweep.next_id < 209U) {
+        snapshot->mario.animation_id = (int16_t)sourceboot_animation_sweep.next_id;
+        snapshot->mario.animation_frame = 0;
+        sourceboot_animation_sweep.last_id = sourceboot_animation_sweep.next_id++;
+        sourceboot_animation_sweep.last_frame = 0U;
+    }
+#endif
+    const uint8_t pose_ok = sm64_saturn_mario_actor_pose_selector(
+        &snapshot->mario, &snapshot->mario_pose);
+#if SATURN_DIAGNOSTIC_MODE == 1
+    if (pose_ok != 0U && sourceboot_animation_sweep.last_id < 209U) {
+        const uint16_t id = sourceboot_animation_sweep.last_id;
+        const uint16_t word = (uint16_t)(id >> 5);
+        const uint32_t mask = 1UL << (id & 31U);
+        if ((sourceboot_animation_sweep.seen_words[word] & mask) == 0U) {
+            sourceboot_animation_sweep.seen_words[word] |= mask;
+            sourceboot_animation_sweep.seen_count++;
+        }
+        uint32_t hash = 2166136261UL;
+        for (uint16_t vertex = 0U; vertex < snapshot->mario_pose.vertex_count; vertex++) {
+            for (uint16_t axis = 0U; axis < 3U; axis++) {
+                hash ^= (uint16_t)snapshot->mario_pose.vertices[vertex][axis];
+                hash *= 16777619UL;
+            }
+        }
+        sourceboot_animation_sweep.result_hash = hash;
+    } else if (sourceboot_animation_sweep.next_id > 0U) {
+        sourceboot_animation_sweep.fallback_count++;
+    }
+#endif
     for (axis = 0U; axis < 4U; axis++) {
         snapshot->camera.view_projection_q16[axis][axis] = 65536;
     }

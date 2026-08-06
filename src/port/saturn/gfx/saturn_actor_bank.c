@@ -88,7 +88,13 @@ bool sm64_saturn_actor_bank_animation(
     sm64_saturn_actor_animation_record_t *record)
 {
     const uint8_t *source;
-    if (view == NULL || record == NULL || animation_id >= view->bank.animation_count)
+    if (view == NULL || record == NULL || animation_id >= view->bank.animation_count ||
+        view->records_offset > view->byte_count ||
+        (uint32_t)animation_id * SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE >
+            view->byte_count - view->records_offset ||
+        SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE >
+            view->byte_count - view->records_offset -
+            (uint32_t)animation_id * SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE)
         return false;
     source = view->bytes + view->records_offset +
              (uint32_t)animation_id * SM64_SATURN_ACTOR_ANIMATION_RECORD_SIZE;
@@ -413,11 +419,21 @@ bool sm64_saturn_actor_bank_sample_channel(
 {
     sm64_saturn_actor_animation_record_t record;
     uint32_t index_words, value_words, count, offset, selected;
-    if (sample == NULL || !sm64_saturn_actor_bank_animation(view, animation_id, &record))
+    if (sample == NULL || view == NULL ||
+        !sm64_saturn_actor_bank_animation(view, animation_id, &record) ||
+        record.indices_offset < 4U || record.values_offset < 4U ||
+        record.indices_offset > view->byte_count - 4U ||
+        record.values_offset > view->byte_count - 4U ||
+        record.indices_offset < view->indices_offset ||
+        record.values_offset < view->values_offset ||
+        record.indices_offset > view->indices_offset + view->indices_size ||
+        record.values_offset > view->values_offset + view->values_size)
         return false;
     index_words = read_be32(view->bytes + record.indices_offset - 4U);
     value_words = read_be32(view->bytes + record.values_offset - 4U);
-    if ((uint32_t)channel * 2U + 1U >= index_words)
+    if ((uint32_t)channel * 2U + 1U >= index_words ||
+        index_words > (view->byte_count - record.indices_offset) / 2U ||
+        value_words > (view->byte_count - record.values_offset) / 2U)
         return false;
     count = read_be16(view->bytes + record.indices_offset + (uint32_t)channel * 4U);
     offset = read_be16(view->bytes + record.indices_offset + (uint32_t)channel * 4U + 2U);
@@ -426,4 +442,40 @@ bool sm64_saturn_actor_bank_sample_channel(
         return false;
     *sample = read_be_s16(view->bytes + record.values_offset + selected * 2U);
     return true;
+}
+
+bool sm64_saturn_actor_bank_joint(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t joint,
+    sm64_saturn_actor_joint_t *out)
+{
+    const uint32_t offset = GEOMETRY_HEADER_SIZE + (uint32_t)joint * JOINT_RECORD_SIZE;
+    const uint8_t *record;
+    if (view == NULL || out == NULL || joint >= view->bank.joint_count ||
+        view->meshlets_size < offset + JOINT_RECORD_SIZE)
+        return false;
+    record = view->bytes + view->meshlets_offset + offset;
+    out->parent_ordinal = read_be_s16(record);
+    out->translation[0] = read_be_s16(record + 2U);
+    out->translation[1] = read_be_s16(record + 4U);
+    out->translation[2] = read_be_s16(record + 6U);
+    out->node_ordinal = read_be_s16(record + 8U);
+    out->branch_ordinal = read_be16(record + 10U);
+    return true;
+}
+
+bool sm64_saturn_actor_bank_vertex(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t vertex,
+    sm64_saturn_actor_vertex_t *out)
+{
+    const uint32_t offset = view == NULL ? 0U : view->vertices_offset +
+        (uint32_t)vertex * 10U;
+    if (view == NULL || out == NULL || vertex >= view->bank.vertex_count ||
+        offset > view->byte_count || 10U > view->byte_count - offset)
+        return false;
+    out->local[0] = read_be_s16(view->bytes + offset);
+    out->local[1] = read_be_s16(view->bytes + offset + 2U);
+    out->local[2] = read_be_s16(view->bytes + offset + 4U);
+    out->joint_ordinal = read_be16(view->bytes + offset + 6U);
+    out->branch_ordinal = read_be16(view->bytes + offset + 8U);
+    return out->joint_ordinal < view->bank.joint_count;
 }

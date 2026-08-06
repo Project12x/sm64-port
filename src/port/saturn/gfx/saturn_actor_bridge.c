@@ -20,6 +20,29 @@
 
 #include "saturn_mario_actor_mesh.h"
 
+#ifndef SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+#define SATURN_FEATURE_COMPLETE_MARIO_ANIMATION 0
+#endif
+
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+extern const uint8_t sm64_saturn_mario_actor_bank_data[];
+extern const uint32_t sm64_saturn_mario_actor_bank_size;
+static sm64_saturn_actor_bank_view_t complete_actor_bank;
+static int16_t complete_actor_vertices[SM64_MARIO_VERTEX_COUNT][3];
+static uint8_t complete_actor_lights[SM64_MARIO_VERTEX_COUNT];
+static int32_t complete_actor_joints[20U * 16U];
+static uint8_t complete_actor_bank_ready;
+static const sm64_saturn_actor_bank_view_t *complete_bank(void)
+{
+    if (complete_actor_bank_ready == 0U)
+        complete_actor_bank_ready = (uint8_t)sm64_saturn_actor_bank_validate(
+            sm64_saturn_mario_actor_bank_data, sm64_saturn_mario_actor_bank_size,
+            &complete_actor_bank);
+    return complete_actor_bank_ready != 0U ? &complete_actor_bank : NULL;
+}
+#endif
+
+#if !SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
 static uint8_t is_walking_family(int16_t animation_id)
 {
     switch (animation_id) {
@@ -34,6 +57,7 @@ static uint8_t is_walking_family(int16_t animation_id)
         return 0U;
     }
 }
+#endif
 
 uint8_t sm64_saturn_mario_actor_snapshot(
     sm64_saturn_mario_actor_snapshot_t *snapshot)
@@ -68,7 +92,11 @@ uint8_t sm64_saturn_mario_actor_snapshot(
         snapshot->animation_frame = 0;
         snapshot->area_index = -1;
     }
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+    snapshot->walking_bank = 0U;
+#else
     snapshot->walking_bank = is_walking_family(snapshot->animation_id);
+#endif
     snapshot->valid = 1U;
     return 1U;
 }
@@ -80,6 +108,31 @@ uint8_t sm64_saturn_mario_actor_pose(
     if (snapshot == NULL || pose == NULL || !snapshot->valid) {
         return 0U;
     }
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+    {
+        const sm64_saturn_actor_bank_view_t *bank = complete_bank();
+        sm64_saturn_actor_pose_work_t work = {
+            .vertices = complete_actor_vertices,
+            .light_intensity = complete_actor_lights,
+            .joint_matrices_q16 = complete_actor_joints,
+            .vertex_capacity = SM64_MARIO_VERTEX_COUNT,
+            .joint_capacity = 20U,
+            .light_capacity = SM64_MARIO_VERTEX_COUNT,
+        };
+        sm64_saturn_actor_pose_view_t evaluated;
+        if (bank == NULL || !sm64_saturn_actor_pose_evaluate(
+                bank, snapshot->animation_id, snapshot->animation_frame,
+                &work, &evaluated))
+            return 0U;
+        pose->vertices = evaluated.vertices;
+        pose->light_intensity = evaluated.light_intensity;
+        pose->frame = evaluated.frame;
+        pose->frame_count = evaluated.frame_count;
+        pose->vertex_count = evaluated.vertex_count;
+        pose->walking_bank = 0U;
+        return 1U;
+    }
+#else
     pose->walking_bank = snapshot->walking_bank;
     pose->vertex_count = SM64_MARIO_VERTEX_COUNT;
     if (snapshot->walking_bank) {
@@ -99,6 +152,7 @@ uint8_t sm64_saturn_mario_actor_pose(
         pose->light_intensity = sm64_mario_animation_light_intensity[pose->frame];
     }
     return 1U;
+#endif
 }
 
 uint8_t sm64_saturn_mario_actor_pose_selector(
@@ -116,9 +170,13 @@ uint8_t sm64_saturn_mario_actor_pose_selector(
     selector->walking_bank = 0U;
     selector->valid = 0U;
     if (!sm64_saturn_mario_actor_pose(snapshot, &pose)) return 0U;
+#if SATURN_FEATURE_COMPLETE_MARIO_ANIMATION
+    selector->vertex_bank_id = SM64_SATURN_MARIO_VERTEX_BANK_COMPLETE;
+#else
     selector->vertex_bank_id = pose.walking_bank ?
         SM64_SATURN_MARIO_VERTEX_BANK_WALKING :
         SM64_SATURN_MARIO_VERTEX_BANK_NEUTRAL;
+#endif
     selector->material_bank_id = SM64_SATURN_MARIO_MATERIAL_BANK_DEFAULT;
     selector->frame = pose.frame;
     selector->frame_count = pose.frame_count;

@@ -619,6 +619,8 @@ verify-actor-pose-bank: compile-mario-actor-bank
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/actor_pose_bank_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_bank.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_actor_pose.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_trig_q16.inc.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-pose-bank-test$(HOST_EXEEXT)"
 	"$(SATURN_REPO_ROOT)/build/saturn/host-tests/actor-pose-bank-test$(HOST_EXEEXT)" "$(MARIO_ACTOR_BANK)"
 

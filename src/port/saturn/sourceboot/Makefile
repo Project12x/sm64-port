@@ -27,6 +27,8 @@ SOURCEBOOT_WATER_SKYBOX := $(SOURCEBOOT_PC_BUILD)/bin/water_skybox.c
 SOURCEBOOT_CART_IMAGE = $(SH_BUILD_DIR)/SOURCE.DAT
 SOURCEBOOT_QUAD_MAP_C := $(SOURCEBOOT_GENERATED)/saturn_quad_map.c
 SOURCEBOOT_QUAD_MAP_H := $(SOURCEBOOT_GENERATED)/saturn_quad_map.h
+SOURCEBOOT_ACTOR_BANK := $(ROOT)/build/saturn/actors/mario/mario.s64b
+SOURCEBOOT_ACTOR_BANK_C := $(SOURCEBOOT_GENERATED)/mario_actor_bank.c
 SATURN_SOURCEBOOT_ROUTE_REPLAY ?= 0
 SATURN_SOURCEBOOT_LEVEL_ID ?= 9
 SATURN_SOURCEBOOT_AREA_ID ?= 1
@@ -278,6 +280,8 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/runtime/saturn_camera_role.c \
   $(ROOT)/src/port/saturn/runtime/saturn_camera_fixed.c \
   $(ROOT)/src/port/saturn/gfx/saturn_actor_bridge.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_bank.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_actor_pose.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_snapshot.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_queue.c \
   $(ROOT)/src/port/saturn/gfx/saturn_render_job_graph.c \
@@ -315,6 +319,10 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(SOURCEBOOT_MATH_SRCS) $(ROOT)/levels/scripts.c \
   $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C)
+
+ifeq ($(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION),1)
+SH_SRCS += $(SOURCEBOOT_ACTOR_BANK_C)
+endif
 
 ifeq ($(SATURN_FEATURE_SEMANTIC_AUDIO),1)
 SH_SRCS += source_audio_semantics.c \
@@ -530,6 +538,14 @@ IP_1ST_READ_SIZE := 0
 $(SOURCEBOOT_GENERATED)/mario_anim_data.c: $(ROOT)/tools/mario_anims_converter.py $(wildcard $(ROOT)/assets/anims/*.inc.c)
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" tools/mario_anims_converter.py > "$(SOURCEBOOT_GENERATED)/mario_anim_data.c"
+
+$(SOURCEBOOT_ACTOR_BANK):
+	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" \
+	  compile-mario-actor-bank SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+
+$(SOURCEBOOT_ACTOR_BANK_C): $(SOURCEBOOT_ACTOR_BANK) $(ROOT)/tools/saturn/emit_actor_bank_c.py
+	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/emit_actor_bank_c.py" \
+	  --input "$<" --output "$@"
 
 # Grouped target (GNU Make >= 4.3): one run of the tool produces both files,
 # so `&:` keeps make from scheduling the recipe twice under -j.

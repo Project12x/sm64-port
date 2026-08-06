@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 
+#include "saturn_actor_pose.h"
+
 typedef struct sm64_saturn_mario_actor_snapshot {
     int32_t position[3];
     int32_t camera_position[3];
@@ -42,6 +44,7 @@ typedef struct sm64_saturn_mario_pose_selector {
 enum {
     SM64_SATURN_MARIO_VERTEX_BANK_NEUTRAL = 1U,
     SM64_SATURN_MARIO_VERTEX_BANK_WALKING = 2U,
+    SM64_SATURN_MARIO_VERTEX_BANK_COMPLETE = 3U,
     SM64_SATURN_MARIO_MATERIAL_BANK_DEFAULT = 1U,
 };
 

@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Added the feature-selectable compact Mario pose evaluator.  The enabled
+  sourceboot path consumes the source-selected animation ID/frame after the
+  authoritative geo tick, evaluates one bounded 20-joint pose from the
+  validated 209-ID S64B bank, and feeds the existing meshlet admission path;
+  it does not introduce a Saturn animation clock or duplicate material/switch
+  ownership.  Feature-off retains the legacy generated pose selector.  The
+  serialized variant builder seals matching ELF/CUE/ISO hashes, while the
+  non-promotable animation-sweep validator rejects missing/duplicate IDs,
+  diagnostic-only evaluator symbols, fallback/corrupt telemetry, and identity
+  drift.  Target/Ymir sweep evidence remains outstanding until a linked
+  variant reports all 209 IDs.
+
 - Replaced sourceboot's optional silent-audio path with a feature-selected,
   source-authoritative SH-2 policy adapter while preserving every public
   `src/audio/external.h` signature and retaining the silent translation unit

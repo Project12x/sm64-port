@@ -36,6 +36,19 @@ typedef struct sm64_saturn_actor_bank_view {
     uint32_t max_scratch;
 } sm64_saturn_actor_bank_view_t;
 
+typedef struct sm64_saturn_actor_joint {
+    int16_t parent_ordinal;
+    int16_t translation[3];
+    int16_t node_ordinal;
+    uint16_t branch_ordinal;
+} sm64_saturn_actor_joint_t;
+
+typedef struct sm64_saturn_actor_vertex {
+    int16_t local[3];
+    uint16_t joint_ordinal;
+    uint16_t branch_ordinal;
+} sm64_saturn_actor_vertex_t;
+
 bool sm64_saturn_actor_bank_validate(const void *data, size_t byte_count,
                                      sm64_saturn_actor_bank_view_t *view);
 bool sm64_saturn_actor_bank_validate_expected(
@@ -47,5 +60,11 @@ bool sm64_saturn_actor_bank_animation(
 bool sm64_saturn_actor_bank_sample_channel(
     const sm64_saturn_actor_bank_view_t *view, uint16_t animation_id,
     uint16_t frame, uint16_t channel, int16_t *sample);
+bool sm64_saturn_actor_bank_joint(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t joint,
+    sm64_saturn_actor_joint_t *out);
+bool sm64_saturn_actor_bank_vertex(
+    const sm64_saturn_actor_bank_view_t *view, uint16_t vertex,
+    sm64_saturn_actor_vertex_t *out);
 
 #endif
