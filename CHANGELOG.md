@@ -4,6 +4,19 @@
 
 ### Changed
 
+- Added a dedicated, bounded actor-instance queue and master-only batch merge
+  without expanding the proven eight-entry world graph. Each pointer-free job
+  owns one Task 14 snapshot identity and a disjoint output span, either SH-2
+  may claim it exactly once through the existing P2/TAS publication pattern,
+  and stale generation/package/bank/incarnation or claimant failures
+  quarantine only that instance. Stable batches preserve published painter
+  order while grouping adjacent compatible family/material work. The queue's
+  fixed memory report derives from the shared snapshot ceiling; BOB capacity
+  remains an explicit package-evidence gate rather than an assumed claim. The
+  DLL-safe inherited gate also now checks the worker context's current inline
+  references instead of requiring primitive/material pointers that were
+  deliberately removed from that context.
+
 - Added the scene-neutral admission boundary for validated render packages.
   Generic cluster/node/portal views now reject malformed metadata before
   traversal, perform conservative Z-Treme-derived frustum tests before

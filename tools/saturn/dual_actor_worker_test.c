@@ -108,11 +108,14 @@ static int worker_context_has_no_live_game_pointers(void)
     if (end != NULL)
         end[strlen("} demo_mario_transform_context_t;")] = '\0';
     const int valid = has_compact_worker_refs && end != NULL &&
+        strstr(context, "sm64_saturn_ir_transform_job_t job;") != NULL &&
         strstr(context, "sm64_saturn_mario_actor_snapshot_t snapshot;") != NULL &&
         strstr(context, "int16_t vertices[SM64_MARIO_VERTEX_COUNT][3];") != NULL &&
-        strstr(context, "const uint16_t (*primitives)[5];") != NULL &&
-        strstr(context, "const uint8_t (*material_rgb)[3];") != NULL &&
+        strstr(context, "uint8_t light_intensity[SM64_MARIO_VERTEX_COUNT];") != NULL &&
+        strstr(context, "uint16_t vertex_refs[SM64_MARIO_VERTEX_COUNT];") != NULL &&
         strstr(context, "const sm64_saturn_mario_actor_snapshot_t *") == NULL &&
+        strstr(context, "const uint16_t (*primitives)[5];") == NULL &&
+        strstr(context, "const uint8_t (*material_rgb)[3];") == NULL &&
         strstr(context, "MarioState") == NULL && strstr(context, "gMario") == NULL &&
         strstr(context, "GraphNode") == NULL && strstr(context, "vdp1_") == NULL;
     free(text);
