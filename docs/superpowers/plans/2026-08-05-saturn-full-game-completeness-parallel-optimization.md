@@ -1093,11 +1093,17 @@ license, renderer, or target-performance result.
   target; and the tests/report overclaim clean/exact closure from substring and
   self-whitelist checks. No current-head CUE/ISO, Ymir/manual, target/P2, or FPS
   evidence is claimed until those gates pass; do not launch an older artifact.
-- [ ] Add the four generated headers and every other exact compiled/incbin
-  prerequisite to the post-assets closure, restrict `SOURCEBOOT_BUILD_IDENTITY_STAGE`
-  to the explicit identity-assets pass, and replace self-whitelist assertions
-  with a clean-order/closure mutation gate. Independently rereview before any
-  fresh linked image is considered launchable.
+- [x] Add the four generated headers and every other exact compiled/incbin
+  prerequisite to the post-assets closure in `ecefd288`; restrict
+  `SOURCEBOOT_BUILD_IDENTITY_STAGE` to `seal|assets`, with `assets` accepted
+  only for the sole `identity-assets` goal; and replace self-whitelist
+  assertions with an independent compiled/generated prerequisite mutation gate.
+  Bootstrap 6/6, identity 9/9, source identity 5/5, the negative stage-bypass
+  gate, and the DLL-preflighted top-level dry-run pass.
+- [ ] Independently rereview `7a641f48..ecefd288`, then run a clean serialized
+  sourceboot build and inspect the new identity-bearing ELF/map. No current-head
+  CUE/ISO, Ymir/manual, target/P2, or FPS evidence is claimed until those gates
+  pass; do not launch an older artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
