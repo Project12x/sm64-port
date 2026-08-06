@@ -11,6 +11,10 @@ SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_v
 SOURCEBOOT_BUILD_IDENTITY_BIN := $(SOURCEBOOT_GENERATED)/saturn_build_identity.bin
 SOURCEBOOT_BUILD_IDENTITY_JSON := $(SOURCEBOOT_GENERATED)/saturn_build_identity.json
 SOURCEBOOT_BUILD_IDENTITY_LABEL := $(SOURCEBOOT_GENERATED)/saturn_build_identity.label
+SOURCEBOOT_GEO_DEPTH_TOOL := $(ROOT)/tools/saturn/geo_depth_manifest.py
+SOURCEBOOT_GEO_DEPTH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.h
+SOURCEBOOT_GEO_DEPTH_REPORT := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.json
+SOURCEBOOT_GEO_DEPTH_LINKER := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.ld
 SOURCEBOOT_BUILD_IDENTITY_STAGE ?= seal
 ifneq ($(words $(SOURCEBOOT_BUILD_IDENTITY_STAGE)),1)
   $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be exactly one token: seal or assets)
@@ -287,6 +291,9 @@ SOURCEBOOT_GODDARD_SRCS := $(wildcard $(ROOT)/src/goddard/*.c) $(wildcard $(ROOT
 # The Bob script, Bob level data, shared source actor banks, and generated Mario
 # animation table are all consumed through source LevelScript/GeoLayout state.
 SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_cart.c source_q16_kernel_probe.c \
+  source_exception_record.c source_exception_trampolines.sx \
+  $(ROOT)/src/port/saturn/runtime/saturn_geo_walk.c \
+  $(ROOT)/src/port/saturn/runtime/saturn_geo_walk_storage.c \
   $(ROOT)/src/port/saturn/platform/saturn_build_identity.c \
   source_collision_catalog.c $(SOURCEBOOT_WATER_SKYBOX) \
   $(ROOT)/src/port/saturn/controller/controller_saturn.c \
@@ -452,6 +459,7 @@ export MAKE_ISO_XORRISOFS := $(ROOT)/tools/saturn/xorrisofs-reproducible
 
 include $(YAUL_INSTALL_ROOT)/share/build.pre.mk
 
+
 # Keep the default Yaul binary image contiguous in work RAM.  The source data
 # bank is exported separately from the final ELF and copied into the cart at
 # its already-linked VMA before thread5_game_loop() executes.
@@ -508,6 +516,7 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -I$(SOURCEBOOT_GENERATED) -I$(SOURCEBOOT_MARIO_TEXTURE_DIR) \
   -DSATURN_DEMO_MARIO_TEXTURES=1
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections \
+  -L$(SOURCEBOOT_GENERATED) \
   -Wl,--defsym=sm64_saturn_camera_variant_marker=$(SATURN_CAMERA_VARIANT) \
   -Wl,--defsym=sm64_saturn_camera_route_marker=$(SATURN_SOURCEBOOT_CAMERA_ROUTE)
 ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)
@@ -595,7 +604,11 @@ IP_AREAS := JTUBKAEL
 IP_PERIPHERALS := JAMKST
 IP_TITLE := SM64 SATURN SOURCEBOOT E2
 IP_MASTER_STACK_ADDR := 0x06004000
-IP_SLAVE_STACK_ADDR := 0x06001E00
+# The slave stack grows downward. Reserve the final 16 KiB of LWRAM for it;
+# sourceboot-cart.x asserts that static LWRAM ends before this boundary. The
+# old 0x06001E00 HWRAM top gave the dual-SH2 render callbacks too little stack
+# and let an exception frame descend below the physical HWRAM base.
+IP_SLAVE_STACK_ADDR := 0x00300000
 IP_1ST_READ_ADDR := 0x06004000
 IP_1ST_READ_SIZE := 0
 
@@ -631,6 +644,15 @@ $(SOURCEBOOT_COLLISION_CATALOG): $(ROOT)/tools/saturn/prepare_sourceboot_collisi
 	@"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py" \
 	  --root "$(ROOT)" --output "$@" \
 	  $(foreach level,$(SOURCEBOOT_COLLISION_EXCLUDE_LEVELS),--exclude-level $(level))
+
+.PHONY: source-geo-depth
+source-geo-depth: $(SOURCEBOOT_GEO_DEPTH_TOOL)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@"$(SOURCEBOOT_PYTHON)" "$(SOURCEBOOT_GEO_DEPTH_TOOL)" \
+	  --root "$(ROOT)" --source-dir "$(ROOT)/actors" --source-dir "$(ROOT)/levels" \
+	  --output-header "$(SOURCEBOOT_GEO_DEPTH_HEADER)" \
+	  --output-linker "$(SOURCEBOOT_GEO_DEPTH_LINKER)" \
+	  --output-json "$(SOURCEBOOT_GEO_DEPTH_REPORT)"
 
 .PHONY: source-assets
 source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures
@@ -810,7 +832,7 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # not by itself rebuild the world -- the generated .d files carry the real
 # header dependency once a build has run.
 $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
-  $(SOURCEBOOT_BUILD_IDENTITY_INC)
+  $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
 # the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,

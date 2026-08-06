@@ -12,6 +12,10 @@ OUTPUT_ARCH (sh)
 EXTERN (_start)
 ENTRY (_start)
 SEARCH_DIR ("$YAUL_INSTALL_ROOT/$YAUL_ARCH_SH_PREFIX/lib");
+/* Build-generated capacity symbols are supplied through the generated
+ * include directory.  The link must fail if the source storage and manifest
+ * disagree; no hand-maintained BOB capacity is accepted. */
+INCLUDE saturn_geo_depth_manifest.ld
 
 MEMORY {
   ram   (Wx) : ORIGIN = 0x06004000, LENGTH = 0x000FC000
@@ -176,6 +180,21 @@ SECTIONS
   ASSERT ((__lwram_actor_runtime_start & 0xF) == 0,
           "actor runtime must be 16-byte aligned")
 
+  .lwram_geo_traversal (NOLOAD) :
+  {
+    . = ALIGN (16);
+    __lwram_geo_traversal_start = .;
+    KEEP(*(.lwram_geo_traversal))
+    __lwram_geo_traversal_end = .;
+  } > lwram
+  ASSERT (SIZEOF(.lwram_geo_traversal) ==
+          __sourceboot_geo_traversal_expected_size,
+          "geo traversal storage differs from generated full-game capacity")
+  ASSERT ((__lwram_geo_traversal_start & 0xF) == 0,
+          "geo traversal storage must be 16-byte aligned")
+  ASSERT (__lwram_actor_runtime_end <= __lwram_geo_traversal_start,
+          "geo traversal storage overlaps actor runtime")
+
   .lwram_camera_capture (NOLOAD) :
   {
     /* Do not align an empty optional section: GNU ld counts the alignment
@@ -191,6 +210,21 @@ SECTIONS
   ASSERT (SIZEOF(.lwram_camera_capture) == 0 ||
           SIZEOF(.lwram_camera_capture) == 0x2F7C0,
           "SCC1 capture must be absent or exactly 0x2F7C0 bytes")
+  /* The slave SH-2 stack is private CPU state and grows downward. Keep it in
+   * the final 16 KiB of LWRAM so its dynamic frames cannot collide with the
+   * linker-owned static work arenas above. IP_SLAVE_STACK_ADDR is the physical
+   * top (LWRAM origin + length); the explicit base symbol lets the map gate
+   * distinguish this stack reservation from general free-space slack. */
+  PROVIDE (__sourceboot_lwram_slave_stack_base =
+            ORIGIN (lwram) + LENGTH (lwram) - 0x4000);
+  PROVIDE (__sourceboot_lwram_slave_stack_top =
+            ORIGIN (lwram) + LENGTH (lwram));
+  ASSERT ((__sourceboot_lwram_slave_stack_base & 0xF) == 0,
+          "LWRAM slave-stack base must be 16-byte aligned")
+  ASSERT (__lwram_camera_capture_end <= __sourceboot_lwram_slave_stack_base,
+          "LWRAM static work arenas overlap the reserved slave stack")
+  ASSERT (__lwram_geo_traversal_end <= __sourceboot_lwram_slave_stack_base,
+          "geo traversal storage overlaps the reserved slave stack")
   PROVIDE (__sourceboot_required_lwram_margin = 0x4000);
   ASSERT (__lwram_camera_capture_end <= ORIGIN (lwram) + LENGTH (lwram),
           "LWRAM sections extend past the physical top of work RAM")
