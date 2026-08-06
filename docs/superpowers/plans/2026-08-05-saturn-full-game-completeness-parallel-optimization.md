@@ -1142,7 +1142,11 @@ license, renderer, or target-performance result.
 - [ ] Run the clean serialized current-head sourceboot build through the
   DLL-preflight wrapper, inspect the identity-bearing ELF/map and exact HWRAM/
   LWRAM margins, then stage only a source-attested HWRAM repair if the known
-  overflow recurs. Do not launch any pre-`46162df5` artifact.
+  overflow recurs. This run reached compilation and produced the current
+  identity directory/map `e2-bob-identity-id-634477a207617cf6`, but link failed
+  with HWRAM overflow `143888` bytes. The map is usable for source-attested
+  inventory; no ELF/CUE/ISO or launchable image exists. Do not launch any
+  pre-`46162df5` artifact.
 
 #### Task 14 bounded continuation: HWRAM capacity after VDP1 relocation
 
