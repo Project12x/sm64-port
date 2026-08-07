@@ -617,6 +617,7 @@ verify-saturn-hud-layout: check-host-tools
 	  -I"$(SATURN_REPO_ROOT)/src/port/saturn/gfx" \
 	  "$(SATURN_REPO_ROOT)/tools/saturn/saturn_hud_layout_test.c" \
 	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_layout.c" \
+	  "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_publish.c" \
 	  -o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-layout-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; raise SystemExit(subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/saturn-hud-layout-test$(HOST_EXEEXT)']).returncode)"
 

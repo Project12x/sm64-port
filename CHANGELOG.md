@@ -4,6 +4,108 @@
 
 ### Added
 
+- Added `src/port/saturn/gfx/saturn_hud_publish.{h,c}` (Task 6 of the VDP2
+  gameplay HUD plan, `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`):
+  `sm64_saturn_hud_publish()` diffs the layout Task 5's
+  `sm64_saturn_hud_layout_build()` computes for the current frame against
+  the layout actually published last time, and calls Task 4's
+  `sm64_saturn_hud_atlas_write_cell()` only for cells whose `(col,row,glyph)`
+  changed since then -- including writing `SM64_SATURN_HUD_GLYPH_BLANK` for
+  any cell that was occupied last publish and is not occupied this publish.
+  Pure host-testable logic with no VRAM access of its own; a test double
+  stands in for the real atlas writer in the host test, exactly as the plan
+  specified.
+
+  Verified the real, current Task 4/5 public interfaces
+  (`saturn_hud_atlas.h`, `saturn_hud_layout.h`) before writing any code
+  against them, per this plan's established practice -- both matched what
+  the plan's Step 3 snippet assumed exactly (field names/types on
+  `sm64_saturn_hud_cell_t`, `SM64_SATURN_HUD_LAYOUT_MAX_CELLS` = 40, and
+  `sm64_saturn_hud_layout_build()`'s signature), so the plan's given
+  implementation needed no interface-mismatch fixes this time.
+
+  Added `test_publish_writes_blank_for_vacated_cells` to
+  `tools/saturn/saturn_hud_layout_test.c`, beyond the plan's own given test.
+  The plan's `test_publish_only_rewrites_changed_cells` never clears
+  `HUD_FLAG_LIVES`, so it only ever changes a digit glyph within a group
+  that stays on screen -- it never exercises `sm64_saturn_hud_publish()`'s
+  first diff pass (the one that blanks cells no longer occupied) at all;
+  deleting that whole pass would still pass the plan's test. The new test
+  drives the lives group from shown to fully hidden and checks that every
+  previously-occupied cell is rewritten exactly once, that every one of
+  those rewrites specifically carries `SM64_SATURN_HUD_GLYPH_BLANK` (not
+  just "some glyph"), and that republishing the same now-empty snapshot a
+  second time costs zero further writes -- proving `state->last_count`
+  actually shrinks to 0 rather than leaving stale occupied bookkeeping
+  behind.
+
+  Traced the specific correctness questions this task's brief called out
+  before trusting the algorithm: a cell whose glyph changes while a
+  different cell's glyph also changes in the same publish is handled
+  independently per cell (no shared state between diff decisions); the
+  first-ever publish (`state->primed == 0`) writes every cell because
+  `last_count` is already 0 from `sm64_saturn_hud_publish_init()`, so
+  `find_cell()` would return `NULL` regardless of the explicit `primed`
+  guard (the guard is belt-and-suspenders, not load-bearing); and
+  `find_cell()`'s O(count) per-call / O(count^2) total linear scan is a
+  performance-only characteristic, not a correctness gap, given
+  `SM64_SATURN_HUD_LAYOUT_MAX_CELLS` is a fixed 40 and Task 5's layout
+  builder is documented never to emit duplicate `(col,row)` keys for
+  simultaneously-visible glyphs. Also confirmed by construction that the
+  "clear vacated cells" pass and the "write occupied cells" pass can never
+  both target the same `(col,row)` in one call (they partition on
+  membership in the new layout's cell list), so a glyph that changes while
+  staying occupied always gets exactly one write, never a spurious
+  blank-then-rewrite pair.
+
+  Verified by direct execution: compiled and ran the full host test
+  (`gcc -std=c11 -Wall -Wextra -Werror`, zero diagnostics, exit 0, all 6
+  tests including the 2 new ones), then ran a real mutation-testing pass
+  (project standing policy) rather than trusting the given tests --
+  disabling the vacate pass, forcing pass 2 to always/never write, weakening
+  `find_cell`'s `&&` to `||`, and writing the wrong glyph on vacate were all
+  5/5 caught (test suite goes red for each); restored the clean
+  implementation afterward and confirmed a final clean build.
+
+  Hit the same `Makefile.saturn.mk`/Cygwin-`make` `OS` quirk Task 5
+  documented, worked around identically (`OS=Windows_NT` on the command
+  line). Also hit a related but distinct quirk this time: this sandbox's
+  MSYS2 `make` (`/c/msys64/usr/bin/make`, Cygwin-built) strips `TMP`/`TEMP`/
+  `TMPDIR` entirely from its recipe shell's environment (confirmed with a
+  minimal diagnostic Makefile target), which breaks the native
+  (non-MSYS-linked) MinGW `gcc.exe`'s ability to create its intermediate
+  temp files ("Cannot create temporary file in C:\WINDOWS\: Permission
+  denied") -- unrelated to the already-documented `OS`-variable quirk, and
+  reproducing consistently even after this task's files existed. Worked
+  around the same way the plan's own guidance anticipated for the Python-
+  wrapper quirk: reproduced the exact compiler and run commands `make -n`
+  would have issued and ran them directly in a shell with a correctly
+  populated environment, which is what actually proves RED and then GREEN.
+
+  Added `saturn_hud_publish.c` to the `verify-saturn-hud-layout` Makefile
+  target's compile line, per the plan's Step 2.
+
+  **Provenance correction:** the plan's Step 4 text asserted, as the
+  rationale for an "honest negative finding," that "Z-Treme's own HUD
+  counters redraw unconditionally every frame." Both pinned references
+  (`Lobotomy-Software/SlaveDriver-Engine` and `Maxime-XL2/SONIC-Z-TREME`)
+  are vendored locally, so this was checked directly rather than copied
+  into permanent provenance docs unverified. SlaveDriver's own text/HUD
+  module, `PRINT.C`/`PRINT.H`, has no dirty-tracking of any kind and
+  renders text as VDP1 sprites (`sega_spr.h`, `EZ_setLookupTbl`), not VDP2
+  character-pattern cells at all -- not even the same rendering mechanism
+  this task's atlas uses. Z-Treme's only candidate HUD-counter call site,
+  `slPrint("RINGS : ", slLocate(0,4))` in `SRC/game.c:30`, is commented out
+  in the pinned snapshot, and `slPrint`/`slLocate` are proprietary SGL
+  primitives with no available source in this repository. The more precise,
+  defensible finding recorded in `docs/saturn/UPSTREAM_CODE_LEDGER.md`
+  ("Task 23A Task 6") and `docs/saturn/PROVENANCE.md` instead: neither
+  pinned reference offers inspectable per-cell VDP2 dirty-diffing logic to
+  adopt or contrast against, because neither has a live, readable call site
+  to inspect at all -- not that either one demonstrably redraws
+  unconditionally. Added alongside, not overwriting, Task 4's existing
+  `ztFont2NBG3` citation in both files.
+
 - Added `src/port/saturn/gfx/saturn_hud_layout.{h,c}`: a pure, host-testable
   function (`sm64_saturn_hud_layout_build()`) that decides which glyph goes in
   which VDP2 tile cell for a given `sm64_saturn_hud_snapshot_t` (Task 5 of the

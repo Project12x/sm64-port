@@ -5,6 +5,7 @@
 #include "saturn_hud.h"
 #include "saturn_hud_atlas.h"
 #include "saturn_hud_layout.h"
+#include "saturn_hud_publish.h"
 
 static int
 test_layout_places_lives_digit_and_glyphs(void)
@@ -108,6 +109,126 @@ test_layout_reads_power_meter_from_snapshot_not_recomputed(void)
     return 0;
 }
 
+/* Test double for the real target-only atlas writer -- linked instead of
+ * saturn_hud_atlas.c for this fixture, so no Yaul headers are needed.
+ * g_blank_write_count additionally records how many of those writes used
+ * SM64_SATURN_HUD_GLYPH_BLANK specifically, which
+ * test_publish_writes_blank_for_vacated_cells below needs; g_write_count
+ * alone (the plan's original double) cannot distinguish "wrote the right
+ * glyph" from "wrote some glyph". */
+static uint32_t g_write_count;
+static uint32_t g_blank_write_count;
+
+void
+sm64_saturn_hud_atlas_write_cell(uint8_t col, uint8_t row, sm64_saturn_hud_glyph_t glyph)
+{
+    (void)col; (void)row;
+    g_write_count++;
+    if (glyph == SM64_SATURN_HUD_GLYPH_BLANK)
+        g_blank_write_count++;
+}
+
+static int
+test_publish_only_rewrites_changed_cells(void)
+{
+    sm64_saturn_hud_publish_state_t state;
+    sm64_saturn_hud_publish_init(&state);
+
+    sm64_saturn_hud_snapshot_t snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    snapshot.flags = 0x0001;
+    snapshot.lives = 3;
+
+    g_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    const uint32_t first_pass_writes = g_write_count;
+    if (first_pass_writes == 0U) {
+        fprintf(stderr, "first publish wrote zero cells\n");
+        return 1;
+    }
+
+    g_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    if (g_write_count != 0U) {
+        fprintf(stderr, "unchanged snapshot triggered %u rewrites\n", g_write_count);
+        return 1;
+    }
+
+    snapshot.lives = 4;
+    g_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    if (g_write_count == 0U || g_write_count >= first_pass_writes) {
+        fprintf(stderr, "single-field change rewrote %u cells (expected fewer than %u)\n",
+               g_write_count, first_pass_writes);
+        return 1;
+    }
+    return 0;
+}
+
+/* Coverage gap the plan's own test above cannot see (flagged by this task's
+ * self-review instructions): test_publish_only_rewrites_changed_cells never
+ * clears HUD_FLAG_LIVES, so every cell that's occupied stays occupied for
+ * the whole test -- only a digit glyph within that still-shown group ever
+ * changes. sm64_saturn_hud_publish()'s first diff pass (the one that scans
+ * state->last_cells for entries no longer present in the new layout and
+ * writes SM64_SATURN_HUD_GLYPH_BLANK for them) is never exercised by that
+ * test at all; deleting that whole loop would not fail it. This test drives
+ * the lives group from shown to fully hidden and checks: every previously-
+ * occupied cell is rewritten exactly once (matching occupied_cells, not
+ * more and not fewer), every one of those rewrites specifically carries
+ * SM64_SATURN_HUD_GLYPH_BLANK (not just "some glyph"), and republishing the
+ * same now-empty snapshot again costs zero further writes -- which only
+ * holds if state->last_count actually shrank to 0 rather than leaving
+ * stale "occupied" bookkeeping behind. */
+static int
+test_publish_writes_blank_for_vacated_cells(void)
+{
+    sm64_saturn_hud_publish_state_t state;
+    sm64_saturn_hud_publish_init(&state);
+
+    sm64_saturn_hud_snapshot_t snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    snapshot.flags = 0x0001; /* HUD_DISPLAY_FLAG_LIVES */
+    snapshot.lives = 4;
+
+    g_write_count = 0U;
+    g_blank_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    const uint32_t occupied_cells = g_write_count;
+    if (occupied_cells == 0U) {
+        fprintf(stderr, "priming publish for vacate test wrote zero cells\n");
+        return 1;
+    }
+    if (g_blank_write_count != 0U) {
+        fprintf(stderr, "first-ever publish should not blank anything\n");
+        return 1;
+    }
+
+    snapshot.flags = 0x0000; /* lives group no longer displayed */
+    g_write_count = 0U;
+    g_blank_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    if (g_write_count != occupied_cells) {
+        fprintf(stderr, "vacating the lives group wrote %u cells, expected exactly %u\n",
+               g_write_count, occupied_cells);
+        return 1;
+    }
+    if (g_blank_write_count != occupied_cells) {
+        fprintf(stderr, "vacating the lives group blanked %u of %u previously-occupied cells\n",
+               g_blank_write_count, occupied_cells);
+        return 1;
+    }
+
+    g_write_count = 0U;
+    sm64_saturn_hud_publish(&state, &snapshot);
+    if (g_write_count != 0U) {
+        fprintf(stderr, "republishing an already-empty snapshot triggered %u writes\n",
+               g_write_count);
+        return 1;
+    }
+    return 0;
+}
+
 int
 main(void)
 {
@@ -116,5 +237,7 @@ main(void)
     failures += test_layout_omits_lives_when_flag_clear();
     failures += test_layout_never_exceeds_capacity();
     failures += test_layout_reads_power_meter_from_snapshot_not_recomputed();
+    failures += test_publish_only_rewrites_changed_cells();
+    failures += test_publish_writes_blank_for_vacated_cells();
     return failures;
 }

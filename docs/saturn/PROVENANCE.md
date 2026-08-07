@@ -569,6 +569,43 @@ assumed for this file. Both are Yaul-dependency verification (existing
 `yaul-org/libyaul` row in `UPSTREAM_CODE_LEDGER.md`), not a new source; no
 new upstream entry is needed for them beyond noting the fact here.
 
+**2026-08-07 Task 6 (dirty-cell diff/publish)**: `src/port/saturn/gfx/saturn_hud_publish.{h,c}`
+is a **pattern-only** study of `SCL_PriIntProc()`
+(`SCL_FUNC.C:681-743`, pinned commit `a8986591557b6e680550d3c23970284d3b38ff8f`,
+confirmed by direct read: the function spans exactly those 63 lines, and its
+own header comment states it runs once per VBlank-interval interrupt) and
+`SOUND.C`'s `slotDirty[32]` (declared line 24; set on write in
+`playSoundMegaE()`, line 307; checked and cleared before reuse in
+`playSoundE()`, lines 335-337). The adopted pattern is the shape of the
+check -- stage or mark changes as they happen, then at one safe point walk
+the dirty markers and flush only the ones set, clearing each as it is
+consumed -- not any specific register, DMA call, or audio-slot mechanic.
+`sm64_saturn_hud_publish()` applies that shape to an original (col,row,glyph)
+record comparison against the previous publish's cell list; no SlaveDriver
+struct, macro, or DMA call is copied.
+
+Two supporting checks, both negative, were made directly against source
+rather than assumed from the task brief that proposed this citation: (1)
+`PRINT.C`/`PRINT.H`, SlaveDriver's own text/HUD-print module, contains no
+dirty-tracking of any kind, and in fact renders text as VDP1 sprites
+(`sega_spr.h`, `EZ_setLookupTbl`) rather than VDP2 character-pattern cells
+at all -- it is not a same-mechanism precedent to compare against, dirty-
+tracked or not. (2) Sonic Z-Treme (pinned `cff75451c1616aac1236fc2b44223902b55c706b`,
+already cited above for `ztFont2NBG3`'s VDP2 text-plane setup) was
+re-checked specifically for a per-frame HUD counter redraw to compare
+against: the only candidate call site, `slPrint("RINGS : ", slLocate(0,4))`
+in `SRC/game.c:30`, is commented out in the inspected snapshot, and
+`slPrint`/`slLocate` are proprietary SGL primitives with no available source
+in this repository (`LIB/LIBSGL.A` is a compiled binary, per this file's
+existing SGL documentation-only section below). Neither pinned reference
+therefore offers inspectable per-cell VDP2 dirty-diffing logic to adopt or
+contrast against. This is a more precise (and more defensible) finding than
+"redraws unconditionally every frame" -- proving that would require an
+active, inspectable call site, and none was found; the accurate statement is
+that no such call site is live or readable in either reference at their
+pinned commits. `saturn_hud_publish.c`'s cell-level diff is therefore
+original engineering for this project, not adapted from either engine.
+
 ### Sega hardware documentation
 
 | Reference | Use |
