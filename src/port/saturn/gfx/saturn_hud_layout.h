@@ -7,7 +7,14 @@
 #include "saturn_hud.h"
 #include "saturn_hud_atlas.h"
 
-#define SM64_SATURN_HUD_LAYOUT_MAX_CELLS 40U
+/* Exhaustively traced against every branch of sm64_saturn_hud_layout_build()
+ * (2026-08-07 memory-budget audit): LIVES=4, COIN_COUNT=5, STAR_COUNT=4,
+ * TIMER=6, CAMERA_AND_POWER=4, CANNON=1 -- all of LIVES/COIN_COUNT/
+ * STAR_COUNT/CAMERA_AND_POWER are simultaneously active in ordinary
+ * gameplay and TIMER can join during a PSS slide, so 4+5+4+6+4+1=24 is the
+ * real worst case given the current source, not a rounded guess. Every
+ * push_cell()/push_clamped_int() call site was counted, not sampled. */
+#define SM64_SATURN_HUD_LAYOUT_MAX_CELLS 24U
 
 typedef struct sm64_saturn_hud_cell {
     uint8_t col;

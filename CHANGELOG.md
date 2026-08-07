@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Shrank `SM64_SATURN_HUD_LAYOUT_MAX_CELLS` from 40 to 24
+  (`src/port/saturn/gfx/saturn_hud_layout.h`), recovering 128 bytes of
+  HWRAM `.bss` (`sourceboot_hud_publish_state.last_cells[40]` -> `[24]`,
+  8 bytes/cell). Part of a memory-budget audit (2026-08-07) that
+  exhaustively traced every branch of `sm64_saturn_hud_layout_build()`:
+  the real worst case across every simultaneously-reachable HUD group
+  (lives 4 + coins 5 + stars 4 + timer 6 + camera/power 4 + cannon 1) is
+  24 cells, not 40 -- the original 40 was an unjustified round number (no
+  measured-data comment like this codebase's other capacity constants
+  have). `push_cell()`'s existing bounds check means this fails safe (a
+  glyph silently not drawn) rather than corrupting memory if the trace
+  is ever wrong; host test suite re-run and passes unchanged (11/11).
+
 ### Added
 
 - Added project-owned SH-2 exception trampolines
