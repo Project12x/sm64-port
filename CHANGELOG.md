@@ -4,6 +4,96 @@
 
 ### Added
 
+- Added `src/port/saturn/gfx/saturn_hud_layout.{h,c}`: a pure, host-testable
+  function (`sm64_saturn_hud_layout_build()`) that decides which glyph goes in
+  which VDP2 tile cell for a given `sm64_saturn_hud_snapshot_t` (Task 5 of the
+  VDP2 gameplay HUD plan, `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`).
+  No VRAM access, no Yaul dependency -- takes a snapshot, writes up to
+  `SM64_SATURN_HUD_LAYOUT_MAX_CELLS` (40) `(col,row,glyph)` cells, and returns
+  the count actually used.
+
+  Resolved an intentional test/gate contradiction flagged in the plan itself:
+  the plan's power-meter test sets `snapshot.wedges = 3` but leaves
+  `power_meter_animation` at its `memset`-zeroed default while still expecting
+  the meter glyph to appear, apparently conflicting with a `!= 0` gate. Read
+  the real `src/game/hud.h` (`enum PowerMeterAnimation`: `POWER_METER_HIDDEN`
+  is the first enumerator, value 0) and the real `hud.c`
+  (`render_hud_power_meter()`, `hud.c:229-257`) rather than assuming: the
+  source's own gate is `if (sPowerMeterHUD.animation == POWER_METER_HIDDEN)
+  return;`, i.e. it renders for all four non-hidden phases (EMPHASIZED,
+  DEEMPHASIZING, HIDING, VISIBLE), not just the resting VISIBLE state. So
+  `power_meter_animation != 0` is exactly correct and was kept unchanged; the
+  bug was in the test, which was missing
+  `snapshot.power_meter_animation = 1;` (`POWER_METER_EMPHASIZED`, matching
+  the numeric-literal convention `saturn_hud_snapshot_test.c` already
+  established for this field, since neither host test can include
+  `src/game/hud.h` without pulling in the full N64 `PR/ultratypes.h` chain).
+  Fixed the test, not the gate, and documented why inline.
+
+  Also found and fixed a placement bug the plan's own Step 3 snippet did not
+  flag: most of its literal `(col,row)` values are outside the atlas's real
+  visible grid. `sm64_saturn_hud_atlas_write_cell()` (Task 4) silently
+  no-ops any write with `col >= 20` or `row >= 14`
+  (`saturn_hud_atlas.c`'s `HUD_TILE_COLS`/`HUD_TILE_ROWS`, confirmed by
+  reading the real, current file rather than the plan's summary of it) --
+  and the plan's snippet placed lives/coins at `row=26`, stars at
+  `col=24-27`, the timer at `col=20-25`, and the camera glyphs at
+  `col=26-27`, all past those bounds. None of Task 5's or Task 6's own tests
+  would have caught this: they only check glyph presence and total count,
+  never `col`/`row`, and Task 6's dirty-cell publisher (already drafted in
+  the plan) forwards this layout's `(col,row)` straight into
+  `sm64_saturn_hud_atlas_write_cell()` with no remapping. Left uncorrected,
+  this would have made lives, coins, stars, the timer, and the camera status
+  indicator permanently invisible on real hardware and in emulation --
+  passing every test in this 10-task plan while silently defeating its
+  stated goal. Re-derived every placement from `hud.c`'s real pixel
+  coordinates (`SCREEN_WIDTH`/`SCREEN_HEIGHT` = 320x240,
+  `include/config.h:38-39`) divided down to this port's 16px/20x14 grid,
+  clustering to the bottom rows to match the source's own bottom-anchored
+  HUD (`y=205-209` for lives/coins/stars/camera, `y=185` for the timer, both
+  out of 240px) -- and checked that no two glyphs able to be visible in the
+  same frame ever target the same cell, including the realistic
+  simultaneous case (`HUD_DISPLAY_DEFAULT`'s LIVES | COIN_COUNT |
+  CAMERA_AND_POWER bits plus STAR_COUNT/TIMER, `level_update.h:106-116`),
+  not just the tests' synthetic worst case. Documented the full derivation
+  and the final grid assignment in a comment in `saturn_hud_layout.c`.
+
+  Verified by direct execution, not just reading: compiled and ran the host
+  test (`gcc -std=c11 -Wall -Wextra -Werror`, zero diagnostics, exit 0), then
+  ran a real mutation-testing pass (project standing policy) rather than
+  trusting the given tests -- flipping the power-meter gate and inverting
+  the lives-flag check were both caught (test suite goes red); an
+  off-by-one in `push_cell`'s capacity guard (`>` for `>=`) survives
+  uncaught, because the tests' "9999 lives/coins/stars" pathological input
+  only reaches ~20-24 cells against the 40-cell buffer, never the actual
+  boundary -- a real, pre-existing test-coverage gap (inherited from the
+  plan's Step 1 test, not introduced here) worth knowing about, though the
+  shipped code uses the correct `>=` guard. Also confirmed `push_clamped_int`
+  truncates to the low-order N decimal digits rather than saturating at the
+  field's max value (e.g. a 2-digit field showing 105 would render "05", not
+  "99") -- the pathological test's all-9s values (9999) happen to read
+  identically either way, which masks the distinction; documented inline as
+  a known, pre-existing display-fidelity limitation of the fixed-width
+  tile HUD, not a capacity or memory-safety issue.
+
+  Hit two known host-tooling environment quirks getting a real run: this
+  sandbox's Cygwin `make` does not see the `OS` environment variable at all
+  (confirmed with a minimal repro Makefile), so `Makefile.saturn.mk`'s
+  `ifeq ($(OS),Windows_NT)` branch silently picked the wrong
+  `SATURN_TOOLS_PYTHON`/`HOST_EXEEXT` values; fixed by passing
+  `OS=Windows_NT` on the `make` command line rather than editing the
+  Makefile. Separately, the venv Python's `subprocess.run()` test-runner
+  wrapper can't launch an MSYS-style `/d/...` path via native Windows
+  `CreateProcess` (`WinError 2`) -- pre-existing and orthogonal to this
+  task, would affect any `verify-*` target's Python-wrapped run step
+  equally. Both are environment issues, not defects in the Makefile target
+  or the code; worked around by running the make-built binary directly,
+  which is what actually proves the test passes.
+
+  Added `verify-saturn-hud-layout` (Makefile target + `.PHONY` entry),
+  following the exact convention already established by
+  `verify-saturn-hud-snapshot`.
+
 - Closed two code-review gaps in `saturn_hud_atlas.c` (Task 4, above) found by
   a stricter-warning-level review pass (`-Wconversion -Wsign-conversion
   -Wshadow -Wcast-align -Wcast-qual -Wdouble-promotion -Wundef
