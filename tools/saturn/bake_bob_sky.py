@@ -80,13 +80,21 @@ def _png_rows(path: Path) -> tuple[int, int, list[bytes]]:
     return width, height, rows
 
 
-def bake(source: Path, output_width: int = 512, output_height: int = 256) -> tuple[bytes, dict[str, object]]:
+def _replicate_canvas(source: Path, output_width: int, output_height: int) -> tuple[int, int, list[int]]:
+    """Decode source and edge-replicate it into a row-major RGB1555 canvas.
+
+    Shared by bake() and bake_clut16() so a geometry fix applied to one path
+    is mechanically applied to both -- there is exactly one dimension check,
+    one x/y offset computation, and one edge-clamp loop in this file. Alpha
+    is discarded and every sample is unconditionally tagged opaque (bit 15
+    set); this canvas can never contain a transparent sample.
+    """
     width, height, rows = _png_rows(source)
     if width > output_width or height > output_height:
         raise ValueError("sky source exceeds VDP2 bitmap dimensions")
     x_offset = (output_width - width) // 2
     y_offset = (output_height - height) // 2
-    pixels = bytearray(output_width * output_height * 2)
+    raw_rgb1555: list[int] = []
     for y in range(output_height):
         source_y = min(max(y - y_offset, 0), height - 1)
         row = rows[source_y]
@@ -94,7 +102,15 @@ def bake(source: Path, output_width: int = 512, output_height: int = 256) -> tup
             source_x = min(max(x - x_offset, 0), width - 1)
             r, g, b = row[source_x * 4:source_x * 4 + 3]
             value = 0x8000 | ((r * 31 // 255) << 10) | ((g * 31 // 255) << 5) | (b * 31 // 255)
-            struct.pack_into(">H", pixels, (y * output_width + x) * 2, value)
+            raw_rgb1555.append(value)
+    return width, height, raw_rgb1555
+
+
+def bake(source: Path, output_width: int = 512, output_height: int = 256) -> tuple[bytes, dict[str, object]]:
+    width, height, raw_rgb1555 = _replicate_canvas(source, output_width, output_height)
+    pixels = bytearray(output_width * output_height * 2)
+    for offset, value in enumerate(raw_rgb1555):
+        struct.pack_into(">H", pixels, offset * 2, value)
     manifest = {
         "schema": "sm64-saturn-vdp2-sky",
         "source": source.as_posix(),
@@ -112,26 +128,18 @@ def bake_clut16(source: Path, output_width: int = 512, output_height: int = 256)
     """Same edge-replicated canvas as bake(), quantized to a 16-color CLUT.
 
     Returns (packed_nibble_indices, palette_16_rgb1555_words, manifest).
-    Reuses bake()'s exact PNG decode + edge-replication so the two paths only
-    diverge at the final per-pixel quantization step -- keeps them impossible
-    to accidentally desync on canvas geometry.
+    Calls the same _replicate_canvas() helper bake() uses, so the two paths
+    only diverge at the final per-pixel quantization step.
     """
-    width, height, rows = _png_rows(source)
-    if width > output_width or height > output_height:
-        raise ValueError("sky source exceeds VDP2 bitmap dimensions")
-    x_offset = (output_width - width) // 2
-    y_offset = (output_height - height) // 2
-    raw_rgb1555: list[int] = []
-    for y in range(output_height):
-        source_y = min(max(y - y_offset, 0), height - 1)
-        row = rows[source_y]
-        for x in range(output_width):
-            source_x = min(max(x - x_offset, 0), width - 1)
-            r, g, b = row[source_x * 4:source_x * 4 + 3]
-            value = 0x8000 | ((r * 31 // 255) << 10) | ((g * 31 // 255) << 5) | (b * 31 // 255)
-            raw_rgb1555.append(value)
-    palette, index_by_color = quantize_clut16(raw_rgb1555)
-    indices = [index_by_color.get(value, 0) if (value & 0x8000) else 0 for value in raw_rgb1555]
+    width, height, raw_rgb1555 = _replicate_canvas(source, output_width, output_height)
+    palette, mapping = quantize_clut16(raw_rgb1555)
+    # _replicate_canvas() unconditionally tags every sample opaque (bit 15
+    # set), so every value here is a key quantize_clut16() populated into
+    # its histogram/mapping -- a strict subscript matches the pattern used
+    # at every other quantize_clut16 call site in this codebase (see
+    # bake_bob_tiles.py, bake_bob_bsp_fragments.py) and fails loudly instead
+    # of silently mis-mapping if that invariant is ever broken.
+    indices = [mapping[value] for value in raw_rgb1555]
     packed = pack_clut16(indices)
     manifest = {
         "schema": "sm64-saturn-vdp2-sky",

@@ -65,6 +65,7 @@ from bake_castle_uv import (  # noqa: E402
 )
 from bake_bob_tiles import bake_bob, triangle_k  # noqa: E402
 from bake_bob_sky import bake as bake_bob_sky  # noqa: E402
+from bake_bob_sky import bake_clut16 as bake_bob_sky_clut16  # noqa: E402
 from emit_bob_scene import emit as emit_bob_scene  # noqa: E402
 from compile_castle_bsp import compile_bsp  # noqa: E402
 from compile_bob_bsp import (  # noqa: E402
@@ -1788,6 +1789,27 @@ class BobSkyBakeTests(unittest.TestCase):
         self.assertEqual(manifest["bitmap_dimensions"], [512, 256])
         self.assertEqual(manifest["format"], "RGB1555")
         self.assertTrue(manifest["edge_replication"])
+
+    def test_bob_sky_bake_clut16_is_vdp2_sized_and_deterministic(self) -> None:
+        # Unlike test_bake_bob_sky.py's synthetic fixtures, this bakes the
+        # real multi-color skybox asset -- the same source the RGB1555 test
+        # above uses -- so quantization behavior on realistic gradient input
+        # is exercised, not just small hand-built test images.
+        source = TOOLS.parents[1] / "textures" / "skyboxes" / "water.png"
+        first_packed, first_palette, manifest = bake_bob_sky_clut16(source)
+        second_packed, second_palette, manifest_again = bake_bob_sky_clut16(source)
+        self.assertEqual(first_packed, second_packed)
+        self.assertEqual(first_palette, second_palette)
+        self.assertEqual(manifest, manifest_again)
+        self.assertEqual(len(first_packed), (512 * 256) // 2)
+        self.assertEqual(len(first_palette), 16)
+        self.assertEqual(first_palette[0], 0x0000)
+        self.assertEqual(manifest["source_dimensions"], [248, 248])
+        self.assertEqual(manifest["bitmap_dimensions"], [512, 256])
+        self.assertEqual(manifest["format"], "CLUT16")
+        self.assertEqual(manifest["palette_entries"], 16)
+        self.assertTrue(manifest["edge_replication"])
+        self.assertTrue(all(0 <= byte <= 0xFF for byte in first_packed))
 
 
 class TelemetryTests(unittest.TestCase):

@@ -4,6 +4,48 @@
 
 ### Fixed
 
+- Fixed code-quality issues a reviewer found in the CLUT16 baking-mode
+  commit (bc08fb27, Task 1 of `docs/superpowers/plans/2026-08-07-saturn-vdp2-clut.md`):
+  - `bake_bob_sky.py`'s `bake()` and `bake_clut16()` shared an
+    identical dimension-check/offset/edge-clamp block by copy-paste, while
+    `bake_clut16()`'s docstring claimed the two paths "cannot desync on
+    canvas geometry" -- untrue, since nothing forced a fix to one function
+    into the other. Factored the block into a new `_replicate_canvas()`
+    helper both functions call, making the claim actually true.
+  - `bake_clut16()` mapped colors to CLUT indices with
+    `index_by_color.get(value, 0) if (value & 0x8000) else 0`, a silent
+    fallback, instead of the strict `mapping[value]` subscript this
+    codebase's other `quantize_clut16` call sites use
+    (`bake_bob_tiles.py`, `bake_bob_bsp_fragments.py`), which intentionally
+    raise `KeyError` on an unmapped color. Every sample this canvas
+    produces is unconditionally tagged opaque (bit 15 set, alpha is
+    discarded -- pre-existing in `bake()`), so the fallback was always
+    dead; switched to the strict subscript so a future refactor that
+    desyncs the histogram from the indexed pixels fails loudly instead of
+    silently mis-mapping.
+  - `test_bake_bob_sky.py`'s two CLUT16 tests fed a solid single-color
+    4x4 image through `bake_clut16()` and asserted only lengths -- a
+    solid-color source produces one CLUT index for every pixel, so
+    `pack_clut16`'s nibble order can be flipped without changing the
+    output byte, and `quantize_clut16`'s median-cut box-splitting loop
+    never ran beyond its first iteration. Added a four-color-stripe test
+    that independently derives the expected packed bytes and palette
+    (calling `quantize_clut16` directly as an oracle, not `pack_clut16`)
+    and asserts full equality -- verified this catches a nibble-order
+    flip in `pack_clut16` by mutation-testing it directly (test fails,
+    then reverted). Also added tests for `bake_clut16()`'s two error
+    branches (odd total texel count, source larger than output) and a
+    new `BobSkyBakeTests.test_bob_sky_bake_clut16_is_vdp2_sized_and_deterministic`
+    in `test_tools.py` that bakes the real multi-color `water.png` sky
+    asset through the CLUT16 path (mirroring the existing RGB1555 test),
+    so quantization on realistic gradient input is exercised, not just
+    small synthetic fixtures.
+
+  No behavior change to the default `rgb1555` path or to `bake_clut16()`'s
+  output on real input (`test_tools.BobSkyBakeTests` still passes
+  unchanged); `tools/saturn/test_bake_bob_sky.py` now has 6 tests (up
+  from 3), all passing.
+
 - Repaired a corrupted `CHANGELOG.md` entry from the CLUT16 baking-mode
   commit (bc08fb27): the edit inserting the new "Added a CLUT16 baking
   mode to the BOB sky tool" bullet had deleted the summary line of the
