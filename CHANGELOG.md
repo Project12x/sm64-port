@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `docs/saturn/evidence/reports/task14-budget-baseline-2026-08-07.md`
+  (Task 1 of `docs/superpowers/plans/2026-08-07-task14-completion.md`): a
+  fresh from-source link attempt at current HEAD (`dd31e2ad`) compiled
+  cleanly but failed *before* reaching the `sourceboot-cart.x` memory-budget
+  asserts, on `ld: cannot open linker script file
+  saturn_geo_depth_manifest.ld` -- confirmed the file exists on disk with a
+  timestamp preceding the failing link step, and confirmed the link command
+  does carry `-L` to its generated-headers directory, so this is a real,
+  reproducible linker-script/build-config defect (most likely
+  `sourceboot.specs`'s `*link:` override replacing rather than chaining
+  `%(old_link)`, though that was not isolated further since this task makes
+  no source changes), not a fabricated result and not the budget assertion
+  itself. Because no fresh `.map` exists at HEAD, the report instead uses
+  the most recent `.map` in the worktree that *did* reach assert evaluation
+  (07:37 local today, 3 commits stale -- predates the
+  `465fb8b0`/`fce3f4b5`/`0ebd5b05` HWRAM-reduction commits) to record real
+  measured margins: HWRAM short by exactly 3,128 bytes and LWRAM over by
+  exactly 784 bytes, both matching the plan doc's cited pre-reduction
+  baseline exactly. This confirms the pre-reduction baseline but does
+  *not* confirm the plan's reconstructed post-reduction estimate
+  (~2,512 B HWRAM), which remains unconfirmed by any fresh link. The report
+  also ranks the top 25 HWRAM `.bss`/`.data` occupants from that same map
+  by size and owning object file, categorized by mobility (SCU/DMA-fixed,
+  CPU-only mutable, write-once/cart candidate, libyaul-owned) for Tasks 4-5
+  to consume once a fresh link is available to re-confirm the current gap.
+
 ### Fixed
 
 - Fixed code-quality issues a reviewer found in the CLUT16 baking-mode
