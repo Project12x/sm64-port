@@ -39,12 +39,25 @@ typedef struct sm64_saturn_geo_walk_runtime {
 typedef struct sm64_saturn_geo_walk_runtime_enter {
     uintptr_t child;
     uintptr_t sibling;
-    uint16_t leave_action;
+    uintptr_t second_child;      /* Walked strictly after child's entire
+                                   * subtree (and dispatch, if deferred) has
+                                   * drained. Ignored if child == 0 (there is
+                                   * no meaningful "second" without a first).
+                                   * A node needing only one child subtree
+                                   * MUST leave this 0 -- existing wave 1/2
+                                   * handlers are unaffected by construction. */
+    uint16_t leave_action;       /* fires after EVERYTHING (child, dispatch,
+                                   * second_child) drains, if leave_required */
+    uint16_t boundary_action;    /* fires after child's subtree (and
+                                   * dispatch) drains but before second_child
+                                   * begins. Only pushed if second_child != 0
+                                   * AND boundary_required is true. */
     uint16_t matrix_depth;
     uint16_t context_token;
     bool admitted;
     bool defer_dispatch;
     bool leave_required;
+    bool boundary_required;
 } sm64_saturn_geo_walk_runtime_enter_t;
 
 typedef bool (*sm64_saturn_geo_walk_runtime_enter_fn)(

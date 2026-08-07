@@ -112,31 +112,74 @@ bool sm64_saturn_geo_walk_runtime_run(
                 }
                 continue;
             }
-            /* The sibling continuation is below the entire child subtree. */
+            /* The sibling continuation is below the entire child subtree
+             * (and, when present, the second_child subtree below it). */
             if (result.sibling != 0U &&
                 !push(walk, result.sibling, 0U,
                       SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U, 0U, 0U)) {
                 return false;
             }
-            if (result.leave_required &&
-                !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
-                      result.leave_action, result.matrix_depth,
-                      result.context_token)) {
-                return false;
-            }
-            if (result.defer_dispatch && result.child != 0U &&
-                !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH,
-                      0U, 0U, result.context_token)) {
-                return false;
-            }
-            if (result.child != 0U &&
-                !push(walk, result.child, 0U,
-                      SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
-                      result.matrix_depth, result.context_token)) {
-                return false;
-            }
-            if (result.child == 0U && result.defer_dispatch) {
-                ops->dispatch(event.node, user);
+            if (result.child != 0U && result.second_child != 0U) {
+                /* Two-subtree node: walk child, optional boundary action,
+                 * walk second_child, optional final leave. Frames are
+                 * pushed bottom-to-top in the reverse of the desired
+                 * pop/fire order (LIFO), so the eventual pop order is:
+                 * child subtree drains, dispatch (if deferred), boundary
+                 * leave (if boundary_required), second_child subtree
+                 * drains, final leave (if leave_required), sibling. See
+                 * saturn_geo_walk_runtime.h's
+                 * sm64_saturn_geo_walk_runtime_enter_t comments for the
+                 * exact contract. second_child is ignored (this branch is
+                 * skipped) whenever child == 0 -- there is no meaningful
+                 * "second" subtree without a first. */
+                if (result.leave_required &&
+                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
+                          result.leave_action, result.matrix_depth,
+                          result.context_token)) {
+                    return false;
+                }
+                if (!push(walk, result.second_child, 0U,
+                          SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
+                          result.matrix_depth, result.context_token)) {
+                    return false;
+                }
+                if (result.boundary_required &&
+                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
+                          result.boundary_action, result.matrix_depth,
+                          result.context_token)) {
+                    return false;
+                }
+                if (result.defer_dispatch &&
+                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH,
+                          0U, 0U, result.context_token)) {
+                    return false;
+                }
+                if (!push(walk, result.child, 0U,
+                          SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
+                          result.matrix_depth, result.context_token)) {
+                    return false;
+                }
+            } else {
+                if (result.leave_required &&
+                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
+                          result.leave_action, result.matrix_depth,
+                          result.context_token)) {
+                    return false;
+                }
+                if (result.defer_dispatch && result.child != 0U &&
+                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH,
+                          0U, 0U, result.context_token)) {
+                    return false;
+                }
+                if (result.child != 0U &&
+                    !push(walk, result.child, 0U,
+                          SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
+                          result.matrix_depth, result.context_token)) {
+                    return false;
+                }
+                if (result.child == 0U && result.defer_dispatch) {
+                    ops->dispatch(event.node, user);
+                }
             }
         } else if (event.phase == SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH) {
             ops->dispatch(event.node, user);

@@ -131,6 +131,56 @@
     remaining direct recursive calls (24 - 5 across waves 1-2);
     `verify-saturn-geo-walk-runtime` and `verify-saturn-geo-depth-manifest`
     PASS. No target link, Ymir, or manual evidence is claimed by this wave.
+- Extended `saturn_geo_walk_runtime.h`/`.c` to support two-subtree nodes,
+  resolving the wave 2 blocker above (`geo_process_object`,
+  `geo_process_object_parent`, `geo_process_held_object` each walk a
+  `sharedChild` subtree, run a boundary side effect, then walk a second,
+  unrelated child subtree -- a shape the single-child `enter()` result
+  could not express). This is a runtime-only extension: no handler is
+  converted by this change, so `geo_walk_source_policy_test.py` still
+  reports exactly 19 remaining direct recursive calls.
+  - `sm64_saturn_geo_walk_runtime_enter_t` gained `second_child`
+    (`uintptr_t`), `boundary_action` (`uint16_t`), and `boundary_required`
+    (`bool`). `second_child` is walked strictly after `child`'s entire
+    subtree (and deferred dispatch, if any) drains; `boundary_required`
+    optionally fires a leave callback (with `boundary_action`) between the
+    two subtrees; `leave_required`'s existing leave callback (with
+    `leave_action`) now fires after everything -- child, dispatch,
+    boundary, and second_child -- drains, not just after child, when
+    `second_child != 0`. `second_child` is ignored whenever `child == 0`
+    (no meaningful "second" subtree without a first); a dedicated
+    regression test (`test_two_child_ignored_when_child_zero`) pins this
+    down since it is an easy invariant to get backwards.
+  - `sm64_saturn_geo_walk_runtime_run()`'s admitted-node push sequence now
+    branches on `child != 0 && second_child != 0`: the existing
+    single-child push order is unchanged (moved into an `else`, byte-for-
+    byte identical -- confirmed by diff) and a new branch pushes
+    (bottom-to-top, so LIFO pop/fire order is child subtree, dispatch,
+    boundary leave, second_child subtree, final leave, sibling): sibling
+    continuation (shared, pushed before the branch), final leave, second_
+    child ENTER, boundary leave, dispatch, child ENTER.
+  - The real (and only) wave 1/2 construction site,
+    `rendering_graph_node.c`'s `saturn_geo_walk_enter()`, builds this
+    struct by field assignment through a pointer (`result->child = ...`)
+    on a caller-owned `{ 0 }`-initialized local, not by designated-
+    initializer struct literal as originally assumed going into this
+    task -- confirmed by reading the real call site rather than the
+    assumption. Because C field access by name is layout-order-
+    independent and `run()`'s `sm64_saturn_geo_walk_runtime_enter_t result
+    = { 0 };` zero-initializes every member including the three new ones,
+    that call site needed no changes; verified both by inspection and by
+    an isolated host-side proxy compile of the identical field-assignment
+    pattern against the extended header (`-std=c11 -Wall -Wextra -Werror`,
+    zero warnings, and the new fields observed zero at runtime).
+  - Verified: extended `geo_walk_runtime_contract_test.c` (3 pre-existing
+    cases unchanged + 6 new second_child cases) PASSES; a 4-mutation sweep
+    of the new push-order logic (dropping the `child != 0` guard,
+    unconditionally pushing the boundary leave, swapping the final-leave/
+    second_child push order, and dropping the deferred-dispatch push) was
+    caught by the corresponding new test in all 4 cases (0% survival) then
+    reverted. `geo_walk_source_policy_test.py` (19, unchanged),
+    `verify-saturn-geo-walk-runtime`, and `verify-saturn-geo-depth-manifest`
+    all PASS with no change to their own outcomes.
 
 ### Fixed
 
