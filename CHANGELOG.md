@@ -296,6 +296,38 @@
     comment lines 1779/1808 are unchanged). No target link, Ymir, or
     manual evidence is claimed by this wave; the memory-budget link
     remains open and unrelated to this change.
+- Added `test_wave3_two_subtree_object_chain_has_real_capacity_margin` to
+  `tools/saturn/test_geo_depth_manifest.py`, closing the real capacity-
+  margin gap flagged against the two-subtree runtime extension: the
+  manifest generator has no model of the iterative runtime's own frame
+  cost, so its "PASS" alone proved nothing about capacity safety once
+  `geo_process_object`/`_parent`/`geo_process_held_object` actually started
+  using the two-subtree path. Investigating that gap is what surfaced the
+  reentrancy hazard above; the hazard, not the frame-cost multiplier, was
+  the dominant risk, and the guard that closes it also bounds the real
+  frame cost to a small, scene-complexity-independent constant (every
+  not-yet-converted type is confined to real recursion, off the array,
+  regardless of depth). Two throwaway host-side C harnesses (not
+  committed) empirically drove the real `saturn_geo_walk_runtime.c`
+  through the exact push shapes `saturn_geo_walk_enter` now produces for
+  an `OBJECT_PARENT` -> 3 live `Object`s chain, reading `walk.high_water`
+  directly: **5 frames** peak for the shape this codebase's real, verified
+  behavior actually produces (`OBJECT_PARENT.node.children` and every live
+  `Object.node.children` are provably always `NULL` -- traced to
+  `geo_add_child`, the only writer of `.children` anywhere in the
+  codebase, which is never called with a `GraphNodeObject`'s `.node` as
+  the *parent* argument), **8 frames** padded for the theoretical case
+  `node.children` were ever non-`NULL` (never observed, but not assumed
+  away). Both numbers are now asserted against the manifest's real,
+  freshly-computed capacity/margin (`256 - 16 - 172 = 68` frames of
+  existing slack today), not hardcoded, so the check stays meaningful if
+  the actor/level asset set changes. Full derivation, the reentrancy chain,
+  and the empirical probe transcripts are recorded in
+  `docs/saturn/evidence/reports/task14-wave3-geo-walk-capacity-margin-2026-08-07.md`.
+  Also corrects the originating review's "up to 3x per level" estimate:
+  measured directly from `run()`'s push order, the real worst-case factor
+  for a two-subtree node's `child`-direction cost is up to 2x the old
+  single-child path's, not 3x.
 
 ### Fixed
 

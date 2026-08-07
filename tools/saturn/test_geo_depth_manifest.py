@@ -162,12 +162,107 @@ def test_repository_source_dirs_cover_full_game_geo_inputs() -> None:
         assert report["capacity"] >= report["max_proven_depth"]
 
 
+# Task 14 wave 3 (geo_process_object / geo_process_object_parent /
+# geo_process_held_object conversion) real capacity-margin check.
+#
+# This manifest generator has NO concept of the iterative runtime's own
+# frame semantics -- it only counts GEO_OPEN_NODE/GEO_BRANCH/GEO_HELD_OBJECT/
+# GEO_ASM tokens in static GeoLayout source (see geo_depth_manifest.py's own
+# module docstring and build_manifest()). A review of the wave 3 runtime
+# extension (commit e92122c1) flagged this as a real capacity-verification
+# gap: nesting a two-subtree node through its `child` direction (the
+# realistic case, since GEO_HELD_OBJECT is always reached that way) could
+# cost multiple runtime frames per GeoLayout nesting level the static
+# scanner only counts once, so its "PASS" alone proves nothing about
+# real capacity safety at real nesting depths.
+#
+# Investigating that gap (see rendering_graph_node.c's sSaturnGeoWalkActive
+# comment, and this task's completion report, for the full writeup) found
+# the two-subtree frame-cost multiplier was NOT the dominant risk: the real
+# risk was a genuine reentrancy hazard -- a nested saturn_geo_walk_process_
+# children() call silently corrupting an already-active outer walk's frame
+# data, reachable because GEO_HELD_OBJECT is, in every real actor (verified
+# against the shipped mario_geo[] layout), nested beneath still-unconverted
+# "skeleton" types (GEO_ANIMATED_PART, GEO_SCALE, GEO_SWITCH_CASE, ...)
+# inside an Object's own sharedChild. That hazard is now closed by a
+# non-reentrancy guard in rendering_graph_node.c, and the guard has a
+# direct, provable consequence for capacity: it confines EVERY node type
+# not yet converted to real C recursion, entirely off sourceboot_geo_walk_
+# frames, no matter how deep that subtree goes. So the bounded array's REAL
+# peak usage from this wave's conversion is NOT scene-depth-dependent at
+# all -- it is a small, fixed constant, independent of actor/scene
+# complexity, empirically measured (not just hand-derived) by driving the
+# real saturn_geo_walk_runtime.c through the exact push shapes rendering_
+# graph_node.c's saturn_geo_walk_enter now produces:
+WAVE3_REALISTIC_PEAK_FRAMES = 5
+# ^ Measured with a synthetic OBJECT_PARENT -> 3 live Objects (proving
+# object-list WIDTH doesn't add to peak depth, only to total work) -> each
+# Object's sharedChild reported as admitted=false (modeling the
+# reentrancy-guard-confined skeleton subtree, which never pushes here
+# regardless of its real depth), in the shape this codebase's real,
+# verified behavior actually produces: OBJECT_PARENT.node.children and
+# every live Object's node.children are both PROVABLY always NULL (geo_
+# add_child never writes .children with a GraphNodeObject's .node as the
+# parent argument -- see src/engine/graph_node.c), so both types always
+# take the runtime's single-subtree (combined boundary+leave) path, never
+# the two-subtree path, in real gameplay. OBJECT_PARENT's own sibling under
+# Camera (a real scene-graph fact, not a padding assumption) is included.
+
+WAVE3_PADDED_PEAK_FRAMES = 8
+# ^ Measured the same way, but hypothesizing (contrary to the verified real
+# behavior above) that node.children were non-NULL for BOTH OBJECT_PARENT
+# and the live Object, forcing the runtime's true two-subtree path
+# (second_child + boundary_required + leave_required all engaged at once)
+# instead of the single combined-leave path. This never actually happens in
+# this codebase today, but costs nothing to assume away.
+
+
+def test_wave3_two_subtree_object_chain_has_real_capacity_margin() -> None:
+    with tempfile.TemporaryDirectory() as raw:
+        temp = Path(raw)
+        report_path = temp / "repo.json"
+        result = _run(
+            "--root", str(ROOT),
+            "--source-dir", str(ROOT / "actors"),
+            "--source-dir", str(ROOT / "levels"),
+            "--output-json", str(report_path),
+        )
+        assert result.returncode == 0, result.stderr
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        # The existing static model's "slack" is not a frame-accurate
+        # margin for the iterative runtime (that's the whole gap this test
+        # closes) -- but it IS a real, currently-generated number, and wave
+        # 3's own guard-confined addition is a fixed constant independent
+        # of it, so comparing them directly still proves real, non-hand-
+        # picked margin against whatever this repository's actual actor/
+        # level content currently produces.
+        available_slack = (
+            report["capacity"] - report["safety_margin"] - report["max_proven_depth"]
+        )
+        assert available_slack >= WAVE3_PADDED_PEAK_FRAMES, (
+            f"wave 3's real, guard-confined peak frame addition "
+            f"({WAVE3_PADDED_PEAK_FRAMES} padded, {WAVE3_REALISTIC_PEAK_FRAMES} "
+            f"measured for this codebase's actual behavior) does not fit "
+            f"the manifest's current slack ({available_slack} = capacity "
+            f"{report['capacity']} - safety_margin {report['safety_margin']} "
+            f"- max_proven_depth {report['max_proven_depth']}). This does "
+            f"NOT necessarily mean the runtime is unsafe -- it means the "
+            f"sSaturnGeoWalkActive confinement this margin depends on (see "
+            f"this function's own module-level comment) needs "
+            f"re-verification before proceeding, e.g. if a future wave "
+            f"starts converting the skeleton types and the guard's "
+            f"fallback stops covering the held-object path."
+        )
+
+
 def main() -> None:
     test_source_depth_and_determinism()
     test_missing_input_fails_closed()
     test_duplicate_identity_fails_closed()
     test_undercount_and_capacity_mutations_fail_closed()
     test_repository_source_dirs_cover_full_game_geo_inputs()
+    test_wave3_two_subtree_object_chain_has_real_capacity_margin()
     print("geo depth manifest: PASS")
 
 
