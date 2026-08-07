@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed three real, target-only compile failures found by Task 9's first
+  full SH-2 cross-build of the sourceboot image (`docs/superpowers/plans/
+  2026-08-06-saturn-hud-vdp2.md`) -- every one of these files had only ever
+  been compiled by a host `gcc` (whose headers pulled `NULL` in
+  transitively as a side effect) or never actually linked into a full
+  target image before. `src/port/saturn/gfx/saturn_hud_layout.c` (Task 5)
+  and `src/port/saturn/gfx/saturn_hud_publish.c` (Task 6) both use `NULL`
+  but only reach `<stdint.h>` through their own header chain, which the C
+  standard does not require to define it; the real SH-2 newlib headers
+  correctly rejected it (`'NULL' undeclared`). Both now `#include
+  <stddef.h>` directly. `src/port/saturn/runtime/saturn_geo_walk_runtime.c`
+  (unrelated to the HUD; part of the concurrent "iterative geo walk"
+  work, commit `a48e5aac`) had the identical gap and got the identical
+  fix. All three fixes are additive-only (one standard include each);
+  every host test that covers these files
+  (`verify-saturn-hud-snapshot`, `verify-saturn-hud-layout`,
+  `verify-saturn-hud-layout-mutation`, `verify-saturn-hud-no-vdp1`,
+  `verify-saturn-geo-walk-runtime`) was re-run afterward and still passes.
+
 ### Added
 
 - Wired the VDP2 gameplay HUD into sourceboot's real frame bank and

@@ -1,3 +1,9 @@
+/* NULL (used throughout this file) is not guaranteed by
+ * saturn_geo_walk_runtime.h's <stdbool.h>/<stdint.h> includes -- same class
+ * of host-only-masked missing include Task 9 found in saturn_hud_layout.c/
+ * saturn_hud_publish.c during this plan's first real SH-2 cross-compile. */
+#include <stddef.h>
+
 #include "saturn_geo_walk_runtime.h"
 
 static bool push(sm64_saturn_geo_walk_runtime_t *walk,

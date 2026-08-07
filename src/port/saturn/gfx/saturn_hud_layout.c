@@ -1,4 +1,13 @@
 /* src/port/saturn/gfx/saturn_hud_layout.c */
+/* NULL (used below in sm64_saturn_hud_layout_build()'s argument guard) is
+ * not guaranteed by saturn_hud_layout.h's own <stdint.h> include -- the C
+ * standard does not require <stdint.h> to define it. Host gcc's headers
+ * happened to pull NULL in transitively regardless, which let this compile
+ * on host (verify-saturn-hud-layout) while failing the real SH-2 cross
+ * compiler's stricter newlib headers ("'NULL' undeclared"), found by Task 9
+ * during this plan's first full target build. */
+#include <stddef.h>
+
 #include "saturn_hud_layout.h"
 
 /* Mirrors src/game/level_update.h's enum HudDisplayFlags bit values exactly

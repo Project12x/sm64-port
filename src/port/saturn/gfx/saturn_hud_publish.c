@@ -13,6 +13,12 @@
  * compared by key) is original engineering for this project. Full record
  * in docs/saturn/UPSTREAM_CODE_LEDGER.md ("Task 23A Task 6") and
  * docs/saturn/PROVENANCE.md. */
+/* NULL (used throughout this file) is not guaranteed by the transitive
+ * <stdint.h> include this header chain relies on -- see the identical note
+ * in saturn_hud_layout.c, where Task 9's first real SH-2 cross-compile
+ * found the same class of host-only-masked missing include. */
+#include <stddef.h>
+
 #include "saturn_hud_publish.h"
 
 void
