@@ -115,6 +115,10 @@ struct two_child_config {
     bool boundary_required;
     bool leave_required;
     bool defer_dispatch;
+    uintptr_t root_sibling;   /* 0 = no sibling. Appended as a trailing field
+                                * so every existing 5-element positional
+                                * initializer below keeps working unchanged
+                                * (C zero-fills the omitted trailing member). */
 };
 
 struct two_child_ctx {
@@ -139,6 +143,7 @@ static bool two_child_enter(uintptr_t node,
         result->boundary_required = ctx->cfg.boundary_required;
         result->leave_required = ctx->cfg.leave_required;
         result->defer_dispatch = ctx->cfg.defer_dispatch;
+        result->sibling = ctx->cfg.root_sibling;
     } else if (node == 3U) {
         result->child = 4U;
         result->sibling = 5U;
@@ -175,7 +180,7 @@ static int test_two_child_walks_child_then_second_child(void)
 {
     sm64_saturn_geo_walk_runtime_t walk;
     sm64_saturn_geo_walk_runtime_frame_t frames[8];
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, false, false, false } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, false, false, false, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
@@ -195,7 +200,7 @@ static int test_two_child_boundary_leave_fires_between_subtrees(void)
 {
     sm64_saturn_geo_walk_runtime_t walk;
     sm64_saturn_geo_walk_runtime_frame_t frames[8];
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, false, false } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, false, false, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
@@ -216,7 +221,7 @@ static int test_two_child_boundary_then_final_leave_order(void)
 {
     sm64_saturn_geo_walk_runtime_t walk;
     sm64_saturn_geo_walk_runtime_frame_t frames[8];
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, true, false } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, true, false, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
@@ -233,6 +238,34 @@ static int test_two_child_boundary_then_final_leave_order(void)
     return 0;
 }
 
+static int test_two_child_sibling_fires_after_second_child_and_leave(void)
+{
+    sm64_saturn_geo_walk_runtime_t walk;
+    sm64_saturn_geo_walk_runtime_frame_t frames[8];
+    /* Same two-subtree shape as test_two_child_boundary_then_final_leave_
+     * order (child=2, second_child=3, both boundary_required and
+     * leave_required set), PLUS root_sibling=6 -- a node that must be
+     * entered only after the ENTIRE two-subtree unit for node 1 (child's
+     * subtree, boundary leave, second_child's whole subtree, final leave)
+     * has resolved. Node 6 is a fresh leaf id (two_child_enter only
+     * special-cases nodes 1 and 3; nodes 2, 4, 5, 6 are all leaves). */
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, true, false, 6U } };
+    const sm64_saturn_geo_walk_runtime_ops_t ops = {
+        two_child_enter, two_child_dispatch, two_child_leave
+    };
+    /* Identical to test_two_child_boundary_then_final_leave_order's
+     * expected trace, with the sibling's own enter (6) appended last. */
+    const uint8_t expected[] = { 1U, 2U, 0xB0U, 3U, 4U, 5U, 0xEEU, 6U };
+
+    sm64_saturn_geo_walk_runtime_init(&walk, frames, 8U);
+    if (!sm64_saturn_geo_walk_runtime_run(&walk, 1U, &ops, &ctx)) return 100;
+    if (ctx.trace.count != sizeof(expected)) return 101;
+    for (uint8_t i = 0U; i < ctx.trace.count; i++) {
+        if (ctx.trace.values[i] != expected[i]) return 102;
+    }
+    return 0;
+}
+
 static int test_two_child_ignored_when_child_zero(void)
 {
     sm64_saturn_geo_walk_runtime_t walk;
@@ -242,7 +275,7 @@ static int test_two_child_ignored_when_child_zero(void)
      * backwards (e.g. guarding only on second_child != 0). If node 99 were
      * wrongly entered, its enter() call would append 99 to the trace and
      * the length check below would catch it. */
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 0U, 99U, false, false, false } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 0U, 99U, false, false, false, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
@@ -259,7 +292,7 @@ static int test_two_child_defer_dispatch_between_child_and_boundary(void)
 {
     sm64_saturn_geo_walk_runtime_t walk;
     sm64_saturn_geo_walk_runtime_frame_t frames[8];
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, false, false, true } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, false, false, true, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
@@ -288,15 +321,27 @@ static int test_two_child_overflow_reports_capacity(void)
      * bookkeeping frames (final-leave, second_child-ENTER, boundary-leave,
      * child-ENTER) this path pushes. Must report overflow cleanly rather
      * than corrupt walk state or return success. */
-    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, true, false } };
+    struct two_child_ctx ctx = { { { 0 }, 0U }, { 2U, 3U, true, true, false, 0U } };
     const sm64_saturn_geo_walk_runtime_ops_t ops = {
         two_child_enter, two_child_dispatch, two_child_leave
     };
 
     sm64_saturn_geo_walk_runtime_init(&walk, frames, 2U);
     if (sm64_saturn_geo_walk_runtime_run(&walk, 1U, &ops, &ctx)) return 80;
-    return walk.overflowed &&
-           walk.fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW ? 0 : 81;
+    if (!(walk.overflowed &&
+          walk.fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW)) return 81;
+    /* Pin the exact stranded depth, not just "overflow got detected
+     * somehow": node 1's enter() pushes, in order, the final-leave frame
+     * (depth 0->1), then the second_child ENTER frame (depth 1->2) -- both
+     * fit in this capacity-2 array. The THIRD push attempt (the
+     * boundary-leave frame) is the one that hits capacity and fails,
+     * leaving depth stranded at 2 with those first two frames still
+     * sitting in the array, never drained. If this ever reads something
+     * other than 2, either the push order in run()'s two-subtree branch
+     * changed, or capacity accounting elsewhere regressed -- both are
+     * exactly the kind of silent-corruption-adjacent change this
+     * regression guard exists to catch. */
+    return walk.depth == 2U ? 0 : 82;
 }
 
 int main(void)
@@ -312,6 +357,8 @@ int main(void)
     failure = test_two_child_boundary_leave_fires_between_subtrees();
     if (failure != 0) return failure;
     failure = test_two_child_boundary_then_final_leave_order();
+    if (failure != 0) return failure;
+    failure = test_two_child_sibling_fires_after_second_child_and_leave();
     if (failure != 0) return failure;
     failure = test_two_child_ignored_when_child_zero();
     if (failure != 0) return failure;

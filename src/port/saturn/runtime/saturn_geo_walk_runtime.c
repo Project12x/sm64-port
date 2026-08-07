@@ -119,25 +119,33 @@ bool sm64_saturn_geo_walk_runtime_run(
                       SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U, 0U, 0U)) {
                 return false;
             }
+            /* The final-leave push is identical on both branches below (it
+             * uses only result.leave_required/leave_action/matrix_depth/
+             * context_token and event.node, all already available here,
+             * before the two-subtree/single-subtree split) so it is
+             * hoisted above the split instead of being duplicated in each
+             * branch. */
+            if (result.leave_required &&
+                !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
+                      result.leave_action, result.matrix_depth,
+                      result.context_token)) {
+                return false;
+            }
             if (result.child != 0U && result.second_child != 0U) {
                 /* Two-subtree node: walk child, optional boundary action,
-                 * walk second_child, optional final leave. Frames are
-                 * pushed bottom-to-top in the reverse of the desired
-                 * pop/fire order (LIFO), so the eventual pop order is:
-                 * child subtree drains, dispatch (if deferred), boundary
-                 * leave (if boundary_required), second_child subtree
-                 * drains, final leave (if leave_required), sibling. See
+                 * walk second_child, optional final leave (pushed above,
+                 * before this split). Frames are pushed bottom-to-top in
+                 * the reverse of the desired pop/fire order (LIFO), so the
+                 * eventual pop order is: child subtree drains, dispatch
+                 * (if deferred), boundary leave (if boundary_required),
+                 * second_child subtree drains, final leave (if
+                 * leave_required -- already on the stack beneath
+                 * second_child from the hoisted push above), sibling. See
                  * saturn_geo_walk_runtime.h's
                  * sm64_saturn_geo_walk_runtime_enter_t comments for the
                  * exact contract. second_child is ignored (this branch is
                  * skipped) whenever child == 0 -- there is no meaningful
                  * "second" subtree without a first. */
-                if (result.leave_required &&
-                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
-                          result.leave_action, result.matrix_depth,
-                          result.context_token)) {
-                    return false;
-                }
                 if (!push(walk, result.second_child, 0U,
                           SM64_SATURN_GEO_WALK_RUNTIME_ENTER, 0U,
                           result.matrix_depth, result.context_token)) {
@@ -160,12 +168,6 @@ bool sm64_saturn_geo_walk_runtime_run(
                     return false;
                 }
             } else {
-                if (result.leave_required &&
-                    !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_LEAVE,
-                          result.leave_action, result.matrix_depth,
-                          result.context_token)) {
-                    return false;
-                }
                 if (result.defer_dispatch && result.child != 0U &&
                     !push(walk, event.node, 0U, SM64_SATURN_GEO_WALK_RUNTIME_DISPATCH,
                           0U, 0U, result.context_token)) {

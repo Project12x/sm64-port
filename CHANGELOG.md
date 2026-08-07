@@ -181,6 +181,34 @@
     reverted. `geo_walk_source_policy_test.py` (19, unchanged),
     `verify-saturn-geo-walk-runtime`, and `verify-saturn-geo-depth-manifest`
     all PASS with no change to their own outcomes.
+- Fixed 4 code-quality findings from the review of the two-subtree runtime
+  extension above, before building on it (`saturn_geo_walk_runtime.h`/`.c`,
+  `tools/saturn/geo_walk_runtime_contract_test.c`):
+  - Added `test_two_child_sibling_fires_after_second_child_and_leave`: none
+    of the 6 existing two-subtree tests combined a node's own sibling
+    continuation with `second_child`, so nothing pinned down that the
+    sibling fires only after `second_child`'s entire subtree (and any
+    final leave) resolves, not right after `child`'s subtree the way it
+    would for a single-child node.
+  - Strengthened `test_two_child_overflow_reports_capacity` with an exact
+    `walk.depth == 2` assertion for its capacity-2 scenario (traced by
+    hand against `push()`'s exact call order: the final-leave and
+    second_child pushes succeed, the boundary-leave push is the one that
+    overflows, stranding depth at 2) -- previously it only checked that
+    `overflowed`/`fail_reason` were set, which would also pass if the
+    stranding mechanism silently changed to a different (still "detected
+    somehow") shape.
+  - Documented `sm64_saturn_geo_walk_runtime_leave_fn`'s declaration and
+    the `ops.leave` field (`saturn_geo_walk_runtime.h`): for a two-subtree
+    node this one callback now fires with two conceptually distinct
+    meanings (a BOUNDARY call between the subtrees, a FINAL call after
+    everything), distinguished only by which action code the caller
+    chose -- callers must keep those codes numerically distinct.
+  - Hoisted the duplicated `if (result.leave_required) push(...)` block in
+    `sm64_saturn_geo_walk_runtime_run()` above the two-subtree/single-
+    subtree branch split (it only used values already available before
+    the split); a pure refactor, push order unchanged.
+  - Verified: `verify-saturn-geo-walk-runtime` PASSES (9 cases, up from 8).
 
 ### Fixed
 
