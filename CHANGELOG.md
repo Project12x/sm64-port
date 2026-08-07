@@ -209,6 +209,93 @@
     subtree branch split (it only used values already available before
     the split); a pure refactor, push order unchanged.
   - Verified: `verify-saturn-geo-walk-runtime` PASSES (9 cases, up from 8).
+- Converted the last 3 of the original 24 direct recursive
+  `geo_process_node_and_siblings()` call sites in
+  `src/game/rendering_graph_node.c` -- `geo_process_object`,
+  `geo_process_object_parent`, `geo_process_held_object` -- to the bounded
+  runtime, using the two-subtree extension above, wave 3 of Task 2 in
+  `docs/superpowers/plans/2026-08-07-task14-completion.md`. Each handler
+  was split into a small `saturn_geo_enter_*` helper (returning the node's
+  two child pointers, or a `saturn_geo_object_children`/`_object_parent_
+  children`/`_held_object_children` struct with a couple of extra flags
+  for `OBJECT`) shared between the handler's own top-level function (still
+  reachable via real recursion or `geo_process_node_and_siblings`'s
+  switch, driving `saturn_geo_walk_process_children()` directly on each
+  child list -- never on `node` itself, which would double-process this
+  node's own sibling since that continuation is already owned by whichever
+  caller reached it) and a new case in `saturn_geo_walk_enter`'s switch
+  (for when the node is reached as a child within an already-active walk).
+  5 new action codes (`SATURN_GEO_BOUNDARY_OBJECT_PARENT`,
+  `SATURN_GEO_BOUNDARY_OBJECT`, `SATURN_GEO_LEAVE_OBJECT_FINAL`,
+  `SATURN_GEO_LEAVE_OBJECT_COMBINED`, `SATURN_GEO_BOUNDARY_HELD_OBJECT`) in
+  the existing shared enum distinguish `saturn_geo_walk_leave`'s boundary
+  vs. final calls; `_COMBINED` folds both jobs into one callback for the
+  (real, always-taken) case where a node has only one subtree at a given
+  visit, since the runtime's single-subtree path fires only one leave call
+  then. `geo_process_object`'s admission is gated on `areaIndex ==
+  gCurGraphNodeRoot->areaIndex` exactly as before; its final leave (matrix
+  pop, actor-observation end, anim-state reset, `throwMatrix = NULL`) now
+  fires whenever admitted, even when neither child ends up walked (not
+  visible) -- matching the pre-conversion code exactly, where that cleanup
+  ran unconditionally once inside the outer `if`.
+  `geo_process_held_object`'s matrix-stack push/pop is asymmetric versus
+  the other two: the push happens in `enter()` strictly before child A is
+  walked, but the matching pop happens in the boundary/leave callback
+  strictly after child A's subtree drains -- re-verified against the real
+  source rather than assumed, since the task description flagged this as
+  the one place a wrong guess would silently corrupt matrix state.
+  - **Found and fixed a real reentrancy hazard beyond what the two-subtree
+    extension alone addressed** (not merely a frame-cost question):
+    converting `geo_process_held_object` makes it reachable, in every real
+    actor, via a real-recursion detour through still-unconverted
+    "skeleton" types (`GEO_ANIMATED_PART`, `GEO_SCALE`, `GEO_SWITCH_CASE`)
+    nested beneath a now-converted `Object`'s own `sharedChild` --
+    verified against the real shipped `actors/mario/geo.inc.c`,
+    `GEO_HELD_OBJECT` is reached only via exactly those types, 13 levels
+    deep from the layout root. Absent a guard, that detour would let
+    `geo_process_held_object()` call `saturn_geo_walk_process_children()`
+    again while an outer walk (e.g. `CAMERA`'s) is still active many real
+    C stack frames up, silently reinitializing the shared
+    `sourceboot_geo_walk_frames` array mid-drain and corrupting the outer
+    walk's still-pending frames -- genuine memory corruption, not a
+    capacity problem. Independently confirmed via a second-opinion consult
+    (Codex) before implementing the fix. Fixed with a new
+    `sSaturnGeoWalkActive` non-reentrancy guard on
+    `saturn_geo_walk_process_children()`: any call arriving while it is
+    already `true` is, by construction, reached via exactly this detour,
+    and falls back to plain `geo_process_node_and_siblings()` recursion
+    instead of touching the array -- this subtree's unconditionally-
+    correct pre-conversion behavior, and strictly non-regressing (a
+    subtree reached this way already used real recursion before this
+    wave). This means the realistic "Mario holding something" case does
+    **not** yet get the bounded-stack benefit (its held-object subtree
+    still runs via real recursion, identical depth/behavior to before this
+    wave) -- that requires a future wave converting the skeleton types
+    too, at which point this guard's fallback stops firing for that path
+    automatically, with no further changes needed in `geo_process_object`/
+    `_parent`/`geo_process_held_object`.
+  - **Real call-site count is 14, not the 16 (19 - 3) originally
+    estimated going into this wave**: `geo_process_object`,
+    `geo_process_object_parent`, and `geo_process_held_object` each
+    contained *two* literal `geo_process_node_and_siblings(` call sites
+    (`sharedChild` and `children`), not one like every other handler type
+    -- removing all three handlers' direct calls (6 sites, not 3) would
+    give 19 - 6 = 13, and the `sSaturnGeoWalkActive` guard's fallback
+    above (`geo_process_node_and_siblings(children)`, a new, deliberate,
+    narrowly-scoped call) adds exactly 1 back: 19 - 6 + 1 = 14. Verified
+    directly (`geo_walk_source_policy_test.py` reports "14 direct
+    recursive dispatcher calls"), not assumed from the arithmetic.
+  - Verified: `verify-saturn-geo-walk-runtime` and
+    `verify-saturn-geo-depth-manifest` PASS (see also the new manifest
+    test below); a real SH-2 cross-compile
+    (`sh-elf-gcc -fsyntax-only -std=c11` with the exact sourceboot
+    `SH_CFLAGS`/`sourceboot.specs`/`YAUL_CFLAGS_shared` include set,
+    `-Wall -Wextra -Wshadow -Wunused -Wduplicated-branches` etc.) of
+    `rendering_graph_node.c` is clean with zero new warnings/errors (2
+    pre-existing, unrelated `-Wcomment` warnings on wave 2's own doc
+    comment lines 1779/1808 are unchanged). No target link, Ymir, or
+    manual evidence is claimed by this wave; the memory-budget link
+    remains open and unrelated to this change.
 
 ### Fixed
 

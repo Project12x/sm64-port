@@ -1283,88 +1283,118 @@ static s32 obj_is_in_view(struct GraphNodeObject *node, Mat4 matrix) {
 }
 
 /**
- * Process an object node.
+ * The two subtrees an object node walks, plus enough state to drive both
+ * the boundary cleanup (needed only if sharedChild was walked) and the
+ * final cleanup (needed whenever the node was admitted at all, i.e.
+ * areaIndex matched -- see admitted below -- REGARDLESS of whether either
+ * subtree pointer ended up non-NULL: an admitted-but-not-visible object
+ * still pushed a matrix-stack slot and possibly began an actor
+ * observation in saturn_geo_enter_object, both of which must still be
+ * unwound).
  */
-static void geo_process_object(struct Object *node) {
+struct saturn_geo_object_children {
+    struct GraphNode *shared_child;   /* NULL unless visible AND sharedChild != NULL */
+    struct GraphNode *own_children;   /* NULL unless visible AND node.children != NULL */
+    bool admitted;                    /* areaIndex == gCurGraphNodeRoot->areaIndex */
+    bool actor_observed;              /* saturn_source_observe_object_begin's result */
+};
+
+/**
+ * Object enter: the full pre-conversion body up through the
+ * saturn_geo_visible gate, unchanged in substance and ordering (matrix
+ * composition, matrix-stack push, cameraToObject, animation globals,
+ * frustum-cull decision, actor-state observation) -- only the two
+ * recursive calls at the very end are replaced, by reporting sharedChild/
+ * node.children back to the caller instead of walking them directly. See
+ * geo_process_object and saturn_geo_walk_enter's GRAPH_NODE_TYPE_OBJECT
+ * case for the two contexts that consume this shared setup.
+ *
+ * Returns { NULL, NULL, false, false } (nothing else in this struct is
+ * meaningful) when areaIndex does not match -- the pre-conversion
+ * function's entire body was gated on that one check.
+ */
+static struct saturn_geo_object_children saturn_geo_enter_object(struct Object *node) {
     UNUSED Mat4 mtxf;
     s32 hasAnimation = (node->header.gfx.node.flags & GRAPH_RENDER_HAS_ANIMATION) != 0;
-#ifdef TARGET_SATURN
-    bool saturn_actor_observed = false;
-#endif
+    struct saturn_geo_object_children out = { NULL, NULL, false, false };
 
-    if (node->header.gfx.areaIndex == gCurGraphNodeRoot->areaIndex) {
+    if (node->header.gfx.areaIndex != gCurGraphNodeRoot->areaIndex) {
+        return out;
+    }
+    out.admitted = true;
 #ifdef TARGET_SATURN
-        saturn_actor_observed = saturn_source_observe_object_begin(node);
-        if (node->header.gfx.throwMatrix != NULL) {
-            /* throwMatrix here is always gameplay-owned float data
-             * living OUTSIDE gMatStack at this read (mario.c quicksand,
-             * obj_behaviors.c terrain-normal alignment, mario_actions_
-             * moving.c floor align, object_helpers.c, tilting_inverted_
-             * pyramid.inc.c) -- geo_process_object always overwrites the
-             * pointer to alias gMatStack a few lines below, but that
-             * hasn't happened yet at this read. Convert at the boundary
-             * rather than trying to resolve a gMatStackQ index. */
-            sm64_saturn_mtx_t throwQ;
-            saturn_mat4_to_q16(&throwQ, *node->header.gfx.throwMatrix);
-            (void) sm64_saturn_matrix_mul(&throwQ, &gMatStackQ[gMatStackIndex],
-                                          &gMatStackQ[gMatStackIndex + 1]);
-        } else if (node->header.gfx.node.flags & GRAPH_RENDER_BILLBOARD) {
-            int32_t posQ[3];
-            saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
-            sm64_saturn_mtxq_billboard(&gMatStackQ[gMatStackIndex + 1],
-                                       &gMatStackQ[gMatStackIndex], posQ,
-                                       gCurGraphNodeCamera->roll);
-        } else {
-            sm64_saturn_mtx_t nodeQ;
-            int32_t posQ[3];
-            saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
-            sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, posQ, node->header.gfx.angle[0],
-                                                      node->header.gfx.angle[1],
-                                                      node->header.gfx.angle[2]);
-            (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
-                                          &gMatStackQ[gMatStackIndex + 1]);
-        }
+    out.actor_observed = saturn_source_observe_object_begin(node);
+    if (node->header.gfx.throwMatrix != NULL) {
+        /* throwMatrix here is always gameplay-owned float data
+         * living OUTSIDE gMatStack at this read (mario.c quicksand,
+         * obj_behaviors.c terrain-normal alignment, mario_actions_
+         * moving.c floor align, object_helpers.c, tilting_inverted_
+         * pyramid.inc.c) -- geo_process_object always overwrites the
+         * pointer to alias gMatStack a few lines below, but that
+         * hasn't happened yet at this read. Convert at the boundary
+         * rather than trying to resolve a gMatStackQ index. */
+        sm64_saturn_mtx_t throwQ;
+        saturn_mat4_to_q16(&throwQ, *node->header.gfx.throwMatrix);
+        (void) sm64_saturn_matrix_mul(&throwQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    } else if (node->header.gfx.node.flags & GRAPH_RENDER_BILLBOARD) {
+        int32_t posQ[3];
+        saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
+        sm64_saturn_mtxq_billboard(&gMatStackQ[gMatStackIndex + 1],
+                                   &gMatStackQ[gMatStackIndex], posQ,
+                                   gCurGraphNodeCamera->roll);
+    } else {
+        sm64_saturn_mtx_t nodeQ;
+        int32_t posQ[3];
+        saturn_vec3f_to_q16(posQ, node->header.gfx.pos);
+        sm64_saturn_mtxq_rotate_zxy_and_translate(&nodeQ, posQ, node->header.gfx.angle[0],
+                                                  node->header.gfx.angle[1],
+                                                  node->header.gfx.angle[2]);
+        (void) sm64_saturn_matrix_mul(&nodeQ, &gMatStackQ[gMatStackIndex],
+                                      &gMatStackQ[gMatStackIndex + 1]);
+    }
 
-        {
-            int32_t sQ[3];
-            saturn_vec3f_to_q16(sQ, node->header.gfx.scale);
-            sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
-                                         &gMatStackQ[gMatStackIndex + 1], sQ);
-        }
-        node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
-        /* Refresh MUST happen here, immediately, not deferred to the
-         * mtxf_to_mtx-equivalent point below: cameraToObject (read for
-         * positional audio via play_sound) and obj_is_in_view (frustum
-         * culling -- a gameplay-visible decision) both read
-         * gMatStack[gMatStackIndex] before this function reaches that
-         * point. Deferring the refresh would leave both reading stale
-         * data left over from whatever previously occupied this stack
-         * slot. */
-        saturn_mtxq_refresh_float_mirror(gMatStackIndex);
+    {
+        int32_t sQ[3];
+        saturn_vec3f_to_q16(sQ, node->header.gfx.scale);
+        sm64_saturn_mtxq_scale_vec3f(&gMatStackQ[gMatStackIndex + 1],
+                                     &gMatStackQ[gMatStackIndex + 1], sQ);
+    }
+    node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
+    /* Refresh MUST happen here, immediately, not deferred to the
+     * mtxf_to_mtx-equivalent point below: cameraToObject (read for
+     * positional audio via play_sound) and obj_is_in_view (frustum
+     * culling -- a gameplay-visible decision) both read
+     * gMatStack[gMatStackIndex] before this function reaches that
+     * point. Deferring the refresh would leave both reading stale
+     * data left over from whatever previously occupied this stack
+     * slot. */
+    saturn_mtxq_refresh_float_mirror(gMatStackIndex);
 #else
-        if (node->header.gfx.throwMatrix != NULL) {
-            mtxf_mul(gMatStack[gMatStackIndex + 1], *node->header.gfx.throwMatrix,
-                     gMatStack[gMatStackIndex]);
-        } else if (node->header.gfx.node.flags & GRAPH_RENDER_BILLBOARD) {
-            mtxf_billboard(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex],
-                           node->header.gfx.pos, gCurGraphNodeCamera->roll);
-        } else {
-            mtxf_rotate_zxy_and_translate(mtxf, node->header.gfx.pos, node->header.gfx.angle);
-            mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
-        }
+    if (node->header.gfx.throwMatrix != NULL) {
+        mtxf_mul(gMatStack[gMatStackIndex + 1], *node->header.gfx.throwMatrix,
+                 gMatStack[gMatStackIndex]);
+    } else if (node->header.gfx.node.flags & GRAPH_RENDER_BILLBOARD) {
+        mtxf_billboard(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex],
+                       node->header.gfx.pos, gCurGraphNodeCamera->roll);
+    } else {
+        mtxf_rotate_zxy_and_translate(mtxf, node->header.gfx.pos, node->header.gfx.angle);
+        mtxf_mul(gMatStack[gMatStackIndex + 1], mtxf, gMatStack[gMatStackIndex]);
+    }
 
-        mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex + 1],
-                         node->header.gfx.scale);
-        node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
+    mtxf_scale_vec3f(gMatStack[gMatStackIndex + 1], gMatStack[gMatStackIndex + 1],
+                     node->header.gfx.scale);
+    node->header.gfx.throwMatrix = &gMatStack[++gMatStackIndex];
 #endif
-        node->header.gfx.cameraToObject[0] = gMatStack[gMatStackIndex][3][0];
-        node->header.gfx.cameraToObject[1] = gMatStack[gMatStackIndex][3][1];
-        node->header.gfx.cameraToObject[2] = gMatStack[gMatStackIndex][3][2];
+    node->header.gfx.cameraToObject[0] = gMatStack[gMatStackIndex][3][0];
+    node->header.gfx.cameraToObject[1] = gMatStack[gMatStackIndex][3][1];
+    node->header.gfx.cameraToObject[2] = gMatStack[gMatStackIndex][3][2];
 
-        // FIXME: correct types
-        if (node->header.gfx.animInfo.curAnim != NULL) {
-            geo_set_animation_globals(&node->header.gfx.animInfo, hasAnimation);
-        }
+    // FIXME: correct types
+    if (node->header.gfx.animInfo.curAnim != NULL) {
+        geo_set_animation_globals(&node->header.gfx.animInfo, hasAnimation);
+    }
+    {
         const s32 saturn_geo_visible =
             obj_is_in_view(&node->header.gfx, gMatStack[gMatStackIndex]);
 #ifdef TARGET_SATURN
@@ -1386,51 +1416,183 @@ static void geo_process_object(struct Object *node) {
             if (node->header.gfx.sharedChild != NULL) {
                 gCurGraphNodeObject = (struct GraphNodeObject *) node;
                 node->header.gfx.sharedChild->parent = &node->header.gfx.node;
-                geo_process_node_and_siblings(node->header.gfx.sharedChild);
-                node->header.gfx.sharedChild->parent = NULL;
-                gCurGraphNodeObject = NULL;
+                out.shared_child = node->header.gfx.sharedChild;
             }
             if (node->header.gfx.node.children != NULL) {
-                geo_process_node_and_siblings(node->header.gfx.node.children);
+                out.own_children = node->header.gfx.node.children;
             }
         }
-
-        gMatStackIndex--;
-#ifdef TARGET_SATURN
-        if (saturn_actor_observed)
-            (void)sm64_saturn_geo_state_observer_end_object(
-                sm64_saturn_geo_state_observer_bound());
-#endif
-        gCurAnimType = ANIM_TYPE_NONE;
-        node->header.gfx.throwMatrix = NULL;
     }
+    return out;
+}
+
+/**
+ * Object boundary: clears the temporary parent alias and gCurGraphNodeObject
+ * claim set by saturn_geo_enter_object above, exactly matching the
+ * pre-conversion post-sharedChild-subtree cleanup. Always safe to
+ * dereference node->header.gfx.sharedChild here -- only ever called when
+ * sharedChild was non-NULL at enter time.
+ */
+static void saturn_geo_leave_object_boundary(struct Object *node) {
+    node->header.gfx.sharedChild->parent = NULL;
+    gCurGraphNodeObject = NULL;
+}
+
+/**
+ * Object final leave: pops the matrix-stack slot pushed in
+ * saturn_geo_enter_object, ends the actor observation snapshot if one was
+ * begun, and resets the per-object animation/throwMatrix globals -- exactly
+ * matching the pre-conversion code, which ran this unconditionally once
+ * admitted (areaIndex matched), regardless of saturn_geo_visible.
+ */
+static void saturn_geo_leave_object_final(struct Object *node, bool actor_observed) {
+    gMatStackIndex--;
+#ifdef TARGET_SATURN
+    if (actor_observed) {
+        (void) sm64_saturn_geo_state_observer_end_object(
+            sm64_saturn_geo_state_observer_bound());
+    }
+#endif
+    gCurAnimType = ANIM_TYPE_NONE;
+    node->header.gfx.throwMatrix = NULL;
+}
+
+/**
+ * Process an object node.
+ *
+ * This function's own sibling continuation (if any) is owned by whichever
+ * caller reached it, exactly as geo_process_object_parent's own comment
+ * explains -- so this walks each subtree directly via
+ * saturn_geo_walk_process_children(child-list) rather than submitting
+ * 'node' itself as a walk root.
+ */
+static void geo_process_object(struct Object *node) {
+    struct saturn_geo_object_children children = saturn_geo_enter_object(node);
+
+    if (!children.admitted) {
+        return;
+    }
+    if (children.shared_child != NULL) {
+        (void) saturn_geo_walk_process_children(children.shared_child);
+        saturn_geo_leave_object_boundary(node);
+    }
+    if (children.own_children != NULL) {
+        (void) saturn_geo_walk_process_children(children.own_children);
+    }
+    saturn_geo_leave_object_final(node, children.actor_observed);
+}
+
+/**
+ * The two subtrees an object-parent node walks: 'sharedChild' (child A,
+ * under a temporary parent alias) and 'node.children' (child B, in
+ * practice always NULL -- the live object list is threaded through
+ * sharedChild's own sibling chain, not this field). A child pointer of
+ * NULL here means that subtree does not exist for this visit.
+ */
+struct saturn_geo_object_parent_children {
+    struct GraphNode *shared_child;
+    struct GraphNode *own_children;
+};
+
+/**
+ * Object-parent enter: aliases sharedChild's parent pointer to this node
+ * (matching the pre-conversion aliasing below, needed because sharedChild
+ * is not really this node's child in the graph -- it is the live object
+ * list's head, temporarily borrowed) and reports both subtrees. Does not
+ * itself decide how the two subtrees get sequenced -- see
+ * geo_process_object_parent (this node reached via real recursion or as a
+ * true top-level call) and saturn_geo_walk_enter's GRAPH_NODE_TYPE_OBJECT_
+ * PARENT case (this node reached as a child within an already-active
+ * walk) for the two contexts that both consume this same setup.
+ */
+static struct saturn_geo_object_parent_children
+saturn_geo_enter_object_parent(struct GraphNodeObjectParent *node) {
+    struct saturn_geo_object_parent_children out = { NULL, node->node.children };
+    if (node->sharedChild != NULL) {
+        node->sharedChild->parent = (struct GraphNode *) node;
+        out.shared_child = node->sharedChild;
+    }
+    return out;
+}
+
+/**
+ * Object-parent boundary/leave: clears the temporary parent alias set by
+ * saturn_geo_enter_object_parent above, exactly matching the pre-conversion
+ * post-sharedChild-subtree cleanup. Always safe to dereference
+ * node->sharedChild here -- this is only ever called when sharedChild was
+ * non-NULL at enter time (see both call sites above).
+ */
+static void saturn_geo_leave_object_parent_boundary(struct GraphNodeObjectParent *node) {
+    node->sharedChild->parent = NULL;
 }
 
 /**
  * Process an object parent node. Temporarily assigns itself as the parent of
- * the subtree rooted at 'sharedChild' and processes the subtree, after which the
- * actual children are be processed. (in practice they are null though)
+ * the subtree rooted at 'sharedChild' and processes the subtree, after which
+ * the actual children are be processed. (in practice they are null though)
+ *
+ * This function's own sibling continuation (if any) is owned by whichever
+ * caller reached it (geo_process_node_and_siblings's own loop for a true
+ * top-level/real-recursion call, or a legacy-dispatched handler's own
+ * recursion) -- so, unlike saturn_geo_walk_enter's GRAPH_NODE_TYPE_OBJECT_
+ * PARENT case below, this walks each subtree directly via
+ * saturn_geo_walk_process_children(child-list) rather than submitting
+ * 'node' itself as a walk root: the two subtrees are always DIFFERENT,
+ * nested lists, so this never risks the double-processing a self-submit
+ * would risk against this node's own already-owned sibling.
  */
 static void geo_process_object_parent(struct GraphNodeObjectParent *node) {
-    if (node->sharedChild != NULL) {
-        node->sharedChild->parent = (struct GraphNode *) node;
-        geo_process_node_and_siblings(node->sharedChild);
-        node->sharedChild->parent = NULL;
+    struct saturn_geo_object_parent_children children = saturn_geo_enter_object_parent(node);
+
+    if (children.shared_child != NULL) {
+        (void) saturn_geo_walk_process_children(children.shared_child);
+        saturn_geo_leave_object_parent_boundary(node);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
+    if (children.own_children != NULL) {
+        (void) saturn_geo_walk_process_children(children.own_children);
     }
 }
 
 /**
- * Process a held object node.
+ * The two subtrees a held-object node walks: the held object's own
+ * skeleton (child A, node->objNode->header.gfx.sharedChild, only if
+ * objNode is non-NULL and has one) and this node's own authored children
+ * (child B, node->fnNode.node.children -- fires unconditionally,
+ * regardless of whether child A existed, exactly matching the
+ * pre-conversion code's own two independent if-blocks).
  */
-void geo_process_held_object(struct GraphNodeHeldObject *node) {
+struct saturn_geo_held_object_children {
+    struct GraphNode *shared_child;   /* NULL unless objNode && objNode->...sharedChild */
+    struct GraphNode *own_children;   /* node->fnNode.node.children, unconditionally as-is */
+};
+
+/**
+ * Held-object enter: the full pre-conversion body up through (and
+ * including) the matrix-stack push and anim-state save/claim, unchanged in
+ * substance and ordering -- only the child-A recursive call at the end of
+ * the objNode-gated block is replaced, by reporting the two subtrees back
+ * to the caller instead of walking child A directly. See
+ * geo_process_held_object and saturn_geo_walk_enter's GRAPH_NODE_TYPE_
+ * HELD_OBJ case for the two contexts that consume this shared setup.
+ *
+ * NOTE the asymmetry versus saturn_geo_enter_object/_object_parent: the
+ * matrix-stack PUSH (gMatStackIndex++) happens here, in enter, strictly
+ * BEFORE child A is walked -- but the matching POP happens in
+ * saturn_geo_leave_held_object_boundary below, which fires AFTER child A's
+ * subtree drains (as either a true boundary_action, when child B also
+ * exists, or a leave_action, when it does not -- see that function's own
+ * comment). This mirrors the pre-conversion code exactly: gMatStackIndex++
+ * appears before the recursive sharedChild call, gMatStackIndex-- appears
+ * after it returns.
+ */
+static struct saturn_geo_held_object_children
+saturn_geo_enter_held_object(struct GraphNodeHeldObject *node) {
 #ifndef TARGET_SATURN
     Mat4 mat;
 #endif
     Vec3f translation;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
+    struct saturn_geo_held_object_children out = { NULL, node->fnNode.node.children };
 
 #ifdef F3DEX_GBI_2
     gSPLookAt(gDisplayListHead++, &lookAt);
@@ -1511,19 +1673,48 @@ void geo_process_held_object(struct GraphNodeHeldObject *node) {
             geo_set_animation_globals(&node->objNode->header.gfx.animInfo, hasAnimation);
         }
 
-        geo_process_node_and_siblings(node->objNode->header.gfx.sharedChild);
-        gCurGraphNodeHeldObject = NULL;
-        gCurAnimType = gGeoTempState.type;
-        gCurAnimEnabled = gGeoTempState.enabled;
-        gCurrAnimFrame = gGeoTempState.frame;
-        gCurAnimTranslationMultiplier = gGeoTempState.translationMultiplier;
-        gCurrAnimAttribute = gGeoTempState.attribute;
-        gCurAnimData = gGeoTempState.data;
-        gMatStackIndex--;
+        out.shared_child = node->objNode->header.gfx.sharedChild;
     }
+    return out;
+}
 
-    if (node->fnNode.node.children != NULL) {
-        geo_process_node_and_siblings(node->fnNode.node.children);
+/**
+ * Held-object boundary/leave: restores the anim-state save and
+ * gCurGraphNodeHeldObject claim from saturn_geo_enter_held_object above,
+ * and pops the matrix-stack slot pushed there -- exactly matching the
+ * pre-conversion post-sharedChild-subtree cleanup. No node-specific state
+ * is needed (only globals), so this takes no parameters. Only ever called
+ * when child A (the held object's sharedChild) was actually walked.
+ */
+static void saturn_geo_leave_held_object_boundary(void) {
+    gCurGraphNodeHeldObject = NULL;
+    gCurAnimType = gGeoTempState.type;
+    gCurAnimEnabled = gGeoTempState.enabled;
+    gCurrAnimFrame = gGeoTempState.frame;
+    gCurAnimTranslationMultiplier = gGeoTempState.translationMultiplier;
+    gCurrAnimAttribute = gGeoTempState.attribute;
+    gCurAnimData = gGeoTempState.data;
+    gMatStackIndex--;
+}
+
+/**
+ * Process a held object node.
+ *
+ * This function's own sibling continuation (if any) is owned by whichever
+ * caller reached it, exactly as geo_process_object_parent's own comment
+ * explains -- so this walks each subtree directly via
+ * saturn_geo_walk_process_children(child-list) rather than submitting
+ * 'node' itself as a walk root.
+ */
+void geo_process_held_object(struct GraphNodeHeldObject *node) {
+    struct saturn_geo_held_object_children children = saturn_geo_enter_held_object(node);
+
+    if (children.shared_child != NULL) {
+        (void) saturn_geo_walk_process_children(children.shared_child);
+        saturn_geo_leave_held_object_boundary();
+    }
+    if (children.own_children != NULL) {
+        (void) saturn_geo_walk_process_children(children.own_children);
     }
 }
 
@@ -1628,6 +1819,71 @@ void geo_try_process_children(struct GraphNode *node) {
  * node, or an owner-approved design accommodation. See
  * `docs/superpowers/plans/2026-08-07-task14-completion.md` Task 2's wave
  * 3 status for the reported blocker.
+ *
+ * Task 14 wave 3 lifts that blocker: `saturn_geo_walk_runtime.h`/`.c` now
+ * support a second, independently-sequenced child subtree per ENTER event
+ * (`second_child`, `boundary_action`/`boundary_required`, alongside the
+ * existing `leave_action`/`leave_required` for the final action -- see
+ * that header's `sm64_saturn_geo_walk_runtime_enter_t` comments for the
+ * exact contract and `saturn_geo_walk_leave`'s own comment below for how
+ * the three converted types below map their two independent cleanups onto
+ * those two fields). GRAPH_NODE_TYPE_OBJECT, GRAPH_NODE_TYPE_OBJECT_PARENT,
+ * and GRAPH_NODE_TYPE_HELD_OBJ are now converted, each via a
+ * `saturn_geo_enter_*`/`saturn_geo_leave_*` pair defined next to their
+ * respective `geo_process_*` function above (not down here) -- see those
+ * functions' own comments for the exact per-type shape.
+ *
+ * This wave also found, and had to close, a SECOND reentrancy hazard --
+ * the mirror image of the one wave 2 avoided by not converting the eleven
+ * "skeleton" types (TRANSLATION_ROTATION, TRANSLATION, ROTATION, SCALE,
+ * BILLBOARD, ANIMATED_PART, SHADOW, DISPLAY_LIST, GENERATED_LIST,
+ * SWITCH_CASE, LEVEL_OF_DETAIL) yet. Converting OBJECT means an Object's
+ * `sharedChild` subtree, when the Object is reached as a child within an
+ * already-active walk (now the norm: OBJECT_PARENT is converted too, and
+ * is always Camera's child -- wave 1), extends that SAME active walk
+ * rather than starting a fresh one. But `sharedChild` leads straight into
+ * those still-unconverted skeleton types -- verified against the real
+ * shipped `mario_geo[]` layout (`actors/mario/geo.inc.c`), every
+ * `GEO_HELD_OBJECT` occurrence is reached only via `GEO_SWITCH_CASE`/
+ * `GEO_ANIMATED_PART`/`GEO_SCALE` ancestors, 13 levels deep from the
+ * layout root -- which still dispatch through the legacy bridge below
+ * into their real, unmodified, still-recursive handlers. If that real
+ * recursion reaches another converted type (GRAPH_NODE_TYPE_HELD_OBJ, the
+ * realistic "Mario holding something" case), `geo_process_node_and_
+ * siblings`'s own switch calls `geo_process_held_object()` directly --
+ * which, now that it is converted too, would otherwise call
+ * `saturn_geo_walk_process_children()` again WHILE THE OUTER WALK IS
+ * STILL ACTIVE many real C stack frames up, with real pending frame data
+ * still sitting in `sourceboot_geo_walk_frames[0, outer_depth)`.
+ * `sm64_saturn_geo_walk_runtime_init()` unconditionally resets depth to 0
+ * and starts pushing at index 0 of that SAME shared array (the ONLY
+ * production owner of these frames -- `saturn_geo_walk_storage.h`),
+ * silently overwriting the outer walk's still-pending frames. This is
+ * genuine memory corruption, not merely a capacity concern: once the
+ * nested call returns and the outer walk's loop resumes, it pops frames
+ * whose CONTENTS have been overwritten, using a depth counter that is
+ * itself still correct but now indexes garbage.
+ *
+ * `sSaturnGeoWalkActive` (just below `saturn_geo_walk_process_children`)
+ * guards against exactly this: any call arriving while it is already true
+ * is, by construction, reached via a still-unconverted type's
+ * real-recursion detour from within that outer call, and falls back to
+ * plain recursion instead of touching the shared array -- exactly this
+ * subtree's pre-conversion behavior. This does not regress anything
+ * (a subtree reached this way already used real recursion before this
+ * wave); it does mean this wave's bounded-stack benefit for a node
+ * reached THIS way is deferred until the skeleton types convert in a
+ * future wave, at which point this guard stops firing for that path
+ * automatically, with no further changes needed to OBJECT/OBJECT_PARENT/
+ * HELD_OBJ. See this task's completion report for the concrete capacity
+ * analysis this guard was verified against.
+ *
+ * One more accounting note for whoever next runs
+ * `geo_walk_source_policy_test.py`: converting these three handlers drops
+ * the direct-call count by 6, not 3, because each of the three pre-
+ * conversion functions contained TWO literal `geo_process_node_and_
+ * siblings(` call sites (sharedChild and children), not one -- unlike
+ * every other handler type, which had exactly one. 19 - 6 = 13.
  * --------------------------------------------------------------------- */
 
 enum {
@@ -1635,6 +1891,30 @@ enum {
     SATURN_GEO_LEAVE_MASTER_LIST = 1U,
     SATURN_GEO_LEAVE_PERSPECTIVE = 2U,
     SATURN_GEO_LEAVE_CAMERA = 3U,
+    /* Task 14 wave 3: object/object_parent/held_object action codes.
+     * saturn_geo_walk_leave() below now receives calls carrying two
+     * conceptually different meanings for these three types, distinguished
+     * ONLY by which of these codes leave_action carries (see
+     * saturn_geo_walk_runtime.h's sm64_saturn_geo_walk_runtime_leave_fn and
+     * ops.leave doc comments for the general two-subtree contract): a
+     * BOUNDARY call (fires strictly between the two subtrees) and a FINAL
+     * call (fires once everything for the node has drained). When a node
+     * has only one subtree at a given visit (second_child == 0), the
+     * runtime's single-subtree path fires only ONE leave call for it, so
+     * that call must do BOTH jobs -- SATURN_GEO_LEAVE_OBJECT_COMBINED
+     * below is exactly that case for OBJECT; OBJECT_PARENT and HELD_OBJECT
+     * have no separate final action, so their one boundary code already
+     * serves as the combined code (requested via boundary_action OR
+     * leave_action depending on which runtime path applies -- see each
+     * type's saturn_geo_enter_* / geo_process_* comments). Keeping every
+     * code numerically distinct in this one shared enum means a compiler
+     * warning fires on an accidental duplicate, instead of two unrelated
+     * restore paths silently cross-wiring. */
+    SATURN_GEO_BOUNDARY_OBJECT_PARENT = 4U,
+    SATURN_GEO_BOUNDARY_OBJECT = 5U,
+    SATURN_GEO_LEAVE_OBJECT_FINAL = 6U,
+    SATURN_GEO_LEAVE_OBJECT_COMBINED = 7U,
+    SATURN_GEO_BOUNDARY_HELD_OBJECT = 8U,
 };
 
 /* Named diagnostic for the runtime's fail-closed overflow latch (global
@@ -1683,6 +1963,22 @@ static uintptr_t saturn_geo_walk_sibling_of(const struct GraphNode *node) {
  * mirroring geo_process_node_and_siblings's own switch further down
  * this file. Those handlers are untouched and keep using real recursion
  * for their own children, independent of this walk instance.
+ *
+ * GRAPH_NODE_TYPE_OBJECT / OBJECT_PARENT / HELD_OBJ are deliberately
+ * ABSENT here as of Task 14 wave 3 (same as MASTER_LIST/ORTHO_PROJECTION/
+ * PERSPECTIVE/CAMERA/BACKGROUND before them, waves 1-2): they are now
+ * converted, so saturn_geo_walk_enter's own switch below intercepts them
+ * before this bridge would ever be reached for them when nested within an
+ * active walk -- this function's default: case is genuinely unreachable
+ * for those three types via that path. They CAN still be reached here
+ * indirectly, though: if a still-unconverted type below (e.g.
+ * ANIMATED_PART) recurses via geo_process_node_and_siblings's own switch
+ * (real recursion, not this bridge) and that switch calls
+ * geo_process_object/_parent/geo_process_held_object directly, THAT is a
+ * completely different call path than this function, and is exactly the
+ * reentrancy scenario saturn_geo_walk_process_children's sSaturnGeoWalkActive
+ * guard exists for -- see this file's wave 3 doc comment above the
+ * SATURN_GEO_LEAVE_* enum for the full mechanism.
  */
 static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
     switch (node->type) {
@@ -1701,9 +1997,6 @@ static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
         case GRAPH_NODE_TYPE_ROTATION:
             geo_process_rotation((struct GraphNodeRotation *) node);
             break;
-        case GRAPH_NODE_TYPE_OBJECT:
-            geo_process_object((struct Object *) node);
-            break;
         case GRAPH_NODE_TYPE_ANIMATED_PART:
             geo_process_animated_part((struct GraphNodeAnimatedPart *) node);
             break;
@@ -1719,14 +2012,8 @@ static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
         case GRAPH_NODE_TYPE_SHADOW:
             geo_process_shadow((struct GraphNodeShadow *) node);
             break;
-        case GRAPH_NODE_TYPE_OBJECT_PARENT:
-            geo_process_object_parent((struct GraphNodeObjectParent *) node);
-            break;
         case GRAPH_NODE_TYPE_GENERATED_LIST:
             geo_process_generated_list((struct GraphNodeGenerated *) node);
-            break;
-        case GRAPH_NODE_TYPE_HELD_OBJ:
-            geo_process_held_object((struct GraphNodeHeldObject *) node);
             break;
         default:
             geo_try_process_children(node);
@@ -1738,8 +2025,8 @@ static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
  * Runtime ops.enter: replicates geo_process_node_and_siblings's
  * RENDER_ACTIVE / CHILDREN_FIRST / inactive-object handling generically
  * for every node this walk instance visits, then dispatches by type --
- * real enter-phase logic for this wave's four converted types, the
- * legacy bridge for everything else.
+ * real enter-phase logic for this wave's and prior waves' converted
+ * types, the legacy bridge for everything else.
  */
 static bool saturn_geo_walk_enter(uintptr_t node_token,
                                   sm64_saturn_geo_walk_runtime_enter_t *result,
@@ -1748,13 +2035,16 @@ static bool saturn_geo_walk_enter(uintptr_t node_token,
     (void) user;
 
     result->child = 0U;
+    result->second_child = 0U;
     result->sibling = saturn_geo_walk_sibling_of(node);
     result->leave_action = SATURN_GEO_LEAVE_NONE;
+    result->boundary_action = SATURN_GEO_LEAVE_NONE;
     result->matrix_depth = 0U;
     result->context_token = 0U;
     result->admitted = false;
     result->defer_dispatch = false;
     result->leave_required = false;
+    result->boundary_required = false;
 
     if (!(node->flags & GRAPH_RENDER_ACTIVE)) {
         if (node->type == GRAPH_NODE_TYPE_OBJECT) {
@@ -1818,6 +2108,97 @@ static bool saturn_geo_walk_enter(uintptr_t node_token,
             }
             break;
         }
+        /* Task 14 wave 3: two-subtree types. Each case below translates
+         * the type-specific saturn_geo_enter_* helper's simple
+         * { shared_child, own_children, ... } result into this generic
+         * child/second_child/boundary/leave shape, choosing between
+         * the runtime's two-subtree path (both children present) and its
+         * single-subtree path (see saturn_geo_walk_runtime.h's
+         * second_child comment) the same way each type's own top-level
+         * geo_process_*() function does -- see this file's wave 3 doc
+         * comment above the SATURN_GEO_LEAVE_* enum for the full
+         * reentrancy-safety argument these three types depend on. */
+        case GRAPH_NODE_TYPE_OBJECT_PARENT: {
+            struct GraphNodeObjectParent *op = (struct GraphNodeObjectParent *) node;
+            struct saturn_geo_object_parent_children children =
+                saturn_geo_enter_object_parent(op);
+            result->admitted = (children.shared_child != NULL) ||
+                               (children.own_children != NULL);
+            if (children.shared_child != NULL) {
+                result->child = (uintptr_t) children.shared_child;
+                if (children.own_children != NULL) {
+                    result->second_child = (uintptr_t) children.own_children;
+                    result->boundary_required = true;
+                    result->boundary_action = SATURN_GEO_BOUNDARY_OBJECT_PARENT;
+                } else {
+                    result->leave_required = true;
+                    result->leave_action = SATURN_GEO_BOUNDARY_OBJECT_PARENT;
+                }
+            } else if (children.own_children != NULL) {
+                result->child = (uintptr_t) children.own_children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_OBJECT: {
+            struct Object *obj = (struct Object *) node;
+            struct saturn_geo_object_children children = saturn_geo_enter_object(obj);
+            result->admitted = children.admitted;
+            result->context_token = children.actor_observed ? 1U : 0U;
+            if (children.admitted) {
+                /* The final leave (matrix pop / observer-end / anim clear /
+                 * throwMatrix=NULL) is needed unconditionally once
+                 * admitted, per saturn_geo_enter_object's own contract --
+                 * even when neither child ended up set (not visible). */
+                if (children.shared_child != NULL) {
+                    result->child = (uintptr_t) children.shared_child;
+                    if (children.own_children != NULL) {
+                        result->second_child = (uintptr_t) children.own_children;
+                        result->boundary_required = true;
+                        result->boundary_action = SATURN_GEO_BOUNDARY_OBJECT;
+                        result->leave_required = true;
+                        result->leave_action = SATURN_GEO_LEAVE_OBJECT_FINAL;
+                    } else {
+                        /* No second subtree this visit -- the runtime's
+                         * single-subtree path fires only ONE leave call,
+                         * so it must do both the boundary AND final work. */
+                        result->leave_required = true;
+                        result->leave_action = SATURN_GEO_LEAVE_OBJECT_COMBINED;
+                    }
+                } else {
+                    if (children.own_children != NULL) {
+                        result->child = (uintptr_t) children.own_children;
+                    }
+                    result->leave_required = true;
+                    result->leave_action = SATURN_GEO_LEAVE_OBJECT_FINAL;
+                }
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_HELD_OBJ: {
+            struct GraphNodeHeldObject *ho = (struct GraphNodeHeldObject *) node;
+            struct saturn_geo_held_object_children children =
+                saturn_geo_enter_held_object(ho);
+            /* The enter-phase side effects (gSPLookAt, the GEO_CONTEXT_
+             * RENDER callback) always run once this node is reached and
+             * active, matching CAMERA's own unconditional admission
+             * (wave 1) -- there is no "nothing to do" case for held-object
+             * the way there is for e.g. ORTHO_PROJECTION. */
+            result->admitted = true;
+            if (children.shared_child != NULL) {
+                result->child = (uintptr_t) children.shared_child;
+                if (children.own_children != NULL) {
+                    result->second_child = (uintptr_t) children.own_children;
+                    result->boundary_required = true;
+                    result->boundary_action = SATURN_GEO_BOUNDARY_HELD_OBJECT;
+                } else {
+                    result->leave_required = true;
+                    result->leave_action = SATURN_GEO_BOUNDARY_HELD_OBJECT;
+                }
+            } else if (children.own_children != NULL) {
+                result->child = (uintptr_t) children.own_children;
+            }
+            break;
+        }
         default:
             saturn_geo_walk_dispatch_legacy(node);
             break;
@@ -1839,6 +2220,18 @@ static void saturn_geo_walk_dispatch(uintptr_t node_token, void *user) {
  * Runtime ops.leave: restores the global state each converted handler's
  * enter phase mutated, exactly matching the pre-conversion post-child
  * code paths.
+ *
+ * As of Task 14 wave 3, this callback fires with two conceptually
+ * different meanings for the two-subtree action codes (SATURN_GEO_
+ * BOUNDARY_OBJECT_PARENT/_OBJECT/_HELD_OBJECT and SATURN_GEO_LEAVE_
+ * OBJECT_FINAL/_COMBINED, all defined above): a BOUNDARY call, fired by
+ * the runtime strictly between a node's two subtrees, and a FINAL call,
+ * fired once everything for the node has drained -- distinguished only by
+ * which code leave_action carries here (see
+ * saturn_geo_walk_runtime.h's sm64_saturn_geo_walk_runtime_leave_fn
+ * comment for the general contract, and each SATURN_GEO_LEAVE_ /
+ * SATURN_GEO_BOUNDARY_ enumerator's own comment above for which meaning
+ * it carries and why).
  */
 static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
                                   uint16_t matrix_depth, uint16_t context_token,
@@ -1857,10 +2250,64 @@ static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
         case SATURN_GEO_LEAVE_CAMERA:
             saturn_geo_leave_camera(context_token != 0U);
             break;
+        case SATURN_GEO_BOUNDARY_OBJECT_PARENT:
+            saturn_geo_leave_object_parent_boundary((struct GraphNodeObjectParent *) node);
+            break;
+        case SATURN_GEO_BOUNDARY_OBJECT:
+            saturn_geo_leave_object_boundary((struct Object *) node);
+            break;
+        case SATURN_GEO_LEAVE_OBJECT_FINAL:
+            saturn_geo_leave_object_final((struct Object *) node, context_token != 0U);
+            break;
+        case SATURN_GEO_LEAVE_OBJECT_COMBINED:
+            saturn_geo_leave_object_boundary((struct Object *) node);
+            saturn_geo_leave_object_final((struct Object *) node, context_token != 0U);
+            break;
+        case SATURN_GEO_BOUNDARY_HELD_OBJECT:
+            saturn_geo_leave_held_object_boundary();
+            break;
         default:
             break;
     }
 }
+
+/* Task 14 wave 3: non-reentrancy guard for saturn_geo_walk_process_children
+ * below. See this file's wave 3 doc comment (above the SATURN_GEO_LEAVE_*
+ * enum, near saturn_geo_walk_dispatch_legacy) for the full discovery
+ * writeup; this is the short version needed to read the guard itself.
+ *
+ * sourceboot_geo_walk_frames is ONE global, fixed-capacity array (the
+ * production traversal engine's ONLY frame storage -- saturn_geo_walk_
+ * storage.h). Every call below to sm64_saturn_geo_walk_runtime_init()
+ * resets depth to 0 and starts pushing at index 0 of that SAME array,
+ * regardless of which C call frame makes the call. Converting OBJECT/
+ * OBJECT_PARENT/HELD_OBJ means their subtrees can now be reached via real
+ * recursion THROUGH a still-unconverted "skeleton" type (ANIMATED_PART,
+ * SWITCH_CASE, SCALE, ...) that is itself nested beneath an Object's
+ * sharedChild -- which is now walked as part of whatever OUTER walk
+ * reached that Object (extending it, never starting a fresh one). If that
+ * real-recursion detour reaches another converted type and this function
+ * were called again from inside it, it would silently overwrite the outer
+ * walk's still-pending frame data -- memory corruption, not a capacity
+ * problem, and not hypothetical: verified against the real mario_geo[]
+ * layout, this is exactly the "Mario holding something" path.
+ *
+ * sSaturnGeoWalkActive is set for the duration of the OUTERMOST call only.
+ * Any call arriving while it is already true is, by construction, reached
+ * via exactly that detour, and falls back to plain recursion instead --
+ * this subtree's unconditionally-correct pre-conversion behavior, safe
+ * because it never touches sourceboot_geo_walk_frames. A plain bool
+ * (rather than a counter) is sufficient: this walk only ever runs on the
+ * single master SH-2 core, synchronously, with no interrupt-driven or
+ * concurrent entry -- the only "reentrancy" possible is this exact nested
+ * real-recursion-detour call chain, which is inherently sequential (a
+ * call cannot itself be re-entered before returning). This does not
+ * regress anything (a subtree reached via such a detour already used
+ * real recursion before this wave); it does mean the bounded-stack
+ * benefit for a node reached this way is deferred until the skeleton
+ * types convert in a future wave, at which point this guard stops firing
+ * for that path automatically, with no further changes needed here. */
+static bool sSaturnGeoWalkActive = false;
 
 /**
  * Entry point used by this wave's converted handlers in place of a
@@ -1868,7 +2315,10 @@ static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
  * Owns a
  * fresh walk over sourceboot_geo_walk_frames for the duration of this
  * one call and drains it to completion (matching the original's
- * synchronous, blocking recursion semantics) before returning.
+ * synchronous, blocking recursion semantics) before returning -- UNLESS
+ * called reentrantly (sSaturnGeoWalkActive already true), in which case it
+ * falls back to plain recursion instead of touching the shared frame
+ * array; see sSaturnGeoWalkActive's own comment just above for why.
  */
 static bool saturn_geo_walk_process_children(struct GraphNode *children) {
     sm64_saturn_geo_walk_runtime_t walk;
@@ -1880,9 +2330,15 @@ static bool saturn_geo_walk_process_children(struct GraphNode *children) {
     if (children == NULL) {
         return true;
     }
+    if (sSaturnGeoWalkActive) {
+        geo_process_node_and_siblings(children);
+        return true;
+    }
+    sSaturnGeoWalkActive = true;
     sm64_saturn_geo_walk_runtime_init(&walk, sourceboot_geo_walk_frames,
                                        sourceboot_geo_walk_frame_capacity);
     ok = sm64_saturn_geo_walk_runtime_run(&walk, (uintptr_t) children, &ops, NULL);
+    sSaturnGeoWalkActive = false;
     if (!ok && walk.fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW) {
         sSaturnGeoWalkOverflowCount++;
     }
