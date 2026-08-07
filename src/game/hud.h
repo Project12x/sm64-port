@@ -22,6 +22,8 @@ enum CameraHUDLut {
 };
 
 void set_hud_camera_status(s16 status);
+s16 get_hud_camera_status(void);
+void get_hud_power_meter_state(s8 *out_animation, s16 *out_y);
 void render_hud(void);
 
 #endif // HUD_H

@@ -7,6 +7,7 @@
 
 #include "saturn_actor_bridge.h"
 #include "saturn_actor_instance.h"
+#include "saturn_hud.h"
 
 #if defined(__sh__)
 #include <cpu/cache.h>
@@ -42,6 +43,7 @@ typedef struct sm64_saturn_render_snapshot {
     sm64_saturn_render_view_t camera;
     sm64_saturn_mario_actor_snapshot_t mario;
     sm64_saturn_mario_pose_selector_t mario_pose;
+    sm64_saturn_hud_snapshot_t hud;
     uint32_t generation;
     uint32_t actor_generation;
     uint16_t actor_instance_count;

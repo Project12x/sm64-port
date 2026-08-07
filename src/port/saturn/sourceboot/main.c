@@ -5,6 +5,7 @@
 #include "game/camera.h"
 #include "game/area.h"
 #include "game/game_init.h"
+#include "game/hud.h"
 #include "game/level_update.h"
 #include "game/memory.h"
 #include "saturn_fast3d_frontend.h"
@@ -419,6 +420,23 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     snapshot->area_id = (uint32_t)gCurrAreaIndex;
     snapshot->geometry_bank_id = snapshot->mario_pose.vertex_bank_id;
     snapshot->material_bank_id = snapshot->mario_pose.material_bank_id;
+    s8 power_meter_animation = 0;
+    s16 power_meter_y = 0;
+    get_hud_power_meter_state(&power_meter_animation, &power_meter_y);
+    snapshot->hud.lives = gHudDisplay.lives;
+    snapshot->hud.coins = gHudDisplay.coins;
+    snapshot->hud.stars = gHudDisplay.stars;
+    snapshot->hud.wedges = gHudDisplay.wedges;
+    snapshot->hud.keys = gHudDisplay.keys;
+    snapshot->hud.flags = gHudDisplay.flags;
+    snapshot->hud.timer = gHudDisplay.timer;
+    snapshot->hud.camera_status = get_hud_camera_status();
+    snapshot->hud.power_meter_animation = power_meter_animation;
+    snapshot->hud.power_meter_y = power_meter_y;
+    snapshot->hud.cannon_active = (gCurrentArea != NULL &&
+                                   gCurrentArea->camera->mode == CAMERA_MODE_INSIDE_CANNON)
+                                       ? 1U : 0U;
+    snapshot->hud.reserved0 = 0U;
     if (!sm64_saturn_render_snapshot_publish(&sourceboot_render_snapshots,
                                              snapshot)) {
         (void)sm64_saturn_render_snapshot_quarantine(&sourceboot_render_snapshots,

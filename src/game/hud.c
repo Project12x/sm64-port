@@ -371,6 +371,25 @@ void set_hud_camera_status(s16 status) {
 }
 
 /**
+ * Returns the camera HUD status last set by set_hud_camera_status.
+ * Pure accessor: gHudDisplay is already externally readable, this brings
+ * camera status to the same visibility for platform-layer HUD backends.
+ */
+s16 get_hud_camera_status(void) {
+    return sCameraHUD.status;
+}
+
+/**
+ * Returns the power meter's current animation phase and Y position, as
+ * already computed this tick by render_hud_power_meter(). Pure accessor:
+ * no new computation, just visibility for platform-layer HUD backends.
+ */
+void get_hud_power_meter_state(s8 *out_animation, s16 *out_y) {
+    if (out_animation != NULL) *out_animation = sPowerMeterHUD.animation;
+    if (out_y != NULL) *out_y = sPowerMeterHUD.y;
+}
+
+/**
  * Renders camera HUD glyphs using a table list, depending of
  * the camera status called, a defined glyph is rendered.
  */

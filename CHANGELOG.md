@@ -4,6 +4,59 @@
 
 ### Added
 
+- Added two read-only accessors to `hud.c`/`hud.h` (`get_hud_camera_status`,
+  `get_hud_power_meter_state`) and a new `sm64_saturn_hud_snapshot_t` type
+  (`src/port/saturn/gfx/saturn_hud.h`), then wired a `hud` field of that type
+  onto the existing `sm64_saturn_render_snapshot_t` and filled it from
+  `sourceboot_capture_render_snapshot()` (Task 3 of the VDP2 gameplay HUD
+  plan, `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`). This rides
+  the project's existing double-buffered, generation-tracked render-snapshot
+  rail instead of building a second capture mechanism: `hud` inherits that
+  struct's generation coherence for free. `render_hud()` itself is
+  unmodified -- the two new accessors are pure reads of state it already
+  computes every tick (`sPowerMeterHUD`/`sCameraHUD`), at the same
+  external-visibility level `gHudDisplay` already has as an `extern` global.
+  `saturn_hud.h` stays header-only (struct definition only, no capture
+  function), per the task's explicit design constraint.
+  One placement decision not spelled out in the task's snippet: the new
+  HUD-capture block was inserted immediately before
+  `sm64_saturn_render_snapshot_publish()`, not after it and not at the
+  function's closing brace. `sourceboot_capture_render_snapshot()`'s actual
+  body (`main.c:348-474` pre-change) continues past the `publish` call with
+  quarantine-on-failure cleanup, so "the end of the function" and "before
+  publish" are different places; writing `snapshot->hud.*` after `publish`
+  would race a reader that may have already claimed the buffer via
+  `acquire_ready`. Everything must be written into the snapshot before the
+  single `publish` call that hands it off.
+  Added `tools/saturn/saturn_hud_snapshot_test.c` (a host-only, pointer-free
+  struct-shape test, no Yaul dependency) and a matching
+  `verify-saturn-hud-snapshot` Makefile target/`.PHONY` entry, following the
+  exact convention already established by `verify-render-snapshot-bank` and
+  `verify-actor-instance-snapshot`. Verified RED (missing `saturn_hud.h`)
+  then GREEN (compiles clean under `-Wall -Wextra -Werror`, runs, exit 0)
+  directly with `gcc`, and confirmed the unmodified `verify-saturn-hud-snapshot`
+  target itself also passes end-to-end. Also re-ran the pre-existing
+  `verify-render-snapshot-bank` host test and `test_render_snapshot_source.py`
+  (which regex-asserts no `sm64_saturn_render_snapshot_t` field contains
+  `*`) after adding the `hud` field -- both still pass, no regression.
+  Environment note for whoever runs this next: in this sandbox, MSYS
+  `make` (`/c/msys64/usr/bin/make`) does not see the `OS` environment
+  variable when invoked from the plain Bash tool, so `Makefile.saturn.mk`'s
+  `ifeq ($(OS),Windows_NT)` silently takes the POSIX branch and points
+  `SATURN_TOOLS_PYTHON` at a nonexistent `.venv-saturn-tools/bin/python`.
+  Running the same target through PowerShell (with `.venv-saturn-tools`'s
+  native-Windows `Scripts/python.exe`) avoids that, but `$(SATURN_REPO_ROOT)`
+  is computed via GNU Make's own `$(realpath ...)`, which this MSYS build
+  always renders MSYS-style (`/d/Code/...`); that path form is fatal to
+  `subprocess.run()` under a native-Windows Python (`_winapi.CreateProcess`
+  has no notion of `/d/...`), so the existing python-subprocess-wrapper
+  convention (used by `verify-pcm-protocol`, `verify-render-snapshot-bank`,
+  `verify-actor-instance-snapshot`, and now this target) only completes
+  end-to-end in this sandbox with `SATURN_REPO_ROOT` pinned to a native
+  Windows-style path on the command line. This is a pre-existing sandbox/
+  toolchain friction affecting every target using that convention, not
+  something introduced here, and out of this task's scope to fix.
+
 - Added `tools/saturn/extract_hud_glyphs.py`, a local-ROM-derived extractor
   for the real SM64 gameplay-HUD glyphs (digits, multiply/coin/Mario-head/star
   icons, apostrophe/double-quote, camera-status icons, power-meter wedge
