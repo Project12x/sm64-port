@@ -16,9 +16,10 @@ but do not block merges; the final all-features BOB build must measure at least
 Implementation begins with the existing dirty native-math verifier/oracle
 repair, then immutable feature/package identity and the transitive scene
 closure. The accepted rollback remains BOB with live input, Q16 camera,
-32-Mbit DRAM cart, and renderer Pipeline 4. The detailed plan has 29 small,
+32-Mbit DRAM cart, and renderer Pipeline 4. The detailed plan has 30 named,
 reviewed tasks, immediate plan/ledger updates at every transition, and
-serialized `-j1` build/Ymir gates for the busy host.
+serialized `-j1` build/Ymir gates for the busy host. The governing plan now
+has 30 named tasks, including the explicit VDP2 gameplay-HUD task 23A.
 
 ## Current stability lane within the larger track
 
@@ -33,7 +34,7 @@ geo-only fork.
 Once the current image is stable and the geo source-policy gate reaches zero
 direct recursive calls, return to the larger track at the still-open
 production audio bridge and package residency (Task 21), generated BOB
-dynamic closure and semantic audio (Tasks 22--23), final-draw and transfer
+dynamic closure, semantic audio, and the VDP2 gameplay HUD (Tasks 22--23A), final-draw and transfer
 overlap (Tasks 24--26), Whomp's Fortress portability (Task 27), the complete
 feature matrix (Task 28), and all-features FPS recovery/publication (Task 29).
 The 12--15 FPS sprint remains downstream of that sequence, not replaced by

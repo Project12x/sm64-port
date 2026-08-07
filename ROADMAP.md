@@ -28,8 +28,8 @@ a BOB-only target. The accepted dual-SH2 BOB rollback remains the comparison
 point, and no target/FPS claim is promoted until the current image is stable.
 
 After that gate, resume the larger sequence rather than restarting planning:
-Task 21 production MC68000/sourceboot audio integration; Tasks 22--23 complete
-BOB actor/effect and music/SFX closure; Tasks 24--26 command, job-granularity,
+Task 21 production MC68000/sourceboot audio integration; Tasks 22--23A complete
+BOB actor/effect, music/SFX, and VDP2 gameplay-HUD closure; Tasks 24--26 command, job-granularity,
 and VDP1-transfer overlap; Task 27 Whomp's Fortress package transition; and
 Tasks 28--29 the four-feature matrix and all-features recovery to at least
 4.0 mean FPS. Only then does the representative 12--15 FPS sprint begin.

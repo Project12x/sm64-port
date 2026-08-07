@@ -160,7 +160,7 @@ For every task:
 | 1 | 1--5 | truthfulness, identity, closure, package foundation | native-math blocker reconciled; S64P schema/provisional fixtures and bounded loader green; no final BOB-root claim |
 | 2 | 6--10 | audio control, full Mario bank, geo evidence, source audio policy | protocol v2, all animation IDs, differential state seam, source-policy host models green |
 | 3 | 11--17 | generic actor banks/snapshots, audio content/VM/voices, scene admission | representative actor/audio packages and generic queue/SCSP execution green |
-| 4 | 18--23 | complete BOB actors/effects and audible semantic closure | final BOB root resealed from completed payloads; visual/audio closure has zero unresolved required capabilities |
+| 4 | 18--23A | complete BOB actors/effects, audible semantic closure, and gameplay HUD | final BOB root resealed from completed payloads; visual/audio/HUD closure has zero unresolved required capabilities |
 | 5 | 24--27 | render reductions, better SH-2 granularity/overlap, WF proof | reviewed gains/counters and second-level package load proof green |
 | 6 | 28--29 | four-build attribution and all-features acceptance | exact identities, final >=4.0 mean FPS recovery, manual semantics, final review |
 
@@ -195,6 +195,7 @@ all complete.
 - [x] Task 21 — Wave 2 bounded host/ABI slice source-complete; broader Task 21 source-incomplete — Wave 0/1 implementation `7a1bb170`, repair `1e56ce5f`, scoped rereview SPEC/QUALITY PASS, C0/I0/M0. Wave 2 initial implementation `d23ec834`, fix `59c2a014`, and fix `0e5ac8e4` are accepted after primary and backup independent rereviews SPEC/QUALITY PASS, C0/I0/M0. The six serial DLL/MSYS gates pass in 4.2 seconds. Completion-mode commands are ticketed-only; capability-absent legacy no-ack remains compatible; malformed/unmatched/duplicate completions latch fail-closed until explicit recovery. Real seq00/AUDIO.DAT/S64P inputs, sourceboot feature-on, production MC68000 linkage, target, Ymir, manual, and audible claims remain blocked.
 - [ ] Task 22 — preflight complete; implementation not started — prove complete BOB visual/dynamic closure. Current closure is 86 records/47 families with unsupported geo/effect/runtime facts, only a provisional empty-dependency S64P, no final linker/replay tooling, and Mario-specific renderer cutover. No final root, target, Ymir, manual, or FPS claim is made.
 - [ ] Task 23 — preflight complete; implementation not started — prove audible BOB music/SFX semantic closure. Current blockers are the missing final root, real seq00/full AUDIO.DAT, strong sourceboot event bridge, production MC68000 semantic consumer, and completion/identity status channel. No target, Ymir, manual-audio, or audible claim is made.
+- [ ] Task 23A — pending; implementation not started — deploy the source-semantic gameplay HUD through VDP2. The current `gHudDisplay`/`render_hud()` semantics and diagnostic VDP2 text seam are not yet a real in-game HUD; no target, Ymir, visual, or FPS claim is made.
 - [ ] Task 24 — reduce command, Gouraud, sort, and repeated-memory work
 - [ ] Task 25 — improve opportunistic dual-SH2 job granularity
 - [ ] Task 26 — extend useful work across transfer/presentation fences
@@ -1651,6 +1652,49 @@ claim full semantic audio, or make the SH-2 own MC68000 slot state.
 
 - [ ] Commit as `feat(saturn): close BOB music and SFX semantics`; independent review must separate automated facts from owner-heard evidence and keep retail-hardware audio open.
 
+### Task 23A: Deploy the source-semantic gameplay HUD on VDP2
+
+**Lane:** integration/UI. **Depends on:** the stable sourceboot/VDP2 frame
+path and the authoritative source HUD state; independent of the MC68000 audio
+consumer. **Produces:** a generation-coherent gameplay HUD for BOB and the
+generic full-game path without adding VDP1 geometry.
+
+**Files:**
+
+- Create: `src/port/saturn/gfx/saturn_hud.h/.c`
+- Create: `tools/saturn/test_saturn_hud.py`
+- Create: `docs/saturn/evidence/reports/saturn-hud-target-2026-08-06.md`
+- Modify: `src/port/saturn/gfx/saturn_vdp2_frame.h/.c`,
+  `src/port/saturn/sourceboot/main.c`, the Saturn HUD asset-generation rule,
+  `Makefile.saturn.mk`, and `CHANGELOG.md`
+
+**Contract:** Preserve the source meanings of `gHudDisplay.flags`, lives,
+coins, stars, power-meter state, camera status, timer, keys, and the cannon
+reticle. Capture them after the authoritative source tick into a fixed-width,
+pointer-free HUD snapshot carrying the same displayed/rendered/simulation
+generation tuple used by VDP2 composition. The final overlay uses a bounded
+VDP2 NBG tilemap and resident glyph/icon atlas; it never emits VDP1 commands,
+reads live game globals from a VBlank callback, or rebuilds an entire text
+surface every frame. `dbgio` remains diagnostics only.
+
+- [ ] RED: cover hidden/default flag combinations, numeric formatting,
+  power-meter transitions, camera/timer/key/reticle state, dirty-cell diffs,
+  stale or mismatched generations, fixed-buffer overflow, and proof that the
+  HUD path does not append VDP1 work.
+- [ ] Generate a Saturn-shaped glyph/icon atlas and bounded NBG tile/palette
+  spans from the existing source HUD assets; initialize them once and update
+  only changed tile cells through the VDP2 commit boundary.
+- [ ] Wire the source HUD snapshot into the displayed-generation tuple without
+  changing source cadence, input, camera, actor, audio, or VDP1 ownership.
+- [ ] Add gameplay acceptance for lives, coins, stars, power, camera status,
+  timer, keys, and cannon reticle in BOB; then cover pause, dialog, and
+  course-complete HUD layouts through the same tilemap backend.
+- [ ] Run the focused host gate, one reviewed dual-SH2 target candidate, and
+  exact profile-managed Ymir manual visual/controls acceptance. Record HUD
+  correctness and any visual limitations; do not impose a new FPS threshold.
+- [ ] Commit as `feat(saturn): deploy source-semantic VDP2 HUD`; keep full
+  audio, texture, actor, and 12--15 FPS gates independently tracked.
+
 ### Task 24: Reduce command, Gouraud, sort, and repeated-memory work
 
 **Lane:** optimization. **Depends on:** Tasks 13, 16, and 22. **Produces:** smaller/faster master finalization for the representative all-actor workload.
@@ -1891,4 +1935,4 @@ make -C src/port/saturn/sourceboot -B -j1 \
 
 ## Sprint completion criteria
 
-The sprint is complete only when all 29 tasks and their individual steps are contemporaneously status-marked; every behavior commit has its changelog reasoning; every task has independent specification/quality review; the full host and linked target gates are green; the four diagnostic artifacts have exact identities; BOB visual and audio closure reports contain no unresolved required records; Whomp's Fortress reaches generic READY and rolls back on target; all 209 Mario IDs complete the production evaluator target sweep; the owner manually accepts controls/camera/visual/audio semantics; and the authoritative all-features BOB build measures at least 4.0 mean presentation FPS in the pinned setup. Retail-hardware performance, complete playability of every later level, and the 12--15 FPS target remain explicit follow-on work.
+The sprint is complete only when all 30 named tasks and their individual steps are contemporaneously status-marked; every behavior commit has its changelog reasoning; every task has independent specification/quality review; the full host and linked target gates are green; the four diagnostic artifacts have exact identities; BOB visual, audio, and HUD closure reports contain no unresolved required records; Whomp's Fortress reaches generic READY and rolls back on target; all 209 Mario IDs complete the production evaluator target sweep; the owner manually accepts controls/camera/visual/audio/HUD semantics; and the authoritative all-features BOB build measures at least 4.0 mean presentation FPS in the pinned setup. Retail-hardware performance, complete playability of every later level, and the 12--15 FPS target remain explicit follow-on work.
