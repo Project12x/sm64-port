@@ -253,6 +253,8 @@ SOURCEBOOT_BOB_SKY_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_sky_manifest.json
 SOURCEBOOT_MARIO_TEXTURE_DIR := $(ROOT)/build/saturn/marioturntable/generated
 SOURCEBOOT_MARIO_TEXTURE_HEADER := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.h
 SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.json
+SOURCEBOOT_HUD_GLYPH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_generated.h
+SOURCEBOOT_HUD_GLYPH_MANIFEST := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_manifest.json
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -656,7 +658,7 @@ source-geo-depth: $(SOURCEBOOT_GEO_DEPTH_TOOL)
 	  --output-json "$(SOURCEBOOT_GEO_DEPTH_REPORT)"
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures
+source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -755,6 +757,19 @@ $(SOURCEBOOT_MARIO_TEXTURE_HEADER) $(SOURCEBOOT_MARIO_TEXTURE_REPORT) &: \
 
 .PHONY: source-mario-textures
 source-mario-textures: $(SOURCEBOOT_MARIO_TEXTURE_HEADER) $(SOURCEBOOT_MARIO_TEXTURE_REPORT)
+
+$(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_HUD_GLYPH_MANIFEST) &: \
+	$(ROOT)/tools/saturn/extract_hud_glyphs.py \
+	$(ROOT)/tools/saturn/extract_mario_textures.py \
+	$(ROOT)/assets.json $(ROOT)/baserom.us.z64
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/extract_hud_glyphs.py" \
+	  --rom "$(ROOT)/baserom.us.z64" --assets "$(ROOT)/assets.json" \
+	  --output "$(SOURCEBOOT_HUD_GLYPH_HEADER)" \
+	  --manifest "$(SOURCEBOOT_HUD_GLYPH_MANIFEST)"
+
+.PHONY: source-hud-glyphs
+source-hud-glyphs: $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_HUD_GLYPH_MANIFEST)
 
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata

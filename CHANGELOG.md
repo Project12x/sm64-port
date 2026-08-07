@@ -45,6 +45,33 @@
   `json`/`Path` imports and the stale `power_meter_eight_segments` fixture
   key from the test file.
 
+- Wired `tools/saturn/extract_hud_glyphs.py` into the sourceboot Makefile
+  (Task 2 of the VDP2 gameplay HUD plan): a new grouped target generates
+  `saturn_hud_glyphs_generated.h` and `saturn_hud_glyphs_manifest.json`,
+  mirroring `SOURCEBOOT_MARIO_TEXTURE_HEADER`/`source-mario-textures`
+  exactly (same `&:` grouped-output shape, same `--rom`/`--assets`/
+  `--output`/`--manifest` invocation style). `source-hud-glyphs` is now a
+  prerequisite of `source-assets`, so a full sourceboot asset build
+  regenerates the HUD glyph data automatically, the same as every other
+  ROM-derived Saturn asset. One deliberate deviation from the original task
+  plan text: the plan's snippet introduced a new `SOURCEBOOT_HUD_GLYPH_DIR`
+  variable hardcoded to `$(ROOT)/build/saturn/sourceboot/generated`, but
+  that path is already the existing `SOURCEBOOT_GENERATED` variable (used
+  directly, with no dedicated dir variable, by all the BOB-asset targets) --
+  defining a second variable with the same value would have been dead
+  duplication with no precedent elsewhere in the file, so the header/
+  manifest paths are defined directly off `$(SOURCEBOOT_GENERATED)` instead.
+  Scope note for whichever later task adds the C-side HUD renderer: this
+  change does not yet add the generated header to `$(SH_OBJS_UNIQ)`'s
+  order-only prerequisite list (the mechanism that blocks every compile
+  until generated headers exist) because no `.c` file includes it yet --
+  that wiring should land alongside the first consumer, mirroring how
+  `SOURCEBOOT_MARIO_TEXTURE_HEADER` is listed there. Verified standalone
+  (`make -f src/port/saturn/sourceboot/Makefile source-hud-glyphs`) against
+  the real ROM: produces all 30 glyphs from `GLYPH_MANIFEST`, is a no-op on
+  re-run, and `source-hud-glyphs` shows up in `source-assets`'s expanded
+  prerequisite list per `make -p`.
+
 ### Changed
 
 - Extended the iterative geo runtime seam with depth-first child/sibling
