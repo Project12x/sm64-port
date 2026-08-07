@@ -55,7 +55,23 @@
 
 ### Added
 
-- Added project-owned SH-2 exception trampolines
+- Added a CLUT16 baking mode to the BOB sky tool
+  (`tools/saturn/bake_bob_sky.py` gains `bake_clut16()` plus
+  `--texture-format {rgb1555,clut16}` and `--palette-output` CLI options;
+  new `tools/saturn/test_bake_bob_sky.py`, 3 tests). Task 1 of the VDP2
+  CLUT plan (`docs/superpowers/plans/2026-08-07-saturn-vdp2-clut.md`):
+  storing the 512x256 sky as 4bpp palette indices instead of 16bpp
+  RGB1555 will recover VRAM/cart budget in later tasks. Rather than
+  writing a new quantizer, the mode reuses the already-hardware-proven
+  median-cut CLUT pipeline from `bake_castle_uv.py`
+  (`quantize_clut16`/`pack_clut16`, the same code behind 97.8% of BOB's
+  VDP1 terrain tiles), and duplicates `bake()`'s exact PNG decode +
+  centered edge-replication so the two paths cannot desync on canvas
+  geometry. The default `rgb1555` path is byte-identical to before (the
+  existing Makefile `compile-bob-sky` target passes no new flags and is
+  unaffected; `test_tools.BobSkyBakeTests` still passes), so nothing
+  consumes CLUT16 output yet -- later plan tasks wire it into the VDP2
+  init code.
   (`src/port/saturn/sourceboot/source_exception_trampolines.sx`,
   `source_exception_record.c`) installed for both master and slave interrupt
   vector tables at the top of `main()`, for illegal instruction, illegal

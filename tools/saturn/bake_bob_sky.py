@@ -13,8 +13,12 @@ import argparse
 import binascii
 import json
 import struct
+import sys
 import zlib
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bake_castle_uv import pack_clut16, quantize_clut16  # noqa: E402
 
 
 def _png_rows(path: Path) -> tuple[int, int, list[bytes]]:
@@ -104,15 +108,65 @@ def bake(source: Path, output_width: int = 512, output_height: int = 256) -> tup
     return bytes(pixels), manifest
 
 
+def bake_clut16(source: Path, output_width: int = 512, output_height: int = 256) -> tuple[list[int], list[int], dict[str, object]]:
+    """Same edge-replicated canvas as bake(), quantized to a 16-color CLUT.
+
+    Returns (packed_nibble_indices, palette_16_rgb1555_words, manifest).
+    Reuses bake()'s exact PNG decode + edge-replication so the two paths only
+    diverge at the final per-pixel quantization step -- keeps them impossible
+    to accidentally desync on canvas geometry.
+    """
+    width, height, rows = _png_rows(source)
+    if width > output_width or height > output_height:
+        raise ValueError("sky source exceeds VDP2 bitmap dimensions")
+    x_offset = (output_width - width) // 2
+    y_offset = (output_height - height) // 2
+    raw_rgb1555: list[int] = []
+    for y in range(output_height):
+        source_y = min(max(y - y_offset, 0), height - 1)
+        row = rows[source_y]
+        for x in range(output_width):
+            source_x = min(max(x - x_offset, 0), width - 1)
+            r, g, b = row[source_x * 4:source_x * 4 + 3]
+            value = 0x8000 | ((r * 31 // 255) << 10) | ((g * 31 // 255) << 5) | (b * 31 // 255)
+            raw_rgb1555.append(value)
+    palette, index_by_color = quantize_clut16(raw_rgb1555)
+    indices = [index_by_color.get(value, 0) if (value & 0x8000) else 0 for value in raw_rgb1555]
+    packed = pack_clut16(indices)
+    manifest = {
+        "schema": "sm64-saturn-vdp2-sky",
+        "source": source.as_posix(),
+        "source_dimensions": [width, height],
+        "bitmap_dimensions": [output_width, output_height],
+        "format": "CLUT16",
+        "palette_entries": len(palette),
+        "bytes": len(packed),
+        "sha256": __import__("hashlib").sha256(bytes(packed)).hexdigest(),
+        "edge_replication": True,
+    }
+    return packed, palette, manifest
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--texture-format", choices=["rgb1555", "clut16"], default="rgb1555")
+    parser.add_argument("--palette-output", type=Path, help="required when --texture-format=clut16")
     args = parser.parse_args(argv)
-    pixels, manifest = bake(args.input)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(pixels)
+    if args.texture_format == "clut16":
+        if args.palette_output is None:
+            parser.error("--palette-output is required with --texture-format clut16")
+        packed, palette, manifest = bake_clut16(args.input)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_bytes(bytes(packed))
+        args.palette_output.parent.mkdir(parents=True, exist_ok=True)
+        args.palette_output.write_bytes(b"".join(struct.pack(">H", c) for c in palette))
+    else:
+        pixels, manifest = bake(args.input)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_bytes(pixels)
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
     args.manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return 0
