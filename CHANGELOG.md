@@ -17,6 +17,30 @@
   glyph silently not drawn) rather than corrupting memory if the trace
   is ever wrong; host test suite re-run and passes unchanged (11/11).
 
+- Baked sourceboot's boot-time sky gradient to a compile-time constant
+  (`tools/saturn/gen_sourceboot_sky_gradient.py`, generating
+  `saturn_sky_gradient_generated.h`; `src/port/saturn/sourceboot/main.c`,
+  `Makefile`), recovering 448 bytes of HWRAM `.bss`
+  (`sourceboot_sky_gradient[224]` deleted). Second finding from the same
+  2026-08-07 memory-budget audit: `sourceboot_init_sky_gradient()` filled
+  this array with pure integer arithmetic once at boot, DMA'd it to VDP2
+  VRAM, and never touched it again, so it never needed to be a mutable
+  runtime buffer. The generator reproduces the original fill loop exactly
+  (verified line-for-line against a real host-compiled copy of the
+  original C loop, all 224 lines match) and packs RGB1555 words using
+  this codebase's existing hardware-verified bit order
+  (`extract_mario_textures.saturn_rgb1555`), not a re-derivation from the
+  union's compiler-defined bitfield layout. The array is now
+  `static const`, which the linker's existing automatic
+  `*sm64-port*(.rodata)` rule (`sourceboot-cart.x`) already routes onto
+  the 4 MiB DRAM cartridge instead of HWRAM -- no new linker wiring
+  needed. A `_Static_assert` in `main.c` guards against the generated
+  header's line count drifting from `SOURCEBOOT_BACKSCREEN_LINES`. Could
+  not get real `sh-elf-gcc` verification (no cross toolchain present in
+  this worktree, unlike a prior session's environment); verified instead
+  via the standalone Python test suite (8/8 passing) and a host-gcc
+  syntax/round-trip check of the generated header in isolation.
+
 ### Added
 
 - Added project-owned SH-2 exception trampolines

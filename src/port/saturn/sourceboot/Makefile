@@ -255,6 +255,7 @@ SOURCEBOOT_MARIO_TEXTURE_HEADER := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_
 SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.json
 SOURCEBOOT_HUD_GLYPH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_generated.h
 SOURCEBOOT_HUD_GLYPH_MANIFEST := $(SOURCEBOOT_GENERATED)/saturn_hud_glyphs_manifest.json
+SOURCEBOOT_SKY_GRADIENT_HEADER := $(SOURCEBOOT_GENERATED)/saturn_sky_gradient_generated.h
 SOURCEBOOT_BOB_TOOLS := \
   $(ROOT)/tools/saturn/extract_bob_area.py $(ROOT)/tools/saturn/saturn_mesh_ir.py \
   $(ROOT)/tools/saturn/quad_pairing.py $(ROOT)/tools/saturn/extract_castle_area.py \
@@ -661,7 +662,7 @@ source-geo-depth: $(SOURCEBOOT_GEO_DEPTH_TOOL)
 	  --output-json "$(SOURCEBOOT_GEO_DEPTH_REPORT)"
 
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs
+source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs source-sky-gradient
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -774,6 +775,17 @@ $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_HUD_GLYPH_MANIFEST) &: \
 .PHONY: source-hud-glyphs
 source-hud-glyphs: $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_HUD_GLYPH_MANIFEST)
 
+# Pure integer arithmetic, no ROM/asset input -- unlike the HUD glyph rule
+# above, this only ever needs to re-run when the generator script itself
+# changes.
+$(SOURCEBOOT_SKY_GRADIENT_HEADER): $(ROOT)/tools/saturn/gen_sourceboot_sky_gradient.py
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@$(SOURCEBOOT_PYTHON) "$(ROOT)/tools/saturn/gen_sourceboot_sky_gradient.py" \
+	  --output "$(SOURCEBOOT_SKY_GRADIENT_HEADER)"
+
+.PHONY: source-sky-gradient
+source-sky-gradient: $(SOURCEBOOT_SKY_GRADIENT_HEADER)
+
 # Keep the large baked bank binary, rather than a generated C initializer, so
 # the source cart remains compact and the linker can place it in .cart_rodata
 # alongside the other immutable source assets.  The generated assembly is in
@@ -853,7 +865,8 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # generated glyph header the same way, so it needs the same guard (deferred
 # here from Task 2, which created source-hud-glyphs but not this ordering).
 $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
-  $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
+  $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_SKY_GRADIENT_HEADER) \
+  $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
 # the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,

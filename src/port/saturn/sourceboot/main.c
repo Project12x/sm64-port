@@ -38,6 +38,7 @@
 #include "source_q16_kernel_probe.h"
 #include "source_route_probe.h"
 #include "mario_eye_uv_tiles.h"
+#include "saturn_sky_gradient_generated.h"
 #include "../gpl/slavedriver_dma_queue.h" /* gpl/ is a sibling of sourceboot/
                                            * under src/port/saturn/; matches
                                            * hwtest's existing include style
@@ -791,11 +792,18 @@ static void sourceboot_vblank_out_handler(void *work __unused) {
 
 /* BOB's sky is the VDP2 back screen, not a VDP1 polygon.  The back-screen
  * color table is sampled once per display line, so this costs 224 RGB1555
- * entries in VDP2 VRAM and no work in the game/render loop.  Keep the table
- * in HWRAM until vdp2_scrn_back_sync() queues the upload; it is deliberately
- * a fixed boot asset rather than camera or simulation state. */
+ * entries in VDP2 VRAM and no work in the game/render loop.  The gradient
+ * itself is pure integer arithmetic over a fixed boot asset (never camera
+ * or simulation state), so it is baked to a build-time `static const` by
+ * tools/saturn/gen_sourceboot_sky_gradient.py instead of computed into a
+ * mutable HWRAM array every boot; the automatic *sm64-port*(.rodata) linker
+ * rule (sourceboot-cart.x) places the constant on the 4 MiB DRAM cartridge
+ * instead, recovering 448 bytes of HWRAM (2026-08-07 memory-budget audit,
+ * Finding 2). See saturn_sky_gradient_generated.h for the baked table. */
 #define SOURCEBOOT_BACKSCREEN_LINES 224U
-static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
+_Static_assert(SOURCEBOOT_SKY_GRADIENT_GENERATED_LINES == SOURCEBOOT_BACKSCREEN_LINES,
+    "generated sky gradient line count drifted from SOURCEBOOT_BACKSCREEN_LINES -- "
+    "rerun tools/saturn/gen_sourceboot_sky_gradient.py or update both constants");
 
 /* .lwram_bss is deliberately NOLOAD.  Keep the relocated CPU-only state
  * deterministic without asking crt0 to clear the whole LWRAM arena; the
@@ -875,23 +883,12 @@ extern const uint16_t sm64_saturn_bob_sky_bitmap[];
 
 static void sourceboot_init_sky_gradient(void)
 {
-    for (uint16_t line = 0; line < SOURCEBOOT_BACKSCREEN_LINES; line++) {
-        /* Dark blue at the horizon, brighter blue overhead.  RGB1555's
-         * channels are 5-bit; interpolate with integer arithmetic so the
-         * boot image is deterministic on SH-2 and host probes. */
-        const uint16_t t = (uint16_t)(SOURCEBOOT_BACKSCREEN_LINES - 1U - line);
-        const uint16_t r = (uint16_t)(1U + (t * 1U) /
-            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
-        const uint16_t g = (uint16_t)(2U + (t * 8U) /
-            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
-        const uint16_t b = (uint16_t)(8U + (t * 15U) /
-            (SOURCEBOOT_BACKSCREEN_LINES - 1U));
-        sourceboot_sky_gradient[line] = RGB1555(1, r, g, b);
-    }
-
+    /* Dark blue at the horizon, brighter blue overhead -- the table itself
+     * (sourceboot_sky_gradient_generated) is baked at build time; see the
+     * comment above SOURCEBOOT_BACKSCREEN_LINES. */
     vdp2_scrn_back_buffer_set(VDP2_VRAM_ADDR(3, 0x01FE00),
-                              sourceboot_sky_gradient,
-                              SOURCEBOOT_BACKSCREEN_LINES);
+                              sourceboot_sky_gradient_generated,
+                              SOURCEBOOT_SKY_GRADIENT_GENERATED_LINES);
     vdp2_scrn_back_sync();
 }
 
