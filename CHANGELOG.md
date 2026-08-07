@@ -106,6 +106,36 @@
   unconditionally. Added alongside, not overwriting, Task 4's existing
   `ztFont2NBG3` citation in both files.
 
+  **Provenance correction, corrected (2026-08-07):** a spec review caught
+  that the "Provenance correction" above is itself wrong. It cited an
+  unrelated, commented-out `slPrint("RINGS : "...)` label inside
+  `ztReset()` (`SRC/game.c:30`, a one-time player-death/respawn path) and
+  concluded no live per-frame HUD-counter call site existed in either
+  reference -- but never checked `draw_stats()` (`ZT_RENDERING.c:146-152`),
+  which is exactly what the plan's own text names, at the plan's line 20.
+  Re-read the pinned Z-Treme tree directly and traced the real call chain:
+  `draw_stats()` issues unconditional `slPrintHex`/`slLocate` calls for
+  `LIVES`, `OWNED` ("Rings or weapons", `ZTE_DEF.H:282`), and a
+  `TIMER`-derived clock, gated by nothing (its own early-return at line 148
+  is commented out, and the only active gate, line 165, guards later
+  debug-only readouts, not these three); it is called unconditionally for
+  the local player from `ztRender()` (`ZT_RENDERING.c:792-793`, gated only
+  on `currentPlayer->PLAYER_ID == 0`, true for `PLAYER_1`, `main.c:119`),
+  which `main_loop()` calls unconditionally every invocation
+  (`SRC/game.c:772`), inside `ztGameLoop()`'s `while(1)` loop paced by
+  `slSynch()` (`ZT_GAME.c:70-107`). The plan's original claim was correct
+  all along: Z-Treme's own HUD counters do redraw unconditionally every
+  frame. Fixed `docs/saturn/UPSTREAM_CODE_LEDGER.md` and
+  `docs/saturn/PROVENANCE.md` to cite `draw_stats()` instead of the
+  unrelated dead line, restoring the plan's original framing, while leaving
+  the SlaveDriver `PRINT.C` finding (VDP1-sprite-based text, not VDP2
+  cells) unchanged, since that part was independently confirmed accurate
+  and not in question. The underlying negative finding these citations
+  support -- neither reference implements *per-cell* VDP2 dirty diffing, so
+  `saturn_hud_publish.c` is original engineering -- is unaffected; only the
+  supporting evidence for Z-Treme's half of it was wrong and is now
+  corrected. No code or test changes; this is a documentation-only fix.
+
 - Added `src/port/saturn/gfx/saturn_hud_layout.{h,c}`: a pure, host-testable
   function (`sm64_saturn_hud_layout_build()`) that decides which glyph goes in
   which VDP2 tile cell for a given `sm64_saturn_hud_snapshot_t` (Task 5 of the

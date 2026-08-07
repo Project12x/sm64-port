@@ -593,18 +593,44 @@ at all -- it is not a same-mechanism precedent to compare against, dirty-
 tracked or not. (2) Sonic Z-Treme (pinned `cff75451c1616aac1236fc2b44223902b55c706b`,
 already cited above for `ztFont2NBG3`'s VDP2 text-plane setup) was
 re-checked specifically for a per-frame HUD counter redraw to compare
-against: the only candidate call site, `slPrint("RINGS : ", slLocate(0,4))`
-in `SRC/game.c:30`, is commented out in the inspected snapshot, and
-`slPrint`/`slLocate` are proprietary SGL primitives with no available source
-in this repository (`LIB/LIBSGL.A` is a compiled binary, per this file's
-existing SGL documentation-only section below). Neither pinned reference
-therefore offers inspectable per-cell VDP2 dirty-diffing logic to adopt or
-contrast against. This is a more precise (and more defensible) finding than
-"redraws unconditionally every frame" -- proving that would require an
-active, inspectable call site, and none was found; the accurate statement is
-that no such call site is live or readable in either reference at their
-pinned commits. `saturn_hud_publish.c`'s cell-level diff is therefore
-original engineering for this project, not adapted from either engine.
+against, this time tracing the real call chain rather than stopping at the
+first plausible-looking match. `draw_stats()` (`ZT_RENDERING.c:146-152`)
+issues unconditional `slPrintHex`/`slLocate` calls for `LIVES`, `OWNED`
+("Rings or weapons", `ZTE_DEF.H:282`), and a `TIMER`-derived clock value,
+with no gate before any of the three -- the function's own early-return at
+line 148 is itself commented out, and the only active gate in the function,
+`if (showDebugStats==false) ... return;` at line 165, guards solely the
+debug readouts that come after these three prints, not the prints
+themselves. The call chain confirms this genuinely runs every frame:
+`draw_stats()` is called unconditionally for the local player from
+`ztRender()` (`ZT_RENDERING.c:792-793`, gated only on
+`currentPlayer->PLAYER_ID == 0`, true for `PLAYER_1`, `main.c:119`);
+`main_loop()` calls `ztRender(&PLAYER_1, ...)` unconditionally every
+invocation (`SRC/game.c:772`); and `main_loop()` itself runs inside
+`ztGameLoop()`'s `while (1)` loop, paced by `slSynch()` immediately after
+(`ZT_GAME.c:70`, `102`, `107`). The plan's original citation was therefore
+correct: Z-Treme's own live gameplay HUD counters do redraw unconditionally
+every frame, with no dirty tracking of any kind.
+
+**Correction to this entry (2026-08-07):** the paragraph above originally
+cited a different, unrelated line -- a commented-out `slPrint("RINGS : "...)`
+label inside `ztReset()` (`SRC/game.c:30`), which only runs on player
+death/respawn, not per frame -- and concluded from that one dead line alone
+that no live per-frame call site existed in either reference. That
+conclusion was wrong: it checked a superficially similar but different
+function than the one the plan actually cited, and never examined
+`draw_stats()` at all. A spec review caught the discrepancy against the
+plan text (which names `ZT_RENDERING.c:146-152` explicitly, at the plan's
+own line 20); re-reading the pinned tree directly, as above, confirmed the
+plan's original claim, replacing the earlier, incorrect "no live call site"
+finding recorded here. The original *negative* finding this citation exists
+to support is unaffected and still holds, now on correct evidence: neither
+pinned reference implements *per-cell* dirty diffing for VDP2 tile content
+specifically -- Z-Treme's counters redraw wholesale every frame with no
+diffing at all, and SlaveDriver's text system is not VDP2-cell-based to
+begin with (see above). `saturn_hud_publish.c`'s cell-level diff is
+therefore still original engineering for this project, not adapted from
+either engine.
 
 ### Sega hardware documentation
 
