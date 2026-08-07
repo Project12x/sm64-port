@@ -49,14 +49,51 @@
   stated goal. Re-derived every placement from `hud.c`'s real pixel
   coordinates (`SCREEN_WIDTH`/`SCREEN_HEIGHT` = 320x240,
   `include/config.h:38-39`) divided down to this port's 16px/20x14 grid,
-  clustering to the bottom rows to match the source's own bottom-anchored
-  HUD (`y=205-209` for lives/coins/stars/camera, `y=185` for the timer, both
-  out of 240px) -- and checked that no two glyphs able to be visible in the
-  same frame ever target the same cell, including the realistic
-  simultaneous case (`HUD_DISPLAY_DEFAULT`'s LIVES | COIN_COUNT |
-  CAMERA_AND_POWER bits plus STAR_COUNT/TIMER, `level_update.h:106-116`),
-  not just the tests' synthetic worst case. Documented the full derivation
-  and the final grid assignment in a comment in `saturn_hud_layout.c`.
+  clustering everything into the bottom four tile rows -- and checked that
+  no two glyphs able to be visible in the same frame ever target the same
+  cell, including the realistic simultaneous case (`HUD_DISPLAY_DEFAULT`'s
+  LIVES | COIN_COUNT | CAMERA_AND_POWER bits plus STAR_COUNT/TIMER,
+  `level_update.h:106-116`), not just the tests' synthetic worst case.
+  Documented the full derivation and the final grid assignment in a comment
+  in `saturn_hud_layout.c`.
+
+  **Code-review correction (2026-08-07):** the first version of that
+  derivation comment (and this entry) claimed lives/coins/stars/camera "all
+  sit at y=205-209" in the source, as if the bottom-row clustering were a
+  pixel-derived transcription for all four groups. A code-quality review
+  traced the actual rendering paths and found this conflates two different
+  Y-axis conventions that coexist in `hud.c`: lives/coins/stars
+  (`HUD_TOP_Y=209`) and the timer (`y=185`) all go through
+  `print_text()`/`print_text_fmt_int()` -> `render_text_labels()` ->
+  `render_textrect()`, which applies an unconditional Y flip,
+  `s32 rectBaseY = 224 - y;` (`src/game/print.c:391`, confirmed by reading
+  the real file) -- putting them at actual screen y≈15/y≈39, near the
+  **top**, not the bottom. Only the camera status icon
+  (`render_hud_camera_status()`, `y=205`) uses the unflipped
+  `render_hud_tex_lut()` path directly, so it genuinely is near the bottom.
+  So in the real game, lives/coins/stars/timer cluster near the top and
+  only the camera icon is near the bottom -- the opposite of what the
+  original comment claimed for 4 of the 5 groups. This was a documentation
+  defect only: the shipped layout was already safe (in-bounds) and
+  internally consistent (collision-free) either way, confirmed by the spec
+  reviewer's exhaustive brute-force check of all 1,638,400 possible input
+  combinations. Fixed by correcting the derivation comment in
+  `saturn_hud_layout.c` to state plainly that only the camera icon's bottom
+  placement is a literal match to the source's screen semantics, and that
+  the rest of the bottom-clustering is a deliberate choice driven by the
+  tile grid's coarseness, not a pixel-derived one -- comment-only, no logic
+  changes (mechanically confirmed: built the pre-fix and post-fix
+  `saturn_hud_layout.c` side by side against five representative snapshots,
+  including the pathological worst case, and diffed the emitted
+  `(col,row,glyph)` cells -- byte-identical). Also named the per-group
+  `HUD_ROW_*`/`HUD_COL_*` constants that were previously bare numeric
+  literals scattered across roughly 15 call sites, so a future edit to one
+  group's position is grep-auditable against every other group instead of
+  relying solely on this prose comment, and added `TODO(Task 7):` markers
+  at the three branches the reviewer's mutation testing found completely
+  unexercised by the current 4 tests (the cannon reticle path, the camera
+  mode/C-button switch cases, and the star-count `<100` branch) so Task 7
+  -- the plan's dedicated mutation-test task -- picks them up.
 
   Verified by direct execution, not just reading: compiled and ran the host
   test (`gcc -std=c11 -Wall -Wextra -Werror`, zero diagnostics, exit 0), then

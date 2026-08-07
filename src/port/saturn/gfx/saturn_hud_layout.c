@@ -33,6 +33,34 @@
 #define CAM_STATUS_MODE_GROUP   (CAM_STATUS_MARIO | CAM_STATUS_LAKITU | CAM_STATUS_FIXED)
 #define CAM_STATUS_C_MODE_GROUP (CAM_STATUS_C_DOWN | CAM_STATUS_C_UP)
 
+/* Row assignments for the four tile rows this layout uses (of the atlas's
+ * 14 visible rows, 0-13). Named -- rather than left as bare numbers at each
+ * push_cell() call site -- so a future edit that moves one group can't
+ * silently reintroduce a collision with another group without at least
+ * changing a visible, greppable identifier; the compiler can't catch a
+ * collision either way (two groups landing on the same cell is a logical
+ * error, not a type error), but a named constant makes the intent legible
+ * and makes cross-group collisions grep-auditable. See the placement-
+ * derivation comment on sm64_saturn_hud_layout_build() below for why these
+ * four rows were chosen. */
+#define HUD_ROW_POWER_METER   10U
+#define HUD_ROW_TIMER         11U
+#define HUD_ROW_COUNTERS      12U /* lives, coins, stars all share this row */
+#define HUD_ROW_CANNON_CAMERA 13U /* cannon reticle and camera share this row */
+
+/* Column where each group's cluster starts; every glyph within a group is
+ * placed at a small fixed offset from its group's start column (see each
+ * block in sm64_saturn_hud_layout_build() below), the same way the star-
+ * count block's own offsets already worked before this refactor. Named for
+ * the same collision-auditing reason as the HUD_ROW_* constants above. */
+#define HUD_COL_POWER_METER 8U
+#define HUD_COL_LIVES       1U
+#define HUD_COL_COINS       10U
+#define HUD_COL_STARS       15U
+#define HUD_COL_TIMER       13U
+#define HUD_COL_CANNON      15U
+#define HUD_COL_CAMERA      17U
+
 static uint32_t
 push_cell(sm64_saturn_hud_cell_t *out_cells, uint32_t count, uint32_t capacity,
          uint8_t col, uint8_t row, sm64_saturn_hud_glyph_t glyph)
@@ -99,28 +127,55 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
 
     const int16_t flags = snapshot->flags;
 
-    /* Cell placement below is derived from the real N64 HUD's pixel
-     * positions in src/game/hud.c (SCREEN_WIDTH=320, SCREEN_HEIGHT=240,
-     * confirmed in include/config.h), converted to this port's 16px VDP2
-     * tile grid (320x224 visible => 20 cols x 14 rows, HUD_TILE_COLS/
-     * HUD_TILE_ROWS in saturn_hud_atlas.c) by dividing pixel coordinates by
-     * 16 and clustering to the bottom rows, matching hud.c's own
-     * bottom-anchored layout (lives/coins/stars/camera all sit at
-     * y=205-209 out of 240px; the timer sits one row higher at y=185).
+    /* Cell placement below deliberately clusters every group into the
+     * bottom four tile rows (HUD_ROW_POWER_METER..HUD_ROW_CANNON_CAMERA,
+     * i.e. rows 10-13 of this port's 20x14 VDP2 grid). Only ONE of the
+     * five groups' bottom placement is actually a literal match to the
+     * source's real on-screen position -- the camera status icon.
      *
-     * This is a coarse re-approximation, not a pixel-exact transform (a
-     * 16px cell is too coarse for that, and the source uses sub-cell
-     * offsets like x+4 for the small camera arrows) -- but every placement
-     * below is a real derivation from those source coordinates, not
-     * arbitrary, and every one is verified against the atlas's hard
-     * col<20/row<14 bound (sm64_saturn_hud_atlas_write_cell() silently
-     * no-ops any write outside it, see the header) and against every other
-     * concurrently-active group placed here, so no two glyphs that can be
-     * visible in the same frame ever target the same cell:
-     *   row 10: power meter                      (col 8)
-     *   row 11: timer                             (cols 13-18)
-     *   row 12: lives (1-4), coins (10-14), stars (15-18)
-     *   row 13: cannon reticle (15), camera (17-19)
+     * render_hud_camera_status() (hud.c) draws the camera icon via
+     * render_hud_tex_lut() at y=205 directly: that path issues
+     * gSPTextureRectangle with the given y completely unchanged, no
+     * transform, so y=205 out of the source's 240px-tall reference frame
+     * really is near the bottom of the screen.
+     *
+     * Lives, coins, stars, and the timer are NOT actually near the bottom
+     * in the source, despite hud.c passing y arguments (209, 209, 209,
+     * 185) that look large/bottom-ish at a glance. All four render through
+     * print_text()/print_text_fmt_int(), which queue into sTextLabels[]
+     * and are later drawn by render_text_labels() -> render_textrect()
+     * (src/game/print.c:389-403) -- and render_textrect() unconditionally
+     * flips the Y axis: `s32 rectBaseY = 224 - y;` (print.c:391, confirmed
+     * by reading the real file, not assumed). So HUD_TOP_Y (209, used by
+     * lives/coins/stars) actually lands at screen y = 224-209 = 15, and
+     * the timer's y=185 lands at y = 224-185 = 39 -- both near the TOP of
+     * the screen, not the bottom. (The timer's own apostrophe/double-quote
+     * glyphs corroborate this independently: render_hud_timer() draws
+     * them via the *unflipped* render_hud_tex_lut() path at a hardcoded
+     * y=32, right next to where the flipped digit text actually lands,
+     * y=39. If the flip weren't real, those two pieces of the same
+     * on-screen timer readout would render about 150px apart, which the
+     * original game plainly does not do.)
+     *
+     * So the bottom-row clustering used here for lives/coins/stars/timer
+     * is a deliberate choice driven by this port's coarse 16px tile grid
+     * (putting the whole HUD within a small, easy-to-reason-about corner
+     * of the 20x14 grid), not a pixel-derived transcription of the source
+     * layout -- there is no literal "y=205-209 bottom cluster" in the real
+     * game for those four groups. What IS preserved from the source is
+     * each group's relative horizontal (left/center/right) position and
+     * spacing relative to the others, and the one group (camera) whose
+     * source position genuinely is bottom-anchored.
+     *
+     * Every cell below is verified against the atlas's hard col<20/row<14
+     * bound (sm64_saturn_hud_atlas_write_cell() silently no-ops any write
+     * outside it, see the header) and against every other concurrently-
+     * active group placed here, so no two glyphs that can be visible in
+     * the same frame ever target the same cell:
+     *   HUD_ROW_POWER_METER   (10): power meter               (col 8)
+     *   HUD_ROW_TIMER         (11): timer                     (cols 13-18)
+     *   HUD_ROW_COUNTERS      (12): lives (1-4), coins (10-14), stars (15-18)
+     *   HUD_ROW_CANNON_CAMERA (13): cannon reticle (15), camera (17-19)
      * HUD_DISPLAY_FLAG_LIVES | COIN_COUNT | STAR_COUNT | CAMERA_AND_POWER
      * are simultaneously active during ordinary gameplay (they are exactly
      * HUD_DISPLAY_DEFAULT's non-KEYS bits, level_update.h), and the timer
@@ -129,25 +184,37 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
      * case. */
 
     if (flags & HUD_FLAG_LIVES) {
-        count = push_cell(out_cells, count, capacity, 1U, 12U, SM64_SATURN_HUD_GLYPH_MARIO_HEAD);
-        count = push_cell(out_cells, count, capacity, 2U, 12U, SM64_SATURN_HUD_GLYPH_MULTIPLY);
-        count = push_clamped_int(out_cells, count, capacity, 3U, 12U, snapshot->lives, 2U);
+        count = push_cell(out_cells, count, capacity, HUD_COL_LIVES, HUD_ROW_COUNTERS,
+                          SM64_SATURN_HUD_GLYPH_MARIO_HEAD);
+        count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_LIVES + 1U), HUD_ROW_COUNTERS,
+                          SM64_SATURN_HUD_GLYPH_MULTIPLY);
+        count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_LIVES + 2U), HUD_ROW_COUNTERS,
+                                 snapshot->lives, 2U);
     }
     if (flags & HUD_FLAG_COIN_COUNT) {
-        count = push_cell(out_cells, count, capacity, 10U, 12U, SM64_SATURN_HUD_GLYPH_COIN);
-        count = push_cell(out_cells, count, capacity, 11U, 12U, SM64_SATURN_HUD_GLYPH_MULTIPLY);
-        count = push_clamped_int(out_cells, count, capacity, 12U, 12U, snapshot->coins, 3U);
+        count = push_cell(out_cells, count, capacity, HUD_COL_COINS, HUD_ROW_COUNTERS,
+                          SM64_SATURN_HUD_GLYPH_COIN);
+        count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_COINS + 1U), HUD_ROW_COUNTERS,
+                          SM64_SATURN_HUD_GLYPH_MULTIPLY);
+        count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_COINS + 2U), HUD_ROW_COUNTERS,
+                                 snapshot->coins, 3U);
     }
     if (flags & HUD_FLAG_STAR_COUNT) {
-        const uint8_t star_col = 15U;
-        count = push_cell(out_cells, count, capacity, star_col, 12U, SM64_SATURN_HUD_GLYPH_STAR);
+        count = push_cell(out_cells, count, capacity, HUD_COL_STARS, HUD_ROW_COUNTERS,
+                          SM64_SATURN_HUD_GLYPH_STAR);
+        /* TODO(Task 7): mutation-tested -- neither branch of this
+         * stars<100 split is exercised by the current 4 tests (mutating
+         * the comparison away still passes the full suite). Task 7 is the
+         * plan's dedicated mutation-test task; flagged here rather than
+         * fixed now since strengthening tools/saturn/saturn_hud_layout_test.c
+         * is out of scope for this task. */
         if (snapshot->stars < 100) {
-            count = push_cell(out_cells, count, capacity, (uint8_t)(star_col + 1U), 12U,
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_STARS + 1U), HUD_ROW_COUNTERS,
                               SM64_SATURN_HUD_GLYPH_MULTIPLY);
-            count = push_clamped_int(out_cells, count, capacity, (uint8_t)(star_col + 2U), 12U,
+            count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_STARS + 2U), HUD_ROW_COUNTERS,
                                      snapshot->stars, 2U);
         } else {
-            count = push_clamped_int(out_cells, count, capacity, (uint8_t)(star_col + 1U), 12U,
+            count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_STARS + 1U), HUD_ROW_COUNTERS,
                                      snapshot->stars, 3U);
         }
     }
@@ -156,23 +223,35 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
         const uint16_t minutes = (uint16_t)(frames / (30U * 60U));
         const uint16_t seconds = (uint16_t)((frames - minutes * 1800U) / 30U);
         const uint16_t frac = (uint16_t)(((frames - minutes * 1800U - seconds * 30U)) / 3U);
-        count = push_clamped_int(out_cells, count, capacity, 13U, 11U, minutes, 1U);
-        count = push_cell(out_cells, count, capacity, 14U, 11U, SM64_SATURN_HUD_GLYPH_APOSTROPHE);
-        count = push_clamped_int(out_cells, count, capacity, 15U, 11U, seconds, 2U);
-        count = push_cell(out_cells, count, capacity, 17U, 11U, SM64_SATURN_HUD_GLYPH_DOUBLE_QUOTE);
-        count = push_clamped_int(out_cells, count, capacity, 18U, 11U, frac, 1U);
+        count = push_clamped_int(out_cells, count, capacity, HUD_COL_TIMER, HUD_ROW_TIMER, minutes, 1U);
+        count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_TIMER + 1U), HUD_ROW_TIMER,
+                          SM64_SATURN_HUD_GLYPH_APOSTROPHE);
+        count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_TIMER + 2U), HUD_ROW_TIMER,
+                                 seconds, 2U);
+        count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_TIMER + 4U), HUD_ROW_TIMER,
+                          SM64_SATURN_HUD_GLYPH_DOUBLE_QUOTE);
+        count = push_clamped_int(out_cells, count, capacity, (uint8_t)(HUD_COL_TIMER + 5U), HUD_ROW_TIMER,
+                                 frac, 1U);
     }
     if (flags & HUD_FLAG_CAMERA_AND_POWER) {
-        count = push_cell(out_cells, count, capacity, 17U, 13U, SM64_SATURN_HUD_GLYPH_CAM_CAMERA);
+        count = push_cell(out_cells, count, capacity, HUD_COL_CAMERA, HUD_ROW_CANNON_CAMERA,
+                          SM64_SATURN_HUD_GLYPH_CAM_CAMERA);
+        /* TODO(Task 7): mutation-tested -- none of these three case labels
+         * (MARIO/LAKITU/FIXED) are exercised by the current 4 tests, which
+         * never set snapshot.camera_status. Flagged for Task 7, the plan's
+         * dedicated mutation-test task, rather than fixed here. */
         switch (snapshot->camera_status & CAM_STATUS_MODE_GROUP) {
         case CAM_STATUS_MARIO:
-            count = push_cell(out_cells, count, capacity, 18U, 13U, SM64_SATURN_HUD_GLYPH_CAM_MARIO_HEAD);
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 1U), HUD_ROW_CANNON_CAMERA,
+                              SM64_SATURN_HUD_GLYPH_CAM_MARIO_HEAD);
             break;
         case CAM_STATUS_LAKITU:
-            count = push_cell(out_cells, count, capacity, 18U, 13U, SM64_SATURN_HUD_GLYPH_CAM_LAKITU_HEAD);
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 1U), HUD_ROW_CANNON_CAMERA,
+                              SM64_SATURN_HUD_GLYPH_CAM_LAKITU_HEAD);
             break;
         case CAM_STATUS_FIXED:
-            count = push_cell(out_cells, count, capacity, 18U, 13U, SM64_SATURN_HUD_GLYPH_CAM_FIXED);
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 1U), HUD_ROW_CANNON_CAMERA,
+                              SM64_SATURN_HUD_GLYPH_CAM_FIXED);
             break;
         default:
             break;
@@ -181,14 +260,20 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
          * mutually exclusive case labels of the same switch (both live in
          * CAM_STATUS_C_MODE_GROUP, matching hud.c's render_hud_camera_status
          * switch), so only one of them can ever be the glyph written to
-         * (19,13) in a given snapshot -- there is no frame where both are
-         * simultaneously live and would fight over the cell. */
+         * (HUD_COL_CAMERA+2, HUD_ROW_CANNON_CAMERA) in a given snapshot --
+         * there is no frame where both are simultaneously live and would
+         * fight over the cell.
+         * TODO(Task 7): mutation-tested -- neither case label here is
+         * exercised by the current 4 tests either, same gap as the switch
+         * above. Flagged for Task 7. */
         switch (snapshot->camera_status & CAM_STATUS_C_MODE_GROUP) {
         case CAM_STATUS_C_DOWN:
-            count = push_cell(out_cells, count, capacity, 19U, 13U, SM64_SATURN_HUD_GLYPH_CAM_ARROW_DOWN);
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 2U), HUD_ROW_CANNON_CAMERA,
+                              SM64_SATURN_HUD_GLYPH_CAM_ARROW_DOWN);
             break;
         case CAM_STATUS_C_UP:
-            count = push_cell(out_cells, count, capacity, 19U, 13U, SM64_SATURN_HUD_GLYPH_CAM_ARROW_UP);
+            count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 2U), HUD_ROW_CANNON_CAMERA,
+                              SM64_SATURN_HUD_GLYPH_CAM_ARROW_UP);
             break;
         default:
             break;
@@ -223,12 +308,16 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
             int wedges = snapshot->wedges;
             if (wedges < 1) wedges = 1;
             if (wedges > 8) wedges = 8;
-            count = push_cell(out_cells, count, capacity, 8U, 10U,
+            count = push_cell(out_cells, count, capacity, HUD_COL_POWER_METER, HUD_ROW_POWER_METER,
                               (sm64_saturn_hud_glyph_t)(SM64_SATURN_HUD_GLYPH_POWER_METER_1 + (wedges - 1)));
         }
     }
+    /* TODO(Task 7): mutation-tested -- this branch is not exercised by the
+     * current 4 tests either (none set snapshot.cannon_active). Flagged
+     * for Task 7. */
     if (snapshot->cannon_active) {
-        count = push_cell(out_cells, count, capacity, 15U, 13U, SM64_SATURN_HUD_GLYPH_CANNON_RETICLE);
+        count = push_cell(out_cells, count, capacity, HUD_COL_CANNON, HUD_ROW_CANNON_CAMERA,
+                          SM64_SATURN_HUD_GLYPH_CANNON_RETICLE);
     }
 
     return count;
