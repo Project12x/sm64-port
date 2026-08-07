@@ -57,6 +57,47 @@
   toolchain friction affecting every target using that convention, not
   something introduced here, and out of this task's scope to fix.
 
+- Closed two code-review gaps in the Task 3 HUD-snapshot capture above:
+
+  First, `sourceboot_capture_render_snapshot()`'s HUD-capture block had no
+  comment explaining why it must precede `sm64_saturn_render_snapshot_publish()`
+  -- this function otherwise consistently explains ordering rationale inline
+  (e.g. the observer-frame-timing comment at the top of the same function),
+  and a future refactor (e.g. hoisting HUD capture into a helper called at
+  the end of the function) could silently reintroduce the exact publish-
+  ordering race Task 3 was careful to avoid, since nothing at the call site
+  itself said not to move it. Added a comment directly above the block.
+
+  Second, `saturn_hud.h`'s and the host test's own comments both claimed
+  `sm64_saturn_hud_snapshot_t` is pointer-free and fixed-width, but nothing
+  actually enforced either claim: `tools/saturn/test_render_snapshot_source.py`'s
+  pre-existing regex sweep (`test_snapshot_types_have_no_pointer_fields`,
+  which already protects `sm64_saturn_render_snapshot_t` and the actor
+  bridge types from exactly this class of regression) never opened
+  `saturn_hud.h`, and `saturn_hud_snapshot_test.c`'s `sizeof(...) == 0U`
+  check only proves the struct isn't literally empty. Confirmed live: a
+  `char *debug_label;` injected into the struct compiled clean under the
+  same `-Wall -Wextra -Werror` the Makefile target uses and the host test
+  still exited 0. Fixed by adding
+  `_Static_assert(sizeof(sm64_saturn_hud_snapshot_t) == 22U, ...)` to
+  `saturn_hud.h` (22 bytes independently verified via a host `offsetof`
+  probe before trusting it: field layout packs 8 `int16_t`/`uint16_t`
+  members through offset 16, one padding byte between the `int8_t`
+  `power_meter_animation` at offset 16 and the `int16_t` `power_meter_y`
+  at offset 18 to satisfy 2-byte alignment, then two trailing `uint8_t`
+  fields through offset 21 -- no trailing struct padding needed since 22
+  is already even) and adding `sm64_saturn_hud_snapshot` (pointing at the
+  new `HUD` path constant) to `test_render_snapshot_source.py`'s existing
+  `names` tuple. Re-ran the same `char *debug_label;` mutation after both
+  fixes: the `_Static_assert` now fails the build
+  (`static assertion failed: "hud snapshot ABI must remain fixed-width"`)
+  and the Python sweep now fails independently
+  (`AssertionError: sm64_saturn_hud_snapshot must not carry live game,
+  graph, VDP1, or VRAM pointers`) -- both gates catch it, not just one.
+  Restored the clean file and re-confirmed the host test, the Python
+  sweep, and the pre-existing `verify-render-snapshot-bank` host test all
+  pass clean afterward.
+
 - Added `tools/saturn/extract_hud_glyphs.py`, a local-ROM-derived extractor
   for the real SM64 gameplay-HUD glyphs (digits, multiply/coin/Mario-head/star
   icons, apostrophe/double-quote, camera-status icons, power-meter wedge

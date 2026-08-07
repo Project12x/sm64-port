@@ -26,4 +26,7 @@ typedef struct sm64_saturn_hud_snapshot {
     uint8_t reserved0;
 } sm64_saturn_hud_snapshot_t;
 
+_Static_assert(sizeof(sm64_saturn_hud_snapshot_t) == 22U,
+               "hud snapshot ABI must remain fixed-width");
+
 #endif /* SM64_SATURN_HUD_H */

@@ -420,6 +420,9 @@ static void sourceboot_capture_render_snapshot(uint32_t generation)
     snapshot->area_id = (uint32_t)gCurrAreaIndex;
     snapshot->geometry_bank_id = snapshot->mario_pose.vertex_bank_id;
     snapshot->material_bank_id = snapshot->mario_pose.material_bank_id;
+    /* Must be written before publish() below flips this slot to READY --
+     * acquire_ready() only trusts READY slots, so fields written after
+     * publish() could be read torn/stale by a peer. */
     s8 power_meter_animation = 0;
     s16 power_meter_y = 0;
     get_hud_power_meter_state(&power_meter_animation, &power_meter_y);

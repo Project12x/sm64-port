@@ -6,6 +6,7 @@ import re
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT = ROOT / "src/port/saturn/gfx/saturn_render_snapshot.h"
 ACTOR = ROOT / "src/port/saturn/gfx/saturn_actor_bridge.h"
+HUD = ROOT / "src/port/saturn/gfx/saturn_hud.h"
 IMPLEMENTATION = ROOT / "src/port/saturn/gfx/saturn_render_snapshot.c"
 
 
@@ -41,6 +42,7 @@ def test_snapshot_types_have_no_pointer_fields() -> None:
         (SNAPSHOT, "sm64_saturn_render_snapshot_release"),
         (ACTOR, "sm64_saturn_mario_actor_snapshot"),
         (ACTOR, "sm64_saturn_mario_pose_selector"),
+        (HUD, "sm64_saturn_hud_snapshot"),
     )
     for path, name in names:
         assert "*" not in typedef_body(path, name), (
