@@ -412,11 +412,18 @@ static uintptr_t s_actor_gouraud_addresses[SM64_MARIO_PRIMITIVE_COUNT]
 static const uint8_t *s_actor_light_intensity;
 static uint16_t s_actor_draw_count;
 static uint16_t s_actor_transform_ref_count;
+#if !SATURN_DEMO_HOT_PROMOTION
+/* Hot mode reads the generated immutable bank directly and promotes it into
+ * its single LWRAM work-area owner below.  Keeping a second resident copy in
+ * hot mode would spend the same 43,776 bytes twice for no semantic benefit.
+ * The non-hot build retains the explicit LWRAM resident copy so that the
+ * feature remains independently switchable. */
 static int32_t s_bob_positions_resident[SM64_SATURN_BOB_POSITION_COUNT][3]
     __attribute__((section(".lwram_bss")));
 static sm64_saturn_bob_primitive_t s_bob_primitives_resident[
     SM64_SATURN_BOB_PRIMITIVE_COUNT]
     __attribute__((section(".lwram_bss")));
+#endif
 #define DEMO_TERRAIN_TEMPLATE_CACHE_CAPACITY SM64_SATURN_BOB_PRIMITIVE_COUNT
 typedef enum demo_terrain_template_variant {
     DEMO_TERRAIN_TEMPLATE_BASE,
@@ -492,16 +499,19 @@ demo_terrain_resolved_template(uint16_t primitive_index, bool recovery,
         ? &s_bob_terrain_resolved_templates[primitive_index][variant] : NULL;
 }
 #if SATURN_DEMO_HOT_PROMOTION
-/* Optional Z-Treme-style hot arena. The source bank remains the LWRAM
- * authority; these HWRAM arrays are populated once before the frame loop and
- * then become the renderer's active read-only bank. One enclosing object is
- * deliberate: Z-Treme's workarea.c pattern uses compile-time offsets rather
- * than two cursors that can collide at runtime. */
+/* Optional Z-Treme-style hot arena. The generated bank is immutable source
+ * data; this one enclosing LWRAM work-area owner is populated once before the
+ * frame loop and then becomes the renderer's active read-only bank. Keeping
+ * the source and promoted copies in separate memories would duplicate the
+ * entire 43,776-byte BOB geometry bank and overrun the current HWRAM contract.
+ * One enclosing object is deliberate: Z-Treme's workarea.c pattern uses
+ * compile-time offsets rather than two cursors that can collide at runtime. */
 typedef struct demo_hot_workarea {
     int32_t positions[SM64_SATURN_BOB_POSITION_COUNT][3];
     sm64_saturn_bob_primitive_t primitives[SM64_SATURN_BOB_PRIMITIVE_COUNT];
 } demo_hot_workarea_t;
-static demo_hot_workarea_t s_bob_hot_workarea __attribute__((aligned(16)));
+static demo_hot_workarea_t s_bob_hot_workarea
+    __attribute__((section(".lwram_bss"), aligned(16)));
 _Static_assert(offsetof(demo_hot_workarea_t, positions) == 0U,
                "hot positions must be the first fixed work-area region");
 _Static_assert(offsetof(demo_hot_workarea_t, primitives) >=
@@ -1523,31 +1533,34 @@ void sm64_saturn_demo_render_init(void)
            sizeof(s_primitive_lod_suppressed));
     memset(s_primitive_lod_texture_downgraded, 0,
            sizeof(s_primitive_lod_texture_downgraded));
-    memcpy(s_bob_positions_resident, sm64_saturn_bob_positions,
-           sizeof(s_bob_positions_resident));
-    memcpy(s_bob_primitives_resident, sm64_saturn_bob_primitives,
-           sizeof(s_bob_primitives_resident));
-    s_bob_positions_active = s_bob_positions_resident;
-    s_bob_primitives_active = s_bob_primitives_resident;
 #if SATURN_DEMO_HOT_PROMOTION
+    s_bob_positions_active = sm64_saturn_bob_positions;
+    s_bob_primitives_active = sm64_saturn_bob_primitives;
     saturn_hot_promotion_init(
         &s_bob_hot_promotion, s_bob_hot_workarea.positions,
         sizeof(s_bob_hot_workarea.positions));
     const int32_t (*hot_positions)[3] = saturn_hot_promote(
-        &s_bob_hot_promotion, s_bob_positions_resident,
-        sizeof(s_bob_positions_resident), 16U);
+        &s_bob_hot_promotion, sm64_saturn_bob_positions,
+        sizeof(s_bob_hot_workarea.positions), 16U);
     /* Reset to the second compile-time region; the enclosing work-area
      * assertions prove that this cannot overlap the position bank. */
     saturn_hot_promotion_init(
         &s_bob_hot_promotion, s_bob_hot_workarea.primitives,
         sizeof(s_bob_hot_workarea.primitives));
     const sm64_saturn_bob_primitive_t *hot_primitives = saturn_hot_promote(
-        &s_bob_hot_promotion, s_bob_primitives_resident,
-        sizeof(s_bob_primitives_resident), 16U);
+        &s_bob_hot_promotion, sm64_saturn_bob_primitives,
+        sizeof(s_bob_hot_workarea.primitives), 16U);
     if (hot_positions != NULL && hot_primitives != NULL) {
         s_bob_positions_active = hot_positions;
         s_bob_primitives_active = hot_primitives;
     }
+#else
+    memcpy(s_bob_positions_resident, sm64_saturn_bob_positions,
+           sizeof(s_bob_positions_resident));
+    memcpy(s_bob_primitives_resident, sm64_saturn_bob_primitives,
+           sizeof(s_bob_primitives_resident));
+    s_bob_positions_active = s_bob_positions_resident;
+    s_bob_primitives_active = s_bob_primitives_resident;
 #endif
     memset(s_bob_terrain_template_valid, 0,
            sizeof(s_bob_terrain_template_valid));

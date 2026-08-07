@@ -2,6 +2,55 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added project-owned SH-2 exception trampolines
+  (`src/port/saturn/sourceboot/source_exception_trampolines.sx`,
+  `source_exception_record.c`) installed for both master and slave interrupt
+  vector tables at the top of `main()`, for illegal instruction, illegal
+  slot, CPU address error, and DMA address error. Yaul's own trampoline
+  passes the original register frame to `__exception_assert()`, but
+  `__reset()` and the VDP2 diagnostics screen then reuse the faulting
+  stack -- these trampolines save the full register frame first and copy it
+  into a fixed, pointer-free, HWRAM-resident record
+  (`sourceboot_exception_record`) before delegating to Yaul's normal
+  handler, so the original fault state survives past the reset screen for a
+  debugger to read. Adapted from Yaul's own `cpu_exceptions.sx` pattern (API
+  use, no source copied).
+
+- Relocated ~20 previously-HWRAM (`.bss`) sourceboot statics (frame
+  pipeline, Mario actor snapshot/pose, render-snapshot bank, VDP1
+  backend/frame-bank-set/transfer-targets, Gouraud banks, per-frame
+  telemetry counters, the DMA queue's own metadata, and two small
+  diagnostic probes in `source_cart.c`/`source_q16_kernel_probe.c`) into
+  `.lwram_bss` via a new `SOURCEBOOT_LWRAM_STATE`/
+  `SATURN_DMA_QUEUE_LWRAM_STATE` attribute macro, to relieve chronic HWRAM
+  pressure documented elsewhere in this file and in `STATE.md`. Since
+  `.lwram_bss` is NOLOAD (not crt0-zeroed), added an explicit
+  `sourceboot_reset_lwram_state()` that zeroes every relocated field, called
+  once in `main()` immediately before `sourceboot_init_sky_bitmap()`.
+  Shrank `SOURCEBOOT_MAIN_POOL_BYTES` from `0x60000` to `0x5EC00` (freeing
+  5 KiB) to make room for the relocated state within the existing LWRAM
+  budget. Also reworked `SATURN_DEMO_HOT_PROMOTION`'s BOB geometry path
+  (`saturn_demo_render.c`) to read the generated immutable bank directly
+  and promote it into one LWRAM work-area, instead of first copying it into
+  a separate LWRAM-resident array -- avoiding paying the 43,776-byte BOB
+  geometry bank's cost twice.
+
+  **This is real relief, not a full fix, and does not by itself produce a
+  passing link.** Per the measured, before/after linker `.map` numbers
+  recorded in this file's entries for Task 9 of
+  `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`: with this work
+  included, the accepted-rollback configuration (this work + the
+  unrelated, separately-committed `39008658`/`6dbaea8d`/`a48e5aac` +
+  the VDP2 HUD) still fails `sourceboot-cart.x`'s memory-budget asserts,
+  short by 3,128 HWRAM bytes and over the LWRAM slave-stack boundary by
+  784 bytes -- smaller shortfalls than the ~5,880/~2,176-byte gaps measured
+  with this work stashed out, but not closed. Closing the remaining gap
+  needs either further HWRAM/LWRAM relief beyond this commit or shrinking
+  one of the two unrelated fixed-size consumers named above; this commit
+  does not attempt that on its own.
+
 ### Fixed
 
 - **Correction to the "Fixed three real, target-only compile failures..."

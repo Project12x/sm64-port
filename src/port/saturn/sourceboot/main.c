@@ -45,6 +45,11 @@
                                            * by bare name (see the Makefile's
                                            * SH_CFLAGS -I list). */
 
+extern void sourceboot_exception_illegal_instruction(void);
+extern void sourceboot_exception_illegal_slot(void);
+extern void sourceboot_exception_cpu_address_error(void);
+extern void sourceboot_exception_dma_address_error(void);
+
 #ifndef SATURN_SOURCEBOOT_ROUTE_REPLAY
 #define SATURN_SOURCEBOOT_ROUTE_REPLAY 0
 #endif
@@ -183,35 +188,47 @@ volatile sm64_saturn_sourceboot_cadence_trace_t sourceboot_cadence_trace = {
  * bootstrap profile read because .lwram_bss is not crt0-zeroed. */
 static sm64_saturn_fast3d_frontend_t sourceboot_fast3d
     __attribute__((section(".lwram_bss"), used));
-static uint32_t sourceboot_sim_ticks_accum;
-static uint32_t sourceboot_sim_tick_count;
-static uint32_t sourceboot_render_ticks_accum;
+#define SOURCEBOOT_LWRAM_STATE \
+    __attribute__((section(".lwram_bss"), used))
+static uint32_t sourceboot_sim_ticks_accum SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_sim_tick_count SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_render_ticks_accum SOURCEBOOT_LWRAM_STATE;
 static volatile uint32_t sourceboot_vblank_out_count __uncached;
-static uint32_t sourceboot_sim_vblank_credit_dropped;
-static uint32_t sourceboot_vdp1_bank_generation;
-static uint32_t sourceboot_vdp1_bank_submitted;
-static uint32_t sourceboot_vdp1_bank_displayed;
-static uint32_t sourceboot_vdp1_bank_overwrite_attempts;
-static uint32_t sourceboot_vdp1_bank_late_dma;
-static uint32_t sourceboot_dma_wait_ticks_accum;
-static uint32_t sourceboot_vdp1_wait_ticks_accum;
-static uint32_t sourceboot_vdp1_overwrite_wait_ticks_accum;
-static uint32_t sourceboot_vdp1_transfer_faults;
-static uint32_t sourceboot_vdp1_transfer_queued_not_started;
-static uint32_t sourceboot_trace_scheduler_credit;
-static uint32_t sourceboot_trace_vdp1_presentation_generation;
-static uint32_t sourceboot_trace_vdp2_presentation_generation;
-static uint32_t sourceboot_simulation_vblank_crossings;
-static uint32_t sourceboot_simulation_count;
-static uint32_t sourceboot_transport_presentation_vblank_crossings;
-static uint32_t sourceboot_transport_presentation_count;
+static uint32_t sourceboot_sim_vblank_credit_dropped SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_bank_generation SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_bank_submitted SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_bank_displayed SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_bank_overwrite_attempts SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_bank_late_dma SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_dma_wait_ticks_accum SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_wait_ticks_accum SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_overwrite_wait_ticks_accum
+    SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_transfer_faults SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_vdp1_transfer_queued_not_started
+    SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_trace_scheduler_credit SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_trace_vdp1_presentation_generation
+    SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_trace_vdp2_presentation_generation
+    SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_simulation_vblank_crossings SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_simulation_count SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_transport_presentation_vblank_crossings
+    SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_transport_presentation_count
+    SOURCEBOOT_LWRAM_STATE;
 static sm64_saturn_render_overlap_phase_t sourceboot_render_overlap_phase
     __uncached;
 static bool sourceboot_render_overlap_event_ok __uncached;
-static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline;
-static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot;
-static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose;
-static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots;
+static sm64_saturn_frame_pipeline_t sourceboot_frame_pipeline
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_mario_actor_snapshot_t sourceboot_mario_snapshot
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_mario_actor_pose_t sourceboot_mario_pose
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_render_snapshot_bank_t sourceboot_render_snapshots
+    SOURCEBOOT_LWRAM_STATE;
 /* One NOLOAD actor owner: initialized explicitly through the P2 alias before
  * publication; do not restore standalone observer/bank storage. */
 static sm64_saturn_actor_runtime_storage_t sourceboot_actor_runtime
@@ -221,13 +238,19 @@ static sm64_saturn_actor_runtime_storage_t sourceboot_actor_runtime
 /* Each physical actor bank carries its own render-generation ticket.  A
  * later source tick may acquire the other bank while an earlier generation is
  * still rendering; no single global "active bank" may be overwritten. */
-static uint32_t sourceboot_actor_bank_generation[2];
-static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot;
-static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame;
+static uint32_t sourceboot_actor_bank_generation[2]
+    SOURCEBOOT_LWRAM_STATE;
+static const sm64_saturn_render_snapshot_t *sourceboot_active_render_snapshot
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp2_frame_t sourceboot_vdp2_frame
+    SOURCEBOOT_LWRAM_STATE;
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT
 sm64_saturn_source_route_probe_t sourceboot_route_checkpoint;
-sm64_saturn_camera_timing_t sm64_saturn_camera_timing;
+#endif
+sm64_saturn_camera_timing_t sm64_saturn_camera_timing SOURCEBOOT_LWRAM_STATE;
 #if SATURN_SOURCEBOOT_ROUTE_REPLAY
-volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture;
+volatile sm64_saturn_math_route_capture_t sourceboot_math_route_capture
+    SOURCEBOOT_LWRAM_STATE;
 #endif
 
 const sm64_saturn_input_replay_sample_t *
@@ -518,7 +541,7 @@ static void sourceboot_run_source_tick(void)
 #endif
 }
 
-#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY && !SATURN_SOURCEBOOT_LIVE_INPUT
 static uint32_t sourceboot_float_bits(f32 value) {
     union { f32 f; uint32_t u; } bits;
     bits.f = value;
@@ -646,8 +669,11 @@ static void sourceboot_capture_route_checkpoint(void) {
  *   56 KiB region straight out of the pool's end through adjacent .bss
  *   (diagnosed live via the cart-enabled headless rig: sSurfacePool=0,
  *   gSurfaceNodesAllocated=13,872 of 7,000).
- * - Now: 0x60000 (384 KiB) in LWRAM, where ~1 MiB sits idle next to
- *   the 16 KiB VDP1 staging array. The old 0x30000 was itself too small
+ * - Now: 0x5EC00 (379 KiB) in LWRAM, where ~1 MiB sits idle next to
+ *   the 16 KiB VDP1 staging array. The 5 KiB reserved prefix is the
+ *   permanent owner of the relocated route/frame/DMA state below; it keeps
+ *   that state out of HWRAM without changing the level-pool contract.
+ *   The old 0x30000 was itself too small
  *   for Bob's full load: with level geo/display data allocated first,
  *   the 110 KiB surface pool still failed (measured live: freeSpace
  *   77,520 at the failure point). CPU access to LWRAM is unrestricted;
@@ -660,7 +686,7 @@ static void sourceboot_capture_route_checkpoint(void) {
  * - .lwram_bss is NOLOAD (never crt0-zeroed). main_pool_init() writes
  *   its own block headers and SM64 treats pool contents as
  *   alloc-then-write, matching N64 boot RAM semantics. */
-#define SOURCEBOOT_MAIN_POOL_BYTES (0x00060000UL)
+#define SOURCEBOOT_MAIN_POOL_BYTES (0x0005EC00UL)
 static uint8_t sourceboot_main_pool[SOURCEBOOT_MAIN_POOL_BYTES]
     __attribute__((section(".lwram_bss"))) __aligned(16);
 
@@ -708,15 +734,23 @@ extern const uint8_t sm64_saturn_bob_clut_bank[];
  * `.lwram_cmdts` attribute (the linker rejects that legacy section). */
 static vdp1_cmdt_t sourceboot_vdp1_cmdts[2][SOURCEBOOT_VDP1_COMMAND_CAPACITY]
     __aligned(32);
-static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend;
-static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks;
-static sm64_saturn_vdp1_transfer_targets_t sourceboot_vdp1_transfer_targets;
-static sm64_saturn_vdp1_frame_bank_t *sourceboot_active_build_bank;
-static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_render_ready;
-static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_transfer_pending;
-static bool sourceboot_vdp1_destination_poisoned;
-static bool sourceboot_render_started;
-static uint32_t sourceboot_failed_render_generation;
+static sm64_saturn_vdp1_backend_t sourceboot_vdp1_backend
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp1_frame_bank_set_t sourceboot_vdp1_frame_banks
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp1_transfer_targets_t sourceboot_vdp1_transfer_targets
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp1_frame_bank_t *sourceboot_active_build_bank
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_render_ready
+    SOURCEBOOT_LWRAM_STATE;
+static sm64_saturn_vdp1_frame_bank_t *sourceboot_vdp1_transfer_pending
+    SOURCEBOOT_LWRAM_STATE;
+static bool sourceboot_vdp1_destination_poisoned
+    SOURCEBOOT_LWRAM_STATE;
+static bool sourceboot_render_started SOURCEBOOT_LWRAM_STATE;
+static uint32_t sourceboot_failed_render_generation
+    SOURCEBOOT_LWRAM_STATE;
 
 /* HWRAM (.bss) deliberately: SCU DMA from LWRAM is the documented
  * lockup class the VDP1 backend above already works around (see its
@@ -735,7 +769,8 @@ static uint32_t sourceboot_failed_render_generation;
  * a 0x1B00-byte floor at link time for libyaul's TLSF control block. */
 static sm64_saturn_gouraud_table_t sourceboot_gouraud_staging[2]
     [SM64_SATURN_FAST3D_MAX_RESOLVED_TRIANGLES];
-static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2];
+static sm64_saturn_gouraud_bank_t sourceboot_gouraud_banks[2]
+    SOURCEBOOT_LWRAM_STATE;
 
 /* Per-frame SMPC INTBACK request, on the same VBLANK-OUT cadence the two
  * proven sibling targets use (marioturntable/main.c's vblank_out_handler;
@@ -761,6 +796,65 @@ static void sourceboot_vblank_out_handler(void *work __unused) {
  * a fixed boot asset rather than camera or simulation state. */
 #define SOURCEBOOT_BACKSCREEN_LINES 224U
 static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
+
+/* .lwram_bss is deliberately NOLOAD.  Keep the relocated CPU-only state
+ * deterministic without asking crt0 to clear the whole LWRAM arena; the
+ * transport arrays themselves are initialized by their existing owners below.
+ * This reset is master-owned and runs before either frame pipeline or VDP1
+ * bank can observe the state. */
+static void sourceboot_reset_lwram_state(void)
+{
+    sourceboot_sim_ticks_accum = 0U;
+    sourceboot_sim_tick_count = 0U;
+    sourceboot_render_ticks_accum = 0U;
+    sourceboot_sim_vblank_credit_dropped = 0U;
+    sourceboot_vdp1_bank_generation = 0U;
+    sourceboot_vdp1_bank_submitted = 0U;
+    sourceboot_vdp1_bank_displayed = 0U;
+    sourceboot_vdp1_bank_overwrite_attempts = 0U;
+    sourceboot_vdp1_bank_late_dma = 0U;
+    sourceboot_dma_wait_ticks_accum = 0U;
+    sourceboot_vdp1_wait_ticks_accum = 0U;
+    sourceboot_vdp1_overwrite_wait_ticks_accum = 0U;
+    sourceboot_vdp1_transfer_faults = 0U;
+    sourceboot_vdp1_transfer_queued_not_started = 0U;
+    sourceboot_trace_scheduler_credit = 0U;
+    sourceboot_trace_vdp1_presentation_generation = 0U;
+    sourceboot_trace_vdp2_presentation_generation = 0U;
+    sourceboot_simulation_vblank_crossings = 0U;
+    sourceboot_simulation_count = 0U;
+    sourceboot_transport_presentation_vblank_crossings = 0U;
+    sourceboot_transport_presentation_count = 0U;
+    sm64_saturn_camera_timing_reset();
+    memset(&sourceboot_frame_pipeline, 0,
+           sizeof(sourceboot_frame_pipeline));
+    memset(&sourceboot_mario_snapshot, 0,
+           sizeof(sourceboot_mario_snapshot));
+    memset(&sourceboot_mario_pose, 0, sizeof(sourceboot_mario_pose));
+    memset(&sourceboot_render_snapshots, 0,
+           sizeof(sourceboot_render_snapshots));
+    memset(sourceboot_actor_bank_generation, 0,
+           sizeof(sourceboot_actor_bank_generation));
+#if SATURN_SOURCEBOOT_ROUTE_REPLAY
+    memset((void *)&sourceboot_math_route_capture, 0,
+           sizeof(sourceboot_math_route_capture));
+#endif
+    sourceboot_active_render_snapshot = NULL;
+    memset(&sourceboot_vdp2_frame, 0, sizeof(sourceboot_vdp2_frame));
+    memset(&sourceboot_vdp1_backend, 0, sizeof(sourceboot_vdp1_backend));
+    memset(&sourceboot_vdp1_frame_banks, 0,
+           sizeof(sourceboot_vdp1_frame_banks));
+    memset(&sourceboot_vdp1_transfer_targets, 0,
+           sizeof(sourceboot_vdp1_transfer_targets));
+    sourceboot_active_build_bank = NULL;
+    sourceboot_vdp1_render_ready = NULL;
+    sourceboot_vdp1_transfer_pending = NULL;
+    sourceboot_vdp1_destination_poisoned = false;
+    sourceboot_render_started = false;
+    sourceboot_failed_render_generation = 0U;
+    memset(sourceboot_gouraud_banks, 0,
+           sizeof(sourceboot_gouraud_banks));
+}
 
 /* Remembers the layout last published to the VDP2 HUD atlas so
  * sm64_saturn_hud_publish() (called from sourceboot_present_generation())
@@ -1478,6 +1572,34 @@ void user_init(void) {
 }
 
 int main(void) {
+    /* Install the project-owned exception trampolines immediately after
+     * Yaul's crt0/__cpu_init path, before cart or scene setup can fault.  The
+     * trampolines preserve the original frame and delegate to Yaul's normal
+     * reset/debug-screen handler after recording it. */
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_ILLEGAL_INSTRUCTION,
+                     sourceboot_exception_illegal_instruction);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_ILLEGAL_SLOT,
+                     sourceboot_exception_illegal_slot);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_CPU_ADDRESS_ERROR,
+                     sourceboot_exception_cpu_address_error);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_DMA_ADDRESS_ERROR,
+                     sourceboot_exception_dma_address_error);
+    /* The scene worker can fault independently of the master.  Yaul exposes
+     * the slave table as the same vector IDs plus its base; install the same
+     * frame-preserving trampolines there so a worker-side reset cannot erase
+     * the evidence before the master observes it. */
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_ILLEGAL_INSTRUCTION +
+                         CPU_INTC_INTERRUPT_SLAVE_BASE,
+                     sourceboot_exception_illegal_instruction);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_ILLEGAL_SLOT +
+                         CPU_INTC_INTERRUPT_SLAVE_BASE,
+                     sourceboot_exception_illegal_slot);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_CPU_ADDRESS_ERROR +
+                         CPU_INTC_INTERRUPT_SLAVE_BASE,
+                     sourceboot_exception_cpu_address_error);
+    cpu_intc_ihr_set(CPU_INTC_INTERRUPT_DMA_ADDRESS_ERROR +
+                         CPU_INTC_INTERRUPT_SLAVE_BASE,
+                     sourceboot_exception_dma_address_error);
     /* Keep the one-shot SH-2 kernel vector observable in headless Ymir's
      * no-cart negative-control configuration too: cart loading may fail
      * before the source game loop is available. */
@@ -1506,6 +1628,7 @@ int main(void) {
      * final DRAM-cart address until source_cart_load() has completed. Keep
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
      * never receives a zeroed pre-cart buffer. */
+    sourceboot_reset_lwram_state();
     sourceboot_init_sky_bitmap();
     sm64_saturn_hud_atlas_init();
     sm64_saturn_hud_publish_init(&sourceboot_hud_publish_state);

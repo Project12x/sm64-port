@@ -40,7 +40,11 @@ static const char s_source_cart_cd_text[] __attribute__((section(".bootdata"))) 
 static const char s_source_cart_image_text[] __attribute__((section(".bootdata"))) =
     "sourceboot: SOURCE.DAT is missing or invalid\n";
 
-volatile sm64_saturn_source_cart_probe_t g_sm64_saturn_source_cart_probe;
+/* Host-visible loader telemetry is CPU-owned metadata, not a DMA payload.
+ * Keep it in P2-visible LWRAM; source_cart_init() writes every field before
+ * the first cart read. */
+volatile sm64_saturn_source_cart_probe_t g_sm64_saturn_source_cart_probe
+    __attribute__((section(".lwram_bss"), used));
 
 static sm64_saturn_source_cart_status_t source_cart_finish(
         sm64_saturn_source_cart_status_t status) {

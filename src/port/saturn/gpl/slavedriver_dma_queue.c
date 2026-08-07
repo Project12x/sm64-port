@@ -22,6 +22,13 @@
 #define SATURN_DMA_QUEUE_LWRAM_BASE UINT32_C(0x00200000)
 #define SATURN_DMA_QUEUE_LWRAM_SIZE UINT32_C(0x00100000)
 
+/* The queue is master-CPU metadata, not a DMA payload.  Keep it in the
+ * P2-visible LWRAM work arena so HWRAM remains available for VDP1 command
+ * banks and Gouraud transport.  saturn_dma_queue_init() explicitly resets
+ * every member because .lwram_bss is NOLOAD. */
+#define SATURN_DMA_QUEUE_LWRAM_STATE \
+        __attribute__((section(".lwram_bss"), used))
+
 typedef struct saturn_dma_request {
         void *dst;
         const void *src;
@@ -29,13 +36,14 @@ typedef struct saturn_dma_request {
         saturn_dma_queue_mode_t mode;
         saturn_dma_queue_sequence_t sequence;
 } saturn_dma_request_t;
-static saturn_dma_request_t _queue[SATURN_DMA_QUEUE_CAPACITY];
-static size_t _head;
-static size_t _tail;
-static bool _active;
-static volatile bool _cpu_dmac_completed;
-static saturn_dma_queue_sequence_t _next_sequence;
-static uint32_t _wait_ticks;
+static saturn_dma_request_t _queue[SATURN_DMA_QUEUE_CAPACITY]
+    SATURN_DMA_QUEUE_LWRAM_STATE;
+static size_t _head SATURN_DMA_QUEUE_LWRAM_STATE;
+static size_t _tail SATURN_DMA_QUEUE_LWRAM_STATE;
+static bool _active SATURN_DMA_QUEUE_LWRAM_STATE;
+static volatile bool _cpu_dmac_completed SATURN_DMA_QUEUE_LWRAM_STATE;
+static saturn_dma_queue_sequence_t _next_sequence SATURN_DMA_QUEUE_LWRAM_STATE;
+static uint32_t _wait_ticks SATURN_DMA_QUEUE_LWRAM_STATE;
 
 typedef enum saturn_dma_completion_status {
         SATURN_DMA_COMPLETION_NONE = 0,
@@ -46,8 +54,9 @@ typedef struct saturn_dma_completion {
         saturn_dma_queue_sequence_t sequence;
         saturn_dma_completion_status_t status;
 } saturn_dma_completion_t;
-static saturn_dma_completion_t _completions[SATURN_DMA_QUEUE_CAPACITY];
-static size_t _completion_head;
+static saturn_dma_completion_t _completions[SATURN_DMA_QUEUE_CAPACITY]
+    SATURN_DMA_QUEUE_LWRAM_STATE;
+static size_t _completion_head SATURN_DMA_QUEUE_LWRAM_STATE;
 
 static size_t
 _next_index(size_t index)

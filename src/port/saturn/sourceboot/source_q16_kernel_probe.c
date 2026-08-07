@@ -6,7 +6,10 @@
 #include "../gfx/saturn_q16_sh2.h"
 #include "../gpl/slavedriver_projection.h"
 
-volatile sm64_saturn_q16_kernel_probe_t sourceboot_q16_kernel_probe;
+/* Host diagnostic state only; it is never a DMA source/destination.  Keep it
+ * in the master work arena so the HWRAM transport floor remains intact. */
+volatile sm64_saturn_q16_kernel_probe_t sourceboot_q16_kernel_probe
+    __attribute__((section(".lwram_bss"), used));
 
 /* Volatile inputs prevent this target-vector exercise being folded into a
  * compile-time constant. The execution order is deliberate: DIVU launch,
