@@ -109,6 +109,243 @@ test_layout_reads_power_meter_from_snapshot_not_recomputed(void)
     return 0;
 }
 
+/* Task 7 coverage-gap closure: the implementer who wrote the four tests
+ * above left three TODO(Task 7) comments in saturn_hud_layout.c flagging
+ * that real mutation testing (flip/disable the branch, rerun the suite)
+ * found zero coverage for the cannon reticle gate, the two camera-status
+ * switch statements, and the stars<100 branch -- each mutated independently
+ * and the full suite above still passed. The five tests below close those
+ * three gaps. Each was itself verified the same way: temporarily mutate the
+ * corresponding saturn_hud_layout.c code path (disable/invert the gate,
+ * swap a case label's glyph, force the sibling branch), rebuild, and
+ * confirm the specific new test below -- and only that test -- fails; then
+ * revert. See this task's commit message / handoff report for the mutation
+ * log. */
+
+static int
+test_layout_places_cannon_reticle_when_active(void)
+{
+    /* Closes TODO(Task 7) on the `if (snapshot->cannon_active)` gate
+     * (saturn_hud_layout.c, bottom of sm64_saturn_hud_layout_build()): no
+     * prior test ever set cannon_active, so a gate inverted to
+     * `if (!snapshot->cannon_active)` -- which would suppress the reticle
+     * exactly when it should show -- still passed every test above. Every
+     * other flag is left clear so the cannon reticle is the only cell this
+     * layout can possibly emit, making the assertion unambiguous. */
+    sm64_saturn_hud_snapshot_t snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    snapshot.cannon_active = 1;
+
+    sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+    const uint32_t count = sm64_saturn_hud_layout_build(&snapshot, cells,
+                                                         SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+    if (count != 1U) {
+        fprintf(stderr, "cannon_active=1 with no other flags should place exactly 1 cell, placed %u\n",
+               count);
+        return 1;
+    }
+    if (cells[0].glyph != SM64_SATURN_HUD_GLYPH_CANNON_RETICLE) {
+        fprintf(stderr, "cannon_active=1 did not place the cannon reticle glyph\n");
+        return 1;
+    }
+    return 0;
+}
+
+static int
+test_layout_omits_cannon_reticle_when_inactive(void)
+{
+    /* Companion to the test above: closes the other direction of the same
+     * gate mutation. A gate forced to always-true (e.g. `if (1)`, ignoring
+     * cannon_active) would slip past
+     * test_layout_places_cannon_reticle_when_active unnoticed, since that
+     * test only ever sets cannon_active=1. This test sets every field to
+     * its default (cannon_active=0 included) and requires the reticle glyph
+     * be completely absent -- mirroring the existing
+     * test_layout_omits_lives_when_flag_clear pattern for the lives group. */
+    sm64_saturn_hud_snapshot_t snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+
+    sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+    const uint32_t count = sm64_saturn_hud_layout_build(&snapshot, cells,
+                                                         SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+    for (uint32_t index = 0U; index < count; index++) {
+        if (cells[index].glyph == SM64_SATURN_HUD_GLYPH_CANNON_RETICLE) {
+            fprintf(stderr, "cannon reticle rendered despite cannon_active == 0\n");
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+test_layout_camera_mode_switch_selects_correct_glyph(void)
+{
+    /* Closes TODO(Task 7) on the CAM_STATUS_MODE_GROUP switch
+     * (MARIO/LAKITU/FIXED case labels): no prior test ever set
+     * camera_status to a value matching any case label, so every test above
+     * only ever exercised the switch's default: break arm. Swapping one
+     * case's glyph for another's would have passed every test above.
+     *
+     * Numeric camera_status values below mirror saturn_hud_layout.c's own
+     * local CAM_STATUS_* macros (CAM_STATUS_MARIO=1, LAKITU=2, FIXED=4),
+     * which themselves mirror src/game/camera.h -- this test file can't
+     * include either header for the same standalone-host-build reason
+     * documented on test_layout_reads_power_meter_from_snapshot_not_recomputed
+     * above (it would pull in the N64 camera/ultratypes dependency chain).
+     *
+     * Each case asserts two things: the expected glyph for that
+     * camera_status IS present (catches the switch producing nothing, or
+     * producing the wrong glyph), and neither of the *other* two mode
+     * glyphs is present (catches a swapped-glyph mutation that still
+     * produces "a" camera-mode glyph, just the wrong one). */
+    static const struct {
+        int16_t camera_status;
+        sm64_saturn_hud_glyph_t expected_glyph;
+        const char *label;
+    } cases[] = {
+        { 1, SM64_SATURN_HUD_GLYPH_CAM_MARIO_HEAD,  "CAM_STATUS_MARIO"  },
+        { 2, SM64_SATURN_HUD_GLYPH_CAM_LAKITU_HEAD, "CAM_STATUS_LAKITU" },
+        { 4, SM64_SATURN_HUD_GLYPH_CAM_FIXED,       "CAM_STATUS_FIXED"  },
+    };
+    const uint32_t case_count = (uint32_t)(sizeof(cases) / sizeof(cases[0]));
+
+    for (uint32_t case_index = 0U; case_index < case_count; case_index++) {
+        sm64_saturn_hud_snapshot_t snapshot;
+        memset(&snapshot, 0, sizeof(snapshot));
+        snapshot.flags = 0x0008; /* HUD_DISPLAY_FLAG_CAMERA_AND_POWER */
+        snapshot.camera_status = cases[case_index].camera_status;
+
+        sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+        const uint32_t count = sm64_saturn_hud_layout_build(&snapshot, cells,
+                                                             SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+        int found_expected = 0;
+        for (uint32_t index = 0U; index < count; index++) {
+            const sm64_saturn_hud_glyph_t glyph = cells[index].glyph;
+            if (glyph == cases[case_index].expected_glyph) {
+                found_expected = 1;
+            } else if (glyph == SM64_SATURN_HUD_GLYPH_CAM_MARIO_HEAD ||
+                       glyph == SM64_SATURN_HUD_GLYPH_CAM_LAKITU_HEAD ||
+                       glyph == SM64_SATURN_HUD_GLYPH_CAM_FIXED) {
+                fprintf(stderr, "%s produced a sibling camera-mode glyph instead of its own\n",
+                       cases[case_index].label);
+                return 1;
+            }
+        }
+        if (!found_expected) {
+            fprintf(stderr, "%s did not produce its expected camera-mode glyph\n",
+                   cases[case_index].label);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+test_layout_camera_cbutton_switch_selects_correct_glyph(void)
+{
+    /* Same closure as test_layout_camera_mode_switch_selects_correct_glyph
+     * above, for the sibling CAM_STATUS_C_MODE_GROUP switch
+     * (C_DOWN/C_UP case labels -- CAM_STATUS_C_DOWN=8, CAM_STATUS_C_UP=16,
+     * same numeric-literal convention). */
+    static const struct {
+        int16_t camera_status;
+        sm64_saturn_hud_glyph_t expected_glyph;
+        const char *label;
+    } cases[] = {
+        { 8,  SM64_SATURN_HUD_GLYPH_CAM_ARROW_DOWN, "CAM_STATUS_C_DOWN" },
+        { 16, SM64_SATURN_HUD_GLYPH_CAM_ARROW_UP,   "CAM_STATUS_C_UP"   },
+    };
+    const uint32_t case_count = (uint32_t)(sizeof(cases) / sizeof(cases[0]));
+
+    for (uint32_t case_index = 0U; case_index < case_count; case_index++) {
+        sm64_saturn_hud_snapshot_t snapshot;
+        memset(&snapshot, 0, sizeof(snapshot));
+        snapshot.flags = 0x0008; /* HUD_DISPLAY_FLAG_CAMERA_AND_POWER */
+        snapshot.camera_status = cases[case_index].camera_status;
+
+        sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+        const uint32_t count = sm64_saturn_hud_layout_build(&snapshot, cells,
+                                                             SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+        int found_expected = 0;
+        for (uint32_t index = 0U; index < count; index++) {
+            const sm64_saturn_hud_glyph_t glyph = cells[index].glyph;
+            if (glyph == cases[case_index].expected_glyph) {
+                found_expected = 1;
+            } else if (glyph == SM64_SATURN_HUD_GLYPH_CAM_ARROW_DOWN ||
+                       glyph == SM64_SATURN_HUD_GLYPH_CAM_ARROW_UP) {
+                fprintf(stderr, "%s produced the sibling C-button glyph instead of its own\n",
+                       cases[case_index].label);
+                return 1;
+            }
+        }
+        if (!found_expected) {
+            fprintf(stderr, "%s did not produce its expected C-button glyph\n",
+                   cases[case_index].label);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int
+test_layout_star_count_below_100_uses_two_digit_field(void)
+{
+    /* Closes TODO(Task 7) on the `if (snapshot->stars < 100)` branch: only
+     * the >=100 sibling was ever exercised (test_layout_never_exceeds_capacity's
+     * stars=9999), so disabling this branch entirely (always taking the
+     * >=100 path) still passed every test above.
+     *
+     * The two branches are deliberately hard to tell apart by cell COUNT
+     * alone: <100 pushes star-icon + multiply + 2 digits (4 cells), >=100
+     * pushes star-icon + 3 digits (also 4 cells) -- same total either way.
+     * What only the <100 branch ever produces is the MULTIPLY glyph (the
+     * >=100 branch never pushes one) and exactly 2 digit cells instead of 3.
+     * stars=42 makes both signals unambiguous: the correct <100 rendering
+     * is "x42" (multiply, then digits 4,2); a mutant that always took the
+     * >=100 path would zero-pad the same value to 3 digits as "042" with no
+     * multiply glyph at all -- found_multiply would be false and
+     * digit_cell_count would be 3, so either assertion below independently
+     * catches that mutation. */
+    sm64_saturn_hud_snapshot_t snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    snapshot.flags = 0x0004; /* HUD_DISPLAY_FLAG_STAR_COUNT */
+    snapshot.stars = 42;
+
+    sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+    const uint32_t count = sm64_saturn_hud_layout_build(&snapshot, cells,
+                                                         SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+    int found_star = 0, found_multiply = 0, found_digit_4 = 0, found_digit_2 = 0;
+    uint32_t digit_cell_count = 0U;
+    for (uint32_t index = 0U; index < count; index++) {
+        const sm64_saturn_hud_glyph_t glyph = cells[index].glyph;
+        if (glyph == SM64_SATURN_HUD_GLYPH_STAR) found_star = 1;
+        if (glyph == SM64_SATURN_HUD_GLYPH_MULTIPLY) found_multiply = 1;
+        if (glyph == SM64_SATURN_HUD_GLYPH_DIGIT_4) found_digit_4 = 1;
+        if (glyph == SM64_SATURN_HUD_GLYPH_DIGIT_2) found_digit_2 = 1;
+        if (glyph >= SM64_SATURN_HUD_GLYPH_DIGIT_0 && glyph <= SM64_SATURN_HUD_GLYPH_DIGIT_9)
+            digit_cell_count++;
+    }
+    if (!found_star) {
+        fprintf(stderr, "star count layout missing the star icon glyph\n");
+        return 1;
+    }
+    if (!found_multiply) {
+        fprintf(stderr, "stars=42 (< 100) did not render the multiply glyph -- "
+               "did the <100 branch stop running?\n");
+        return 1;
+    }
+    if (digit_cell_count != 2U) {
+        fprintf(stderr, "stars=42 (< 100) rendered %u digit cells, expected exactly 2\n",
+               digit_cell_count);
+        return 1;
+    }
+    if (!found_digit_4 || !found_digit_2) {
+        fprintf(stderr, "stars=42 did not render its expected '4' and '2' digit glyphs\n");
+        return 1;
+    }
+    return 0;
+}
+
 /* Test double for the real target-only atlas writer -- linked instead of
  * saturn_hud_atlas.c for this fixture, so no Yaul headers are needed.
  * g_blank_write_count additionally records how many of those writes used
@@ -237,6 +474,11 @@ main(void)
     failures += test_layout_omits_lives_when_flag_clear();
     failures += test_layout_never_exceeds_capacity();
     failures += test_layout_reads_power_meter_from_snapshot_not_recomputed();
+    failures += test_layout_places_cannon_reticle_when_active();
+    failures += test_layout_omits_cannon_reticle_when_inactive();
+    failures += test_layout_camera_mode_switch_selects_correct_glyph();
+    failures += test_layout_camera_cbutton_switch_selects_correct_glyph();
+    failures += test_layout_star_count_below_100_uses_two_digit_field();
     failures += test_publish_only_rewrites_changed_cells();
     failures += test_publish_writes_blank_for_vacated_cells();
     return failures;

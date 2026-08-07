@@ -101,8 +101,20 @@ sm64_saturn_hud_publish(sm64_saturn_hud_publish_state_t *state,
             state->primed
                 ? find_cell(state->last_cells, state->last_count, next->col, next->row)
                 : NULL;
+#ifdef SM64_SATURN_HUD_TEST_MUTATE_DIRTY_GATE
+        /* Mutation: always treat every cell as changed. The unchanged-
+         * snapshot test in Task 6 must then fail, proving the real gate
+         * (comparing prior->glyph) is what keeps redundant writes out.
+         * (void)prior silences -Wunused-variable under -Werror: prior is
+         * still computed above (so this branch's codegen stays close to the
+         * real gate's, same find_cell() cost) but deliberately never
+         * consulted here -- that is the mutation. */
+        (void)prior;
+        sm64_saturn_hud_atlas_write_cell(next->col, next->row, next->glyph);
+#else
         if (prior == NULL || prior->glyph != next->glyph)
             sm64_saturn_hud_atlas_write_cell(next->col, next->row, next->glyph);
+#endif
     }
 
     for (uint32_t index = 0U; index < next_count; index++)

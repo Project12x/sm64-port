@@ -4,6 +4,101 @@
 
 ### Added
 
+- Added a build-time mutation gate and a static structural gate for the VDP2
+  gameplay HUD (Task 7 of `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`),
+  plus closed three test-coverage gaps Task 5's review had flagged but
+  deferred.
+
+  **Why a mutation gate, not just a passing test:** Task 6's
+  `test_publish_only_rewrites_changed_cells` passing proves the dirty-cell
+  diff *can* produce zero writes on an unchanged snapshot; it does not by
+  itself prove that behavior is load-bearing rather than accidental (e.g. a
+  refactor that quietly always-writes but happens not to break any other
+  assertion would slip through unnoticed). `saturn_hud_publish.c`'s pass-2
+  writer-selection `if` is now wrapped in
+  `#ifdef SM64_SATURN_HUD_TEST_MUTATE_DIRTY_GATE`, which forces every cell
+  to be treated as changed regardless of `prior->glyph`. The plan's given
+  snippet leaves `prior` computed-but-unread on that branch, which fails
+  `-Wunused-variable` under this project's `-Werror`; added `(void)prior;`
+  to keep the mutation build compiling without weakening it (the real gate
+  in the `#else` arm is untouched). New Make target
+  `verify-saturn-hud-layout-mutation` builds that mutant and requires it
+  exit nonzero via the existing `tools/saturn/expect_failure.py` convention
+  (14+ other call sites already use this pattern in this Makefile) --
+  confirmed the mutant fails with "unchanged snapshot triggered 4
+  rewrites", caught by the fixture.
+
+  **Why a grep gate for VDP1:** this HUD is VDP2-only by design (character
+  cells on NBG0), and Task 8 is about to introduce a VDP1 frame-bank type
+  that legitimately carries the HUD snapshot through a `sm64_saturn_vdp1_*`
+  name. A static, structural proof that the HUD's own rendering logic
+  (`saturn_hud_layout.c`, `saturn_hud_publish.c`, `saturn_hud_atlas.c`)
+  never references `vdp1_cmdt`/`VDP1_CMDT`/`sm64_saturn_vdp1_` closes the
+  door on that boundary eroding silently in a future edit, without needing
+  a compiler-level dependency check (these files already don't include any
+  VDP1 header). `saturn_hud.h`/`saturn_render_snapshot.h` are deliberately
+  excluded from the grep for exactly that Task 8 reason. New Make target
+  `verify-saturn-hud-no-vdp1` passes against the real files; also verified
+  it actually catches a violation, not just that it passes today, by
+  temporarily appending a fake `sm64_saturn_vdp1_frame_bank_fake_reference`
+  comment to `saturn_hud_layout.c`, confirming the gate correctly failed,
+  then reverting via `git checkout --` before committing.
+
+  Both new targets added to `.PHONY` alongside every other `verify-*`
+  target in this file.
+
+  **Coverage-gap closure (beyond the plan's literal text):** Task 5's
+  review had left three `TODO(Task 7)` comments in `saturn_hud_layout.c`,
+  each recording a real mutation-testing finding that the original 4 tests
+  in `tools/saturn/saturn_hud_layout_test.c` never exercised: the
+  `cannon_active` gate (no test ever set it), both `camera_status` switch
+  statements (MARIO/LAKITU/FIXED and C_DOWN/C_UP -- no test ever set
+  `camera_status` to a case-matching value, so only `default:` ever ran),
+  and the `stars < 100` branch (only the `>=100` sibling had coverage, via
+  the existing capacity test's `stars=9999`). Added 5 new tests closing all
+  three: `test_layout_places_cannon_reticle_when_active` /
+  `test_layout_omits_cannon_reticle_when_inactive` (both directions of the
+  boolean gate -- a single inversion mutation breaks both, but each also
+  independently catches an always-true or always-false variant alone),
+  `test_layout_camera_mode_switch_selects_correct_glyph` /
+  `test_layout_camera_cbutton_switch_selects_correct_glyph` (every case
+  label of both switches, table-driven, asserting the *sibling* glyphs are
+  absent so a swapped-glyph mutation is caught rather than just "some"
+  camera-mode glyph appearing), and
+  `test_layout_star_count_below_100_uses_two_digit_field` (stars=42; the
+  `<100` and `>=100` branches coincidentally produce the same total cell
+  count -- 4 either way -- so the assertion targets the two signals only
+  `<100` can produce: the multiply glyph's presence and an exact 2-digit
+  field instead of 3). All 5 wired into `main()`.
+
+  Verified each new test against a real mutation of its own target code
+  path, not just that it passes today (project standing policy): inverted
+  the `cannon_active` gate (both new cannon tests failed, plus incidentally
+  broke an existing Task 6 publish test since `cannon_active` defaults to 0
+  almost everywhere); swapped `CAM_MARIO_HEAD`/`CAM_LAKITU_HEAD` in the mode
+  switch (`test_layout_camera_mode_switch_selects_correct_glyph` failed,
+  naming `CAM_STATUS_MARIO`); swapped `CAM_ARROW_DOWN`/`CAM_ARROW_UP` in the
+  C-button switch (`test_layout_camera_cbutton_switch_selects_correct_glyph`
+  failed, naming `CAM_STATUS_C_DOWN`); forced the stars branch to always
+  take the `>=100` path (`test_layout_star_count_below_100_uses_two_digit_field`
+  failed: "did not render the multiply glyph"). Each mutation was applied
+  with `Edit`, built, run, observed red, then reverted with
+  `git checkout --` and confirmed byte-identical to `HEAD` before moving to
+  the next. Replaced the three now-resolved `TODO(Task 7)` comments with
+  notes naming the covering test, so they stop claiming the gap is still
+  open.
+
+  Verified by direct execution from a from-scratch `build/saturn/host-tests`
+  directory: normal build (11 tests, exit 0), mutation build (exit 1,
+  caught by `expect_failure.py`, exit 0), no-VDP1 grep gate (exit 0, both
+  via real `make` and standalone). Hit the same MSYS2 `make`
+  recipe-shell-strips-`TMP`/`TEMP` quirk Task 6 already documented (`Cannot
+  create temporary file in C:\WINDOWS\: Permission denied`); worked around
+  it identically -- reproduced the exact `make -n` command lines directly
+  in a shell with a correctly populated environment. `verify-saturn-hud-no-vdp1`
+  itself has no such issue (grep needs no temp files) and was additionally
+  confirmed to run clean through real `make` directly.
+
 - Added `src/port/saturn/gfx/saturn_hud_publish.{h,c}` (Task 6 of the VDP2
   gameplay HUD plan, `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`):
   `sm64_saturn_hud_publish()` diffs the layout Task 5's

@@ -202,12 +202,12 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
     if (flags & HUD_FLAG_STAR_COUNT) {
         count = push_cell(out_cells, count, capacity, HUD_COL_STARS, HUD_ROW_COUNTERS,
                           SM64_SATURN_HUD_GLYPH_STAR);
-        /* TODO(Task 7): mutation-tested -- neither branch of this
-         * stars<100 split is exercised by the current 4 tests (mutating
-         * the comparison away still passes the full suite). Task 7 is the
-         * plan's dedicated mutation-test task; flagged here rather than
-         * fixed now since strengthening tools/saturn/saturn_hud_layout_test.c
-         * is out of scope for this task. */
+        /* Covered by test_layout_star_count_below_100_uses_two_digit_field
+         * (tools/saturn/saturn_hud_layout_test.c, added in Task 7), which
+         * mutation-verified this branch: forcing the >=100 path
+         * unconditionally makes that test fail (no multiply glyph, 3 digit
+         * cells instead of 2). test_layout_never_exceeds_capacity's
+         * stars=9999 already covered the >=100 sibling branch. */
         if (snapshot->stars < 100) {
             count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_STARS + 1U), HUD_ROW_COUNTERS,
                               SM64_SATURN_HUD_GLYPH_MULTIPLY);
@@ -236,10 +236,10 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
     if (flags & HUD_FLAG_CAMERA_AND_POWER) {
         count = push_cell(out_cells, count, capacity, HUD_COL_CAMERA, HUD_ROW_CANNON_CAMERA,
                           SM64_SATURN_HUD_GLYPH_CAM_CAMERA);
-        /* TODO(Task 7): mutation-tested -- none of these three case labels
-         * (MARIO/LAKITU/FIXED) are exercised by the current 4 tests, which
-         * never set snapshot.camera_status. Flagged for Task 7, the plan's
-         * dedicated mutation-test task, rather than fixed here. */
+        /* Covered by test_layout_camera_mode_switch_selects_correct_glyph
+         * (tools/saturn/saturn_hud_layout_test.c, added in Task 7), which
+         * mutation-verified all three case labels: swapping two cases'
+         * glyphs makes that test fail. */
         switch (snapshot->camera_status & CAM_STATUS_MODE_GROUP) {
         case CAM_STATUS_MARIO:
             count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 1U), HUD_ROW_CANNON_CAMERA,
@@ -263,9 +263,10 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
          * (HUD_COL_CAMERA+2, HUD_ROW_CANNON_CAMERA) in a given snapshot --
          * there is no frame where both are simultaneously live and would
          * fight over the cell.
-         * TODO(Task 7): mutation-tested -- neither case label here is
-         * exercised by the current 4 tests either, same gap as the switch
-         * above. Flagged for Task 7. */
+         * Covered by test_layout_camera_cbutton_switch_selects_correct_glyph
+         * (tools/saturn/saturn_hud_layout_test.c, added in Task 7), which
+         * mutation-verified both case labels: swapping their glyphs makes
+         * that test fail. */
         switch (snapshot->camera_status & CAM_STATUS_C_MODE_GROUP) {
         case CAM_STATUS_C_DOWN:
             count = push_cell(out_cells, count, capacity, (uint8_t)(HUD_COL_CAMERA + 2U), HUD_ROW_CANNON_CAMERA,
@@ -312,9 +313,11 @@ sm64_saturn_hud_layout_build(const sm64_saturn_hud_snapshot_t *snapshot,
                               (sm64_saturn_hud_glyph_t)(SM64_SATURN_HUD_GLYPH_POWER_METER_1 + (wedges - 1)));
         }
     }
-    /* TODO(Task 7): mutation-tested -- this branch is not exercised by the
-     * current 4 tests either (none set snapshot.cannon_active). Flagged
-     * for Task 7. */
+    /* Covered by test_layout_places_cannon_reticle_when_active and
+     * test_layout_omits_cannon_reticle_when_inactive
+     * (tools/saturn/saturn_hud_layout_test.c, added in Task 7), which
+     * mutation-verified this gate in both directions: inverting it makes
+     * both tests fail. */
     if (snapshot->cannon_active) {
         count = push_cell(out_cells, count, capacity, HUD_COL_CANNON, HUD_ROW_CANNON_CAMERA,
                           SM64_SATURN_HUD_GLYPH_CANNON_RETICLE);
