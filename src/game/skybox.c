@@ -79,7 +79,7 @@ extern SkyboxTexture water_skybox_ptrlist;
  * remaining skybox banks await the cart-backed source asset package. This
  * avoids binding nine unrelated level textures into internal work RAM; the
  * full table is restored for the multi-level package target. */
-SkyboxTexture *sSkyboxTextures[10] = {
+SkyboxTexture *const sSkyboxTextures[10] = {
     &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,
     &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,
     &water_skybox_ptrlist, &water_skybox_ptrlist, &water_skybox_ptrlist,

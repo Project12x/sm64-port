@@ -41,6 +41,18 @@
   via the standalone Python test suite (8/8 passing) and a host-gcc
   syntax/round-trip check of the generated header in isolation.
 
+- Qualified `sSkyboxTextures` as `SkyboxTexture *const` in the
+  `SATURN_SOURCEBOOT` branch of `src/game/skybox.c`, recovering 40 bytes
+  of HWRAM `.data` (linker auto-routes it to the cart via the existing
+  `*sm64-port*(.rodata)` rule). Fourth finding from the 2026-08-07
+  memory-budget audit: this Saturn-specific 10-entry pointer spine
+  (all ten entries alias the same water skybox while the multi-level
+  package is pending, per the existing comment) was fully compile-time
+  literal with exactly one read site (`skybox.c:278`, value-read only,
+  never reassigned) and no other reference anywhere in the tree. The
+  pointee type was already `const`; only the outer array needed the
+  qualifier.
+
 ### Added
 
 - Added project-owned SH-2 exception trampolines
