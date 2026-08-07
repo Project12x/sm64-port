@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `tools/saturn/extract_hud_glyphs.py`, a local-ROM-derived extractor
+  for the real SM64 gameplay-HUD glyphs (digits, multiply/coin/Mario-head/star
+  icons, apostrophe/double-quote, camera-status icons, power-meter wedge
+  textures), following the same MIO0-decode + assets.json-offset-lookup +
+  RGB1555-conversion pipeline established by `extract_mario_textures.py`.
+  This is Task 1 of the planned VDP2 gameplay HUD (`docs/superpowers/plans/
+  2026-08-06-saturn-hud-vdp2.md`); the HUD itself has no visible on-screen
+  presentation yet, only diagnostic dbgio text. Several offsets in the
+  original task plan were wrong and were corrected against `bin/segment2.c`'s
+  `main_hud_lut`/`main_hud_camera_lut` arrays and the real `assets.json`: the
+  digit-range formula only covered digits 0-4, `glyph_multiply`/`glyph_coin`/
+  `glyph_mario_head`/`glyph_star` and the four non-`cam_camera` camera icons
+  pointed at the wrong glyph slots (JP-only glyphs shift the US MIO0 layout),
+  `cam_mario_head` is not a separate texture (the game reuses
+  `texture_hud_char_mario_head`, so the manifest aliases it to
+  `glyph_mario_head`'s key), and the power-meter filenames were wrong
+  (`power_meter_one_segment` is singular, and the 8-wedge state is
+  `power_meter_full`, not `power_meter_eight_segments`). As with all
+  Nintendo-derived extractors in this repo, output is generated only under
+  `build/` (gitignored) from the user's own ROM and is never committed.
+
 ### Changed
 
 - Extended the iterative geo runtime seam with depth-first child/sibling
