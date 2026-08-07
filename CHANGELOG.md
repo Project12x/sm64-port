@@ -83,6 +83,54 @@
     link, Ymir, or manual evidence is claimed by this wave; the memory-budget
     link (Tasks 1/4/5/6 of the same plan) remains open and unrelated to this
     change.
+- Converted 1 more direct recursive `geo_process_node_and_siblings()` call
+  site (19 of the original 24 now remain), wave 2 of Task 2 in
+  `docs/superpowers/plans/2026-08-07-task14-completion.md`:
+  `geo_process_background` now calls `saturn_geo_walk_process_children()`
+  instead of recursing, split into a `saturn_geo_enter_background()` helper
+  (no leave phase needed -- the handler never touches the matrix stack or
+  any global requiring post-child restoration) and registered as a real
+  `GRAPH_NODE_TYPE_BACKGROUND` case in the shared `ops.enter` dispatch
+  (removed from the legacy bridge switch it used to fall through to).
+  `GEO_BACKGROUND` is authored only in `levels/*/areas/*/geo.inc.c` (zero
+  occurrences under `actors/`, confirmed by grep across the full tree) and
+  always as `ORTHO_PROJECTION`'s child (converted wave 1), so it is
+  level-authored top-level scene skeleton in the same sense as wave 1's
+  four types and carries no reentrancy risk.
+  - **Wave scoped to 1, not ~6, after finding a real architectural blocker
+    for every other remaining call site.** `saturn_geo_walk_runtime.c`'s
+    `push()`/`sm64_saturn_geo_walk_runtime_run()` (read in full this wave)
+    supports exactly one child subtree, one optional dispatch, and one
+    optional leave per node ENTER event -- there is no mechanism to resume
+    a node for a *second*, independently-restored child subtree.
+    `geo_process_object`, `geo_process_object_parent`, and
+    `geo_process_held_object` each process TWO sequential child subtrees
+    per node (a `sharedChild` subtree under a temporary `->parent` alias
+    that must be cleared strictly before an unrelated `->node.children`
+    subtree begins) -- this does not fit the established single-child
+    enter/dispatch/leave pattern used by every handler converted so far.
+    Every other remaining type -- `TRANSLATION_ROTATION`, `TRANSLATION`,
+    `ROTATION`, `SCALE`, `BILLBOARD`, `ANIMATED_PART`, `SHADOW`,
+    `DISPLAY_LIST`, `GENERATED_LIST`, `SWITCH_CASE`, `LEVEL_OF_DETAIL` --
+    is authored pervasively inside actor geo layouts (verified per-macro
+    against `actors/*/geo.inc.c` vs. `levels/*/geo.inc.c`, e.g.
+    `GEO_DISPLAY_LIST`: 89 actor files vs. 341 level files; `GEO_SCALE`:
+    67 vs. 8; `GEO_ANIMATED_PART`: 56 vs. 1) and is therefore reachable
+    only beneath `OBJECT`'s `sharedChild`; none of them can be safely
+    converted before `OBJECT`/`OBJECT_PARENT`/`HELD_OBJ` are, for the same
+    reentrancy reason wave 1 excluded `SWITCH_CASE`/`LEVEL_OF_DETAIL`
+    (`progress.md:436-441`). Converting any of them now would let a nested
+    occurrence, reached via the still-real-recursion `OBJECT`/
+    `OBJECT_PARENT` bridge from within an already-active outer drain (e.g.
+    `CAMERA`'s), reinitialize the shared `sourceboot_geo_walk_frames` span
+    mid-drain. Resolving this needs either a runtime extension (a second
+    child-subtree slot per frame) or an owner-approved design
+    accommodation -- recorded as a blocker rather than forced through with
+    a shortcut.
+  - Verified: `tools/saturn/geo_walk_source_policy_test.py` now reports 19
+    remaining direct recursive calls (24 - 5 across waves 1-2);
+    `verify-saturn-geo-walk-runtime` and `verify-saturn-geo-depth-manifest`
+    PASS. No target link, Ymir, or manual evidence is claimed by this wave.
 
 ### Fixed
 

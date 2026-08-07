@@ -940,11 +940,15 @@ static void geo_process_generated_list(struct GraphNodeGenerated *node) {
 }
 
 /**
- * Process a background node. Tries to retrieve a background display list from
- * the function of the node. If that function is null or returns null, a black
- * rectangle is drawn instead.
+ * Background enter: tries to retrieve a background display list from the
+ * function of the node; if that function is null or returns null, a black
+ * rectangle is drawn instead -- exactly matching the pre-conversion
+ * unconditional (not gated on having children) append/fallback. No leave
+ * action is needed -- the original handler never touched the matrix stack
+ * or any global that needs post-child restoration. Returns whether there
+ * are children to descend into.
  */
-static void geo_process_background(struct GraphNodeBackground *node) {
+static bool saturn_geo_enter_background(struct GraphNodeBackground *node) {
     Gfx *list = NULL;
 
     if (node->fnNode.func != NULL) {
@@ -972,8 +976,15 @@ static void geo_process_background(struct GraphNodeBackground *node) {
 
         geo_append_display_list((void *) VIRTUAL_TO_PHYSICAL(gfxStart), 0);
     }
-    if (node->fnNode.node.children != NULL) {
-        geo_process_node_and_siblings(node->fnNode.node.children);
+    return node->fnNode.node.children != NULL;
+}
+
+/**
+ * Process a background node.
+ */
+static void geo_process_background(struct GraphNodeBackground *node) {
+    if (saturn_geo_enter_background(node)) {
+        (void) saturn_geo_walk_process_children(node->fnNode.node.children);
     }
 }
 
@@ -1571,6 +1582,52 @@ void geo_try_process_children(struct GraphNode *node) {
  *     hazard. This dispatcher still handles both types correctly today
  *     via the legacy bridge (unchanged geo_process_switch/geo_process_
  *     level_of_detail, unaffected by this walk instance).
+ *
+ * Task 14 wave 2 (2026-08-07) adds exactly one more converted type,
+ * GRAPH_NODE_TYPE_BACKGROUND: `GEO_BACKGROUND` is authored only in
+ * `levels/* /areas/*\/geo.inc.c` (verified: zero occurrences under
+ * `actors/`), always as ORTHO_PROJECTION's child (already converted,
+ * wave 1) for the area skybox -- it is level-authored top-level scene
+ * skeleton in the same sense as wave 1's four types and cannot appear
+ * nested beneath a still-unconverted handler's subtree, so it carries no
+ * reentrancy risk. Its handler has a single child pointer and no
+ * leave-phase restoration, fitting the established pattern exactly.
+ *
+ * Wave 2 evaluated the remaining 19 unconverted call sites (14 handler
+ * types plus geo_try_process_children's own generic bridge and
+ * geo_process_root's top-level kickoff call, neither of which is a
+ * per-node-type handler) and found a real architectural blocker, not
+ * merely a reentrancy-ordering one:
+ * GRAPH_NODE_TYPE_OBJECT, GRAPH_NODE_TYPE_OBJECT_PARENT, and
+ * GRAPH_NODE_TYPE_HELD_OBJ (geo_process_object/geo_process_object_parent/
+ * geo_process_held_object) each process TWO independent, sequentially-
+ * ordered child subtrees per node -- a `sharedChild` subtree under a
+ * temporary `->parent` alias that must be cleared strictly *before* a
+ * second, unrelated `->node.children` subtree begins -- and
+ * `saturn_geo_walk_runtime.c`'s enter/dispatch/leave scheduler (verified
+ * by reading its `push()`/`sm64_saturn_geo_walk_runtime_run()`
+ * implementation) supports exactly one child subtree, one optional
+ * dispatch, and one optional leave per ENTER event; there is no
+ * mechanism to resume a node for a second, independently-restored child
+ * subtree. This is a hard prerequisite blocker, not just an ordering
+ * one: every other remaining node type (TRANSLATION_ROTATION,
+ * TRANSLATION, ROTATION, SCALE, BILLBOARD, ANIMATED_PART, SHADOW,
+ * DISPLAY_LIST, GENERATED_LIST, SWITCH_CASE, LEVEL_OF_DETAIL) is
+ * authored pervasively inside actor geo layouts (verified per-macro
+ * against `actors/*\/geo.inc.c`, e.g. GEO_DISPLAY_LIST: 89 actor files
+ * vs. 341 level files; GEO_SCALE: 67 vs. 8; GEO_ANIMATED_PART: 56 vs. 1)
+ * and is therefore reachable ONLY beneath OBJECT's `sharedChild`. None of
+ * them can be safely converted (added to the ops.enter switch above)
+ * until OBJECT/OBJECT_PARENT/HELD_OBJ themselves are -- doing so first
+ * would let a nested occurrence, reached via the still-real-recursion
+ * OBJECT/OBJECT_PARENT bridge from within an already-active outer drain
+ * (e.g. CAMERA's), reinitialize the shared `sourceboot_geo_walk_frames`
+ * span mid-drain, corrupting it -- and OBJECT/OBJECT_PARENT/HELD_OBJ
+ * cannot themselves convert without either extending the runtime's frame
+ * model to support a second, independently-restored child subtree per
+ * node, or an owner-approved design accommodation. See
+ * `docs/superpowers/plans/2026-08-07-task14-completion.md` Task 2's wave
+ * 3 status for the reported blocker.
  * --------------------------------------------------------------------- */
 
 enum {
@@ -1668,9 +1725,6 @@ static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
         case GRAPH_NODE_TYPE_GENERATED_LIST:
             geo_process_generated_list((struct GraphNodeGenerated *) node);
             break;
-        case GRAPH_NODE_TYPE_BACKGROUND:
-            geo_process_background((struct GraphNodeBackground *) node);
-            break;
         case GRAPH_NODE_TYPE_HELD_OBJ:
             geo_process_held_object((struct GraphNodeHeldObject *) node);
             break;
@@ -1754,6 +1808,14 @@ static bool saturn_geo_walk_enter(uintptr_t node_token,
             result->leave_action = SATURN_GEO_LEAVE_CAMERA;
             result->context_token = (children != NULL) ? 1U : 0U;
             result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_BACKGROUND: {
+            struct GraphNodeBackground *bg = (struct GraphNodeBackground *) node;
+            if (saturn_geo_enter_background(bg)) {
+                result->admitted = true;
+                result->child = (uintptr_t) bg->fnNode.node.children;
+            }
             break;
         }
         default:
