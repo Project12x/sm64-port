@@ -4,6 +4,103 @@
 
 ### Added
 
+- Added `src/port/saturn/gfx/saturn_hud_atlas.{h,c}`: a one-time VDP2 NBG0
+  character/cell-mode glyph atlas (Task 4 of the VDP2 gameplay HUD plan,
+  `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`). `sm64_saturn_hud_atlas_init()`
+  uploads every HUD glyph (digits, camera-status icons, power-meter wedges,
+  a procedural cannon reticle, a transparent blank) into VDP2 character-
+  pattern VRAM and configures a dedicated NBG0 plane for them, separate from
+  the existing NBG1 sky bitmap and NBG3 dbgio text; `sm64_saturn_hud_atlas_write_cell()`
+  writes one pattern-name-data cell. This is the first character/cell-mode
+  VDP2 usage in this port -- the only prior usage (the NBG1 sky bitmap,
+  `introface`'s title screen, dbgio's own NBG3 console) is bitmap mode or an
+  already-existing library device, a structurally different Yaul API path,
+  so there was no in-repo precedent to reuse for the pixel-upload shape.
+
+  Re-verifying the plan's own code snippet against the real vendored Yaul
+  source (rather than trusting it, per this project's standing rule to
+  check permissive reference code before writing to it) found and fixed
+  three mismatches between the plan's assumptions and reality:
+
+  1. **VDP2 `CHAR_SIZE_2X2` character-pattern data is four separately-
+     addressed, individually-contiguous 8x8 pixel cells** (top-left/top-
+     right/bottom-left/bottom-right, 64 words each), not one flat 16-wide
+     raster. Confirmed two independent ways: `vdp2_scrn_pnd_set()`'s aux-
+     mode character-number bit-packing
+     (`third_party/libyaul/libyaul/scu/bus/b/vdp/vdp2_scrn_cell.c:320-356`)
+     supplements the pattern-name table's character number with implicit
+     low bits that select one of the four sub-cells; and, independently,
+     Yaul's own `satconv` texture converter's `TILE_16x16` case reads
+     exactly those four 8x8 quadrants, in that order, into one contiguous
+     buffer (`third_party/libyaul/tools/satconv/tile.c:177-208`). The
+     plan's snippet copied source pixels into a character-pattern slot
+     with a flat `dest[index] = pixels[index]` loop, which would have
+     interleaved rows from different quadrants and produced a scrambled
+     glyph on real hardware (and in cycle-accurate emulation) for every
+     glyph wider than 8px -- i.e. everything except the two 8x8 camera
+     arrows, which happened to work by coincidence since their source
+     width equals one cell's width. Fixed by replacing the single-pixel-
+     count `hud_atlas_upload_one()` helper the plan specified with
+     `hud_atlas_upload_pattern()`, which performs the same quadrant
+     reordering as `satconv`'s `TILE_16x16` case, generalized with a
+     source-stride parameter so one helper also serves the crop case
+     below and the 8x8 arrows (whose unwritten quadrants are now
+     explicitly blanked to solid transparent, rather than left at
+     whatever the VRAM bank previously held -- Saturn VRAM is not
+     guaranteed zeroed at power-on).
+  2. **The real generated `sm64_saturn_hud_power_meter_1..8` arrays are
+     `[1024]` (32x32 source pixels), not `[256]`** as the plan's snippet
+     assumed (confirmed by reading the real Task-2-generated
+     `build/saturn/sourceboot/generated/saturn_hud_glyphs_generated.h`,
+     which the plan itself expected this task to check rather than trust).
+     This matches the plan's own prose ("Power meter source art is
+     32x32") but not its code, which called the upload helper with a
+     literal `256U` pixel count against a 1024-element array -- not an
+     out-of-bounds read (256 < 1024), but the wrong 256 pixels: the first
+     8 full 32-wide source rows, not a 16x16 top-left square. Fixed by
+     giving `hud_atlas_upload_pattern()` a source-stride parameter so the
+     power-meter calls can correctly crop the top-left 16x16 region
+     (stride 32, width/height 16), matching the plan's own stated
+     "one representative 16x16 cell... via the top-left quadrant" intent.
+  3. **This port's real VDP2 TV mode is 320x224** (`VDP2_TVMD_HORZ_NORMAL_A`
+     / `VDP2_TVMD_VERT_224`, set in `user_init()`,
+     `src/port/saturn/sourceboot/main.c:1512-1514`), giving a 20x14 visible
+     grid of 16x16 cells (320/16, 224/16) -- not the 32x28 the plan's
+     `HUD_TILE_COLS`/`HUD_TILE_ROWS` and header doc comment assumed "at
+     this screen resolution". 32x32 is real too, but it is the raw
+     `CHAR_SIZE_2X2` page's hardware capacity (`VDP2_SCRN_PAGE_WIDTH_CALCULATE`/
+     `PAGE_HEIGHT_CALCULATE` in `scrn_macros.h`, fixed regardless of TV
+     resolution), not what is actually on screen; conflating the two
+     wouldn't have corrupted memory (32x32 cells are all validly
+     addressable within the allocated PND page) but would have let a
+     later layout task silently place HUD elements in the invisible
+     16 columns / 18 rows outside the real 320x224 raster, a bug that
+     would only have surfaced at Task 9/10's visual verification stage,
+     much later. Fixed by splitting the single constant into
+     `HUD_PAGE_STRIDE_COLS` (32, used only internally for the real PND
+     address stride) and corrected `HUD_TILE_COLS`/`HUD_TILE_ROWS` (20/14,
+     the public bounds `sm64_saturn_hud_atlas_write_cell()` checks against).
+
+  All three were resolvable by adjusting the code to match verified
+  reality rather than requiring an escalation. Verification performed:
+  no target link is possible yet (needs Task 8's Makefile wiring and the
+  full SH-2 game-tree link), but the real `sh-elf-gcc` 14.3.0 cross-
+  compiler (found already installed at `work/yaul-install/bin/`) was used
+  to both `-fsyntax-only` check and fully compile-to-object-file this
+  source against the real vendored Yaul headers and the real generated
+  glyph header, with `-Wall -Wextra -Wpedantic` and zero diagnostics. The
+  resulting object's symbol table confirms every `sm64_saturn_hud_*` glyph
+  array resolved, both public functions are correctly exported (`T`), the
+  internal helper is correctly local (`t`), and the only unresolved
+  externs are the two genuinely-external Yaul calls (`cpu_cache_purge`,
+  `vdp2_scrn_cell_format_set`) plus compiler-generated helpers -- stronger
+  verification than a plain read-through, though still short of an actual
+  target boot. Added the Z-Treme `ztFont2NBG3()` pattern-only citation
+  (dedicated character-mode plane, own VRAM region, single static page,
+  topmost priority -- priority itself is set later, in Task 8) plus the
+  Yaul-dependency verification notes to `docs/saturn/UPSTREAM_CODE_LEDGER.md`
+  and `docs/saturn/PROVENANCE.md`.
+
 - Added two read-only accessors to `hud.c`/`hud.h` (`get_hud_camera_status`,
   `get_hud_power_meter_state`) and a new `sm64_saturn_hud_snapshot_t` type
   (`src/port/saturn/gfx/saturn_hud.h`), then wired a `hud` field of that type

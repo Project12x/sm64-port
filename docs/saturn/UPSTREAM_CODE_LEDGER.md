@@ -1,6 +1,6 @@
 # Visual-slice upstream code ledger
 
-Last updated 2026-08-04.
+Last updated 2026-08-07.
 
 This is the implementation-facing companion to [PROVENANCE.md](PROVENANCE.md).
 It answers a narrower question: which reviewed upstream code or design pattern
@@ -222,3 +222,10 @@ SM64 engine code and are not candidates for adopting either engine's opposite
 allocation discipline. If a fix ships from this investigation, it will be
 scoped to this port's own platform layer, and this row will be updated with
 the concrete destination file at that point.
+
+## Task 23A Task 4 — VDP2 NBG0 HUD glyph atlas (2026-08-07)
+
+| Upstream | Pin / license | Inspected code | Reuse mode and concrete destination |
+|---|---|---|---|
+| [Maxime-XL2/SONIC-Z-TREME](https://github.com/Maxime-XL2/SONIC-Z-TREME) | `cff75451c1616aac1236fc2b44223902b55c706b` / GPL-3.0 | `Projects/SONIC Z-TREME/ZTE/ZT_VDP2.c:10-26` (`ztFont2NBG3`) | **Pattern-only.** `src/port/saturn/gfx/saturn_hud_atlas.{h,c}` adopts only the shape of Z-Treme's own VDP2 text/HUD plane setup: a dedicated character-mode plane with its own VRAM region separate from the world-background plane, a single static page, the same page mapped to all four map-register slots, and topmost display priority (priority itself is set later, in Task 8's `sourceboot_vdp2_layers_set`, not this file). No SGL source is copied; Yaul's independently-implemented `vdp2_scrn_cell_format_set`/`vdp2_scrn_pnd_set` API is used instead, at different parameters (16x16 RGB1555-direct `CHAR_SIZE_2X2` vs. Z-Treme's 8x8 palette-256 `CHAR_SIZE_1x1`). Full record in `PROVENANCE.md`. |
+| `yaul-org/libyaul` | `6012f79f237773378c8014e70d8998ad95a38d98` / MIT | `libyaul/scu/bus/b/vdp/vdp2_scrn_cell.c`, `libyaul/scu/bus/b/vdp/vdp2/scrn_cell.h`, `scrn_macros.h`, `scrn_shared.h`, `vram.h`; `tools/satconv/tile.c` (`TILE_16x16` case); `libyaul/kernel/dbgio/devices/vdp2.c` | **Dependency / API verification.** Every `vdp2_scrn_cell_format_t`/`vdp2_scrn_normal_map_t` field, enum value (`VDP2_SCRN_CHAR_SIZE_2X2`, `VDP2_SCRN_CCC_RGB_32768`, `VDP2_SCRN_AUX_MODE_1`, `VDP2_SCRN_PLANE_SIZE_1X1`, `VDP2_SCRN_NBG0`), and macro (`VDP2_VRAM_ADDR`, `VDP2_SCRN_PND_CONFIG_1`, `CPU_CACHE_THROUGH`) this task's code uses was independently re-verified against these real headers rather than trusted from the plan text. `tools/satconv/tile.c`'s `TILE_16x16` case (reads four 8x8 quadrants -- top-left/top-right/bottom-left/bottom-right -- into a contiguous 256-byte buffer in that order) independently confirms `vdp2_scrn_pnd_set`'s aux-mode character-number bit-packing: a `CHAR_SIZE_2X2` character pattern is four separately-addressed 8x8 cells, not one flat 16-wide raster. `saturn_hud_atlas.c`'s `hud_atlas_upload_pattern()` implements the same quadrant-reordering algorithm as `tile.c`'s `TILE_16x16` case, generalized with a source stride/crop so it also serves the 8x8 camera-arrow glyphs (placed in the top-left cell only) and a 16x16 top-left crop of the 32x32 power-meter source art. No source is copied; the destination is an original implementation against the public Yaul contract. |

@@ -532,6 +532,43 @@ is the corresponding close-port of `WALLS.C:1803-1950`; it preserves the
 coarse range hand-off and bounded join while keeping VDP1 allocation and game
 state on the master.
 
+**2026-08-07 Task 4 (VDP2 NBG0 HUD glyph atlas)**: `src/port/saturn/gfx/saturn_hud_atlas.{h,c}`
+is a **pattern-only** study of `ztFont2NBG3()`
+(`Projects/SONIC Z-TREME/ZTE/ZT_VDP2.c:10-26`, confirmed at the pinned commit
+by direct read: the function spans exactly those 17 lines). The adopted
+pattern is the shape of the setup, not any SGL call or parameter: a
+dedicated character-mode plane with its own VRAM region separate from the
+world-background plane, a single static page (`slPageNbg3`/
+`VDP2_SCRN_PLANE_SIZE_1X1`), the same page mapped to all four map-register
+slots (`slMapNbg3(page,page,page,page)` mirrors this task's
+`vdp2_scrn_normal_map_t` with `.plane_a`/`.plane_b`/`.plane_c`/`.plane_d`
+all set to the same `HUD_PND_BASE`), and topmost display priority
+(`slPriorityNbg3(7)` -- this task's own priority 7 is set later, in Task 8's
+`sourceboot_vdp2_layers_set`, not in this file). No SGL source is copied;
+`ztFont2NBG3` itself configures an 8x8 palette-256 plane (`COL_TYPE_256,
+CHAR_SIZE_1x1`) via the proprietary SGL API, structurally different from
+this task's 16x16 RGB1555-direct plane (`VDP2_SCRN_CCC_RGB_32768,
+VDP2_SCRN_CHAR_SIZE_2X2`) built on Yaul's independently-implemented
+`vdp2_scrn_cell_format_set`/`vdp2_scrn_pnd_set`.
+
+Two additional facts were verified directly against real vendored source,
+not assumed from either reference engine, because they are not expressed by
+any single struct field or enum name in Yaul's public API: (1) VDP2
+`CHAR_SIZE_2X2` character-pattern data is four separately-addressed,
+individually-contiguous 8x8 pixel cells (top-left/top-right/bottom-left/
+bottom-right), not one contiguous 16x16 raster -- confirmed against
+`vdp2_scrn_pnd_set()`'s aux-mode character-number bit-packing
+(`third_party/libyaul/libyaul/scu/bus/b/vdp/vdp2_scrn_cell.c:320-356`) and
+independently against Yaul's own `satconv` texture converter, whose
+`TILE_16x16` case reads exactly those four 8x8 quadrants in that order
+(`third_party/libyaul/tools/satconv/tile.c:177-208`). (2) this port's VDP2
+TV mode is 320x224 (`VDP2_TVMD_HORZ_NORMAL_A` / `VDP2_TVMD_VERT_224`, set in
+`user_init()`, `src/port/saturn/sourceboot/main.c:1512-1514`), giving a
+20x14 grid of 16x16 cells, not the 32x28 an earlier draft of the plan
+assumed for this file. Both are Yaul-dependency verification (existing
+`yaul-org/libyaul` row in `UPSTREAM_CODE_LEDGER.md`), not a new source; no
+new upstream entry is needed for them beyond noting the fact here.
+
 ### Sega hardware documentation
 
 | Reference | Use |
