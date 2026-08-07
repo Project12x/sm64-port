@@ -30,6 +30,60 @@
   CPU-only mutable, write-once/cart candidate, libyaul-owned) for Tasks 4-5
   to consume once a fresh link is available to re-confirm the current gap.
 
+### Changed
+
+- Converted the first 4 of 24 direct recursive `geo_process_node_and_siblings()`
+  call sites in `src/game/rendering_graph_node.c` off the SH-2 C call stack
+  and onto the bounded LWRAM-backed iterative runtime
+  (`saturn_geo_walk_runtime.h/.c`, `sourceboot_geo_walk_frames`), wave 1 of
+  Task 2 in `docs/superpowers/plans/2026-08-07-task14-completion.md`:
+  `geo_process_master_list`, `geo_process_ortho_projection`,
+  `geo_process_perspective`, and `geo_process_camera` now call a new shared
+  `saturn_geo_walk_process_children()` engine instead of recursing. Each
+  handler was split into an `_enter`/`_leave` pair (setup vs. post-child
+  restoration) bound to the runtime's enter/dispatch/leave phases per the
+  design-correction constraint in `progress.md:436-441` (16-byte SH-2
+  continuation frame, no node-filtering shortcut); the new engine's
+  `ops.enter` dispatch mirrors `geo_process_node_and_siblings`'s full
+  node-type switch and bridges every not-yet-converted type to its existing,
+  unmodified handler function by name (never through the tracked function
+  name), so any node type reachable beneath a converted handler's children
+  is still handled correctly. A new `saturn_geo_walk_sibling_of()` helper
+  replicates the original's circular-ring `iterateChildren`/wraparound
+  semantics (switch-case selected-child termination, self-looped single
+  nodes, and `node->parent->children` as a time-invariant ring-head
+  reference) without needing to thread the chain's head pointer through the
+  runtime's frame fields.
+  - **Wave scoped to 4, not ~6, for a documented reentrancy-safety reason**:
+    `GRAPH_NODE_TYPE_SWITCH_CASE` and `GRAPH_NODE_TYPE_LEVEL_OF_DETAIL` were
+    deliberately excluded this wave. Each `saturn_geo_walk_process_children()`
+    call takes a **fresh** `sm64_saturn_geo_walk_runtime_init()` over the one
+    shared `sourceboot_geo_walk_frames` span and drains to completion before
+    returning; this is safe only because this wave's four types are the
+    level_geo.c-authored top-level scene skeleton (root-only placement,
+    `gCurGraphNodeMasterList`'s pre-existing re-entrancy guard, at most one
+    camera per branch) and can never appear nested inside a still-unconverted
+    handler's subtree. `SWITCH_CASE` and `LEVEL_OF_DETAIL` are, by contrast,
+    pervasively authored *inside* actor/object geo layouts (e.g. cap-state
+    and eye-blink switches) alongside still-unconverted types
+    (`OBJECT`, `TRANSLATION_ROTATION`, `ANIMATED_PART`, ...); converting
+    either before every type that can contain them is also converted would
+    let a nested instance reinitialize the shared LWRAM frame span while an
+    outer instance is still mid-drain, silently corrupting its in-progress
+    continuation frames. Both remain correctly handled via the legacy bridge
+    (unchanged `geo_process_switch`/`geo_process_level_of_detail`, real
+    C recursion, unaffected by this walk instance) and are deferred to the
+    wave that also converts every type that can nest beneath them.
+  - Verified: `tools/saturn/geo_walk_source_policy_test.py` now reports 20
+    remaining direct recursive calls (24 - 4); `verify-saturn-geo-walk-runtime`
+    and `verify-saturn-geo-depth-manifest` PASS; a real SH-2 cross-compile
+    (`sh-elf-gcc -fsyntax-only` with the exact sourceboot `SH_CFLAGS`/
+    `sourceboot.specs`, `-Wall -Wextra -Wshadow -Wunused` etc.) of
+    `rendering_graph_node.c` is clean with zero warnings/errors. No target
+    link, Ymir, or manual evidence is claimed by this wave; the memory-budget
+    link (Tasks 1/4/5/6 of the same plan) remains open and unrelated to this
+    change.
+
 ### Fixed
 
 - Fixed code-quality issues a reviewer found in the CLUT16 baking-mode

@@ -47,9 +47,19 @@ Mtx *gMatStackFixed[32];
 #include "port/saturn/gfx/saturn_matrix_ctors.h"
 #include "port/saturn/gfx/saturn_render_native_math.h"
 #include "port/saturn/gfx/saturn_geo_state_observer.h"
+#include "port/saturn/runtime/saturn_geo_walk_runtime.h"
+#include "port/saturn/runtime/saturn_geo_walk_storage.h"
 #include "object_fields.h"
 #include "object_list_processor.h"
 #include "model_ids.h"
+
+/* Task 14 wave 1: bounded iterative geo-walk integration. Converted
+ * handlers call this instead of recursing through
+ * geo_process_node_and_siblings; see the shared engine definitions
+ * (saturn_geo_walk_process_children and friends) further down this file
+ * for the enter/dispatch/leave binding and the wave-scoped reentrancy
+ * rationale. */
+static bool saturn_geo_walk_process_children(struct GraphNode *children);
 
 #ifndef SATURN_MTX_IS_Q16
 /* This TU's Saturn path is a Q16.16 WIRE PRODUCER (saturn_mtxq_write_wire
@@ -391,27 +401,48 @@ static void geo_append_display_list(void *displayList, s16 layer) {
 }
 
 /**
+ * Master-list enter: the pre-child re-entrancy guard and listHeads reset.
+ * Returns false (leaving all state untouched) when the guard rejects the
+ * node, exactly matching the pre-conversion combined condition.
+ */
+static bool saturn_geo_enter_master_list(struct GraphNodeMasterList *node) {
+    s32 i;
+
+    if (gCurGraphNodeMasterList != NULL || node->node.children == NULL) {
+        return false;
+    }
+    gCurGraphNodeMasterList = node;
+    for (i = 0; i < GFX_NUM_MASTER_LISTS; i++) {
+        node->listHeads[i] = NULL;
+    }
+    return true;
+}
+
+/**
+ * Master-list leave: draws the accumulated lists and releases the guard.
+ */
+static void saturn_geo_leave_master_list(struct GraphNodeMasterList *node) {
+    geo_process_master_list_sub(node);
+    gCurGraphNodeMasterList = NULL;
+}
+
+/**
  * Process the master list node.
  */
 static void geo_process_master_list(struct GraphNodeMasterList *node) {
-    s32 i;
-    UNUSED s32 sp1C;
-
-    if (gCurGraphNodeMasterList == NULL && node->node.children != NULL) {
-        gCurGraphNodeMasterList = node;
-        for (i = 0; i < GFX_NUM_MASTER_LISTS; i++) {
-            node->listHeads[i] = NULL;
-        }
-        geo_process_node_and_siblings(node->node.children);
-        geo_process_master_list_sub(node);
-        gCurGraphNodeMasterList = NULL;
+    if (saturn_geo_enter_master_list(node)) {
+        (void) saturn_geo_walk_process_children(node->node.children);
+        saturn_geo_leave_master_list(node);
     }
 }
 
 /**
- * Process an orthographic projection node.
+ * Ortho-projection enter: builds and submits the projection matrix. No
+ * leave action is needed -- the original handler never touched the
+ * matrix stack or any global that needs post-child restoration. Returns
+ * false (no side effects) when there are no children to project for.
  */
-static void geo_process_ortho_projection(struct GraphNodeOrthoProjection *node) {
+static bool saturn_geo_enter_ortho_projection(struct GraphNodeOrthoProjection *node) {
     if (node->node.children != NULL) {
         Mtx *mtx = alloc_display_list(sizeof(*mtx));
 #ifdef TARGET_SATURN
@@ -440,14 +471,28 @@ static void geo_process_ortho_projection(struct GraphNodeOrthoProjection *node) 
         gSPPerspNormalize(gDisplayListHead++, 0xFFFF);
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
 
-        geo_process_node_and_siblings(node->node.children);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Process an orthographic projection node.
+ */
+static void geo_process_ortho_projection(struct GraphNodeOrthoProjection *node) {
+    if (saturn_geo_enter_ortho_projection(node)) {
+        (void) saturn_geo_walk_process_children(node->node.children);
     }
 }
 
 /**
- * Process a perspective projection node.
+ * Perspective enter: the func() callback runs unconditionally (matching
+ * the pre-conversion code), then, if there are children, builds and
+ * submits the projection matrix and claims gCurGraphNodeCamFrustum.
+ * Returns false when there are no children -- the func() call above has
+ * already happened by then, exactly as before.
  */
-static void geo_process_perspective(struct GraphNodePerspective *node) {
+static bool saturn_geo_enter_perspective(struct GraphNodePerspective *node) {
     if (node->fnNode.func != NULL) {
         node->fnNode.func(GEO_CONTEXT_RENDER, &node->fnNode.node, gMatStack[gMatStackIndex]);
     }
@@ -487,8 +532,25 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
         gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(mtx), G_MTX_PROJECTION | G_MTX_LOAD | G_MTX_NOPUSH);
 
         gCurGraphNodeCamFrustum = node;
-        geo_process_node_and_siblings(node->fnNode.node.children);
-        gCurGraphNodeCamFrustum = NULL;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Perspective leave: restores gCurGraphNodeCamFrustum.
+ */
+static void saturn_geo_leave_perspective(void) {
+    gCurGraphNodeCamFrustum = NULL;
+}
+
+/**
+ * Process a perspective projection node.
+ */
+static void geo_process_perspective(struct GraphNodePerspective *node) {
+    if (saturn_geo_enter_perspective(node)) {
+        (void) saturn_geo_walk_process_children(node->fnNode.node.children);
+        saturn_geo_leave_perspective();
     }
 }
 
@@ -542,9 +604,16 @@ static void geo_process_switch(struct GraphNodeSwitchCase *node) {
 }
 
 /**
- * Process a camera node.
+ * Camera enter: builds the roll/lookat matrices and pushes the matrix
+ * stack unconditionally (matching the pre-conversion code, which always
+ * incremented gMatStackIndex regardless of whether the node had
+ * children). Returns the children pointer to descend into, or NULL if
+ * there are none; the caller must ALWAYS pair this with
+ * saturn_geo_leave_camera() to balance the unconditional push, exactly
+ * as the original always ran gMatStackIndex-- at the end regardless of
+ * the children check.
  */
-static void geo_process_camera(struct GraphNodeCamera *node) {
+static struct GraphNode *saturn_geo_enter_camera(struct GraphNodeCamera *node) {
     UNUSED Mat4 cameraTransform;
     Mtx *rollMtx = alloc_display_list(sizeof(*rollMtx));
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
@@ -592,10 +661,33 @@ static void geo_process_camera(struct GraphNodeCamera *node) {
 #ifdef TARGET_SATURN
         sSaturnCameraMatrixQ = &gMatStackQ[gMatStackIndex];
 #endif
-        geo_process_node_and_siblings(node->fnNode.node.children);
+        return node->fnNode.node.children;
+    }
+    return NULL;
+}
+
+/**
+ * Camera leave: always pops the matrix stack; clears gCurGraphNodeCamera
+ * only when the enter phase actually claimed it (i.e. the node had
+ * children), matching the original's unconditional
+ * gMatStackIndex-- paired with a conditional gCurGraphNodeCamera clear.
+ */
+static void saturn_geo_leave_camera(bool had_children) {
+    if (had_children) {
         gCurGraphNodeCamera = NULL;
     }
     gMatStackIndex--;
+}
+
+/**
+ * Process a camera node.
+ */
+static void geo_process_camera(struct GraphNodeCamera *node) {
+    struct GraphNode *children = saturn_geo_enter_camera(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_camera(children != NULL);
 }
 
 /**
@@ -1431,6 +1523,308 @@ void geo_try_process_children(struct GraphNode *node) {
     if (node->children != NULL) {
         geo_process_node_and_siblings(node->children);
     }
+}
+
+/* ---------------------------------------------------------------------
+ * Task 14 wave 1: bounded iterative geo-walk engine.
+ *
+ * geo_process_master_list/geo_process_ortho_projection/geo_process_
+ * perspective/geo_process_camera above no longer recurse through
+ * geo_process_node_and_siblings for their children; they call
+ * saturn_geo_walk_process_children() below, which drives
+ * saturn_geo_walk_runtime.h's bounded enter/dispatch/leave scheduler
+ * (LWRAM frame span: sourceboot_geo_walk_frames, sized by the generated
+ * depth manifest) instead of the SH-2 C call stack.
+ *
+ * This engine's ops.enter dispatch below is intentionally general: it
+ * mirrors geo_process_node_and_siblings's full node-type switch
+ * further down this file so that ANY node type reachable beneath a
+ * converted handler's children is handled correctly, not just the four
+ * types this wave converts. For node types not yet converted, enter()
+ * synchronously delegates to their EXISTING, unmodified handler function
+ * (saturn_geo_walk_dispatch_legacy) -- those handlers still recurse
+ * through the real geo_process_node_and_siblings for their own
+ * children, entirely independent of this walk instance. This is safe
+ * (no shared-state reentrancy) because:
+ *   - Each call to saturn_geo_walk_process_children() takes a FRESH,
+ *     from-scratch sm64_saturn_geo_walk_runtime_init() and runs its
+ *     bounded drive loop to completion before returning -- it is never
+ *     left "suspended" mid-drain the way a truly reentrant use would
+ *     require.
+ *   - This wave's four converted types (MASTER_LIST, ORTHO_PROJECTION,
+ *     PERSPECTIVE, CAMERA) are the level_geo.c-authored top-level scene
+ *     skeleton: MASTER_LIST/ORTHO_PROJECTION/PERSPECTIVE appear only as
+ *     GraphNodeRoot's direct children, and MASTER_LIST additionally
+ *     carries its own pre-existing re-entrancy guard
+ *     (gCurGraphNodeMasterList == NULL). CAMERA appears once per
+ *     perspective branch. None of the four are ever authored inside an
+ *     actor/object geo layout, so none of them can appear NESTED beneath
+ *     a still-unconverted handler's subtree (Object, TranslationRotation,
+ *     AnimatedPart, ...) -- the one path that WOULD make
+ *     saturn_geo_walk_process_children() reentrant against its own
+ *     still-active LWRAM frame span. Deliberately excluded from this
+ *     wave for exactly that reason: GRAPH_NODE_TYPE_SWITCH_CASE and
+ *     GRAPH_NODE_TYPE_LEVEL_OF_DETAIL, both of which ARE pervasively
+ *     authored nested inside actor geo layouts (e.g. cap-state/eye-blink
+ *     switches), so converting them before every type that can contain
+ *     them is also converted would introduce exactly that reentrancy
+ *     hazard. This dispatcher still handles both types correctly today
+ *     via the legacy bridge (unchanged geo_process_switch/geo_process_
+ *     level_of_detail, unaffected by this walk instance).
+ * --------------------------------------------------------------------- */
+
+enum {
+    SATURN_GEO_LEAVE_NONE = 0U,
+    SATURN_GEO_LEAVE_MASTER_LIST = 1U,
+    SATURN_GEO_LEAVE_PERSPECTIVE = 2U,
+    SATURN_GEO_LEAVE_CAMERA = 3U,
+};
+
+/* Named diagnostic for the runtime's fail-closed overflow latch (global
+ * constraint: no silent truncation). The generated depth manifest sizes
+ * sourceboot_geo_walk_frames to the proven max scene depth with margin,
+ * so this should never increment in practice; it exists so an overflow
+ * is observable rather than silently dropped. A dedicated telemetry/HUD
+ * seam for this counter is left to a later task. */
+static uint32_t sSaturnGeoWalkOverflowCount = 0U;
+
+/**
+ * Computes the sibling continuation for one node in a geo_add_child-built
+ * ring, replicating geo_process_node_and_siblings's
+ * "iterateChildren"/wraparound semantics without needing to thread the
+ * chain's head pointer through the runtime's frame fields:
+ *   - A switch-case's selected child is never chained to its sibling
+ *     case options (matches the original's parent->type ==
+ *     GRAPH_NODE_TYPE_SWITCH_CASE special case).
+ *   - A self-looped node (geo_add_child's single-child encoding, and the
+ *     temporary sharedChild/parent aliasing used by geo_process_object
+ *     and geo_process_object_parent) has no sibling.
+ *   - Every other node in a real ring shares node->parent, so
+ *     node->parent->children is a time-invariant reference to the ring's
+ *     head regardless of which member is currently being visited; this
+ *     is exactly the original's `curGraphNode->next != firstNode` check.
+ */
+static uintptr_t saturn_geo_walk_sibling_of(const struct GraphNode *node) {
+    const struct GraphNode *parent = node->parent;
+
+    if (parent != NULL && parent->type == GRAPH_NODE_TYPE_SWITCH_CASE) {
+        return 0U;
+    }
+    if (node->next == node) {
+        return 0U;
+    }
+    if (parent != NULL && node->next == parent->children) {
+        return 0U;
+    }
+    return (uintptr_t) node->next;
+}
+
+/**
+ * Bridge for node types this wave does not yet convert: dispatches to
+ * the existing, unmodified handler function by name (never through the
+ * geo_process_node_and_siblings text this policy gate tracks), exactly
+ * mirroring geo_process_node_and_siblings's own switch further down
+ * this file. Those handlers are untouched and keep using real recursion
+ * for their own children, independent of this walk instance.
+ */
+static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
+    switch (node->type) {
+        case GRAPH_NODE_TYPE_LEVEL_OF_DETAIL:
+            geo_process_level_of_detail((struct GraphNodeLevelOfDetail *) node);
+            break;
+        case GRAPH_NODE_TYPE_SWITCH_CASE:
+            geo_process_switch((struct GraphNodeSwitchCase *) node);
+            break;
+        case GRAPH_NODE_TYPE_TRANSLATION_ROTATION:
+            geo_process_translation_rotation((struct GraphNodeTranslationRotation *) node);
+            break;
+        case GRAPH_NODE_TYPE_TRANSLATION:
+            geo_process_translation((struct GraphNodeTranslation *) node);
+            break;
+        case GRAPH_NODE_TYPE_ROTATION:
+            geo_process_rotation((struct GraphNodeRotation *) node);
+            break;
+        case GRAPH_NODE_TYPE_OBJECT:
+            geo_process_object((struct Object *) node);
+            break;
+        case GRAPH_NODE_TYPE_ANIMATED_PART:
+            geo_process_animated_part((struct GraphNodeAnimatedPart *) node);
+            break;
+        case GRAPH_NODE_TYPE_BILLBOARD:
+            geo_process_billboard((struct GraphNodeBillboard *) node);
+            break;
+        case GRAPH_NODE_TYPE_DISPLAY_LIST:
+            geo_process_display_list((struct GraphNodeDisplayList *) node);
+            break;
+        case GRAPH_NODE_TYPE_SCALE:
+            geo_process_scale((struct GraphNodeScale *) node);
+            break;
+        case GRAPH_NODE_TYPE_SHADOW:
+            geo_process_shadow((struct GraphNodeShadow *) node);
+            break;
+        case GRAPH_NODE_TYPE_OBJECT_PARENT:
+            geo_process_object_parent((struct GraphNodeObjectParent *) node);
+            break;
+        case GRAPH_NODE_TYPE_GENERATED_LIST:
+            geo_process_generated_list((struct GraphNodeGenerated *) node);
+            break;
+        case GRAPH_NODE_TYPE_BACKGROUND:
+            geo_process_background((struct GraphNodeBackground *) node);
+            break;
+        case GRAPH_NODE_TYPE_HELD_OBJ:
+            geo_process_held_object((struct GraphNodeHeldObject *) node);
+            break;
+        default:
+            geo_try_process_children(node);
+            break;
+    }
+}
+
+/**
+ * Runtime ops.enter: replicates geo_process_node_and_siblings's
+ * RENDER_ACTIVE / CHILDREN_FIRST / inactive-object handling generically
+ * for every node this walk instance visits, then dispatches by type --
+ * real enter-phase logic for this wave's four converted types, the
+ * legacy bridge for everything else.
+ */
+static bool saturn_geo_walk_enter(uintptr_t node_token,
+                                  sm64_saturn_geo_walk_runtime_enter_t *result,
+                                  void *user) {
+    struct GraphNode *node = (struct GraphNode *) node_token;
+    (void) user;
+
+    result->child = 0U;
+    result->sibling = saturn_geo_walk_sibling_of(node);
+    result->leave_action = SATURN_GEO_LEAVE_NONE;
+    result->matrix_depth = 0U;
+    result->context_token = 0U;
+    result->admitted = false;
+    result->defer_dispatch = false;
+    result->leave_required = false;
+
+    if (!(node->flags & GRAPH_RENDER_ACTIVE)) {
+        if (node->type == GRAPH_NODE_TYPE_OBJECT) {
+            ((struct GraphNodeObject *) node)->throwMatrix = NULL;
+        }
+        return true;
+    }
+
+    if (node->flags & GRAPH_RENDER_CHILDREN_FIRST) {
+        if (node->children != NULL) {
+            result->admitted = true;
+            result->child = (uintptr_t) node->children;
+        }
+        return true;
+    }
+
+    switch (node->type) {
+        case GRAPH_NODE_TYPE_MASTER_LIST: {
+            struct GraphNodeMasterList *ml = (struct GraphNodeMasterList *) node;
+            if (saturn_geo_enter_master_list(ml)) {
+                result->admitted = true;
+                result->child = (uintptr_t) ml->node.children;
+                result->leave_required = true;
+                result->leave_action = SATURN_GEO_LEAVE_MASTER_LIST;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_ORTHO_PROJECTION: {
+            struct GraphNodeOrthoProjection *op = (struct GraphNodeOrthoProjection *) node;
+            if (saturn_geo_enter_ortho_projection(op)) {
+                result->admitted = true;
+                result->child = (uintptr_t) op->node.children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_PERSPECTIVE: {
+            struct GraphNodePerspective *pp = (struct GraphNodePerspective *) node;
+            if (saturn_geo_enter_perspective(pp)) {
+                result->admitted = true;
+                result->child = (uintptr_t) pp->fnNode.node.children;
+                result->leave_required = true;
+                result->leave_action = SATURN_GEO_LEAVE_PERSPECTIVE;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_CAMERA: {
+            struct GraphNodeCamera *cam = (struct GraphNodeCamera *) node;
+            struct GraphNode *children = saturn_geo_enter_camera(cam);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_CAMERA;
+            result->context_token = (children != NULL) ? 1U : 0U;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        default:
+            saturn_geo_walk_dispatch_legacy(node);
+            break;
+    }
+    return true;
+}
+
+/**
+ * Runtime ops.dispatch: no node type converted this wave defers a
+ * separate dispatch phase (their work happens in enter()/leave()).
+ * Reserved for future waves' leaf display/callback nodes.
+ */
+static void saturn_geo_walk_dispatch(uintptr_t node_token, void *user) {
+    (void) node_token;
+    (void) user;
+}
+
+/**
+ * Runtime ops.leave: restores the global state each converted handler's
+ * enter phase mutated, exactly matching the pre-conversion post-child
+ * code paths.
+ */
+static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
+                                  uint16_t matrix_depth, uint16_t context_token,
+                                  void *user) {
+    struct GraphNode *node = (struct GraphNode *) node_token;
+    (void) matrix_depth;
+    (void) user;
+
+    switch (leave_action) {
+        case SATURN_GEO_LEAVE_MASTER_LIST:
+            saturn_geo_leave_master_list((struct GraphNodeMasterList *) node);
+            break;
+        case SATURN_GEO_LEAVE_PERSPECTIVE:
+            saturn_geo_leave_perspective();
+            break;
+        case SATURN_GEO_LEAVE_CAMERA:
+            saturn_geo_leave_camera(context_token != 0U);
+            break;
+        default:
+            break;
+    }
+}
+
+/**
+ * Entry point used by this wave's converted handlers in place of a
+ * direct recursive geo_process_node_and_siblings call on their children.
+ * Owns a
+ * fresh walk over sourceboot_geo_walk_frames for the duration of this
+ * one call and drains it to completion (matching the original's
+ * synchronous, blocking recursion semantics) before returning.
+ */
+static bool saturn_geo_walk_process_children(struct GraphNode *children) {
+    sm64_saturn_geo_walk_runtime_t walk;
+    static const sm64_saturn_geo_walk_runtime_ops_t ops = {
+        saturn_geo_walk_enter, saturn_geo_walk_dispatch, saturn_geo_walk_leave
+    };
+    bool ok;
+
+    if (children == NULL) {
+        return true;
+    }
+    sm64_saturn_geo_walk_runtime_init(&walk, sourceboot_geo_walk_frames,
+                                       sourceboot_geo_walk_frame_capacity);
+    ok = sm64_saturn_geo_walk_runtime_run(&walk, (uintptr_t) children, &ops, NULL);
+    if (!ok && walk.fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW) {
+        sSaturnGeoWalkOverflowCount++;
+    }
+    return ok;
 }
 
 /**
