@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- Repaired a corrupted `CHANGELOG.md` entry from the CLUT16 baking-mode
+  commit (bc08fb27): the edit inserting the new "Added a CLUT16 baking
+  mode to the BOB sky tool" bullet had deleted the summary line of the
+  adjacent pre-existing "Added project-owned SH-2 exception trampolines"
+  bullet while leaving that entry's continuation paragraph attached
+  directly beneath the new entry with no bullet separator, producing one
+  garbled item that switched topics mid-paragraph. Restored the missing
+  summary line and the blank-line list-item boundary between the two
+  entries by diffing against parent commit 0ebd5b05's intact copy; no
+  other changelog content altered.
+
 - Shrank `SM64_SATURN_HUD_LAYOUT_MAX_CELLS` from 40 to 24
   (`src/port/saturn/gfx/saturn_hud_layout.h`), recovering 128 bytes of
   HWRAM `.bss` (`sourceboot_hud_publish_state.last_cells[40]` -> `[24]`,
@@ -72,6 +83,8 @@
   unaffected; `test_tools.BobSkyBakeTests` still passes), so nothing
   consumes CLUT16 output yet -- later plan tasks wire it into the VDP2
   init code.
+
+- Added project-owned SH-2 exception trampolines
   (`src/port/saturn/sourceboot/source_exception_trampolines.sx`,
   `source_exception_record.c`) installed for both master and slave interrupt
   vector tables at the top of `main()`, for illegal instruction, illegal
