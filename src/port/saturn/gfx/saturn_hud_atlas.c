@@ -5,8 +5,26 @@
 
 #include "saturn_hud_glyphs_generated.h"
 
-#define HUD_CPD_BASE VDP2_VRAM_ADDR(1, 0x00000)
-#define HUD_PND_BASE VDP2_VRAM_ADDR(1, 0x08000)
+/* Bank 2 (VDP2 quarter-bank B0), NOT bank 1 -- found and fixed during Task 8
+ * integration. VDP2_VRAM_ADDR(bank, offset) addresses one of 4 physical
+ * 0x20000-byte quarter-banks (A0=0, A1=1, B0=2, B1=3; see the diagram in
+ * third_party/libyaul/libyaul/scu/bus/b/vdp/vdp2/vram.h). This plan's design
+ * decision #7 called bank 1 "bank B0, disjoint from NBG1's sky bitmap in
+ * bank A0" -- but sourceboot's sky bitmap is 512x256 @ RGB1555
+ * (sourceboot_init_sky_bitmap(), main.c) = 0x40000 bytes = exactly TWO
+ * quarter-banks, so it physically occupies bank A0 AND bank A1 in full
+ * (0x25E00000-0x25E3FFFF). Bank 1 in VDP2_VRAM_ADDR's real numbering IS
+ * bank A1 (0x25E20000-0x25E3FFFF) -- the second half of the sky bitmap, not
+ * a disjoint region. Placing the HUD atlas there would have had
+ * sm64_saturn_hud_atlas_init() overwrite the sky bitmap's bottom 128 rows
+ * (VRAM offsets 0x00000-0x08800 within A1) the moment Task 8 wired the atlas
+ * init call into boot -- a real corruption, not a bandwidth question, and
+ * cycle-pattern slot allocation cannot fix a base-address collision. Bank 2
+ * (B0) is confirmed unused by anything else in this target (sky bitmap:
+ * banks 0-1; dbgio's NBG3 console + the backscreen gradient table: both
+ * bank 3), so this is the actual disjoint region the plan intended. */
+#define HUD_CPD_BASE VDP2_VRAM_ADDR(2, 0x00000)
+#define HUD_PND_BASE VDP2_VRAM_ADDR(2, 0x08000)
 
 /* Real VDP2 page geometry for CHAR_SIZE_2X2 + PLANE_SIZE_1X1: a page is
  * always a 32x32 cell grid (VDP2_SCRN_PAGE_WIDTH_CALCULATE /

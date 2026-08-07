@@ -327,6 +327,9 @@ SH_SRCS := main.c source_entry.c source_demo_data.c source_platform.c source_car
   $(ROOT)/src/port/saturn/gfx/saturn_gouraud_transfer.c \
   $(ROOT)/src/port/saturn/gfx/saturn_vdp1_frame_bank.c \
   $(ROOT)/src/port/saturn/gfx/saturn_vdp2_frame.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_hud_atlas.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_hud_layout.c \
+  $(ROOT)/src/port/saturn/gfx/saturn_hud_publish.c \
   $(ROOT)/src/port/saturn/gfx/saturn_terrain_command_template.c \
   $(ROOT)/src/port/saturn/gpl/ztreme_frustum.c \
   $(ROOT)/src/port/saturn/gfx/saturn_scene_admission.c \
@@ -846,9 +849,11 @@ $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue: $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso
 # compile may start before it exists; under -j make would otherwise happily
 # race a consumer against the generator. Order-only, so a regenerated map does
 # not by itself rebuild the world -- the generated .d files carry the real
-# header dependency once a build has run.
+# header dependency once a build has run. saturn_hud_atlas.c includes the
+# generated glyph header the same way, so it needs the same guard (deferred
+# here from Task 2, which created source-hud-glyphs but not this ordering).
 $(SH_OBJS_UNIQ): | $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
-  $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
+  $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_BUILD_IDENTITY_INC) source-geo-depth
 
 # The link resolves -lsm64softfp out of $(SOFTFP_BUILD_DIR) (both the -L and
 # the -l are in SH_LDFLAGS above), and Yaul's .elf rule cannot know about it,

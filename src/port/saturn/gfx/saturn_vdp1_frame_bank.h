@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "saturn_hud.h"
 #include "saturn_vdp2_camera_snapshot.h"
 
 struct sm64_saturn_gouraud_bank;
@@ -51,6 +52,7 @@ typedef struct sm64_saturn_vdp1_frame_bank {
     uint16_t gouraud_count;
     uint32_t snapshot_generation;
     sm64_saturn_vdp2_camera_snapshot_t camera_snapshot;
+    sm64_saturn_hud_snapshot_t hud;
     uint32_t worker_ticket;
     uint32_t command_transfer_ticket;
     uint32_t gouraud_transfer_ticket;
@@ -87,6 +89,9 @@ bool sm64_saturn_vdp1_frame_bank_begin_build(
 bool sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
     sm64_saturn_vdp1_frame_bank_t *bank,
     const sm64_saturn_vdp2_camera_snapshot_t *snapshot);
+bool sm64_saturn_vdp1_frame_bank_set_hud_snapshot(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    const sm64_saturn_hud_snapshot_t *snapshot);
 bool sm64_saturn_vdp1_frame_bank_ready(
     sm64_saturn_vdp1_frame_bank_t *bank, uint16_t command_count,
     uint16_t gouraud_count, uint32_t worker_ticket);

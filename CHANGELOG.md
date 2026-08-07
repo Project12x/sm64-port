@@ -4,6 +4,114 @@
 
 ### Added
 
+- Wired the VDP2 gameplay HUD into sourceboot's real frame bank and
+  presentation path (Task 8 of `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`)
+  -- the task where Tasks 3-7's independently-built, independently-tested
+  pieces first connect inside the real game loop. Added `hud` to
+  `sm64_saturn_vdp1_frame_bank_t` alongside `camera_snapshot`
+  (`saturn_vdp1_frame_bank.h`/`.c`), with a new
+  `sm64_saturn_vdp1_frame_bank_set_hud_snapshot()` that mirrors
+  `_set_camera_snapshot()`'s exact guard (`bank->state !=
+  SM64_SATURN_VDP1_FRAME_BANK_BUILDING` -> reject, otherwise a plain field
+  copy) after reading its real implementation first, per the plan's
+  instruction. Also mirrored the field's full lifecycle, not just the
+  setter: `sm64_saturn_vdp1_frame_bank_begin_build()` now resets
+  `bank->hud` to `{0}` on FREE->BUILDING transition, exactly like
+  `camera_snapshot` already does -- the plan's Step 2 text only asked for
+  setter-shape parity, but leaving a fresh `BUILDING` bank holding a stale
+  `hud` snapshot from two generations back (in the same struct where
+  `camera_snapshot` is deliberately zeroed) would have been an inconsistent,
+  latent bug in the same file, so this task closed it as part of the
+  mirroring the field's own name implies. `main.c` now copies `hud` off
+  `sourceboot_active_render_snapshot` into the frame bank right after the
+  existing `camera_snapshot` copy (same acquired-and-generation-checked
+  pointer, no new gate), publishes it every presented generation via
+  `sm64_saturn_hud_publish(&sourceboot_hud_publish_state, &bank->hud)`
+  alongside the existing camera-snapshot extraction in
+  `sourceboot_present_generation()`, initializes the atlas and publish
+  state once after cart load, and raises NBG0 to priority 7 (topmost,
+  above VDP1 sprites and NBG3 dbgio text) in `sourceboot_vdp2_layers_set()`.
+  `SM64_SATURN_VDP2_FRAME_DISPLAY_MASK` now includes NBG0.
+
+  **Found and fixed a real VRAM base-address collision, not just a
+  bandwidth question.** The plan's design decision #7 and Task 4's
+  committed `saturn_hud_atlas.c` placed the HUD character-pattern/pattern-
+  name data at `VDP2_VRAM_ADDR(1, 0x00000)`, describing it as "bank B0,
+  disjoint from NBG1's sky bitmap in bank A0." Re-deriving the real address
+  math (`VDP2_VRAM_ADDR(bank, offset) = base + (bank << 17) + offset`,
+  third_party/libyaul/libyaul/scu/bus/b/vdp/vdp2/vram.h) shows bank
+  argument `1` is actually quarter-bank **A1**, not B0 -- and sourceboot's
+  sky bitmap (`sourceboot_init_sky_bitmap()`, 512x256 @ RGB1555 =
+  0x40000 bytes) is exactly two quarter-banks, so it physically occupies
+  bank A0 *and* bank A1 in full (`0x25E00000`-`0x25E3FFFF`). The HUD atlas
+  was about to be written directly into the sky bitmap's own bottom 128
+  rows. This was dormant since Task 4 (nothing called
+  `sm64_saturn_hud_atlas_init()` yet), and no cycle-pattern slot allocation
+  can fix a base-address collision -- moving VRAM bytes is the only fix.
+  Relocated `HUD_CPD_BASE`/`HUD_PND_BASE` in `saturn_hud_atlas.c` to bank B0
+  (`VDP2_VRAM_ADDR(2, ...)`), confirmed unused by grepping every
+  `VDP2_VRAM_ADDR` call site in `src/port/saturn` (sky bitmap: banks 0-1;
+  dbgio's NBG3 console + the backscreen gradient table: both bank 3). The
+  relative CPD/PND offset (`0x08000`) is unchanged, so the existing
+  `_Static_assert` guarding atlas overflow into the PND region is
+  unaffected (confirmed by successful compile, not just inspection).
+
+  This also **simplified** the plan's Step 5 VRAM cycle-pattern carve-out.
+  The literal plan text reduced NBG1 from 8 slots to 6 (stealing one from
+  each of bank A0/A1) to give NBG0 2 slots in those same banks, on the
+  (now-corrected) assumption the HUD atlas shared a bank with the sky. With
+  the atlas relocated to bank B0 -- previously completely idle -- NBG0
+  instead gets its own slots there (`.pt[2]`), and NBG1's original 8-slot
+  sky provision is left **untouched**, which is strictly lower-risk than
+  the plan's literal text (no reduction to the sky's own read bandwidth at
+  all). Provisioned NBG0 with 1 PNDR slot (always sufficient regardless of
+  color depth, per the general guideline in `vdp2_vram_cycp_bank_t`'s own
+  doc comment) plus 4 CHPNDR slots, matching the same per-bank ratio the
+  sky bitmap already uses for its own RGB_32768 data (NBG0 is also
+  RGB_32768) -- bank B0 has 8 slots total and nothing else competes for it,
+  so this is free headroom, not a tradeoff.
+
+  Verified `VDP2_VRAM_CYCP_PNDR_NBG0`/`CHPNDR_NBG0` and the real
+  `vdp2_vram_cycp_t` shape (`pt[4]`, each a `t0..t7` bitfield -- not the
+  `pt[2]`/`t0..t3` shape the plan's snippet implied) directly against the
+  vendored header rather than trusting the plan's snippet.
+
+  Added `saturn_hud_atlas.c`/`saturn_hud_layout.c`/`saturn_hud_publish.c`
+  to sourceboot's `SH_SRCS`, and added `$(SOURCEBOOT_HUD_GLYPH_HEADER)` to
+  the `$(SH_OBJS_UNIQ): |` order-only prerequisite list (deferred here from
+  Task 2, which created the `source-hud-glyphs` generator target but not
+  this ordering) -- confirmed via `make -p` that every object target now
+  correctly lists the generated glyph header as an order-only prerequisite,
+  matching the existing quad-map/mario-texture-header guard immediately
+  above it.
+
+  **Compiler verification:** `main.c` carries real, uncommitted, unrelated
+  in-flight work in this worktree (an LWRAM frame-state relocation and new
+  exception trampolines), so this task's own hunks were isolated with
+  `git apply --cached` against a clean `HEAD` copy (replaying the same
+  edits onto a `git show HEAD:main.c` copy, diffing, and staging only that
+  diff) rather than staging the whole working tree, leaving the unrelated
+  work uncommitted exactly as found. Got real `sh-elf-gcc` verification
+  beyond `-fsyntax-only`: full object-file compiles (not just syntax
+  checks) of `saturn_vdp1_frame_bank.c`, `saturn_hud_atlas.c`, and the
+  complete `main.c` against the real vendored Yaul headers and this
+  worktree's real generated headers (quad map, HUD glyphs, build identity,
+  Mario textures) -- all three produced real SH-2 object files with exit
+  code 0, zero new warnings (the two `-Wunused-variable` warnings `main.c`
+  produces are both pre-existing and orthogonal to this task: `pose_ok`
+  under `SATURN_DIAGNOSTIC_MODE=0` and `sourceboot_render_overlap_event_ok`
+  under `SATURN_DEMO_PATH=0`, neither touched by this task's edits). Hit
+  the same MSYS2-`make`-doesn't-propagate-env and native-`sh-elf-gcc`-
+  resolves-MinGW's-`as.exe`-over-the-real-one quirks prior tasks in this
+  plan documented; worked around the first with PowerShell + explicit
+  `$env:` vars instead of sourcing `.yaul.env` through bash, and the second
+  with an explicit `-B<yaul-bin>/` search-path flag. Confirmed via `make -p`
+  that `SH_SRCS` includes all three new `.c` files in the right place. Not
+  verified here (needs Task 9's automated Ymir capture and Task 10's manual
+  acceptance): the full sourceboot link, real VDP2 visual composition, and
+  whether the corrected cycle-pattern provision is genuinely sufficient for
+  glitch-free NBG0 rendering under real scanout timing.
+
 - Added a build-time mutation gate and a static structural gate for the VDP2
   gameplay HUD (Task 7 of `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`),
   plus closed three test-coverage gaps Task 5's review had flagged but

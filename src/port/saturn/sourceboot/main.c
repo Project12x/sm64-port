@@ -27,6 +27,10 @@
 #include "saturn_vdp1_backend.h"
 #include "saturn_vdp1_frame_bank.h"
 #include "saturn_vdp2_frame.h"
+#include "saturn_hud.h"
+#include "saturn_hud_atlas.h"
+#include "saturn_hud_layout.h"
+#include "saturn_hud_publish.h"
 #include "saturn_build_identity.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
@@ -758,6 +762,13 @@ static void sourceboot_vblank_out_handler(void *work __unused) {
 #define SOURCEBOOT_BACKSCREEN_LINES 224U
 static rgb1555_t sourceboot_sky_gradient[SOURCEBOOT_BACKSCREEN_LINES];
 
+/* Remembers the layout last published to the VDP2 HUD atlas so
+ * sm64_saturn_hud_publish() (called from sourceboot_present_generation())
+ * can rewrite only the cells that changed. Ordinary .bss (crt0-zeroed), then
+ * explicitly primed by sm64_saturn_hud_publish_init() below, alongside the
+ * other one-writer frame-state globals in this file. */
+static sm64_saturn_hud_publish_state_t sourceboot_hud_publish_state;
+
 #define SOURCEBOOT_SKY_BITMAP_WIDTH 512U
 #define SOURCEBOOT_SKY_BITMAP_HEIGHT 256U
 #define SOURCEBOOT_SKY_BITMAP_WORDS \
@@ -804,6 +815,20 @@ static void sourceboot_init_sky_bitmap(void)
         .palette_base = 0,
         .bitmap_base = VDP2_VRAM_ADDR(0, 0x00000),
     };
+    /* NBG1's sky bitmap is 512x256 @ RGB1555 = 0x40000 bytes -- exactly two
+     * quarter-banks (0x20000 each), so it physically occupies BOTH bank A0
+     * (.pt[0]) and bank A1 (.pt[1]) in full. All 8 of their combined slots
+     * stay dedicated to NBG1, unreduced: an earlier draft of this carve-out
+     * gave NBG0 one slot each in .pt[0]/.pt[1] by taking them from NBG1, but
+     * that assumed the HUD atlas's character/pattern data lived in a bank
+     * shared with the sky. It does not -- HUD_CPD_BASE/HUD_PND_BASE
+     * (saturn_hud_atlas.c) were relocated to bank B0 (VDP2_VRAM_ADDR(2, ..))
+     * specifically because it is unclaimed by anything else in this target,
+     * so NBG0 gets its own slots there (.pt[2]) instead of contending with
+     * NBG1 for A0/A1 bandwidth. One PNDR slot is always sufficient regardless
+     * of color depth; CHPNDR slot count scales with color depth, and NBG0 is
+     * RGB_32768 like NBG1, so it gets the same 4-slot provision NBG1 uses
+     * per bank -- bank B0 has 8 total and nothing else competes for it. */
     const vdp2_vram_cycp_t cycles = {
         .pt[0].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
         .pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
@@ -813,6 +838,11 @@ static void sourceboot_init_sky_bitmap(void)
         .pt[1].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
         .pt[1].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
         .pt[1].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
+        .pt[2].t0 = VDP2_VRAM_CYCP_PNDR_NBG0,
+        .pt[2].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
     };
     vdp2_vram_cycp_set(&cycles);
     vdp2_scrn_bitmap_format_set(&format);
@@ -836,12 +866,14 @@ static void sourceboot_vdp2_layers_set(uint32_t display_mask,
                                        uint8_t vdp1_priority,
                                        void *work __unused)
 {
-    /* NBG1 is an opaque baked sky and must remain behind VDP1. NBG3 hosts
-     * dbgio's text. Every sprite group stays visible above both. */
+    /* NBG1 is an opaque baked sky and must remain behind VDP1. NBG0 hosts
+     * the gameplay HUD and stays above everything, including dbgio's NBG3
+     * diagnostics text. Every sprite group stays visible above the sky. */
     for (uint8_t priority = 0U; priority < 8U; priority++)
         vdp2_sprite_priority_set(priority, vdp1_priority);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 0U);
-    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 7U);
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 7U); /* gameplay HUD: always on top, matching Z-Treme's NBG3 font-plane precedent */
+    vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 6U); /* dbgio diagnostics: below the HUD */
     vdp2_scrn_display_set((uint16_t)display_mask);
 }
 
@@ -895,6 +927,7 @@ static void sourceboot_present_generation(
         0U;
     const sm64_saturn_vdp2_camera_snapshot_t vdp2_camera =
         sourceboot_vdp2_camera_snapshot(bank);
+    sm64_saturn_hud_publish(&sourceboot_hud_publish_state, &bank->hud);
     const sm64_saturn_vdp2_generation_state_t vdp2_generations = {
         .displayed_generation = presentation_generation,
         .rendered_generation = presentation_generation,
@@ -1067,6 +1100,10 @@ static void sourceboot_frame_service_render(uint32_t generation)
         };
         render_complete = sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
             sourceboot_active_build_bank, &camera_snapshot);
+        if (!render_complete) goto failed;
+        render_complete = sm64_saturn_vdp1_frame_bank_set_hud_snapshot(
+            sourceboot_active_build_bank,
+            &sourceboot_active_render_snapshot->hud);
         if (!render_complete) goto failed;
         sm64_saturn_vdp1_backend_bind_frame_bank(&sourceboot_vdp1_backend,
                                                  sourceboot_active_build_bank);
@@ -1470,6 +1507,8 @@ int main(void) {
      * the VDP2 format setup in user_init(), but defer the actual copy so NBG1
      * never receives a zeroed pre-cart buffer. */
     sourceboot_init_sky_bitmap();
+    sm64_saturn_hud_atlas_init();
+    sm64_saturn_hud_publish_init(&sourceboot_hud_publish_state);
     sm64_saturn_vdp2_frame_init(&sourceboot_vdp2_frame);
 
     dbgio_init();

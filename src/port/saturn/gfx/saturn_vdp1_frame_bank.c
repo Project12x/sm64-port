@@ -176,6 +176,7 @@ bool sm64_saturn_vdp1_frame_bank_begin_build(
         bank->gouraud_count = 0U;
         bank->snapshot_generation = generation;
         bank->camera_snapshot = (sm64_saturn_vdp2_camera_snapshot_t){0};
+        bank->hud = (sm64_saturn_hud_snapshot_t){0};
         bank->worker_ticket = SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID;
         bank->command_transfer_ticket =
             SM64_SATURN_VDP1_FRAME_BANK_TICKET_INVALID;
@@ -201,6 +202,17 @@ bool sm64_saturn_vdp1_frame_bank_set_camera_snapshot(
         bank->state != SM64_SATURN_VDP1_FRAME_BANK_BUILDING)
         return false;
     bank->camera_snapshot = *snapshot;
+    return true;
+}
+
+bool sm64_saturn_vdp1_frame_bank_set_hud_snapshot(
+    sm64_saturn_vdp1_frame_bank_t *bank,
+    const sm64_saturn_hud_snapshot_t *snapshot)
+{
+    if (bank == NULL || snapshot == NULL ||
+        bank->state != SM64_SATURN_VDP1_FRAME_BANK_BUILDING)
+        return false;
+    bank->hud = *snapshot;
     return true;
 }
 
