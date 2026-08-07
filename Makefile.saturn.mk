@@ -41,6 +41,16 @@ SATURN_TOOLS_PYTHON ?= $(SATURN_REPO_ROOT)/.venv-saturn-tools/bin/python
 HOST_CC_ENV ?= env -u GCC_EXEC_PREFIX -u COMPILER_PATH -u LIBRARY_PATH -u C_INCLUDE_PATH -u CPLUS_INCLUDE_PATH -u CFLAGS -u CPPFLAGS -u LDFLAGS
 HOST_EXEEXT :=
 endif
+# ymir-headless is built out-of-tree in the sibling ymir-agent checkout (two
+# directories above this worktree, alongside work/yaul-install -- see
+# docs/saturn/HWTEST.md). The BIOS/IPL image lives under the shared
+# sm64-port checkout's .ymir-profile, one level above every worktree, not
+# inside any individual worktree (confirmed on disk: no .ymir-profile here).
+# Both are absolute, `?=`-overridable defaults, matching the existing
+# tools/saturn/capture_camera_idle.py precedent of hardcoding this
+# developer's out-of-repo tool paths rather than guessing a relative one.
+YMIR_HEADLESS_EXE ?= D:/Code/RetroDev/sm64-saturn-port/ymir-agent/build-agent/apps/ymir-headless/Release/ymir-headless.exe
+SATURN_YMIR_BIOS ?= D:/Code/RetroDev/sm64-saturn-port/sm64-port/.ymir-profile/roms/ipl/Sega Saturn BIOS (USA).bin
 SM64_ROM ?=
 CASTLE_TEXTURES ?= inside_09000000 inside_09001000 inside_09003800 inside_09004000 inside_09005000 inside_09008000 inside_09008800 inside_castle_seg7_texture_07000800 inside_castle_seg7_texture_07002000
 CASTLE_TILE ?= 16
@@ -98,7 +108,7 @@ QUAD_MAP_ACTOR_ARGS := \
 LIBYAUL_VERSION := 0.3.1
 LIBYAUL_COMMIT := 6012f79f237773378c8014e70d8998ad95a38d98
 
-.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
+.PHONY: all bootstrap bootstrap-host-tools check check-host-tools check-libyaul check-sdk hello verify-hello hwtest verify-hwtest introface verify-introface marioturntable verify-marioturntable castleviewer verify-castleviewer sourceboot verify-sourceboot verify-sourceboot-feature-identity vdp2probe verify-vdp2probe dual-transform verify-dual-transform pcm68k-image verify-pcm68k-image verify-audio68k-modules compile-pcm-proof-bank soundtest verify-soundtest verify-tools verify-runtime-contracts verify-source-render-policy verify-source-geo-state-diff verify-saturn-geo-walk-contract verify-saturn-geo-depth-manifest verify-runtime-camera-contract verify-sourceboot-presentation-boundary verify-sourceboot-boot-trace verify-vdp2-frame verify-pcm-protocol verify-audio-protocol-v2 verify-audio-completion-abi verify-audio-policy verify-audio-spatial verify-audio-residency compile-saturn-audio verify-pcm-transport verify-pcm68k-model verify-scsp-pcm8 verify-pcm68k-heartbeat-host verify-soundtest-boot verify-audio-sound-cpu-boot verify-sequence-vm verify-audio-voice-allocator verify-audio-slot-shadow verify-audio-scsp-timer verify-terrain-command-template verify-terrain-command-template-target-compile verify-terrain-depth-bins verify-terrain-command-stream verify-terrain-clip verify-ztreme-frustum verify-bob-bsp-header verify-visible-position-set verify-render-clusters verify-scene-admission verify-portal-windows verify-render-snapshot-bank verify-saturn-hud-snapshot verify-saturn-hud-layout verify-saturn-hud-layout-mutation verify-saturn-hud-no-vdp1 verify-sourceboot-hud-target verify-dual-frame-bank verify-frame-pipeline verify-render-overlap-integration verify-demo-render-overlap verify-vdp1-frame-bank verify-vdp1-transfer-pipeline verify-gouraud-transfer verify-actor-pose-bank verify-actor-meshlets verify-actor-family-bank verify-actor-capability-bank verify-actor-capability-articulated verify-actor-instance-queue verify-actor-batches verify-actor-effects verify-dma-queue verify-ir-transform verify-render-native-math verify-render-native-math-mutation verify-hot-promotion verify-mtxf-lookat-host-diff verify-mtxq-ctors verify-mtxq-ctors-mutation verify-graph-q16-contract verify-mtxq-conversion-assembly verify-softfp-bitexact verify-render-callback-context verify-scene-package-schema classify-source compile-introface-mesh compile-mario-actor-bank compile-actor-banks compile-mario-actor compile-mario-textures compile-castle-area1 compile-castle-gameplay-config compile-castle-geo-root compile-castle-textures compile-castle-collision compile-quad-map compile-scene-closure compile-provisional-scene-package compile-bob-area compile-bob-bsp compile-bob-bsp-fragments compile-bob-tiles compile-bob-scene compile-bob-sky plan-castle-camera verify-all clean
 
 all: hello
 
@@ -660,6 +670,71 @@ verify-saturn-hud-no-vdp1:
 	    "$(SATURN_REPO_ROOT)/src/port/saturn/gfx/saturn_hud_atlas.c"; then \
 	  echo "HUD source references a VDP1 command-list symbol" >&2; exit 1; \
 	fi
+
+# Task 9 (docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md): the first
+# composed build+capture+assert target for any Saturn subsystem. Builds the
+# "accepted rollback" sourceboot configuration (HANDOFF_2026-08-06-task-23a-
+# hud.md / STATE.md: BOB, live input, Q16 camera, renderer Pipeline 4,
+# profile-managed 32-Mbit DRAM cart, dual SH-2), boots it headless in Ymir,
+# peeks the VDP2 HUD pattern-name table, and asserts the "lives" cell holds
+# the Mario-head glyph. SATURN_CAMERA_VARIANT=3 is "Q16 camera": this
+# Makefile's own SATURN_CAMERA_VARIANT validation (below) labels variant 3
+# "fixed" -- i.e. the Q16.16 fixed-point kernel -- not variant 2 (an older
+# design doc used 1/2 before the fixed-point variant was renumbered to 3).
+# SATURN_SLAVE_RENDER=1 is "dual SH-2" (it is also this Makefile's own
+# default, kept explicit here for self-documentation).
+# SATURN_SOURCEBOOT_ROUTE_REPLAY=1 is required by the sourceboot Makefile's
+# own validation the moment SATURN_SOURCEBOOT_LIVE_INPUT=1 is set
+# ("SATURN_SOURCEBOOT_LIVE_INPUT=1 requires SATURN_SOURCEBOOT_ROUTE_REPLAY=1",
+# confirmed empirically -- an initial attempt without it failed the real
+# build at src/port/saturn/sourceboot/Makefile:158) -- it is a build-time
+# prerequisite flag here, not a request for scripted-camera capture; live
+# input still drives Mario at runtime (SATURN_SOURCEBOOT_CAMERA_ROUTE stays
+# at its default 0, so no route/camera-idle capture machinery activates).
+# Every other flag is left at the sourceboot Makefile's own default -- this
+# task verifies the HUD reached VRAM correctly, not degradation/BSP/fragment
+# tuning that earlier full-game-completeness tasks already own.
+SOURCEBOOT_HUD_BUILD_FLAGS := \
+  SATURN_DEMO_PATH=1 \
+  SATURN_SOURCEBOOT_ROUTE_REPLAY=1 \
+  SATURN_SOURCEBOOT_LIVE_INPUT=1 \
+  SATURN_CAMERA_VARIANT=3 \
+  SATURN_RENDERER_PIPELINE=4 \
+  SATURN_SLAVE_RENDER=1 \
+  SATURN_CART_MBIT=32
+SOURCEBOOT_HUD_CAPTURE_REPORT := $(SATURN_REPO_ROOT)/docs/saturn/evidence/reports/saturn-hud-automated-capture-2026-08-06.json
+# SM64_SATURN_HUD_GLYPH_MARIO_HEAD's atlas index (src/port/saturn/gfx/
+# saturn_hud_atlas.h): 13th entry (0-based 12) of sm64_saturn_hud_glyph_t.
+SOURCEBOOT_HUD_EXPECT_GLYPH_INDEX := 12
+
+.PHONY: verify-sourceboot-hud-target
+verify-sourceboot-hud-target: check-libyaul check-sdk check-host-tools
+# -C (not -f path/to/Makefile) is load-bearing: the sourceboot Makefile's own
+# CFLAGS assume $(CURDIR) is its own directory (-I$(CURDIR), and critically
+# the relative -specs=sourceboot.specs, which GCC resolves against the
+# process's actual CWD). Confirmed empirically -- an initial attempt using
+# -f left CURDIR at this file's directory instead, and sh-elf-gcc failed
+# every translation unit with "cannot read spec file 'sourceboot.specs':
+# No such file or directory" because the real file lives in
+# src/port/saturn/sourceboot/, one level below where CURDIR pointed. Every
+# proven historical invocation of this Makefile (STATE.md/ROADMAP.md-linked
+# plan docs, tools/saturn/*.sh) uses -C for exactly this reason.
+	$(MAKE) -C src/port/saturn/sourceboot -j1 \
+	  $(SOURCEBOOT_HUD_BUILD_FLAGS) source-hud-glyphs
+	$(MAKE) -C src/port/saturn/sourceboot -j1 \
+	  $(SOURCEBOOT_HUD_BUILD_FLAGS)
+	@cue="$$(ls -t "$(SATURN_REPO_ROOT)"/build/saturn/sourceboot/e2-bob-identity-*/*.cue 2>/dev/null | head -1)"; \
+	if [ -z "$$cue" ]; then \
+	  echo "verify-sourceboot-hud-target: no built .cue found under build/saturn/sourceboot/e2-bob-identity-*/" >&2; \
+	  exit 1; \
+	fi; \
+	echo "verify-sourceboot-hud-target: capturing $$cue"; \
+	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/capture_sourceboot_hud_state.py" \
+	  --ymir "$(YMIR_HEADLESS_EXE)" \
+	  --ipl "$(SATURN_YMIR_BIOS)" \
+	  --game "$$cue" \
+	  --expect-glyph-index $(SOURCEBOOT_HUD_EXPECT_GLYPH_INDEX) \
+	  --output "$(SOURCEBOOT_HUD_CAPTURE_REPORT)"
 
 verify-actor-instance-snapshot:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"

@@ -25,6 +25,31 @@
 
 ### Added
 
+- Added `tools/saturn/capture_sourceboot_hud_state.py` and the
+  `verify-sourceboot-hud-target` composed build+capture+assert Make target
+  (Task 9 of `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`): boots
+  the "accepted rollback" sourceboot configuration headless in Ymir, peeks
+  the VDP2 HUD pattern-name table at the real, current
+  `saturn_hud_atlas.c`/`saturn_hud_layout.c` VRAM address and tile
+  coordinates (bank 2, `HUD_PND_BASE=0x25E48000`; `(col=1,row=12)` for the
+  lives cluster's Mario-head glyph), and asserts the observed VDP2
+  character-number field against the value `sm64_saturn_hud_atlas_init()`
+  would actually have written there. Reuses `YmirClient` from
+  `capture_route_views.py` rather than reimplementing the JSON-RPC
+  transport. **Status: the build+link now reaches a real SH-2 ELF link for
+  the first time (every compile error, including the three fixed above, is
+  resolved), but that link itself currently fails** on a real, pre-existing
+  memory-budget conflict introduced by the same concurrent "iterative geo
+  walk" work (commit `6dbaea8d`, "feat(saturn): add generated geo traversal
+  storage", 2026-08-06): `src/port/saturn/sourceboot/sourceboot-cart.x`'s
+  HWRAM/LWRAM budget assertions (lines 142, 225-227, 232) fail once the new
+  `.lwram_geo_traversal`/`.lwram_actor_runtime` sections are linked in
+  alongside the accepted-rollback configuration. This is not part of the
+  HUD (Tasks 1-8) and not something this task's scope covers fixing; the
+  capture script and Make target are ready to produce real pass/fail
+  evidence as soon as that budget conflict is resolved by whoever owns the
+  geo-walk work -- no further HUD-side changes are expected to be needed.
+
 - Wired the VDP2 gameplay HUD into sourceboot's real frame bank and
   presentation path (Task 8 of `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`)
   -- the task where Tasks 3-7's independently-built, independently-tested
