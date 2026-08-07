@@ -4,6 +4,74 @@
 
 ### Fixed
 
+- **Correction to the "Fixed three real, target-only compile failures..."
+  entry immediately below in this section, and to the "Added
+  `tools/saturn/capture_sourceboot_hud_state.py`..." entry in the "Added"
+  section further down this same file** (same-day follow-up review; both
+  of those entries left exactly as originally written, this entry appended
+  rather than editing them in place). Two problems with the original
+  root-cause narrative in those two entries:
+
+  1. **Misattribution.** Both of those entries blame the `.lwram_actor_runtime`
+     (`0x10000` = 65,536-byte) section on the geo-walk commits (`6dbaea8d`/
+     `a48e5aac`). Re-verified with `git show 39008658 -- src/port/saturn/
+     sourceboot/sourceboot-cart.x`: that section, including its own
+     `ASSERT (SIZEOF(.lwram_actor_runtime) == 0x10000, ...)`, was actually
+     added ten hours earlier the same day by `39008658` ("feat(saturn):
+     reserve sourceboot actor runtime arena"), an unrelated actor-system
+     feature. `git show 6dbaea8d -- src/port/saturn/sourceboot/
+     sourceboot-cart.x` confirms that commit only adds `.lwram_geo_traversal`
+     and reads the pre-existing `__lwram_actor_runtime_end` symbol; it does
+     not define or resize `.lwram_actor_runtime`. Reverting just
+     `6dbaea8d`/`a48e5aac` would not reclaim this 64 KiB.
+
+  2. **An uncommitted confound that was never isolated.** This worktree
+     carries uncommitted changes (`git diff --numstat`, re-verified while
+     writing this correction) to `src/port/saturn/sourceboot/main.c`
+     (+167/-44), `src/port/saturn/gfx/saturn_demo_render.c` (+29/-16),
+     `src/port/saturn/gpl/slavedriver_dma_queue.c` (+18/-9),
+     `src/port/saturn/sourceboot/source_cart.c` (+5/-1), and `src/port/
+     saturn/sourceboot/source_q16_kernel_probe.c` (+4/-1) -- 223
+     insertions/71 deletions total across those five tracked files -- plus
+     two new untracked files (`source_exception_record.c`,
+     `source_exception_trampolines.sx`, 96 lines together) that the
+     *committed* sourceboot Makefile already lists in `SH_SRCS`. All of
+     this was therefore compiled into every one of the seven build attempts
+     behind the entries below, and was never isolated as a variable before
+     writing the original narrative.
+     `saturn_demo_render.c`'s own uncommitted diff documents moving a
+     43,776-byte BOB geometry bank from HWRAM into `.lwram_bss`
+     (new `__attribute__((section(".lwram_bss")))` annotations, with a
+     comment citing the exact byte count), and `main.c`'s uncommitted diff
+     applies the same pattern to several other statics via a new
+     `SOURCEBOOT_LWRAM_STATE` macro -- consistent with this file's own
+     `STATE.md` describing "the uncommitted/current work" as "repairing
+     memory/exception behavior." `.lwram_bss` has no fixed-size `ASSERT` in
+     `sourceboot-cart.x` (unlike `.lwram_actor_runtime`/
+     `.lwram_geo_traversal`), so this uncommitted growth is invisible to a
+     diff of the linker script alone. Geo-walk's own genuine addition is
+     `0x1000` (4,096) bytes per the real generated
+     `saturn_geo_depth_manifest.ld`; this uncommitted refactor is roughly an
+     order of magnitude larger by itself and is at least as likely to be the
+     dominant contributor to the LWRAM assertions. It also cannot be
+     responsible for the fourth, separate HWRAM-margin assertion either way,
+     since geo-walk touches zero HWRAM bytes -- neither can this LWRAM-side
+     refactor explain an HWRAM assertion, so that specific failure's cause
+     remains unidentified by either explanation.
+
+  **Net effect: the real dominant cause of the link failure is not yet
+  conclusively identified.** The committed-only delta (this plan's Tasks
+  1-9 plus the separately-committed, unrelated `39008658`/`6dbaea8d`/
+  `a48e5aac`) was never build-tested in isolation from the ~390 lines of
+  uncommitted/untracked change described above. Whoever resumes this should
+  not assume reverting `6dbaea8d`/`a48e5aac` alone restores a passing
+  link -- it may not touch the actual dominant consumer at all. The
+  uncommitted work belongs to someone else's in-progress task in this
+  shared worktree and was deliberately left untouched (not stashed, not
+  reverted) per this task's own instructions; re-testing with it stashed
+  by its owner, against the same accepted-rollback flags, would be the
+  fastest way to separate the two variables.
+
 - Fixed three real, target-only compile failures found by Task 9's first
   full SH-2 cross-build of the sourceboot image (`docs/superpowers/plans/
   2026-08-06-saturn-hud-vdp2.md`) -- every one of these files had only ever
