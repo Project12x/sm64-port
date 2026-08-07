@@ -4,6 +4,52 @@
 
 ### Added
 
+- Closed two code-review gaps in `saturn_hud_atlas.c` (Task 4, above) found by
+  a stricter-warning-level review pass (`-Wconversion -Wsign-conversion
+  -Wshadow -Wcast-align -Wcast-qual -Wdouble-promotion -Wundef
+  -Wstrict-prototypes`, still zero diagnostics -- these are both missing
+  guards, not compiler-catchable bugs):
+
+  First, `sm64_saturn_hud_atlas_write_cell()` bounds-checked `col`/`row` but
+  not `glyph`: a future caller computing an out-of-range
+  `sm64_saturn_hud_glyph_t` (e.g. Task 5's not-yet-written unclamped digit
+  arithmetic) would have `cpd_addr` land past the last real character
+  pattern and write a garbage glyph into a valid, visible PND cell --
+  discoverable only at Task 9/10's visual check, far from where the bug
+  would actually be introduced. Added `|| glyph >= SM64_SATURN_HUD_GLYPH_COUNT`
+  to the existing guard clause, matching the established index-plus-enum-
+  sentinel shape already used by
+  `saturn_demo_render.c:471-472`'s `demo_terrain_template_valid_set()`
+  (confirmed by reading it: same two-condition-plus-`_COUNT` pattern).
+
+  Second, nothing enforced that the atlas's character-pattern data
+  (`SM64_SATURN_HUD_GLYPH_COUNT * HUD_CHAR_BYTES`, currently 32 * 512 =
+  16384 bytes) stays under the 32768-byte gap to `HUD_PND_BASE`; a future
+  glyph addition could silently grow past that boundary and corrupt the
+  pattern-name table's own VRAM region, a cross-structure corruption that
+  would be very hard to trace back from a Ymir visual glitch. Added a
+  `_Static_assert` at file scope, matching the invariant-enforcement shape
+  already used by `saturn_pcm_protocol.h:164`
+  (`SM64_SATURN_PCM_BANK_OFFSET < SM64_SATURN_PCM_SOUND_RAM_BYTES`).
+  Verified the assert actually fires, not just that it compiles: built a
+  scratch copy with `HUD_PND_BASE`'s offset shrunk from `0x08000` to
+  `0x2000` (8192 bytes, below the real 16384-byte requirement) and
+  confirmed `sh-elf-gcc -fsyntax-only` fails with exactly the written
+  message ("HUD character-pattern data overflows into the PND region"),
+  then discarded the scratch copy -- the real file was never edited to an
+  invalid state.
+
+  Also folded the reviewer's optional minor suggestion: added
+  `HUD_CHAR_DIM` (16) so the eight power-meter crop calls reference a named
+  constant instead of a bare `16U, 16U` pair. Left the second optional
+  suggestion (extracting the quadrant-reorder arithmetic into a pure,
+  host-testable function with a unit test) as a note for a later task
+  rather than doing it here: that would mean building a new host-testable
+  module and Makefile `verify-*` target ahead of Task 5, which already
+  plans a pure, host-testable `saturn_hud_layout.c` of its own -- doing it
+  now risks scaffolding that Task 5 would then have to reconcile with
+  rather than build.
+
 - Added `src/port/saturn/gfx/saturn_hud_atlas.{h,c}`: a one-time VDP2 NBG0
   character/cell-mode glyph atlas (Task 4 of the VDP2 gameplay HUD plan,
   `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`). `sm64_saturn_hud_atlas_init()`

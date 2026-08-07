@@ -22,7 +22,19 @@
 #define HUD_TILE_COLS 20U
 #define HUD_TILE_ROWS 14U
 
-#define HUD_CHAR_BYTES (16U * 16U * 2U) /* 16x16 RGB1555 texels per pattern */
+#define HUD_CHAR_DIM 16U /* character-pattern width/height in texels */
+#define HUD_CHAR_BYTES (HUD_CHAR_DIM * HUD_CHAR_DIM * 2U) /* RGB1555 texels per pattern */
+
+/* Guards against a future glyph addition silently growing the character-
+ * pattern data past HUD_PND_BASE and corrupting the pattern-name table's
+ * own VRAM region -- the same invariant-enforcement shape already used by
+ * src/port/saturn/audio/saturn_pcm_protocol.h:164
+ * (SM64_SATURN_PCM_BANK_OFFSET < SM64_SATURN_PCM_SOUND_RAM_BYTES). Currently
+ * 32 glyphs * 512 bytes = 16384, comfortably under the 32768-byte gap to
+ * HUD_PND_BASE. */
+_Static_assert((uint32_t)SM64_SATURN_HUD_GLYPH_COUNT * HUD_CHAR_BYTES <=
+               (HUD_PND_BASE - HUD_CPD_BASE),
+               "HUD character-pattern data overflows into the PND region");
 
 /* Uploads a source glyph image into one 16x16 (CHAR_SIZE_2X2) character
  * pattern slot.
@@ -154,21 +166,21 @@ sm64_saturn_hud_atlas_init(void)
      * [numHealthWedges - 1] with no 0-wedge slot -- so there is no
      * "power_meter_0" source texture to extract or upload. */
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_1, sm64_saturn_hud_power_meter_1,
-                             SM64_SATURN_HUD_POWER_METER_1_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_1_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_2, sm64_saturn_hud_power_meter_2,
-                             SM64_SATURN_HUD_POWER_METER_2_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_2_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_3, sm64_saturn_hud_power_meter_3,
-                             SM64_SATURN_HUD_POWER_METER_3_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_3_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_4, sm64_saturn_hud_power_meter_4,
-                             SM64_SATURN_HUD_POWER_METER_4_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_4_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_5, sm64_saturn_hud_power_meter_5,
-                             SM64_SATURN_HUD_POWER_METER_5_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_5_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_6, sm64_saturn_hud_power_meter_6,
-                             SM64_SATURN_HUD_POWER_METER_6_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_6_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_7, sm64_saturn_hud_power_meter_7,
-                             SM64_SATURN_HUD_POWER_METER_7_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_7_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
     hud_atlas_upload_pattern(SM64_SATURN_HUD_GLYPH_POWER_METER_8, sm64_saturn_hud_power_meter_8,
-                             SM64_SATURN_HUD_POWER_METER_8_WIDTH, 16U, 16U);
+                             SM64_SATURN_HUD_POWER_METER_8_WIDTH, HUD_CHAR_DIM, HUD_CHAR_DIM);
 
     /* Cannon reticle and blank are procedural, not extracted -- solid gray
      * (matching ingame_menu.c's gDPSetEnvColor(50,50,50,180)) and solid
@@ -219,7 +231,8 @@ void
 sm64_saturn_hud_atlas_write_cell(uint8_t col, uint8_t row,
                                  sm64_saturn_hud_glyph_t glyph)
 {
-    if (col >= HUD_TILE_COLS || row >= HUD_TILE_ROWS)
+    if (col >= HUD_TILE_COLS || row >= HUD_TILE_ROWS ||
+        glyph >= SM64_SATURN_HUD_GLYPH_COUNT)
         return;
     const uint32_t cell_index = (uint32_t)row * HUD_PAGE_STRIDE_COLS + col;
     volatile uint16_t *const pnd = (volatile uint16_t *)
