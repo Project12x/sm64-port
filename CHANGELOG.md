@@ -25,6 +25,26 @@
   Nintendo-derived extractors in this repo, output is generated only under
   `build/` (gitignored) from the user's own ROM and is never committed.
 
+- Closed a code-review gap in the HUD glyph extractor: the test suite had
+  zero coverage of the actual pixel-extraction logic in `build_header`,
+  confirmed by live mutation testing (a swapped `width, height, size,
+  regions = entry` unpack and a `"big"` -> `"little"` endianness change in
+  the RGB1555 conversion both passed the suite unnoticed). Added
+  `test_build_header_extracts_correct_pixels_and_metadata` to
+  `test_extract_hud_glyphs.py`, which feeds `build_header` a tiny hand-built
+  synthetic MIO0 blob and asserts concrete pixel words, width/height,
+  offset, and sha256; re-verified to catch both mutations before fixing
+  them back out. Also fixed `extract_hud_glyphs.py`'s
+  `decoded_bases.setdefault(base, mio0_decode(rom, base))`, which looked
+  like a decode-once-per-base cache but wasn't: Python evaluates
+  `setdefault`'s second argument eagerly on every call regardless of
+  whether the key already exists, so `mio0_decode` ran once per glyph (30x)
+  instead of once per distinct MIO0 segment (2x). This was wasted work, not
+  a correctness bug -- re-running the real extraction against the real ROM
+  after the fix produced byte-identical output. Removed the now-dead
+  `json`/`Path` imports and the stale `power_meter_eight_segments` fixture
+  key from the test file.
+
 ### Changed
 
 - Extended the iterative geo runtime seam with depth-first child/sibling

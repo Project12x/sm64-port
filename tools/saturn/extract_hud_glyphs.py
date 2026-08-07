@@ -90,7 +90,9 @@ def build_header(assets: dict, rom: bytes | None = None, rom_sha256: str | None 
         width, height, size, regions = entry
         base, offset = regions["us"]
         if rom is not None:
-            image = decoded_bases.setdefault(base, mio0_decode(rom, base))
+            if base not in decoded_bases:
+                decoded_bases[base] = mio0_decode(rom, base)
+            image = decoded_bases[base]
             data = image[offset : offset + size]
             if len(data) != size:
                 raise ValueError(f"{glyph.asset_name}: range outside decoded segment")
