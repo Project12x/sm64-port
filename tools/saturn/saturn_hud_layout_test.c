@@ -346,6 +346,109 @@ test_layout_star_count_below_100_uses_two_digit_field(void)
     return 0;
 }
 
+/* Systematic (col,row) collision check, added alongside the 2026-08-09
+ * row-placement fix (HUD_ROW_COUNTERS and HUD_ROW_TIMER moved from the
+ * bottom cluster to the top; HUD_ROW_POWER_METER moved to share the
+ * timer's row -- see saturn_hud_layout.c's placement-derivation comment on
+ * sm64_saturn_hud_layout_build() for the pixel math). The 2026-08-07 spec
+ * review that first checked this property brute-forced all 1,638,400
+ * possible input combinations by hand and never committed a reusable test;
+ * this is a permanent, re-runnable replacement covering every dimension
+ * that can change which (col,row) cells get written: all 32 HUD_FLAG_*
+ * bit combinations, cannon_active (2), every camera mode/C-button case
+ * pair hud.c's two switches recognize including "neither matched" (12),
+ * power_meter_animation hidden vs. any visible phase (2), and both
+ * branches of the stars<100 column-width switch (2) -- 32*2*12*2*2 = 3,072
+ * snapshots. lives/coins/timer digit *values* are left fixed because
+ * every digit's column offset is a fixed-width field independent of the
+ * value it holds (2 digits for lives, 3 for coins, a fixed 6-cell layout
+ * for the timer) -- varying them cannot change which cells get targeted,
+ * only which glyph lands in an already-covered cell, which is out of
+ * scope for a placement collision check. For every one of the 3,072
+ * snapshots, every (col,row) pair the layout writes is required to be
+ * unique within that single build() call: two glyphs targeting the same
+ * cell in the same frame is exactly what a real collision looks like (the
+ * second write silently clobbers the first cell in VRAM). */
+static int
+test_layout_no_collisions_across_realistic_snapshots(void)
+{
+    static const int16_t camera_statuses[] = {
+        0,               /* no mode, no C-button */
+        1, 2, 4,         /* CAM_STATUS_MARIO / LAKITU / FIXED alone */
+        8, 16,           /* CAM_STATUS_C_DOWN / C_UP alone */
+        1 | 8, 1 | 16,   /* MARIO + C_DOWN / C_UP */
+        2 | 8, 2 | 16,   /* LAKITU + C_DOWN / C_UP */
+        4 | 8, 4 | 16,   /* FIXED + C_DOWN / C_UP */
+    };
+    static const int32_t star_values[] = { 42, 9999 };  /* <100 branch, >=100 branch */
+    static const int8_t power_anims[] = { 0, 1 };        /* POWER_METER_HIDDEN, any visible phase */
+    static const uint8_t cannon_states[] = { 0, 1 };
+    static const int16_t flag_bits[] = { 0x0001, 0x0002, 0x0004, 0x0008, 0x0040 };
+
+    const uint32_t flag_bit_count = (uint32_t)(sizeof(flag_bits) / sizeof(flag_bits[0]));
+    const uint32_t flag_combo_count = 1U << flag_bit_count;
+    const uint32_t camera_status_count = (uint32_t)(sizeof(camera_statuses) / sizeof(camera_statuses[0]));
+    uint32_t combos_checked = 0U;
+
+    for (uint32_t flag_mask = 0U; flag_mask < flag_combo_count; flag_mask++) {
+        int16_t flags = 0;
+        for (uint32_t bit = 0U; bit < flag_bit_count; bit++) {
+            if (flag_mask & (1U << bit))
+                flags = (int16_t)(flags | flag_bits[bit]);
+        }
+
+        for (uint32_t cannon_index = 0U; cannon_index < 2U; cannon_index++) {
+            for (uint32_t cam_index = 0U; cam_index < camera_status_count; cam_index++) {
+                for (uint32_t pm_index = 0U; pm_index < 2U; pm_index++) {
+                    for (uint32_t star_index = 0U; star_index < 2U; star_index++) {
+                        sm64_saturn_hud_snapshot_t snapshot;
+                        memset(&snapshot, 0, sizeof(snapshot));
+                        snapshot.flags = flags;
+                        snapshot.lives = 4;
+                        snapshot.coins = 55;
+                        snapshot.stars = (int16_t)star_values[star_index];
+                        snapshot.timer = 12345U;
+                        snapshot.wedges = 3;
+                        snapshot.camera_status = camera_statuses[cam_index];
+                        snapshot.power_meter_animation = power_anims[pm_index];
+                        snapshot.cannon_active = cannon_states[cannon_index];
+
+                        sm64_saturn_hud_cell_t cells[SM64_SATURN_HUD_LAYOUT_MAX_CELLS];
+                        const uint32_t count = sm64_saturn_hud_layout_build(
+                            &snapshot, cells, SM64_SATURN_HUD_LAYOUT_MAX_CELLS);
+
+                        for (uint32_t a = 0U; a < count; a++) {
+                            for (uint32_t b = a + 1U; b < count; b++) {
+                                if (cells[a].col == cells[b].col && cells[a].row == cells[b].row) {
+                                    fprintf(stderr,
+                                           "collision at (col=%u,row=%u): glyph %d and glyph %d "
+                                           "both written (flags=0x%04x cannon_active=%u "
+                                           "camera_status=%d power_meter_animation=%d stars=%d)\n",
+                                           cells[a].col, cells[a].row, (int)cells[a].glyph,
+                                           (int)cells[b].glyph, (unsigned)(uint16_t)flags,
+                                           cannon_states[cannon_index],
+                                           (int)camera_statuses[cam_index],
+                                           (int)power_anims[pm_index],
+                                           (int)star_values[star_index]);
+                                    return 1;
+                                }
+                            }
+                        }
+                        combos_checked++;
+                    }
+                }
+            }
+        }
+    }
+
+    if (combos_checked != 3072U) {
+        fprintf(stderr, "expected to check 3072 snapshot combinations, checked %u\n",
+               combos_checked);
+        return 1;
+    }
+    return 0;
+}
+
 /* Test double for the real target-only atlas writer -- linked instead of
  * saturn_hud_atlas.c for this fixture, so no Yaul headers are needed.
  * g_blank_write_count additionally records how many of those writes used
@@ -479,6 +582,7 @@ main(void)
     failures += test_layout_camera_mode_switch_selects_correct_glyph();
     failures += test_layout_camera_cbutton_switch_selects_correct_glyph();
     failures += test_layout_star_count_below_100_uses_two_digit_field();
+    failures += test_layout_no_collisions_across_realistic_snapshots();
     failures += test_publish_only_rewrites_changed_cells();
     failures += test_publish_writes_blank_for_vacated_cells();
     return failures;

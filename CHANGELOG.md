@@ -150,6 +150,58 @@
 
 ### Fixed
 
+- Moved the VDP2 HUD's lives/coins/stars/timer/power-meter cells from the
+  bottom of the frame to the top, where the source game actually draws
+  them. The owner's manual screenshot review of the first working HUD
+  render (commit `a6c2032a`) caught the defect directly: lives, coins,
+  stars, and the timer rendered at the BOTTOM of the screen, when real
+  SM64 draws them near the TOP. Root cause was already diagnosed, but not
+  fixed, by a 2026-08-07 code-review pass documented in
+  `docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md` (~line 1149): that
+  pass correctly traced `src/game/print.c:391`'s `render_textrect()`,
+  which applies an unconditional Y flip (`rectBaseY = 224 - y`) to
+  everything routed through `print_text()`/`print_text_fmt_int()` --
+  covering lives/coins/stars (source `HUD_TOP_Y=209`, flips to real screen
+  y=15) and the timer (source y=185, flips to y=39), both near the TOP of
+  a 224-line-tall frame -- but that pass only corrected the explanatory
+  comment in `saturn_hud_layout.c`, leaving the actual `HUD_ROW_*` tile
+  constants unmoved at the bottom (rows 10-12 of the 20x14 grid).
+  Re-derived every row fresh from the real source for this fix, not from
+  that prior summary: `HUD_ROW_COUNTERS` moves 12 -> 0 and `HUD_ROW_TIMER`
+  moves 11 -> 2, matching the flipped pixel math above. A third group,
+  the power meter (health wheel), was flagged by the 2026-08-07 pass as
+  "intentionally not pixel-derived, just a coarse-grid choice" and left at
+  the bottom (row 10) -- re-deriving it independently found that was
+  wrong too: `render_dl_power_meter()` positions it via a real vertex
+  transform (`guTranslate` into the same shared HUD projection
+  `create_dl_ortho_matrix()` sets up, `guOrtho(..., 0, SCREEN_HEIGHT, ...)`
+  with `SCREEN_HEIGHT=240`, a Y-up world convention distinct from
+  `print.c`'s own "224" flip constant), so its real screen row at its
+  typical resting/visible Y (200) is `240-200=40` -> tile row 2 -- the
+  SAME row as the timer, whose columns never overlap it (power meter is a
+  single cell at col 8; the timer spans cols 13-18), so
+  `HUD_ROW_POWER_METER` moves 10 -> 2 to share `HUD_ROW_TIMER`'s row
+  rather than getting its own. `HUD_ROW_CANNON_CAMERA` (row 13, camera
+  status icon + cannon reticle) is unchanged: `render_hud_camera_status()`
+  draws the camera icon via the *unflipped* `render_hud_tex_lut()` path
+  directly at y=205, which genuinely is near the bottom -- that placement
+  was already correct. Re-verified zero (col,row) collisions across every
+  group that can co-occur with a new, permanent, systematic test,
+  `test_layout_no_collisions_across_realistic_snapshots`
+  (`tools/saturn/saturn_hud_layout_test.c`, 3,072 snapshot combinations
+  covering all `HUD_FLAG_*` bit combinations, cannon/camera/power-meter
+  state, and both branches of the stars<100 column-width switch) --
+  replacing the 2026-08-07 pass's own 1,638,400-combination brute-force
+  spec review, which was run by hand and never committed as a test.
+  `tools/saturn/capture_sourceboot_hud_state.py`'s `DEFAULT_EXPECT_ROW`
+  updated in lockstep (12 -> 0) to keep the automated in-emulator capture
+  checking the cell the layout actually writes now, instead of silently
+  false-passing against the old row. All four HUD host suites green
+  (`verify-saturn-hud-snapshot/-layout/-layout-mutation/-no-vdp1`) and a
+  real headless-Ymir `verify-sourceboot-hud-target` capture (`build-agent2`
+  `ymir-headless`) against the canonical HUD build config confirms the
+  corrected layout on target.
+
 - Made the VDP2 gameplay HUD actually visible for the first time, closing
   two target-proven defects from the completed Task 9 blank-HUD
   investigation (pixel-exact PND-injection proof in headless Ymir -- the

@@ -61,8 +61,16 @@ HUD_CHAR_BYTES = HUD_CHAR_DIM * HUD_CHAR_DIM * 2
 # HUD_DISPLAY_DEFAULT's bits (level_update.h) and is active during ordinary
 # gameplay, so this cell should hold SM64_SATURN_HUD_GLYPH_MARIO_HEAD as soon
 # as the source tick has run past level load with the default HUD flags.
+#
+# HUD_ROW_COUNTERS moved 12 -> 0 on 2026-08-09 (owner manual-screenshot
+# review caught the HUD rendering at the bottom of the frame instead of the
+# top; see saturn_hud_layout.c's placement-derivation comment). Updated
+# here in lockstep -- leaving this at the old row would silently re-create
+# the exact "hardcoded expectation quietly drifts from the real layout and
+# false-passes" failure mode this module's own docstring already warns
+# about for the CONFIG_1/CONFIG_3 PND-packing bug.
 DEFAULT_EXPECT_COL = 1
-DEFAULT_EXPECT_ROW = 12
+DEFAULT_EXPECT_ROW = 0
 
 
 def pnd_cell_address(col: int, row: int) -> int:
@@ -168,7 +176,8 @@ def main() -> int:
                              "HUD_COL_LIVES in saturn_hud_layout.c)")
     parser.add_argument("--expect-row", type=int, default=DEFAULT_EXPECT_ROW,
                         help=f"HUD tile-grid row to sample (default: {DEFAULT_EXPECT_ROW}, "
-                             "HUD_ROW_COUNTERS in saturn_hud_layout.c)")
+                             "HUD_ROW_COUNTERS in saturn_hud_layout.c, corrected "
+                             "2026-08-09 from row 12 to row 0)")
     parser.add_argument("--expect-glyph-index", type=int, required=True,
                         help="sm64_saturn_hud_glyph_t ordinal expected at "
                              "(--expect-col,--expect-row) once the lives readout "
