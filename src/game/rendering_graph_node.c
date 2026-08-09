@@ -555,12 +555,13 @@ static void geo_process_perspective(struct GraphNodePerspective *node) {
 }
 
 /**
- * Process a level of detail node. From the current transformation matrix,
- * the perpendicular distance to the camera is extracted and the children
- * of this node are only processed if that distance is within the render
- * range of this node.
+ * Level-of-detail enter: extracts the perpendicular distance to the camera
+ * from the current transformation matrix and returns whether that distance
+ * is within this node's render range AND it has children to descend into.
+ * No leave action is needed -- the original handler never touched the
+ * matrix stack or any global that needs post-child restoration.
  */
-static void geo_process_level_of_detail(struct GraphNodeLevelOfDetail *node) {
+static bool saturn_geo_enter_level_of_detail(struct GraphNodeLevelOfDetail *node) {
 #ifdef GBI_FLOATS
     Mtx *mtx = gMatStackFixed[gMatStackIndex];
     s16 distanceFromCam = (s32) -mtx->m[3][2]; // z-component of the translation column
@@ -577,18 +578,36 @@ static void geo_process_level_of_detail(struct GraphNodeLevelOfDetail *node) {
 #endif
 
     if (node->minDistance <= distanceFromCam && distanceFromCam < node->maxDistance) {
-        if (node->node.children != 0) {
-            geo_process_node_and_siblings(node->node.children);
-        }
+        return node->node.children != 0;
+    }
+    return false;
+}
+
+/**
+ * Process a level of detail node. From the current transformation matrix,
+ * the perpendicular distance to the camera is extracted and the children
+ * of this node are only processed if that distance is within the render
+ * range of this node.
+ */
+static void geo_process_level_of_detail(struct GraphNodeLevelOfDetail *node) {
+    if (saturn_geo_enter_level_of_detail(node)) {
+        (void) saturn_geo_walk_process_children(node->node.children);
     }
 }
 
 /**
- * Process a switch case node. The node's selection function is called
- * if it is 0, and among the node's children, only the selected child is
- * processed next.
+ * Switch-case enter: runs the selection callback (if any), then walks the
+ * node's children ring to the selectedCase-th entry. Returns the selected
+ * child, or NULL if there isn't one -- the dynamically-chosen child is
+ * still exactly one resulting pointer at enter time, fitting the single-
+ * child contract (same pattern as BACKGROUND's enter-time decision). No
+ * leave action is needed -- the original handler never touched the matrix
+ * stack or any global that needs post-child restoration. Note:
+ * saturn_geo_walk_sibling_of already special-cases "parent->type ==
+ * GRAPH_NODE_TYPE_SWITCH_CASE => no sibling chaining" for whichever child
+ * gets selected here.
  */
-static void geo_process_switch(struct GraphNodeSwitchCase *node) {
+static struct GraphNode *saturn_geo_enter_switch(struct GraphNodeSwitchCase *node) {
     struct GraphNode *selectedChild = node->fnNode.node.children;
     s32 i;
 
@@ -598,8 +617,18 @@ static void geo_process_switch(struct GraphNodeSwitchCase *node) {
     for (i = 0; selectedChild != NULL && node->selectedCase > i; i++) {
         selectedChild = selectedChild->next;
     }
+    return selectedChild;
+}
+
+/**
+ * Process a switch case node. The node's selection function is called
+ * if it is 0, and among the node's children, only the selected child is
+ * processed next.
+ */
+static void geo_process_switch(struct GraphNodeSwitchCase *node) {
+    struct GraphNode *selectedChild = saturn_geo_enter_switch(node);
     if (selectedChild != NULL) {
-        geo_process_node_and_siblings(selectedChild);
+        (void) saturn_geo_walk_process_children(selectedChild);
     }
 }
 
@@ -691,12 +720,17 @@ static void geo_process_camera(struct GraphNodeCamera *node) {
 }
 
 /**
- * Process a translation / rotation node. A transformation matrix based
- * on the node's translation and rotation is created and pushed on both
- * the float and fixed point matrix stacks.
- * For the rest it acts as a normal display list node.
+ * Translation/rotation enter: builds the transform and pushes the matrix
+ * stack unconditionally (matching the pre-conversion code, which always
+ * incremented gMatStackIndex regardless of whether the node had children),
+ * then appends the display list if any. Returns the children pointer to
+ * descend into, or NULL if there are none; the caller must ALWAYS pair
+ * this with saturn_geo_leave_translation_rotation() to balance the
+ * unconditional push, exactly as the original always ran gMatStackIndex--
+ * at the end regardless of the children check.
  */
-static void geo_process_translation_rotation(struct GraphNodeTranslationRotation *node) {
+static struct GraphNode *saturn_geo_enter_translation_rotation(
+    struct GraphNodeTranslationRotation *node) {
     UNUSED Mat4 mtxf;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
@@ -727,18 +761,39 @@ static void geo_process_translation_rotation(struct GraphNodeTranslationRotation
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Translation/rotation leave: always pops the matrix stack, balancing the
+ * unconditional push in saturn_geo_enter_translation_rotation().
+ */
+static void saturn_geo_leave_translation_rotation(void) {
     gMatStackIndex--;
 }
 
 /**
- * Process a translation node. A transformation matrix based on the node's
- * translation is created and pushed on both the float and fixed point matrix stacks.
+ * Process a translation / rotation node. A transformation matrix based
+ * on the node's translation and rotation is created and pushed on both
+ * the float and fixed point matrix stacks.
  * For the rest it acts as a normal display list node.
  */
-static void geo_process_translation(struct GraphNodeTranslation *node) {
+static void geo_process_translation_rotation(struct GraphNodeTranslationRotation *node) {
+    struct GraphNode *children = saturn_geo_enter_translation_rotation(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_translation_rotation();
+}
+
+/**
+ * Translation enter: builds the transform and pushes the matrix stack
+ * unconditionally (matching the pre-conversion code), then appends the
+ * display list if any. Returns the children pointer to descend into, or
+ * NULL if there are none; the caller must ALWAYS pair this with
+ * saturn_geo_leave_translation() to balance the unconditional push.
+ */
+static struct GraphNode *saturn_geo_enter_translation(struct GraphNodeTranslation *node) {
     UNUSED Mat4 mtxf;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
@@ -768,18 +823,38 @@ static void geo_process_translation(struct GraphNodeTranslation *node) {
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Translation leave: always pops the matrix stack, balancing the
+ * unconditional push in saturn_geo_enter_translation().
+ */
+static void saturn_geo_leave_translation(void) {
     gMatStackIndex--;
 }
 
 /**
- * Process a rotation node. A transformation matrix based on the node's
- * rotation is created and pushed on both the float and fixed point matrix stacks.
+ * Process a translation node. A transformation matrix based on the node's
+ * translation is created and pushed on both the float and fixed point matrix stacks.
  * For the rest it acts as a normal display list node.
  */
-static void geo_process_rotation(struct GraphNodeRotation *node) {
+static void geo_process_translation(struct GraphNodeTranslation *node) {
+    struct GraphNode *children = saturn_geo_enter_translation(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_translation();
+}
+
+/**
+ * Rotation enter: builds the transform and pushes the matrix stack
+ * unconditionally (matching the pre-conversion code), then appends the
+ * display list if any. Returns the children pointer to descend into, or
+ * NULL if there are none; the caller must ALWAYS pair this with
+ * saturn_geo_leave_rotation() to balance the unconditional push.
+ */
+static struct GraphNode *saturn_geo_enter_rotation(struct GraphNodeRotation *node) {
     UNUSED Mat4 mtxf;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
@@ -807,18 +882,38 @@ static void geo_process_rotation(struct GraphNodeRotation *node) {
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Rotation leave: always pops the matrix stack, balancing the
+ * unconditional push in saturn_geo_enter_rotation().
+ */
+static void saturn_geo_leave_rotation(void) {
     gMatStackIndex--;
 }
 
 /**
- * Process a scaling node. A transformation matrix based on the node's
- * scale is created and pushed on both the float and fixed point matrix stacks.
+ * Process a rotation node. A transformation matrix based on the node's
+ * rotation is created and pushed on both the float and fixed point matrix stacks.
  * For the rest it acts as a normal display list node.
  */
-static void geo_process_scale(struct GraphNodeScale *node) {
+static void geo_process_rotation(struct GraphNodeRotation *node) {
+    struct GraphNode *children = saturn_geo_enter_rotation(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_rotation();
+}
+
+/**
+ * Scale enter: builds the transform and pushes the matrix stack
+ * unconditionally (matching the pre-conversion code), then appends the
+ * display list if any. Returns the children pointer to descend into, or
+ * NULL if there are none; the caller must ALWAYS pair this with
+ * saturn_geo_leave_scale() to balance the unconditional push.
+ */
+static struct GraphNode *saturn_geo_enter_scale(struct GraphNodeScale *node) {
     UNUSED Mat4 transform;
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
@@ -845,19 +940,40 @@ static void geo_process_scale(struct GraphNodeScale *node) {
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Scale leave: always pops the matrix stack, balancing the unconditional
+ * push in saturn_geo_enter_scale().
+ */
+static void saturn_geo_leave_scale(void) {
     gMatStackIndex--;
 }
 
 /**
- * Process a billboard node. A transformation matrix is created that makes its
- * children face the camera, and it is pushed on the floating point and fixed
- * point matrix stacks.
+ * Process a scaling node. A transformation matrix based on the node's
+ * scale is created and pushed on both the float and fixed point matrix stacks.
  * For the rest it acts as a normal display list node.
  */
-static void geo_process_billboard(struct GraphNodeBillboard *node) {
+static void geo_process_scale(struct GraphNodeScale *node) {
+    struct GraphNode *children = saturn_geo_enter_scale(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_scale();
+}
+
+/**
+ * Billboard enter: pushes the matrix stack unconditionally (matching the
+ * pre-conversion code) before building the billboard matrix (which also
+ * reads gCurGraphNodeCamera/gCurGraphNodeHeldObject/gCurGraphNodeObject but
+ * does not mutate them), then appends the display list if any. Returns the
+ * children pointer to descend into, or NULL if there are none; the caller
+ * must ALWAYS pair this with saturn_geo_leave_billboard() to balance the
+ * unconditional push.
+ */
+static struct GraphNode *saturn_geo_enter_billboard(struct GraphNodeBillboard *node) {
     Mtx *mtx = alloc_display_list(sizeof(*mtx));
 
     gMatStackIndex++;
@@ -901,10 +1017,41 @@ static void geo_process_billboard(struct GraphNodeBillboard *node) {
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Billboard leave: always pops the matrix stack, balancing the
+ * unconditional push in saturn_geo_enter_billboard().
+ */
+static void saturn_geo_leave_billboard(void) {
     gMatStackIndex--;
+}
+
+/**
+ * Process a billboard node. A transformation matrix is created that makes its
+ * children face the camera, and it is pushed on the floating point and fixed
+ * point matrix stacks.
+ * For the rest it acts as a normal display list node.
+ */
+static void geo_process_billboard(struct GraphNodeBillboard *node) {
+    struct GraphNode *children = saturn_geo_enter_billboard(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_billboard();
+}
+
+/**
+ * Display-list enter: appends the display list if any -- no matrix stack
+ * or global state touched at all, no leave action needed. Returns the
+ * children pointer to descend into, or NULL if there are none.
+ */
+static struct GraphNode *saturn_geo_enter_display_list(struct GraphNodeDisplayList *node) {
+    if (node->displayList != NULL) {
+        geo_append_display_list(node->displayList, node->node.flags >> 8);
+    }
+    return node->node.children;
 }
 
 /**
@@ -913,19 +1060,18 @@ static void geo_process_billboard(struct GraphNodeBillboard *node) {
  * parent node. It processes its children if it has them.
  */
 static void geo_process_display_list(struct GraphNodeDisplayList *node) {
-    if (node->displayList != NULL) {
-        geo_append_display_list(node->displayList, node->node.flags >> 8);
-    }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
+    struct GraphNode *children = saturn_geo_enter_display_list(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
     }
 }
 
 /**
- * Process a generated list. Instead of storing a pointer to a display list,
- * the list is generated on the fly by a function.
+ * Generated-list enter: runs fnNode.func to optionally build/append a
+ * display list -- no matrix stack touched, no leave action needed. Returns
+ * the children pointer to descend into, or NULL if there are none.
  */
-static void geo_process_generated_list(struct GraphNodeGenerated *node) {
+static struct GraphNode *saturn_geo_enter_generated_list(struct GraphNodeGenerated *node) {
     if (node->fnNode.func != NULL) {
         Gfx *list = node->fnNode.func(GEO_CONTEXT_RENDER, &node->fnNode.node,
                                      (struct AllocOnlyPool *) gMatStack[gMatStackIndex]);
@@ -934,8 +1080,17 @@ static void geo_process_generated_list(struct GraphNodeGenerated *node) {
             geo_append_display_list((void *) VIRTUAL_TO_PHYSICAL(list), node->fnNode.node.flags >> 8);
         }
     }
-    if (node->fnNode.node.children != NULL) {
-        geo_process_node_and_siblings(node->fnNode.node.children);
+    return node->fnNode.node.children;
+}
+
+/**
+ * Process a generated list. Instead of storing a pointer to a display list,
+ * the list is generated on the fly by a function.
+ */
+static void geo_process_generated_list(struct GraphNodeGenerated *node) {
+    struct GraphNode *children = saturn_geo_enter_generated_list(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
     }
 }
 
@@ -989,10 +1144,16 @@ static void geo_process_background(struct GraphNodeBackground *node) {
 }
 
 /**
- * Render an animated part. The current animation state is not part of the node
- * but set in global variables. If an animated part is skipped, everything afterwards desyncs.
+ * Animated-part enter: mutates gCurAnimType/gCurrAnimAttribute (animation
+ * state that intentionally persists into the child subtree and beyond,
+ * matching the pre-conversion behavior -- NOT saved/restored here), builds
+ * the animated transform, and pushes the matrix stack unconditionally
+ * (matching the pre-conversion code). Returns the children pointer to
+ * descend into, or NULL if there are none; the caller must ALWAYS pair
+ * this with saturn_geo_leave_animated_part() to balance the unconditional
+ * push.
  */
-static void geo_process_animated_part(struct GraphNodeAnimatedPart *node) {
+static struct GraphNode *saturn_geo_enter_animated_part(struct GraphNodeAnimatedPart *node) {
     UNUSED Mat4 matrix;
     Vec3s rotation;
     Vec3f translation;
@@ -1063,10 +1224,30 @@ static void geo_process_animated_part(struct GraphNodeAnimatedPart *node) {
     if (node->displayList != NULL) {
         geo_append_display_list(node->displayList, node->node.flags >> 8);
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
-    }
+    return node->node.children;
+}
+
+/**
+ * Animated-part leave: always pops the matrix stack, balancing the
+ * unconditional push in saturn_geo_enter_animated_part(). The animation
+ * globals mutated in the enter phase are deliberately NOT restored here
+ * (matches pre-conversion behavior -- animation state is meant to flow
+ * downward and persist).
+ */
+static void saturn_geo_leave_animated_part(void) {
     gMatStackIndex--;
+}
+
+/**
+ * Render an animated part. The current animation state is not part of the node
+ * but set in global variables. If an animated part is skipped, everything afterwards desyncs.
+ */
+static void geo_process_animated_part(struct GraphNodeAnimatedPart *node) {
+    struct GraphNode *children = saturn_geo_enter_animated_part(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
+    }
+    saturn_geo_leave_animated_part();
 }
 
 /**
@@ -1103,11 +1284,14 @@ void geo_set_animation_globals(struct AnimInfo *node, s32 hasAnimation) {
 }
 
 /**
- * Process a shadow node. Renders a shadow under an object offset by the
- * translation of the first animated component and rotated according to
- * the floor below it.
+ * Shadow enter: renders the shadow display list (if any), fully balancing
+ * its own internal gMatStackIndex push/pop around the shadow display
+ * list's transform BEFORE returning -- that push/pop is entirely self-
+ * contained and unrelated to the child subtree below. No leave action is
+ * needed for the child subtree itself. Returns the children pointer to
+ * descend into, or NULL if there are none.
  */
-static void geo_process_shadow(struct GraphNodeShadow *node) {
+static struct GraphNode *saturn_geo_enter_shadow(struct GraphNodeShadow *node) {
     Gfx *shadowList;
     UNUSED Mat4 mtxf;
     Vec3f shadowPos;
@@ -1188,8 +1372,18 @@ static void geo_process_shadow(struct GraphNodeShadow *node) {
             gMatStackIndex--;
         }
     }
-    if (node->node.children != NULL) {
-        geo_process_node_and_siblings(node->node.children);
+    return node->node.children;
+}
+
+/**
+ * Process a shadow node. Renders a shadow under an object offset by the
+ * translation of the first animated component and rotated according to
+ * the floor below it.
+ */
+static void geo_process_shadow(struct GraphNodeShadow *node) {
+    struct GraphNode *children = saturn_geo_enter_shadow(node);
+    if (children != NULL) {
+        (void) saturn_geo_walk_process_children(children);
     }
 }
 
@@ -1893,6 +2087,30 @@ void geo_try_process_children(struct GraphNode *node) {
  * name out contiguously followed by "(" anywhere in this file, including
  * in a comment, adds a phantom match. This paragraph and the one above
  * it both avoid that deliberately.)
+ *
+ * Task 14's final sub-wave (2026-08-09) converts the eleven remaining
+ * skeleton types wave 2 deliberately deferred: LEVEL_OF_DETAIL,
+ * SWITCH_CASE, TRANSLATION_ROTATION, TRANSLATION, ROTATION, SCALE,
+ * BILLBOARD, ANIMATED_PART, DISPLAY_LIST, GENERATED_LIST, and SHADOW.
+ * Re-reading every one of their handlers in full found no two-subtree
+ * shape among them (all eleven are true single-child, some with an
+ * unconditional matrix-stack push/pop pair to balance, some with none)
+ * and no ordering hazard: none of them themselves call `saturn_geo_walk_
+ * process_children` directly, so none of them was ever a "fresh walk
+ * starter" the way wave 1/2's level-authored types or wave 3's Object
+ * family were feared to be if converted out of order. All eleven now
+ * funnel through the exact same shared entry point every previously
+ * converted type already used, which already carries the generic,
+ * type-agnostic `sSaturnGeoWalkActive` reentrancy guard described above --
+ * built in wave 3 specifically to remain correct once these skeleton
+ * types converted, with no further changes needed here. Because this was
+ * the last group of node types dispatched through the legacy bridge
+ * (`saturn_geo_walk_dispatch_legacy`, just below), that bridge's switch is
+ * now empty of real cases and has been collapsed to its default fallback;
+ * see its own updated comment for what still legitimately reaches it.
+ * `sSaturnGeoWalkActive`'s single deliberate real-recursion fallback call
+ * site (the same one wave 3's accounting paragraph above counted) is now
+ * the only one left in this file outside the dispatcher's own definition.
  * --------------------------------------------------------------------- */
 
 enum {
@@ -1924,6 +2142,17 @@ enum {
     SATURN_GEO_LEAVE_OBJECT_FINAL = 6U,
     SATURN_GEO_LEAVE_OBJECT_COMBINED = 7U,
     SATURN_GEO_BOUNDARY_HELD_OBJECT = 8U,
+    /* Task 14 final sub-wave: the six remaining single-child types that
+     * push an unconditional matrix-stack slot in enter() and must pop it
+     * in leave() regardless of whether the node had children (same shape
+     * as CAMERA's SATURN_GEO_LEAVE_CAMERA above, minus the conditional
+     * global clear -- these six only ever need the unconditional pop). */
+    SATURN_GEO_LEAVE_TRANSLATION_ROTATION = 9U,
+    SATURN_GEO_LEAVE_TRANSLATION = 10U,
+    SATURN_GEO_LEAVE_ROTATION = 11U,
+    SATURN_GEO_LEAVE_SCALE = 12U,
+    SATURN_GEO_LEAVE_BILLBOARD = 13U,
+    SATURN_GEO_LEAVE_ANIMATED_PART = 14U,
 };
 
 /* Named diagnostic for the runtime's fail-closed overflow latch (global
@@ -1966,68 +2195,31 @@ static uintptr_t saturn_geo_walk_sibling_of(const struct GraphNode *node) {
 }
 
 /**
- * Bridge for node types this wave does not yet convert: dispatches to
- * the existing, unmodified handler function by name (never through the
- * geo_process_node_and_siblings text this policy gate tracks), exactly
- * mirroring geo_process_node_and_siblings's own switch further down
- * this file. Those handlers are untouched and keep using real recursion
- * for their own children, independent of this walk instance.
+ * Bridge for node types not handled by a real case in saturn_geo_walk_
+ * enter's own switch below, exactly mirroring geo_process_node_and_
+ * siblings's own switch further down this file's default case.
  *
- * GRAPH_NODE_TYPE_OBJECT / OBJECT_PARENT / HELD_OBJ are deliberately
- * ABSENT here as of Task 14 wave 3 (same as MASTER_LIST/ORTHO_PROJECTION/
- * PERSPECTIVE/CAMERA/BACKGROUND before them, waves 1-2): they are now
- * converted, so saturn_geo_walk_enter's own switch below intercepts them
- * before this bridge would ever be reached for them when nested within an
- * active walk -- this function's default: case is genuinely unreachable
- * for those three types via that path. They CAN still be reached here
- * indirectly, though: if a still-unconverted type below (e.g.
- * ANIMATED_PART) recurses via geo_process_node_and_siblings's own switch
- * (real recursion, not this bridge) and that switch calls
- * geo_process_object/_parent/geo_process_held_object directly, THAT is a
- * completely different call path than this function, and is exactly the
- * reentrancy scenario saturn_geo_walk_process_children's sSaturnGeoWalkActive
- * guard exists for -- see this file's wave 3 doc comment above the
- * SATURN_GEO_LEAVE_* enum for the full mechanism.
+ * As of Task 14's final sub-wave, every node type that switch dispatches
+ * on a real handler for (MASTER_LIST, ORTHO_PROJECTION, PERSPECTIVE,
+ * CAMERA, BACKGROUND, OBJECT, OBJECT_PARENT, HELD_OBJ, and this sub-wave's
+ * eleven: LEVEL_OF_DETAIL, SWITCH_CASE, TRANSLATION_ROTATION, TRANSLATION,
+ * ROTATION, SCALE, BILLBOARD, ANIMATED_PART, DISPLAY_LIST, GENERATED_LIST,
+ * SHADOW) is intercepted directly by saturn_geo_walk_enter's own switch
+ * before this bridge would ever be reached for it -- this function is now
+ * genuinely unreachable for all of them via that path. It remains in
+ * place (rather than being deleted outright) because ROOT, START, and
+ * CULLING_RADIUS are never dispatched by either switch (they fall to
+ * geo_try_process_children generically already, in both switches) and
+ * because geo_process_node_and_siblings's own switch -- which THIS
+ * function's callers never touch, by construction -- can still reach a
+ * fully-converted type via real recursion during the sSaturnGeoWalkActive
+ * reentrancy-fallback path (see that flag's own comment above
+ * saturn_geo_walk_process_children for the full mechanism); that fallback
+ * calls geo_process_node_and_siblings directly, which owns its own switch,
+ * not this one.
  */
 static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
-    switch (node->type) {
-        case GRAPH_NODE_TYPE_LEVEL_OF_DETAIL:
-            geo_process_level_of_detail((struct GraphNodeLevelOfDetail *) node);
-            break;
-        case GRAPH_NODE_TYPE_SWITCH_CASE:
-            geo_process_switch((struct GraphNodeSwitchCase *) node);
-            break;
-        case GRAPH_NODE_TYPE_TRANSLATION_ROTATION:
-            geo_process_translation_rotation((struct GraphNodeTranslationRotation *) node);
-            break;
-        case GRAPH_NODE_TYPE_TRANSLATION:
-            geo_process_translation((struct GraphNodeTranslation *) node);
-            break;
-        case GRAPH_NODE_TYPE_ROTATION:
-            geo_process_rotation((struct GraphNodeRotation *) node);
-            break;
-        case GRAPH_NODE_TYPE_ANIMATED_PART:
-            geo_process_animated_part((struct GraphNodeAnimatedPart *) node);
-            break;
-        case GRAPH_NODE_TYPE_BILLBOARD:
-            geo_process_billboard((struct GraphNodeBillboard *) node);
-            break;
-        case GRAPH_NODE_TYPE_DISPLAY_LIST:
-            geo_process_display_list((struct GraphNodeDisplayList *) node);
-            break;
-        case GRAPH_NODE_TYPE_SCALE:
-            geo_process_scale((struct GraphNodeScale *) node);
-            break;
-        case GRAPH_NODE_TYPE_SHADOW:
-            geo_process_shadow((struct GraphNodeShadow *) node);
-            break;
-        case GRAPH_NODE_TYPE_GENERATED_LIST:
-            geo_process_generated_list((struct GraphNodeGenerated *) node);
-            break;
-        default:
-            geo_try_process_children(node);
-            break;
-    }
+    geo_try_process_children(node);
 }
 
 /**
@@ -2114,6 +2306,120 @@ static bool saturn_geo_walk_enter(uintptr_t node_token,
             if (saturn_geo_enter_background(bg)) {
                 result->admitted = true;
                 result->child = (uintptr_t) bg->fnNode.node.children;
+            }
+            break;
+        }
+        /* Task 14 final sub-wave: the eleven remaining single-child types.
+         * Each saturn_geo_enter_* helper below already performs exactly
+         * the same enter-phase work (matrix push, display list append,
+         * selection callback, etc.) its pre-conversion geo_process_*
+         * wrapper did -- unconditionally, before this switch examines the
+         * returned child pointer -- then returns the one child pointer to
+         * descend into (or NULL). See each helper's own comment (next to
+         * its definition above) for the exact per-type shape and which of
+         * these six need an unconditional leave-phase matrix-stack pop
+         * (TRANSLATION_ROTATION, TRANSLATION, ROTATION, SCALE, BILLBOARD,
+         * ANIMATED_PART -- same unconditional-push/unconditional-pop shape
+         * as wave 1's CAMERA, minus the conditional global clear). The
+         * other five (LEVEL_OF_DETAIL, SWITCH_CASE, DISPLAY_LIST,
+         * GENERATED_LIST, SHADOW) need no leave action at all, matching
+         * ORTHO_PROJECTION/BACKGROUND's shape above. */
+        case GRAPH_NODE_TYPE_LEVEL_OF_DETAIL: {
+            struct GraphNodeLevelOfDetail *lod = (struct GraphNodeLevelOfDetail *) node;
+            if (saturn_geo_enter_level_of_detail(lod)) {
+                result->admitted = true;
+                result->child = (uintptr_t) lod->node.children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_SWITCH_CASE: {
+            struct GraphNodeSwitchCase *sw = (struct GraphNodeSwitchCase *) node;
+            struct GraphNode *selectedChild = saturn_geo_enter_switch(sw);
+            if (selectedChild != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) selectedChild;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_TRANSLATION_ROTATION: {
+            struct GraphNodeTranslationRotation *tr =
+                (struct GraphNodeTranslationRotation *) node;
+            struct GraphNode *children = saturn_geo_enter_translation_rotation(tr);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_TRANSLATION_ROTATION;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_TRANSLATION: {
+            struct GraphNodeTranslation *tn = (struct GraphNodeTranslation *) node;
+            struct GraphNode *children = saturn_geo_enter_translation(tn);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_TRANSLATION;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_ROTATION: {
+            struct GraphNodeRotation *rn = (struct GraphNodeRotation *) node;
+            struct GraphNode *children = saturn_geo_enter_rotation(rn);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_ROTATION;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_SCALE: {
+            struct GraphNodeScale *sc = (struct GraphNodeScale *) node;
+            struct GraphNode *children = saturn_geo_enter_scale(sc);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_SCALE;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_BILLBOARD: {
+            struct GraphNodeBillboard *bb = (struct GraphNodeBillboard *) node;
+            struct GraphNode *children = saturn_geo_enter_billboard(bb);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_BILLBOARD;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_ANIMATED_PART: {
+            struct GraphNodeAnimatedPart *ap = (struct GraphNodeAnimatedPart *) node;
+            struct GraphNode *children = saturn_geo_enter_animated_part(ap);
+            result->admitted = true;
+            result->leave_required = true;
+            result->leave_action = SATURN_GEO_LEAVE_ANIMATED_PART;
+            result->child = (uintptr_t) children;
+            break;
+        }
+        case GRAPH_NODE_TYPE_DISPLAY_LIST: {
+            struct GraphNodeDisplayList *dl = (struct GraphNodeDisplayList *) node;
+            struct GraphNode *children = saturn_geo_enter_display_list(dl);
+            if (children != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_GENERATED_LIST: {
+            struct GraphNodeGenerated *gl = (struct GraphNodeGenerated *) node;
+            struct GraphNode *children = saturn_geo_enter_generated_list(gl);
+            if (children != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_SHADOW: {
+            struct GraphNodeShadow *sh = (struct GraphNodeShadow *) node;
+            struct GraphNode *children = saturn_geo_enter_shadow(sh);
+            if (children != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) children;
             }
             break;
         }
@@ -2274,6 +2580,24 @@ static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
             break;
         case SATURN_GEO_BOUNDARY_HELD_OBJECT:
             saturn_geo_leave_held_object_boundary();
+            break;
+        case SATURN_GEO_LEAVE_TRANSLATION_ROTATION:
+            saturn_geo_leave_translation_rotation();
+            break;
+        case SATURN_GEO_LEAVE_TRANSLATION:
+            saturn_geo_leave_translation();
+            break;
+        case SATURN_GEO_LEAVE_ROTATION:
+            saturn_geo_leave_rotation();
+            break;
+        case SATURN_GEO_LEAVE_SCALE:
+            saturn_geo_leave_scale();
+            break;
+        case SATURN_GEO_LEAVE_BILLBOARD:
+            saturn_geo_leave_billboard();
+            break;
+        case SATURN_GEO_LEAVE_ANIMATED_PART:
+            saturn_geo_leave_animated_part();
             break;
         default:
             break;

@@ -345,6 +345,77 @@
   measured directly from `run()`'s push order, the real worst-case factor
   for a two-subtree node's `child`-direction cost is up to 2x the old
   single-child path's, not 3x.
+- Converted the remaining 11 unconverted node-type handlers in
+  `src/game/rendering_graph_node.c` -- the "skeleton" types wave 2
+  deliberately deferred -- off real recursion and onto the bounded
+  runtime, the final sub-wave of Task 2 in
+  `docs/superpowers/plans/2026-08-07-task14-completion.md`:
+  `geo_process_level_of_detail`, `geo_process_switch`,
+  `geo_process_translation_rotation`, `geo_process_translation`,
+  `geo_process_rotation`, `geo_process_scale`, `geo_process_billboard`,
+  `geo_process_animated_part`, `geo_process_display_list`,
+  `geo_process_generated_list`, and `geo_process_shadow`. Each was split
+  into a `saturn_geo_enter_*` helper (returning the node's one child
+  pointer to descend into, matching each pre-conversion handler's exact
+  side-effect ordering) and a matching case in `saturn_geo_walk_enter`'s
+  switch; the six types that unconditionally push a matrix-stack slot in
+  enter (`TRANSLATION_ROTATION`, `TRANSLATION`, `ROTATION`, `SCALE`,
+  `BILLBOARD`, `ANIMATED_PART`) also gained a `saturn_geo_leave_*` helper
+  and a new action code in the existing shared enum
+  (`SATURN_GEO_LEAVE_TRANSLATION_ROTATION` through
+  `SATURN_GEO_LEAVE_ANIMATED_PART`) so the pop always balances the push
+  regardless of whether the node had children, exactly as the
+  pre-conversion code did. `geo_process_animated_part`'s animation-state
+  globals (`gCurAnimType`, `gCurrAnimAttribute`, ...) are deliberately
+  left unrestored in the new leave helper, matching pre-conversion
+  behavior: that state is meant to flow downward into the child subtree
+  and persist. `geo_process_switch`'s selection callback and
+  `geo_process_level_of_detail`'s distance gate now run inside their
+  `saturn_geo_enter_*` helper exactly as before, unconditionally ahead of
+  the child-presence check; `saturn_geo_walk_sibling_of`'s existing
+  switch-case special case (no sibling chaining for a selected child,
+  added in wave 1) needed no changes. Re-reading every one of these
+  eleven handlers in full (not relying on a prior research pass alone)
+  confirmed all are true single-child shapes with no two-subtree case
+  among them, and no ordering hazard: none of them call
+  `saturn_geo_walk_process_children` themselves, so converting this whole
+  group at once could not recreate the wave-1/2/3 class of "fresh walk
+  starter reached before its containing type converts" hazard -- all
+  eleven now funnel through the same shared `sSaturnGeoWalkActive`
+  type-agnostic reentrancy guard every previously-converted type already
+  used.
+  - Because this was the last group of node types the legacy bridge
+    (`saturn_geo_walk_dispatch_legacy`) dispatched real cases for, that
+    switch is now collapsed to its `geo_try_process_children` default
+    fallback (still needed for `ROOT`/`START`/`CULLING_RADIUS`, which
+    neither switch ever gave a named case); its own comment was rewritten
+    to describe the two remaining, deliberately out-of-scope, non-per-
+    node-type call sites instead of an exhaustive per-type absence list
+    that no longer applied.
+  - **Real remaining call-site count is 3, not 0**:
+    `geo_walk_source_policy_test.py` reports "3 direct recursive
+    dispatcher calls" after this change (down from 14), and all three are
+    the ones flagged out of scope before this wave started -- the
+    `sSaturnGeoWalkActive` guard's own deliberate real-recursion fallback
+    (unchanged, one call site), plus the two non-per-node-type sites wave
+    2's own accounting paragraph already named and never converted:
+    `geo_try_process_children`'s generic children-only bridge and
+    `geo_process_root`'s top-level kickoff call. Converting either of
+    those is a materially different, larger change (turning
+    `geo_process_node_and_siblings` itself into a bounded-walk entry
+    point) than converting a per-node-type handler, and was out of scope
+    for this sub-wave.
+  - Verified: `verify-saturn-geo-walk-runtime` and
+    `verify-saturn-geo-depth-manifest` PASS (both independent of this
+    file's per-node-type dispatch, unaffected by this change); a real
+    SH-2 cross-compile (`sh-elf-gcc -fsyntax-only -std=c11` with the exact
+    sourceboot `SH_CFLAGS`/`sourceboot.specs`/`YAUL_CFLAGS_shared` include
+    set, `-Wall -Wextra -Wshadow -Wunused -Wduplicated-branches` etc.,
+    resolved via `.yaul.env` and a prior build's generated headers) of
+    `rendering_graph_node.c` is clean with zero new warnings/errors (the
+    same 2 pre-existing, unrelated `-Wcomment` warnings on wave 2's own
+    doc comment lines are unchanged, unmoved by this wave's insertions
+    above them).
 
 ### Fixed
 
