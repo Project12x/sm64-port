@@ -80,6 +80,53 @@
 
 ### Fixed
 
+- Fixed three review findings on the m64 decode-walk packaging commit
+  (`82841ccb`), the largest a reviewer-proven residual truncation exposure:
+  the walker validates only the sequence-level prefix of an m64 (~17% of
+  real sequence bytes; channel/layer script bodies are opaque by design,
+  and that scope boundary stays), so a truncation landing entirely in the
+  opaque region -- reviewer-proven by cutting `03_level_grass.m64` from
+  5,122 to 2,000 bytes -- still sealed into `AUDIO.DAT` with exit 0.
+  `tools/saturn/saturn_audio_package.py` now cross-checks every on-disk US
+  m64 it consumes against the exact byte size `assets.json` pins for it
+  (`sound/sequences/us/NAME.m64 -> [size, ...]`), failing packaging closed
+  with the sequence name, actual size, and pinned size on mismatch. Policy,
+  from real data: all 34 extracted US m64s carry pins that match disk
+  exactly (verified, zero mismatches), so a missing per-sequence pin -- or
+  a missing `assets.json` -- also fails closed. New RED test reproduces the
+  reviewer's exact cut (temp-copied real file mutated at test time; nothing
+  Nintendo-derived committed) and asserts the walker alone still passes the
+  truncated bytes, pinning why the size gate exists. Second finding, a
+  counting error: the walker docstring, test docstring, and the `82841ccb`
+  CHANGELOG entry all said "20 of 34" US sequences never reach a
+  sequence-level 0xFF; the real measurement is 19 of 34 (the 20 folded
+  generated seq00 into a count of the 34 extracted files that also mentions
+  seq00 separately) -- corrected in all three places; the commit message
+  itself is immutable history, so the correction is recorded here. Third
+  finding: `test_m64_decode_walk.py` enshrined `fb 00 00` (a delay-free
+  unconditional self-loop) as valid with a false rationale ("exactly how
+  looping music terminates" -- in fact all 19 real loopers carry an `0xfd`
+  delay inside the loop, and a delay-free closed cycle exhausts
+  `vm_tick_sequence`'s 64-instruction per-tick budget and returns false, a
+  fault, on the first tick: `sequence_vm.c:231` loop bound). Took the
+  review's preferred fix, not the comment-only fallback: the walker now
+  records the control-flow graph it decodes and reports a `delay-free-loop`
+  finding for any reachable cycle carrying no delay opcode (0xfd/0xfe),
+  counting a `0xfc` call as delay-bearing when its callee's reachable code
+  delays (the cycle through the call's return point dynamically executes
+  the callee each iteration); all 34 real US m64s plus generated seq00
+  still pass, and companion tests lock the with-delay loop shapes (plain,
+  `0xfe`, delay-in-subroutine) as valid. Also documented the walker's one
+  deliberate strictness deviation from `vm_flow`: out-of-range EU/SH
+  relative-branch displacements are rejected unconditionally, while the
+  real VM (`sequence_vm.c:203-207`) checks the not-taken condition before
+  bounds-checking, making a never-taken branch with a bad displacement
+  dynamically legal -- conservative, US-irrelevant (the US set never uses
+  these opcodes), now stated in the module docstring. Suites: 30 walker
+  tests (was 27), 8 packager tests (was 7), 9 sequence-bank tests, all
+  green under `.venv-saturn-tools`; real `compile-saturn-audio` GREEN-twice
+  with byte-identical artifacts, all 35 sequences passing.
+
 - Fixed a real cart-load packaging defect that caused the sourceboot cart-load
   safety gate to reject a correct, fully-built `SOURCE.DAT` at boot
   (`src/port/saturn/sourceboot/sourceboot-cart.x`). Root cause: the
@@ -260,15 +307,22 @@
   opcodes, operands truncated mid-opcode, overlapping decode, and control
   flow that falls off EOF. Root cause of the gap: the old byte-scan
   heuristic only rejected literal `FB/FC FF FF` patterns, so Task 1's
-  quality review (finding M-A, closed here with a RED fixture) confirmed a
-  sequence truncated mid-opcode sailed through packaging; the scan
-  survives only as a cheap prefilter. Judgment call, recorded for
+  quality review confirmed a sequence truncated mid-opcode sailed through
+  packaging; the scan survives only as a cheap prefilter. Finding M-A's
+  closure is split (correction recorded in the follow-up fix entry above):
+  the walker closes *sequence-level* truncation with a RED fixture, while
+  truncation landing entirely in the opaque channel-script region is
+  closed by the `assets.json` exact-size pin added in the follow-up
+  commit, not by the walker. Judgment call, recorded for
   reviewers: the plan's literal "0xFF reachable on every path" check was
   implemented as "every reachable path terminates at 0xFF, a validated
-  jump, or a merge into already-decoded code", because 20 of the repo's 34
-  real US sequences -- every looping level-music script, plus generated
-  seq00 -- end in an intentional 0xfb jump-back loop and never reach a
+  jump, or a merge into already-decoded code", because 19 of the repo's 34
+  real US sequences -- every looping level-music script -- plus generated
+  seq00 end in an intentional 0xfb jump-back loop and never reach a
   sequence-level 0xFF, so the literal check would reject all real music.
+  (This entry originally said "20 of the repo's 34", double-counting seq00
+  into the extracted-file count; the commit message carries the same
+  error.)
   Channel-script bodies stay opaque (pointers range-validated only): the
   VM emits CHANNEL_START events and has no channel interpreter to port,
   and interpretation is Task 15's scope, not this validator's. All 35 real

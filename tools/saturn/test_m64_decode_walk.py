@@ -8,11 +8,13 @@ reads the user-extracted `sound/sequences/us/*.m64` set from disk at test
 time, mirroring how test_compile_saturn_audio.py consumes the same inputs.
 
 Fixture policy notes (verified against the real US m64 set, 2026-08-09):
-20 of 34 real sequences -- every looping level-music script -- terminate in
+19 of 34 real sequences -- every looping level-music script -- terminate in
 an intentional `0xfb` jump-back loop and never reach a sequence-level 0xFF.
 The walker therefore treats a loop (merge into already-decoded code) as a
-legal path terminator; only falling off EOF or dying mid-opcode is a
-termination defect.
+legal path terminator when the cycle carries a delay opcode (0xfd/0xfe), as
+every real looper does; a delay-free cycle exhausts the VM's per-tick
+instruction budget and faults on the first tick, so it is a finding.
+Falling off EOF or dying mid-opcode is a termination defect.
 """
 from __future__ import annotations
 
@@ -20,7 +22,8 @@ import struct
 import unittest
 from pathlib import Path
 
-from m64_decode_walk import (FINDING_BUDGET, FINDING_EMPTY, FINDING_OVERLAP,
+from m64_decode_walk import (FINDING_BUDGET, FINDING_DELAY_FREE_LOOP,
+                             FINDING_EMPTY, FINDING_OVERLAP,
                              FINDING_OVERSIZED, FINDING_RUNS_PAST_END,
                              FINDING_TARGET_MID_INSTRUCTION,
                              FINDING_TARGET_OUT_OF_RANGE, FINDING_TRUNCATED,
@@ -69,7 +72,8 @@ class ValidSequenceTest(unittest.TestCase):
 
     def test_looping_music_shape_passes(self) -> None:
         # Real level music loops forever at the sequence level (verified:
-        # 20/34 real US m64s); a loop terminator must not be a finding.
+        # 19/34 real US m64s); a loop terminator whose cycle carries a
+        # delay -- as every real looper's does -- must not be a finding.
         ok, findings = walk_sequence(looping_sequence(), FORMAT_US)
         self.assertTrue(ok)
         self.assertEqual(findings, [])
@@ -116,13 +120,61 @@ class DefectClassTest(unittest.TestCase):
         self.assertIn(FINDING_TARGET_OUT_OF_RANGE, kinds(findings))
         self.assertEqual(findings[0].offset, 0)
 
-    def test_infinite_loop_terminates_promptly(self) -> None:
-        # Degenerate self-loop: the visited set (backstopped by the work
-        # budget) must terminate the walk instead of hanging.  The shape
-        # itself is legal -- it is exactly how looping music terminates.
+    def test_delay_free_self_loop_is_a_finding(self) -> None:
+        # Delay-free unconditional self-loop: the visited set terminates the
+        # walk promptly (no hang), and the shape is a defect -- unlike real
+        # looping music (whose loop always carries an 0xfd delay), a cycle
+        # with no delay opcode exhausts vm_tick_sequence's 64-instruction
+        # budget and faults the VM on the first tick (sequence_vm.c:231).
         ok, findings = walk_sequence(bytes([0xfb, 0x00, 0x00]), FORMAT_US)
+        self.assertFalse(ok)
+        self.assertEqual(kinds(findings), [FINDING_DELAY_FREE_LOOP])
+        self.assertEqual(findings[0].offset, 0)
+
+    def test_with_delay_self_loop_passes(self) -> None:
+        # The real looping-music shape in miniature: the jump-back cycle
+        # contains a delay, so each tick stops instead of faulting.
+        ok, findings = walk_sequence(bytes([0xfd, 0x40, 0xfb, 0x00, 0x00]),
+                                     FORMAT_US)
         self.assertTrue(ok)
         self.assertEqual(findings, [])
+        # 0xfe (delay 1) stops the tick just the same.
+        ok, findings = walk_sequence(bytes([0xfe, 0xfb, 0x00, 0x00]),
+                                     FORMAT_US)
+        self.assertTrue(ok)
+        self.assertEqual(findings, [])
+
+    def test_delay_free_conditional_cycle_is_a_finding(self) -> None:
+        # A conditional back-branch forms a cycle too; with no delay on it
+        # the first tick with a looping value faults the same way.
+        ok, findings = walk_sequence(bytes([0xfa, 0x00, 0x00, 0xff]),
+                                     FORMAT_US)
+        self.assertFalse(ok)
+        self.assertEqual(kinds(findings), [FINDING_DELAY_FREE_LOOP])
+
+    def test_delay_inside_called_subroutine_breaks_the_cycle(self) -> None:
+        # The loop body calls a subroutine that delays: dynamically every
+        # iteration executes the callee's 0xfd, so the cycle through the
+        # call's return point is delay-bearing and legal.
+        with_delay = bytes([
+            0xfc, 0x00, 0x06,  # 0x00 call -> 0x06
+            0xfb, 0x00, 0x00,  # 0x03 jump -> 0x00 (loop)
+            0xfd, 0x10,        # 0x06 subroutine delay
+            0xff,              # 0x08 subroutine return
+        ])
+        ok, findings = walk_sequence(with_delay, FORMAT_US)
+        self.assertTrue(ok)
+        self.assertEqual(findings, [])
+        # The same loop calling a delay-free subroutine still faults.
+        without_delay = bytes([
+            0xfc, 0x00, 0x06,  # 0x00 call -> 0x06
+            0xfb, 0x00, 0x00,  # 0x03 jump -> 0x00 (loop)
+            0xd3, 0x20,        # 0x06 subroutine body (no delay)
+            0xff,              # 0x08 subroutine return
+        ])
+        ok, findings = walk_sequence(without_delay, FORMAT_US)
+        self.assertFalse(ok)
+        self.assertEqual(kinds(findings), [FINDING_DELAY_FREE_LOOP])
 
     def test_work_budget_reports_exhaustion(self) -> None:
         ok, findings = walk_sequence(valid_sequence(), FORMAT_US,

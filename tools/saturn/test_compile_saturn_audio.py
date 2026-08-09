@@ -10,6 +10,7 @@ import aifc
 import tempfile
 from pathlib import Path
 
+from m64_decode_walk import FORMAT_US, walk_sequence
 from saturn_audio_package import (AudioPackageError, CHUNK_ALIGNMENT, HEADER,
                                   RESIDENT_LIMIT, _load_sequences, compile_catalog,
                                   parse_aiff, validate_audio_dependency)
@@ -25,6 +26,26 @@ def synthetic_walkable_payload(size: int) -> bytes:
     return bytes([0xD3, 0x20]) + b"\xfe" * (size - 3) + b"\xff"
 
 
+def write_us_m64_pins(root: Path) -> None:
+    """Give a temp packaging root the assets.json m64 size pins the packager
+    enforces, copied verbatim from the real repo manifest (sizes only -- the
+    temp tree's m64s are copies of the same extracted files)."""
+    data = json.loads((ROOT / "assets.json").read_text(encoding="utf-8"))
+    pins = {key: value for key, value in data.items()
+            if key.startswith("sound/sequences/us/") and key.endswith(".m64")}
+    (root / "assets.json").write_text(json.dumps(pins), encoding="utf-8")
+
+
+def pin_m64_size(root: Path, filename: str, size: int) -> None:
+    """Re-pin one sequence in a temp root's assets.json, for tests that
+    rewrite a sequence with synthetic content and still need to exercise the
+    decode walker behind the size gate."""
+    pins_path = root / "assets.json"
+    pins = json.loads(pins_path.read_text(encoding="utf-8"))
+    pins[f"sound/sequences/us/{filename}"] = [size, {}]
+    pins_path.write_text(json.dumps(pins), encoding="utf-8")
+
+
 def copy_complete_sound(temp: str | Path) -> Path:
     root = Path(temp) / "repo"
     shutil.copytree(ROOT / "sound", root / "sound")
@@ -33,6 +54,7 @@ def copy_complete_sound(temp: str | Path) -> Path:
     # expanded payload (decode-walk valid, since the packager now walks every
     # packaged sequence); the real asset remains a required user input.
     (root / "sound/sequences.bin.inc.c").write_bytes(synthetic_walkable_payload(2048))
+    write_us_m64_pins(root)
     return root
 
 
@@ -140,7 +162,11 @@ def test_alignment_hash_drift_and_duplicate() -> None:
         first = Path(temp) / "one"
         one = compile_catalog(root, first)
         seq = root / "sound/sequences/us/03_level_grass.m64"
-        seq.write_bytes(seq.read_bytes() + b"\0")
+        grown = seq.read_bytes() + b"\0"
+        seq.write_bytes(grown)
+        # Keep the size pin consistent with the mutation: this test is about
+        # identity drift, not the fail-closed size gate (covered separately).
+        pin_m64_size(root, "03_level_grass.m64", len(grown))
         second = Path(temp) / "two"
         two = compile_catalog(root, second)
         assert one["source_sha256"] != two["source_sha256"]
@@ -187,6 +213,7 @@ def test_generated_sequences_bin() -> None:
         # No sequences.bin.inc.c: the generated bank replaces the PC-build
         # product entirely on this path.
         shutil.copytree(ROOT / "sound", root / "sound")
+        write_us_m64_pins(root)
         bin_path = root / "build/saturn/audio/generated/sequences.bin"
         raw = write_synthetic_sequences_bin(bin_path)
         entries = _load_sequences(root, bin_path)
@@ -224,6 +251,7 @@ def test_decode_walk_fail_closed() -> None:
         valid = bytes([0xd3, 0x20, 0xd5, 0x32, 0xdd, 0x78, 0xdb, 0x66,
                        0xfd, 0x40, 0xff])
         sequence.write_bytes(valid[:5])  # cuts 0xdd's operand
+        pin_m64_size(root, sequence.name, 5)  # size gate passes; walker fires
         try:
             compile_catalog(root, Path(temp) / "truncated")
         except AudioPackageError as error:
@@ -234,6 +262,7 @@ def test_decode_walk_fail_closed() -> None:
             raise AssertionError("expected truncated-sequence failure")
         # Channel-pointer table entry past EOF.
         sequence.write_bytes(bytes([0xd3, 0x20, 0x90, 0x40, 0x00, 0xff]))
+        pin_m64_size(root, sequence.name, 6)
         try:
             compile_catalog(root, Path(temp) / "channel")
         except AudioPackageError as error:
@@ -244,6 +273,7 @@ def test_decode_walk_fail_closed() -> None:
             raise AssertionError("expected channel-pointer failure")
         # The synthetic valid script itself must pass end to end.
         sequence.write_bytes(valid)
+        pin_m64_size(root, sequence.name, len(valid))
         result = compile_catalog(root, Path(temp) / "valid")
         assert result["sequence_count"] == 35
         # The generated seq00 payload is walked too: an invalid opcode in
@@ -262,10 +292,58 @@ def test_decode_walk_fail_closed() -> None:
             raise AssertionError("expected generated-seq00 walk failure")
 
 
+def test_m64_size_pins_fail_closed() -> None:
+    """Reviewer-proven residual exposure, closed by the assets.json size pin:
+    a truncation landing entirely in the opaque channel-script region passes
+    the decode walker (which validates only the sequence-level prefix, by
+    design) and previously sealed into AUDIO.DAT with exit 0.  The real file
+    is temp-copied and mutated at test time; no Nintendo bytes are committed."""
+    key = "sound/sequences/us/03_level_grass.m64"
+    pinned = json.loads((ROOT / "assets.json").read_text(encoding="utf-8"))[key][0]
+    with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
+        sequence = root / key
+        original = sequence.read_bytes()
+        assert len(original) == pinned, (len(original), pinned)
+        truncated = original[:2000]  # the reviewer's exact cut
+        # The cut lands entirely in the opaque region: the walker alone still
+        # passes it, which is exactly why the size pin exists.  (If a future
+        # walker change starts catching this, re-examine whether the pin test
+        # still exercises the opaque-region scenario.)
+        walk_ok, _ = walk_sequence(truncated, FORMAT_US)
+        assert walk_ok, "expected the opaque-region truncation to pass the walker"
+        sequence.write_bytes(truncated)
+        try:
+            compile_catalog(root, Path(temp) / "truncated")
+        except AudioPackageError as error:
+            message = str(error)
+            assert "03_level_grass" in message, message
+            assert "2000" in message and str(pinned) in message, message
+        else:
+            raise AssertionError("expected size-pin mismatch failure")
+        # A sequence with no assets.json entry fails closed too: all 34
+        # extracted US m64s are pinned, so a missing pin is a defect.
+        sequence.write_bytes(original)
+        pins = json.loads((root / "assets.json").read_text(encoding="utf-8"))
+        del pins[key]
+        (root / "assets.json").write_text(json.dumps(pins), encoding="utf-8")
+        try:
+            compile_catalog(root, Path(temp) / "unpinned")
+        except AudioPackageError as error:
+            assert "size pin" in str(error), str(error)
+        else:
+            raise AssertionError("expected missing-pin failure")
+        # Missing assets.json entirely fails closed as well.
+        (root / "assets.json").unlink()
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "no-pins"),
+                       "missing assets.json size pins")
+
+
 def test_generated_sequences_bin_fail_closed() -> None:
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp) / "repo"
         shutil.copytree(ROOT / "sound", root / "sound")
+        write_us_m64_pins(root)
         missing = root / "build/saturn/audio/generated/sequences.bin"
         try:
             compile_catalog(root, Path(temp) / "x", sequences_bin=missing)
@@ -291,6 +369,7 @@ if __name__ == "__main__":
     for test in (test_aiff_and_catalog, test_source_fail_closed,
                  test_alignment_hash_drift_and_duplicate, test_residency_safety_contract,
                  test_generated_sequences_bin, test_decode_walk_fail_closed,
+                 test_m64_size_pins_fail_closed,
                  test_generated_sequences_bin_fail_closed):
         test()
-    print("compile_saturn_audio: 7/7")
+    print("compile_saturn_audio: 8/8")

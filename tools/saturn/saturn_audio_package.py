@@ -6,6 +6,12 @@ never invokes the PC build: source JSON, m64 and AIFF identities are hashed
 before packaging and a missing input is a hard error.  Sample PCM is reduced to
 signed Saturn PCM8; all sequence/bank metadata is retained as canonical
 JSON so tuning, envelopes and control-flow bytes remain inspectable.
+
+Every on-disk US m64 consumed is size-checked against the exact byte count
+assets.json pins for it (fail-closed on mismatch or missing pin): the decode
+walker only validates the sequence-level prefix -- channel/layer script
+bodies are opaque by design -- so the size pin is the packaging defense
+against a truncation landing entirely in the opaque region.
 """
 from __future__ import annotations
 
@@ -34,6 +40,40 @@ PACKAGE_HASH_OFFSET = 64
 
 class AudioPackageError(ValueError):
     pass
+
+
+_M64_PIN_PREFIX = "sound/sequences/us/"
+
+
+def _load_m64_size_pins(root: Path) -> dict[str, int]:
+    """Load the exact byte sizes assets.json pins for the extracted US m64s.
+
+    Entry format (verified against the repo manifest):
+    "sound/sequences/us/NAME.m64" -> [size, {"us": [rom_offset]}].  All 34
+    extracted US sequences carry a pin, so a missing manifest -- or later, a
+    missing per-sequence entry -- fails packaging closed.
+    """
+    pins_path = root / "assets.json"
+    if not pins_path.is_file():
+        raise AudioPackageError(
+            f"missing {pins_path}: assets.json size pins are required to "
+            "package extracted m64 sequences (truncation defense for the "
+            "regions the decode walk keeps opaque)")
+    try:
+        data = json.loads(pins_path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise AudioPackageError(
+            f"invalid assets.json at {pins_path}: {error}") from error
+    pins: dict[str, int] = {}
+    for key, value in data.items():
+        if not key.startswith(_M64_PIN_PREFIX) or not key.endswith(".m64"):
+            continue
+        if (not isinstance(value, list) or not value or
+                not isinstance(value[0], int) or value[0] <= 0):
+            raise AudioPackageError(
+                f"assets.json entry for {key} does not pin a positive size")
+        pins[key] = value[0]
+    return pins
 
 
 @dataclass(frozen=True)
@@ -198,6 +238,7 @@ def _extract_generated_seq00(sequences_bin: Path) -> tuple[bytes, int, int]:
 
 def _load_sequences(root: Path, sequences_bin: Path | None = None) -> list[dict[str, object]]:
     raw = json.loads((root / "sound/sequences.json").read_text(encoding="utf-8"))
+    size_pins = _load_m64_size_pins(root)
     entries = []
     seq_dir = root / "sound/sequences/us"
     for seq_key, banks in raw.items():
@@ -226,6 +267,22 @@ def _load_sequences(root: Path, sequences_bin: Path | None = None) -> list[dict[
         if path is not None and (len(payload) < 4 or not any(payload)):
             raise AudioPackageError(f"invalid control flow in extracted sequence asset: {name}.m64")
         if path is not None:
+            # Exact-size cross-check against the assets.json pin: the decode
+            # walk below only validates the sequence-level prefix (channel/
+            # layer bodies are opaque by design), so a truncation landing
+            # entirely in the opaque region would otherwise package cleanly.
+            pin_key = f"{_M64_PIN_PREFIX}{path.name}"
+            pinned_size = size_pins.get(pin_key)
+            if pinned_size is None:
+                raise AudioPackageError(
+                    f"sequence {name} has no assets.json size pin "
+                    f"({pin_key}); every extracted US m64 is pinned, so a "
+                    "missing pin fails packaging closed")
+            if len(payload) != pinned_size:
+                raise AudioPackageError(
+                    f"sequence {name} size mismatch: on-disk {path.name} is "
+                    f"{len(payload)} bytes but assets.json pins "
+                    f"{pinned_size} bytes (truncated or modified extraction)")
             # Cheap prefilter retained from the pre-walker heuristic: it
             # costs one linear scan and catches the canonical FF FF target
             # anywhere in the payload, including regions the sequence-level

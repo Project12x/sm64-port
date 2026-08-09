@@ -29,9 +29,31 @@ deduplicates work with a visited set, and is backstopped by a bounded
 instruction budget.  A reachable path may legally terminate three ways --
 an 0xFF end opcode, a validated unconditional jump, or a merge into
 already-decoded code (looping music never reaches 0xFF at the sequence
-level: verified on 20 of the repo's 34 real US m64s, which all end in an
+level: verified on 19 of the repo's 34 real US m64s, which all end in an
 intentional 0xfb jump-back loop).  Falling off EOF, dying mid-opcode, or
 decoding an opcode outside the VM's accepted set is a finding.
+
+A loop terminator is only legal when the cycle it closes contains a delay
+opcode (0xfd/0xfe): vm_tick_sequence executes at most
+SM64_SATURN_SEQUENCE_VM_INSTRUCTION_BUDGET (64) instructions per tick and
+returns false -- a fault -- when the budget exhausts without a delay
+stopping the tick (:231 loop bound, :386 fall-out), so a reachable
+delay-free control-flow cycle faults the VM on its first tick.  All 19
+real looping sequences carry an 0xfd delay inside their loop.  The walk
+therefore records the control-flow graph it decodes and reports a
+`delay-free-loop` finding for any reachable cycle with no delay on it; a
+call instruction counts as delay-bearing when its callee's reachable code
+contains a delay, because the cycle through the call's return point
+dynamically executes the callee body each iteration.
+
+One deliberate strictness deviation from vm_flow: this walker rejects an
+out-of-range EU/SH relative-branch displacement (0xf2/0xf3/0xf4)
+unconditionally, while the real vm_flow (:198-218) checks the not-taken
+condition *before* bounds-checking the displacement, so a never-taken
+conditional relative branch carrying a bad displacement is dynamically
+legal.  Static validation cannot evaluate the condition, and no real
+sequence relies on the loophole (the US set never uses these opcodes), so
+the walker fails such branches closed.
 
 Dynamic-only properties are out of scope by design: call/loop stack depth
 (SM64_SATURN_SEQUENCE_VM_STACK_DEPTH), loop iteration counts, event
@@ -58,6 +80,7 @@ FINDING_TARGET_OUT_OF_RANGE = "target-out-of-range"
 FINDING_TARGET_MID_INSTRUCTION = "target-mid-instruction"
 FINDING_OVERLAP = "overlapping-decode"
 FINDING_BUDGET = "work-budget-exhausted"
+FINDING_DELAY_FREE_LOOP = "delay-free-loop"
 
 # The VM addresses sequences with uint16_t pc/length (sequence_vm.h).
 _MAX_SEQUENCE_LENGTH = 0xFFFF
@@ -77,6 +100,9 @@ _ABS_TARGET_OPCODES = frozenset({0xfc, 0xfb, 0xfa, 0xf9, 0xf5})
 # target; the rest carry no operand.  0x30/0xb0 fail closed.
 _LOW_FAMILIES_NO_OPERAND = frozenset({0x00, 0x10, 0x20, 0x40, 0x50, 0x60,
                                       0x70, 0x80, 0xa0})
+# Delay opcodes stop a tick (vm_flow :185-198 sets *stopped); a cycle with
+# neither exhausts vm_tick_sequence's 64-instruction budget and faults.
+_DELAY_OPCODES = frozenset({0xFD, 0xFE})
 
 
 @dataclass(frozen=True)
@@ -87,6 +113,77 @@ class Finding:
 
     def __str__(self) -> str:
         return f"{self.kind} at offset 0x{self.offset:04x}: {self.detail}"
+
+
+def _delay_free_cycle(payload: bytes, starts: set[int],
+                      edges: dict[int, set[int]],
+                      call_targets: dict[int, int]) -> int | None:
+    """Return the smallest offset on a reachable delay-free cycle, or None.
+
+    Operates on the control-flow graph the walk decoded: nodes are
+    instruction starts, edges are fall-throughs plus validated branch/call
+    targets (0xf7 loop-ends are finite-count fall-throughs in the VM's
+    dynamic stack model, so they contribute no static back-edge).  Delay
+    instructions (0xfd/0xfe) break cycles; a 0xfc call breaks them too when
+    any delay is reachable from its callee, since the cycle through the
+    call's return point dynamically executes the callee body.
+    """
+    graph = {node: {t for t in edges.get(node, ()) if t in starts}
+             for node in starts}
+
+    def reaches_delay(entry: int) -> bool:
+        seen: set[int] = set()
+        stack = [entry]
+        while stack:
+            node = stack.pop()
+            if node in seen:
+                continue
+            seen.add(node)
+            if payload[node] in _DELAY_OPCODES:
+                return True
+            stack.extend(graph.get(node, ()))
+        return False
+
+    keep = set()
+    for node in starts:
+        cmd = payload[node]
+        if cmd in _DELAY_OPCODES:
+            continue
+        if cmd == 0xFC and node in call_targets and \
+                reaches_delay(call_targets[node]):
+            continue
+        keep.add(node)
+    # Kahn peels on the induced subgraph, in both directions (in-degree-0
+    # forward, then out-degree-0 backward) so the survivors are the cycles
+    # themselves, not acyclic code upstream or downstream of one.
+    def peel(nodes: set[int], forward: bool) -> set[int]:
+        succ = {node: {t for t in graph[node] if t in nodes}
+                for node in nodes}
+        if not forward:
+            reverse: dict[int, set[int]] = {node: set() for node in nodes}
+            for node, targets in succ.items():
+                for target in targets:
+                    reverse[target].add(node)
+            succ = reverse
+        degree = {node: 0 for node in nodes}
+        for targets in succ.values():
+            for target in targets:
+                degree[target] += 1
+        queue = [node for node in nodes if degree[node] == 0]
+        alive = set(nodes)
+        while queue:
+            node = queue.pop()
+            alive.discard(node)
+            for target in succ[node]:
+                degree[target] -= 1
+                if degree[target] == 0:
+                    queue.append(target)
+        return alive
+
+    survivors = peel(peel(keep, True), False)
+    if not survivors:
+        return None
+    return min(survivors)
 
 
 def walk_sequence(payload: bytes, fmt: str = FORMAT_US, *,
@@ -112,6 +209,10 @@ def walk_sequence(payload: bytes, fmt: str = FORMAT_US, *,
     findings: list[Finding] = []
     starts: set[int] = set()          # decoded instruction boundaries
     operand_owner: dict[int, int] = {}  # operand byte -> instruction start
+    # Control-flow graph of the decode (fall-throughs + validated targets),
+    # consumed by the delay-free-cycle analysis after the walk.
+    edges: dict[int, set[int]] = {}
+    call_targets: dict[int, int] = {}   # 0xfc call site -> callee offset
     # Worklist entries: (offset, source) where source is the branching
     # instruction's offset for queued targets, or None for the entry point.
     work: list[tuple[int, int | None]] = [(0, None)]
@@ -234,6 +335,9 @@ def walk_sequence(payload: bytes, fmt: str = FORMAT_US, *,
                     target, pc = read_abs_target(at, cmd, pc, "branch/call")
                     if target is not None:
                         work.append((target, at))
+                        edges.setdefault(at, set()).add(target)
+                        if cmd == 0xFC:
+                            call_targets[at] = target
                     # 0xfb is unconditional; a rejected target also ends the
                     # path (the VM faults there).
                     stop = cmd == 0xFB or target is None
@@ -266,6 +370,7 @@ def walk_sequence(payload: bytes, fmt: str = FORMAT_US, *,
                             stop = True
                         else:
                             work.append((target, at))
+                            edges.setdefault(at, set()).add(target)
                             stop = cmd == 0xF4  # unconditional relative jump
                 else:
                     findings.append(Finding(
@@ -292,13 +397,22 @@ def walk_sequence(payload: bytes, fmt: str = FORMAT_US, *,
                     stop = True
             if stop:
                 break
+            edges.setdefault(at, set()).add(pc)  # fall-through edge
+    cycle_at = _delay_free_cycle(payload, starts, edges, call_targets)
+    if cycle_at is not None:
+        findings.append(Finding(
+            FINDING_DELAY_FREE_LOOP, cycle_at,
+            "reachable control-flow cycle contains no delay opcode "
+            "(0xfd/0xfe); the VM's 64-instruction tick budget "
+            "(SM64_SATURN_SEQUENCE_VM_INSTRUCTION_BUDGET) faults on the "
+            "first tick"))
     return not findings, findings
 
 
 __all__ = [
-    "FINDING_BUDGET", "FINDING_EMPTY", "FINDING_OVERLAP", "FINDING_OVERSIZED",
-    "FINDING_RUNS_PAST_END", "FINDING_TARGET_MID_INSTRUCTION",
-    "FINDING_TARGET_OUT_OF_RANGE", "FINDING_TRUNCATED",
-    "FINDING_UNKNOWN_OPCODE", "FORMAT_EU_SH", "FORMAT_US", "Finding",
-    "walk_sequence",
+    "FINDING_BUDGET", "FINDING_DELAY_FREE_LOOP", "FINDING_EMPTY",
+    "FINDING_OVERLAP", "FINDING_OVERSIZED", "FINDING_RUNS_PAST_END",
+    "FINDING_TARGET_MID_INSTRUCTION", "FINDING_TARGET_OUT_OF_RANGE",
+    "FINDING_TRUNCATED", "FINDING_UNKNOWN_OPCODE", "FORMAT_EU_SH",
+    "FORMAT_US", "Finding", "walk_sequence",
 ]
