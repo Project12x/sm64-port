@@ -123,6 +123,37 @@
 
 ### Fixed
 
+- Right-sized the LWRAM `.lwram_geo_traversal` arena by changing
+  `tools/saturn/geo_depth_manifest.py`'s capacity rounding policy from
+  next-power-of-two to 16-frame alignment above the requirement
+  (max_proven_depth + safety_margin). At real full-game scale the old
+  rounding turned requirement 188 (172 proven + 16 margin) into 256
+  frames = 4,096 B, which crossed the reserved LWRAM slave-stack floor
+  at 0x002FC000 by 784 B and blocked the demo-path manual-test link
+  (arena 0x002FB310-0x002FC310, fresh `.map` evidence); the new policy
+  yields 192 frames = 3,072 B, clearing the floor with 240 B to spare
+  and saving 1,024 B of LWRAM. Owner-approved this session via explicit
+  AskUserQuestion, backed by two independent safety nets: the real
+  measured end-to-end runtime peak for the complete converted traversal
+  is 19 frames (docs/saturn/evidence/reports/
+  task14-closure-mario-body-chain-real-depth-2026-08-09.md), two orders
+  below the static bound, and the runtime latches
+  `SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW` fail-closed if the static
+  bound is ever wrong on hardware. RED-first: extended
+  `tools/saturn/test_geo_depth_manifest.py` with the alignment-policy
+  case (requirement 34 -> capacity 48, where power-of-two would give 64;
+  exact-policy assertion at repository scale; aligned-but-undercutting
+  capacity mutations fail closed with a recomputed identity digest), and
+  re-based the wave-3 slack check on capacity minus proven depth since
+  the alignment policy deliberately removes the old accidental
+  power-of-two remainder the check previously consumed. No linker edit:
+  `sourceboot-cart.x`'s size assert binds to the generated
+  `__sourceboot_geo_traversal_expected_size`, and
+  `sourceboot_geo_walk_frames[]` is sized by the generated
+  `SM64_SATURN_GEO_TRAVERSAL_CAPACITY`, so both track the manifest
+  automatically. `verify-saturn-geo-depth-manifest` and
+  `verify-saturn-geo-walk-runtime` both PASS.
+
 - Fixed the sourceboot build-identity nondeterminism first documented in
   `docs/saturn/evidence/reports/task14-headless-boot-capture-post-cart-rodata-fix-2026-08-09.md`
   section 4: one logical `make -f Makefile.saturn.mk verify-sourceboot`

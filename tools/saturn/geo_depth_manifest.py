@@ -5,8 +5,20 @@ The source path currently has no production iterative dispatcher.  This tool
 therefore owns the capacity proof first: it scans every supplied GeoLayout
 source (or accepts a checked descriptor from a generated/link-time producer),
 accounts for structural nesting plus shared/held/callback edges, and emits a
-power-of-two frame capacity with a recorded identity.  A later dispatcher may
-consume the generated header only after the linker/map gate proves placement.
+16-frame-aligned frame capacity with a recorded identity.  A later dispatcher
+may consume the generated header only after the linker/map gate proves
+placement.
+
+Capacity rounding policy (owner-approved 2026-08-09): the requirement
+(max proven depth + safety margin) is rounded up to the next 16-frame
+boundary.  The original next-power-of-two rounding over-allocated at real
+full-game scale (requirement 188 -> 256 frames = 4,096 B), pushing the
+LWRAM traversal arena past the reserved slave-stack floor; alignment
+rounding keeps the deterministic aligned bound without the exponential
+blow-up (188 -> 192 frames = 3,072 B).  Capacity never drops below the
+requirement, and the runtime independently latches
+SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW fail-closed if the static bound is
+ever exceeded.
 """
 from __future__ import annotations
 
@@ -130,11 +142,17 @@ def load_descriptor(path: Path) -> dict[str, object]:
     return {"identity": identity, "kind": "descriptor", **fields}
 
 
-def _next_power_of_two(value: int) -> int:
-    result = 1
-    while result < value:
-        result <<= 1
-    return result
+CAPACITY_ALIGNMENT_FRAMES = 16
+
+
+def _aligned_capacity(required: int) -> int:
+    """Round the required frame count up to the 16-frame capacity policy."""
+    if required < 1:
+        required = 1
+    remainder = required % CAPACITY_ALIGNMENT_FRAMES
+    if remainder:
+        required += CAPACITY_ALIGNMENT_FRAMES - remainder
+    return required
 
 
 def _canonical_records(records: Iterable[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -160,7 +178,7 @@ def build_manifest(
         raise ManifestError("duplicate geo-depth identity: " + ", ".join(duplicates))
     max_proven_depth = max(int(record["max_depth"]) for record in records)
     required = max_proven_depth + safety_margin
-    capacity = _next_power_of_two(max(1, required))
+    capacity = _aligned_capacity(required)
     canonical = {
         "schema": SCHEMA,
         "frame_bytes": FRAME_BYTES,
@@ -184,8 +202,9 @@ def verify_report(path: Path) -> None:
     max_depth = _nonnegative_int(report.get("max_proven_depth"), "max_proven_depth", "manifest")
     margin = _nonnegative_int(report.get("safety_margin"), "safety_margin", "manifest")
     capacity = _nonnegative_int(report.get("capacity"), "capacity", "manifest")
-    if capacity < _next_power_of_two(max(1, max_depth + margin)):
-        raise ManifestError("manifest capacity is below the proven depth plus safety margin")
+    if capacity < _aligned_capacity(max_depth + margin):
+        raise ManifestError(
+            "manifest capacity is below the 16-frame-aligned proven depth plus safety margin")
     inputs = report.get("inputs")
     if not isinstance(inputs, list) or not inputs:
         raise ManifestError("manifest inputs are missing")
