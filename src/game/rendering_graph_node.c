@@ -2111,6 +2111,57 @@ void geo_try_process_children(struct GraphNode *node) {
  * `sSaturnGeoWalkActive`'s single deliberate real-recursion fallback call
  * site (the same one wave 3's accounting paragraph above counted) is now
  * the only one left in this file outside the dispatcher's own definition.
+ *
+ * Task 14's real final closure (2026-08-09) converts the last two node
+ * types that could still route through that fallback in realistic
+ * gameplay: GRAPH_NODE_TYPE_START and GRAPH_NODE_TYPE_CULLING_RADIUS.
+ * Unlike every type converted above, neither ever had a dedicated
+ * `geo_process_*()` wrapper to extract a `saturn_geo_enter_*` pair from --
+ * confirmed by grep, `geo_process_node_and_siblings`'s own switch (further
+ * down this file) has never had a case for either; both structurally fall
+ * to ITS default, `geo_try_process_children`, which is unrelated to and
+ * unchanged by this closure. What DOES change is `saturn_geo_walk_enter`'s
+ * own switch just below: both types previously fell to ITS default case
+ * too, `saturn_geo_walk_dispatch_legacy(node)`, which synchronously detours
+ * into real, unbounded C recursion via `geo_try_process_children` ->
+ * `geo_process_node_and_siblings`. `GRAPH_NODE_TYPE_START` is the one that
+ * matters most: it is the literal first command of every actor's geo
+ * layout (`GEO_NODE_START()`, confirmed as the entry command of 30+
+ * `actors/*\/geo.inc.c` files and 8 level files), and `process_geo_layout`'s
+ * return value for each becomes that actor Object's `sharedChild`
+ * (`src/engine/level_script.c`/`src/engine/behavior_script.c`) -- meaning
+ * `GRAPH_NODE_TYPE_OBJECT` (converted wave 3) has, until this commit, been
+ * descending straight into an unconverted START and back into real
+ * recursion on EVERY object render, including Mario's own body/limb/held-
+ * object subtree (`actors/mario/geo.inc.c`'s `mario_geo_render_body`, 13
+ * real `GraphNode` levels deep) during essentially all non-stationary
+ * gameplay -- exactly the scenario the prior closure report (see this
+ * file's CHANGELOG entry citing `task14-wave4-full-traversal-capacity-
+ * margin-2026-08-09.md`) flagged as still real-recursion-reachable.
+ * `GRAPH_NODE_TYPE_CULLING_RADIUS` carries the identical detour risk for
+ * the same reason (34 occurrences across ~24 actor files, essentially
+ * always wrapping real `GEO_OPEN_NODE()`/.../`GEO_CLOSE_NODE()` content,
+ * e.g. `actors/toad/geo.inc.c`'s full body chain) and converts alongside
+ * it in this same commit. Both are purely structural pass-through nodes
+ * with zero per-visit side effects of their own -- `saturn_geo_enter_start`/
+ * `saturn_geo_enter_culling_radius` below just hand back `node->children`,
+ * no leave action needed, matching ORTHO_PROJECTION/BACKGROUND/DISPLAY_
+ * LIST's no-leave shape rather than the matrix-stack-push types. With both
+ * added as real cases, `saturn_geo_walk_enter`'s default case (still
+ * `saturn_geo_walk_dispatch_legacy`) is unreachable for any node type that
+ * can legitimately appear as a walk token -- the only type left unhandled
+ * by that switch is `GRAPH_NODE_TYPE_ROOT`, which by construction never
+ * appears as one (`geo_process_root` always drives its own children via
+ * real recursion directly, never through `saturn_geo_walk_process_
+ * children`). The default case is kept as a defensive fallback rather than
+ * deleted, matching how the eleven-type sub-wave above already treated its
+ * own now-unreachable bridge. `sSaturnGeoWalkActive`'s real-recursion
+ * fallback itself is deliberately NOT removed by this commit -- it remains
+ * the correct, safe behavior for the one call site that reaches it
+ * (nested reentry from within an already-active walk), which this closure
+ * does not change; this commit only removes the two node types that used
+ * to reach real recursion via the OTHER path (the default-case detour),
+ * not the reentrancy-guard path itself.
  * --------------------------------------------------------------------- */
 
 enum {
@@ -2195,22 +2246,55 @@ static uintptr_t saturn_geo_walk_sibling_of(const struct GraphNode *node) {
 }
 
 /**
+ * Start-node enter: GraphNodeStart (`struct GraphNode node;` only, no
+ * function pointer, no extra fields -- src/engine/graph_node.h:139-142) is
+ * purely structural, exactly as its own doc comment already states ("Does
+ * not have any additional functionality."). init_graph_node_start() does
+ * nothing beyond allocating and stamping the type; a START node acquires
+ * real children only via the ordinary geo_add_child()/register_scene_
+ * graph_node() mechanism triggered by a following GEO_OPEN_NODE()/.../
+ * GEO_CLOSE_NODE() block. No side effects, no leave action needed. Returns
+ * the children pointer to descend into, or NULL if there are none.
+ */
+static struct GraphNode *saturn_geo_enter_start(struct GraphNodeStart *node) {
+    return node->node.children;
+}
+
+/**
+ * Culling-radius enter: GraphNodeCullingRadius (node + s16 cullingRadius +
+ * padding -- src/engine/graph_node.h:342-347) carries no function pointer
+ * and no per-visit dispatch logic; its only real-time effect is that
+ * obj_is_in_view() peeks at ITS OWNER Object's sharedChild culling-radius
+ * field before that Object is admitted at all (unrelated to this node's
+ * own traversal). Walking into a CULLING_RADIUS node's own subtree, once
+ * reached, is a pure structural pass-through exactly like START -- same
+ * geo_add_child()-based child-acquisition mechanism, same "no case in
+ * geo_process_node_and_siblings's switch either" fact. No side effects, no
+ * leave action needed. Returns the children pointer to descend into, or
+ * NULL if there are none.
+ */
+static struct GraphNode *saturn_geo_enter_culling_radius(struct GraphNodeCullingRadius *node) {
+    return node->node.children;
+}
+
+/**
  * Bridge for node types not handled by a real case in saturn_geo_walk_
  * enter's own switch below, exactly mirroring geo_process_node_and_
  * siblings's own switch further down this file's default case.
  *
- * As of Task 14's final sub-wave, every node type that switch dispatches
- * on a real handler for (MASTER_LIST, ORTHO_PROJECTION, PERSPECTIVE,
- * CAMERA, BACKGROUND, OBJECT, OBJECT_PARENT, HELD_OBJ, and this sub-wave's
- * eleven: LEVEL_OF_DETAIL, SWITCH_CASE, TRANSLATION_ROTATION, TRANSLATION,
- * ROTATION, SCALE, BILLBOARD, ANIMATED_PART, DISPLAY_LIST, GENERATED_LIST,
- * SHADOW) is intercepted directly by saturn_geo_walk_enter's own switch
- * before this bridge would ever be reached for it -- this function is now
- * genuinely unreachable for all of them via that path. It remains in
- * place (rather than being deleted outright) because ROOT, START, and
- * CULLING_RADIUS are never dispatched by either switch (they fall to
- * geo_try_process_children generically already, in both switches) and
- * because geo_process_node_and_siblings's own switch -- which THIS
+ * As of Task 14's real final closure, every node type that switch can
+ * legitimately be handed as a walk token (MASTER_LIST, ORTHO_PROJECTION,
+ * PERSPECTIVE, CAMERA, BACKGROUND, OBJECT, OBJECT_PARENT, HELD_OBJ, the
+ * eleven skeleton types converted the sub-wave before this one, and now
+ * START and CULLING_RADIUS) is intercepted directly by saturn_geo_walk_
+ * enter's own switch before this bridge would ever be reached for it --
+ * this function is now genuinely unreachable in realistic use. It remains
+ * in place (rather than being deleted outright) as a defensive fallback:
+ * the only node type saturn_geo_walk_enter's switch still has no case for
+ * is GRAPH_NODE_TYPE_ROOT, which by construction never appears as a walk
+ * token (geo_process_root always drives its own children via real
+ * recursion directly, never through saturn_geo_walk_process_children).
+ * Separately, geo_process_node_and_siblings's own switch -- which THIS
  * function's callers never touch, by construction -- can still reach a
  * fully-converted type via real recursion during the sSaturnGeoWalkActive
  * reentrancy-fallback path (see that flag's own comment above
@@ -2417,6 +2501,34 @@ static bool saturn_geo_walk_enter(uintptr_t node_token,
         case GRAPH_NODE_TYPE_SHADOW: {
             struct GraphNodeShadow *sh = (struct GraphNodeShadow *) node;
             struct GraphNode *children = saturn_geo_enter_shadow(sh);
+            if (children != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) children;
+            }
+            break;
+        }
+        /* Task 14 real final closure: START and CULLING_RADIUS, the last
+         * two node types that could still reach this switch's default
+         * case and detour into real, unbounded recursion via
+         * saturn_geo_walk_dispatch_legacy. Both are pure structural
+         * pass-through with no side effects of their own -- see each
+         * saturn_geo_enter_* helper's own comment above for the full
+         * per-type rationale, and this switch's own preceding block
+         * comment for why GRAPH_NODE_TYPE_START in particular is the type
+         * that actually closes the master-stack-overrun gap this whole
+         * engine exists for. */
+        case GRAPH_NODE_TYPE_START: {
+            struct GraphNodeStart *st = (struct GraphNodeStart *) node;
+            struct GraphNode *children = saturn_geo_enter_start(st);
+            if (children != NULL) {
+                result->admitted = true;
+                result->child = (uintptr_t) children;
+            }
+            break;
+        }
+        case GRAPH_NODE_TYPE_CULLING_RADIUS: {
+            struct GraphNodeCullingRadius *cr = (struct GraphNodeCullingRadius *) node;
+            struct GraphNode *children = saturn_geo_enter_culling_radius(cr);
             if (children != NULL) {
                 result->admitted = true;
                 result->child = (uintptr_t) children;

@@ -2,6 +2,76 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Converted `GRAPH_NODE_TYPE_START` and `GRAPH_NODE_TYPE_CULLING_RADIUS` in
+  `src/game/rendering_graph_node.c`'s `saturn_geo_walk_enter` switch onto
+  the bounded iterative geo-walk runtime, closing Task 14's real remaining
+  gap: both types previously fell to that switch's default case
+  (`saturn_geo_walk_dispatch_legacy`), which detours into real, unbounded
+  C recursion via `geo_try_process_children` ->
+  `geo_process_node_and_siblings`. `GRAPH_NODE_TYPE_START` is the one that
+  actually matters -- it is the literal first command of `mario_geo_
+  render_body` (`actors/mario/geo.inc.c:1788`) and of every other actor's
+  geo layout (`GEO_NODE_START()` confirmed as the entry command of 30+
+  `actors/*/geo.inc.c` files and 8 level files via grep), and
+  `process_geo_layout()`'s return value for each actor is stored as that
+  actor's `Object.header.gfx.sharedChild` (`src/engine/level_script.c`,
+  `src/engine/behavior_script.c`), so `GRAPH_NODE_TYPE_OBJECT` (converted
+  wave 3) has, until this commit, descended straight into an unconverted
+  START and back into real recursion on every object render -- including
+  Mario's own body/limb/held-object subtree, 13 real `GraphNode` levels
+  deep, during essentially all non-stationary gameplay. This is exactly
+  the master-stack-overrun scenario the prior closure report
+  (`docs/saturn/evidence/reports/task14-wave4-full-traversal-capacity-
+  margin-2026-08-09.md`, cited in this file's most recent `### Added`
+  entry below) flagged as still real-recursion-reachable despite all 18
+  other node types already being converted. `GRAPH_NODE_TYPE_CULLING_
+  RADIUS` carries the identical detour risk (34 `GEO_CULLING_RADIUS`
+  occurrences across ~24 actor files, essentially always wrapping real
+  `GEO_OPEN_NODE()`/.../`GEO_CLOSE_NODE()` content per a 20+-file sample,
+  e.g. `actors/toad/geo.inc.c`'s full body chain) and converts in this
+  same commit. Verified against the real struct definitions
+  (`src/engine/graph_node.h:139-142`, `:342-347`): both types are purely
+  structural -- no function pointer, no per-visit side effects -- so their
+  new `saturn_geo_enter_start`/`saturn_geo_enter_culling_radius` helpers
+  just hand back `node->children`, with no leave action needed (same
+  no-leave shape as `ORTHO_PROJECTION`/`BACKGROUND`/`DISPLAY_LIST`, not
+  the matrix-stack-push types). Neither type ever had a dedicated
+  `geo_process_*()` wrapper to extract from (confirmed by grep:
+  `geo_process_node_and_siblings`'s own switch has never had a case for
+  either, and still doesn't -- that switch and its `geo_try_process_
+  children` default fallback are unrelated to and unchanged by this
+  commit). With both added as real cases, `saturn_geo_walk_enter`'s
+  default case is now unreachable for any node type that can legitimately
+  appear as a walk token; the only type it still has no case for is
+  `GRAPH_NODE_TYPE_ROOT`, which by construction never appears as one
+  (`geo_process_root` always drives its own children via real recursion
+  directly, never through `saturn_geo_walk_process_children`). The default
+  case and `sSaturnGeoWalkActive`'s own real-recursion reentrancy-guard
+  fallback are both deliberately kept, not removed -- the former as a
+  defensive fallback (matching how the eleven-type sub-wave before this
+  one already treated it), the latter because it remains the correct,
+  safe behavior for its one call site (nested reentry from within an
+  already-active walk), unrelated to the default-case detour this commit
+  closes.
+  - Verified: `mingw32-make -f Makefile.saturn.mk -j1
+    verify-saturn-geo-walk-runtime verify-saturn-geo-depth-manifest` and
+    `python tools/saturn/geo_walk_source_policy_test.py` all PASS (policy
+    script: `3 allowlisted permanent call sites, 0 unaccounted`, unchanged
+    from before this commit -- this closure removes a *second*,
+    previously-unaccounted-for recursion path reachable only through
+    `saturn_geo_walk_enter`'s own default case, not one of the three
+    call sites that script tracks inside `geo_process_node_and_siblings`
+    itself). Also ran a real `sh-elf-gcc -fsyntax-only` check against
+    `rendering_graph_node.c` using the actual sourceboot `SH_CFLAGS`
+    (extracted via `mingw32-make -p -q` in
+    `src/port/saturn/sourceboot/`, toolchain at
+    `work/yaul-install/bin`): 0 errors, only 4 pre-existing-style
+    `-Wcomment` warnings from intentionally-escaped `*\/` sequences
+    elsewhere in this file's doc comments (one of the four newly added by
+    this commit's own doc comment, in the same pre-existing style).
+
 ### Fixed
 
 - Fixed `tools/saturn/geo_walk_source_policy_test.py` (the
