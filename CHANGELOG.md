@@ -4,6 +4,50 @@
 
 ### Fixed
 
+- Fixed `tools/saturn/geo_walk_source_policy_test.py` (the
+  `verify-saturn-geo-walk-source-policy` gate), left permanently red by
+  the wave 4 sub-wave 1 commit (`ac37a009`) that finished the per-node-type
+  handler cutover: the script still hard-asserted **zero** direct recursive
+  `geo_process_node_and_siblings()` calls in `rendering_graph_node.c`, but
+  that commit's own CHANGELOG documents 3 call sites as permanently
+  out of scope by design (`saturn_geo_walk_process_children`'s
+  `sSaturnGeoWalkActive` reentrancy-guard fallback, `geo_try_process_children`'s
+  generic children-only bridge, and `geo_process_root`'s top-level kickoff) --
+  running the script raised `AssertionError` and exited 1 on that HEAD, found
+  via direct execution while re-reviewing that commit. Rewrote the check to
+  allowlist exactly those 3 call sites by enclosing function name (resolved
+  via each call's nearest preceding column-0 function-definition line, not
+  just a raw count) and still fail on any direct recursive call found
+  outside that allowlist, or on a missing/duplicated allowlisted site --
+  both remain real regressions. Verified the new check both accepts the
+  current HEAD (which has exactly the 3 allowlisted sites and nothing else)
+  and rejects a locally re-injected stray direct call in an unrelated
+  handler, confirming it still does its job.
+  - While re-running this gate for real to confirm the fix (not just
+    reading the script), found a second, older, unrelated defect in the
+    same file: its trailing `assert "saturn_geo_walk_runtime_frame_t" in
+    text` sanity check has been dead/unsatisfiable since the script's
+    original commit (`d49c8799`, predates the wave 1-4 handler conversion
+    entirely) -- that exact identifier never existed anywhere in
+    `rendering_graph_node.c` (missing the `sm64_` prefix, and a spurious
+    `_frame` that doesn't belong; the real, instantiated type is
+    `sm64_saturn_geo_walk_runtime_t`, declared at the local `walk` variable
+    in `saturn_geo_walk_process_children()`). Corrected the string to match
+    so this sanity check actually verifies what it claims to. This is
+    reported separately from the reviewer's confirmed 3-call-site defect
+    above because it predates and is independent of the commit under
+    review.
+  - Verified: `python tools/saturn/geo_walk_source_policy_test.py` now
+    prints `geo walk source policy: PASS (3 allowlisted permanent call
+    sites, 0 unaccounted)` and exits 0 (both via the repo's
+    `.venv-saturn-tools` interpreter, matching how
+    `make -f Makefile.saturn.mk verify-saturn-geo-walk-source-policy`
+    invokes it, and via the system `python`); `test_geo_walk_contract.py`
+    and `test_geo_depth_manifest.py` still PASS, confirming no regression
+    to the other geo-walk verification gates. This gate remains
+    deliberately excluded from `verify-all` (per its own prior
+    documentation), so this fix does not change the aggregate test target.
+
 - Corrected a stale accounting comment in `rendering_graph_node.c` (above
   the Task 14 wave 3 action-code enum) that claimed converting
   `geo_process_object`/`_parent`/`geo_process_held_object` drops
