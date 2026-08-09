@@ -241,6 +241,31 @@
     `-Wcomment` warnings from intentionally-escaped `*\/` sequences
     elsewhere in this file's doc comments (one of the four newly added by
     this commit's own doc comment, in the same pre-existing style).
+- Added `docs/saturn/evidence/reports/task14-headless-boot-capture-cart-load-blocker-2026-08-09.md`:
+  the first real automated headless-Ymir boot capture against the
+  genuinely green-linked Task 14 canonical acceptance build
+  (`e2-bob-identity-id-fdc1ac9ba25a4779`). Pushed depth to 7,462 real
+  emulated frames since BIOS handoff (5,400 past target-identity
+  confirmation), in bounded ≤600-frame `exec.run_for` chunks. Found: no
+  SH-2 exception ever fired (`sourceboot_exception_record.magic` stayed
+  `0x00000000` throughout), but also no VDP1/VDP2 presentation activity
+  at all -- `main()` halts permanently in a deliberate `for (;;) {}` at
+  the pre-cart-load safety gate. Root-caused via
+  `g_sm64_saturn_source_cart_probe` (`SM64_SATURN_SOURCE_CART_SIZE_MISMATCH`)
+  and independently cross-verified by parsing the built ISO's own
+  ISO9660 directory record directly: this build's packaged `SOURCE.DAT`
+  is 2,940,880 bytes, but its own linked ELF `.cart_rodata` section
+  expects exactly 2,343,984 bytes -- a real, previously-undiscovered
+  596,896-byte build-packaging mismatch, unrelated to the geo-walk
+  recursion work, that blocks this identity from ever reaching the game
+  loop under headless emulation. Cross-checked with the project's own
+  already-vetted `capture_sourceboot_boot_trace.py` (unmodified) to rule
+  out a harness-specific bug: identical stuck-at-`main-entry` result.
+  Honest conclusion: this capture is inconclusive about whether the
+  original Mario-holding-object master-stack-overrun crash is fixed,
+  because execution never reaches that code path; it does prove no SH-2
+  exception occurs before the cart-load gate, and it surfaces a new,
+  real blocker for whoever picks up Task 14's next increment.
 
 ### Fixed
 
