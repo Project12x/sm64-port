@@ -18,17 +18,25 @@ from saturn_audio_package import (AudioPackageError, CHUNK_ALIGNMENT, HEADER,
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def synthetic_walkable_payload(size: int) -> bytes:
+    """Synthetic sequence script that passes the decode-walk validator:
+    mutebhv, then delay-1 padding, then the 0xFF end opcode."""
+    assert size >= 3
+    return bytes([0xD3, 0x20]) + b"\xfe" * (size - 3) + b"\xff"
+
+
 def copy_complete_sound(temp: str | Path) -> Path:
     root = Path(temp) / "repo"
     shutil.copytree(ROOT / "sound", root / "sound")
     # The checked-in wrapper intentionally has no generated include.  Tests
     # that exercise the complete package contract provide a clearly synthetic
-    # expanded payload; the real asset remains a required user input.
-    (root / "sound/sequences.bin.inc.c").write_bytes(bytes(range(256)) * 8)
+    # expanded payload (decode-walk valid, since the packager now walks every
+    # packaged sequence); the real asset remains a required user input.
+    (root / "sound/sequences.bin.inc.c").write_bytes(synthetic_walkable_payload(2048))
     return root
 
 
-def write_synthetic_sequences_bin(path: Path) -> bytes:
+def write_synthetic_sequences_bin(path: Path, seq0: bytes | None = None) -> bytes:
     """Synthetic 35-entry big-endian TYPE_SEQ bank; entry 0 is >1024 bytes.
 
     Mirrors the assemble_sound.py --sequences layout without any real
@@ -37,7 +45,8 @@ def write_synthetic_sequences_bin(path: Path) -> bytes:
     """
     count = 35
     data_start = (4 + count * 8 + 15) & -16
-    seq0 = bytes((i * 7 + 3) & 0xFF for i in range(1500))
+    if seq0 is None:
+        seq0 = synthetic_walkable_payload(1500)
     seq0_len = (len(seq0) + 15) & -16
     entries = [(data_start, seq0_len)]
     cursor = data_start + seq0_len
@@ -204,6 +213,55 @@ def test_generated_sequences_bin() -> None:
             raise AssertionError("expected fallback inventory failure")
 
 
+def test_decode_walk_fail_closed() -> None:
+    """The decode walker is the packaging authority: any finding fails
+    packaging closed, naming the sequence and the offending offset."""
+    with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
+        sequence = root / "sound/sequences/us/03_level_grass.m64"
+        # Review finding M-A: a synthetic valid sequence truncated mid-opcode
+        # passes the byte-scan heuristic but must now fail packaging.
+        valid = bytes([0xd3, 0x20, 0xd5, 0x32, 0xdd, 0x78, 0xdb, 0x66,
+                       0xfd, 0x40, 0xff])
+        sequence.write_bytes(valid[:5])  # cuts 0xdd's operand
+        try:
+            compile_catalog(root, Path(temp) / "truncated")
+        except AudioPackageError as error:
+            message = str(error)
+            assert "03_level_grass" in message, message
+            assert "offset" in message and "truncated" in message, message
+        else:
+            raise AssertionError("expected truncated-sequence failure")
+        # Channel-pointer table entry past EOF.
+        sequence.write_bytes(bytes([0xd3, 0x20, 0x90, 0x40, 0x00, 0xff]))
+        try:
+            compile_catalog(root, Path(temp) / "channel")
+        except AudioPackageError as error:
+            message = str(error)
+            assert "03_level_grass" in message, message
+            assert "target-out-of-range" in message, message
+        else:
+            raise AssertionError("expected channel-pointer failure")
+        # The synthetic valid script itself must pass end to end.
+        sequence.write_bytes(valid)
+        result = compile_catalog(root, Path(temp) / "valid")
+        assert result["sequence_count"] == 35
+        # The generated seq00 payload is walked too: an invalid opcode in
+        # the bank's entry 0 fails packaging closed, naming the sequence.
+        bad_seq0 = bytes([0xd3, 0x20, 0xb0]) + b"\xfe" * 1496 + b"\xff"
+        bad_bank = root / "build/bad-seq00.bin"
+        write_synthetic_sequences_bin(bad_bank, seq0=bad_seq0)
+        try:
+            compile_catalog(root, Path(temp) / "seq00",
+                            sequences_bin=bad_bank)
+        except AudioPackageError as error:
+            message = str(error)
+            assert "00_sound_player" in message, message
+            assert "unknown-opcode" in message, message
+        else:
+            raise AssertionError("expected generated-seq00 walk failure")
+
+
 def test_generated_sequences_bin_fail_closed() -> None:
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp) / "repo"
@@ -232,6 +290,7 @@ def test_generated_sequences_bin_fail_closed() -> None:
 if __name__ == "__main__":
     for test in (test_aiff_and_catalog, test_source_fail_closed,
                  test_alignment_hash_drift_and_duplicate, test_residency_safety_contract,
-                 test_generated_sequences_bin, test_generated_sequences_bin_fail_closed):
+                 test_generated_sequences_bin, test_decode_walk_fail_closed,
+                 test_generated_sequences_bin_fail_closed):
         test()
-    print("compile_saturn_audio: 6/6")
+    print("compile_saturn_audio: 7/7")

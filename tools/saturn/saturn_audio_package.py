@@ -18,6 +18,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from gen_sequence_bank import SequenceBankError, parse_sequence_bank
+from m64_decode_walk import FORMAT_US, walk_sequence
+
 MAGIC = b"S64A"
 VERSION = 1
 CHUNK_ALIGNMENT = 2048
@@ -169,27 +172,27 @@ def source_inventory(root: Path, sequences_bin: Path | None = None) -> tuple[lis
 def _extract_generated_seq00(sequences_bin: Path) -> tuple[bytes, int, int]:
     """Extract sequence 00's payload from the generated raw sequence bank.
 
-    Layout per tools/assemble_sound.py --sequences (big-endian, 32-bit
-    words): u16 magic (3), u16 entry count, then entry_count pairs of
-    (u32 absolute offset, u32 length), data 16-aligned per entry.
+    The structural index-table parse is shared with the generator
+    (gen_sequence_bank.parse_sequence_bank, the assemble_sound.py
+    --sequences big-endian 32-bit layout); packager policy checks -- the US
+    entry count and a non-empty sequence 00 -- are layered on top.
     """
     raw = sequences_bin.read_bytes()
-    if len(raw) < 8:
-        raise AudioPackageError(f"generated sequence bank is truncated: {sequences_bin}")
-    magic, count = struct.unpack_from(">HH", raw, 0)
-    if magic != 3:
+    try:
+        table = parse_sequence_bank(raw)
+    except SequenceBankError as error:
         raise AudioPackageError(
-            f"generated sequence bank has wrong magic {magic}: {sequences_bin} "
-            "(expected the assemble_sound.py TYPE_SEQ layout; regenerate with "
-            "tools/saturn/gen_sequence_bank.py)")
-    if count != 35:
+            f"invalid generated sequence bank {sequences_bin}: {error} "
+            "(expected the assemble_sound.py TYPE_SEQ layout; regenerate "
+            "with tools/saturn/gen_sequence_bank.py)") from error
+    if len(table) != 35:
         raise AudioPackageError(
             f"generated sequence bank must carry the 35 US sequences, found "
-            f"{count}: {sequences_bin}")
-    offset, length = struct.unpack_from(">II", raw, 4)
-    if length == 0 or offset < 4 + count * 8 or offset + length > len(raw):
+            f"{len(table)}: {sequences_bin}")
+    offset, length = table[0]
+    if length == 0:
         raise AudioPackageError(
-            f"generated sequence bank entry 00 is out of range: {sequences_bin}")
+            f"generated sequence bank entry 00 is empty: {sequences_bin}")
     return raw[offset:offset + length], offset, length
 
 
@@ -223,25 +226,36 @@ def _load_sequences(root: Path, sequences_bin: Path | None = None) -> list[dict[
         if path is not None and (len(payload) < 4 or not any(payload)):
             raise AudioPackageError(f"invalid control flow in extracted sequence asset: {name}.m64")
         if path is not None:
+            # Cheap prefilter retained from the pre-walker heuristic: it
+            # costs one linear scan and catches the canonical FF FF target
+            # anywhere in the payload, including regions the sequence-level
+            # walk below treats as opaque (channel/layer script bodies).
+            # The decode walker after it is the packaging authority.
             for index, opcode in enumerate(payload):
                 if opcode in (0xFB, 0xFC):
-                    # The first 128 bytes are the format's offset table, not
-                    # executable script bytes; command validation begins after
-                    # that table and accepts both absolute and backwards
-                    # relative targets used by the original player.
+                    # The first 128 bytes of extracted m64s carry setup
+                    # commands; scanning from 128 keeps the historical
+                    # false-positive-free window.
                     if index < 128:
                         continue
                     if index + 2 >= len(payload):
                         continue
                     target_bytes = payload[index + 1:index + 3]
-                    # FF FF is never a valid in-package script target (it is
-                    # the canonical malformed negative fixture); avoid
-                    # treating arbitrary data bytes that happen to equal FB/FC
-                    # as opcodes without a full sequence VM decode.
                     if target_bytes == b"\xff\xff":
                         raise AudioPackageError(f"out-of-range jump/call in {name}.m64")
         if path is None and seq_id == 0 and len(payload) <= 1024:
             raise AudioPackageError("expanded sequence-00 payload is too small")
+        # Decode-walk validation (the authority): statically walk the
+        # sequence-level script exactly as the 68k sequence VM would decode
+        # it; any finding fails packaging closed with the sequence named.
+        walk_ok, walk_findings = walk_sequence(payload, FORMAT_US)
+        if not walk_ok:
+            first = walk_findings[0]
+            more = (f" (+{len(walk_findings) - 1} more finding(s))"
+                    if len(walk_findings) > 1 else "")
+            raise AudioPackageError(
+                f"sequence {name} failed decode-walk validation at offset "
+                f"0x{first.offset:04x}: {first.kind}: {first.detail}{more}")
         source_path = (generated_source if path is None else path)
         entry = {"id": seq_id, "name": name, "banks": banks,
                  "source": _relative_source(source_path, root),

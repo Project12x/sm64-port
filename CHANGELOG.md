@@ -214,6 +214,43 @@
 
 ### Added
 
+- Added `tools/saturn/m64_decode_walk.py` (+ `test_m64_decode_walk.py`, 27
+  unittest cases, synthetic fixtures only) and wired it into
+  `saturn_audio_package.py`'s `_load_sequences` as the packaging authority
+  (Task 2 of `docs/superpowers/plans/2026-08-07-task12-completion.md`): a
+  validation-only static reachability walker over m64 sequence-level
+  scripts, ported from the 68k sequence VM's traversal structure
+  (`src/port/saturn/audio68k/sequence_vm.c` `vm_flow`/`vm_tick_sequence`
+  dispatch tables, including the US vs EU/SH operand splits -- US 0xf2
+  reserve-notes+u8/0xf1 bare/0xf0 invalid; EU/SH 0xf1+u8/0xf0 bare,
+  0xf2-0xf4 relative branches, 0xda/0xdc rejected). It decodes from offset
+  0, follows both sides of every conditional plus calls/loops with a
+  visited set and a bounded instruction budget, and fails packaging closed
+  -- naming the sequence and offset -- on out-of-range or mid-instruction
+  branch/call targets, channel-pointer table entries past EOF, unknown
+  opcodes, operands truncated mid-opcode, overlapping decode, and control
+  flow that falls off EOF. Root cause of the gap: the old byte-scan
+  heuristic only rejected literal `FB/FC FF FF` patterns, so Task 1's
+  quality review (finding M-A, closed here with a RED fixture) confirmed a
+  sequence truncated mid-opcode sailed through packaging; the scan
+  survives only as a cheap prefilter. Judgment call, recorded for
+  reviewers: the plan's literal "0xFF reachable on every path" check was
+  implemented as "every reachable path terminates at 0xFF, a validated
+  jump, or a merge into already-decoded code", because 20 of the repo's 34
+  real US sequences -- every looping level-music script, plus generated
+  seq00 -- end in an intentional 0xfb jump-back loop and never reach a
+  sequence-level 0xFF, so the literal check would reject all real music.
+  Channel-script bodies stay opaque (pointers range-validated only): the
+  VM emits CHANNEL_START events and has no channel interpreter to port,
+  and interpretation is Task 15's scope, not this validator's. All 35 real
+  repo sequences pass the walker; `compile-saturn-audio` output is
+  byte-identical before/after and GREEN-twice, so the walker adds no
+  artifact or determinism impact. Also deduplicated the generated-bank
+  index parse per Task 1's accepted review: `_extract_generated_seq00` now
+  reuses `gen_sequence_bank.parse_sequence_bank` instead of
+  re-implementing the TYPE_SEQ layout, with packager-only policy checks
+  (35-entry US count, non-empty sequence 00) layered on top.
+
 - Added `tools/saturn/gen_sequence_bank.py` (+ `test_gen_sequence_bank.py`,
   9 unittest cases, synthetic fixtures only): standalone generation of the
   expanded sequence bank (`build/saturn/audio/generated/sequences.bin`, raw
