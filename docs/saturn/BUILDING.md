@@ -251,6 +251,53 @@ Source it in each build shell:
 source .yaul.env
 ```
 
+### AI-agent shell sandboxes: two build gotchas
+
+Two environment quirks were hit and confirmed while independently
+reproducing a build from an AI-agent (Claude Code) Bash-tool sandbox on
+Windows; both are sandbox/tooling artifacts, not codebase bugs, and are
+recorded here so future agent-run review/build rounds don't re-diagnose
+them from scratch.
+
+1. **`export`-ed variables set mid-session do not reach child processes
+   launched from a later tool call.** Each Bash-tool invocation runs in a
+   fresh shell; only variables already present at shell start (`PATH`,
+   `HOME`, etc.) are visible to a `make.exe`/`sh-elf-gcc.exe` launched from a
+   *different* tool call than the one that exported them -- confirmed with a
+   minimal `export FOO=bar` + child-process repro. Modifying an
+   already-present variable (e.g. `export PATH="$YAUL_INSTALL_ROOT/bin:$PATH"`)
+   *does* propagate, because `PATH` already existed; a brand-new variable
+   name (`YAUL_INSTALL_ROOT`, `COMPILER_PATH`, `AS`, `AR`, `RANLIB`, ...)
+   does not. Workaround: pass every new variable `.yaul.env` would otherwise
+   export as an explicit `make VAR=value` command-line argument, in the same
+   tool call that runs `make` -- not as a preceding `export`. Also keep the
+   `.yaul.env` PATH ordering intact (yaul-install `bin/` before
+   `mingw64/bin`): passing `COMPILER_PATH` with the wrong path-list
+   delimiter, or reordering `PATH` incorrectly, both reproduce the same
+   symptom as a missing cross-toolchain -- `as.exe: unrecognized option
+   '-big'` -- because GCC's driver falls back to a bare, unprefixed `as`
+   found via `PATH` search when its own search dirs don't resolve one, and
+   picks up the host's native `as.exe` instead of the SH-2 cross
+   assembler's.
+2. **Very long recipe lines can fail through the recursive
+   `make -C .../sourceboot verify` chain with a nonsensical error.**
+   Sourceboot's final `.elf` link recipe passes ~230 object file paths on
+   one command line; invoked through `make -f Makefile.saturn.mk
+   verify-sourceboot`'s recursive `$(MAKE) -C sourceboot` chain under MSYS,
+   this was observed to intermittently fail with `sh-elf-gcc: error: -E or
+   -x required when input is from standard input` -- a message that
+   normally means GCC received no input files and fell back to reading
+   stdin. `make -n` confirms the recipe's *expanded* command line is
+   well-formed (all ~230 `.o` paths present, ending in a normal `-o
+   .../*.elf`); extracting that exact line with `make -n ... | grep
+   '\.elf'` and running it directly (with `SOURCEBOOT_GENERATED_LDDIR` --
+   normally `export`-ed by the sourceboot Makefile itself -- set explicitly,
+   since a manual replay outside `make` does not inherit it) links cleanly.
+   This points to a shell-handoff/argv-marshaling artifact in the recursive
+   `make -C` chain on this MSYS setup, not a real command defect. Workaround
+   when this specific failure is hit: `make -n` the failing target, extract
+   its one expanded recipe line, and run it directly.
+
 ## Installing the pinned libyaul build
 
 Install an SH-2 compiler first, then build and install the SDK libraries and

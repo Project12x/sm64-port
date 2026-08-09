@@ -4,6 +4,29 @@
 
 ### Docs
 
+- Independently re-verified the `.cart_rodata` orphan-input-section fix
+  (`4bd66637`, `src/port/saturn/sourceboot/sourceboot-cart.x`) from a
+  from-scratch clean build the review round ran itself -- not the
+  implementer's report -- after a prior review round was force-concluded
+  before its own independent build finished (only past the identity-assets
+  stage). Real numbers read from this round's own build (identity
+  `e2-bob-identity-id-58b5304a51e463e9`, same canonical acceptance
+  configuration): `sh-elf-readelf -S` reports `.cart_rodata` `SIZEOF` =
+  2,940,880 B; `sh-elf-nm`'s `___sourceboot_cart_rodata_start`/`_end` span is
+  also 2,940,880 B; a direct `sh-elf-objcopy -O binary
+  --only-section=.cart_rodata` reproduction of `SOURCE.DAT` is 2,940,880 B
+  on disk -- all three agree exactly, and exactly match the byte count
+  `4bd66637` claimed. The link-time `ASSERT` added by that commit therefore
+  holds. Budget margins also independently confirmed from the same ELF:
+  HWRAM 19,524 B free against the 6,912 B floor, LWRAM 16,384 B free against
+  the 16,384 B floor (both `>=`, both PASS) -- matching `4bd66637`'s claimed
+  HWRAM margin exactly. The soft-fp/fp-bit substitution gate and undefined-
+  symbol gate (`sh-elf-nm -u`) also pass on this ELF. No source change was
+  needed; the original fix was already correct. Recorded two sandbox/tooling
+  gotchas hit while reproducing this build, with their confirmed workarounds,
+  in `docs/saturn/BUILDING.md`, for future review/build rounds run from an
+  AI-agent shell sandbox.
+
 - Reconciled `docs/superpowers/plans/2026-08-07-task14-completion.md`'s
   Task 1/4/5/6 status against this session's real, verified outcomes: Task 1
   (2026-08-07 baseline) marked superseded by the real green link below;
