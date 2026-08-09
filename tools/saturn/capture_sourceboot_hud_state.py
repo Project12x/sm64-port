@@ -70,18 +70,30 @@ def pnd_cell_address(col: int, row: int) -> int:
 
 
 def expected_character_number(glyph_index: int) -> int:
-    """Reproduce VDP2_SCRN_PND_CONFIG_1's bit-packing (libyaul's
+    """Reproduce VDP2_SCRN_PND_CONFIG_3's bit-packing (libyaul's
     scrn_macros.h) for the glyph sm64_saturn_hud_atlas_init()/
     sm64_saturn_hud_atlas_write_cell() would have written:
 
-        VDP2_SCRN_PND_CONFIG_1(cram_mode, cpd_addr, pal_addr) =
-            (pal_num(pal_addr) & 0xF) << 12 | VDP2_SCRN_PND_CP_NUM(cpd_addr)
-        VDP2_SCRN_PND_CP_NUM(addr) = (addr >> 5) & 0x0FFF
+        VDP2_SCRN_PND_CONFIG_3(cram_mode, cpd_addr, pal_addr) =
+            (pal_num(pal_addr) & 0xF) << 12 |
+            ((VDP2_SCRN_PND_CP_NUM(cpd_addr) >> 2) & 0x0FFF)
+        VDP2_SCRN_PND_CP_NUM(addr) = (addr) >> 5
 
     with pal_addr == 0 (this atlas always calls
-    VDP2_SCRN_PND_CONFIG_1(0, cpd_addr, 0), see saturn_hud_atlas.c), so the
+    VDP2_SCRN_PND_CONFIG_3(0, cpd_addr, 0), see saturn_hud_atlas.c), so the
     full 16-bit PND word's low 12 bits equal
-    ``((HUD_CPD_BASE + glyph_index * HUD_CHAR_BYTES) >> 5) & 0x0FFF``.
+    ``((HUD_CPD_BASE + glyph_index * HUD_CHAR_BYTES) >> 7) & 0x0FFF``.
+
+    CONFIG_3 (not CONFIG_1) because the encoding is dictated by the screen's
+    cell format, CHAR_SIZE_2X2 + AUX_MODE_1: with 2x2 characters the char
+    number's low 2 bits (8x8 sub-cell selectors) drop out of the PND word,
+    which holds char# bits 13-2 instead of 11-0 (scrn_macros.h:159-161;
+    vdp2_scrn_cell.c:347-351 "Character number in pattern name table: bits
+    13~2"). An earlier revision of this tool mirrored the atlas's CONFIG_1
+    bug (the Task 9 blank-HUD defect: every cell resolved into the bank-A0
+    sky bitmap) and therefore false-PASSED it -- keeping this helper derived
+    from the *format-correct* macro, not from whatever the C side happens to
+    call, is the point of re-deriving it here.
 
     This is a VRAM-address-derived hardware "character number", NOT the same
     small integer as the sm64_saturn_hud_glyph_t enum ordinal -- the atlas
@@ -93,7 +105,7 @@ def expected_character_number(glyph_index: int) -> int:
     hit once.
     """
     cpd_addr = HUD_CPD_BASE + glyph_index * HUD_CHAR_BYTES
-    return (cpd_addr >> 5) & 0x0FFF
+    return (cpd_addr >> 7) & 0x0FFF
 
 
 def read_pnd_cell(client: YmirClient, col: int, row: int) -> int:

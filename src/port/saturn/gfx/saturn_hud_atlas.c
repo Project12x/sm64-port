@@ -256,5 +256,23 @@ sm64_saturn_hud_atlas_write_cell(uint8_t col, uint8_t row,
     volatile uint16_t *const pnd = (volatile uint16_t *)
         (CPU_CACHE_THROUGH | (HUD_PND_BASE + cell_index * 2U));
     const uint32_t cpd_addr = HUD_CPD_BASE + (uint32_t)glyph * HUD_CHAR_BYTES;
-    *pnd = (uint16_t)VDP2_SCRN_PND_CONFIG_1(0, cpd_addr, 0);
+    /* CONFIG_3, not CONFIG_1: the 1-word PND encoding is a function of this
+     * screen's char_size + aux_mode (set in the cell format above:
+     * CHAR_SIZE_2X2 + AUX_MODE_1), not a free choice. With a 2x2 character
+     * size the hardware addresses characters in 2x2-cell (16x16-texel) units,
+     * so the character number's low 2 bits (the 8x8 sub-cell selectors) drop
+     * out of the pattern-name word and the PND field holds char# bits 13-2:
+     *   VDP2_SCRN_PND_CONFIG_3 packs (CP_NUM >> 2) & 0x0FFF, where
+     *   CP_NUM = cpd_addr >> 5 (scrn_macros.h:135,159-161), i.e.
+     *   (cpd_addr >> 7) & 0x0FFF;
+     * libyaul's supplement writer mirrors exactly this split for
+     * aux-mode-1/2x2 ("Character number in pattern name table: bits 13~2",
+     * vdp2_scrn_cell.c:347-351), with the PNC supplement providing bits
+     * 14/1/0. CONFIG_1 is the 1x1-character packing (char# bits 11-0,
+     * CP_NUM & 0x0FFF unshifted): under 2x2 decode the hardware re-scales
+     * that value by 4, which resolved every glyph into VRAM bank A0 (the
+     * NBG1 sky bitmap) instead of the atlas at HUD_CPD_BASE in bank B0 --
+     * the target-proven Task 9 blank-HUD defect (PND injection of the
+     * CONFIG_3 word rendered the glyph pixel-exactly). */
+    *pnd = (uint16_t)VDP2_SCRN_PND_CONFIG_3(0, cpd_addr, 0);
 }

@@ -150,6 +150,61 @@
 
 ### Fixed
 
+- Made the VDP2 gameplay HUD actually visible for the first time, closing
+  two target-proven defects from the completed Task 9 blank-HUD
+  investigation (pixel-exact PND-injection proof in headless Ymir -- the
+  mechanisms were confirmed on target before any code changed, not
+  hypothesized). Defect 1, wrong pattern-name encoding
+  (`src/port/saturn/gfx/saturn_hud_atlas.c`,
+  `sm64_saturn_hud_atlas_write_cell()`): the cell write used
+  `VDP2_SCRN_PND_CONFIG_1` -- the CHAR_SIZE_1X1 packing (char# bits 11-0,
+  `cpd_addr >> 5`) -- but this screen is CHAR_SIZE_2X2 + AUX_MODE_1, whose
+  1-word PND holds char# bits 13-2 (`(cpd_addr >> 7) & 0x0FFF`,
+  `VDP2_SCRN_PND_CONFIG_3`; verified against the vendored
+  `scrn_macros.h:159-161` and `vdp2_scrn_cell.c:347-351` supplement logic).
+  Under 2x2 decode the hardware re-scales the CONFIG_1 value by 4, so every
+  HUD cell resolved into VRAM bank A0 (the NBG1 sky bitmap) instead of the
+  glyph atlas at bank B0 -- the injection experiment rendered the glyph
+  pixel-exactly the moment the CONFIG_3 word was poked. Defect 2,
+  sprite/NBG0 priority tie (`src/port/saturn/sourceboot/main.c`,
+  `sourceboot_vdp2_layers_set()`): all 8 VDP1 sprite groups sat at
+  priority 7, tying NBG0's 7; VDP2 resolves the tie sprite-over-NBG0 and
+  VDP1 covers the whole frame, so even corrected cells lost everywhere
+  except sprite-free regions (also target-proven). Sprite groups are now
+  capped at 6 (caller-requested priority honored up to the cap); NBG0 alone
+  owns 7. Companion fixes: (a)
+  `tools/saturn/capture_sourceboot_hud_state.py` reproduced the CONFIG_1
+  packing in `expected_character_number()`, so it false-PASSED the broken
+  encoding -- it now derives the CONFIG_3 relationship
+  (`(cpd_addr >> 7) & 0x0FFF`) and passes only against the fix; (b)
+  NBG0's bank-B0 CHPNDR cycle slots moved t1-t4 -> t1,t2,t4,t5 with
+  explicit `NO_ACCESS` in t3/t6/t7 (`sourceboot_init_sky_bitmap()`),
+  because T3 is an illegal CPD slot when PND reads at T0 (VDP2 timing rule;
+  Ymir's `kLoResPatterns` mirrors the exclusion but renders leniently --
+  real hardware does not), and because an unset designated-initializer slot
+  is 0x0 = `PNDR_NBG0`, not no-access, which in NBG0's own PND bank could
+  move the PND fetch off T0. Verification -- the FIRST real completion of
+  the HUD plan Task 9's verification intent
+  (`docs/superpowers/plans/2026-08-06-saturn-hud-vdp2.md`): all four HUD
+  host suites green (`verify-saturn-hud-snapshot/-layout/
+  -layout-mutation/-no-vdp1`; none encoded the CONFIG_1 expectation -- the
+  layout tests stub the atlas writer); canonical acceptance
+  `verify-sourceboot` build (identity `id-fb7fe58dc19689a1`) green; and the
+  corrected capture tool against that build in headless Ymir
+  (build-agent2 `ymir-headless`, 3,600 startup frames, 5,100 total) PASSES:
+  the lives cell PND word reads 0x0830 = the CONFIG_3-encoded Mario-head
+  character number, and the final screenshot shows the HUD genuinely
+  rendered OVER the VDP1 scene for the first time -- Mario-head x04 lives,
+  coin x000, star x00, and the power-meter glyph, all pixel-correct over
+  Bob-omb Battlefield terrain. Out of scope, tracked separately: NBG1 sky
+  priority 0 and the NBG3/dbgio RGB555 restriction. Session gotcha worth
+  recording: the stale `YMIR_HEADLESS_EXE` default in `Makefile.saturn.mk`
+  points at the `build-agent` ymir-headless (2026-07-18, predates
+  `--dram-cart` support), which silently boots with no DRAM cart and parks
+  every build -- including a byte-identical known-good one -- in the
+  cart-load failure spin; the task14 evidence report's `build-agent2`
+  binary is the working one.
+
 - Recovered 5,952 B of HWRAM `.data` by const-qualifying write-once cold
   tables so the sourceboot linker's existing `*sm64-port?*(.rodata.*)`
   rule relocates them to the cart bank, clearing the demo-path build's

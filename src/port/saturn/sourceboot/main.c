@@ -919,7 +919,25 @@ static void sourceboot_init_sky_bitmap(void)
      * NBG1 for A0/A1 bandwidth. One PNDR slot is always sufficient regardless
      * of color depth; CHPNDR slot count scales with color depth, and NBG0 is
      * RGB_32768 like NBG1, so it gets the same 4-slot provision NBG1 uses
-     * per bank -- bank B0 has 8 total and nothing else competes for it. */
+     * per bank -- bank B0 has 8 total and nothing else competes for it.
+     *
+     * NBG0's CHPNDR slots are t1,t2,t4,t5 -- deliberately skipping t3.
+     * The VDP2 cycle-pattern timing rule couples the two access kinds: with
+     * the pattern-name read at T0, character-pattern reads are only legal in
+     * the slots the T0 PND fetch can feed, and T3 is excluded from that set
+     * (Ymir's kLoResPatterns table mirrors the same T0-PND/T3-CPD exclusion
+     * and happens to render it leniently; real hardware does not). An
+     * earlier revision used t1-t4, which drops NBG0's character fetch on
+     * hardware even though every emulator frame looked fine.
+     *
+     * Bank B0's leftover slots (t3,t6,t7) are explicit NO_ACCESS because a
+     * designated-initializer zero is NOT "no access" in this encoding:
+     * VDP2_VRAM_CYCP_PNDR_NBG0 is 0x0 (vram.h) and NO_ACCESS is 0xF, so an
+     * unset slot in the one bank that really holds NBG0's PND would silently
+     * grant an extra NBG0 pattern-name slot -- including at T3, which could
+     * move the PND fetch off T0 and void the CPD-slot legality above. The
+     * other banks' unset slots also decay to PNDR_NBG0, but NBG0 has no data
+     * there for the grant to serve (pre-existing, unchanged here). */
     const vdp2_vram_cycp_t cycles = {
         .pt[0].t0 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
         .pt[0].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG1,
@@ -932,8 +950,11 @@ static void sourceboot_init_sky_bitmap(void)
         .pt[2].t0 = VDP2_VRAM_CYCP_PNDR_NBG0,
         .pt[2].t1 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
         .pt[2].t2 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
-        .pt[2].t3 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t3 = VDP2_VRAM_CYCP_NO_ACCESS,
         .pt[2].t4 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t5 = VDP2_VRAM_CYCP_CHPNDR_NBG0,
+        .pt[2].t6 = VDP2_VRAM_CYCP_NO_ACCESS,
+        .pt[2].t7 = VDP2_VRAM_CYCP_NO_ACCESS,
     };
     vdp2_vram_cycp_set(&cycles);
     vdp2_scrn_bitmap_format_set(&format);
@@ -959,9 +980,18 @@ static void sourceboot_vdp2_layers_set(uint32_t display_mask,
 {
     /* NBG1 is an opaque baked sky and must remain behind VDP1. NBG0 hosts
      * the gameplay HUD and stays above everything, including dbgio's NBG3
-     * diagnostics text. Every sprite group stays visible above the sky. */
+     * diagnostics text. Every sprite group stays visible above the sky.
+     *
+     * Sprites are capped one level BELOW NBG0's 7: VDP2 resolves an
+     * equal-priority tie in the sprite layer's favor, and VDP1's frame
+     * covers the whole raster, so sprites at 7 buried every HUD cell under
+     * terrain -- target-proven in the Task 9 investigation (corrected HUD
+     * cells rendered over sprite-free regions but never over VDP1 pixels).
+     * The caller's requested vdp1_priority is honored up to that cap; NBG0
+     * alone owns level 7. */
+    const uint8_t sprite_priority = (vdp1_priority > 6U) ? 6U : vdp1_priority;
     for (uint8_t priority = 0U; priority < 8U; priority++)
-        vdp2_sprite_priority_set(priority, vdp1_priority);
+        vdp2_sprite_priority_set(priority, sprite_priority);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 0U);
     vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 7U); /* gameplay HUD: always on top, matching Z-Treme's NBG3 font-plane precedent */
     vdp2_scrn_priority_set(VDP2_SCRN_NBG3, 6U); /* dbgio diagnostics: below the HUD */
