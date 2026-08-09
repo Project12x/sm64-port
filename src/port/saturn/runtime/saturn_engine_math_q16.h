@@ -9,6 +9,12 @@
 
 #if defined(__sh__)
 #include <yaul.h>
+
+/* SH-2 DIVU is at CPU(0x0f00): DVSR 0xffffff00, DVCR 0xffffff08,
+ * DVDNTL 0xffffff14 -- same literal address used by the proven-correct
+ * launch pattern in gpl/slavedriver_projection.h. DVCR's overflow bit is
+ * sticky and does not auto-clear on the next division. */
+#define SM64_SATURN_DIVU_DVCR ((volatile uint32_t *)0xFFFFFF08u)
 #endif
 
 static inline int32_t
@@ -49,6 +55,8 @@ sm64_saturn_atan2_q16_index(uint32_t y, uint32_t x)
         low = rounded;
     }
 #if defined(__sh__)
+    /* Clear a prior DVCR overflow before launch; collect checks the fresh bit. */
+    *SM64_SATURN_DIVU_DVCR &= ~1u;
     cpu_divu_64_32_set(high, low, x);
     {
         const uint32_t quotient = cpu_divu_status_get() ? 1024U : cpu_divu_quotient_get();

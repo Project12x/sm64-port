@@ -2,6 +2,85 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Sticky SH-2 DIVU overflow flag silently corrupted `atan2`/the shared 64/32
+  divide primitive after the first divide overflow, target-confirmed as the
+  mechanism behind BOB's permanent display blackout. The SH-2's on-chip DIVU
+  latches its overflow bit in DVCR (`0xFFFFFF08` bit 0) and does NOT
+  auto-clear it before the next division -- this branch's own proven-correct
+  reference pattern (`src/port/saturn/gpl/slavedriver_projection.h:44-47`, a
+  documented close-port of SlaveDriver Engine's DIVU launch) explicitly
+  clears DVCR immediately before every `cpu_divu_64_32_set()` call for
+  exactly this reason. Two of this branch's native-math primitives were
+  missing that clear: `sm64_saturn_atan2_q16_index()`
+  (`src/port/saturn/runtime/saturn_engine_math_q16.h`, the code path
+  `atan2s()`/`atan2_lookup()` take under `SATURN_ATAN2_VARIANT=2`, the
+  Makefile default) and `sm64_saturn_div_s64_s32()`
+  (`src/port/saturn/gfx/saturn_render_native_math.h`, the shared divide used
+  pervasively across the render/transform pipeline -- matrix constructors,
+  vec3 normalize, frustum/terrain clip, demo render). Full causal chain,
+  target-confirmed: an overflowing divide anywhere sets the sticky DVCR bit
+  -> the next `atan2_q16_index` call reads that stale bit via
+  `cpu_divu_status_get()` and force-returns the lookup table's saturated max
+  index (1024, i.e. 45 degrees) instead of the real quotient -> BOB's
+  radial-hill camera yaw (`sAreaYaw`) froze at that saturated sentinel
+  starting post-BIOS frame ~9580-9600 in the pre-fix headless capture and
+  never recovered through 30000+ frames -> the presented frame permanently
+  stopped updating while game state stayed alive underneath (Mario still
+  walking, VDP generations still climbing), matching the owner's manual-test
+  artifact's deterministic, unrecoverable display blackout.
+  `sm64_saturn_div_s64_s32`'s identical gap is a second exposure on the same
+  mechanism, code-inferred rather than separately target-isolated this
+  session: `sm64_saturn_vec3_normalize_q16()` maps any of its divide
+  failures to `(0,0,0)`, a plausible collapse path if it ever hits camera
+  basis vectors. Fix: `*SM64_SATURN_DIVU_DVCR &= ~1u;` immediately before
+  each `cpu_divu_64_32_set()` call in both files, matching
+  `slavedriver_projection.h`'s exact pattern/comment; the register pointer
+  is defined locally in each header (matching address/citation, not a
+  shared include) so neither file's existing dependency surface changes.
+  Audited every `cpu_divu_64_32_set(` call site in the repo outside
+  `third_party/libyaul` (read-only dependency): only these two lacked the
+  clear. libyaul's own `cpu_divu_fix16_set()` wrapper has the same gap but
+  is third-party/unmodified; this branch's one caller of it
+  (`saturn_ir_transform.c`) is a separate, unaffected code path (Gouraud IR
+  transform, not on the atan2/render-native-math seam). New regression
+  coverage: `tools/saturn/test_divu_overflow_clear_contract.py` -- DVCR is
+  real hardware state a host (non-`__sh__`) build cannot exercise, so this
+  is a source-text contract (asserts the clear immediately precedes each
+  launch) rather than a compiled test; mutation-verified to fail against
+  the pre-fix source and to fail again if the clear is later deleted.
+  Existing host mutation gates (`verify-render-native-math-mutation`,
+  `verify-engine-atan2-q16-mutation`) still pass unchanged, as expected --
+  both only exercise the non-`__sh__` software-overflow branch, which this
+  fix does not touch. Target re-verified post-fix: rebuilt sourceboot
+  (`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+  SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
+  SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0
+  SATURN_SOURCEBOOT_LIVE_INPUT=1 SATURN_SOURCEBOOT_ROUTE_REPLAY=1`, fresh
+  identity `id-b8cf2d2e52b7c85f`) and re-ran the exact headless repro (Ymir
+  headless, chunked `exec.run_for`, `sAreaYaw` resolved fresh at
+  `0x0609DEFA` -- the old `0x0609F5DA` had shifted, as expected after a
+  rebuild) sampling every 20 frames across the historical freeze window
+  (post-BIOS frames 9500-10000, 26 screenshots) plus every 1000 frames
+  through frame 32000 (exceeding the original 30000+-frame proof depth, 37
+  screenshots total). Result: `sAreaYaw` moved through 8 distinct values
+  across the run (-7135 -> -7141 -> -7147 -> -7055 -> -7166 -> -7555 ->
+  -7651 -> -7214), including movement inside the historically-frozen 9500-
+  10000 window itself, and never landed on the pre-fix -8192/0x2000
+  sentinel; the value does hold flat for stretches (matching the scripted
+  replay route's own held/released rotation-input segments, consistent
+  with normal deterministic-route behavior, not a re-manifestation of the
+  bug) but always resumes moving afterward through frame 32000. No
+  screenshot collapsed toward the ~3178-byte near-black pattern (all 37
+  ranged 9589-12761 bytes); spot-checked visually at frames 9580, 15000,
+  19000, and 31000 -- all show distinct, real rendered content (terrain,
+  HUD, Mario at different poses/framing). This also protects the
+  in-progress demo-path build (`SATURN_DEMO_PATH=1 SATURN_CAMERA_VARIANT=3`):
+  that config does not set `SATURN_ATAN2_VARIANT`, so it resolves to the
+  same Makefile default of 2 and shares the identical atan2 exposure this
+  fix closes.
+
 ### Added
 
 - Closure-derived resident audio bundles (task12-completion Task 3):
