@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Docs
+
+- Reconciled `docs/superpowers/plans/2026-08-07-task14-completion.md`'s
+  Task 1/4/5/6 status against this session's real, verified outcomes: Task 1
+  (2026-08-07 baseline) marked superseded by the real green link below;
+  Tasks 4-5 (LWRAM/HWRAM closure) marked moot for the plan's own canonical
+  acceptance configuration (`e2-bob-identity-id-fdc1ac9ba25a4779`) -- real
+  surplus of 12,612 B HWRAM / 526,128 B LWRAM there, no deficit to close --
+  while flagging that a different, heavier `SATURN_DEMO_*` configuration's
+  earlier-measured 3,992-byte HWRAM shortfall (predating this session's own
+  linker-script fix) remains real, unretested against current HEAD, and out
+  of scope for this pass; Task 6 marked real for the green link and
+  headless-capture evidence, still open for the manual/visual desktop
+  confirmation gate (needs the owner's own eyes). Appended a matching,
+  bounded-claims entry to the SDD ledger
+  (`.superpowers/sdd/2026-08-05-saturn-full-game-completeness-parallel-optimization/progress.md`).
+  No source changes. `STATE.md:34-35`'s stability-lane exit condition
+  ("the geo source-policy gate reaches zero direct recursive calls") is
+  flagged as stale against the real accepted exit state (an allowlist of 2
+  structurally-necessary permanent call sites, not a literal zero) for the
+  session controller to reconcile separately -- not corrected here, per this
+  task's own scope boundary (STATE.md/ROADMAP.md are human-maintained
+  narrative docs, out of scope for this pass).
+
 ### Fixed
 
 - Fixed the real root cause of sourceboot's persistent

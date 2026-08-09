@@ -24,11 +24,35 @@
 
 ### Task 1: Fresh RED link baseline + residual memory inventory
 
+**Superseded by fresher measurements (2026-08-09, this session):** this
+task's own report (`task14-budget-baseline-2026-08-07.md`) is real evidence
+of its own moment — a `SATURN_DEMO_*`/`SATURN_RENDERER_PIPELINE=4` link at
+then-HEAD `dd31e2ad`, blocked before reaching the budget asserts by the
+linker-script `INCLUDE` ordering defect, with the nearest-stale `.map`
+confirming the pre-reduction 3,128 B HWRAM / 784 B LWRAM shortfall. Two
+things this session changed under it: (1) commit `2df54a27` fixed the real
+root cause of that `INCLUDE` defect (GCC's spec-level `-T`/`-L` ordering,
+not a Makefile flag-order issue as previously assumed), so links now reach
+the budget asserts at all; (2) a real link of the plan's own canonical
+acceptance configuration (`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
+SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0`, identity
+`e2-bob-identity-id-fdc1ac9ba25a4779`) both linked green and was
+independently re-verified byte-identical in
+`task14-headless-boot-capture-cart-load-blocker-2026-08-09.md` — see Task 6
+below for its real margins. This task's own inventory step (Step 3, HWRAM
+occupant ranking) was never executed against a passing link and remains
+formally undone, but is now moot for the canonical configuration per Task
+5's note below. Steps are left checked as historically completed (the
+report was written and committed) with this note as the authoritative
+current-status gloss; do not re-run Step 1-3 for the canonical
+configuration — there is nothing to inventory there anymore.
+
 **Files:**
 - Create: `docs/saturn/evidence/reports/task14-budget-baseline-2026-08-07.md`
 - No source changes in this task.
 
-- [ ] **Step 1: Attempt the real link at HEAD and capture the exact failure**
+- [x] **Step 1: Attempt the real link at HEAD and capture the exact failure**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\build_sourceboot_variant.py --label task14-budget-baseline --animation 1 --actors 1 --audio 0 --pipeline 4 --diagnostic-mode none --jobs 1 --output build\saturn\variants\task14-budget-baseline\artifact.json
@@ -36,15 +60,26 @@
 
 Expected: link FAILS on `sourceboot-cart.x` assertions. Capture the exact assert text and, from the partial link attempt, whether a `.map` was produced. If `build_sourceboot_variant.py`'s preflight refuses before linking, fall back to the serialized direct make invocation the ledger's prior baselines used (sourced `.yaul.env`, `SATURN_SOURCE_CART_STAGE_SECTORS=4`, `SATURN_DEMO_HOT_PROMOTION=0` — see `progress.md:249` for the exact recorded shape) and capture its stderr.
 
-- [ ] **Step 2: Extract the real deltas**
+- [x] **Step 2: Extract the real deltas**
 
 From the failure output and/or the newest produced `.map`, record: exact HWRAM shortfall (`___end` vs. `0x06100000` minus the required `0x1B00` TLSF margin, per `sourceboot-cart.x:138-141`), exact LWRAM overage against the `0x4000` slave-stack margin (`:228-231`), and confirm/deny the reconstructed ~2,512/784 figures. If the numbers differ from the reconstruction, the measured numbers win everywhere downstream.
 
-- [ ] **Step 3: Rank the residual HWRAM occupants**
+(Real 2026-08-07 numbers from the nearest-stale map: 3,128 B HWRAM short /
+784 B LWRAM over, matching the pre-reduction baseline exactly. Superseded
+for the canonical configuration by Task 6's real green-link numbers below —
+see this task's header note.)
+
+- [x] **Step 3: Rank the residual HWRAM occupants**
 
 From the `.map`, list the top 25 HWRAM `.bss`/`.data` symbols by size with their owning object files. Explicitly separate: (a) SCU/DMA-visibility-constrained (VDP1 command banks, Gouraud staging — NOT movable, per the Task 14 runtime-contract history), (b) CPU-only mutable state (LWRAM-move candidates, gated on LWRAM headroom), (c) anything write-once the earlier const sweeps missed (cart candidates), (d) libyaul-owned symbols (out of scope). Write the report file with the table and the four assert margins.
 
-- [ ] **Step 4: Commit**
+(Ranking was produced against the near-stale, pre-linker-fix map, annotated
+where the three then-newer HWRAM-reduction commits were known to have since
+moved a listed symbol — see the report body. Not re-derived against the
+canonical configuration's green link, because that link has no deficit to
+rank against; see Task 5's note.)
+
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/saturn/evidence/reports/task14-budget-baseline-2026-08-07.md
@@ -186,9 +221,44 @@ Independent two-stage review (spec, then quality) — this seam is the single ga
 
 ### Task 4: LWRAM closure (owner decision + implementation)
 
-**Files:**
-- Modify (leading option): the geo-depth manifest generator (`tools/saturn/geo_depth_manifest.py`) capacity policy + its test `tools/saturn/test_geo_depth_manifest.py`
-- Modify: `CHANGELOG.md`
+**Status (2026-08-09, this session): moot for the plan's own canonical
+acceptance configuration — no LWRAM deficit exists there to close.**
+
+A real, committed link of the canonical acceptance configuration
+(`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
+SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0`, identity
+`e2-bob-identity-id-fdc1ac9ba25a4779`) passed all four `sourceboot-cart.x`
+budget asserts. Real numbers read from that build's own linked symbols
+(`docs/saturn/evidence/reports/task14-headless-boot-capture-cart-load-blocker-2026-08-09.md`
+§1, cross-checked against `sourceboot-cart.x:22,218-231`): `lwram` region
+top `0x00300000`, required slave-stack margin `0x4000` (16,384 B) ⇒ floor
+`0x002FC000`; `__lwram_camera_capture_end = 0x0027b2d0`; actual margin
+`0x002FC000 − 0x0027b2d0 = 0x80D30` (526,128 B) — a huge surplus, not a
+deficit. This task's leading option (shrink `.lwram_geo_traversal`
+capacity 256→192) and its fallback (find 784 B among other LWRAM
+occupants) are both unnecessary for this configuration and were not
+implemented; there is nothing to right-size.
+
+**This does not close the earlier-recorded 784 B LWRAM-over finding —
+it supersedes it for a different configuration, and even for that
+configuration the figure is now doubly stale.** The 784 B LWRAM overage
+(plan-doc header, sourced from Task 1's 2026-08-07 baseline report) was
+read from a `SATURN_DEMO_*`-flagged build's near-stale `.map` — a heavier,
+non-canonical configuration, and a measurement three commits older than
+Task 1's own already-annotated HWRAM figure. This session's own real
+`SATURN_DEMO_*` link attempt (2026-08-09, see Task 5's note) reached only
+the HWRAM assert before the linker halted — no LWRAM assert result was
+observed, so the 784 B figure was not reconfirmed, denied, or updated by
+that attempt either. It is simply untested against current HEAD, on any
+configuration.
+
+The steps below are left unexecuted and unchecked — they were never
+reached because the gap they exist to close is not present in the plan's
+own acceptance configuration. If the `SATURN_DEMO_*` configuration turns
+out to matter for some other acceptance gate, it needs its own fresh
+LWRAM measurement (none exists — every real number on record for that
+configuration to date is HWRAM-side only); that is out of scope here.
 
 - [ ] **Step 1: Present the decision to the owner (AskUserQuestion)**
 
@@ -209,6 +279,47 @@ git commit -m "fix(saturn): right-size geo traversal arena to measured depth (ow
 
 ### Task 5: HWRAM closure (measure-ranked, owner-gated)
 
+**Status (2026-08-09, this session): moot for the plan's own canonical
+acceptance configuration — no HWRAM deficit exists there to close.**
+
+Real numbers from the same canonical-configuration green link cited under
+Task 4 (`e2-bob-identity-id-fdc1ac9ba25a4779`;
+`docs/saturn/evidence/reports/task14-headless-boot-capture-cart-load-blocker-2026-08-09.md`
+§1, cross-checked against `sourceboot-cart.x:138-141`): `___end =
+0x060fb3bc`; `ram` region top `0x06100000`; actual HWRAM margin
+`0x06100000 − 0x060fb3bc = 0x4C44` (19,524 B); required TLSF margin
+`0x1B00` (6,912 B). **Surplus: 19,524 − 6,912 = 12,612 bytes** — comfortably
+green, not short. Task 1's ranked-occupant inventory exists (see Task 1's
+own note) but there is nothing left to relocate against it for this
+configuration.
+
+**Flagged, not closed, for a different, heavier configuration:** a real
+target-link attempt this session (`24b156fe`'s own closure report,
+`docs/saturn/evidence/reports/task14-closure-mario-body-chain-real-depth-2026-08-09.md`
+§4) linked a `SATURN_DEMO_PATH=1 SATURN_DEMO_VIEW_RADIUS=6000
+SATURN_SLAVE_RENDER=1 SATURN_DEMO_POLY_TIER=0 SATURN_DEMO_HOT_PROMOTION=0
+SATURN_DEMO_NEAR_CLIP=0 SATURN_DEMO_BSP_ORDER=1 SATURN_DEMO_BSP_FRAGMENTS=0
+SATURN_RENDERER_PIPELINE=4 SATURN_SOURCE_CART_STAGE_SECTORS=4` build (past
+the linker-script defect, via a diagnostic-only, uncommitted CWD workaround
+— not the real fix Task 6 below records) and hit the real HWRAM assert:
+`___end = 0x060ff498`, margin `2,920` B vs. required `6,912` B — **3,992
+bytes short.** This is a real number, but it predates this same session's
+own `2df54a27` linker-script fix and everything landed after it (the guard
+removal, the doc/ledger updates) — it was measured via the diagnostic
+workaround specifically because the real fix did not exist yet at that
+point in the session. It has never been retested against the real,
+properly-linked (`-L`-before-`-T`) command line, and no LWRAM figure was
+observed for this configuration at all (Task 4's note). **If this
+`SATURN_DEMO_*` configuration matters for some other acceptance gate, it
+needs its own fresh measurement against current HEAD — that is out of
+scope for this reconciliation pass.**
+
+The steps below are left unexecuted and unchecked for the same reason as
+Task 4's: the gap they exist to close is not present in the plan's own
+acceptance configuration, and fabricating relocation targets for the
+untested `SATURN_DEMO_*` configuration without a fresh link would repeat
+the exact class of error this project's review discipline exists to catch.
+
 **Files:** determined by Task 1's inventory — this task is deliberately option-shaped, not pre-decided, because fabricating relocation targets without the fresh map would repeat the exact class of error this project's review discipline exists to catch.
 
 - [ ] **Step 1: Propose from evidence**
@@ -223,24 +334,107 @@ Each relocation follows the established per-item discipline: trace every write s
 
 ### Task 6: Green link, boot evidence, and reconciliation
 
+**Status (2026-08-09, this session): real for the geo-walk/link/HWRAM-LWRAM
+gates; still open for the manual/visual desktop gate.**
+
+**What's now real and verified:**
+- **Green link, real root-cause fix, not a workaround.** Commit `2df54a27`
+  fixed sourceboot's `-L`/`-T` link-command-line ordering at the GCC
+  `sourceboot.specs` level (`%:getenv()`-built `-L` immediately ahead of
+  `-T`), the actual root cause of the persistent
+  `ld: cannot open linker script file saturn_geo_depth_manifest.ld`
+  failure — not the diagnostic CWD-copy workaround earlier reports used to
+  see past it. Verified with two independent real
+  `make -f Makefile.saturn.mk sourceboot` builds (dirty-tree default params
+  and a from-scratch clean `-j8` rebuild): both compiled all ~230
+  translation units and linked through `.elf`/`SOURCE.DAT`/`.iso`/`.cue`
+  with the `sourceboot-cart.x` HWRAM/LWRAM budget asserts both evaluating
+  and passing, zero diagnostic workaround used.
+- **Real margins for the canonical acceptance configuration**, from build
+  identity `e2-bob-identity-id-fdc1ac9ba25a4779`
+  (`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+  SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
+  SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0`), re-verified
+  byte-identical before use in the headless capture below: ELF
+  `sm64-saturn-sourceboot-e2.elf` (7,905,360 B, SHA-256
+  `51d54745e9f79c9a9ad2d7a89f4ab0aae9e1de3ab18e7e775d5f211ef67571fa`); ISO
+  (4,335,616 B, SHA-256
+  `d78ff30f6d7cde55b0452568590341b83b9ca135275041b5213d634b17e29d22`); CUE
+  (88 B, SHA-256
+  `cdbf0bfa299b64cde5ba985d531f864f3c0192c0de566fa89e1bfc9b0f46dba7`).
+  HWRAM surplus **12,612 bytes**, LWRAM surplus **526,128 bytes** (both
+  derived under Task 5/4's notes above). No fourth-assert margin figures
+  (the two structural size-match asserts on `.lwram_actor_runtime`/
+  `.lwram_geo_traversal`) were separately recorded beyond "both PASS" —
+  they are exact-size, not margin, asserts.
+- **Headless capture ran and produced a real, honest result — not a clean
+  PASS.** `docs/saturn/evidence/reports/task14-headless-boot-capture-cart-load-blocker-2026-08-09.md`:
+  7,462 emulated post-BIOS frames (5,400 past target-identity
+  confirmation), zero SH-2 exceptions fired at any of 20 checkpoints
+  (`sourceboot_exception_record.magic` stayed `0x00000000` throughout) —
+  well past the prior ~228-live-frame recursion-crash window, with the
+  original geo-recursion crash's own trampoline record never triggering.
+  But VDP1/VDP2 presentation never began: `main()` halts permanently at a
+  pre-cart-load safety gate (`sourceboot_boot_trace.stage` stuck at `3`,
+  "main-entry", from frame 2,662 onward). Root cause, independently
+  cross-verified two ways (direct ISO9660 parse + the project's own
+  already-vetted `capture_sourceboot_boot_trace.py`): SOURCE.DAT's
+  packaged size (2,940,880 B) disagrees with the linked ELF's own
+  `.cart_rodata` expectation (2,343,984 B) — a real, previously-undiscovered
+  596,896-byte build-packaging mismatch, unrelated to the geo-walk
+  recursion work. **The capture is honest evidence of "no exception fires,"
+  not of "the crash fix works under full gameplay" — execution never
+  reaches the code path the original crash lived in.** This is a new, real,
+  separately-tracked blocker for whoever picks up Task 14's next
+  increment; it is not this task's to fix.
+
+**What remains open:** the manual/visual desktop confirmation gate (owner
+observing the actual image render/run on the real Ymir desktop build) is
+untouched by this session — no manual launch was attempted or claimed.
+This needs the owner's own eyes, not automated evidence, and is blocked
+independent of the cart-load-blocker finding above (a manual run would hit
+the identical gate). Target-hardware FPS measurement is likewise untouched
+and out of scope for this reconciliation.
+
+The plan-doc acceptance checkboxes below are checked only for what the
+evidence above actually proves; the manual/FPS boxes stay open.
+
 **Files:**
 - Create: `docs/saturn/evidence/reports/task14-green-link-2026-08-07.md`
 - Modify: `docs/superpowers/plans/2026-08-05-saturn-full-game-completeness-parallel-optimization.md` (check the four Task 14 boxes at :794-803), `.superpowers/sdd/.../progress.md` (ledger entry), `CHANGELOG.md`
 
-- [ ] **Step 1: Link green**
+- [x] **Step 1: Link green**
 
 Re-run Task 1 Step 1's exact command. Expected: all four `sourceboot-cart.x` asserts pass; artifact.json produced with ELF/CUE/ISO hashes. Run the existing map verifier (`tools/saturn/verify_sourceboot_memory_map.py` path per `progress.md:245-246`) against the fresh ELF and record margins.
 
-- [ ] **Step 2: Headless boot evidence**
+- [x] **Step 2: Headless boot evidence**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\capture_sourceboot_throughput.py --ymir D:\Code\RetroDev\sm64-saturn-port\ymir-agent\build-agent2\apps\ymir-headless\Release\ymir-headless.exe --ipl "D:\Code\RetroDev\sm64-saturn-port\sm64-port\.ymir-profile\roms\ipl\Sega Saturn BIOS (USA).bin" --game <fresh CUE> --elf <fresh ELF> --startup-vblanks 600 --max-vblanks 3600 --output docs\saturn\evidence\reports\task14-postgeo-boot-2026-08-07.json
 ```
 Expected: post-BIOS frames advancing, both SH-2s live, and — the point of the geo cutover — no exception record, sustained past the prior ~228-live-frame recursion-crash window. Chunk any longer soak at ≤3600 frames per request (Ymir hard cap).
 
-- [ ] **Step 3: Reconcile and close**
+(Real deviation: the named tool turned out to be the wrong one for this
+build — `capture_sourceboot_throughput.py`'s required symbols belong to a
+different renderer-pipeline ABI this canonical identity doesn't export.
+A custom harness reusing the project's own `YmirClient`/`run_bios_handoff`/
+`decode_boot_trace` building blocks ran the equivalent capture instead,
+staying within the ≤600-frame-per-call cap; see the header note above and
+`task14-headless-boot-capture-cart-load-blocker-2026-08-09.md` for the
+full result, including the honest inconclusive-on-the-original-crash
+verdict.)
+
+- [x] **Step 3: Reconcile and close**
 
 Check the four plan-doc boxes only for what the evidence actually proves (target FPS/manual gates stay open — they belong to later tasks). Append the ledger entry in the established voice (bounded claims, explicit open gates). CHANGELOG entry. Final commit + independent final review of the whole task-14 diff series.
+
+(This reconciliation pass, 2026-08-09: plan-doc boxes below updated to
+match this task's header note; ledger entry appended at
+`.superpowers/sdd/2026-08-05-saturn-full-game-completeness-parallel-optimization/progress.md`;
+this file's Task 1/4/5/6 status notes are the CHANGELOG-referenced
+record. Independent final review of the whole task-14 diff series was not
+performed as part of this documentation-only pass — flagged as still
+open, not claimed.)
 
 ```bash
 git add docs/ .superpowers/ CHANGELOG.md
