@@ -44,7 +44,13 @@ therefore records the control-flow graph it decodes and reports a
 `delay-free-loop` finding for any reachable cycle with no delay on it; a
 call instruction counts as delay-bearing when its callee's reachable code
 contains a delay, because the cycle through the call's return point
-dynamically executes the callee body each iteration.
+dynamically executes the callee body each iteration.  That callee rule is
+optimistic in one direction: a callee that delays only on SOME reachable
+path (e.g. behind a conditional branch) still counts as delay-bearing, so
+a loop whose only delay is conditionally skippable passes this static
+check yet could exhaust the VM budget dynamically -- a contrived shape no
+real sequence has (all 19 real loopers carry a direct on-cycle 0xfd);
+per-tick budget behavior is Task 15's dynamic domain, not this walker's.
 
 One deliberate strictness deviation from vm_flow: this walker rejects an
 out-of-range EU/SH relative-branch displacement (0xf2/0xf3/0xf4)
@@ -118,7 +124,14 @@ class Finding:
 def _delay_free_cycle(payload: bytes, starts: set[int],
                       edges: dict[int, set[int]],
                       call_targets: dict[int, int]) -> int | None:
-    """Return the smallest offset on a reachable delay-free cycle, or None.
+    """Return the smallest surviving offset when a delay-free cycle exists, or None.
+
+    "Surviving" rather than "on the cycle": the double Kahn peel used below
+    answers cycle EXISTENCE exactly, but its survivor set can include nodes
+    on paths between two cycles, so the reported offset is a diagnostic
+    anchor near the cycle, not guaranteed to sit on it (exact on-cycle
+    attribution would need SCC computation, not warranted for a fail-closed
+    validator whose finding rejects the sequence either way).
 
     Operates on the control-flow graph the walk decoded: nodes are
     instruction starts, edges are fall-throughs plus validated branch/call

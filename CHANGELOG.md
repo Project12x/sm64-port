@@ -4,6 +4,16 @@
 
 ### Docs
 
+- Hedged two overclaiming docstrings in `tools/saturn/m64_decode_walk.py`
+  per its accepted quality review (comment-only, no behavior change): the
+  module docstring now states the call-delay propagation rule's one-way
+  optimism (a callee delaying only on SOME reachable path counts as
+  delay-bearing -- a contrived shape no real sequence has; dynamic budget
+  behavior is Task 15's domain), and `_delay_free_cycle`'s docstring now
+  accurately describes its reported offset as a near-cycle diagnostic
+  anchor (Kahn-peel survivors can include between-cycle nodes) rather
+  than claiming it always sits on the cycle. Walker suite re-run: 30/30.
+
 - Re-ran the Task 14 headless boot capture against a fresh canonical
   acceptance build now that the `.cart_rodata` orphan-input-section fix
   (`4bd66637`) is landed, confirming the cart-load gate the prior capture
