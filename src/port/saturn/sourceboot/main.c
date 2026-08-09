@@ -32,6 +32,7 @@
 #include "saturn_hud_layout.h"
 #include "saturn_hud_publish.h"
 #include "saturn_build_identity.h"
+#include "saturn_object_pool_probe.h"
 #include "source_cart.h"
 #include "source_camera_acceptance_route.h"
 #include "source_camera_idle_probe.h"
@@ -516,6 +517,11 @@ static void sourceboot_run_source_tick(void)
     sm64_saturn_demo_render_scene_observe(gCurrentArea != NULL,
                                           gCurrLevelNum, gCurrAreaIndex);
 #endif
+    /* Object-pool occupancy probe (memory-residency campaign Task 2):
+     * this function runs exactly once per generation regardless of which
+     * branch above executed, the same per-tick guarantee
+     * sourceboot_boot_trace's SOURCE_TICK boundary relies on. */
+    g_sm64_saturn_object_pool_probe.frames_sampled++;
     const uint16_t sim_end = cpu_frt_count_get();
     sourceboot_fast3d.profile.sim_frt_ticks_last =
         sourceboot_frt_delta(sim_start, sim_end);

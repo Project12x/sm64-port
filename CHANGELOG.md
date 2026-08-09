@@ -112,6 +112,40 @@
 
 ### Added
 
+- Instrumented `gObjectPool` occupancy with a fail-closed probe
+  (memory-residency-campaign Task 2, feeds OWNER GATE G1):
+  `sm64_saturn_object_pool_probe_t` / `g_sm64_saturn_object_pool_probe`
+  (`src/port/saturn/runtime/saturn_object_pool_probe.h`, magic/current/
+  peak/alloc_failures/frames_sampled, all `volatile uint32_t`, 20 bytes,
+  always compiled under `TARGET_SATURN`) is wired at the real allocate/free
+  sites in `src/game/spawn_object.c` -- `try_allocate_object()`'s single
+  successful-return point (current/peak), `deallocate_object()`'s free-list
+  push (current, underflow-guarded), and `allocate_object()`'s true
+  pool-exhaustion path (the `find_unimportant_object() == NULL` branch that
+  otherwise just hangs forever) -- plus a per-game-loop-tick counter in
+  `sourceboot_run_source_tick()` (`src/port/saturn/sourceboot/main.c`).
+  New source-text contract test `tools/saturn/test_object_pool_probe_contract.py`
+  (11 tests, RED before implementation, GREEN after, including three
+  "guard is not a tautology" mutation-detection tests) plus a new
+  `verify-saturn-object-pool-probe-contract` Makefile target (wired into
+  `verify-all`). A real 21,600-emulated-frame headless Ymir capture
+  (`tools/saturn/capture_object_pool_occupancy.py`, 20,100 of them
+  post-BIOS-handoff, sampled every 300 frames) against the canonical
+  flags-on geo-walk build found **real peak occupancy of 138 objects
+  (57.5% of the 240-slot pool) with zero alloc_failures** -- more than
+  double the plan's previously-cited 64-live-rendered-actor bound, proving
+  the plan's own caution that pool occupancy includes invisible logic
+  objects (spawners, triggers, helpers), not just rendered actors. The
+  capture is an idle-boot measurement (no live input/route replay in this
+  config), so it captures BOB's full static/macro object roster (which
+  SM64 spawns at area load, not proximity) but not Mario-movement-
+  triggered transients or the pickup/hold interaction itself; reported
+  honestly as a measured floor, not a worst-case ceiling, in
+  `docs/saturn/evidence/reports/memcamp-object-pool-occupancy-2026-08-09.md`.
+  This real number (138) invalidates the plan's own worked capacity
+  examples (96, 128 -- both below the measured peak); Task 3's owner gate
+  should compute candidates from 138.
+
 - Offline SeamAwareDecimater terrain-decimation prototype (memory-residency-
   campaign Task 7, parallel lane -- no build-system integration, no identity
   wiring, not wired into any `verify-*` target): `tools/saturn/mesh_ir_obj_shim.py`

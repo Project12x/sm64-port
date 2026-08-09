@@ -20,6 +20,10 @@
 #include "profiler.h"
 #include "spawn_object.h"
 
+#ifdef TARGET_SATURN
+#include "port/saturn/runtime/saturn_object_pool_probe.h"
+#endif
+
 
 /**
  * Flags controlling what debug info is displayed.
@@ -68,6 +72,17 @@ u32 gTimeStopState;
  * The pool that objects are allocated from.
  */
 struct Object gObjectPool[OBJECT_POOL_CAPACITY];
+#endif
+
+#ifdef TARGET_SATURN
+/*
+ * Occupancy probe for gObjectPool above. See saturn_object_pool_probe.h for
+ * the full rationale. The counter fields update at the real allocate/free
+ * sites in spawn_object.c; this is only the storage definition.
+ */
+volatile sm64_saturn_object_pool_probe_t g_sm64_saturn_object_pool_probe = {
+    .magic = SM64_SATURN_OBJECT_POOL_PROBE_MAGIC,
+};
 #endif
 
 /**

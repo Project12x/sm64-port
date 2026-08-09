@@ -16,6 +16,10 @@
 #include "spawn_object.h"
 #include "types.h"
 
+#ifdef TARGET_SATURN
+#include "port/saturn/runtime/saturn_object_pool_probe.h"
+#endif
+
 /**
  * An unused linked list struct that seems to have been replaced by ObjectNode.
  */
@@ -114,6 +118,18 @@ struct Object *try_allocate_object(struct ObjectNode *destList, struct ObjectNod
 #endif
     geo_add_child(&gObjParentGraphNode, &nextObj->gfx.node);
 
+#ifdef TARGET_SATURN
+    /* This is the real allocation site: every path above that reaches here
+     * (free-list pop, or malloc under USE_SYSTEM_MALLOC) has just handed
+     * out one object slot. */
+    g_sm64_saturn_object_pool_probe.current_allocated++;
+    if (g_sm64_saturn_object_pool_probe.current_allocated >
+        g_sm64_saturn_object_pool_probe.peak_allocated) {
+        g_sm64_saturn_object_pool_probe.peak_allocated =
+            g_sm64_saturn_object_pool_probe.current_allocated;
+    }
+#endif
+
     return (struct Object *) nextObj;
 }
 
@@ -144,6 +160,16 @@ static void deallocate_object(struct ObjectNode *freeList, struct ObjectNode *ob
     // Insert at beginning of free list
     obj->next = freeList->next;
     freeList->next = obj;
+
+#ifdef TARGET_SATURN
+    /* This is the real free site: the object above just returned to the
+     * free list. Guard against underflow rather than trusting every call
+     * site to be perfectly balanced (defensive coding: a stray double-free
+     * must not wrap current_allocated into a huge unsigned value). */
+    if (g_sm64_saturn_object_pool_probe.current_allocated > 0) {
+        g_sm64_saturn_object_pool_probe.current_allocated--;
+    }
+#endif
 }
 
 #ifndef USE_SYSTEM_MALLOC
@@ -254,6 +280,12 @@ struct Object *allocate_object(struct ObjectNode *objList) {
 
         // If no unimportant object exists, then the object pool is exhausted.
         if (unimportantObj == NULL) {
+#ifdef TARGET_SATURN
+            /* This is the true pool-exhaustion path -- unlike the recoverable
+             * eviction below, nothing frees a slot here, so it counts as a
+             * real allocation failure before the port hangs. */
+            g_sm64_saturn_object_pool_probe.alloc_failures++;
+#endif
             // We've met with a terrible fate.
             while (TRUE) {
             }
