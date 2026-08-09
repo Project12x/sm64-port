@@ -18,14 +18,32 @@ and measured. After the full-feature build measures at least 4.0 mean
 presentation FPS in the pinned setup (4--6 FPS is the accepted band), the
 next sprint pursues 12--15 FPS against the representative workload.
 
-### Current execution lane — temporary stability prerequisite
+### Current execution lane — memory-residency campaign
 
-The current implementation wave is deliberately Saturn-shaped and bounded:
-repair the memory/exception instability, then cut the production geo walk over
-to its generated LWRAM continuation arena and enter/dispatch/leave callbacks.
-This is an execution lane inside the full-game roadmap, not a new milestone or
-a BOB-only target. The accepted dual-SH2 BOB rollback remains the comparison
-point, and no target/FPS claim is promoted until the current image is stable.
+The prior stability lane is **complete**: the geo-walk cutover to the
+bounded dual-SH2 enter/dispatch/leave runtime reaches zero unaccounted
+recursive calls at the source-policy gate, and the now-dead reentrancy
+guard is removed. Six 2026-08-09 fix commits (`1eb30fee`, `2c08b009`,
+`b1f456a5`, `a6c2032a`, `16007c4d`, `b9679f57`) landed on top of that
+closure, and the owner's first manual session on the resulting textured
+demo build (identity `id-1335252b7f9383a6`) confirmed textures, HUD, and
+the camera-freeze fix hold at a stable 2--4 FPS.
+
+The current execution lane is now the memory-residency campaign
+(`docs/superpowers/plans/2026-08-09-memory-residency-campaign.md`): a
+measured 12,408-byte HWRAM link deficit on the flags-on
+(`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`) demo-path build blocks that build
+from linking at all. Closing this deficit is the prerequisite gate before
+the post-manual-gate sprint's Lane A (Task 16 drain / Task 22 closure) can
+resume its A2/A4 target-build steps. SeamAwareDecimater terrain decimation
+and the VDP2 CLUT plan run as a parallel fidelity lane against
+LWRAM/cart/VDP1, not against this HWRAM deficit — they are not on this
+campaign's critical path and instead feed the later 12--15 FPS sprint.
+This remains an execution lane inside the full-game roadmap, not a new
+milestone or a BOB-only target; the accepted dual-SH2 BOB rollback remains
+the comparison point, and no target/FPS claim is promoted until the
+campaign closes the deficit.
 
 After that gate, resume the larger sequence rather than restarting planning:
 Task 21 production MC68000/sourceboot audio integration; Tasks 22--23A complete

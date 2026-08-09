@@ -18,6 +18,18 @@
   decimation prototype runs as a parallel offline lane; identity-wired
   build integration is explicitly deferred to a future plan pending the
   owner's renderer-route decision.
+- Reconciled STATE.md, ROADMAP.md, and the post-manual-gate sprint plan
+  with reality: both docs' current-lane narratives still described the
+  now-finished geo-walk cutover (`5ba8d85c`..`dd81d616`, policy gate 0
+  unaccounted recursive calls) and memory/exception repair as in-flight
+  work, when six further fix commits (`1eb30fee`, `2c08b009`, `b1f456a5`,
+  `a6c2032a`, `16007c4d`, `b9679f57`) and the first owner-played manual
+  session on the textured demo build (`id-1335252b7f9383a6`, stable
+  2--4 FPS) had already closed that lane. Both docs now name the
+  memory-residency campaign as the current lane and its measured
+  12,408 B flags-on HWRAM deficit as the gate. Also added a "Discovered
+  constraint" note to the sprint plan's Lane A preamble: A2/A4 target
+  builds won't link until that deficit closes.
 
 ### Fixed
 

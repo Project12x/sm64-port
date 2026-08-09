@@ -21,24 +21,44 @@ reviewed tasks, immediate plan/ledger updates at every transition, and
 serialized `-j1` build/Ymir gates for the busy host. The governing plan now
 has 30 named tasks, including the explicit VDP2 gameplay-HUD task 23A.
 
-## Current stability lane within the larger track
+## Current lane: memory-residency campaign
 
-The active short-term lane is **not a scope reset**: it is the Saturn-shaped
-stability prerequisite for the same full-game sprint. The uncommitted/current
-work is repairing memory/exception behavior and replacing the production
-recursive geo walk with a bounded dual-SH2 enter/dispatch/leave traversal.
-These changes must preserve the accepted 4--6 FPS BOB rollback and the
-full-game ownership model; they do not turn the project into a BOB-only or
-geo-only fork.
+The prior short-term stability lane is now **closed, not merely paused**.
+The geo-walk cutover from the production recursive traversal to the bounded
+dual-SH2 enter/dispatch/leave runtime is COMPLETE: the geo source-policy
+gate reports zero unaccounted recursive calls, and the now-dead reentrancy
+guard was removed (`5ba8d85c`..`dd81d616`). Six further fix commits landed
+2026-08-09 on top of that closure: `1eb30fee` (right-size the
+geo-traversal arena via 16-frame capacity alignment), `2c08b009`
+(const-sweep cold HWRAM `.data` tables to cart rodata), `b1f456a5` (halve
+closure-mode SFX sample rate to fit the BOB resident budget), `a6c2032a`
+(make the VDP2 HUD visible via CONFIG_3 PND encoding and sprite priority
+cap), `16007c4d` (move HUD counters/timer/power-meter to the top of frame,
+matching source), and `b9679f57` (clear the sticky SH-2 DIVU overflow flag
+before atan2/native-math divides, fixing BOB's permanent camera/display
+freeze). The first owner-played manual session on the resulting textured
+demo build (identity `id-1335252b7f9383a6`) confirmed textures, HUD, and
+the camera-freeze fix hold at a stable 2--4 FPS.
 
-Once the current image is stable and the geo source-policy gate reaches zero
-direct recursive calls, return to the larger track at the still-open
-production audio bridge and package residency (Task 21), generated BOB
-dynamic closure, semantic audio, and the VDP2 gameplay HUD (Tasks 22--23A), final-draw and transfer
-overlap (Tasks 24--26), Whomp's Fortress portability (Task 27), the complete
-feature matrix (Task 28), and all-features FPS recovery/publication (Task 29).
-The 12--15 FPS sprint remains downstream of that sequence, not replaced by
-the stability lane.
+That manual acceptance closes the stability lane. The new active lane is
+the memory-residency campaign
+(`docs/superpowers/plans/2026-08-09-memory-residency-campaign.md`); its
+driving number is a measured **12,408-byte HWRAM link deficit** on the
+flags-on (`SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
+SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`) demo-path build, which must close
+before that build can link and run at all. This remains **not a scope
+reset**: it is the next Saturn-shaped prerequisite gate for the same
+full-game sprint, and it must preserve the accepted 4--6 FPS BOB rollback
+and the full-game ownership model.
+
+Once the campaign closes that deficit, return to the larger track at the
+still-open production audio bridge and package residency (Task 21),
+generated BOB dynamic closure, semantic audio, and the VDP2 gameplay HUD
+(Tasks 22--23A), final-draw and transfer overlap (Tasks 24--26), Whomp's
+Fortress portability (Task 27), the complete feature matrix (Task 28), and
+all-features FPS recovery/publication (Task 29). The 12--15 FPS sprint
+remains downstream of that sequence, not replaced by either prerequisite
+lane.
 
 Task 9A/A9A is **rebuilt, exact-map green, independently reviewed, and captured
 at runtime**. Specification is PASS; code-quality review found no
