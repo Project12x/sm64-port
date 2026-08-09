@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrected a stale accounting comment in `rendering_graph_node.c` (above
+  the Task 14 wave 3 action-code enum) that claimed converting
+  `geo_process_object`/`_parent`/`geo_process_held_object` drops
+  `geo_walk_source_policy_test.py`'s remaining-call count from 19 to 13
+  -- it omits the `sSaturnGeoWalkActive` reentrancy guard's own real
+  fallback recursion call (added by the same wave), so the real,
+  script-verified count is 14, not 13. Caught while fixing this: a
+  first attempt at the correction spelled the dispatcher's name out
+  contiguously in the new prose, which the policy script's raw
+  (non-comment-aware) text scan counted as a phantom 15th call site --
+  the original comment had dodged this by accident, via a line-wrap
+  that splits the identifier across two lines. Reworded to avoid the
+  literal pattern instead of relying on incidental line-wrapping, and
+  left a note for future editors of that comment block.
+
 ### Added
 
 - Added `docs/saturn/evidence/reports/task14-budget-baseline-2026-08-07.md`

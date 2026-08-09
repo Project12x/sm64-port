@@ -1883,7 +1883,16 @@ void geo_try_process_children(struct GraphNode *node) {
  * the direct-call count by 6, not 3, because each of the three pre-
  * conversion functions contained TWO literal `geo_process_node_and_
  * siblings(` call sites (sharedChild and children), not one -- unlike
- * every other handler type, which had exactly one. 19 - 6 = 13.
+ * every other handler type, which had exactly one. 19 - 6 = 13, but the
+ * sSaturnGeoWalkActive reentrancy-guard fallback above adds back exactly
+ * one new, deliberate real-recursion call site (the fallback this guard
+ * takes when it detects reentry), so the real live count is 13 + 1 = 14
+ * -- confirmed by actually running the script, not just this arithmetic.
+ * (Note for future editors of this comment: that policy script does a
+ * raw text scan, not a comment-aware one -- spelling the dispatcher's
+ * name out contiguously followed by "(" anywhere in this file, including
+ * in a comment, adds a phantom match. This paragraph and the one above
+ * it both avoid that deliberately.)
  * --------------------------------------------------------------------- */
 
 enum {
