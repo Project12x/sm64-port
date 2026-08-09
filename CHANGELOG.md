@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Docs
+
+- Wrote the memory residency campaign plan
+  (`docs/superpowers/plans/2026-08-09-memory-residency-campaign.md`): the
+  gate before Lane A can resume. Driven by three same-day research inputs
+  (all evidence-cited in the plan): the measured 12,408 B flags-on HWRAM
+  link deficit, the SlaveDriver/Z-Treme work-RAM technique mining (headline:
+  `gObjectPool`'s 240x608 B always-resident footprint vs. the port's own
+  attested 64-live actor bound), and the SeamAwareDecimater fidelity-scaling
+  scoping (terrain decimation is an LWRAM/cart/VDP1 lever, not an HWRAM
+  one). Critical path: occupancy probe -> owner-gated pool capacity cut
+  with fail-closed overflow latch -> flags-on textured link gate -> owner
+  manual acceptance of the original object-holding crash scenario. The
+  decimation prototype runs as a parallel offline lane; identity-wired
+  build integration is explicitly deferred to a future plan pending the
+  owner's renderer-route decision.
+
 ### Fixed
 
 - Sticky SH-2 DIVU overflow flag silently corrupted `atan2`/the shared 64/32

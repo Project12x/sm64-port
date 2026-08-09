@@ -1,0 +1,159 @@
+# Memory Residency Campaign: Textures + Actors in One Build
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Tasks 3 and 6 are OWNER GATES — they require the project owner, not an agent, and the plan pauses there.
+
+**Goal:** Make the textured demo-path build link and run with `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1` and `SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, so the owner can manually exercise the original object-holding crash scenario in a visually testable build.
+
+**Architecture:** Close a measured 12,408-byte HWRAM deficit with one large, evidence-gated lever (object-pool residency cut, SlaveDriver/Z-Treme pattern) instead of many small scrapes; instrument first, cut to a measured number, keep a fail-closed overflow latch. A parallel fidelity-scaling lane (SeamAwareDecimater) attacks LWRAM/cart/VDP1 for the future but is NOT on this plan's critical path.
+
+**Tech Stack:** SH-2 GCC (Yaul), GNU ld map analysis, Ymir headless (build-agent2), Python host tools under `.venv-saturn-tools`, MSYS2 login-shell builds.
+
+---
+
+## Measured ground truth (2026-08-09, all from real .map/emulator evidence — do not re-derive unless HEAD moves)
+
+- Flags-on demo-path config fails the link **HWRAM-only**: `___end = 0x06101578`, hard ceiling `0x06100000`, required safe floor `0x1B00` above `___end`'s ceiling → **deficit 12,408 B** past the safe floor. LWRAM adds zero bytes (surplus stays +240 B). Evidence map: `build/saturn/sourceboot/e2-bob-identity-id-f60aaf60fe7b5d06/obj/sm64-saturn-sourceboot-e2.map`.
+- Per-flag HWRAM cost +12,632 B: `complete_actor_pose_slots` (`src/port/saturn/gfx/saturn_actor_bridge.c:43-44`) = **+8,560 B** (68%); new actor-bank `.text` ≈ +4.0 KB net (not movable — only `ram` is executable).
+- `gObjectPool` (`src/game/object_list_processor.c:70`, capacity 240 at `src/game/object_list_processor.h:26`, 608 B/slot via `struct Object`, `include/types.h:149-208`) = **145,920 B of always-resident HWRAM `.bss`** in every config. The port's own snapshot domain already attests at most **64 live rendered actors** (`SM64_SATURN_ACTOR_INSTANCE_MAX_LIVE`, `src/port/saturn/gfx/saturn_actor_instance.h`). Reference engines: SlaveDriver runs 350×144 B objects with run/idle/free lists (`OBJECT.C:9-89`); Z-Treme keeps pickups as 24 B in-level records with no pool at all (`ZTE_DEF.H:187-195`).
+- CAUTION that motivates Task 2: pool occupancy ≠ rendered actors. The pool also holds invisible logic objects (spawners, triggers, Mario/camera helpers) and transient particles. The 64-live bound is attested for RENDERING only. Cut to a MEASURED number, never a borrowed one.
+- Working reference build for occupancy measurement: the canonical geo-walk config (`SATURN_FEATURE_*=1`, no demo flags) links fine with HWRAM surplus and runs 38k+ frames headless with zero exceptions.
+- Reference-code ledger (reference-code-first rule): SlaveDriver Engine `work/upstream/slavedriver-engine` @ `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0; Sonic Z-Treme `work/upstream/sonic-z-treme` @ `cff75451c1616aac1236fc2b44223902b55c706b`, GPL-3.0. Close-porting with attribution into `src/port/saturn/gpl/` is established practice. SeamAwareDecimater (MIT, `github.com/songrun/SeamAwareDecimater`) not yet cloned — Task 7 records its pin.
+
+## Environment hazards (all bit us this session — non-negotiable)
+
+- Build via `/c/msys64/usr/bin/bash.exe -l` (LOGIN shell), source `.yaul.env` inside it, pass `OS=Windows_NT YAUL_INSTALL_ROOT=/d/Code/RetroDev/sm64-saturn-port/work/yaul-install` as make args. Never `unset COMPILER_PATH` for SH-2 cross builds.
+- Headless Ymir MUST be `D:\Code\RetroDev\sm64-saturn-port\ymir-agent\build-agent2\apps\ymir-headless\Release\ymir-headless.exe` (the Makefile's default binary silently boots cartless). BIOS: `.ymir-profile\roms\ipl\Sega Saturn BIOS (USA).bin`. Chunk `exec.run_for` ≤600 frames.
+- Host Python: `.venv-saturn-tools` (its `subprocess.Popen` absolute-path defect is a known, chipped, separate issue — run make-built test binaries directly when it bites).
+- Never stage the 4 permanently-dirty `.superpowers/sdd/*` files. CHANGELOG.md edits: re-read fresh, self-contained bullet, no neighbor reflow.
+
+---
+
+### Task 1: Documentation reconciliation (doc drift + constraint recording)
+
+**Files:**
+- Modify: `STATE.md` (current-lane section)
+- Modify: `ROADMAP.md` (current-execution-lane section)
+- Modify: `docs/superpowers/plans/2026-08-09-post-manual-gate-sprint.md` (Lane A preamble)
+- Modify: `CHANGELOG.md`
+
+- [ ] **Step 1: Update STATE.md.** Replace the stale "uncommitted/current work is repairing memory/exception behavior and replacing the production recursive geo walk" narrative: the geo-walk cutover is COMPLETE (policy gate: 0 unaccounted recursive calls, guard removed as dead code, commits `5ba8d85c`..`dd81d616`), six fix commits landed 2026-08-09 (`1eb30fee`, `2c08b009`, `b1f456a5`, `a6c2032a`, `16007c4d`, `b9679f57`), and the first owner-played manual session on the textured demo build (identity `id-1335252b7f9383a6`) confirmed textures/HUD/camera-freeze-fix at stable 2-4 FPS. State the new active lane: this memory-residency campaign, with the measured 12,408 B flags-on HWRAM deficit as its driving number.
+- [ ] **Step 2: Update ROADMAP.md** current-execution-lane paragraph the same way: stability lane complete; memory-residency campaign is the prerequisite gate before Lane A (Tasks 16/22) resumes; decimation/CLUT are the parallel fidelity lane feeding the later FPS sprint.
+- [ ] **Step 3: Amend the sprint plan.** In `2026-08-09-post-manual-gate-sprint.md`, add a short "Discovered constraint (2026-08-09)" block to Lane A's preamble: A2/A4 target builds will not link until this campaign closes the 12,408 B deficit; cite the evidence map path above.
+- [ ] **Step 4: CHANGELOG (Docs) bullet** summarizing the reconciliation, then commit all four files: `docs(saturn): reconcile STATE/ROADMAP/sprint plan with completed stability lane and measured flags-on deficit`.
+
+### Task 2: Object-pool occupancy probe + headless measurement
+
+**Files:**
+- Modify: `src/game/object_list_processor.c` (or the real allocation site — see Step 2)
+- Create: `src/port/saturn/runtime/saturn_object_pool_probe.h`
+- Create: `tools/saturn/capture_object_pool_occupancy.py`
+- Test: `tools/saturn/test_object_pool_probe_contract.py`
+- Modify: `Makefile.saturn.mk` (verify target), `CHANGELOG.md`
+
+- [ ] **Step 1: Write the failing contract test.** `test_object_pool_probe_contract.py`: source-text contract (same style as `test_divu_overflow_clear_contract.py`) asserting the probe struct exists with fields `magic`, `current_allocated`, `peak_allocated`, `alloc_failures`, `frames_sampled`, that the counters are updated at the real allocate AND free sites, and that the probe is `volatile` and TARGET_SATURN-gated. Run: expect FAIL (nothing exists yet).
+- [ ] **Step 2: Find the real allocate/free sites.** Grep `src/game/spawn_object.c` and `src/engine/` for the functions that take objects from / return objects to the free list (decomp names are typically `try_allocate_object` / `unload_object` or `deallocate_object` — read the real code; do NOT trust these names). The counter hooks go exactly there, one increment/decrement each, plus a failure increment on the NULL/exhausted path.
+- [ ] **Step 3: Implement the probe.**
+
+```c
+/* saturn_object_pool_probe.h */
+#define SM64_SATURN_OBJECT_POOL_PROBE_MAGIC 0x4F504F4Cu /* 'OPOL' */
+typedef struct {
+    volatile uint32_t magic;
+    volatile uint32_t current_allocated;
+    volatile uint32_t peak_allocated;
+    volatile uint32_t alloc_failures;
+    volatile uint32_t frames_sampled;
+} sm64_saturn_object_pool_probe_t;
+extern sm64_saturn_object_pool_probe_t g_sm64_saturn_object_pool_probe;
+```
+
+Hook the counters at the Step-2 sites (peak updated on allocate; `frames_sampled` bumped once per game-loop tick from wherever the existing per-frame probe/boot-trace update runs — find the real site). Keep it always-compiled under TARGET_SATURN (it is 20 bytes; not worth a flag).
+- [ ] **Step 4: Contract test passes; host suites unaffected.** Re-run Step 1's test (PASS) plus `verify-saturn-geo-walk-runtime` as a canary.
+- [ ] **Step 5: Build the canonical flags-on geo-walk config** (the one that links: `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0 SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0`, `verify-sourceboot`), resolve `g_sm64_saturn_object_pool_probe` via `sh-elf-nm`.
+- [ ] **Step 6: Measure.** `capture_object_pool_occupancy.py` (pattern-copy from the existing boot-capture harnesses): BIOS handoff, then sample the probe every 300 frames to ≥20,000 post-handoff frames on the standard BOB route. Record `peak_allocated`, `alloc_failures` (must be 0 at capacity 240), and the time series. If the route never spawns the macro-object-heavy areas, note that honestly in the report — the owner gate weighs it.
+- [ ] **Step 7: Evidence report** `docs/saturn/evidence/reports/memcamp-object-pool-occupancy-2026-08-XX.md` with the real numbers, then commit code+test+harness+report+CHANGELOG: `feat(saturn): instrument object pool occupancy with fail-closed probe`.
+
+### Task 3: OWNER GATE G1 — pool capacity decision
+
+- [ ] **Step 1: Present via AskUserQuestion.** Give the owner: measured `peak_allocated`, the time series shape, and a capacity recommendation = smallest power-of-two-free number ≥ peak × 1.5, alongside the bytes recovered per candidate (e.g. capacity 96 → 87,552 B freed; 128 → 68,096 B freed; deficit to beat: 12,408 B). Options: recommended capacity / a more conservative one / abort-and-find-other-levers.
+- [ ] **Step 2: Record the decision** verbatim in the plan's execution ledger and carry it into Task 4. Do not proceed without it (standing owner constraint: capacity changes require explicit sign-off — precedent: the geo-arena resize).
+
+### Task 4: Pool capacity cut + overflow latch
+
+**Files:**
+- Modify: `src/game/object_list_processor.h` (capacity constant)
+- Modify: `src/port/saturn/sourceboot/Makefile` (flag plumbing)
+- Modify: `src/game/spawn_object.c` (or real exhaustion site — latch)
+- Test: extend `tools/saturn/test_object_pool_probe_contract.py`
+- Modify: `CHANGELOG.md`
+
+- [ ] **Step 1: RED.** Extend the contract test: `OBJECT_POOL_CAPACITY` must honor an override macro, and the exhaustion path must both count AND latch (a `pool_exhausted_latched` field or reuse `alloc_failures != 0`) — assert the test fails before implementation.
+- [ ] **Step 2: Implement the override.**
+
+```c
+/* object_list_processor.h — replace the bare constant */
+#ifdef SATURN_OBJECT_POOL_CAPACITY_OVERRIDE
+#define OBJECT_POOL_CAPACITY SATURN_OBJECT_POOL_CAPACITY_OVERRIDE
+#else
+#define OBJECT_POOL_CAPACITY 240
+#endif
+```
+
+Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical passthrough, feature-off-rollback convention); non-empty → `-DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=$(value)`. Wire it into the build-identity typed parameters exactly like `polygon_tier` (`gen_build_identity.py` `COMPILER_CONFIG_FIELDS` + bootstrap `--set`), so identity changes when capacity does.
+- [ ] **Step 3: GREEN + passthrough proof.** Contract test passes. Build the canonical config once with the override unset — the sealed identity must match a pre-change build at the same HEAD (byte-identical passthrough), same discipline as the audio closure flag.
+- [ ] **Step 4: Cut + re-measure.** Build canonical flags-on with `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. From the fresh map: confirm `gObjectPool` shrank by exactly 608 × (240 − N) bytes. Re-run the Task 2 harness to ≥20,000 frames: `alloc_failures == 0` REQUIRED. Any failure = STOP, report, return to G1.
+- [ ] **Step 5: Commit** with the G1 decision, map delta, and re-measurement numbers in the CHANGELOG: `feat(saturn): cut object pool residency to owner-approved measured capacity`.
+
+### Task 5: Flags-on textured build — link gate + combined smoke
+
+**Files:** none modified — build + verify only. Evidence report + CHANGELOG only.
+
+- [ ] **Step 1: Build the goal config**: the exact 18-flag demo-path tuple from the `id-1335252b7f9383a6` build but with `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, plus `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. Link must pass both region asserts; record real margins from the map (expect roughly: old deficit −12,408 B + pool recovery ≥ +55 KB net HWRAM surplus).
+- [ ] **Step 2: ISO completeness** (SOURCE.DAT in ISO9660 listing, size == `.cart_rodata` SIZEOF).
+- [ ] **Step 3: Combined headless smoke** (≥20,000 post-handoff frames): cart gate, zero exceptions, VDP generations climbing, `sAreaYaw` non-freeze through 9,500–10,000 (fresh `sh-elf-nm` address), pool probe `alloc_failures == 0`, HUD at top, textured terrain, **and actors visibly present** — screenshot must show at least one spawned actor (coin/enemy) that the flags-off build lacked. If actors don't render because Task 16's drain stubs still quarantine them, capture what the probe says is *spawned* vs *rendered* and report honestly — spawned-but-invisible still unblocks the pickup test only if interaction works; flag for the owner either way.
+- [ ] **Step 4: Evidence report + CHANGELOG commit**: `docs(saturn): flags-on textured build links and smokes with pool residency cut`.
+
+### Task 6: OWNER GATE G2 — manual acceptance (the campaign's actual goal)
+
+- [ ] **Step 1: Launch** desktop Ymir (`build-agent2` `ymir-sdl3.exe -p <repo>\.ymir-profile -d <Task 5 CUE>`).
+- [ ] **Step 2: Owner checklist:** (a) **pick up / hold an object — THE original crash scenario, in its home config family**; (b) hold camera rotation for a sustained stretch (direct DVCR-fix confirmation); (c) textures + HUD-at-top sanity; (d) several minutes of stability; (e) rough FPS impression vs the 2-4 flags-off baseline (animation/actors will cost — measured, not blocking, per the governing plan's regression policy).
+- [ ] **Step 3: Record the verdict** in the sprint plan's manual-gate section and STATE.md. PASS here closes the campaign's critical path and re-opens Lane A/Lane B execution.
+
+### Task 7 (parallel lane, start any time after Task 1): SeamAwareDecimater offline prototype
+
+**Files:**
+- Create: `work/upstream/seam-aware-decimater/` (pinned clone — record SHA + MIT in the ledger)
+- Create: `tools/saturn/mesh_ir_obj_shim.py` (IR→OBJ→IR round-trip)
+- Test: `tools/saturn/test_mesh_ir_obj_shim.py`
+- NO build-system integration in this task. NO identity wiring. Offline only.
+
+- [ ] **Step 1: Clone + pin + build.** Clone SeamAwareDecimater into `work/upstream/`, pin libigl/Eigen to era-appropriate commits, build under MSYS2 MinGW — prefer a small hand-rolled Makefile in the fork over introducing CMake (repo has zero CMake today). Record binary SHA-256.
+- [ ] **Step 2: RED then implement the shim.** Round-trip test first: IR→OBJ→IR with decimation disabled must be byte-identical (positions re-quantized deterministically, `texture_tile` state reattached by material, UVs 1:1 by construction). Then run real decimation at 50% and 25% (`--strict 2`), and prove GREEN-twice determinism of the decimated outputs (two runs, byte-identical) — a nondeterministic decimater is disqualifying (identity-seal precedent: the `__pycache__` drift incident).
+- [ ] **Step 3: Run the existing downstream tools offline** (`saturn_mesh_ir.py`, `compile_bob_bsp.py`) on the decimated IRs; capture REAL post-pairing primitive counts, BSP node counts, and the regenerated LWRAM array bounds vs today's 867 primitives / 1,183 nodes / ~447 KB scaled LWRAM.
+- [ ] **Step 4: Visual artifact for OWNER GATE G3.** Render or capture the decimated terrain (host-side viewer or an offline Ymir capture from a scratch build if cheap) at both levels; package screenshots + the Step 3 numbers into an evidence report. The owner decides acceptable fidelity level — UI/visual quality is an owner-eyes gate by project convention.
+- [ ] **Step 5: Commit** shim + tests + report (upstream clone stays untracked per `work/upstream/` convention): `feat(saturn): offline seam-aware terrain decimation prototype with real downstream counts`.
+
+### Task 8 (deferred — separate plan required): identity-wired decimation build stage
+
+Explicitly OUT of this plan's scope. Prerequisites before planning it: G3 fidelity verdict, and the **owner routing decision** (demo/BSP Route A vs geo-walk Route B as the surviving renderer — Route B needs a new IR→Vtx/Gfx emitter, roughly a third of the integration cost; Route A gets decimation nearly free at the IR boundary). The five-point identity wiring recipe (config fields, generated inputs, tool provenance JSON, `identity-assets` ordering, bootstrap-test extension) is recorded in the 2026-08-09 decimation scoping report — carry it into that plan verbatim. Also carry: the CLUT plan's `bob_sky_*` rename will hard-fail the identity seal unless `GENERATED_IMAGE_INPUTS` and its bootstrap test are updated in the same commit.
+
+---
+
+## Follow-on backlog (mined, ledgered, NOT in this campaign)
+
+| Lever | Source | Benefit class | Reuse mode |
+|---|---|---|---|
+| Per-Object fat trim (64 B resident `Mat4`, 320 B worst-case `rawData`) | Both engines recompute transforms transiently | HWRAM, scales with capacity | behavior-lesson |
+| Two-region LIFO arena allocator with spill + lock | SlaveDriver `UTIL.C:336-405` | structural — ends per-flag link wars | close-port (~60 lines) |
+| Animation working-set cap (12 B cursors, decode-in-place from memory-mapped cart) | Z-Treme `ZT_ANIMATION.c:5-52` + our cart mapping | HWRAM (animation flag cost) | pattern-only |
+| Run/idle/free intrusive object lists + render-visibility wake | SlaveDriver `OBJECT.C:20-89`, `WALLS.C:2520` | CPU + enables deeper pool cuts | close-port (~80 lines) |
+| Dormant 24 B pickup records in level data | Z-Treme `ZTE_DEF.H:187-195` | HWRAM (coins bypass pool) | pattern-only |
+| Frame-phase buffer aliasing | SlaveDriver `WALLS.C:1234-1253` | LWRAM, needs overlap-phase proof | pattern-only |
+| VDP1 texture slots + LRU + upload-time mips | SlaveDriver `PIC.C` | VDP1 time (FPS sprint) | close-port (~150 lines) |
+| Near-to-far degradation + AI time-slicing | Z-Treme `ZT_RENDERING.c:494-503`, SlaveDriver `AICOMMON.C:24` | VDP1 + CPU (FPS sprint) | pattern-only |
+
+## Self-review notes
+
+- Spec coverage: goal = flags-on textured build, linkable and owner-accepted → Tasks 2-6 are the critical path; Task 1 records the constraint; Task 7 runs the owner's requested fidelity-scaling exploration without coupling to the gate.
+- The pool cut recovers ≥55 KB against a 12.4 KB deficit even at the conservative capacity-128 option — margin is not the risk; unmeasured occupancy spikes are, which is why Task 2 precedes G1 and the latch is mandatory in Task 4.
+- Type/name consistency: probe struct name `g_sm64_saturn_object_pool_probe` and field names are used identically in Tasks 2, 4, and 5. Capacity macro `SATURN_OBJECT_POOL_CAPACITY_OVERRIDE` consistent across Tasks 4-5.
