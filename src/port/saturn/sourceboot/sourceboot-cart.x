@@ -58,9 +58,25 @@ SECTIONS
      *sm64-port?*(.rodata)
      *sm64-port?*(.rodata.*)
      *sm64-port?*(.gnu.linkonce.r.*)
+     /* Some generated objects (e.g. tools/saturn/emit_actor_bank_c.py) place
+      * their payload directly into an input section literally named
+      * .cart_rodata -- the same name as this OUTPUT section -- via
+      * __attribute__((section(".cart_rodata"))). Without an explicit rule
+      * here, GNU ld's orphan-section-placement still appends such input
+      * sections to this output section (same name), but only AFTER
+      * ___sourceboot_cart_rodata_end is assigned above, silently excluding
+      * them from the [start,end) span the runtime load-size probe trusts
+      * even though their bytes are really present in the linked output and
+      * therefore in SOURCE.DAT. Match the literal name explicitly so any
+      * such input lands here as ordinary script content, before the end
+      * symbol is taken. */
+     *(.cart_rodata)
      . = ALIGN (16);
      ___sourceboot_cart_rodata_end = .;
   } > cart
+  ASSERT (SIZEOF (.cart_rodata) ==
+          (___sourceboot_cart_rodata_end - ___sourceboot_cart_rodata_start),
+          "cart_rodata orphan input section: SIZEOF(.cart_rodata) disagrees with the start/end symbol span -- an input section named .cart_rodata is bypassing this script's glob rules")
 
   .rodata :
   {
