@@ -35,6 +35,33 @@
   import removed, `pin_m64_size` now emits the real assets.json entry shape,
   deliberate-shadowing comment on the legacy `_load_sequences` guards).
 
+- Closed the real BOB closure's 188,416-byte resident overflow
+  (task12-completion Task 3 follow-up, owner-approved this session: "halve
+  the sample rate - thats fine"): `saturn_audio_package.py` now 2:1-decimates
+  closure-mode SFX sample PCM (drop every other frame, post-AIFF-decode,
+  before packaging) and halves the affected samples' `rate` field --
+  eligibility is exact (reachable only via a resolved SFX chain, never via
+  any scene's whole-bank music inclusion), so music bank 22 and WF's
+  hardcoded fallback are provably untouched (spot-checked byte-identical
+  against independent AIFF parses). Corrected sub-figures from the prior
+  entry's estimate, independently re-derived against the real 660,864-byte
+  raw PCM total: SFX-only was 416,112 B (406.4 KiB) at full rate, not
+  ~426 KiB/418.0 KiB; music-only is confirmed at 253,952 B (248.0 KiB,
+  includes its metadata share) as estimated. Halving drops SFX PCM to
+  208,056 B, so the real closure now packages at 473,088 resident bytes
+  (462.0 KiB) against the 491,520-byte (480.0 KiB) limit -- 18,432 bytes
+  (18.0 KiB) of real margin, confirmed via `compile-saturn-audio
+  verify-audio-residency` in closure mode (`--closure` against the real
+  generated BOB closure) and two independent compiles hashing byte-identical
+  (`AUDIO.DAT`, `audio_manifest.json`, both `*_audio_closure.json`).
+  `SATURN_AUDIO_SCENE_CLOSURE` no longer needs to stay opt-in for a
+  resident-budget reason (a fidelity/residency policy still gates whether it
+  ships by default). Packager suite grows 11 -> 12
+  (`test_closure_real_bob_sfx_halving_fits_resident_budget`, generated from
+  the real repo via `collect_scene_closure`); the existing
+  `test_closure_resident_overflow_fails_closed` synthetic-fixture fail-closed
+  coverage is unchanged.
+
 ### Docs
 
 - Hedged two overclaiming docstrings in `tools/saturn/m64_decode_walk.py`

@@ -600,6 +600,82 @@ def test_closure_resident_overflow_fails_closed() -> None:
             sap.RESIDENT_LIMIT = original
 
 
+def test_closure_real_bob_sfx_halving_fits_resident_budget() -> None:
+    """Task 3's real BOB closure (54 SFX IDs across 9 instrument banks plus
+    music bank 22, 48 unique samples) needs 679,936 resident bytes at full
+    rate against the 491,520-byte SM64_SATURN_AUDIO_RESIDENT_LIMIT -- a
+    deterministic 188,416-byte overflow (the fail-closed mechanism itself
+    stays covered by test_closure_resident_overflow_fails_closed's synthetic
+    fixture).  Owner-approved fix (2026-08-09 session, explicit approval:
+    "halve the sample rate - thats fine"): 2:1 PCM decimation on
+    closure-mode SFX samples only; music bank 22 stays full rate.  This must
+    now fit, with real margin, end to end against the real repo inputs."""
+    import collect_scene_closure as csc
+    with tempfile.TemporaryDirectory() as temp:
+        root = copy_complete_sound(temp)
+        (root / "include").mkdir(parents=True, exist_ok=True)
+        shutil.copy(ROOT / "include/sounds.h", root / "include/sounds.h")
+        shutil.copy(ROOT / "include/seq_ids.h", root / "include/seq_ids.h")
+        document = csc.collect_scene_closure(
+            ROOT, "bob", 1, ROOT / "tools/saturn/behavior_spawn_rules.json")
+        closure_path = Path(temp) / "closure.json"
+        csc.write_closure(closure_path, document)
+        assert len(document["sfx_ids"]) == 54, document["sfx_ids"]
+
+        result = compile_catalog(root, Path(temp) / "AUDIO.DAT",
+                                 Path(temp) / "audio_manifest.json",
+                                 scene_closure=closure_path)
+        bob = result["closures"]["bob"]
+        assert bob["selection"] == "scene-closure-v1"
+        assert len(bob["sample_ids"]) == 48, bob["sample_ids"]
+        # Real, independently re-derived numbers: full rate needs 679,936
+        # bytes (661,504 aligned PCM + 18,432 aligned metadata).  Halving the
+        # 32 SFX-only samples (16 music-bank-22 samples untouched) drops raw
+        # PCM from 660,864 to 452,808 bytes, 2048-aligning to 454,656; plus
+        # the unchanged 18,432 aligned metadata gives 473,088 resident bytes
+        # -- 18,432 bytes (18.0 KiB) of real margin under the 491,520-byte
+        # (480.0 KiB) limit.
+        assert bob["resident_bytes"] == 473_088, bob["resident_bytes"]
+        assert bob["resident_bytes"] <= RESIDENT_LIMIT
+        assert RESIDENT_LIMIT - bob["resident_bytes"] == 18_432
+
+        sample_by_id = {s["id"]: s for s in result["samples"]}
+        # Spot-check two music-bank-22 samples against an independent direct
+        # AIFF parse: rate, frame count, packaged PCM bytes, and the
+        # closure's own chunk hash all agree -- music never passes through
+        # the SFX decimation path.
+        for stable_id in ("instruments/06_kick_drum_1", "instruments/07_rimshot"):
+            direct = parse_aiff(ROOT / "sound/samples" / f"{stable_id}.aiff")
+            assert sample_by_id[stable_id]["rate"] == direct.rate
+            assert sample_by_id[stable_id]["pcm8_bytes"] == len(direct.pcm8)
+            expected_hash = hashlib.sha256(direct.pcm8).hexdigest()
+            chunk = next(c for c in bob["chunk_hashes"]
+                        if c["kind"] == "SAMP" and c["id"] == stable_id)
+            assert chunk["sha256"] == expected_hash, stable_id
+
+        # Every one of the closure's 48 samples is either exactly half its
+        # source rate/length (the 32 SFX-only samples) or byte-identical to
+        # the source (the 16 music samples) -- never anything else.
+        halved = 0
+        for stable_id in bob["sample_ids"]:
+            direct = parse_aiff(ROOT / "sound/samples" / f"{stable_id}.aiff")
+            record = sample_by_id[stable_id]
+            if record["rate"] == direct.rate // 2:
+                assert record["pcm8_bytes"] == len(direct.pcm8[::2])
+                halved += 1
+            else:
+                assert record["rate"] == direct.rate
+                assert record["pcm8_bytes"] == len(direct.pcm8)
+        assert halved == 32, halved
+
+        # GREEN-twice: independent compiles of the real closure agree byte
+        # for byte (pitch-halving must be deterministic, not incidental).
+        second = compile_catalog(root, Path(temp) / "AUDIO2.DAT",
+                                 scene_closure=closure_path)
+        assert json.dumps(result["closures"], sort_keys=True) == \
+            json.dumps(second["closures"], sort_keys=True)
+
+
 def test_generated_sequences_bin_fail_closed() -> None:
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp) / "repo"
@@ -634,6 +710,7 @@ if __name__ == "__main__":
                  test_closure_selection_exact,
                  test_closure_unresolvable_fails_closed,
                  test_closure_resident_overflow_fails_closed,
+                 test_closure_real_bob_sfx_halving_fits_resident_budget,
                  test_generated_sequences_bin_fail_closed):
         test()
-    print("compile_saturn_audio: 11/11")
+    print("compile_saturn_audio: 12/12")

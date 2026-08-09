@@ -841,6 +841,56 @@ def _instrument_chain_sample_names(bank: dict[str, object], index: int,
     return names
 
 
+def _decimate_sfx_sample(sample: Sample) -> Sample:
+    """Halve one closure-mode SFX sample's rate by simple 2:1 PCM decimation
+    (drop every other frame), applied after AIFF decode and before
+    packaging.  Coarse and intentional -- real SCSP hardware commonly ran
+    one-shot effects well below 44.1kHz -- not a filtered/bandlimited
+    resample.  The halved rate is recorded on the returned Sample so the
+    manifest's "rate" field (the field a future SCSP voice allocator reads
+    for playback pitch) stays truthful about what was actually packaged."""
+    pcm8 = bytes(sample.pcm8[::2])
+    return Sample(sample.stable_id, sample.source, sample.source_sha256,
+                  sample.rate // 2, len(pcm8), pcm8, sample.aiff_metadata)
+
+
+def _closure_sfx_decimation_targets(sequences: list[dict[str, object]],
+                                    banks: list[dict[str, object]],
+                                    sfx_resolution: dict[str, list[dict[str, object]]],
+                                    closure_music_ids: list[int]) -> set[str]:
+    """Sample identities (the same "sample_bank/name" form as Sample.stable_id)
+    eligible for closure-mode SFX rate halving: reachable only through a
+    resolved SFX chain, and never through any scene's whole-bank music
+    inclusion -- the closure-driven scene's own music banks, or the [3]
+    hardcoded fallback every non-closure scene keeps (mirroring the
+    fallback selection at compile_catalog's closures loop).  Music samples
+    are protected even if a future closure's SFX chain happens to name the
+    same bank; ambiguous names are simply left undecimated (fail safe)."""
+    bank_by_name = {str(bank["name"]): bank for bank in banks}
+
+    def music_bank_names(sequence_ids: list[int]) -> set[str]:
+        seqs = [seq for seq in sequences if seq["id"] in sequence_ids]
+        return {bank for seq in seqs for bank in seq["banks"] if isinstance(bank, str)}
+
+    protected: set[str] = set()
+    for name in music_bank_names([3]) | music_bank_names(closure_music_ids):
+        bank = bank_by_name[name]
+        prefix = str(bank["sample_bank"])
+        protected |= {f"{prefix}/{sample_name}" for sample_name in _sample_names(bank)}
+
+    eligible: set[str] = set()
+    for chain in sfx_resolution.values():
+        for entry in chain:
+            if "bank" not in entry:
+                continue  # synthesized waveform: no sample dependency
+            bank = bank_by_name[str(entry["bank"])]
+            prefix = str(bank["sample_bank"])
+            index = int(entry["instrument_index"])
+            names = _instrument_chain_sample_names(bank, index, str(entry["instrument"]))
+            eligible |= {f"{prefix}/{sample_name}" for sample_name in names}
+    return eligible - protected
+
+
 def _sequence_payload(root: Path, sequence: dict[str, object]) -> bytes:
     """Read one catalog sequence's script bytes; generated seq00 is a slice
     of the standalone sequence bank addressed by its recorded source_range."""
@@ -981,15 +1031,28 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
         closure_provenance = {
             "closure_source": _relative_source(scene_closure, root),
             "closure_sha256": _sha(scene_closure.read_bytes())}
+    # Closure-mode SFX-only rate halving (owner-approved, 2026-08-09 session):
+    # the real BOB closure needs 679,936 resident bytes at full rate against
+    # the 491,520-byte RESIDENT_LIMIT.  2:1-decimating the SFX-only samples
+    # (never music) closes the gap with real margin; see
+    # _closure_sfx_decimation_targets for the exact eligibility rule.  Stays
+    # empty -- and this compile byte-identical to before -- whenever no
+    # closure is supplied.
+    sfx_decimation_targets: set[str] = (
+        _closure_sfx_decimation_targets(sequences, banks, sfx_resolution, closure_music_ids)
+        if sfx_resolution is not None else set())
     # Keep generated manifests checkout-portable.  parse_aiff is intentionally
     # usable on an arbitrary path for the small unit test, but package records
     # must never embed an absolute developer checkout path.
     samples = []
     for path in sorted((root / "sound/samples").glob("**/*.aiff")):
         parsed = parse_aiff(path)
-        samples.append(Sample(parsed.stable_id, path.relative_to(root).as_posix(),
-                              parsed.source_sha256, parsed.rate, parsed.frames,
-                              parsed.pcm8, parsed.aiff_metadata))
+        sample = Sample(parsed.stable_id, path.relative_to(root).as_posix(),
+                        parsed.source_sha256, parsed.rate, parsed.frames,
+                        parsed.pcm8, parsed.aiff_metadata)
+        if sample.stable_id in sfx_decimation_targets:
+            sample = _decimate_sfx_sample(sample)
+        samples.append(sample)
     sample_bindings = _sample_bindings(banks)
     sample_records = [{"id": s.stable_id, "source": s.source, "sha256": s.source_sha256,
                        "rate": s.rate, "frames": s.frames, "pcm8_bytes": len(s.pcm8),
