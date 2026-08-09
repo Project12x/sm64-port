@@ -4,6 +4,35 @@
 
 ### Docs
 
+- Re-ran the Task 14 headless boot capture against a fresh canonical
+  acceptance build now that the `.cart_rodata` orphan-input-section fix
+  (`4bd66637`) is landed, confirming the cart-load gate the prior capture
+  found is now passed: `g_sm64_saturn_source_cart_probe` reads
+  `status=ok`/`stage=ready`/`copied_size==expected_size==2,940,880` at every
+  post-identity checkpoint across 38,062 total frames (36,000 past identity
+  confirmation, ~5x the prior capture's depth); no SH-2 exception fires;
+  VDP1/VDP2 presentation generation climbs continuously (10 -> 1,379);
+  `gMarioState` resolves to real, evolving action state; and the final frame
+  is a real rendered scene with Mario visible, not black. Independently
+  cross-checked with the project's own already-reviewed
+  `tools/saturn/capture_sourceboot_boot_trace.py` against a second,
+  separately-built ISO, confirming the same result. Also found and
+  documented (not fixed -- evidence-only task) a real, previously-unknown
+  build-identity nondeterminism defect: `tools/saturn/gen_build_identity.py`'s
+  output is not stable across separate `make` process invocations, so the
+  project's own `pre-build-iso` hook (run via a freshly re-parsed recursive
+  `make`) sometimes stages `SOURCE.DAT`/patches IP.BIN into a *different*
+  identity's directory than the outer build is packaging, silently shipping
+  an `.iso` missing `SOURCE.DAT` entirely. One affected build's artifacts
+  were repaired by hand (tool-only, no source changes) for this capture; a
+  second full build converged cleanly on its own. Still open, unchanged from
+  the prior capture: the specific "Mario holding an object" scenario cannot
+  be exercised by this build (`SATURN_SOURCEBOOT_LIVE_INPUT=0` and
+  `SATURN_SOURCEBOOT_ROUTE_REPLAY=0` mean nothing drives Mario), so that
+  piece still needs either a scripted-input capture route or a human at a
+  live desktop Ymir window. See
+  `docs/saturn/evidence/reports/task14-headless-boot-capture-post-cart-rodata-fix-2026-08-09.md`.
+
 - Independently re-verified the `.cart_rodata` orphan-input-section fix
   (`4bd66637`, `src/port/saturn/sourceboot/sourceboot-cart.x`) from a
   from-scratch clean build the review round ran itself -- not the
