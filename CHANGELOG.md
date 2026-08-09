@@ -214,6 +214,42 @@
 
 ### Added
 
+- Added `tools/saturn/gen_sequence_bank.py` (+ `test_gen_sequence_bank.py`,
+  9 unittest cases, synthetic fixtures only): standalone generation of the
+  expanded sequence bank (`build/saturn/audio/generated/sequences.bin`, raw
+  binary, plus a JSON manifest with per-sequence offsets/sizes/SHA-256)
+  without requiring a PC game build (Task 1 of
+  `docs/superpowers/plans/2026-08-07-task12-completion.md`). Root cause of
+  the audio packager's fail-closed inventory block: `sound/sequences.bin.inc.c`
+  is a PC-build product that never lands in `sound/`, while every raw input
+  (34 US `.m64`s, committed `sound/sequences/00_sound_player.s`,
+  `sequences.json`) already exists on disk -- a missing generation step, not
+  a source-data gap. The generator reproduces the decomp's exact assembly
+  path: cpp+as+objcopy of `00_sound_player.s` (the decomp `Makefile`'s
+  :901-903 assemble rule and :771-773 `.m64` objcopy rule; pinned sh-elf
+  toolchain discovered via `--toolchain-bin`, then `$YAUL_INSTALL_ROOT/bin`
+  as check-sdk does, then PATH, MSYS-style paths converted), then
+  serialization through the repo's own canonical `tools/assemble_sound.py
+  --sequences` as a subprocess (reuse mode: dependency -- index table,
+  garbage alignment and padding are the reference implementation's bytes),
+  pinned to big-endian/32-bit words: the Saturn SH-2/68k consumer's layout,
+  resolving the plan's documented text/binary seam in favor of raw bytes.
+  `saturn_audio_package.py` (and the `compile_saturn_audio.py` CLI) gained
+  `--sequences-bin`: the inventory accepts the generated bank in place of
+  the `.inc.c` (old acceptance kept as fallback; both guard messages now
+  name the generator as the fix), and sequence 00's catalog payload is now
+  the real sound-player script bytes extracted via the bank's index table
+  (recorded as `source_range`), no longer the whole generated file as a
+  stand-in. New `compile-audio-sequences` make target wired as a
+  prerequisite of `compile-saturn-audio`; the `verify-audio-residency`
+  determinism gate passes `--sequences-bin` through. Real results:
+  `sequences.bin` 114,112 B, 35 entries, seq00 13,456 B at offset 288
+  (packager's 1,024 B guard now passes on real repo inputs);
+  `compile-saturn-audio` ran GREEN twice with all seven generated artifacts
+  byte-identical across runs, and `verify-audio-residency` (C residency
+  test + determinism gate) PASS via native `mingw32-make`. Packager suite
+  extended to 6/6 (`test_compile_saturn_audio.py`).
+
 - Added `docs/saturn/evidence/reports/task14-closure-mario-body-chain-real-depth-2026-08-09.md`:
   real, run-verified closure evidence for Task 14 Task 2, superseding the
   prior wave-4 report's pre-closure "headline finding" (that Mario's real

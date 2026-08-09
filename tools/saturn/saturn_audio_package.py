@@ -125,9 +125,16 @@ def parse_aiff(path: Path) -> Sample:
                   _aiff_metadata(path.read_bytes()))
 
 
-def source_inventory(root: Path) -> tuple[list[Path], str]:
+def _relative_source(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def source_inventory(root: Path, sequences_bin: Path | None = None) -> tuple[list[Path], str]:
     sound = root / "sound"
-    expanded_seq0 = sound / "sequences.bin.inc.c"
+    expanded_seq0 = sequences_bin if sequences_bin is not None else sound / "sequences.bin.inc.c"
     required = [sound / "sequences.json", sound / "sound_data.c", expanded_seq0]
     required += sorted((sound / "sound_banks").glob("*.json"))
     required += sorted((sound / "sequences" / "us").glob("*.m64"))
@@ -137,9 +144,16 @@ def source_inventory(root: Path) -> tuple[list[Path], str]:
     if not (sound / "sound_data.c").is_file():
         raise AudioPackageError("missing sound/sound_data.c for generated sequence 00")
     if not expanded_seq0.is_file() or expanded_seq0.stat().st_size <= 1024:
+        if sequences_bin is not None:
+            raise AudioPackageError(
+                f"missing generated sequence bank: {expanded_seq0} "
+                "(generate it with tools/saturn/gen_sequence_bank.py, or the "
+                "compile-audio-sequences make target)")
         raise AudioPackageError(
             "missing expanded sequence-00 payload: sound/sequences.bin.inc.c "
-            "(the 338-byte sound_data.c wrapper is not package data)")
+            "(the 338-byte sound_data.c wrapper is not package data; generate "
+            "the standalone bank with tools/saturn/gen_sequence_bank.py and "
+            "pass --sequences-bin instead)")
     banks = sorted((sound / "sound_banks").glob("*.json"))
     samples = sorted((sound / "samples").glob("**/*.aiff"))
     if len(banks) != 38 or len(samples) != 219:
@@ -148,12 +162,38 @@ def source_inventory(root: Path) -> tuple[list[Path], str]:
             f"found {len(banks)}/{len(samples)}")
     records = []
     for path in required:
-        rel = path.relative_to(root).as_posix()
-        records.append((rel, _sha(path.read_bytes())))
+        records.append((_relative_source(path, root), _sha(path.read_bytes())))
     return required, _sha(_canonical(records))
 
 
-def _load_sequences(root: Path) -> list[dict[str, object]]:
+def _extract_generated_seq00(sequences_bin: Path) -> tuple[bytes, int, int]:
+    """Extract sequence 00's payload from the generated raw sequence bank.
+
+    Layout per tools/assemble_sound.py --sequences (big-endian, 32-bit
+    words): u16 magic (3), u16 entry count, then entry_count pairs of
+    (u32 absolute offset, u32 length), data 16-aligned per entry.
+    """
+    raw = sequences_bin.read_bytes()
+    if len(raw) < 8:
+        raise AudioPackageError(f"generated sequence bank is truncated: {sequences_bin}")
+    magic, count = struct.unpack_from(">HH", raw, 0)
+    if magic != 3:
+        raise AudioPackageError(
+            f"generated sequence bank has wrong magic {magic}: {sequences_bin} "
+            "(expected the assemble_sound.py TYPE_SEQ layout; regenerate with "
+            "tools/saturn/gen_sequence_bank.py)")
+    if count != 35:
+        raise AudioPackageError(
+            f"generated sequence bank must carry the 35 US sequences, found "
+            f"{count}: {sequences_bin}")
+    offset, length = struct.unpack_from(">II", raw, 4)
+    if length == 0 or offset < 4 + count * 8 or offset + length > len(raw):
+        raise AudioPackageError(
+            f"generated sequence bank entry 00 is out of range: {sequences_bin}")
+    return raw[offset:offset + length], offset, length
+
+
+def _load_sequences(root: Path, sequences_bin: Path | None = None) -> list[dict[str, object]]:
     raw = json.loads((root / "sound/sequences.json").read_text(encoding="utf-8"))
     entries = []
     seq_dir = root / "sound/sequences/us"
@@ -167,8 +207,17 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
         # its bank/control mapping is still captured, but it has no .m64 file.
         if path is None and seq_id != 0:
             raise AudioPackageError(f"missing extracted sequence asset: {name}.m64")
-        generated_source = root / "sound/sequences.bin.inc.c"
-        payload = generated_source.read_bytes() if path is None else path.read_bytes()
+        source_range = None
+        if sequences_bin is not None:
+            generated_source = sequences_bin
+            if path is None:
+                payload, seq0_offset, seq0_length = _extract_generated_seq00(sequences_bin)
+                source_range = [seq0_offset, seq0_length]
+            else:
+                payload = path.read_bytes()
+        else:
+            generated_source = root / "sound/sequences.bin.inc.c"
+            payload = generated_source.read_bytes() if path is None else path.read_bytes()
         if path is not None and not payload:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
         if path is not None and (len(payload) < 4 or not any(payload)):
@@ -194,10 +243,13 @@ def _load_sequences(root: Path) -> list[dict[str, object]]:
         if path is None and seq_id == 0 and len(payload) <= 1024:
             raise AudioPackageError("expanded sequence-00 payload is too small")
         source_path = (generated_source if path is None else path)
-        entries.append({"id": seq_id, "name": name, "banks": banks,
-                        "source": source_path.relative_to(root).as_posix(),
-                        "bytes": len(payload), "sha256": _sha(payload),
-                        "control_flow": "source-m64" if path else "source-generated"})
+        entry = {"id": seq_id, "name": name, "banks": banks,
+                 "source": _relative_source(source_path, root),
+                 "bytes": len(payload), "sha256": _sha(payload),
+                 "control_flow": "source-m64" if path else "source-generated"}
+        if source_range is not None:
+            entry["source_range"] = source_range
+        entries.append(entry)
     if len(entries) != 35 or [x["id"] for x in entries] != list(range(35)):
         raise AudioPackageError("sequence catalog must contain stable IDs 00..22")
     return entries
@@ -283,6 +335,20 @@ def _sample_bindings(banks: list[dict[str, object]]) -> dict[str, list[dict[str,
     return bindings
 
 
+def _sequence_payload(root: Path, sequence: dict[str, object]) -> bytes:
+    """Read one catalog sequence's script bytes; generated seq00 is a slice
+    of the standalone sequence bank addressed by its recorded source_range."""
+    data = (root / str(sequence["source"])).read_bytes()
+    source_range = sequence.get("source_range")
+    if source_range is not None:
+        start, length = source_range
+        data = data[start:start + length]
+        if len(data) != length:
+            raise AudioPackageError(
+                f"sequence {sequence['name']} source_range is out of range")
+    return data
+
+
 def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, object]],
              banks: list[dict[str, object]], samples: list[Sample], root: Path) -> dict[str, object]:
     seqs = [x for x in sequences if x["id"] in sequence_ids]
@@ -311,8 +377,7 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
         chunk_hashes.append({"kind": kind, "id": stable_id,
                              "bytes": len(payload), "sha256": _sha(payload)})
     for sequence in seqs:
-        payload = (root / str(sequence["source"])).read_bytes()
-        add_chunk("SEQU", str(sequence["id"]), payload)
+        add_chunk("SEQU", str(sequence["id"]), _sequence_payload(root, sequence))
     for bank in selected:
         add_chunk("BANK", str(bank["name"]), _canonical(bank["metadata"]))
     for sample in selected_samples:
@@ -334,9 +399,10 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
             "active_generation_eviction": "rejected", "post_boot_sound_ram_clear": "rejected"}
 
 
-def compile_catalog(root: Path, output: Path, manifest_output: Path | None = None) -> dict[str, object]:
-    files, source_sha = source_inventory(root)
-    sequences = _load_sequences(root)
+def compile_catalog(root: Path, output: Path, manifest_output: Path | None = None,
+                    sequences_bin: Path | None = None) -> dict[str, object]:
+    files, source_sha = source_inventory(root, sequences_bin)
+    sequences = _load_sequences(root, sequences_bin)
     banks = _load_banks(root)
     # Keep generated manifests checkout-portable.  parse_aiff is intentionally
     # usable on an arbitrary path for the small unit test, but package records
@@ -364,7 +430,7 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
                                          "sfx_mappings": sfx_mappings,
                                          "closures": closures})))
     for seq in sequences:
-        payload = b"" if seq["source"] is None else (root / str(seq["source"])).read_bytes()
+        payload = b"" if seq["source"] is None else _sequence_payload(root, seq)
         chunks.append((b"SEQU", payload))
     for bank in banks:
         chunks.append((b"BANK", _canonical(bank["metadata"])))
@@ -432,8 +498,13 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--sequences-bin", type=Path, default=None,
+                        help="generated raw sequence bank from "
+                             "tools/saturn/gen_sequence_bank.py; when absent, "
+                             "falls back to sound/sequences.bin.inc.c")
     args = parser.parse_args()
-    print(json.dumps(compile_catalog(args.root.resolve(), args.output, args.manifest), sort_keys=True))
+    print(json.dumps(compile_catalog(args.root.resolve(), args.output, args.manifest,
+                                     args.sequences_bin), sort_keys=True))
 
 
 if __name__ == "__main__":

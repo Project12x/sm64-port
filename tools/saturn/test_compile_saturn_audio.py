@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import struct
 import aifc
 import tempfile
 from pathlib import Path
 
 from saturn_audio_package import (AudioPackageError, CHUNK_ALIGNMENT, HEADER,
-                                  RESIDENT_LIMIT, compile_catalog, parse_aiff,
-                                  validate_audio_dependency)
+                                  RESIDENT_LIMIT, _load_sequences, compile_catalog,
+                                  parse_aiff, validate_audio_dependency)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,6 +26,33 @@ def copy_complete_sound(temp: str | Path) -> Path:
     # expanded payload; the real asset remains a required user input.
     (root / "sound/sequences.bin.inc.c").write_bytes(bytes(range(256)) * 8)
     return root
+
+
+def write_synthetic_sequences_bin(path: Path) -> bytes:
+    """Synthetic 35-entry big-endian TYPE_SEQ bank; entry 0 is >1024 bytes.
+
+    Mirrors the assemble_sound.py --sequences layout without any real
+    Nintendo bytes: u16 magic 3, u16 count, count * (u32 offset, u32 length),
+    16-aligned data, zero pad to 64.
+    """
+    count = 35
+    data_start = (4 + count * 8 + 15) & -16
+    seq0 = bytes((i * 7 + 3) & 0xFF for i in range(1500))
+    seq0_len = (len(seq0) + 15) & -16
+    entries = [(data_start, seq0_len)]
+    cursor = data_start + seq0_len
+    for _ in range(1, count):
+        entries.append((cursor, 16))
+        cursor += 16
+    header = struct.pack(">HH", 3, count)
+    header += b"".join(struct.pack(">II", offset, length) for offset, length in entries)
+    header += bytes(data_start - len(header))
+    payload = seq0 + bytes(seq0_len - len(seq0)) + bytes(range(16)) * (count - 1)
+    raw = header + payload
+    raw += bytes(((len(raw) + 63) & -64) - len(raw))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+    return raw
 
 
 def expect_failure(fn, text: str) -> None:
@@ -144,8 +172,66 @@ def test_residency_safety_contract() -> None:
             assert closure["post_boot_sound_ram_clear"] == "rejected"
 
 
+def test_generated_sequences_bin() -> None:
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp) / "repo"
+        # No sequences.bin.inc.c: the generated bank replaces the PC-build
+        # product entirely on this path.
+        shutil.copytree(ROOT / "sound", root / "sound")
+        bin_path = root / "build/saturn/audio/generated/sequences.bin"
+        raw = write_synthetic_sequences_bin(bin_path)
+        entries = _load_sequences(root, bin_path)
+        seq0 = entries[0]
+        offset, length = seq0["source_range"]
+        assert length > 1024 and seq0["bytes"] == length
+        assert seq0["sha256"] == hashlib.sha256(raw[offset:offset + length]).hexdigest()
+        assert seq0["control_flow"] == "source-generated"
+        assert seq0["source"] == "build/saturn/audio/generated/sequences.bin"
+        assert all("source_range" not in entry for entry in entries[1:])
+        result = compile_catalog(root, Path(temp) / "AUDIO.DAT",
+                                 Path(temp) / "audio_manifest.json",
+                                 sequences_bin=bin_path)
+        assert result["sequence_count"] == 35
+        assert any(item["path"] == "build/saturn/audio/generated/sequences.bin"
+                   for item in result["source_inventory"])
+        # Without --sequences-bin the fallback still fails closed, and the
+        # guard names the standalone generator as the fix.
+        try:
+            compile_catalog(root, Path(temp) / "fallback")
+        except AudioPackageError as error:
+            assert "gen_sequence_bank" in str(error)
+        else:
+            raise AssertionError("expected fallback inventory failure")
+
+
+def test_generated_sequences_bin_fail_closed() -> None:
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp) / "repo"
+        shutil.copytree(ROOT / "sound", root / "sound")
+        missing = root / "build/saturn/audio/generated/sequences.bin"
+        try:
+            compile_catalog(root, Path(temp) / "x", sequences_bin=missing)
+        except AudioPackageError as error:
+            assert "gen_sequence_bank" in str(error)
+        else:
+            raise AssertionError("expected missing generated bank failure")
+        bad_magic = root / "build/bad-magic.bin"
+        bad_magic.parent.mkdir(parents=True, exist_ok=True)
+        bad_magic.write_bytes(b"\x00\x07\x00\x23" + bytes(2048))
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "y",
+                                               sequences_bin=bad_magic),
+                       "wrong sequence bank magic")
+        truncated = root / "build/truncated.bin"
+        truncated.write_bytes(struct.pack(">HH", 3, 35) +
+                              struct.pack(">II", 288, 1 << 20) + bytes(2048))
+        expect_failure(lambda: compile_catalog(root, Path(temp) / "z",
+                                               sequences_bin=truncated),
+                       "entry 00 out of range")
+
+
 if __name__ == "__main__":
     for test in (test_aiff_and_catalog, test_source_fail_closed,
-                 test_alignment_hash_drift_and_duplicate, test_residency_safety_contract):
+                 test_alignment_hash_drift_and_duplicate, test_residency_safety_contract,
+                 test_generated_sequences_bin, test_generated_sequences_bin_fail_closed):
         test()
-    print("compile_saturn_audio: 4/4")
+    print("compile_saturn_audio: 6/6")

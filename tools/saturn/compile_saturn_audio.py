@@ -11,10 +11,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--sequences-bin", type=Path, default=None,
+                        help="generated raw sequence bank from "
+                             "tools/saturn/gen_sequence_bank.py; when absent, "
+                             "falls back to sound/sequences.bin.inc.c")
     args = parser.parse_args()
     out = args.output_dir
     manifest = out / "audio_manifest.json"
-    result = compile_catalog(args.root.resolve(), out / "AUDIO.DAT", manifest)
+    result = compile_catalog(args.root.resolve(), out / "AUDIO.DAT", manifest,
+                             args.sequences_bin)
     for scene in ("bob", "wf"):
         (out / f"{scene}_audio_closure.json").write_text(
             json.dumps(result["closures"][scene], indent=2, sort_keys=True) + "\n",
