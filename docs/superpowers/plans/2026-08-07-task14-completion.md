@@ -62,32 +62,55 @@ git commit -m "docs(saturn): record task 14 fresh link baseline and HWRAM invent
 
 Wave discipline — repeat this identical loop four times (sites 24→18→12→6→0):
 
-**Real completion status (2026-08-09, this session, verified against HEAD `442597e7`):** All four waves landed and are independently reviewed
-(`5ba8d85c`, `958caf5f`, `e92122c1`, `169141f5`, `51c46bfa`, `ea31881c`,
-`3cc5e84a`, `ac37a009`, `442597e7`). `python tools/saturn/geo_walk_source_policy_test.py`
-now reports `PASS (3 allowlisted permanent call sites, 0 unaccounted)` —
-**not** a raw 0, and that is correct, not a shortfall: 3 direct recursive
-`geo_process_node_and_siblings()` calls are permanent-by-design
-(`sSaturnGeoWalkActive`'s reentrancy-guard fallback, `geo_try_process_
-children`'s generic bridge, `geo_process_root`'s top-level kickoff), and
-the policy test was rewritten (`442597e7`) to allowlist exactly those three
-by enclosing-function name rather than hard-asserting zero. This session
-independently re-verified the guard-keep decision with new evidence (not
-just re-trusting `442597e7`'s own rationale): `saturn_geo_walk_enter`'s
-switch has no case for `GRAPH_NODE_TYPE_ROOT`/`START`/`CULLING_RADIUS`, all
-three fall to the legacy real-recursion bridge, and all three are
-genuinely reachable in shipped content — `GEO_CULLING_RADIUS` is the first
-command in `actors/whomp/geo.inc.c` and 24 other actor files, and
-`GEO_NODE_START()` is the first command of `mario_geo_render_body`, the
-branch Mario's own geo layout selects during all non-stationary gameplay
-(`actors/mario/geo.inc.c:1788`, `src/game/mario_misc.c:343-352`) — so the
-guard's fallback is not dead code by a wide, easily-reproduced margin. See
-`docs/saturn/evidence/reports/task14-wave4-full-traversal-capacity-margin-2026-08-09.md`
-for the full re-measurement this triggered (real peak bounded-array usage:
-5-14 frames measured/hypothetical across four scenarios, vs.
-manifest capacity 256/safety margin 16 — enormous margin, but the array's
-reach is narrower than "all types converted" suggests, precisely because
-of these three permanent exceptions).
+**Real completion status — REAL FINAL CLOSURE (2026-08-09, this session,
+verified against HEAD `24b156fe`):** All four waves plus a real final
+closure sub-wave landed and are independently reviewed (`5ba8d85c`,
+`958caf5f`, `e92122c1`, `169141f5`, `51c46bfa`, `ea31881c`, `3cc5e84a`,
+`ac37a009`, `442597e7`, `b5d57990`, `24b156fe`, and this session's own
+guard-removal commit). **This task is now fully closed — the original
+"Mario holding something" master-stack-overrun crash is structurally
+fixed, not merely bounded-with-a-fallback.**
+
+Earlier same-day work (`24b156fe`) converted the last two node types that
+could still route real content into unbounded recursion:
+`GRAPH_NODE_TYPE_START` (the literal first command of every actor's geo
+layout, including `mario_geo_render_body`) and `GRAPH_NODE_TYPE_CULLING_
+RADIUS` (25 actor files' first command). That closed the "Mario holding
+something" gap for real: `saturn_geo_walk_enter`'s switch now has a real
+case for every node type that can legitimately appear as a walk token —
+20 types — with only `GRAPH_NODE_TYPE_ROOT` left uncased, which by
+construction never appears as one.
+
+That, in turn, made the `sSaturnGeoWalkActive` reentrancy guard (kept as
+of `442597e7`'s policy-test rewrite, and still kept as of `24b156fe`'s own
+commit message out of caution) **provably unreachable**: its only trigger
+was a nested call to `saturn_geo_walk_process_children` from inside an
+already-active walk, reachable only via `saturn_geo_walk_enter`'s
+now-unreachable `default:` case. This session traced that concretely (not
+just re-trusting the prior session's caution) and removed the guard, its
+fallback branch, and the two state toggles as dead code —
+`tools/saturn/geo_walk_source_policy_test.py` now reports
+`PASS (2 allowlisted permanent call sites, 0 unaccounted)`, its lowest
+achievable count: `geo_try_process_children` (still needed for
+`GRAPH_NODE_TYPE_ROOT` and `GRAPH_RENDER_CHILDREN_FIRST`-flagged nodes) and
+`geo_process_root`'s top-level kickoff — both structurally necessary
+bridges, not hazards.
+
+This session also re-measured Mario's real body-chain depth with a real,
+compiled, and run probe against the actual `saturn_geo_walk_runtime.c`
+(not the earlier wave 4 report's hypothetical/pre-closure estimate):
+fully-equipped Mario (moving, cap state present, holding an object via the
+real `GEO_HELD_OBJECT` node) now walks entirely on the bounded array —
+**19 frames real peak**, against the manifest's current 240-frame usable
+budget (`capacity=256`, `safety_margin=16`) — **221 frames of real
+margin**. See
+`docs/saturn/evidence/reports/task14-closure-mario-body-chain-real-depth-2026-08-09.md`
+for the full node-by-node transcription, the probe source, and a real
+target-link attempt (compiled clean; link blocked by a pre-existing
+linker-script `INCLUDE` ordering defect, diagnosed to its precise root
+cause this session; a diagnostic-only workaround pushed past it to reveal
+a real, separately-tracked 3,992-byte HWRAM budget deficit — Task 4-6
+territory below, not this task's).
 
 - [x] **Step 1 (per wave): Read before writing**
 

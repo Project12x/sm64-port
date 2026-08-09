@@ -2155,13 +2155,21 @@ void geo_try_process_children(struct GraphNode *node) {
  * real recursion directly, never through `saturn_geo_walk_process_
  * children`). The default case is kept as a defensive fallback rather than
  * deleted, matching how the eleven-type sub-wave above already treated its
- * own now-unreachable bridge. `sSaturnGeoWalkActive`'s real-recursion
- * fallback itself is deliberately NOT removed by this commit -- it remains
- * the correct, safe behavior for the one call site that reaches it
- * (nested reentry from within an already-active walk), which this closure
- * does not change; this commit only removes the two node types that used
- * to reach real recursion via the OTHER path (the default-case detour),
- * not the reentrancy-guard path itself.
+ * own now-unreachable bridge.
+ *
+ * UPDATE, same-day closure-verification pass: the paragraph above
+ * originally left `sSaturnGeoWalkActive`'s real-recursion fallback in
+ * place, reasoning it "remains the correct, safe behavior for the one call
+ * site that reaches it." That call site is exactly the default-case detour
+ * this same paragraph just proved unreachable -- so the fallback it was
+ * guarding had already gone unreachable in this very commit, and was left
+ * in only out of caution rather than because a live path still needed it.
+ * A follow-up pass traced every caller of `saturn_geo_walk_process_
+ * children` concretely (see that function's own comment, above its
+ * definition) and confirmed no path can re-enter it while a walk is
+ * already active. The guard, its `sSaturnGeoWalkActive` flag, and the
+ * fallback's recursive call have since been deleted as dead code; see
+ * that function's own comment for the current, guard-free shape.
  * --------------------------------------------------------------------- */
 
 enum {
@@ -2294,13 +2302,13 @@ static struct GraphNode *saturn_geo_enter_culling_radius(struct GraphNodeCulling
  * is GRAPH_NODE_TYPE_ROOT, which by construction never appears as a walk
  * token (geo_process_root always drives its own children via real
  * recursion directly, never through saturn_geo_walk_process_children).
- * Separately, geo_process_node_and_siblings's own switch -- which THIS
- * function's callers never touch, by construction -- can still reach a
- * fully-converted type via real recursion during the sSaturnGeoWalkActive
- * reentrancy-fallback path (see that flag's own comment above
- * saturn_geo_walk_process_children for the full mechanism); that fallback
- * calls geo_process_node_and_siblings directly, which owns its own switch,
- * not this one.
+ *
+ * A same-day closure-verification pass confirmed this function being
+ * unreachable also makes it the ONLY way anything could ever call
+ * saturn_geo_walk_process_children while a walk is already active -- so
+ * that function's former sSaturnGeoWalkActive reentrancy guard (and its
+ * plain-recursion fallback) has since been deleted as dead code; see
+ * saturn_geo_walk_process_children's own comment for the current shape.
  */
 static void saturn_geo_walk_dispatch_legacy(struct GraphNode *node) {
     geo_try_process_children(node);
@@ -2716,54 +2724,46 @@ static void saturn_geo_walk_leave(uintptr_t node_token, uint16_t leave_action,
     }
 }
 
-/* Task 14 wave 3: non-reentrancy guard for saturn_geo_walk_process_children
- * below. See this file's wave 3 doc comment (above the SATURN_GEO_LEAVE_*
- * enum, near saturn_geo_walk_dispatch_legacy) for the full discovery
- * writeup; this is the short version needed to read the guard itself.
+/* Task 14 real final closure (2026-08-09), guard removal: the wave-3
+ * sSaturnGeoWalkActive non-reentrancy guard that used to live here (and
+ * its plain-recursion fallback branch inside saturn_geo_walk_process_
+ * children below) has been deleted. It guarded against a nested call to
+ * this function while an outer walk was still draining -- reachable, at
+ * the time it was added, only via saturn_geo_walk_enter's default case
+ * (saturn_geo_walk_dispatch_legacy) detouring into real recursion through
+ * a still-unconverted node type nested beneath an already-converted one
+ * (the "Mario holding something" path: OBJECT -> ... unconverted skeleton
+ * types ... -> HELD_OBJ, all real then).
  *
- * sourceboot_geo_walk_frames is ONE global, fixed-capacity array (the
- * production traversal engine's ONLY frame storage -- saturn_geo_walk_
- * storage.h). Every call below to sm64_saturn_geo_walk_runtime_init()
- * resets depth to 0 and starts pushing at index 0 of that SAME array,
- * regardless of which C call frame makes the call. Converting OBJECT/
- * OBJECT_PARENT/HELD_OBJ means their subtrees can now be reached via real
- * recursion THROUGH a still-unconverted "skeleton" type (ANIMATED_PART,
- * SWITCH_CASE, SCALE, ...) that is itself nested beneath an Object's
- * sharedChild -- which is now walked as part of whatever OUTER walk
- * reached that Object (extending it, never starting a fresh one). If that
- * real-recursion detour reaches another converted type and this function
- * were called again from inside it, it would silently overwrite the outer
- * walk's still-pending frame data -- memory corruption, not a capacity
- * problem, and not hypothetical: verified against the real mario_geo[]
- * layout, this is exactly the "Mario holding something" path.
- *
- * sSaturnGeoWalkActive is set for the duration of the OUTERMOST call only.
- * Any call arriving while it is already true is, by construction, reached
- * via exactly that detour, and falls back to plain recursion instead --
- * this subtree's unconditionally-correct pre-conversion behavior, safe
- * because it never touches sourceboot_geo_walk_frames. A plain bool
- * (rather than a counter) is sufficient: this walk only ever runs on the
- * single master SH-2 core, synchronously, with no interrupt-driven or
- * concurrent entry -- the only "reentrancy" possible is this exact nested
- * real-recursion-detour call chain, which is inherently sequential (a
- * call cannot itself be re-entered before returning). This does not
- * regress anything (a subtree reached via such a detour already used
- * real recursion before this wave); it does mean the bounded-stack
- * benefit for a node reached this way is deferred until the skeleton
- * types convert in a future wave, at which point this guard stops firing
- * for that path automatically, with no further changes needed here. */
-static bool sSaturnGeoWalkActive = false;
+ * That detour no longer exists. saturn_geo_walk_enter's switch (below)
+ * now has a real case for every node type that can legitimately appear as
+ * a walk token -- the eleven skeleton types (wave 4) and, as of this same
+ * closure, GRAPH_NODE_TYPE_START and GRAPH_NODE_TYPE_CULLING_RADIUS, the
+ * pair that used to be the last two routes into the default case for any
+ * real content. The only type left uncased there is GRAPH_NODE_TYPE_ROOT,
+ * which by construction never appears as a walk token (geo_process_root
+ * always drives its own children via real recursion directly, never
+ * through this function) -- so saturn_geo_walk_dispatch_legacy is now
+ * unreachable, and with it the ONLY call site that could ever reach this
+ * function while a walk was already active. Traced concretely (not just
+ * "probably"): every caller of saturn_geo_walk_process_children is a
+ * saturn_geo_enter_* or geo_process_* handler reached either as the single
+ * bootstrap call from geo_process_root's own real-recursion pass over
+ * root's direct children (walk not yet started), or as a walk token
+ * inside an already-running walk's own enter() switch (which returns
+ * child pointers to the runtime instead of recursing) -- never as a
+ * nested call from inside another active walk. Confirmed by re-running
+ * geo_walk_source_policy_test.py after deletion: it reports the lowest
+ * achievable count, 2 allowlisted call sites (geo_try_process_children's
+ * own definition, geo_process_root's kickoff), both structurally
+ * necessary bridges, not hazards. */
 
 /**
- * Entry point used by this wave's converted handlers in place of a
- * direct recursive geo_process_node_and_siblings call on their children.
- * Owns a
- * fresh walk over sourceboot_geo_walk_frames for the duration of this
- * one call and drains it to completion (matching the original's
- * synchronous, blocking recursion semantics) before returning -- UNLESS
- * called reentrantly (sSaturnGeoWalkActive already true), in which case it
- * falls back to plain recursion instead of touching the shared frame
- * array; see sSaturnGeoWalkActive's own comment just above for why.
+ * Entry point used by every converted handler in place of a direct
+ * recursive geo_process_node_and_siblings call on their children. Owns a
+ * fresh walk over sourceboot_geo_walk_frames for the duration of this one
+ * call and drains it to completion (matching the original's synchronous,
+ * blocking recursion semantics) before returning.
  */
 static bool saturn_geo_walk_process_children(struct GraphNode *children) {
     sm64_saturn_geo_walk_runtime_t walk;
@@ -2775,15 +2775,9 @@ static bool saturn_geo_walk_process_children(struct GraphNode *children) {
     if (children == NULL) {
         return true;
     }
-    if (sSaturnGeoWalkActive) {
-        geo_process_node_and_siblings(children);
-        return true;
-    }
-    sSaturnGeoWalkActive = true;
     sm64_saturn_geo_walk_runtime_init(&walk, sourceboot_geo_walk_frames,
                                        sourceboot_geo_walk_frame_capacity);
     ok = sm64_saturn_geo_walk_runtime_run(&walk, (uintptr_t) children, &ops, NULL);
-    sSaturnGeoWalkActive = false;
     if (!ok && walk.fail_reason == SM64_SATURN_GEO_WALK_RUNTIME_OVERFLOW) {
         sSaturnGeoWalkOverflowCount++;
     }

@@ -3,19 +3,32 @@
 
 The full per-node-type handler set was migrated off native recursion onto
 the bounded iterative geo-walk runtime across waves 1-4 (see CHANGELOG.md).
-Three call sites are permanent-by-design and intentionally excluded from
-that migration -- converting any of them means turning
+Two call sites are permanent-by-design and intentionally excluded from
+that migration -- converting either of them means turning
 `geo_process_node_and_siblings` itself into a bounded-walk entry point,
 a materially larger change than converting a per-node-type handler:
 
-  * `saturn_geo_walk_process_children`'s `sSaturnGeoWalkActive` reentrancy
-    guard fallback -- deliberate real recursion when a walk is already in
-    flight, so as not to touch the shared frame array from a nested call.
   * `geo_try_process_children` -- the generic children-only bridge used by
-    node types with no per-type handler (`ROOT`/`START`/`CULLING_RADIUS`).
+    node types with no per-type handler (`ROOT`; `START`/`CULLING_RADIUS`
+    now have real saturn_geo_walk_enter cases and no longer route here in
+    realistic use, but this bridge remains structurally necessary for the
+    still-uncased `ROOT` type and for GRAPH_RENDER_CHILDREN_FIRST nodes of
+    any type).
   * `geo_process_root` -- the top-level walk kickoff.
 
-This test allowlists exactly those three call sites by enclosing function
+Task 14's real final closure (2026-08-09) converted the last two node
+types (`START`/`CULLING_RADIUS`) that could still route through
+`saturn_geo_walk_enter`'s default case into real, unbounded recursion.
+That made `saturn_geo_walk_process_children`'s `sSaturnGeoWalkActive`
+reentrancy guard -- previously a third allowlisted call site here, a
+deliberate real-recursion fallback for when a walk was already in flight
+-- provably unreachable: its only possible trigger was exactly that
+default-case detour. The guard, its fallback call, and this test's third
+allowlist entry were removed together in the same closure-verification
+pass; see `saturn_geo_walk_process_children`'s own comment in
+rendering_graph_node.c for the concrete reachability trace.
+
+This test allowlists exactly those two call sites by enclosing function
 name and still fails on any direct recursive call found anywhere else, or
 on a missing/duplicated allowlisted site -- both are regressions.
 """
@@ -30,7 +43,6 @@ SOURCE = ROOT / "src" / "game" / "rendering_graph_node.c"
 
 # Enclosing function name -> required number of direct recursive calls.
 ALLOWED_ENCLOSING_CALL_SITES = {
-    "saturn_geo_walk_process_children": 1,
     "geo_try_process_children": 1,
     "geo_process_root": 1,
 }
@@ -80,7 +92,11 @@ def main() -> None:
         "dispatcher call(s) outside the allowlisted permanent-by-design "
         f"call sites {sorted(ALLOWED_ENCLOSING_CALL_SITES)}: this is a "
         "regression -- new handler recursion must go through the bounded "
-        "geo-walk runtime instead"
+        "geo-walk runtime instead. If this fires because "
+        "saturn_geo_walk_process_children grew a new real-recursion call "
+        "site (e.g. sSaturnGeoWalkActive or an equivalent guard came back), "
+        "that is a genuine regression of the 2026-08-09 guard-removal "
+        "closure -- see this test's own module docstring."
     )
     for name, expected in ALLOWED_ENCLOSING_CALL_SITES.items():
         actual = counts.get(name, 0)
@@ -99,7 +115,7 @@ def main() -> None:
     # commit, unrelated to and predating the wave 1-4 handler conversion.
     assert "sm64_saturn_geo_walk_runtime_t" in text
     assert ".lwram_geo_traversal" in (ROOT / "src/port/saturn/runtime/saturn_geo_walk_storage.c").read_text(encoding="utf-8")
-    print("geo walk source policy: PASS (3 allowlisted permanent call sites, 0 unaccounted)")
+    print("geo walk source policy: PASS (2 allowlisted permanent call sites, 0 unaccounted)")
 
 
 if __name__ == "__main__":

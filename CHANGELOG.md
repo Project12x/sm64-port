@@ -4,6 +4,109 @@
 
 ### Changed
 
+- Removed `saturn_geo_walk_process_children`'s `sSaturnGeoWalkActive`
+  reentrancy guard (`src/game/rendering_graph_node.c`) as dead code, closing
+  Task 14 Task 2's real final gap. The guard's fallback (plain recursion
+  when a walk was already active) existed to protect against exactly one
+  path: `saturn_geo_walk_enter`'s `default:` case
+  (`saturn_geo_walk_dispatch_legacy`) detouring into real recursion for a
+  still-unconverted node type reached from inside an already-active walk.
+  The prior commit (`24b156fe`, same day) converted the last two node types
+  that could reach that default case for any real content
+  (`GRAPH_NODE_TYPE_START`/`GRAPH_NODE_TYPE_CULLING_RADIUS`) but explicitly
+  kept the guard "out of caution" rather than resolving whether it was now
+  dead. This closure traces that concretely: `saturn_geo_walk_enter`'s
+  switch now has a real case for all 20 node types that can legitimately
+  appear as a walk token; the only type left uncased is
+  `GRAPH_NODE_TYPE_ROOT`, which by construction never appears as one
+  (`geo_process_root` always drives its own children via real recursion
+  directly, never through `saturn_geo_walk_process_children`). Every
+  `geo_process_*` top-level wrapper function that calls
+  `saturn_geo_walk_process_children` (`geo_process_master_list`,
+  `geo_process_object`, `geo_process_held_object`, etc.) has exactly one
+  call site each, confirmed by grep, all inside
+  `geo_process_node_and_siblings`'s own switch -- never reachable from
+  `saturn_geo_walk_enter`'s converted cases, which call the
+  `saturn_geo_enter_*` helpers directly and never recurse. The runtime
+  itself (`sm64_saturn_geo_walk_runtime_run`,
+  `src/port/saturn/runtime/saturn_geo_walk_runtime.c`) is a pure iterative
+  loop that never re-enters itself. With the only trigger path proven
+  unreachable, removed the guard variable, its `if`/fallback branch, and
+  the two state toggles; updated the now-stale present-tense documentation
+  in `saturn_geo_walk_dispatch_legacy`'s own comment and the wave 1-4
+  historical doc block that had (accurately, at the time) argued for
+  keeping it.
+- Updated `tools/saturn/geo_walk_source_policy_test.py`'s
+  `ALLOWED_ENCLOSING_CALL_SITES` from 3 to 2 entries (dropped
+  `saturn_geo_walk_process_children`), matching the guard removal above.
+  Rewrote the module docstring and the failure-message text to explain the
+  new lowest-achievable count and flag a future regression (a new direct
+  recursive call site inside `saturn_geo_walk_process_children`) as a
+  guard-removal regression, not just a generic policy violation.
+  - Verified: `python tools/saturn/geo_walk_source_policy_test.py` reports
+    `PASS (2 allowlisted permanent call sites, 0 unaccounted)`.
+  - Verified: a real cross-compile of the full `sourceboot` target
+    (`make -C src/port/saturn/sourceboot`, MSYS2 toolchain at
+    `work/yaul-install/bin`, MSYS2 runtime at `C:\msys64` -- not Git
+    Bash's own bundled `/mingw64`/`/usr`, which resolves to a different,
+    cygwin-flavored toolchain that silently breaks `make`'s
+    environment-variable inheritance) compiles this file (and all ~230
+    other translation units) with zero errors, warnings only,
+    pre-existing/unrelated to this change. Caught and fixed one
+    comment-only bug during that process before it reached this state: a
+    literal `*/` inside a new comment's prose prematurely closed the
+    surrounding block comment, corrupting subsequent real code into a
+    parse error -- reworded the comment; no logic was ever affected.
+
+### Added
+
+- Added `docs/saturn/evidence/reports/task14-closure-mario-body-chain-real-depth-2026-08-09.md`:
+  real, run-verified closure evidence for Task 14 Task 2, superseding the
+  prior wave-4 report's pre-closure "headline finding" (that Mario's real
+  render path detours into real recursion at `START`) now that
+  `24b156fe` and this session's guard removal (above) have closed that
+  gap. Modeled fully-equipped Mario (moving -- so
+  `geo_switch_mario_stand_run` selects the `GEO_NODE_START`-gated
+  `mario_geo_render_body` branch, the overwhelming majority of real play
+  time -- near LOD range, normal non-metal/non-vanish body, right hand in
+  the closed-grip `GEO_HELD_OBJECT` case) by transcribing the real node
+  sequence 1:1 against the actual `actors/mario/geo.inc.c` (41 synthetic
+  nodes including every real sibling at every level, not simplified away)
+  and driving it through the actual, unmodified
+  `saturn_geo_walk_runtime.c` (compiled and run, not hand-derived): real
+  measured peak **19 frames**, `final_depth=0` (clean, no stranded
+  frames), against the manifest's current `capacity=256`/`safety_margin=16`
+  (240-frame usable budget) -- **221 frames of real margin**. The real run
+  caught and corrected a hand-derivation mistake mid-analysis (expected
+  the held-object hand to be strictly deeper than the non-holding one;
+  both hands actually peak identically at their `SCALE -> DISPLAY_LIST`
+  leaf, with `HELD_OBJECT` one level shallower as `SCALE`'s sibling) --
+  the exact reason this report drives the real runtime instead of
+  hand-counting. Also attempted a real target link
+  (`make -C src/port/saturn/sourceboot`, same flags as the prior sandbox's
+  own `SATURN_DEMO_PATH=1`/`SATURN_RENDERER_PIPELINE=4` script): compiled
+  clean; link failed at the same previously-recorded
+  `ld: cannot open linker script file saturn_geo_depth_manifest.ld`
+  defect, now diagnosed to its precise root cause (a real `-v` re-run of
+  the captured `collect2` invocation shows `sourceboot.specs`'s `*link:`
+  spec places `-T sourceboot-cart.x` at command-line offset 108, while the
+  `-L build/saturn/sourceboot/generated` flag that would resolve
+  `sourceboot-cart.x`'s own `INCLUDE saturn_geo_depth_manifest.ld` lands
+  at offset 525 -- after `-T`, so `ld`'s immediate INCLUDE resolution
+  can't see it yet; controlled by GCC's own spec-template placement, not
+  reorderable from the Makefile's own flag order). A diagnostic-only
+  workaround (copying the generated `.ld` fragment into the link's CWD,
+  not committed) pushed past the defect to reveal the real,
+  separately-tracked HWRAM budget gap for this specific build
+  configuration: `___end=0x060ff498`, `ram` top `0x06100000`, actual
+  margin 2,920 bytes vs. required 6,912 bytes -- **3,992-byte deficit**
+  (Task 14 completion plan Tasks 4-6 territory, not fixed here).
+- Updated `docs/superpowers/plans/2026-08-07-task14-completion.md`'s
+  Task 2 real-completion-status note to reflect the real final closure
+  (guard removed, real depth measurement, real link attempt) and appended
+  an honest summary to the SDD ledger
+  (`.superpowers/sdd/2026-08-05-saturn-full-game-completeness-parallel-optimization/progress.md`).
+
 - Converted `GRAPH_NODE_TYPE_START` and `GRAPH_NODE_TYPE_CULLING_RADIUS` in
   `src/game/rendering_graph_node.c`'s `saturn_geo_walk_enter` switch onto
   the bounded iterative geo-walk runtime, closing Task 14's real remaining
