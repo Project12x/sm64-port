@@ -65,6 +65,52 @@
 
 ### Added
 
+- Added `docs/saturn/evidence/reports/task14-wave4-full-traversal-capacity-margin-2026-08-09.md`:
+  closure-verification for the geo-walk recursive-to-bounded cutover
+  (waves 1-4), independently re-deriving (not re-trusting) two decisions
+  the wave 3/4 commits had already made. **Guard disposition**: confirmed
+  `sSaturnGeoWalkActive`'s real-recursion fallback (kept, not removed) is
+  not dead code by reading `saturn_geo_walk_enter`'s full switch (no case
+  for `GRAPH_NODE_TYPE_ROOT`/`START`/`CULLING_RADIUS`, all three fall to
+  the legacy bridge) and finding both types genuinely, commonly reachable
+  in shipped content: `GEO_CULLING_RADIUS` is the first command in
+  `actors/whomp/geo.inc.c` and 24 other actor files, and `GEO_NODE_START()`
+  is the first command of `mario_geo_render_body` -- the branch
+  `geo_switch_mario_stand_run` (`src/game/mario_misc.c:343-352`) selects
+  during every non-stationary gameplay frame, i.e. essentially all real
+  play time. **Capacity re-measurement**: drove the real
+  `saturn_geo_walk_runtime.c` (extending wave 3's own empirical-probe
+  method, per that report's own explicit "should re-run this same method"
+  note) through the actual push shapes for all 18 now-converted node
+  types plus the 3 permanent detour types, across four real/representative
+  scenarios; found real measured/hypothetical peaks of 5-14 frames against
+  manifest capacity 256/margin 16 (226-235 frames of slack -- capacity-safe
+  by a wide margin), but also found the headline result: **Mario's actual
+  live in-game body/limb/held-object chain still runs via real C recursion
+  today during normal (non-stationary) gameplay**, because it detours off
+  the bounded array one level below `OBJECT`, before ever reaching the
+  `ANIMATED_PART`/`HELD_OBJECT` chain the original "Mario holding
+  something" master-stack-overrun scenario was about -- the bounded
+  array's margin is real but is not the safety proof for that scenario,
+  which remains governed by the pre-existing, unrelated
+  `geo_depth_manifest.py` native-stack mechanism, unchanged by this whole
+  effort. Also attempted a real target link per Task 1's baseline command;
+  could not reach the previously-recorded `ld: cannot open linker script
+  file` step this session to confirm or deny it, blocked earlier by a
+  different, this-sandbox-specific toolchain issue (this MSYS2 install has
+  no `mingw32-make.exe` of its own; the only available one, Qt's bundled
+  `mingw32-make`, resolves an `awk` during recipe execution that cannot
+  parse a path-normalization one-liner in Yaul's shared
+  `build.post.bin.mk`) -- not fixed (`yaul-install` is a read-only
+  dependency directory); link status remains unconfirmed, for a reason
+  distinct from the previously-recorded defect.
+- Updated `docs/superpowers/plans/2026-08-07-task14-completion.md`'s
+  Task 2 checkboxes to reflect real completion status (all four wave
+  steps done, with a real-completion-status note explaining the 3
+  allowlisted call sites and pointing at the new capacity-margin report)
+  and appended an honest summary of waves 1-4 to the SDD ledger
+  (`.superpowers/sdd/2026-08-05-saturn-full-game-completeness-parallel-optimization/progress.md`).
+
 - Added `docs/saturn/evidence/reports/task14-budget-baseline-2026-08-07.md`
   (Task 1 of `docs/superpowers/plans/2026-08-07-task14-completion.md`): a
   fresh from-source link attempt at current HEAD (`dd31e2ad`) compiled
