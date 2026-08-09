@@ -19,13 +19,14 @@ import aifc
 import hashlib
 import json
 import math
+import re
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
-from gen_sequence_bank import SequenceBankError, parse_sequence_bank
+from gen_sequence_bank import SEQUENCE_DEFINES, SequenceBankError, parse_sequence_bank
 from m64_decode_walk import FORMAT_US, walk_sequence
+from scene_package_schema import SCHEMA as SCENE_CLOSURE_SCHEMA
 
 MAGIC = b"S64A"
 VERSION = 1
@@ -262,6 +263,9 @@ def _load_sequences(root: Path, sequences_bin: Path | None = None) -> list[dict[
         else:
             generated_source = root / "sound/sequences.bin.inc.c"
             payload = generated_source.read_bytes() if path is None else path.read_bytes()
+        # Deliberately shadowed by the size-pin gate and decode walker below:
+        # kept so empty/degenerate payloads fail with the historical asset-
+        # specific messages instead of a generic pin/walk finding.
         if path is not None and not payload:
             raise AudioPackageError(f"empty extracted sequence asset: {name}.m64")
         if path is not None and (len(payload) < 4 or not any(payload)):
@@ -406,6 +410,437 @@ def _sample_bindings(banks: list[dict[str, object]]) -> dict[str, list[dict[str,
     return bindings
 
 
+# --- Scene-closure ingestion -------------------------------------------------
+# When --closure is passed, the resident bundle is derived from the
+# authoritative scene closure emitted by collect_scene_closure.py instead of
+# the hardcoded music-only selection.  Join chain: closure sfx_ids ->
+# include/sounds.h declarations -> sound/sequences/00_sound_player.s channel
+# dyntables (bank/instrument selection) -> sound_banks/*.json instruments ->
+# sample records.  Every unresolvable link fails packaging closed naming the
+# SFX ID.  The full provenance validation of the closure document itself
+# (per-record source hashes) is the generator's job; the packager validates
+# the schema tag and the aggregate fields it consumes, and cross-checks the
+# aggregates against the record union when records are present.
+
+_SOUND_PLAYER_SOURCE = "sound/sequences/00_sound_player.s"
+# Instrument indices >= 0x80 select the sequence engine's synthesized
+# waveforms (see the source engine's set_instrument), not a sampled
+# instrument; 0x7F selects the bank's percussion set.
+_INSTRUMENT_WAVEFORM_BASE = 0x80
+_INSTRUMENT_PERCUSSION = 0x7F
+
+
+def _load_scene_closure(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        raise AudioPackageError(f"missing scene closure: {path}")
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        raise AudioPackageError(f"invalid scene closure {path}: {error}") from error
+    if not isinstance(document, dict) or document.get("schema") != SCENE_CLOSURE_SCHEMA:
+        raise AudioPackageError(
+            f"unsupported scene closure schema in {path}: expected "
+            f"{SCENE_CLOSURE_SCHEMA}")
+    level = document.get("level")
+    if not isinstance(level, str) or not level:
+        raise AudioPackageError(f"scene closure {path} has no level")
+    for field in ("sfx_ids", "sfx_banks", "music_sequence_ids"):
+        values = document.get(field)
+        if (not isinstance(values, list) or
+                any(not isinstance(v, str) for v in values) or
+                values != sorted(set(values))):
+            raise AudioPackageError(
+                f"scene closure {path}: {field} must be a sorted unique "
+                "string list")
+    records = document.get("records")
+    if not isinstance(records, list):
+        raise AudioPackageError(f"scene closure {path}: records must be a list")
+    if records:
+        for field in ("sfx_ids", "sfx_banks", "music_sequence_ids"):
+            union = sorted({value for record in records
+                            for value in record.get(field, [])})
+            if union != document[field]:
+                raise AudioPackageError(
+                    f"scene closure {path}: {field} does not match the "
+                    "record union (truncated or hand-edited closure)")
+    return document
+
+
+def _sound_declarations(root: Path) -> tuple[dict[str, list[tuple[str, int]]], dict[str, int]]:
+    """Parse include/sounds.h: SOUND_X -> [(SOUND_BANK_Y, soundID)], plus
+    SOUND_BANK_Y -> bank number.
+
+    The declaration regex and the one-SOUND_ARG_LOAD-per-ID / bank-name-split
+    conventions are reused from collect_scene_closure.py::_sound_declarations
+    (:656-663) and its bank lowering (:816); this parser additionally captures
+    the soundID argument (include/sounds.h:11 packs bank<<28 | soundID<<16).
+    """
+    path = root / "include/sounds.h"
+    if not path.is_file():
+        raise AudioPackageError(
+            f"missing {path}: include/sounds.h declarations are required for "
+            "closure-driven SFX selection")
+    text = path.read_text(encoding="utf-8")
+    declarations: dict[str, list[tuple[str, int]]] = {}
+    for match in re.finditer(
+            r"^\s*#define\s+(SOUND_[A-Z0-9_]+)\b([^\n]*(?:\\\r?\n[^\n]*)*)",
+            text, re.M):
+        loads = re.findall(
+            r"\bSOUND_ARG_LOAD\s*\(\s*(SOUND_BANK_[A-Z0-9_]+)\s*,\s*"
+            r"(0[xX][0-9a-fA-F]+|\d+)", match.group(2))
+        if loads:
+            declarations.setdefault(match.group(1), []).extend(
+                (bank, int(sound_id, 0)) for bank, sound_id in loads)
+    bank_numbers = {match.group(1): int(match.group(2))
+                    for match in re.finditer(
+                        r"^\s*#define\s+(SOUND_BANK_[A-Z0-9_]+)\s+(\d+)\s*$",
+                        text, re.M)}
+    return declarations, bank_numbers
+
+
+def _music_sequence_numbers(root: Path) -> dict[str, int]:
+    """Parse include/seq_ids.h's enum SeqId into symbol -> sequence number."""
+    path = root / "include/seq_ids.h"
+    if not path.is_file():
+        raise AudioPackageError(
+            f"missing {path}: include/seq_ids.h is required to map closure "
+            "music_sequence_ids to sequence numbers")
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"enum\s+SeqId\s*\{(.*?)\}", text, re.S)
+    if not match:
+        raise AudioPackageError(f"{path}: no enum SeqId block found")
+    numbers: dict[str, int] = {}
+    value = 0
+    for line in match.group(1).splitlines():
+        line = re.sub(r"//.*", "", line).strip().rstrip(",")
+        if not line:
+            continue
+        entry = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*(0[xX][0-9a-fA-F]+|\d+))?", line)
+        if not entry:
+            raise AudioPackageError(f"{path}: unsupported SeqId enumerator: {line}")
+        if entry.group(2) is not None:
+            value = int(entry.group(2), 0)
+        numbers[entry.group(1)] = value
+        value += 1
+    return numbers
+
+
+def _preprocess_player_source(text: str) -> list[str]:
+    """Minimal, fail-closed C-preprocessor pass over the sound player source
+    mirroring gen_sequence_bank's cpp invocation (SEQUENCE_DEFINES, i.e. the
+    US sequence set).  Only the directive forms the committed file uses are
+    supported; anything else fails packaging closed."""
+    defines = set(SEQUENCE_DEFINES)
+    lines: list[str] = []
+    stack: list[bool] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if stripped.startswith("#include"):
+                continue
+            if stripped.startswith("#ifdef"):
+                stack.append(stripped.split()[1] in defines)
+                continue
+            if stripped.startswith("#ifndef"):
+                stack.append(stripped.split()[1] not in defines)
+                continue
+            if stripped.startswith("#if "):
+                terms = re.findall(r"defined\s*\(\s*([A-Za-z0-9_]+)\s*\)", stripped)
+                cleaned = re.sub(r"defined\s*\(\s*[A-Za-z0-9_]+\s*\)", "", stripped[4:])
+                if not terms or cleaned.replace("||", "").strip():
+                    raise AudioPackageError(
+                        f"{_SOUND_PLAYER_SOURCE}:{number}: unsupported #if "
+                        "expression (only defined(X) || defined(Y) forms)")
+                stack.append(any(term in defines for term in terms))
+                continue
+            if stripped.startswith("#else"):
+                if not stack:
+                    raise AudioPackageError(
+                        f"{_SOUND_PLAYER_SOURCE}:{number}: unmatched #else")
+                stack[-1] = not stack[-1]
+                continue
+            if stripped.startswith("#endif"):
+                if not stack:
+                    raise AudioPackageError(
+                        f"{_SOUND_PLAYER_SOURCE}:{number}: unmatched #endif")
+                stack.pop()
+                continue
+            raise AudioPackageError(
+                f"{_SOUND_PLAYER_SOURCE}:{number}: unsupported preprocessor "
+                f"directive: {stripped.split()[0]}")
+        if all(stack):
+            lines.append(line)
+    if stack:
+        raise AudioPackageError(
+            f"{_SOUND_PLAYER_SOURCE}: unterminated conditional block")
+    return lines
+
+
+def _parse_sound_player(root: Path) -> tuple[dict[str, list[str]], list[str], dict[int, str]]:
+    """Parse the (preprocessed) sound player into labeled blocks, the label
+    order (for layer fall-through), and the SFX channel map."""
+    path = root / _SOUND_PLAYER_SOURCE
+    if not path.is_file():
+        raise AudioPackageError(
+            f"missing {path}: the committed sound player source is required "
+            "for closure-driven SFX selection")
+    blocks: dict[str, list[str]] = {}
+    order: list[str] = []
+    prelude: list[str] = []
+    current: str | None = None
+    for line in _preprocess_player_source(path.read_text(encoding="utf-8")):
+        line = re.sub(r"//.*", "", line).strip()
+        if not line:
+            continue
+        label = re.fullmatch(r"(\.[A-Za-z0-9_]+):", line)
+        if label:
+            current = label.group(1)
+            blocks[current] = []
+            order.append(current)
+            continue
+        (blocks[current] if current is not None else prelude).append(line)
+    channels: dict[int, str] = {}
+    for line in prelude:
+        match = re.fullmatch(r"seq_startchannel\s+(\d+)\s*,\s*(\.[A-Za-z0-9_]+)", line)
+        if match:
+            channels[int(match.group(1))] = match.group(2)
+    if not channels:
+        raise AudioPackageError(
+            f"{_SOUND_PLAYER_SOURCE}: no seq_startchannel channel map found")
+    return blocks, order, channels
+
+
+def _layer_instruments(blocks: dict[str, list[str]], order: list[str],
+                       label: str, seen: set[str]) -> set[int]:
+    """Collect layer_setinstr values reachable from a layer entry, following
+    fall-through into the next labeled block plus layer_jump/layer_call."""
+    found: set[int] = set()
+    while label in blocks and label not in seen:
+        seen.add(label)
+        ended = False
+        for line in blocks[label]:
+            match = re.fullmatch(r"layer_setinstr\s+(\d+)", line)
+            if match:
+                found.add(int(match.group(1)))
+                continue
+            match = re.match(r"layer_(?:jump|call)\s+(\.[A-Za-z0-9_]+)", line)
+            if match:
+                found |= _layer_instruments(blocks, order, match.group(1), seen)
+                continue
+            if re.match(r"layer_(?:end|ret)\b", line):
+                ended = True
+        if ended:
+            break
+        index = order.index(label) + 1
+        if index >= len(order):
+            break
+        label = order[index]
+    return found
+
+
+def _walk_sound_subroutine(blocks: dict[str, list[str]], order: list[str],
+                           label: str, sfx_id: str,
+                           bank: int | None = None,
+                           seen: set[tuple[str, int | None]] | None = None
+                           ) -> tuple[set[tuple[int, int]], set[int]]:
+    """Walk one sound subroutine collecting (bank ordinal, instrument index)
+    pairs (positional pairing: each instrument selection binds to the most
+    recent chan_setbank) plus synthesized-waveform indices.  chan_jump and
+    the conditional branches are followed as a reachability union; a
+    chan_call target that mutates instrument state, or any dynamically
+    dispatched control flow, fails closed.  The visited set is keyed by
+    (label, bank state) so a shared block revisited under a different bank
+    still contributes its pairs; termination stays bounded by the finite
+    label and bank-ordinal domains."""
+    seen = seen if seen is not None else set()
+    pairs: set[tuple[int, int]] = set()
+    waves: set[int] = set()
+    while label is not None and (label, bank) not in seen:
+        seen.add((label, bank))
+        if label not in blocks:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: sound player label {label} is undefined")
+        next_label = None
+        for line in blocks[label]:
+            match = re.fullmatch(r"chan_setbank\s+(\d+)", line)
+            if match:
+                bank = int(match.group(1))
+                continue
+            match = re.fullmatch(r"chan_setinstr\s+(\d+)", line)
+            if match:
+                instrument = int(match.group(1))
+                if instrument >= _INSTRUMENT_WAVEFORM_BASE:
+                    waves.add(instrument)
+                elif bank is None:
+                    raise AudioPackageError(
+                        f"closure SFX {sfx_id}: chan_setinstr {instrument} in "
+                        f"{label} has no preceding chan_setbank")
+                else:
+                    pairs.add((bank, instrument))
+                continue
+            match = re.match(r"chan_setlayer\s+\d+\s*,\s*(\.[A-Za-z0-9_]+)", line)
+            if match:
+                for instrument in _layer_instruments(blocks, order, match.group(1), set()):
+                    if instrument >= _INSTRUMENT_WAVEFORM_BASE:
+                        waves.add(instrument)
+                    elif bank is None:
+                        raise AudioPackageError(
+                            f"closure SFX {sfx_id}: layer_setinstr {instrument} "
+                            f"reached from {label} has no bank in effect")
+                    else:
+                        pairs.add((bank, instrument))
+                continue
+            match = re.fullmatch(r"chan_jump\s+(\.[A-Za-z0-9_]+)", line)
+            if match:
+                next_label = match.group(1)
+                break
+            match = re.match(r"chan_(?:beqz|bltz|bgez)\s+(\.[A-Za-z0-9_]+)", line)
+            if match:
+                branch_pairs, branch_waves = _walk_sound_subroutine(
+                    blocks, order, match.group(1), sfx_id, bank, seen)
+                pairs |= branch_pairs
+                waves |= branch_waves
+                continue
+            match = re.fullmatch(r"chan_call\s+(\.[A-Za-z0-9_]+)", line)
+            if match:
+                for called in blocks.get(match.group(1), []):
+                    if re.match(r"chan_set(?:bank|instr|layer)\b", called):
+                        raise AudioPackageError(
+                            f"closure SFX {sfx_id}: chan_call target "
+                            f"{match.group(1)} mutates instrument state")
+                continue
+            if re.match(r"chan_dyncall\b", line):
+                raise AudioPackageError(
+                    f"closure SFX {sfx_id}: dynamically dispatched control "
+                    f"flow (chan_dyncall) in {label} cannot be resolved")
+        label = next_label
+    return pairs, waves
+
+
+def _resolve_closure_sfx(root: Path, closure: dict[str, object],
+                         banks: list[dict[str, object]]
+                         ) -> dict[str, list[dict[str, object]]]:
+    """Resolve every closure sfx_id to its bank/instrument chain entries.
+    Fails closed, naming the SFX ID, on any unresolvable link."""
+    declarations, bank_numbers = _sound_declarations(root)
+    blocks, order, channels = _parse_sound_player(root)
+    seq00_banks = json.loads(
+        (root / "sound/sequences.json").read_text(encoding="utf-8")).get(
+            "00_sound_player")
+    if not isinstance(seq00_banks, list) or not seq00_banks:
+        raise AudioPackageError(
+            "sound/sequences.json has no 00_sound_player bank list")
+    bank_by_stem = {str(bank["name"]): bank for bank in banks}
+    resolution: dict[str, list[dict[str, object]]] = {}
+    derived_banks: set[str] = set()
+    for sfx_id in closure["sfx_ids"]:
+        loads = declarations.get(sfx_id)
+        if not loads:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: no SOUND_ARG_LOAD declaration in "
+                "include/sounds.h")
+        if len(loads) != 1:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: ambiguous SOUND_ARG_LOAD declaration")
+        bank_symbol, sound_id = loads[0]
+        derived_banks.add(bank_symbol[len("SOUND_BANK_"):].lower())
+        bank_number = bank_numbers.get(bank_symbol)
+        if bank_number is None:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: {bank_symbol} has no numeric define")
+        channel = channels.get(bank_number)
+        if channel is None:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: sound player has no channel for "
+                f"bank {bank_number}")
+        table = next((match.group(1) for line in blocks[channel]
+                      for match in [re.match(r"chan_setdyntable\s+(\.[A-Za-z0-9_]+)", line)]
+                      if match), None)
+        if table is None or table not in blocks:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: channel {channel} has no dyntable")
+        entries = [match.group(1) if match else None
+                   for line in blocks[table]
+                   for match in [re.fullmatch(r"sound_ref\s+(\.[A-Za-z0-9_]+)", line)]]
+        if sound_id >= len(entries) or entries[sound_id] is None:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: sound ID 0x{sound_id:02x} is outside "
+                f"the {table} dyntable ({len(entries)} entries)")
+        pairs, waves = _walk_sound_subroutine(blocks, order, entries[sound_id], sfx_id)
+        chain: list[dict[str, object]] = []
+        for ordinal, index in sorted(pairs):
+            if ordinal >= len(seq00_banks):
+                raise AudioPackageError(
+                    f"closure SFX {sfx_id}: chan_setbank {ordinal} is outside "
+                    "the 00_sound_player bank list")
+            stem = str(seq00_banks[ordinal])
+            bank = bank_by_stem.get(stem)
+            if bank is None:
+                raise AudioPackageError(
+                    f"closure SFX {sfx_id}: instrument bank {stem} has no "
+                    "sound_banks record")
+            if index == _INSTRUMENT_PERCUSSION:
+                if bank["metadata"].get("percussion") is None:
+                    raise AudioPackageError(
+                        f"closure SFX {sfx_id}: bank {stem} has no percussion")
+                chain.append({"bank": stem, "instrument_index": index,
+                              "instrument": "percussion"})
+                continue
+            instruments = bank["metadata"].get("instrument_list", [])
+            name = instruments[index] if index < len(instruments) else None
+            if not isinstance(name, str):
+                raise AudioPackageError(
+                    f"closure SFX {sfx_id}: instrument {index} is not defined "
+                    f"in bank {stem}")
+            chain.append({"bank": stem, "instrument_index": index,
+                          "instrument": name})
+        for wave in sorted(waves):
+            chain.append({"waveform": wave})
+        if not chain:
+            raise AudioPackageError(
+                f"closure SFX {sfx_id}: no instrument selection is reachable "
+                f"from {entries[sound_id]}")
+        resolution[sfx_id] = chain
+    declared = set(closure["sfx_banks"])
+    if derived_banks != declared:
+        difference = sorted(declared ^ derived_banks)
+        raise AudioPackageError(
+            "closure sfx_banks disagree with the include/sounds.h "
+            f"derivation: {', '.join(difference)}")
+    return resolution
+
+
+def _instrument_chain_sample_names(bank: dict[str, object], index: int,
+                                   instrument: str) -> set[str]:
+    """Sample names referenced by one resolved instrument (or the percussion
+    set) of a bank, mirroring _sample_names' sound/sound_lo/sound_hi walk."""
+    if instrument == "percussion" and index == _INSTRUMENT_PERCUSSION:
+        scope: object = bank["metadata"].get("percussion")
+        percussions = bank["metadata"].get("percussions")
+        if isinstance(scope, str) and isinstance(percussions, dict):
+            scope = percussions.get(scope)
+    else:
+        scope = bank["metadata"].get("instruments", {}).get(instrument)
+    names: set[str] = set()
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"sound", "sound_lo", "sound_hi"}:
+                    if isinstance(child, str):
+                        names.add(child)
+                    elif isinstance(child, dict):
+                        sample = child.get("sample")
+                        if isinstance(sample, str):
+                            names.add(sample)
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+    visit(scope)
+    return names
+
+
 def _sequence_payload(root: Path, sequence: dict[str, object]) -> bytes:
     """Read one catalog sequence's script bytes; generated seq00 is a slice
     of the standalone sequence bank addressed by its recorded source_range."""
@@ -421,24 +856,60 @@ def _sequence_payload(root: Path, sequence: dict[str, object]) -> bytes:
 
 
 def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, object]],
-             banks: list[dict[str, object]], samples: list[Sample], root: Path) -> dict[str, object]:
+             banks: list[dict[str, object]], samples: list[Sample], root: Path,
+             sfx_resolution: dict[str, list[dict[str, object]]] | None = None,
+             closure_provenance: dict[str, str] | None = None) -> dict[str, object]:
     seqs = [x for x in sequences if x["id"] in sequence_ids]
-    bank_names = sorted({bank for seq in seqs for bank in seq["banks"] if isinstance(bank, str)})
+    music_banks = sorted({bank for seq in seqs for bank in seq["banks"] if isinstance(bank, str)})
+    # Closure-driven SFX selection: banks/instruments reached by the resolved
+    # chains contribute only their chain samples; music banks stay whole-bank
+    # (their m64 bodies are opaque by policy, so any instrument may be used).
+    sfx_allowed: dict[str, set[str]] = {}
+    sfx_pairs: set[tuple[str, int]] = set()
+    if sfx_resolution is not None:
+        bank_by_stem = {str(bank["name"]): bank for bank in banks}
+        for chain in sfx_resolution.values():
+            for entry in chain:
+                if "bank" not in entry:
+                    continue  # synthesized waveform: no sample dependency
+                stem = str(entry["bank"])
+                index = int(entry["instrument_index"])
+                sfx_pairs.add((stem, index))
+                sfx_allowed.setdefault(stem, set()).update(
+                    _instrument_chain_sample_names(
+                        bank_by_stem[stem], index, str(entry["instrument"])))
+    bank_names = sorted(set(music_banks) | set(sfx_allowed))
     selected = [bank for bank in banks if bank["name"] in bank_names]
     sample_map = {sample.stable_id: sample for sample in samples}
     selected_samples = []
     for bank in selected:
         sample_bank = str(bank["sample_bank"])
-        for sample_name in sorted(_sample_names(bank)):
+        chain_names = sfx_allowed.get(str(bank["name"]), set())
+        allowed = set(chain_names)
+        if sfx_resolution is None or bank["name"] in music_banks:
+            allowed |= _sample_names(bank)
+        for sample_name in sorted(allowed):
             sample = sample_map.get(f"{sample_bank}/{sample_name}")
-            if sample is not None and sample not in selected_samples:
+            if sample is None:
+                if sample_name in chain_names:
+                    raise AudioPackageError(
+                        f"{name} closure: SFX chain sample "
+                        f"{sample_bank}/{sample_name} has no extracted AIFF")
+                continue
+            if sample not in selected_samples:
                 selected_samples.append(sample)
     pcm_bytes = sum(len(sample.pcm8) for sample in selected_samples)
     metadata_bytes = sum(len(_canonical(bank["metadata"])) for bank in selected)
     resident_bytes = _align(pcm_bytes) + _align(metadata_bytes)
     if resident_bytes > RESIDENT_LIMIT:
         raise AudioPackageError(f"{name} resident closure exceeds {RESIDENT_LIMIT}: {resident_bytes}")
-    mappings = [mapping for mapping in _sfx_mappings(selected)]
+    if sfx_resolution is None:
+        mappings = [mapping for mapping in _sfx_mappings(selected)]
+    else:
+        stem_by_id = {bank["id"]: str(bank["name"]) for bank in selected}
+        mappings = [mapping for mapping in _sfx_mappings(selected)
+                    if stem_by_id[mapping["bank_id"]] in music_banks or
+                    (stem_by_id[mapping["bank_id"]], mapping["sound_id"]) in sfx_pairs]
     chunk_hashes = []
     identity = hashlib.sha256()
     def add_chunk(kind: str, stable_id: str, payload: bytes) -> None:
@@ -453,28 +924,63 @@ def _closure(name: str, sequence_ids: list[int], sequences: list[dict[str, objec
         add_chunk("BANK", str(bank["name"]), _canonical(bank["metadata"]))
     for sample in selected_samples:
         add_chunk("SAMP", sample.stable_id, sample.pcm8)
+    record: dict[str, object] = {
+        "scene": name, "generation": 1, "sequence_ids": sequence_ids,
+        "bank_names": bank_names,
+        "sample_ids": [sample.stable_id for sample in selected_samples],
+        "sfx_mappings": mappings,
+        # WF has no generated scene closure yet, so its bundle keeps the
+        # hardcoded music-only selection; the marker records the asymmetry.
+        "selection": ("scene-closure-v1" if sfx_resolution is not None
+                      else "hardcoded-music-fallback")}
+    if sfx_resolution is not None:
+        record["sfx_resolution"] = sfx_resolution
+        record.update(closure_provenance or {})
     # The dependency digest covers framed source bytes, not merely IDs or a
     # metadata summary.  Any selected sequence, bank, or sample mutation must
     # therefore invalidate the scene root.
-    identity.update(_canonical({"scene": name, "generation": 1,
-                                "sequence_ids": sequence_ids,
-                                "bank_names": bank_names,
-                                "sample_ids": [sample.stable_id for sample in selected_samples],
-                                "sfx_mappings": mappings}))
-    return {"scene": name, "generation": 1, "sequence_ids": sequence_ids,
-            "bank_names": bank_names,
-            "sample_ids": [sample.stable_id for sample in selected_samples],
-            "sfx_mappings": mappings, "chunk_hashes": chunk_hashes,
+    identity.update(_canonical(record))
+    return {**record, "chunk_hashes": chunk_hashes,
             "payload_sha256": identity.hexdigest(),
             "resident_bytes": resident_bytes, "resident_limit": RESIDENT_LIMIT,
             "active_generation_eviction": "rejected", "post_boot_sound_ram_clear": "rejected"}
 
 
 def compile_catalog(root: Path, output: Path, manifest_output: Path | None = None,
-                    sequences_bin: Path | None = None) -> dict[str, object]:
+                    sequences_bin: Path | None = None,
+                    scene_closure: Path | None = None) -> dict[str, object]:
     files, source_sha = source_inventory(root, sequences_bin)
     sequences = _load_sequences(root, sequences_bin)
     banks = _load_banks(root)
+    closure_scene = None
+    closure_music_ids: list[int] = []
+    sfx_resolution = None
+    closure_provenance = None
+    if scene_closure is not None:
+        closure_document = _load_scene_closure(scene_closure)
+        closure_scene = str(closure_document["level"])
+        if closure_scene not in ("bob", "wf"):
+            raise AudioPackageError(
+                f"scene closure level {closure_scene} has no resident bundle "
+                "(expected bob or wf)")
+        sequence_numbers = _music_sequence_numbers(root)
+        known_ids = {sequence["id"] for sequence in sequences}
+        for symbol in closure_document["music_sequence_ids"]:
+            number = sequence_numbers.get(symbol)
+            if number is None:
+                raise AudioPackageError(
+                    f"closure music sequence {symbol} is not declared in "
+                    "include/seq_ids.h")
+            if number not in known_ids:
+                raise AudioPackageError(
+                    f"closure music sequence {symbol} (id {number}) is not in "
+                    "the sequence catalog")
+            closure_music_ids.append(number)
+        closure_music_ids = sorted(set(closure_music_ids))
+        sfx_resolution = _resolve_closure_sfx(root, closure_document, banks)
+        closure_provenance = {
+            "closure_source": _relative_source(scene_closure, root),
+            "closure_sha256": _sha(scene_closure.read_bytes())}
     # Keep generated manifests checkout-portable.  parse_aiff is intentionally
     # usable on an arbitrary path for the small unit test, but package records
     # must never embed an absolute developer checkout path.
@@ -492,8 +998,17 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
                        "aiff_metadata": s.aiff_metadata,
                        "bank_bindings": sample_bindings.get(s.stable_id, [])} for s in samples]
     sfx_mappings = _sfx_mappings(banks)
-    closures = {"bob": _closure("bob", [3], sequences, banks, samples, root),
-                "wf": _closure("wf", [3], sequences, banks, samples, root)}
+    closures = {}
+    for scene in ("bob", "wf"):
+        if scene == closure_scene:
+            closures[scene] = _closure(scene, closure_music_ids, sequences,
+                                       banks, samples, root,
+                                       sfx_resolution=sfx_resolution,
+                                       closure_provenance=closure_provenance)
+        else:
+            # Hardcoded music-only fallback: kept only for scenes without a
+            # generated closure (currently WF); recorded in the manifest.
+            closures[scene] = _closure(scene, [3], sequences, banks, samples, root)
     chunks: list[tuple[bytes, bytes]] = []
     chunks.append((b"META", _canonical({"schema": "S64A", "version": VERSION,
                                          "source_sha256": source_sha, "sequences": sequences,
@@ -543,6 +1058,8 @@ def compile_catalog(root: Path, output: Path, manifest_output: Path | None = Non
                    "chunk_hashes": closures[scene]["chunk_hashes"]}
                   for scene in ("bob", "wf")],
               "source_inventory": [{"path": p.relative_to(root).as_posix(), "sha256": _sha(p.read_bytes())} for p in files],
+              "closure_selection": {scene: closures[scene]["selection"]
+                                    for scene in ("bob", "wf")},
               "closures": closures}
     if manifest_output:
         manifest_output.parent.mkdir(parents=True, exist_ok=True)
@@ -573,9 +1090,14 @@ def main() -> None:
                         help="generated raw sequence bank from "
                              "tools/saturn/gen_sequence_bank.py; when absent, "
                              "falls back to sound/sequences.bin.inc.c")
+    parser.add_argument("--closure", type=Path, default=None,
+                        help="scene closure JSON from "
+                             "tools/saturn/collect_scene_closure.py; drives "
+                             "that scene's resident bundle selection (other "
+                             "scenes keep the hardcoded music-only fallback)")
     args = parser.parse_args()
     print(json.dumps(compile_catalog(args.root.resolve(), args.output, args.manifest,
-                                     args.sequences_bin), sort_keys=True))
+                                     args.sequences_bin, args.closure), sort_keys=True))
 
 
 if __name__ == "__main__":

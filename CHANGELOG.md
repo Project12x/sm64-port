@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+### Added
+
+- Closure-derived resident audio bundles (task12-completion Task 3):
+  `tools/saturn/saturn_audio_package.py` and `compile_saturn_audio.py` accept
+  `--closure <scene closure JSON>` and derive that scene's resident bundle
+  from `collect_scene_closure.py`'s authoritative declarations instead of the
+  hardcoded music-only selection. Join chain: closure `sfx_ids` ->
+  `include/sounds.h` `SOUND_ARG_LOAD` declarations (reusing the closure
+  generator's one-declaration-per-ID and `SOUND_BANK_*`->lowercase bank-name
+  conventions, extended with the soundID operand) -> the preprocessed
+  `sound/sequences/00_sound_player.s` channel dyntables (positional
+  chan_setbank/chan_setinstr pairing, chan_jump/branch/layer following,
+  `>=0x80` = synthesized waveform, `0x7F` = percussion) -> `sound_banks/*.json`
+  instruments -> sample records; music comes from the closure's
+  `music_sequence_ids` via `include/seq_ids.h`. Every unresolvable link fails
+  packaging closed naming the SFX ID; closure-driven bundles record
+  `selection`/`sfx_resolution`/closure provenance, and scenes without a
+  closure (currently WF) keep the hardcoded music-only fallback, recorded as
+  `closure_selection` in the manifest. `Makefile.saturn.mk` wires the flag
+  through `compile-saturn-audio` and the `verify-audio-residency` GREEN-twice
+  gate via opt-in `SATURN_AUDIO_SCENE_CLOSURE` -- opt-in because the honest
+  real-BOB bundle (all 54 closure SFX IDs resolved across 9 instrument banks
+  plus music bank 22, 48 samples) needs 679,936 resident bytes against the
+  491,520-byte `SM64_SATURN_AUDIO_RESIDENT_LIMIT` hardware contract, so real
+  end-to-end packaging fails closed by design (deterministically) until a
+  sample-fidelity/residency policy closes the 188,416-byte gap; SFX-only
+  (~426 KiB) or music-only (~246 KiB) each fit, their union does not.
+  Packager suite grows 8 -> 11 (exact-union selection, fail-closed
+  unresolvable IDs/music/bank-mismatch, resident overflow on the closure
+  path); batched Task 2 review cleanups landed alongside (unused `Iterable`
+  import removed, `pin_m64_size` now emits the real assets.json entry shape,
+  deliberate-shadowing comment on the legacy `_load_sequences` guards).
+
 ### Docs
 
 - Hedged two overclaiming docstrings in `tools/saturn/m64_decode_walk.py`

@@ -295,10 +295,23 @@ compile-audio-sequences: check-host-tools
 		--root "$(SATURN_REPO_ROOT)" --output-dir "$(AUDIO_GENERATED)" \
 		$(if $(YAUL_INSTALL_ROOT),--toolchain-bin "$(YAUL_INSTALL_ROOT)/bin",)
 
+# Closure-driven resident-bundle selection (task12-completion Task 3).  The
+# machinery is complete and fail-closed, but the real BOB closure cannot ship
+# through the default gate yet: the honest closure-derived bundle (54 SFX IDs
+# -> 9 instrument banks + music bank 22, 48 samples) needs 679,936 resident
+# bytes against the SM64_SATURN_AUDIO_RESIDENT_LIMIT contract of 491,520
+# (saturn_audio_package.h:13), so packaging fails closed by design until a
+# sample-fidelity/residency policy (Task 17 territory) closes the 188,416-byte
+# gap.  Opt in explicitly once that lands:
+#   make ... compile-saturn-audio SATURN_AUDIO_SCENE_CLOSURE=$(SCENE_CLOSURE_OUTPUT)
+SATURN_AUDIO_SCENE_CLOSURE ?=
+SATURN_AUDIO_CLOSURE_ARGS = $(if $(SATURN_AUDIO_SCENE_CLOSURE),--closure "$(SATURN_AUDIO_SCENE_CLOSURE)",)
+
 compile-saturn-audio: check-host-tools compile-audio-sequences
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" tools/saturn/compile_saturn_audio.py \
 		--root "$(SATURN_REPO_ROOT)" --output-dir "$(AUDIO_GENERATED)" \
-		--sequences-bin "$(AUDIO_GENERATED)/sequences.bin"
+		--sequences-bin "$(AUDIO_GENERATED)/sequences.bin" \
+		$(SATURN_AUDIO_CLOSURE_ARGS)
 
 verify-audio-residency: compile-saturn-audio
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
@@ -310,7 +323,7 @@ verify-audio-residency: compile-saturn-audio
 		"$(PCM68K_DIR)/audio_package.c" \
 		-o "$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)"
 	"$(SATURN_TOOLS_PYTHON)" -c "import subprocess; subprocess.run([r'$(SATURN_REPO_ROOT)/build/saturn/host-tests/audio-residency-test$(HOST_EXEEXT)', r'$(AUDIO_GENERATED)/AUDIO.DAT'], check=True)"
-	@"$(SATURN_TOOLS_PYTHON)" -c "import hashlib, pathlib, shutil, subprocess, tempfile; root=pathlib.Path(r'$(SATURN_REPO_ROOT)'); py=r'$(SATURN_TOOLS_PYTHON)'; sb=r'$(AUDIO_GENERATED)/sequences.bin'; a=pathlib.Path(tempfile.mkdtemp(prefix='s64a-a-')); b=pathlib.Path(tempfile.mkdtemp(prefix='s64a-b-')); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(a), '--sequences-bin', sb], check=True); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(b), '--sequences-bin', sb], check=True); names=['AUDIO.DAT','audio_manifest.json','bob_audio_closure.json','wf_audio_closure.json']; assert all(hashlib.sha256((a/n).read_bytes()).digest()==hashlib.sha256((b/n).read_bytes()).digest() for n in names); print('audio deterministic hashes: PASS')"
+	@"$(SATURN_TOOLS_PYTHON)" -c "import hashlib, pathlib, shutil, subprocess, tempfile; root=pathlib.Path(r'$(SATURN_REPO_ROOT)'); py=r'$(SATURN_TOOLS_PYTHON)'; sb=r'$(AUDIO_GENERATED)/sequences.bin'; cl=r'$(SATURN_AUDIO_SCENE_CLOSURE)'; extra=(['--closure', cl] if cl else []); a=pathlib.Path(tempfile.mkdtemp(prefix='s64a-a-')); b=pathlib.Path(tempfile.mkdtemp(prefix='s64a-b-')); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(a), '--sequences-bin', sb] + extra, check=True); subprocess.run([py, str(root/'tools/saturn/compile_saturn_audio.py'), '--root', str(root), '--output-dir', str(b), '--sequences-bin', sb] + extra, check=True); names=['AUDIO.DAT','audio_manifest.json','bob_audio_closure.json','wf_audio_closure.json']; assert all(hashlib.sha256((a/n).read_bytes()).digest()==hashlib.sha256((b/n).read_bytes()).digest() for n in names); print('audio deterministic hashes: PASS')"
 
 verify-pcm-transport:
 	@"$(SATURN_TOOLS_PYTHON)" -c "from pathlib import Path; Path(r'$(SATURN_REPO_ROOT)/build/saturn/host-tests').mkdir(parents=True, exist_ok=True)"
