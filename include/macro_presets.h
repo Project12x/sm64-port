@@ -12,7 +12,12 @@ struct MacroPreset
     /*0x06*/ s16 param;
 };
 
-struct MacroPreset MacroObjectPresets[] = {
+/* Write-once level preset table: read only by spawn_macro_objects()
+ * (src/game/macro_special_objects.c) at area load, never reassigned.
+ * const so the sourceboot linker's cart-rodata rule keeps its 2,928 B
+ * off HWRAM .data (2026-08-09 memory-budget sweep; same discipline as
+ * sSkyboxTextures, commit 0ebd5b05). */
+const struct MacroPreset MacroObjectPresets[] = {
     {bhvYellowCoin, MODEL_YELLOW_COIN, 0},
     {bhvOneCoin, MODEL_YELLOW_COIN, 0},
     {bhvMovingBlueCoin, MODEL_BLUE_COIN, 0},

@@ -123,6 +123,44 @@
 
 ### Fixed
 
+- Recovered 5,952 B of HWRAM `.data` by const-qualifying write-once cold
+  tables so the sourceboot linker's existing `*sm64-port?*(.rodata.*)`
+  rule relocates them to the cart bank, clearing the demo-path build's
+  HWRAM TLSF-floor link assert (margin was 5,688 B below the 0x1B00
+  floor; it is now 264 B above it, `___end = 0x060FE3F8`). Moves, each
+  preceded by a whole-repo write-site trace per the `sSkyboxTextures`
+  discipline (commit `0ebd5b05`): `MacroObjectPresets`
+  (`include/macro_presets.h`, 2,928 B; read only by
+  `spawn_macro_objects()` at area load, no address taken, no writes) and
+  the entire `struct CameraTrigger` table family in `src/game/camera.c`
+  -- approved candidates `sCamBBH` (1,464 B) and `sCamCastle` (840 B)
+  plus, as a same-file, same-mechanism scope extension flagged for owner
+  review, the trace-identical siblings `sCamRR`/`sCamHMC` (168 B each),
+  `sCamSSL` (120 B), `sCamSL`/`sCamTHI`/`sCamCCM` (72 B each),
+  `sCamCotMC` (48 B), and the dead-in-this-port `sCamBOB` (gc'd before
+  and after; 0 B). The sibling extension was needed because the fourth
+  approved candidate, `gArctanTable` (2,050 B), was skipped as genuinely
+  warm -- `atan2_lookup_q16()` passes it to
+  `sm64_saturn_atan2_lookup_q16()` on the live TARGET_SATURN per-frame
+  `atan2s` path (`src/engine/math_util.c:719`), the same hot-trig class
+  as the explicitly excluded `gSineTable` -- leaving the approved three
+  440 B short of the floor. Every trigger table is referenced only by
+  its definition and one `levels/level_defines.h` row consumed solely by
+  `camera.c`'s `sCameraTriggers` spine initializer, and every spine
+  access in `camera_course_processing()` is a read (field loads and the
+  `event()` call), so the spine's element type became
+  `const struct CameraTrigger *` (the 160-B spine itself deliberately
+  stays non-const `.data`, outside the approved scope). `gSineTable`
+  untouched per explicit exclusion. Also intentionally NOT "fixed":
+  `verify-sourceboot`'s SH-2 native-math census fails afterward with
+  `bounded route closure has no linked owner: _demo_actor_queue_transform`
+  -- a pre-existing defect this unblocking merely exposes (the symbol is
+  already absent from the owner's blocked-attempt map
+  `e2-bob-identity-id-c272f4c6d93451ef`, fully inlined into
+  `demo_actor_admit_compat_wrapper` at -O2 since the feature-off compat
+  wrappers landed), which belongs to the native-math census lane, not
+  this memory-budget task.
+
 - Right-sized the LWRAM `.lwram_geo_traversal` arena by changing
   `tools/saturn/geo_depth_manifest.py`'s capacity rounding policy from
   next-power-of-two to 16-frame alignment above the requirement

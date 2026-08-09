@@ -6331,7 +6331,7 @@ void surface_type_modes_thi(struct Camera *c) {
  * This behavior is exploitable, since the ranges assume that Mario must pass through the latter on
  * exit. Using hyperspeed, the earlier area can be directly exited from, keeping the changes it applies.
  */
-struct CameraTrigger sCamSL[] = {
+const struct CameraTrigger sCamSL[] = {
     { 1, cam_sl_snowman_head_8dir, 1119, 3584, 1125, 1177, 358, 358, -0x1D27 },
     // This trigger surrounds the previous one
     { 1, cam_sl_free_roam, 1119, 3584, 1125, 4096, 4096, 4096, -0x1D27 },
@@ -6343,7 +6343,7 @@ struct CameraTrigger sCamSL[] = {
  * The first helps the camera from getting stuck on the starting side, the latter aligns with the
  * tunnel. Both sides achieve their effect by editing the camera yaw.
  */
-struct CameraTrigger sCamTHI[] = {
+const struct CameraTrigger sCamTHI[] = {
     { 1, cam_thi_move_cam_through_tunnel, -4609, -2969, 6448, 100, 300, 300, 0 },
     { 1, cam_thi_look_through_tunnel,     -4809, -2969, 6448, 100, 300, 300, 0 },
     NULL_TRIGGER
@@ -6353,7 +6353,7 @@ struct CameraTrigger sCamTHI[] = {
  * The HMC triggers are mostly for warping the camera below platforms, but the second trigger is used to
  * start the cutscene for entering the CotMC pool.
  */
-struct CameraTrigger sCamHMC[] = {
+const struct CameraTrigger sCamHMC[] = {
     { 1, cam_hmc_enter_maze, 1996, 102, 0, 205, 100, 205, 0 },
     { 1, cam_castle_hmc_start_pool_cutscene, 3350, -4689, 4800, 600, 50, 600, 0 },
     { 1, cam_hmc_elevator_black_hole, -3278, 1236, 1379, 358, 200, 358, 0 },
@@ -6368,7 +6368,7 @@ struct CameraTrigger sCamHMC[] = {
  * setting close mode in the middle of the pyramid, and setting the boss fight camera mode to outward
  * radial.
  */
-struct CameraTrigger sCamSSL[] = {
+const struct CameraTrigger sCamSSL[] = {
     { 1, cam_ssl_enter_pyramid_top, -2048, 1080, -1024, 150, 150, 150, 0 },
     { 2, cam_ssl_pyramid_center, 0, -104, -104, 1248, 1536, 2950, 0 },
     { 2, cam_ssl_pyramid_center, 0, 2500, 256, 515, 5000, 515, 0 },
@@ -6380,7 +6380,7 @@ struct CameraTrigger sCamSSL[] = {
  * The RR triggers are for changing between fixed and 8 direction mode when entering / leaving the building at
  * the end of the ride.
  */
-struct CameraTrigger sCamRR[] = {
+const struct CameraTrigger sCamRR[] = {
     { 1, cam_rr_exit_building_side, -4197, 3819, -3087, 1769, 1490, 342, 0 },
     { 1, cam_rr_enter_building_side, -4197, 3819, -3771, 769, 490, 342, 0 },
     { 1, cam_rr_enter_building_window, -5603, 4834, -5209, 300, 600, 591, 0 },
@@ -6397,7 +6397,7 @@ struct CameraTrigger sCamRR[] = {
  * This table contains the only instance of a CameraTrigger with an area set to -1, and it sets the mode
  * to free_roam when Mario is not walking up the tower.
  */
-struct CameraTrigger sCamBOB[] = {
+const struct CameraTrigger sCamBOB[] = {
     {  1, cam_bob_tower, 2468, 2720, -4608, 3263, 1696, 3072, 0 },
     { -1, cam_bob_default_free_roam, 0, 0, 0, 0, 0, 0, 0 },
     NULL_TRIGGER
@@ -6406,7 +6406,7 @@ struct CameraTrigger sCamBOB[] = {
 /**
  * The CotMC trigger is only used to prevent fix Lakitu in place when Mario exits through the waterfall.
  */
-struct CameraTrigger sCamCotMC[] = {
+const struct CameraTrigger sCamCotMC[] = {
     { 1, cam_cotmc_exit_waterfall, 0, 1500, 3500, 550, 10000, 1500, 0 },
     NULL_TRIGGER
 };
@@ -6414,7 +6414,7 @@ struct CameraTrigger sCamCotMC[] = {
 /**
  * The CCM triggers are used to set the flag that says when Mario is in the slide shortcut.
  */
-struct CameraTrigger sCamCCM[] = {
+const struct CameraTrigger sCamCCM[] = {
     { 2, cam_ccm_enter_slide_shortcut, -4846, 2061, 27, 1229, 1342, 396, 0 },
     { 2, cam_ccm_leave_slide_shortcut, -6412, -3917, -6246, 307, 185, 132, 0 },
     NULL_TRIGGER
@@ -6427,7 +6427,10 @@ struct CameraTrigger sCamCCM[] = {
  * There are two triggers for looking up and down straight staircases when Mario is at the start,
  * and one trigger that starts the enter pool cutscene when Mario enters HMC.
  */
-struct CameraTrigger sCamCastle[] = {
+/* const: fully compile-time-literal cutscene trigger table, read only
+ * through sCameraTriggers[] in camera_course_processing(); moving it to
+ * cart rodata recovers 840 B of HWRAM .data (2026-08-09 sweep). */
+const struct CameraTrigger sCamCastle[] = {
     { 1, cam_castle_close_mode, -1100, 657, -1346, 300, 150, 300, 0 },
     { 1, cam_castle_enter_lobby, -1099, 657, -803, 300, 150, 300, 0 },
     { 1, cam_castle_close_mode, -2304, -264, -4072, 140, 150, 140, 0 },
@@ -6473,7 +6476,10 @@ struct CameraTrigger sCamCastle[] = {
  *
  * The triggers are also responsible for warping the camera below platforms.
  */
-struct CameraTrigger sCamBBH[] = {
+/* const: fully compile-time-literal cutscene trigger table, read only
+ * through sCameraTriggers[] in camera_course_processing(); moving it to
+ * cart rodata recovers 1,464 B of HWRAM .data (2026-08-09 sweep). */
+const struct CameraTrigger sCamBBH[] = {
     { 1, cam_bbh_enter_front_door, 742, 0, 2369, 200, 200, 200, 0 },
     { 1, cam_bbh_leave_front_door, 741, 0, 1827, 200, 200, 200, 0 },
     { 1, cam_bbh_room_1, 222, 0, 1458, 200, 200, 200, 0 },
@@ -6549,7 +6555,11 @@ struct CameraTrigger sCamBBH[] = {
  *
  * Each table is terminated with NULL_TRIGGER
  */
-struct CameraTrigger *sCameraTriggers[LEVEL_COUNT + 1] = {
+/* Element type is pointer-to-const so const level tables (sCamBBH,
+ * sCamCastle) can live in cart rodata; non-const sibling tables still
+ * convert implicitly. Every access below is a read (field loads and the
+ * event() call) -- nothing writes through this spine. */
+const struct CameraTrigger *sCameraTriggers[LEVEL_COUNT + 1] = {
     NULL,
     #include "levels/level_defines.h"
 };
