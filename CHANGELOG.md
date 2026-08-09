@@ -112,6 +112,42 @@
 
 ### Added
 
+- Offline SeamAwareDecimater terrain-decimation prototype (memory-residency-
+  campaign Task 7, parallel lane -- no build-system integration, no identity
+  wiring, not wired into any `verify-*` target): `tools/saturn/mesh_ir_obj_shim.py`
+  converts `sm64-saturn-mesh-ir` v2 <-> Wavefront OBJ (v/vt share an index by
+  construction; `texture_tile` and `source` round-trip via material-id/face-
+  order side channels, since OBJ has no field for either), driving a pinned
+  MIT clone of SeamAwareDecimater
+  (`github.com/songrun/SeamAwareDecimater@c69934356ecdb0dd91070a6fc0520cdb0cc4d983`,
+  libigl@`4ce917d4` and Eigen@`3.3.7` pinned alongside it, all under
+  `work/upstream/seam-aware-decimater/`, untracked per the existing `/work/`
+  convention) built via a hand-rolled MSYS2 MinGW Makefile
+  (`decimater.exe` SHA-256 `0d04b80a5a98d103501c2b0a7439946febdb06765909f0a1f2eae01848759bd9`).
+  IR->OBJ->IR round trip is byte-identical with decimation disabled (proven
+  against the real 1,625-vertex/1,101-triangle/18-material BOB mesh, not just
+  a fixture). Real 50% and 25% decimation runs (`--strict 2`) are GREEN-twice
+  deterministic (four runs, one SHA-256:
+  `97e1e94b6be4a308d33128ab22b603fd5fa6b2a1e1422b6120cf0eb5032c53bf`) and,
+  surprisingly, identical to each other -- this terrain is 65% boundary edges
+  once split into per-material submeshes, so `--strict 2` hits the same
+  natural collapse floor well below either target (1,625->1,532 positions,
+  1,101->932 triangles). Two real blockers were found and fixed inside the
+  shim (not routed around, and the downstream compilers were never modified):
+  bowtie (multi-fan) vertices crashing libigl's `circulation.cpp` assertion
+  (fixed via geometry-preserving vertex splitting), and two post-decimation
+  triangles that became zero-area only after integer requantization (fixed
+  via a degenerate-triangle filter with full per-triangle drop records).
+  Running the real, unmodified `saturn_mesh_ir.py`/`compile_bob_bsp.py` on the
+  decimated IR against real baseline numbers re-verified from the current
+  generated files (867 primitives/1,183 BSP nodes, not trusted from the plan
+  summary) gives real primitives 867->727 (-16.2%) and BSP nodes 1,183->945
+  (-20.1%). Full evidence, hashes, and two isometric wireframe SVGs (before/
+  after) at `docs/saturn/evidence/reports/memcamp-decimation-prototype-2026-08-09.md`
+  (+ companion `.json`). Identity-wired integration remains explicitly
+  deferred (Task 8, separate plan, pending the owner's G3 fidelity verdict and
+  renderer-route decision).
+
 - Closure-derived resident audio bundles (task12-completion Task 3):
   `tools/saturn/saturn_audio_package.py` and `compile_saturn_audio.py` accept
   `--closure <scene closure JSON>` and derive that scene's resident bundle

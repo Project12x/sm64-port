@@ -1,0 +1,589 @@
+{
+  "schema": "sm64-saturn-decimation-prototype-evidence",
+  "version": 1,
+  "task": "memory-residency-campaign Task 7 (offline SeamAwareDecimater prototype)",
+  "date": "2026-08-09",
+  "upstream_pins": {
+    "seam_aware_decimater": {
+      "repo": "https://github.com/songrun/SeamAwareDecimater",
+      "commit": "c69934356ecdb0dd91070a6fc0520cdb0cc4d983",
+      "commit_date": "2020-03-18",
+      "license": "MIT"
+    },
+    "libigl": {
+      "repo": "https://github.com/libigl/libigl",
+      "commit": "4ce917d424efd941174c6ff46adf15790c2ad12a",
+      "commit_date": "2020-02-29",
+      "license": "MPL-2.0",
+      "usage": "header-only"
+    },
+    "eigen": {
+      "repo": "https://gitlab.com/libeigen/eigen",
+      "tag": "3.3.7",
+      "commit": "21ae2afd4edaa1b69782c67a54182d34efe43f9c",
+      "commit_date": "2018-12-11",
+      "license": "MPL-2.0",
+      "usage": "header-only"
+    }
+  },
+  "decimater_binary": {
+    "path": "work/upstream/seam-aware-decimater/decimater.exe",
+    "sha256": "0d04b80a5a98d103501c2b0a7439946febdb06765909f0a1f2eae01848759bd9",
+    "size_bytes": 1002781,
+    "compiler": "g++.exe (Rev5, Built by MSYS2 project) 16.1.0",
+    "build_flags": "-std=c++11 -O2 -DIGL_NO_MOSEK",
+    "makefile": "work/upstream/seam-aware-decimater/Makefile.mingw"
+  },
+  "determinism_proof": {
+    "percent_50_run_a_sha256": "97e1e94b6be4a308d33128ab22b603fd5fa6b2a1e1422b6120cf0eb5032c53bf",
+    "percent_50_run_b_sha256": "97e1e94b6be4a308d33128ab22b603fd5fa6b2a1e1422b6120cf0eb5032c53bf",
+    "percent_25_run_a_sha256": "97e1e94b6be4a308d33128ab22b603fd5fa6b2a1e1422b6120cf0eb5032c53bf",
+    "percent_25_run_b_sha256": "97e1e94b6be4a308d33128ab22b603fd5fa6b2a1e1422b6120cf0eb5032c53bf",
+    "all_four_identical": true,
+    "note": "50% and 25% targets converge to the same real natural strict-2 collapse floor for this dataset."
+  },
+  "baseline": {
+    "source": "build/saturn/sourceboot/generated/ (re-verified against real current files)",
+    "positions": 1625,
+    "triangles": 1101,
+    "materials": 18,
+    "render_primitive_count": 867,
+    "quad_pairing_report": {
+      "matcher": "networkx.max_weight_matching",
+      "matcher_version": "3.6.1",
+      "matching_policy": "maximum cardinality, then maximum integer quality",
+      "deformation_pose_count": 0,
+      "deformation_pose_names": [],
+      "source_triangle_count": 1101,
+      "candidate_count": 235,
+      "quad_count": 234,
+      "standalone_triangle_count": 633,
+      "render_primitive_count": 867,
+      "commands_saved": 234,
+      "rejection_reasons": {
+        "normal_divergence": 27,
+        "planar_quad_not_convex": 60,
+        "uv_affine_error": 532,
+        "uv_cycle_degenerate": 2
+      },
+      "textured_pairing": true,
+      "textured_affine_error_limit": 256
+    },
+    "bsp_node_count": 1183,
+    "bsp_ref_count": 1425,
+    "estimated_fragment_resident_bytes": 773920,
+    "all_16x16_fragment_resident_bytes": 337280,
+    "vdp1_texture_budget_bytes": 446432
+  },
+  "decimated_50_and_25_percent_identical_result": {
+    "positions": 1532,
+    "raw_decimated_triangles": 934,
+    "degenerate_triangles_dropped": 2,
+    "degenerate_triangle_records": [
+      {
+        "material": 8,
+        "indices": [
+          924,
+          923,
+          922
+        ],
+        "positions": [
+          [
+            5478,
+            1536,
+            4710
+          ],
+          [
+            5478,
+            1024,
+            4710
+          ],
+          [
+            5478,
+            1536,
+            4710
+          ]
+        ]
+      },
+      {
+        "material": 8,
+        "indices": [
+          924,
+          925,
+          923
+        ],
+        "positions": [
+          [
+            5478,
+            1536,
+            4710
+          ],
+          [
+            5478,
+            1024,
+            4710
+          ],
+          [
+            5478,
+            1024,
+            4710
+          ]
+        ]
+      }
+    ],
+    "triangles_after_drop": 932,
+    "render_primitive_count": 727,
+    "quad_pairing_report": {
+      "matcher": "networkx.max_weight_matching",
+      "matcher_version": "3.6.1",
+      "matching_policy": "maximum cardinality, then maximum integer quality",
+      "deformation_pose_count": 0,
+      "deformation_pose_names": [],
+      "source_triangle_count": 932,
+      "candidate_count": 205,
+      "quad_count": 205,
+      "standalone_triangle_count": 522,
+      "render_primitive_count": 727,
+      "commands_saved": 205,
+      "rejection_reasons": {
+        "normal_divergence": 12,
+        "planar_quad_not_convex": 14,
+        "uv_affine_error": 401,
+        "uv_cycle_degenerate": 2
+      },
+      "textured_pairing": true,
+      "textured_affine_error_limit": 256
+    },
+    "bsp_node_count": 945,
+    "bsp_ref_count": 1191,
+    "estimated_fragment_resident_bytes": 612832,
+    "all_16x16_fragment_resident_bytes": 284800,
+    "vdp1_texture_budget_bytes": 446432,
+    "per_material_decimation_report_50pct": {
+      "percent_vertices": 50,
+      "strict": 2,
+      "input_positions": 1625,
+      "input_triangles": 1101,
+      "output_positions": 1532,
+      "output_triangles": 932,
+      "degenerate_triangles_dropped": 2,
+      "degenerate_triangles": [
+        {
+          "material": 8,
+          "indices": [
+            924,
+            923,
+            922
+          ],
+          "positions": [
+            [
+              5478,
+              1536,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ],
+            [
+              5478,
+              1536,
+              4710
+            ]
+          ]
+        },
+        {
+          "material": 8,
+          "indices": [
+            924,
+            925,
+            923
+          ],
+          "positions": [
+            [
+              5478,
+              1536,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ]
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "material": 0,
+          "input_vertices": 190,
+          "output_vertices": 167,
+          "target_vertices": 95,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 1,
+          "input_vertices": 169,
+          "output_vertices": 164,
+          "target_vertices": 84,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 2,
+          "input_vertices": 211,
+          "output_vertices": 211,
+          "target_vertices": 106,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 3,
+          "input_vertices": 20,
+          "output_vertices": 12,
+          "target_vertices": 10,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 4,
+          "input_vertices": 226,
+          "output_vertices": 226,
+          "target_vertices": 113,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 5,
+          "input_vertices": 74,
+          "output_vertices": 56,
+          "target_vertices": 37,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 6,
+          "input_vertices": 44,
+          "output_vertices": 44,
+          "target_vertices": 22,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 7,
+          "input_vertices": 46,
+          "output_vertices": 42,
+          "target_vertices": 23,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 8,
+          "input_vertices": 60,
+          "output_vertices": 44,
+          "target_vertices": 30,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 9,
+          "input_vertices": 18,
+          "output_vertices": 18,
+          "target_vertices": 9,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 10,
+          "input_vertices": 72,
+          "output_vertices": 72,
+          "target_vertices": 36,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 11,
+          "input_vertices": 20,
+          "output_vertices": 20,
+          "target_vertices": 10,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 12,
+          "input_vertices": 68,
+          "output_vertices": 68,
+          "target_vertices": 34,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 13,
+          "input_vertices": 8,
+          "output_vertices": 8,
+          "target_vertices": 4,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 14,
+          "input_vertices": 40,
+          "output_vertices": 40,
+          "target_vertices": 20,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 15,
+          "input_vertices": 359,
+          "output_vertices": 320,
+          "target_vertices": 180,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 16,
+          "input_vertices": 8,
+          "output_vertices": 8,
+          "target_vertices": 4,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 17,
+          "input_vertices": 12,
+          "output_vertices": 12,
+          "target_vertices": 6,
+          "skipped": false,
+          "returncode": 0
+        }
+      ],
+      "mode": "decimate"
+    },
+    "per_material_decimation_report_25pct": {
+      "percent_vertices": 25,
+      "strict": 2,
+      "input_positions": 1625,
+      "input_triangles": 1101,
+      "output_positions": 1532,
+      "output_triangles": 932,
+      "degenerate_triangles_dropped": 2,
+      "degenerate_triangles": [
+        {
+          "material": 8,
+          "indices": [
+            924,
+            923,
+            922
+          ],
+          "positions": [
+            [
+              5478,
+              1536,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ],
+            [
+              5478,
+              1536,
+              4710
+            ]
+          ]
+        },
+        {
+          "material": 8,
+          "indices": [
+            924,
+            925,
+            923
+          ],
+          "positions": [
+            [
+              5478,
+              1536,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ],
+            [
+              5478,
+              1024,
+              4710
+            ]
+          ]
+        }
+      ],
+      "materials": [
+        {
+          "material": 0,
+          "input_vertices": 190,
+          "output_vertices": 167,
+          "target_vertices": 48,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 1,
+          "input_vertices": 169,
+          "output_vertices": 164,
+          "target_vertices": 42,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 2,
+          "input_vertices": 211,
+          "output_vertices": 211,
+          "target_vertices": 53,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 3,
+          "input_vertices": 20,
+          "output_vertices": 12,
+          "target_vertices": 5,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 4,
+          "input_vertices": 226,
+          "output_vertices": 226,
+          "target_vertices": 56,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 5,
+          "input_vertices": 74,
+          "output_vertices": 56,
+          "target_vertices": 18,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 6,
+          "input_vertices": 44,
+          "output_vertices": 44,
+          "target_vertices": 11,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 7,
+          "input_vertices": 46,
+          "output_vertices": 42,
+          "target_vertices": 12,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 8,
+          "input_vertices": 60,
+          "output_vertices": 44,
+          "target_vertices": 15,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 9,
+          "input_vertices": 18,
+          "output_vertices": 18,
+          "target_vertices": 4,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 10,
+          "input_vertices": 72,
+          "output_vertices": 72,
+          "target_vertices": 18,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 11,
+          "input_vertices": 20,
+          "output_vertices": 20,
+          "target_vertices": 5,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 12,
+          "input_vertices": 68,
+          "output_vertices": 68,
+          "target_vertices": 17,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 13,
+          "input_vertices": 8,
+          "output_vertices": 8,
+          "target_vertices": 2,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 14,
+          "input_vertices": 40,
+          "output_vertices": 40,
+          "target_vertices": 10,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 15,
+          "input_vertices": 359,
+          "output_vertices": 320,
+          "target_vertices": 90,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 16,
+          "input_vertices": 8,
+          "output_vertices": 8,
+          "target_vertices": 2,
+          "skipped": false,
+          "returncode": 0
+        },
+        {
+          "material": 17,
+          "input_vertices": 12,
+          "output_vertices": 12,
+          "target_vertices": 3,
+          "skipped": false,
+          "returncode": 0
+        }
+      ],
+      "mode": "decimate"
+    }
+  },
+  "boundary_edge_fraction": {
+    "total_unique_edges_post_bowtie_split": 2447,
+    "boundary_edges": 1591,
+    "fraction_percent": 65.02,
+    "note": "Computed across all 18 materials post-bowtie-split, pre-decimation; explains why strict=2 achieves only a modest reduction on this fragmented terrain mesh."
+  },
+  "visual_artifacts": [
+    "docs/saturn/evidence/screenshots/memcamp-decimation-wireframe-baseline-2026-08-09.svg",
+    "docs/saturn/evidence/screenshots/memcamp-decimation-wireframe-decimated-2026-08-09.svg"
+  ]
+}
