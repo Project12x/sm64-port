@@ -5,6 +5,16 @@ endif
 ROOT := $(abspath $(dir $(realpath $(firstword $(MAKEFILE_LIST))))/../../../..)
 SH_PROGRAM := sm64-saturn-sourceboot-e2
 SOURCEBOOT_GENERATED := $(ROOT)/build/saturn/sourceboot/generated
+# sourceboot.specs' *link: spec reads this at link time via GCC's
+# %:getenv() spec function to build a -L flag it places directly ahead of
+# -T sourceboot-cart.x on the real collect2/ld command line -- the only way
+# to guarantee ld's search path for sourceboot-cart.x's
+# `INCLUDE saturn_geo_depth_manifest.ld` is populated before ld parses -T
+# (see the comment in sourceboot.specs for why SH_LDFLAGS's own -L cannot
+# do this: GCC's LINK_COMMAND_SPEC always places %(link) ahead of the
+# %{L*} cluster it builds from ordinary -L flags, regardless of Makefile
+# flag order).
+export SOURCEBOOT_GENERATED_LDDIR := $(SOURCEBOOT_GENERATED)
 SOURCEBOOT_PYTHON ?= $(ROOT)/.venv-saturn-tools/Scripts/python.exe
 SOURCEBOOT_BUILD_IDENTITY_SPEC ?= $(SOURCEBOOT_GENERATED)/saturn_build_identity_spec.json
 SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_values.inc
@@ -523,7 +533,6 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -I$(SOURCEBOOT_GENERATED) -I$(SOURCEBOOT_MARIO_TEXTURE_DIR) \
   -DSATURN_DEMO_MARIO_TEXTURES=1
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections \
-  -L$(SOURCEBOOT_GENERATED) \
   -Wl,--defsym=sm64_saturn_camera_variant_marker=$(SATURN_CAMERA_VARIANT) \
   -Wl,--defsym=sm64_saturn_camera_route_marker=$(SATURN_SOURCEBOOT_CAMERA_ROUTE)
 ifeq ($(SATURN_SOURCEBOOT_CAMERA_ROUTE),1)

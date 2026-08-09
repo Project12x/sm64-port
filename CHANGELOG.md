@@ -2,6 +2,73 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the real root cause of sourceboot's persistent
+  `ld: cannot open linker script file saturn_geo_depth_manifest.ld` link
+  failure (`src/port/saturn/sourceboot/sourceboot.specs`,
+  `src/port/saturn/sourceboot/Makefile`) -- the defect a prior session
+  diagnosed but only worked around diagnostically (copying the generated
+  `.ld` fragment into the link's CWD, never committed). `sourceboot.specs`'s
+  `*link:` spec entirely replaces GCC's default link spec (no
+  `%(old_link)`), so none of the driver's usual `%{L*}` handling applies to
+  it: a real `-v` capture of the actual `collect2`/`ld` command line showed
+  GCC's built-in `LINK_COMMAND_SPEC` always places this spec's expansion
+  (`-T sourceboot-cart.x`) first, immediately after the LTO plugin options,
+  while the `%{L*}` cluster it assembles from ordinary `-L` flags --
+  including the Makefile's own `-L build/saturn/sourceboot/generated`,
+  meant to resolve `sourceboot-cart.x`'s `INCLUDE
+  saturn_geo_depth_manifest.ld` -- lands far later, after the startfiles.
+  `ld` resolves `INCLUDE` immediately as it parses `-T`, in a single
+  left-to-right scan of the command line, so the search path is still empty
+  at that point; reordering the flag within the Makefile's `SH_LDFLAGS`
+  cannot change this, since GCC's spec engine collects flags into fixed
+  template slots, not literal argv position (verified empirically: moving
+  the `-L` earlier in `SH_LDFLAGS` never moved it earlier in the real
+  `collect2` invocation). Also verified and ruled out: the project's own
+  prior-art fix for an identical-shaped problem --
+  `sourceboot-cart.x:14`'s `SEARCH_DIR ("$YAUL_INSTALL_ROOT/...")`, which
+  makes its own `INCLUDE ldscripts/yaul-c++.x` resolve -- turned out to be
+  a red herring, not a working mechanism: `ld 2.44`'s `SEARCH_DIR` does not
+  actually expand arbitrary `$VARNAME` environment references (confirmed
+  by testing a control variable pointing at a real, existing directory,
+  which still failed to resolve); `ldscripts/yaul-c++.x` was always
+  resolving via `ld`'s own relocatable-prefix default script directory
+  (visible via `sh-elf-ld --verbose`), unrelated to that `SEARCH_DIR` line
+  or to anything -L-based.
+  The real fix: `sourceboot.specs`'s `*link:` spec now uses GCC's
+  `%:getenv(NAME SUFFIX)` spec function to build `-L<generated-dir>`
+  directly inside the same spec string, immediately ahead of
+  `-T sourceboot-cart.x`, guaranteeing the real command-line order
+  regardless of anything the Makefile does downstream. The Makefile now
+  `export`s `SOURCEBOOT_GENERATED_LDDIR` (the same
+  `build/saturn/sourceboot/generated` path) for the spec's `%:getenv()` to
+  read, and drops the now-redundant `-L$(SOURCEBOOT_GENERATED)` from
+  `SH_LDFLAGS` (superseded by the spec-level `-L`, keeping only one place
+  that owns this search path). Confirmed with a real `-v` capture in an
+  isolated repro against the actual pinned toolchain
+  (`work/yaul-install/bin/sh-elf-gcc` 14.3.0, `sh-elf-ld` (GNU Binutils)
+  2.44) before touching the real specs file: the fix moves `-L` to
+  immediately precede `-T` on the real `collect2` command line, and the
+  `INCLUDE` resolves.
+  - Verified: two independent real `make -f Makefile.saturn.mk sourceboot`
+    builds against the actual pinned SH-2 toolchain (MSYS2 runtime at
+    `C:\msys64`, not Git Bash's own bundled `/mingw64`/`/usr`, which
+    resolves to a different, incompatible MSYS runtime that silently drops
+    exported environment variables before they reach `make`/`gcc`/`ld` --
+    a second, unrelated environment hazard hit and worked around during
+    this verification). Attempt 1: default target params, `-j1`, from a
+    build tree with pre-existing partial object directories from many
+    prior failed link attempts. Attempt 2: a genuinely clean rebuild after
+    `rm -rf`-ing the target's identity-tagged build directory entirely,
+    `-j8`. Both attempts compiled all ~230 translation units, linked with
+    zero `ld` errors of any kind, and completed the full pipeline through
+    `.elf`/`.sym`/`.asm`/`SOURCE.DAT`/`.iso`/`.cue` -- the
+    `sourceboot-cart.x` HWRAM/LWRAM budget `ASSERT()`s (separately tracked
+    under Task 14 completion Tasks 4-6) both evaluated and passed for this
+    default build configuration. No diagnostic workaround (no `.ld`
+    fragment copied into the link CWD) was used in either attempt.
+
 ### Changed
 
 - Removed `saturn_geo_walk_process_children`'s `sSaturnGeoWalkActive`

@@ -33,8 +33,20 @@
 %(includes)
 
 %rename link old_link
+# This *link: spec entirely replaces the default one (no %(old_link)), so
+# none of the driver's usual %{L*} handling applies here -- GCC's built-in
+# LINK_COMMAND_SPEC always places this spec's expansion first on the actual
+# collect2/ld command line, ahead of the %{L*} cluster it assembles from
+# ordinary -L flags (verified with -v: reordering -L in the Makefile's
+# SH_LDFLAGS never moves it earlier, since GCC's spec engine collects flags
+# into fixed template slots, not literal argv position). sourceboot-cart.x's
+# `INCLUDE saturn_geo_depth_manifest.ld` is resolved by ld immediately as it
+# parses -T, so any -L naming the generated directory must already be on the
+# command line by then. %:getenv() reads the directory from the environment
+# (see Makefile's `export SOURCEBOOT_GENERATED_LDDIR`) and injects the -L
+# directly ahead of -T in this same spec string, guaranteeing the order.
 *link:
--T sourceboot-cart.x
+-L%:getenv(SOURCEBOOT_GENERATED_LDDIR /) -T sourceboot-cart.x
 
 *startfile:
 crt0%O%s init%O%s
