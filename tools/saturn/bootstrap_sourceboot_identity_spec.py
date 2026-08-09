@@ -117,6 +117,13 @@ def _source_closure_inputs(root: Path) -> tuple[str, ...]:
             raise ValueError(f"source_hash closure root is missing: {relative_root}")
         for path in directory.rglob("*"):
             if path.is_file():
+                # Python bytecode caches are derived from .py files that are
+                # already in this closure, and their bytes embed the source
+                # mtime; any interpreter merely importing a tool rewrites
+                # them. Hashing them adds no source coverage and made the
+                # identity drift between computations within one build.
+                if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
+                    continue
                 paths.add(path.relative_to(root).as_posix())
     for relative in SOURCE_CLOSURE_FILES:
         if not (root / relative).is_file():

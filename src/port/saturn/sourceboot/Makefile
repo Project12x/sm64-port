@@ -444,9 +444,27 @@ SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS = \
   --set bsp_fragment_flat=$(SATURN_DEMO_BSP_FRAGMENT_FLAT) \
   --set fast3d_q16_trace=$(SATURN_FAST3D_Q16_TRACE) \
   --set experimental_skip_geo_walk=$(SATURN_EXPERIMENTAL_SKIP_GEO_WALK)
+# One logical build must seal exactly once. Yaul's .iso rule re-invokes this
+# makefile for the pre/post-build-iso hooks, and the verify target is a third
+# fresh parse; each re-parse used to re-run the bootstrap against the live
+# tree, and any file the build itself had touched in the meantime resealed a
+# *different* identity -- the pre-build-iso hook then staged SOURCE.DAT into
+# that other identity's directory and the outer .iso quietly shipped without
+# it. Callers that already sealed pass the tag in SOURCEBOOT_SEALED_IDENTITY
+# (asserted against the frozen spec below); SOURCEBOOT_IDENTITY_FROZEN=1
+# derives the tag from the existing spec without resealing (used to read the
+# sealed tag back out without perturbing it). The sealing parse exports the
+# tag so its own hook sub-makes inherit it.
+SOURCEBOOT_SEALED_IDENTITY ?=
+SOURCEBOOT_IDENTITY_FROZEN ?= 0
+ifneq ($(words $(filter $(SOURCEBOOT_IDENTITY_FROZEN),0 1)),1)
+  $(error SOURCEBOOT_IDENTITY_FROZEN must be 0 or 1)
+endif
+ifeq ($(strip $(SOURCEBOOT_SEALED_IDENTITY))$(filter 1,$(SOURCEBOOT_IDENTITY_FROZEN)),)
 SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_STATUS := $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/bootstrap_sourceboot_identity_spec.py" --root "$(ROOT)" --output "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS) && printf ready)
 ifneq ($(SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_STATUS),ready)
   $(error sourceboot build identity bootstrap failed)
+endif
 endif
 # The generator validates every artifact, constructs the exact ABI bytes, and
 # the staging label comes back from those bytes rather than a handwritten tag.
@@ -458,6 +476,16 @@ SOURCEBOOT_IDENTITY_DIRECTORY_TAG := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(R
 ifeq ($(SOURCEBOOT_IDENTITY_DIRECTORY_TAG),)
   $(error sourceboot build identity spec did not produce an object-directory tag)
 endif
+# A provided sealed tag must match what the frozen spec yields; a mismatch
+# means the spec changed between the seal and this sub-step, and silently
+# proceeding is exactly the split-identity staging bug this exists to stop.
+ifneq ($(strip $(SOURCEBOOT_SEALED_IDENTITY)),)
+  ifneq ($(strip $(SOURCEBOOT_SEALED_IDENTITY)),$(SOURCEBOOT_IDENTITY_DIRECTORY_TAG))
+    $(error sourceboot sealed identity mismatch: caller sealed $(strip $(SOURCEBOOT_SEALED_IDENTITY)) but the frozen spec yields $(SOURCEBOOT_IDENTITY_DIRECTORY_TAG))
+  endif
+endif
+override SOURCEBOOT_SEALED_IDENTITY := $(SOURCEBOOT_IDENTITY_DIRECTORY_TAG)
+export SOURCEBOOT_SEALED_IDENTITY
 override SOURCEBOOT_OUTPUT_TAG := -identity-$(SOURCEBOOT_IDENTITY_DIRECTORY_TAG)
 endif
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
@@ -692,6 +720,15 @@ source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp
 identity-assets: source-assets $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
+
+# Emits only the seal-stage identity directory tag, so an orchestrating make
+# (Makefile.saturn.mk sourceboot/verify-sourceboot) can seal once and hand the
+# same identity to every subsequent sub-make. Combine with
+# SOURCEBOOT_IDENTITY_FROZEN=1 to read the already-sealed tag back without
+# resealing. Run with -s --no-print-directory for clean capture.
+.PHONY: print-identity-tag
+print-identity-tag:
+	@printf '%s\n' '$(SOURCEBOOT_IDENTITY_DIRECTORY_TAG)'
 
 $(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_REPORT) &: \
     $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_SOURCES)

@@ -194,12 +194,28 @@ castleviewer: compile-castle-area1 compile-castle-gameplay-config compile-castle
 verify-castleviewer: castleviewer
 	$(MAKE) -C "$(CASTLEVIEWER_DIR)" verify
 
+# Seal the build identity exactly once per logical build: materialize the
+# generated inputs, capture the seal-stage tag from one dedicated parse, then
+# pass that tag to the build sub-make (and, below, to the verify sub-make).
+# Without this, every fresh parse of the sourceboot Makefile -- the build, the
+# pre/post-build-iso hooks Yaul spawns from the .iso recipe, and verify --
+# resealed against the live tree, and any file the build had touched in the
+# meantime produced a different identity: pre-build-iso then staged SOURCE.DAT
+# into the wrong identity's directory and the shipped .iso silently lacked it.
 sourceboot: check-libyaul check-sdk
 	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets
-	$(MAKE) -C "$(SOURCEBOOT_DIR)"
+	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag)" && \
+	  test -n "$$tag" && \
+	  printf 'sourceboot: sealed identity %s\n' "$$tag" && \
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag"
 
+# Read the sealed tag back from the frozen spec (no reseal) so verify runs
+# against the exact identity the build above produced.
 verify-sourceboot: sourceboot
-	$(MAKE) -C "$(SOURCEBOOT_DIR)" verify
+	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag SOURCEBOOT_IDENTITY_FROZEN=1)" && \
+	  test -n "$$tag" && \
+	  printf 'verify-sourceboot: verifying sealed identity %s\n' "$$tag" && \
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify SOURCEBOOT_SEALED_IDENTITY="$$tag"
 
 verify-sourceboot-feature-identity:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_build_identity.py"
@@ -1594,10 +1610,18 @@ compile-bob-area: check-host-tools
 	  --output "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
 	  --report "$(BOB_MESH_GENERATED)/bob_area1_report.json"
 
-compile-bob-bsp: compile-bob-area
+# Keep this invocation argument-identical to the report/header rule in
+# src/port/saturn/sourceboot/Makefile: both write
+# bob_area1_bsp_report.json, and the report's content depends on whether
+# --manifest analysis ran. Two writers emitting different bytes to the same
+# path made the file flip on every make pass, and the file is part of the
+# sourceboot build-identity closure -- each flip resealed a new identity.
+compile-bob-bsp: compile-bob-area compile-bob-tiles
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/compile_bob_bsp.py" \
 	  --input "$(BOB_MESH_GENERATED)/bob_area1_compiled.json" \
-	  --output "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json"
+	  --output "$(BOB_MESH_GENERATED)/bob_area1_bsp_report.json" \
+	  --header "$(BOB_MESH_GENERATED)/bob_bsp.h" \
+	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json"
 
 compile-bob-bsp-fragments: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_bsp_fragments.py" \

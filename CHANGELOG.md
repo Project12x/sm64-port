@@ -90,6 +90,60 @@
 
 ### Fixed
 
+- Fixed the sourceboot build-identity nondeterminism first documented in
+  `docs/saturn/evidence/reports/task14-headless-boot-capture-post-cart-rodata-fix-2026-08-09.md`
+  section 4: one logical `make -f Makefile.saturn.mk verify-sourceboot`
+  invocation could split its outputs across several
+  `build/saturn/sourceboot/e2-bob-identity-id-*` directories, with the
+  worst case a shipped `.iso` silently missing `SOURCE.DAT` (boot-time
+  `SM64_SATURN_SOURCE_CART_IMAGE_NOT_FOUND`). Root cause was two
+  compounding defects, both traced live this session. (1) Content
+  instability inside the hash closure: two different rules write
+  `build/saturn/sourceboot/generated/bob_area1_bsp_report.json` -- the
+  sourceboot Makefile's report/header rule runs `compile_bob_bsp.py` with
+  `--manifest`/`--header` (report carries the fragment-analysis keys),
+  while `Makefile.saturn.mk`'s `compile-bob-bsp` (re-run on every assets
+  pass through `compile-bob-scene`'s phony dependency chain) ran it bare,
+  so the report flipped between two byte-variants on every pass and the
+  Make graph never reached a fixed point. (2) Per-parse resealing: the
+  identity bootstrap re-hashed the live tree in every fresh parse of the
+  sourceboot Makefile -- the main build, Yaul's recursive
+  `pre-build-iso`/`post-build-iso` hook sub-makes spawned from the `.iso`
+  recipe, and `verify` -- so any closure change between parses (the
+  report flip above, or a concurrently-active agent editing `tools/saturn`,
+  observed live twice this session) made the `pre-build-iso` hook stage
+  `SOURCE.DAT` into a different identity's directory than the `.iso` the
+  outer parse was packaging. Fix: `compile-bob-bsp` now passes the same
+  `--manifest`/`--header` arguments as the sourceboot rule (one canonical
+  report byte-content); the identity is sealed exactly once per logical
+  build -- `Makefile.saturn.mk` captures the tag via the sourceboot
+  Makefile's new `print-identity-tag` target right after `identity-assets`
+  and passes it as `SOURCEBOOT_SEALED_IDENTITY` to the build and (via
+  `SOURCEBOOT_IDENTITY_FROZEN=1` read-back of the frozen spec, no reseal)
+  to `verify`; a seal-stage parse exports the tag so the hook sub-makes it
+  spawns inherit it; any provided tag is asserted against the frozen
+  spec's own derivation, so identity divergence inside one build is now a
+  loud parse-time error instead of silent mis-staging; and
+  `bootstrap_sourceboot_identity_spec.py` no longer hashes
+  `__pycache__`/`.pyc` bytecode caches (214 were in the closure --
+  derived from `.py` files the closure already hashes byte-for-byte, they
+  embed source mtimes and are rewritten by any interpreter import, so
+  they added drift, not coverage; what the hash covers is otherwise
+  unchanged). Proof, canonical acceptance flags, clean identity-dir state
+  each time: runs 1+2 sealed and verified the same identity
+  `id-86d0871248d8a89b` end-to-end with byte-identical ELF/`SOURCE.DAT`/
+  `.iso`/`.cue`; a concurrent audio-lane commit then legitimately resealed
+  the tree (delta attributed to `tools/saturn/m64_decode_walk.py` by
+  manifest diff) and runs 3+4 both sealed `id-03363ebec1b504f4`, again
+  byte-identical to each other; every run produced exactly one identity
+  directory with `SOURCE.DAT` present inside the `.iso` (direct ISO9660
+  root-directory parse) at exactly the ELF's `.cart_rodata` size
+  (2,940,880 B), so the adjacent cart-size fix also still holds. A
+  live-input variant (`SATURN_SOURCEBOOT_LIVE_INPUT=1
+  SATURN_SOURCEBOOT_ROUTE_REPLAY=1` added to the canonical flags) built
+  the same way into `id-62d0e851516512df`, complete and self-consistent,
+  for the owner's manual desktop-Ymir acceptance run.
+
 - Fixed three review findings on the m64 decode-walk packaging commit
   (`82841ccb`), the largest a reviewer-proven residual truncation exposure:
   the walker validates only the sequence-level prefix of an m64 (~17% of
