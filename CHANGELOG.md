@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added a deterministic Saturn toolchain-attestation v1 seal. It measures the
+  exact invoked Yaul SH-ELF binaries and compiler version plus every
+  compiler-discovered external dependency, while serializing only
+  component-relative paths so install locations cannot affect release identity.
+  Duplicate, case-colliding, missing, unclassified, ambiguous, stale, or
+  malformed inputs now fail closed before atomic publication, preventing an
+  external SDK move or byte drift from silently reusing a release seal.
+
 - Added a compiler-derived, canonical source-closure v2 seal for Saturn
   builds. It records only classed target inputs and their byte hashes while
   keeping permitted absolute toolchain dependencies outside the serialized

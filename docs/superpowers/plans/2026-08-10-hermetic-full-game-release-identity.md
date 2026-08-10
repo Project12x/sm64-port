@@ -422,7 +422,13 @@ Record tests and open gates, run specification review then code-quality review, 
 - Produces: `AttestationBuild(document: dict[str, Any], canonical: bytes, sha256: str, external_dependency_keys: frozenset[tuple[str, str]])`.
 - Produces: `build_toolchain_attestation(components: Sequence[ToolchainComponent], external_dependencies: Sequence[Path]) -> AttestationBuild` and `verify_toolchain_attestation(path: Path, components: Sequence[ToolchainComponent], external_dependencies: Sequence[Path]) -> dict[str, Any]`.
 
-- [ ] **Step 1: Write failing toolchain tests**
+Status: `source-complete`; independent specification and code-quality reviews
+remain open. `external_dependency_keys` use `(component_id, component-relative
+path)`, and the `yaul-sh-sdk` version string carries Yaul `0.3.1`, pinned commit
+`6012f79f237773378c8014e70d8998ad95a38d98`, and exact GCC `--version` stdout.
+This keeps component install roots diagnostic-only and out of canonical bytes.
+
+- [x] **Step 1: Write failing toolchain tests**
 
 ```python
 def test_install_root_does_not_enter_canonical_attestation(self) -> None:
@@ -452,13 +458,13 @@ def test_unclassified_or_ambiguous_external_dependency_fails(self) -> None:
 
 Also reject duplicate component ids, duplicate binary records, missing binaries, stale attestation bytes, case collisions, unknown keys, and invalid lowercase hashes.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_toolchain_attestation.py
 ```
 
-- [ ] **Step 3: Implement canonical component records**
+- [x] **Step 3: Implement canonical component records**
 
 Use the canonical form:
 
@@ -477,7 +483,7 @@ document = {
 
 Binary and dependency record paths are relative to their component root. Component roots are diagnostics returned to the caller but absent from canonical bytes. For the sourceboot build use one non-overlapping `yaul-sh-sdk` component rooted at `YAUL_INSTALL_ROOT`, versioned with Yaul `0.3.1`, commit `6012f79f237773378c8014e70d8998ad95a38d98`, GCC `--version`, and the SHA-256 of the invoked compiler, assembler, linker driver, `nm`, `objcopy`, `objdump`, `readelf`, and `addr2line` binaries.
 
-- [ ] **Step 4: Implement verification and CLI emission**
+- [x] **Step 4: Implement verification and CLI emission**
 
 The CLI accepts repeated `--external-dependency`, explicit tool binary paths, `--yaul-root`, `--yaul-version`, `--yaul-commit`, and `--output`. It validates all input bytes before atomically replacing the prior output. Verification rebuilds canonical bytes from the current components and dependencies and requires byte equality with the sealed file.
 
@@ -490,7 +496,7 @@ else:
     write_if_changed(args.output, built.canonical)
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_toolchain_attestation.py
