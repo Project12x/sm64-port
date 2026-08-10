@@ -2697,6 +2697,140 @@ static bool demo_detached_start_decoy(uint32_t generation)
                 verify_release.assert_not_called()
                 run_command.assert_not_called()
 
+    def test_measurement_rejects_preexisting_output_before_verification_or_tools(self) -> None:
+        from test_release_manifest import ReleaseFixture
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            fixture = ReleaseFixture(root)
+            manifest = fixture.write()
+            baseline = root / "baseline.txt"
+            route = root / "route.txt"
+            audit = root / "audit.txt"
+            report = root / "measurement.json"
+            baseline.write_text("BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8")
+            route.write_text("ROUTE_ORACLE_VERSION 1\nROOT _root\n", encoding="utf-8")
+            audit.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            original = b"preserve preexisting output\n"
+            report.write_bytes(original)
+            with patch.object(verifier, "verify_baseline_integrity"), patch.object(
+                verifier, "verify_route_oracle_integrity"
+            ), patch.object(
+                verifier.release_manifest_module,
+                "verify_release_manifest",
+                side_effect=AssertionError("release verification called"),
+            ) as verify_release, patch.object(
+                verifier, "run_command", side_effect=AssertionError("tool called")
+            ) as run_command:
+                self.assertEqual(verifier.main([
+                    str(fixture.outputs["elf"]), str(baseline),
+                    "--route-oracle", str(route),
+                    "--audit-route-oracle", str(audit),
+                    "--measure-audit-report", str(report),
+                    "--release-manifest", str(manifest),
+                    "--objdump", "objdump", "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                ]), 2)
+                verify_release.assert_not_called()
+                run_command.assert_not_called()
+            self.assertEqual(report.read_bytes(), original)
+
+    def test_measurement_late_input_aliases_fail_without_mutating_inputs(self) -> None:
+        from test_release_manifest import ReleaseFixture
+
+        sections = "  [ 1] .text PROGBITS 06001000 001000 002004 00 AX 0 0 2\n"
+        symbols = (
+            "   1: 06001000 16 FUNC GLOBAL DEFAULT 1 _game_loop_one_iteration\n"
+            "   2: 06002000 4 FUNC GLOBAL DEFAULT 1 ___mulsf3\n"
+        )
+        disassembly = (
+            "06001000 <_game_loop_one_iteration>:\n"
+            " 6001000: b7 fe bsr 6002000 <___mulsf3>\n"
+            " 6001002: 00 09 nop\n 6001004: 00 0b rts\n"
+            " 6001006: 00 09 nop\n06002000 <___mulsf3>:\n"
+            " 6002000: 00 0b rts\n 6002002: 00 09 nop\n"
+        )
+
+        for alias_kind in ("hardlink", "symlink"):
+            with self.subTest(alias_kind=alias_kind), tempfile.TemporaryDirectory(
+                dir=Path(__file__).parent
+            ) as temporary:
+                root = Path(temporary)
+                fixture = ReleaseFixture(root)
+                manifest = fixture.write()
+                baseline = root / "baseline.txt"
+                route = root / "route.txt"
+                audit = root / "audit.txt"
+                report = root / "measurement.json"
+                baseline.write_text(
+                    "BASELINE_VERSION 1\nHOT_CEILING 1\n"
+                    "HOT _game_loop_one_iteration ___mulsf3 1\n",
+                    encoding="utf-8",
+                )
+                route.write_text(
+                    "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                    encoding="utf-8",
+                )
+                audit.write_bytes(route.read_bytes())
+                if alias_kind == "symlink":
+                    probe = root / "symlink-probe"
+                    try:
+                        probe.symlink_to(baseline)
+                    except (OSError, NotImplementedError):
+                        continue
+                    probe.unlink()
+                originals = {
+                    path: path.read_bytes()
+                    for path in (
+                        fixture.outputs["elf"], baseline, route, audit, manifest
+                    )
+                }
+                calls: list[list[str]] = []
+
+                def fake_command(command: list[str]) -> str:
+                    calls.append(command)
+                    if command[1] == "-d":
+                        return disassembly
+                    if command[1] == "-SW":
+                        return sections
+                    if command[1] == "-sW":
+                        return symbols
+                    if command[1] == "--debug-dump=decodedline":
+                        if alias_kind == "hardlink":
+                            os.link(baseline, report)
+                        else:
+                            report.symlink_to(baseline)
+                        return "fixture.c 1 0x06001000\n"
+                    raise AssertionError(command)
+
+                with patch.object(
+                    verifier, "run_command", side_effect=fake_command
+                ), patch.object(
+                    verifier, "verify_baseline_integrity"
+                ), patch.object(
+                    verifier, "verify_route_oracle_integrity"
+                ), patch.object(
+                    verifier, "prove_sourceboot_bob_null_camera_triggers",
+                    return_value=False,
+                ), patch.object(
+                    verifier, "source_locations", return_value={}
+                ):
+                    self.assertEqual(verifier.main([
+                        str(fixture.outputs["elf"]), str(baseline),
+                        "--route-oracle", str(route),
+                        "--audit-route-oracle", str(audit),
+                        "--measure-audit-report", str(report),
+                        "--release-manifest", str(manifest),
+                        "--objdump", "objdump", "--readelf", "readelf",
+                        "--addr2line", "addr2line",
+                    ]), 2)
+                self.assertEqual(len(calls), 4)
+                for path, original in originals.items():
+                    self.assertEqual(path.read_bytes(), original)
+
     def test_v4_cli_requires_release_manifest_before_tools_or_pin_lookup(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
             root = Path(temporary)

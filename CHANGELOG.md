@@ -85,10 +85,14 @@
 
 - Hardened native-math audit-v4 publication and CLI preflight after review
   exposed three fail-closed gaps. The one-shot sealer now writes and fsyncs a
-  privately owned same-directory file before using Task 7's atomic no-clobber
-  namespace publication, so readers can observe only an absent or complete
-  contract; ambiguous crash/race state is retained with diagnostics instead
-  of unlinking a potentially replaced path. Measurement output now rejects
+  privately owned same-directory file before atomically publishing the exact
+  held object (handle-based exclusive rename on Windows; held-fd exclusive
+  hardlink on POSIX), so a substituted private name cannot become the contract
+  and readers observe only absent or complete bytes. Ambiguous private state is
+  retained with diagnostics instead of unlinking a potentially replaced path.
+  Measurement output now uses the same complete-private, atomic no-clobber
+  publication and refuses preexisting outputs, so late aliases introduced
+  after tool execution cannot redirect writes. Its preflight also rejects
   lexical, Windows-casefold, symlink, and hardlink aliases of every read input
   before release verification or SH tools, and `--release-manifest` is accepted
   only for parsed audit v4 or explicitly unsealed measurement mode. Historical

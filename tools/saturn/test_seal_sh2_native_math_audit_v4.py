@@ -22,8 +22,8 @@ from hermetic_manifest import canonical_json_bytes
 from test_release_manifest import ReleaseFixture
 
 import release_manifest
+import path_identity
 import seal_sh2_native_math_audit_v4 as sealer
-import stage_saturn_release as staging
 
 
 class AuditV4SealerTests(unittest.TestCase):
@@ -269,13 +269,15 @@ class AuditV4SealerTests(unittest.TestCase):
 
     def test_publish_race_never_clobbers_concurrent_final(self) -> None:
         concurrent = b"concurrent winner\n"
-        real_rename = staging._rename_noreplace
+        real_publish = path_identity._publish_held_file
 
-        def race(namespace, source, target, adapter):
-            (namespace.path / target).write_bytes(concurrent)
-            return real_rename(namespace, source, target, adapter)
+        def race(descriptor, namespace, private_name, target_name):
+            (namespace.path / target_name).write_bytes(concurrent)
+            return real_publish(
+                descriptor, namespace, private_name, target_name
+            )
 
-        with patch.object(staging, "_rename_noreplace", side_effect=race):
+        with patch.object(path_identity, "_publish_held_file", side_effect=race):
             with self.assertRaises(FileExistsError) as caught:
                 sealer.seal_v4_contract(self.measurement, self.manifest, self.output)
         self.assertEqual(self.output.read_bytes(), concurrent)
@@ -284,14 +286,16 @@ class AuditV4SealerTests(unittest.TestCase):
     def test_replaced_private_name_is_retained_without_cleanup(self) -> None:
         replacement = b"do not delete a concurrent replacement\n"
 
-        def replace_private(namespace, source, target, adapter):
-            original = namespace.path / source
-            displaced = namespace.path / f"{source}.displaced"
+        def replace_private(descriptor, namespace, private_name, target_name):
+            original = namespace.path / private_name
+            displaced = namespace.path / f"{private_name}.displaced"
             original.rename(displaced)
             original.write_bytes(replacement)
             raise OSError("simulated rename failure")
 
-        with patch.object(staging, "_rename_noreplace", side_effect=replace_private):
+        with patch.object(
+            path_identity, "_publish_held_file", side_effect=replace_private
+        ):
             with self.assertRaisesRegex(OSError, "simulated rename failure") as caught:
                 sealer.seal_v4_contract(self.measurement, self.manifest, self.output)
         self.assertFalse(self.output.exists())
@@ -299,6 +303,59 @@ class AuditV4SealerTests(unittest.TestCase):
         self.assertGreaterEqual(len(retained), 2)
         self.assertIn(replacement, [path.read_bytes() for path in retained])
         self.assertTrue(any("retained" in note for note in caught.exception.__notes__))
+
+    def test_source_substitution_before_publish_cannot_publish_foreign_bytes(self) -> None:
+        foreign = b"substituted foreign bytes\n"
+
+        def substitute(namespace, private_name: str) -> None:
+            private = namespace.path / private_name
+            private.rename(namespace.path / f"{private_name}.displaced")
+            private.write_bytes(foreign)
+
+        real_publish = path_identity._publish_held_file
+
+        def exact_race(descriptor, namespace, private_name, target_name):
+            substitute(namespace, private_name)
+            return real_publish(
+                descriptor, namespace, private_name, target_name
+            )
+
+        with patch.object(
+            path_identity, "_publish_held_file", side_effect=exact_race
+        ):
+            raw = sealer.seal_v4_contract(
+                self.measurement, self.manifest, self.output
+            )
+        self.assertEqual(self.output.read_bytes(), raw)
+        self.assertNotEqual(self.output.read_bytes(), foreign)
+        self.assertIn(
+            foreign,
+            [
+                path.read_bytes()
+                for path in self.root.glob(".sm64-saturn-private-audit-v4.txt-*")
+                if path.is_file()
+            ],
+        )
+
+        class PosixNamespace:
+            _fd = 19
+
+        with patch.object(path_identity.Path, "is_dir", return_value=True), \
+                patch.object(path_identity.os, "link") as link:
+            path_identity._publish_posix_handle(
+                23, PosixNamespace(), "final.txt"
+            )
+        link.assert_called_once_with(
+            "/proc/self/fd/23",
+            "final.txt",
+            dst_dir_fd=19,
+            follow_symlinks=True,
+        )
+        with patch.object(path_identity.Path, "is_dir", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "unsupported"):
+                path_identity._publish_posix_handle(
+                    23, PosixNamespace(), "final.txt"
+                )
 
     def test_sealer_rejects_output_aliases_to_read_inputs(self) -> None:
         for name, source in (

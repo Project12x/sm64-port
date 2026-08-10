@@ -27,8 +27,8 @@ from time import monotonic
 from typing import Any, Callable, Iterable
 
 import release_manifest as release_manifest_module
-from hermetic_manifest import canonical_json_bytes, write_if_changed
-from path_identity import reject_output_input_aliases
+from hermetic_manifest import canonical_json_bytes
+from path_identity import publish_new_bytes, reject_output_input_aliases
 
 
 @dataclass(frozen=True)
@@ -6182,6 +6182,14 @@ def main(argv: list[str] | None = None) -> int:
                 if path is not None
             )
             reject_output_input_aliases(args.measure_audit_report, read_inputs)
+            if (
+                args.measure_audit_report.exists()
+                or args.measure_audit_report.is_symlink()
+            ):
+                raise ValueError(
+                    "refusing to overwrite measurement output: "
+                    f"{args.measure_audit_report}"
+                )
         if (
             args.release_manifest is not None
             and args.measure_audit_report is None
@@ -6529,11 +6537,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if measurement_document is not None:
         try:
-            write_if_changed(
+            publish_new_bytes(
                 args.measure_audit_report,
                 canonical_json_bytes(measurement_document),
+                existing_error=(
+                    "refusing to overwrite measurement output: "
+                    f"{args.measure_audit_report}"
+                ),
             )
-        except OSError as error:
+        except (OSError, RuntimeError, ValueError) as error:
             print(f"SH-2 native-math census ERROR: {error}", file=sys.stderr)
             return 2
     return 0

@@ -7,19 +7,12 @@ import argparse
 import hashlib
 import json
 import os
-import stat
 from pathlib import Path
 from typing import Any
 
 from hermetic_manifest import canonical_json_bytes
-from path_identity import reject_output_input_aliases
-from release_manifest import (
-    DirectoryNamespaceGuard,
-    _file_identity,
-    _is_reparse,
-    verify_release_manifest,
-)
-import stage_saturn_release as staging
+from path_identity import publish_new_bytes, reject_output_input_aliases
+from release_manifest import DirectoryNamespaceGuard, verify_release_manifest
 
 
 MEASUREMENT_SCHEMA = "sm64-saturn-native-math-measurement-v1"
@@ -88,66 +81,12 @@ def _fsync_directory(namespace: DirectoryNamespaceGuard) -> None:
 
 def _write_exclusive(path: Path, raw: bytes) -> None:
     """Privately write, durably flush, then atomically publish one new file."""
-    path = path.absolute()
-    adapter = staging._resolve_atomic_rename_adapter()
-    private_name: str | None = None
-    try:
-        with DirectoryNamespaceGuard(path.parent) as namespace:
-            try:
-                namespace.lstat_child(path.name)
-            except FileNotFoundError:
-                pass
-            else:
-                raise ValueError(f"refusing to overwrite audit contract: {path}")
-            for _attempt in range(32):
-                candidate = staging._unique_name("private", path.name)
-                try:
-                    descriptor = namespace.open_child(
-                        candidate, staging._exclusive_flags(), 0o644
-                    )
-                except FileExistsError:
-                    continue
-                private_name = candidate
-                break
-            else:
-                raise RuntimeError("could not allocate private audit contract")
-            try:
-                with os.fdopen(descriptor, "wb") as stream:
-                    written = stream.write(raw)
-                    if written != len(raw):
-                        raise OSError(
-                            f"short private audit contract write: {written}/{len(raw)}"
-                        )
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                    opened = os.fstat(stream.fileno())
-                current = namespace.lstat_child(private_name)
-                namespace.require_current()
-                if (
-                    _file_identity(opened) != _file_identity(current)
-                    or not stat.S_ISREG(current.st_mode)
-                    or stat.S_ISLNK(current.st_mode)
-                    or _is_reparse(current)
-                    or current.st_nlink != 1
-                    or current.st_size != len(raw)
-                ):
-                    raise ValueError(
-                        "private audit contract was replaced, aliased, or truncated"
-                    )
-                staging._rename_noreplace(
-                    namespace, private_name, path.name, adapter
-                )
-                private_name = None
-                _fsync_directory(namespace)
-            except BaseException as error:
-                if private_name is not None:
-                    error.add_note(
-                        "private audit publication state retained without cleanup: "
-                        f"{namespace.path / private_name}"
-                    )
-                raise
-    except FileExistsError:
-        raise
+    publish_new_bytes(
+        path,
+        raw,
+        existing_error=f"refusing to overwrite audit contract: {path}",
+        fsync_directory=_fsync_directory,
+    )
 
 
 def seal_v4_contract(
