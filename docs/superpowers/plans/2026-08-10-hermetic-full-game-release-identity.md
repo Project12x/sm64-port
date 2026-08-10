@@ -864,10 +864,11 @@ Task 3 already exposed a reviewed flag-style CLI rather than subcommands. Task
 Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
 of inventing a second interface.
 
-**Live status (2026-08-10):** `source-complete` in behavior commit `b1d75772`
-(`feat(saturn): integrate hermetic sourceboot sealing`). The first independent
-review verdict is `Needs fixes`; repair round 1 is active. Host/dry-run TDD covers stage
-isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
+**Live status (2026-08-10):** repair round 1 is `source-complete` in commit
+`b2ea338c` (`fix(saturn): match hermetic scans to Yaul`) after the original
+behavior commit `b1d75772`. The first independent-review verdict remains
+`Needs fixes` until controller-owned rereview clears the repair. Host/dry-run
+TDD covers stage isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
 propagation, explicit closure classification and identity-cycle breaking,
 post-link dependency/external equality, release cleanliness dispatch, live
 toolchain verification, and stale closure/attestation failure. Generated `.sx`
@@ -883,16 +884,27 @@ rule does not. Important findings require discovery scans to be fresh when
 flags/specs change, full C++ discovery/prefix-map support for the eventual full
 game, fail-closed rejection of aliased closure/handoff output paths before I/O,
 and dry-run tests that prove exact expanded inventory/argv parity rather than
-source-token presence. Task 6 remains `active`; no target or release-evidence
-gate is closed by the repair.
+source-token presence. The repair now uses distinct C/C++/`.sx` scanners,
+forces discovery depfiles fresh on every discovery stage, applies all three
+prefix maps to C++, and rejects resolved closure/handoff output aliases before
+any publication. The Make regression extracts its real compile models from the
+checked-in pinned Yaul rules and proves exact 223 C + 4 `.sx` default coverage,
+four post-link `.sx` scans, and an injected one-C++ 228-source inventory. Task 6
+remains `active`; no target or release-evidence gate is closed by the repair.
 
-Fresh post-commit verification passed all four exact suites: 5 Make + 15
+Repair TDD RED comprised four focused failures: aliased outputs were accepted;
+`.sx` discovery retained an extra `-specs=sourceboot.specs`; a cached `main.c`
+depfile suppressed the second scan after flag drift; and the injected C++ source
+was absent from discovery. Final exact GREEN is 7 Make + 15 bootstrap + 17
+closure + 15 attestation = 54 host tests, with one legitimate Windows
+case-spelling skip. Rereview and every real-target/release gate remain open.
+
+The initial implementation's post-commit verification passed 5 Make + 15
 bootstrap + 16 closure + 15 attestation = 51 host tests, with one legitimate
-case-spelling skip on this Windows filesystem. Self-review of
-`57da18b7..b1d75772` found no defects in flag parity, stage isolation, `.sx`
-coverage, cycle breaking, post-link equality, release cleanliness, or stale-spec
-failure. The source/documentation portion of Step 8 is complete; its checkbox
-remains open pending the required independent reviews.
+case-spelling skip on this Windows filesystem. Its no-findings self-review was
+superseded by the independent `Needs fixes` verdict and repair above. The
+source/documentation portion of Step 8 is complete; its checkbox remains open
+pending the required independent rereview.
 
 - [x] **Step 1: Write failing Make-contract tests**
 
