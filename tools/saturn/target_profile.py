@@ -141,6 +141,31 @@ def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[
     return document, manifest, tuple(requested_paths)
 
 
+def _preflight_descriptor_payload_paths(root: Path, descriptor_path: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Classify descriptor paths before a missing spelling can hide a collision."""
+    document = _read_object(root / descriptor_path, "package descriptor")
+    _require_keys(document, {"schema", "package_class", "package_id", "inputs"}, "package descriptor")
+    if document["schema"] != DESCRIPTOR_SCHEMA or document["package_class"] not in PACKAGE_CLASSES:
+        raise ValueError("package descriptor schema or package_class is invalid")
+    if not isinstance(document["package_id"], str) or not document["package_id"]:
+        raise ValueError("package descriptor package_id is invalid")
+    inputs = document["inputs"]
+    if not isinstance(inputs, list) or not inputs:
+        raise ValueError("package descriptor has missing payloads")
+    requested: list[str] = []
+    normalized: list[str] = []
+    for item in inputs:
+        if not isinstance(item, dict) or set(item) != {"path"} or not isinstance(item["path"], str):
+            raise ValueError("package descriptor input is invalid")
+        requested.append(item["path"].replace("\\", "/"))
+        normalized.append(normalize_repo_path(root, item["path"]))
+    reject_case_collisions(requested)
+    reject_case_collisions(normalized)
+    if len(set(normalized)) != len(normalized):
+        raise ValueError("package descriptor has duplicate payload paths")
+    return tuple(requested), tuple(normalized)
+
+
 def _revalidate_measurements(root: Path, measurements: Mapping[str, str]) -> None:
     """Fail before publication if any bytes changed after their first hash."""
     for relative, expected in sorted(measurements.items(), key=lambda item: item[0].encode("utf-8")):
@@ -166,9 +191,18 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
     package_rows: list[dict[str, str]] = []
     per_class: dict[str, list[dict[str, Any]]] = {kind: [] for kind in PACKAGE_CLASSES}
     seen_tuples: set[tuple[str, str]] = set()
-    payload_paths: list[str] = []
-    requested_payload_paths: list[str] = []
+    payload_paths = []
+    requested_payload_paths = []
     measurements: dict[str, str] = {}
+    for descriptor_path in profile["package_descriptors"]:
+        requested, normalized = _preflight_descriptor_payload_paths(root, descriptor_path)
+        requested_payload_paths.extend(requested)
+        payload_paths.extend(normalized)
+    reject_case_collisions(requested_payload_paths)
+    reject_case_collisions(payload_paths)
+    if len(set(payload_paths)) != len(payload_paths):
+        raise ValueError("target profile has duplicate payload paths")
+
     for descriptor_path in profile["package_descriptors"]:
         descriptor, manifest, requested_paths = _descriptor(root, descriptor_path)
         package_key = (descriptor["package_class"], descriptor["package_id"])
@@ -176,9 +210,7 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
             raise ValueError(f"duplicate package class/id tuple: {package_key}")
         seen_tuples.add(package_key)
         measurements[descriptor_path] = manifest["source_descriptor_sha256"]
-        requested_payload_paths.extend(requested_paths)
         for item in manifest["inputs"]:
-            payload_paths.append(item["path"])
             measurements[item["path"]] = item["sha256"]
         manifest_canonical = canonical_json_bytes(manifest)
         manifest_sha256 = hashlib.sha256(manifest_canonical).hexdigest()
@@ -187,11 +219,6 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
             "manifest_sha256": manifest_sha256,
         })
         per_class[descriptor["package_class"]].append(manifest)
-
-    reject_case_collisions(requested_payload_paths)
-    reject_case_collisions(payload_paths)
-    if len(set(payload_paths)) != len(payload_paths):
-        raise ValueError("target profile has duplicate payload paths")
 
     output_dir = output_dir.resolve()
     package_class_manifests: dict[str, Path] = {}

@@ -14,7 +14,8 @@
 ### Fixed
 
 - Hardened deterministic target-profile sealing after review: payload identity
-  now rejects duplicate or case-fold-colliding paths across descriptors,
+  now preflights and rejects duplicate or case-fold-colliding paths across
+  descriptors before a missing spelling can hide the collision,
   rehashes every measured descriptor and payload immediately before each
   aggregate publication, and rejects relative output-name escapes. This closes
   cross-package ambiguity and mutation windows that could otherwise publish a
