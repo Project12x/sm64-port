@@ -864,17 +864,17 @@ Task 3 already exposed a reviewed flag-style CLI rather than subcommands. Task
 Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
 of inventing a second interface.
 
-**Live status (2026-08-10):** repair round 1 is `source-complete` in commit
+**Live status (2026-08-10):** Task 6 is `complete`; repair round 1 landed in commit
 `b2ea338c` (`fix(saturn): match hermetic scans to Yaul`) after the original
-behavior commit `b1d75772`. The first independent-review verdict remains
-`Needs fixes` until controller-owned rereview clears the repair. Host/dry-run
+behavior commit `b1d75772`, and scoped independent rereview cleared every
+finding with no new Critical or Important breakage. Host/dry-run
 TDD covers stage isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
 propagation, explicit closure classification and identity-cycle breaking,
 post-link dependency/external equality, release cleanliness dispatch, live
 toolchain verification, and stale closure/attestation failure. Generated `.sx`
 sources now live in the stable generated-input directory so discovery and build
 name identical inputs rather than requiring an identity to discover itself. No
-real SH-2 build was run; independent review and every target/release evidence
+real SH-2 build was run; every target/release evidence
 gate remain open.
 
 **Review repair round 1 (2026-08-10):** the reviewer confirmed the staged
@@ -889,22 +889,24 @@ forces discovery depfiles fresh on every discovery stage, applies all three
 prefix maps to C++, and rejects resolved closure/handoff output aliases before
 any publication. The Make regression extracts its real compile models from the
 checked-in pinned Yaul rules and proves exact 223 C + 4 `.sx` default coverage,
-four post-link `.sx` scans, and an injected one-C++ 228-source inventory. Task 6
-remains `active`; no target or release-evidence gate is closed by the repair.
+four post-link `.sx` scans, and an injected one-C++ 228-source inventory. Scoped
+rereview marked all five findings `ADDRESSED` and found no new Critical or
+Important breakage. Task 6 is `complete`; no target or release-evidence gate is
+closed by the repair.
 
 Repair TDD RED comprised four focused failures: aliased outputs were accepted;
 `.sx` discovery retained an extra `-specs=sourceboot.specs`; a cached `main.c`
 depfile suppressed the second scan after flag drift; and the injected C++ source
 was absent from discovery. Final exact GREEN is 7 Make + 15 bootstrap + 17
 closure + 15 attestation = 54 host tests, with one legitimate Windows
-case-spelling skip. Rereview and every real-target/release gate remain open.
+case-spelling skip. Rereview is approved; every real-target/release gate remains
+open.
 
 The initial implementation's post-commit verification passed 5 Make + 15
 bootstrap + 16 closure + 15 attestation = 51 host tests, with one legitimate
 case-spelling skip on this Windows filesystem. Its no-findings self-review was
 superseded by the independent `Needs fixes` verdict and repair above. The
-source/documentation portion of Step 8 is complete; its checkbox remains open
-pending the required independent rereview.
+source/documentation and independent-review portions of Step 8 are complete.
 
 - [x] **Step 1: Write failing Make-contract tests**
 
@@ -1036,7 +1038,7 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 
 Do not claim a real SH build in this task.
 
-- [ ] **Step 8: Update build guide, changelog, ledgers, commit, and review**
+- [x] **Step 8: Update build guide, changelog, ledgers, commit, and review**
 
 Document `SOURCEBOOT_TARGET_PROFILE`, development versus release mode, generated manifest locations, and the five-stage failure boundary in `docs/saturn/BUILDING.md`.
 
