@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Bound sourceboot's custom SH inspection-tool paths to the host executable
+  suffix. MSYS can launch an extensionless `sh-elf-readelf` command on Windows,
+  but the attestation deliberately measures a concrete file and correctly
+  rejected that non-file spelling while the installation contains
+  `sh-elf-readelf.exe`. Objdump, readelf, and addr2line now select `.exe` only
+  under `OS=Windows_NT`; non-Windows paths and all pinned tool bytes are
+  unchanged, and later native-math verification consumes the same exact files.
+
 - Deduplicated exact CLI tool paths when composing the sourceboot toolchain's
   canonical binary set. Yaul invokes `sh-elf-gcc.exe` as both compiler and
   linker driver, so treating role repetition as two binary records rejected

@@ -1795,6 +1795,18 @@ change. The closure bytes existed only as an uncommitted `.tmp`; the combined
 closure/attestation publication, compile, link, and release gates remain open
 pending the exact rerun.
 
+The run from `a35c2a93` again built the closure `.tmp` and advanced through the
+shared compiler/linker-driver topology, then attestation rejected the literal
+extensionless Windows path `sh-elf-readelf` because the installed concrete file
+is `sh-elf-readelf.exe`. MSYS command lookup hides that distinction during
+execution, but a byte attestation must not. Sourceboot now defines a Windows-only
+`.exe` suffix for its custom objdump/readelf/addr2line bindings; non-Windows
+spelling is unchanged, and both attestation and native-math verification consume
+the same exact files. Focused Make TDD was RED at 10/11 and GREEN at 11/11.
+Reference record: close-port reuse of `HOST_EXEEXT` in the in-tree
+`Makefile.saturn.mk` at `a35c2a93`; no external source or license/notice change.
+Atomic discovery publication and downstream target/release gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

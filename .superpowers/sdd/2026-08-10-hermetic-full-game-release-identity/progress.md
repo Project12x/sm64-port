@@ -1057,6 +1057,17 @@
   rejection. TDD RED was 15/16; GREEN is 16/16. Reference: clean-room use of
   the in-tree Task 3 binary-set schema and pinned Yaul variables at `f9b1345e`;
   no external source or license/notice change. Candidate A remains open.
+- Candidate A from `a35c2a93` built closure `.tmp` and passed shared-role
+  deduplication, then attestation rejected extensionless Windows
+  `sh-elf-readelf` because the concrete file is `sh-elf-readelf.exe`. MSYS can
+  execute the former spelling, but byte attestation correctly requires a file;
+  atomic discovery publication and downstream gates remain open.
+- Tool-binding correction: sourceboot custom objdump/readelf/addr2line paths
+  use `.exe` only under `OS=Windows_NT`; non-Windows and pinned bytes are
+  unchanged, and native-math verification consumes the same paths. TDD RED was
+  10/11; GREEN is 11/11. Reference: close-port reuse of in-tree
+  `Makefile.saturn.mk` `HOST_EXEEXT` at `a35c2a93`; no external source or
+  license/notice change. Candidate A remains open pending exact rerun.
 
 ## Task 5 review repair round 2
 

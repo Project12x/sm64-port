@@ -308,6 +308,10 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("--actual-depfile", makefile)
         self.assertIn("--assembly-scan-depfile", makefile)
         self.assertEqual(makefile.count('--dependency-base "$(CURDIR)"'), 2)
+        self.assertIn("SOURCEBOOT_SH_EXEEXT := .exe", makefile)
+        self.assertIn("-objdump$(SOURCEBOOT_SH_EXEEXT)", makefile)
+        self.assertIn("-readelf$(SOURCEBOOT_SH_EXEEXT)", makefile)
+        self.assertIn("-addr2line$(SOURCEBOOT_SH_EXEEXT)", makefile)
 
     def test_compiled_source_handoff_resolves_sourceboot_relative_paths(self) -> None:
         makefile = self.sourceboot_makefile()
