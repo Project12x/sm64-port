@@ -1081,8 +1081,8 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
 **Live status (2026-08-10):** repair round 1 is `source-complete` in behavior
-commit `bb5a840d`; source status is recorded by this documentation commit.
-Controller-owned scoped rereview remains pending, so the first `Needs fixes`
+commit `bb5a840d`, but scoped rereview left the namespace-race portion of
+Finding 1 `NOT ADDRESSED`; repair round 2 is active. The first `Needs fixes`
 verdict is still effective. Fresh post-commit host
 verification passes all seven exact suites at
 24 + 9 + 41 + 12 + 4 + 9 + 7 = 106 tests and adjacent identity/bootstrap/boot-
@@ -1120,13 +1120,23 @@ child exit when Ymir outlives the bounded monitor. Task 7 is `source-complete`
 but not `complete` until controller-owned rereview clears; every target and
 release-evidence gate remains open.
 
+Repair-round-1 rereview marked profile binding, host-neutral schema validation,
+real v1 compatibility, and semantic comparison `ADDRESSED`. Immutable consumer
+snapshots also cleared, but staging/manifest acquisition still use path checks
+separately from open/unlink operations: a swapped ancestor can redirect writes,
+rollback can unlink a foreign replacement, manifest selection can be swapped
+between check/read, and final verification does not reject an extra staged file.
+Round 2 must use race-resistant opened-file/directory identity or private-tree
+atomic publication, exact final inventory, and rollback that never deletes an
+unproven path. Host evidence cannot close any target gate.
+
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
 surfacing only as a downstream digest mismatch, and the explicit v1 occupancy
 compatibility spec must reproduce the exact ELF identity bytes. No further
 source finding remained before independent review. One initial adjacent command named two tests
 incorrectly and was discarded; the corrected fail-fast rerun is the 53-test
-result above. Step 8 remains open for scoped rereview and review-closeout
+result above. Step 8 remains open for repair round 2, scoped rereview, and review-closeout
 status update.
 
 - [x] **Step 1: Write failing release and staging tests**
