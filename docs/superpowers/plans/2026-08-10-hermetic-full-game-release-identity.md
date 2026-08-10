@@ -48,20 +48,22 @@
 
 ### Task 1: Canonical manifests, target profiles, and package-set aggregation
 
-**Execution status (2026-08-10):** `source-complete` at Task 1 dispatch base
-`da15bd4857691fde83d0808400aca2c6ea715144`; focused host contract passed with
+**Execution status (2026-08-10):** `complete` from Task 1 dispatch base
+`da15bd4857691fde83d0808400aca2c6ea715144`; source commit `0f01c14d` and repair
+commits `b8f6f5e8` / `b345dd15` passed the focused host contract with
 `.\\.venv-saturn-tools\\Scripts\\python.exe tools\\saturn\\test_target_profile.py`
-(8 tests) and scoped `git diff --check`. The canonical profile binds only
+(11 tests after repair) and scoped `git diff --check`. The canonical profile binds only
 descriptor-selected measured payloads; the BOB profile carries the accepted
 Task 5 flag tuple, while `sm64-saturn-full` declares every class but is
 intentionally non-release-enabled with no invented game-inventory assertion.
 The first independent combined specification/code-quality review returned
-`Needs fixes`; repair commits `b8f6f5e8` and `b345dd15` record closure-wide exact duplicate and
+`Needs fixes`; the repairs record closure-wide exact duplicate and
 case-fold-colliding payload rejection, pre-publication descriptor/payload
 remeasurement, and relative output-name escape rejection with focused tests.
-Those review gates remain uncleared pending rereview. Target build,
-reproducibility, audit, complete package, 20,100-frame smoke, visual, and
-manual-play gates remain open.
+Scoped rereview found every finding addressed with no new Critical/Important
+breakage, clearing both Task 1 review gates. Target build, reproducibility,
+audit, complete package, 20,100-frame smoke, visual, and manual-play gates
+remain open.
 
 **Files:**
 - Create: `tools/saturn/hermetic_manifest.py`
@@ -89,11 +91,11 @@ manual-play gates remain open.
 - Produces: `resolve_target_profile(root: Path, profile_path: Path, effective_config: Mapping[str, int], output_dir: Path, mode: Literal['development', 'release']) -> ResolvedTargetProfile`.
 - Package classes are `route`, `input`, `camera`, `cart`, `level`, `shared-data`, `actor`, `animation`, `audio`, and `texture`. The first nine map to the legacy identity fields; `texture` is covered by the v2 package-set root because v1 has no texture-specific field.
 
-- [ ] **Step 1: Create the SDD ledger and record the reconciled starting point**
+- [x] **Step 1: Create the SDD ledger and record the reconciled starting point**
 
 Record design commit `69c83a3f`, implementation-plan commit `15289cd6`, the actual Task 1 implementation base at dispatch, the pre-existing blocked Task 3 plan annotations, the unrelated dirty paths, Task 1 status `active`, and every open target gate. Do not stage another campaign's SDD files.
 
-- [ ] **Step 2: Write failing canonicalization, path, profile, and package tests**
+- [x] **Step 2: Write failing canonicalization, path, profile, and package tests**
 
 Add tests with these behaviors:
 
@@ -139,7 +141,7 @@ def test_incomplete_full_game_profile_cannot_release(self) -> None:
 
 The synthetic profile contains two packages in each shipped-content class (`level`, `shared-data`, `actor`, `animation`, `audio`, `texture`) and one package in each control class (`route`, `input`, `camera`, `cart`), for 16 packages. Mutate one package in each class and assert only its class aggregate plus the overall package-set root changes. Reject missing payloads, duplicate class/id tuples, duplicate manifest paths, unknown keys, invalid schema, non-integer config values, absolute paths, escaping paths, and case-fold collisions.
 
-- [ ] **Step 3: Run the focused tests and observe RED**
+- [x] **Step 3: Run the focused tests and observe RED**
 
 Run:
 
@@ -149,7 +151,7 @@ Run:
 
 Expected: import failure for absent `hermetic_manifest` or `target_profile`.
 
-- [ ] **Step 4: Implement the canonical manifest primitives**
+- [x] **Step 4: Implement the canonical manifest primitives**
 
 Use these exact serialization and path rules:
 
@@ -175,7 +177,7 @@ def normalize_repo_path(root: Path, value: str | Path) -> str:
 
 `write_if_changed()` must write a sibling `.tmp`, flush/close it, and replace the destination only after complete bytes exist. Remove the temporary file on failure without touching a valid previous destination.
 
-- [ ] **Step 5: Implement package descriptor and profile resolution**
+- [x] **Step 5: Implement package descriptor and profile resolution**
 
 Package descriptors use this checked-in shape:
 
@@ -208,7 +210,7 @@ package_rows.sort(key=lambda row: (
 
 The resolved profile contains schema, profile id, release-enabled flag, exact effective config, sorted package-manifest records, output names `elf`, `source_dat`, `iso`, `cue`, and no source-machine paths. Release mode requires `release_enabled: true` and exact equality with the profile's `release_config`.
 
-- [ ] **Step 6: Add the real BOB descriptors and both checked-in profiles**
+- [x] **Step 6: Add the real BOB descriptors and both checked-in profiles**
 
 The BOB profile locks the accepted Task 5 flag tuple from the previous plan: demo/replay/live input enabled, 600 bootstrap ticks, level 9 area 1 route 0, camera route 0 variant 3, 32-Mbit cart, 8 staging sectors, pipe 4, hot/near/BSP enabled, polygon tier 2, complete Mario animation and dynamic actor closure enabled, semantic audio disabled, and object-pool capacity 208.
 
@@ -218,7 +220,7 @@ The BOB profile locks the accepted Task 5 flag tuple from the previous plan: dem
 
 The full-game profile has `profile_id: "sm64-saturn-full"`, `release_enabled: false`, all ten package classes declared, and no invented assertion that the missing game inventory is complete. Its release rejection is part of the contract.
 
-- [ ] **Step 7: Run focused tests and inspect deterministic outputs**
+- [x] **Step 7: Run focused tests and inspect deterministic outputs**
 
 Run:
 
@@ -229,7 +231,7 @@ git diff --check -- tools/saturn/hermetic_manifest.py tools/saturn/target_profil
 
 Expected: all tests pass; no whitespace errors.
 
-- [ ] **Step 8: Update changelog and ledgers, commit, and obtain both reviews**
+- [x] **Step 8: Update changelog and ledgers, commit, and obtain both reviews**
 
 Mark Task 1 `source-complete`, list the exact test command, and keep all target gates open. Commit only Task 1 files:
 
