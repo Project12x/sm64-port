@@ -30,8 +30,10 @@ _TOOL_ARGUMENTS = (
     ("nm", "nm"), ("objcopy", "objcopy"), ("objdump", "objdump"),
     ("readelf", "readelf"), ("addr2line", "addr2line"),
 )
-_POSIX_ABSOLUTE_PATH = re.compile(r"(?<![:/])/(?!/)")
+_POSIX_ABSOLUTE_PATH = re.compile(r"(?:^|[\s\"'=:(\[,;])/(?!/)")
 _WINDOWS_ABSOLUTE_PATH = re.compile(r"(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/]|\\\\)")
+_LOCAL_FILE_URI_PATH = re.compile(r"\bfile:(?://)?/", re.IGNORECASE)
+_FORWARD_NETWORK_ROOT = re.compile(r"(?<![:/])//[^/\s]+(?:/|$)")
 
 
 @dataclass(frozen=True)
@@ -299,7 +301,8 @@ def _validate_component_version(value: Any) -> None:
     """Keep component metadata portable rather than sealing host install paths."""
     if not isinstance(value, str) or not value:
         raise ValueError("toolchain component version is invalid")
-    if _POSIX_ABSOLUTE_PATH.search(value) or _WINDOWS_ABSOLUTE_PATH.search(value):
+    if (_POSIX_ABSOLUTE_PATH.search(value) or _WINDOWS_ABSOLUTE_PATH.search(value)
+            or _LOCAL_FILE_URI_PATH.search(value) or _FORWARD_NETWORK_ROOT.search(value)):
         raise ValueError("toolchain component version contains an absolute path")
 
 

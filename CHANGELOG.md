@@ -36,6 +36,12 @@
   host-specific compiler banner from changing a portable release identity; the
   pinned Yaul metadata and every explicit tool path remain required.
 
+- Closed the remaining toolchain-version path form bypasses from rereview.
+  The shared validator now also rejects case-insensitive local `file:` URI
+  paths and forward-slash network roots while accepting ordinary relative
+  version metadata, so compiler banners cannot encode an install host through
+  an alternative absolute-path spelling.
+
 - Hardened source-closure release cleanliness after review. Generated inputs
   outside `build/` now receive the same Git tracking/dirty check as checked-in
   source inputs, while deterministic ignored build outputs remain allowed.

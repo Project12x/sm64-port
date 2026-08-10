@@ -426,8 +426,11 @@ Status: `source-complete`; the first independent combined specification/code-
 quality review returned `Needs fixes` because an unchecked compiler-version
 string could serialize an absolute host path. The focused repair rejects
 absolute POSIX/Windows paths from programmatic component versions and GCC
-stdout before publication; rereview is active and both review gates remain
-open. `external_dependency_keys` use `(component_id, component-relative path)`,
+stdout before publication, but round 1 rereview found `file:///...` and
+`//host/path` bypasses. Repair round 2 rejects those forms while preserving
+ordinary relative version metadata; source-complete rereview is active and both
+review gates remain open. `external_dependency_keys` use
+`(component_id, component-relative path)`,
 and the `yaul-sh-sdk` version string carries Yaul `0.3.1`, pinned commit
 `6012f79f237773378c8014e70d8998ad95a38d98`, and exact GCC `--version` stdout.
 This keeps component install roots diagnostic-only and out of canonical bytes.

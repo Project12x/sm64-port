@@ -169,6 +169,30 @@ class ToolchainAttestationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "version.*absolute path"):
                     build_toolchain_attestation([self.component(version=version)], self.dependencies())
 
+    def test_component_version_rejects_file_uri_and_network_root_paths(self) -> None:
+        for version in ("gcc file:///opt/yaul", "gcc FILE:///opt/yaul", "gcc //host/yaul"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "version.*absolute path"):
+                    build_toolchain_attestation([self.component(version=version)], self.dependencies())
+
+    def test_component_version_accepts_ordinary_compiler_text(self) -> None:
+        built = build_toolchain_attestation(
+            [self.component(version="sh-elf-gcc (GCC) 14.3.0 build=source/tree\nCopyright (C) 2026")],
+            self.dependencies(),
+        )
+        self.assertIn(b"sh-elf-gcc (GCC) 14.3.0 build=source/tree", built.canonical)
+
+    def test_uri_or_network_version_does_not_replace_prior_attestation(self) -> None:
+        output = self.root / "toolchain.json"
+        output.write_bytes(b"known-valid-prior-output\n")
+        for version in ("gcc file:///opt/yaul", "gcc //host/yaul"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "version.*absolute path"):
+                    write_toolchain_attestation(
+                        output, [self.component(version=version)], self.dependencies()
+                    )
+                self.assertEqual(output.read_bytes(), b"known-valid-prior-output\n")
+
     def test_sourceboot_cli_rejects_unpinned_yaul_metadata(self) -> None:
         output = self.root / "toolchain.json"
         for arguments in (
