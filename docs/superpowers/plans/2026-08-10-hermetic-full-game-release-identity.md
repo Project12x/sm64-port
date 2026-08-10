@@ -697,7 +697,7 @@ publish the sibling manifest set transactionally, emit repository-relative
 canonical descriptors/spec bytes, and isolate mutation tests. Focused repair/
 rereview is active; round 1 cleared portability and mutation isolation but kept
 staged-profile revalidation plus exception-preserving, `.tmp`-clean rollback
-open. Repair round 2 is `source-complete` with its commit pending below; 14
+open. Repair round 2 is `source-complete` in commit `c1612fd8`; 14
 focused tests plus 21 identity and 11 target-profile regressions pass (46
 total). Both review gates remain open. The review's request to
 remeasure live compiler/header bytes here was withdrawn: Task 5 validates and
