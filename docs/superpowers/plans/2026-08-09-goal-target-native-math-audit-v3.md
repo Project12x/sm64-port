@@ -46,8 +46,10 @@ full verifier suite ran 229 tests: 228 pass and the documented unrelated
 failure remains open. The direct DLL-safe audit of
 `id-735756402029c2f4` took 391.7 s and exited 0 with audit total 700, no
 unlisted unresolved transfer/effect failure, and neither forbidden caller.
-Self-review checked parser fail-closed behavior, v2 compatibility, fixture
-digest/ELF binding, and the reconciled source-derived owner/candidate changes.
+Independent specification/code-quality review cleared v3's parser,
+digest, exact-ELF binding, fail-fast behavior, v2 preservation, source-derived
+oracle, and documentation requirements: no Critical findings. Its sole
+documentation-gate finding is corrected by this recorded verdict.
 No package, ISO, smoke, visual, or manual-acceptance gate is claimed here.
 Commit: `fix(saturn): bind goal native math audit to sealed target` (this
 Task 1 commit).
@@ -344,13 +346,14 @@ git diff --cached --check
 git commit -m "fix(saturn): bind goal native math audit to sealed target"
 ```
 
-- [x] **Step 10: Self-review specification and code quality**
+- [x] **Step 10: Independent specification and code-quality review**
 
-Self-review against `418161fa..HEAD` checked every v3 design requirement,
-parser fail-closed behavior, v2 compatibility, exact digest/ELF binding,
-source-derived indirect owners, and candidate selection. No repair was
-required. Independent review remains a later integration gate; this task
-does not claim any package, smoke, or owner gate.
+Independent review against `418161fa..373c2640` cleared every v3 design
+requirement, parser fail-closed behavior, v2 compatibility, exact digest/ELF
+binding, source-derived indirect owners, candidate selection, and behavior
+documentation. Verdict: no Critical issues; the only Important issue was this
+missing recorded independent-review outcome, now repaired. This review does
+not claim any package, smoke, or owner gate.
 
 ---
 
@@ -822,7 +825,7 @@ open; do not use the acceptance commit subject.
 - [ ] V3 rejects a wrong ELF before the first SH tool invocation.
 - [ ] Exact ELF and effective-config digests match the approved design.
 - [ ] Verifier and capture suites have fresh, recorded outcomes.
-- [ ] Independent reviews cleared Task 1 and Task 2.
+- [ ] Task 1 independent review cleared; Task 2 review remains pending.
 - [ ] Ordinary target gates, v3 total 700, RAM margins, cart/ISO package, and
   all combined-smoke booleans have artifact-bound evidence.
 - [ ] Screenshot inspection confirms HUD, terrain, and a visible actor.
