@@ -829,6 +829,97 @@
 - Open gates: candidate A/B builds, reproducibility, measurement, v4 seal/pin
   and audit, package/capacity evidence, release staging, independent reviews,
   20,100-frame smoke, visual proof, desktop launch, and owner manual play.
+- First candidate-A invocation was discarded before SH-2 compilation. The
+  wrapper found inherited Qt GNU Make 4.2.1 for the prescribed
+  `mingw32-make` spelling; sourceboot requires grouped targets from GNU Make
+  4.3+, and Yaul dependency discovery failed while parsing. No release output
+  or target evidence was produced.
+- Systematic diagnosis confirmed `C:\msys64\usr\bin\make.exe` 4.4.1 is the
+  installed MSYS Make and the repository's existing full-path precedent. TDD
+  RED was the focused MSYS-wrapper suite at 2/3 with the observed 4.2 version;
+  GREEN is 3/3 plus an explicit wrapper version invocation selecting 4.4.1.
+  The narrow correction maps only the public `mingw32-make` spelling, fails
+  closed below 4.3, and retains the exact Task 9 command and flags.
+- Reference record: pattern-only reuse of the in-tree full-path MSYS Make
+  invocations and wrapper contract at `8588d391`; no external code was copied
+  and no new license/notice obligation was introduced. Candidate A must be
+  restarted after the separately reviewable behavior commit; every target,
+  reproducibility, audit, capacity/package, and staging gate remains open.
+- The first restart after the Make correction was discarded during host asset
+  generation, still before identity discovery or SH-2 compilation. POSIX
+  `/bin/sh` consumed the backslashes in the plan's Windows-form
+  `SOURCEBOOT_PYTHON`, yielding an unresolvable `D:Code...python.exe`. A direct
+  wrapper probe launched the exact same repository interpreter successfully
+  with a `D:/Code/.../python.exe` spelling (`Python 3.12.13`). The plan now
+  normalizes only that assignment to forward slashes; no profile, flag,
+  release-mode, toolchain, or serial-execution binding changed. Candidate A,
+  source-closure cleanliness, and all downstream gates remain open.
+- The next restart completed host assets and reached identity discovery, then
+  was discarded before closure generation: the backslash-form
+  `YAUL_INSTALL_ROOT` was likewise consumed by POSIX `/bin/sh` before the first
+  dependency-only `sh-elf-gcc -MM` call. A direct wrapper probe launched pinned
+  `sh-elf-gcc` 14.3.0 from the forward-slash spelling. The exact command now
+  normalizes both explicit absolute Windows inputs passed into MSYS Make; no
+  build flag or toolchain component changed.
+- Reproducibility correction: candidate B will detach at the exact final source
+  commit that produces successful candidate A, including the separately
+  reviewable Task 9 execution fixes, rather than at historical Task 8 head.
+  Otherwise the release Git/source identity could not be equal. Controller-owned
+  independent review still gates Task 9 completion.
+- Candidate A then completed all 228 dependency-only scans but was discarded
+  at closure assembly before cleanliness evaluation: 52,931 characters of
+  depfile paths plus the other repeated path families exceeded the Windows/MSYS
+  Python command line (`Argument list too long`). No target object, link, seal,
+  or release evidence was produced.
+- TDD RED: `test_gen_source_closure.py` could not import the requested strict
+  path-list loader; a follow-up RED proved `/d/...` rows were not native drive
+  paths in Windows Python; `test_sourceboot_hermetic_build_make.py` was 7/8
+  because repeated closure argv remained. GREEN: source closure 20/20 with one existing
+  case-sensitive-filesystem skip, Make pipeline 8/8, and changed Python
+  `py_compile` clean.
+- Design correction: eight LF-only `sm64-saturn-path-list-v1` transports cover
+  build compiled sources/depfiles/recipe/generator/generated/derived paths and
+  post-link actual/assembly depfiles. Rows are nonblank, trimmed, NUL-free,
+  unique, and byte-sorted. The transport bytes are not identity inputs; their
+  semantic paths derive the same canonical closure, and the generator remains
+  a hashed generator input. Canonical MSYS drive paths convert only at the
+  Windows Python transport boundary. GNU Make writes the lists internally, avoiding a
+  shell argv boundary; dry-run suppression examines only MAKEFLAGS' short-option
+  word. Repeated CLI options remain compatible.
+- Reference record: clean-room/pattern-only adaptation of the in-tree canonical
+  handoff and closure interfaces at `bc6d9441`; no external source was copied
+  and no license/notice obligation changed. Candidate A and every downstream
+  gate remain open pending the exact release rerun from the fix commit.
+- Candidate-A run from `21b79b1c` proved canonical list writing/reading and
+  entered semantic closure classification, then failed closed because
+  implementation `build/us_pc` is a junction to the parent checkout. A
+  generated input resolved outside the guarded repository root. Cleanliness,
+  target compile/link, seal, and all downstream gates remain open; the user
+  junction is preserved untouched.
+- Isolation correction: candidates A and B will be two fresh detached siblings
+  at the same exact final source commit. Each independently receives only an
+  owned `baserom.us.z64` and `build/us_pc` copy, with relative path, length, and
+  SHA-256 inventory equality required before build. This replaces the original
+  implementation-worktree A topology, removes the shared live namespace from
+  both closures, preserves user state, and strengthens the reproducibility
+  claim. Any later in-scope source fix requires both candidates to detach and
+  rebuild at the new common commit.
+- Owned prerequisite verification: candidate roots
+  `hermetic-release-repro-a` and `hermetic-release-repro-b` each contain an
+  ordinary, non-reparse `build/us_pc` directory. Source/A/B inventories are
+  equal across 1,977 files by relative path, byte length, and per-file SHA-256;
+  their canonical inventory digest is
+  `43019209f5080af9a9d4a1c876176b5b9724c17913a4786a573f4ad2275fe7a1`.
+  Source/A/B ROM SHA-256 is
+  `17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91`.
+  Both detached roots were tracked-clean before the ignored prerequisites were
+  installed.
+- Managed execution runs under a different identity from the worktree creator,
+  so the prescribed build scopes Git `safe.directory` to the active candidate
+  through inherited `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0`, and
+  `GIT_CONFIG_VALUE_0`; global Git configuration remains untouched. Candidate
+  A has not restarted, and both candidates must detach at the next common
+  tracked commit before the exact build begins.
 
 ## Task 5 review repair round 2
 

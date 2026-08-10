@@ -1625,6 +1625,24 @@ only `baserom.us.z64` and an inventoried copy of `build/us_pc`, with relative
 path, length, and SHA-256 equality required before build. This material
 isolation correction preserves user state and strengthens reproducibility.
 
+The two owned candidate roots are
+`D:\Code\RetroDev\sm64-saturn-port\sm64-port\.worktrees\hermetic-release-repro-a`
+and
+`D:\Code\RetroDev\sm64-saturn-port\sm64-port\.worktrees\hermetic-release-repro-b`.
+Each `build/us_pc` is an ordinary directory (not a reparse point), and each
+matches the source prerequisite across 1,977 files by relative path, byte
+length, and per-file SHA-256. The canonical inventory digest for the source and
+both copies is
+`43019209f5080af9a9d4a1c876176b5b9724c17913a4786a573f4ad2275fe7a1`.
+The independently copied ROMs likewise match at SHA-256
+`17ce077343c6133f8c9f2d6d6d9a4ab62c8cd2aa57c40aea1f490b4c8bb21d91`.
+Both detached roots were tracked-clean before those ignored prerequisites were
+installed. Because the managed execution identity differs from the worktree
+creator identity, the build function scopes Git trust to the active candidate
+through inherited `GIT_CONFIG_*` variables; it does not change global Git
+configuration. Candidate A has not restarted yet, and both candidates must
+detach at the final common source commit before either build begins.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -1668,6 +1686,10 @@ $task9MakeArguments = @(
 function Invoke-HermeticBobBuild([string]$repoRoot) {
     Push-Location $repoRoot
     try {
+        # Scope Git trust to this candidate; do not mutate global config.
+        $env:GIT_CONFIG_COUNT = '1'
+        $env:GIT_CONFIG_KEY_0 = 'safe.directory'
+        $env:GIT_CONFIG_VALUE_0 = $repoRoot.Replace('\', '/')
         $python = (Join-Path $implementationRoot '.venv-saturn-tools\Scripts\python.exe').Replace('\', '/')
         $arguments = @($task9MakeArguments) + @("SOURCEBOOT_PYTHON=$python")
         powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 `
