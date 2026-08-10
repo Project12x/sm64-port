@@ -756,22 +756,42 @@
 
 ## Task 8 review repair round 2
 
-- Status: `active`. Round-1 scoped rereview marked release-manifest mode
-  legality `ADDRESSED`; the first `Needs fixes` verdict remains effective
-  because exact-object publication and late measurement-output aliasing remain
-  open.
-- Sealer residual race: the checked private leaf can be replaced between its
+- Status: `source-complete` in behavior commit `2277c3e2`
+  (`fix(saturn): publish exact audit objects`). Round-1 scoped rereview marked
+  release-manifest mode legality `ADDRESSED`; the first `Needs fixes` verdict
+  remains effective until controller-owned rereview clears exact-object
+  publication and late measurement-output aliasing.
+- Round-1 sealer finding addressed in source: the checked private leaf could be replaced between its
   last identity check and the name-based no-clobber rename. A successful rename
   of that substituted leaf is not followed by a proof that the published object
   is the exact held/staged object.
-- Measurement residual race: output alias rejection occurs only at preflight.
-  A late symlink or hardlink replacement before the eventual write can redirect
-  publication into an input after release verification or tool activity.
-- Required correction: publish the exact opened or namespace-immutable private
-  object with an atomic exclusive primitive, and publish measurement output
-  exclusively so a late alias can only fail. Deterministic race tests must prove
-  inputs and foreign state remain unchanged. Reuse the reviewed Task 7/shared
-  path-identity primitives and preserve cross-platform fail-closed behavior.
+- Round-1 measurement finding addressed in source: output alias rejection
+  occurred only at preflight, so a late symlink or hardlink replacement before
+  the eventual write could redirect publication into an input after release
+  verification or tool activity.
+- Design correction: shared `path_identity.publish_new_bytes` completely writes
+  and fsyncs a privately owned same-directory object, then atomically publishes
+  that exact held object without replacement. Windows uses handle-bound
+  `FileRenameInfo` while Task 7's `DirectoryNamespaceGuard` pins the parent;
+  POSIX uses an exclusive hardlink from the held descriptor through
+  `/proc/self/fd` or `/dev/fd` and fails closed if neither facility works.
+  Publication is followed by identity/size proof. Ambiguous private state is
+  retained with a diagnostic; final or foreign paths are never unlinked.
+- TDD RED/GREEN: deterministic last-check substitution initially published
+  foreign bytes; after the correction it publishes only canonical bytes and
+  retains the foreign private replacement. A preexisting measurement output
+  initially reached Task 7 verification, and a hardlink introduced after all
+  four tool calls was overwritten; both now fail without tool/preflight bypass
+  or input mutation. The symlink variant runs where host privileges permit.
+  The release-manifest mode matrix remains unchanged and green.
+- Verification: sealer **12/12**; full verifier **241/242**, with only the
+  documented pre-existing null-camera proof failure; Task 7 release-manifest
+  plus staging adjacency **46/46** on the required unsandboxed Windows rerun;
+  changed Python files compile and scoped diff/check passes. Audit v2 remains
+  507 bytes / `87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`;
+  audit v3 remains 416 bytes /
+  `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
+  `GOAL_AUDIT_CONTRACT_V4_SHA256` remains `None`.
 - Open gates: scoped rereview after repair, real target build, reproducibility,
   real audit-v4 measurement/contract/pin, complete-package inventory, release
   evidence, 20,100-frame smoke, visual, and manual play. No target or emulator

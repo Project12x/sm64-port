@@ -1343,12 +1343,13 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 - Produces `seal_v4_contract(measurement_path: Path, release_manifest_path: Path, output: Path) -> bytes`, refusing to overwrite an existing output.
 
 **Live status (2026-08-10):** `source-complete` in behavior commits `db4c620d`
-(`feat(saturn): add release-bound native math audit v4`) and repair `9fcc9632`
-(`fix(saturn): harden audit v4 publication`). Parser/preflight,
+(`feat(saturn): add release-bound native math audit v4`), `9fcc9632`
+(`fix(saturn): harden audit v4 publication`), and round-2 repair `2277c3e2`
+(`fix(saturn): publish exact audit objects`). Parser/preflight,
 explicitly unsealed measurement, one-shot sealing, focused tests, the full
 verifier run, Task 7 release-manifest adjacency, and Python compilation are
 implemented. Independent specification/code-quality reviews remain
-controller-owned; repair round 1 is source-complete and scoped rereview remains
+controller-owned; repair round 2 is source-complete and scoped rereview remains
 open, so the first `Needs fixes` verdict remains effective and Task 8 is not
 `complete`. No real measurement,
 v4 contract, or pinned digest was created; Task 9 still owns those exact-target
@@ -1395,15 +1396,19 @@ only the preserved null-camera failure; Task 7 manifest/staging adjacency is
 46/46. Scoped rereview remains open; no target gate is affected.
 
 Round-1 scoped rereview marked release-manifest mode legality `ADDRESSED`, but
-kept publication and alias safety open. A concurrent actor can replace the
-checked private contract leaf before its name-based no-clobber rename, and
-there is no post-publication identity proof. Measurement output is checked for
-aliases only once, so a late symlink or hardlink replacement can redirect the
-eventual write into an input. Repair round 2 is `active`: it must publish the
-exact opened or namespace-immutable private object atomically and make
-measurement output exclusive at publication so late aliases fail without
-mutating inputs. No real measurement, contract, pin, target, or emulator gate
-is implied by this host-side repair.
+kept exact-object publication and late alias safety open. Repair `2277c3e2`
+now writes both contracts and measurement reports to a complete, fsynced
+same-directory private object and atomically publishes the exact held object
+without replacement. Windows renames the held handle under Task 7's pinned
+directory guard; POSIX links the held descriptor through `/proc/self/fd` or
+`/dev/fd` and fails closed when neither exact-object facility is available.
+Post-publication identity/size checks reject ambiguity, and no final or foreign
+path is unlinked. A preexisting or late symlink/hardlink output therefore makes
+publication fail while all inputs remain byte-identical. Focused race REDs
+proved both prior vulnerabilities; GREEN is 12/12 sealer, 241/242 full verifier
+with only the preserved null-camera failure, and 46/46 Task 7 adjacency.
+Scoped rereview remains open. No real measurement, contract, pin, target, or
+emulator gate is implied by this host-side repair.
 
 - [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 
