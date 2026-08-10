@@ -934,6 +934,29 @@
   prerequisite. Reference: `yaul-org/libyaul`, pinned commit above, MIT
   license, full submodule checkout, dependency/materialization reuse. Candidate
   A remains open pending the exact rerun.
+- The next exact candidate-A restart entered `identity-assets` but stopped
+  before identity discovery: `bake_bob_tiles.py` could not find
+  `levels/bob/0.rgba16.png`. Fresh candidates correctly contain no copied
+  ignored extraction outputs, exposing a missing derivation from the allowed
+  baserom. No closure, target compile/link, seal, or release gate is claimed.
+- Asset-boundary correction: `extract_assets.py` retains its legacy positional
+  language/default-root behavior and adds an isolated output root plus strict
+  canonical path-list emission. Sourceboot derives all 1,539 US assets under
+  candidate-local `build/saturn/sourceboot/generated/extracted-assets`, orders
+  extraction before BOB tile/fragment/sky consumers, and passes 1,540 semantic
+  rows (assets plus extractor manifest) as a second generated-input list for
+  closure sealing and post-link rediscovery. The recursive root Make uses
+  `NOEXTRACT=1` because the independently verified `build/us_pc` tree already
+  owns those includes.
+- TDD RED: hermetic Make was 8/9 and isolated extractor output was 0/1. GREEN:
+  extractor output 2/2, hermetic Make 9/9, source closure 20/20 with one
+  existing case-filesystem skip, and changed Python compilation clean.
+  Reference: in-tree `Makefile` extraction boundary at `fc56b14a`; this
+  inherited SM64 fork has no root license file at that revision, so existing
+  project terms remain unchanged; inspected `Makefile` lines 239-252 and
+  `extract_assets.py`; same-repository close-port reuse introduced no external
+  source or new notice obligation. Candidate A and every downstream gate remain
+  open pending rerun from the behavior commit.
 
 ## Task 5 review repair round 2
 

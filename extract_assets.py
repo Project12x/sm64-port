@@ -2,6 +2,8 @@
 import sys
 import os
 import json
+import argparse
+from pathlib import Path
 
 
 def read_asset_map():
@@ -37,43 +39,92 @@ def asset_needs_update(asset, version):
     return False
 
 
-def remove_file(fname):
-    os.remove(fname)
-    print("deleting", fname)
+def remove_file(fname, output_root=Path(".")):
+    path = output_root / fname
+    os.remove(path)
+    print("deleting", path)
     try:
-        os.removedirs(os.path.dirname(fname))
+        os.removedirs(path.parent)
     except OSError:
         pass
 
 
-def clean_assets(local_asset_file):
+def clean_assets(local_asset_file, output_root=Path(".")):
     assets = set(read_asset_map().keys())
     assets.update(read_local_asset_list(local_asset_file))
+    if local_asset_file is not None:
+        local_asset_file.close()
     for fname in list(assets) + [".assets-local.txt"]:
         if fname.startswith("@"):
             continue
         try:
-            remove_file(fname)
+            remove_file(fname, output_root)
         except FileNotFoundError:
             pass
 
 
+def write_path_list(path, output_root, asset_map, langs):
+    expected = []
+    for asset, data in asset_map.items():
+        if asset.startswith("@") or not any(lang in data[-1] for lang in langs):
+            continue
+        candidate = output_root / asset
+        if not candidate.is_file():
+            raise FileNotFoundError(f"extracted asset is missing: {candidate}")
+        expected.append(candidate.resolve().as_posix())
+    expected.append((output_root / ".assets-local.txt").resolve().as_posix())
+    if len(expected) != len(set(expected)):
+        raise ValueError("extracted asset path list contains duplicates")
+    folded = [value.casefold() for value in expected]
+    if len(folded) != len(set(folded)):
+        raise ValueError("extracted asset path list contains case collisions")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = sorted(expected, key=lambda value: value.encode("utf-8"))
+    path.write_text(
+        "sm64-saturn-path-list-v1\n" + "\n".join(rows) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def tool_output_path(path):
+    """Render an output without a Windows drive colon for tool `path:offset` args."""
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        rendered = resolved.as_posix()
+        if ":" in rendered:
+            raise ValueError("asset output root must be inside the repository")
+        return rendered
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("langs", nargs="*")
+    parser.add_argument("--clean", action="store_true")
+    parser.add_argument("--output-root", type=Path, default=Path("."))
+    parser.add_argument("--path-list", type=Path)
+    options = parser.parse_args()
+    output_root = options.output_root.resolve()
+
     # In case we ever need to change formats of generated files, we keep a
     # revision ID in the local asset file.
     new_version = 7
 
     try:
-        local_asset_file = open(".assets-local.txt")
+        local_asset_file = open(output_root / ".assets-local.txt")
         local_asset_file.readline()
         local_version = int(local_asset_file.readline().strip())
     except Exception:
         local_asset_file = None
         local_version = -1
 
-    langs = sys.argv[1:]
-    if langs == ["--clean"]:
-        clean_assets(local_asset_file)
+    langs = options.langs
+    if options.clean:
+        if langs or options.path_list is not None:
+            parser.error("--clean cannot be combined with languages or --path-list")
+        clean_assets(local_asset_file, output_root)
         sys.exit(0)
 
     all_langs = ["jp", "us", "eu", "sh"]
@@ -89,7 +140,7 @@ def main():
     for asset, data in asset_map.items():
         if asset.startswith("@"):
             continue
-        if os.path.isfile(asset):
+        if (output_root / asset).is_file():
             all_assets.append((asset, data, True))
         else:
             all_assets.append((asset, data, False))
@@ -99,6 +150,8 @@ def main():
     if not any_missing_assets and local_version == new_version:
         # Nothing to do, no need to read a ROM. For efficiency we don't check
         # the list of old assets either.
+        if options.path_list is not None:
+            write_path_list(options.path_list.resolve(), output_root, asset_map, langs)
         return
 
     # Late imports (to optimize startup perf)
@@ -194,7 +247,9 @@ def main():
             args.append("--only-samples")
             for (asset, pos, size, meta) in assets:
                 print("extracting", asset)
-                args.append(asset + ":" + str(pos))
+                target = output_root / asset
+                target.parent.mkdir(parents=True, exist_ok=True)
+                args.append(tool_output_path(target) + ":" + str(pos))
             subprocess.run(args, check=True)
             continue
 
@@ -217,7 +272,8 @@ def main():
         for (asset, pos, size, meta) in assets:
             print("extracting", asset)
             input = image[pos : pos + size]
-            os.makedirs(os.path.dirname(asset), exist_ok=True)
+            target = output_root / asset
+            os.makedirs(target.parent, exist_ok=True)
             if asset.endswith(".png"):
                 png_file = tempfile.NamedTemporaryFile(prefix="asset", delete=False)
                 try:
@@ -236,7 +292,7 @@ def main():
                                 imagetype,
                                 "--combine",
                                 png_file.name,
-                                asset,
+                                str(target),
                             ],
                             check=True,
                         )
@@ -249,7 +305,7 @@ def main():
                                 "-e",
                                 png_file.name,
                                 "-g",
-                                asset,
+                                str(target),
                                 "-f",
                                 fmt,
                                 "-w",
@@ -263,14 +319,14 @@ def main():
                     png_file.close()
                     os.remove(png_file.name)
             else:
-                with open(asset, "wb") as f:
+                with open(target, "wb") as f:
                     f.write(input)
 
     # Remove old assets
     for asset in previous_assets:
         if asset not in new_assets:
             try:
-                remove_file(asset)
+                remove_file(asset, output_root)
             except FileNotFoundError:
                 pass
 
@@ -283,8 +339,12 @@ def main():
             "",
         ]
     )
-    with open(".assets-local.txt", "w") as f:
+    output_root.mkdir(parents=True, exist_ok=True)
+    with open(output_root / ".assets-local.txt", "w") as f:
         f.write(output)
+    if options.path_list is not None:
+        write_path_list(options.path_list.resolve(), output_root, asset_map, langs)
 
 
-main()
+if __name__ == "__main__":
+    main()

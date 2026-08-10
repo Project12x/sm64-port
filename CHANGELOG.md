@@ -4,6 +4,15 @@
 
 ### Added
 
+- Made fresh Saturn release candidates derive the complete US asset set from
+  the allowed baserom inside their own generated build tree. The sourceboot
+  asset boundary now orders extraction before every raw-asset consumer, keeps
+  the legacy root extractor CLI compatible, avoids populating ignored PNGs in
+  the checkout, and seals a canonical 1,540-row generated-input inventory so a
+  missing or host-dependent extracted byte cannot evade release identity or
+  post-link rediscovery. This fixes clean worktrees failing at the first BOB
+  texture while preserving the verified `build/us_pc` prerequisite unchanged.
+
 - Added release-bound native-math audit v4 support. The verifier now parses
   version-specific manifest, identity, effective-config, target-profile, and
   exact-ELF hashes; verifies identity-v2 release bytes into a private immutable

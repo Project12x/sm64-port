@@ -223,6 +223,23 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertGreaterEqual(result.stdout.count("SOURCEBOOT_RELEASE_MODE=\"release\""), 5)
         self.assertGreaterEqual(result.stdout.count("SOURCEBOOT_TARGET_PROFILE=\"custom-bob-profile.json\""), 5)
 
+    def test_identity_assets_extract_allowed_baserom_inputs_before_consumers(self) -> None:
+        result = self.run_make("assets", "identity-assets")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = result.stdout.replace("\\", "/")
+        extraction = 'extract_assets.py'
+        first_consumer = 'compile-bob-bsp-fragments'
+        self.assertIn(extraction, output)
+        self.assertIn('--output-root', output)
+        self.assertIn('--path-list', output)
+        self.assertIn(first_consumer, output)
+        self.assertLess(output.index(extraction), output.index(first_consumer))
+
+        makefile = self.sourceboot_makefile().replace("\\", "/")
+        self.assertIn(".PHONY: source-extracted-assets", makefile)
+        self.assertIn("source-assets: source-extracted-assets", makefile)
+        self.assertGreaterEqual(makefile.count("| source-extracted-assets"), 3)
+
     def test_seal_and_post_link_verification_consume_exact_manifests(self) -> None:
         makefile = self.sourceboot_makefile()
         self.assertIn("--source-closure", makefile)

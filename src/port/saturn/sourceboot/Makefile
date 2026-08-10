@@ -284,6 +284,8 @@ SOURCEBOOT_BOB_TILE_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_tiles_manifest.json
 SOURCEBOOT_BOB_SCENE := $(SOURCEBOOT_GENERATED)/bob_scene.h
 SOURCEBOOT_BOB_SKY := $(SOURCEBOOT_GENERATED)/bob_sky_rgb1555.bin
 SOURCEBOOT_BOB_SKY_MANIFEST := $(SOURCEBOOT_GENERATED)/bob_sky_manifest.json
+SOURCEBOOT_EXTRACTED_ASSET_ROOT := $(SOURCEBOOT_GENERATED)/extracted-assets
+SOURCEBOOT_EXTRACTED_ASSET_LIST := $(SOURCEBOOT_GENERATED)/extracted-assets-v1.txt
 SOURCEBOOT_MARIO_TEXTURE_DIR := $(ROOT)/build/saturn/marioturntable/generated
 SOURCEBOOT_MARIO_TEXTURE_HEADER := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.h
 SOURCEBOOT_MARIO_TEXTURE_REPORT := $(SOURCEBOOT_MARIO_TEXTURE_DIR)/mario_eye_uv_tiles.json
@@ -741,8 +743,15 @@ source-geo-depth: $(SOURCEBOOT_GEO_DEPTH_TOOL)
 	  --output-linker "$(SOURCEBOOT_GEO_DEPTH_LINKER)" \
 	  --output-json "$(SOURCEBOOT_GEO_DEPTH_REPORT)"
 
+.PHONY: source-extracted-assets
+source-extracted-assets:
+	@mkdir -p "$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)"
+	@cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" extract_assets.py \
+	  --output-root "$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)" \
+	  --path-list "$(SOURCEBOOT_EXTRACTED_ASSET_LIST)" us
+
 .PHONY: source-assets
-source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs source-sky-gradient
+source-assets: source-extracted-assets source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs source-sky-gradient
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
 	  --root $(ROOT) --build-prefix build/us_pc \
 	  --define VERSION_US --define VERSION_JP_US \
@@ -750,7 +759,7 @@ source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp
 	if [ -z "$$targets" ]; then \
 	  printf '%s\n' 'sourceboot: no generated source assets were found' >&2; exit 1; \
 	fi; \
-	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us \
+	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 \
 	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets $(SOURCEBOOT_TEXT_STRINGS) \
 	  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'
@@ -792,10 +801,10 @@ $(SOURCEBOOT_BOB_BSP_REPORT) $(SOURCEBOOT_BOB_BSP_HEADER): $(SOURCEBOOT_BOB_COMP
 .PHONY: source-bob-bsp
 source-bob-bsp: $(SOURCEBOOT_BOB_BSP_REPORT) $(SOURCEBOOT_BOB_BSP_HEADER)
 
-$(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST) $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(ROOT)/tools/saturn/bake_bob_bsp_fragments.py $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py $(ROOT)/tools/saturn/bake_bob_tiles.py $(ROOT)/tools/saturn/bake_castle_uv.py
+$(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST) $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(ROOT)/tools/saturn/bake_bob_bsp_fragments.py $(ROOT)/tools/saturn/compile_bob_bsp.py $(ROOT)/tools/saturn/static_bsp.py $(ROOT)/tools/saturn/bake_bob_tiles.py $(ROOT)/tools/saturn/bake_castle_uv.py | source-extracted-assets
 	@$(MAKE) -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
 	  compile-bob-bsp-fragments BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
-	  BOB_ASSET_ROOT="$(ROOT)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+	  BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
 .PHONY: source-bob-bsp-fragments
 source-bob-bsp-fragments: $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) $(SOURCEBOOT_BOB_BSP_FRAGMENT_MANIFEST) $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE) $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER)
@@ -807,11 +816,12 @@ $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER): $(SOURCEBOOT_BOB_BSP_FRAGMENT_SCENE) $(SO
 
 $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST) &: \
 	$(SOURCEBOOT_BOB_MESH) $(SOURCEBOOT_BOB_TILE_TOOLS) \
-	$(SOURCEBOOT_GENERATED)/bob_area1_intake.json
+	$(SOURCEBOOT_GENERATED)/bob_area1_intake.json | source-extracted-assets
 	@$(MAKE) -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
 	  compile-bob-tiles BOB_TILES_GENERATED="$(SOURCEBOOT_GENERATED)" \
 	  BOB_MESH_GENERATED="$(SOURCEBOOT_GENERATED)" \
-	  BOB_AREA_DIR="levels/bob/areas/1" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
+	  BOB_AREA_DIR="levels/bob/areas/1" BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)" \
+	  SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
 .PHONY: source-bob-tiles
 source-bob-tiles: $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) $(SOURCEBOOT_BOB_TILE_MANIFEST)
@@ -824,10 +834,10 @@ $(SOURCEBOOT_BOB_SCENE): $(SOURCEBOOT_BOB_COMPILED) $(SOURCEBOOT_BOB_TILE_MANIFE
 .PHONY: source-bob-scene
 source-bob-scene: $(SOURCEBOOT_BOB_SCENE)
 
-$(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bake_bob_sky.py $(ROOT)/textures/skyboxes/water.png
+$(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_BOB_SKY_MANIFEST) &: $(ROOT)/tools/saturn/bake_bob_sky.py | source-extracted-assets
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@$(MAKE) --no-print-directory -f "$(ROOT)/Makefile.saturn.mk" OS=Windows_NT \
-	  compile-bob-sky BOB_SKY_SOURCE="textures/skyboxes/water.png" \
+	  compile-bob-sky BOB_SKY_SOURCE="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)/textures/skyboxes/water.png" \
 	  BOB_SKY_OUTPUT="$(SOURCEBOOT_BOB_SKY)" \
 	  BOB_SKY_MANIFEST="$(SOURCEBOOT_BOB_SKY_MANIFEST)" SATURN_TOOLS_PYTHON="$(SOURCEBOOT_PYTHON)"
 
@@ -968,6 +978,13 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/hermetic_manifest.py \
   $(ROOT)/tools/saturn/gen_build_identity.py \
   $(ROOT)/tools/saturn/release_manifest.py \
+  $(ROOT)/extract_assets.py $(ROOT)/assets.json \
+  $(ROOT)/tools/Makefile $(ROOT)/tools/disassemble_sound.py \
+  $(ROOT)/tools/n64graphics.c $(ROOT)/tools/n64graphics.h \
+  $(ROOT)/tools/utils.c $(ROOT)/tools/utils.h \
+  $(ROOT)/tools/libmio0.c $(ROOT)/tools/libmio0.h \
+  $(ROOT)/tools/aifc_decode.c $(ROOT)/tools/skyconv.c \
+  $(ROOT)/tools/stb/stb_image.h $(ROOT)/tools/stb/stb_image_write.h \
   $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
   $(ROOT)/tools/mario_anims_converter.py \
   $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py \
@@ -1078,6 +1095,7 @@ identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
 	  --recipe-input-list "$(SOURCEBOOT_RECIPE_INPUT_LIST)" \
 	  --generator-input-list "$(SOURCEBOOT_GENERATOR_INPUT_LIST)" \
 	  --generated-input-list "$(SOURCEBOOT_GENERATED_INPUT_LIST)" \
+	  --generated-input-list "$(SOURCEBOOT_EXTRACTED_ASSET_LIST)" \
 	  --derived-output-list "$(SOURCEBOOT_DERIVED_OUTPUT_LIST)" \
 	  --external-root "$(YAUL_INSTALL_ROOT)"
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \

@@ -1656,6 +1656,29 @@ URL; no repository URL or global Git configuration changed. Reference record:
 MIT license, full pinned submodule checkout, dependency/materialization reuse.
 Candidate A remains unbuilt after this preflight-only stop.
 
+The next candidate-A restart entered `identity-assets` but stopped before
+identity discovery when `bake_bob_tiles.py` could not find
+`levels/bob/0.rgba16.png`. A fresh candidate intentionally has no copied
+ignored extracted assets, exposing that sourceboot consumed root-extracted
+PNGs without deriving them from its allowed baserom. The corrected general
+boundary invokes the existing project extractor with an explicit
+candidate-local output root under `build/saturn/sourceboot/generated`, orders
+that prerequisite before BOB tile/fragment/sky consumers, and tells the
+recursive root Make to retain the already-inventoried `build/us_pc` inputs via
+`NOEXTRACT=1`. A strict second generated-input list seals 1,539 US assets plus
+the extractor manifest (1,540 rows) and post-link verification rediscovers
+their bytes. The default extractor output and positional language interface
+remain compatible for root Make callers. TDD RED was the hermetic Make suite
+at 8/9 and the isolated-output suite at 0/1; GREEN is 9/9 and 2/2, with source
+closure 20/20 plus its existing case-filesystem skip and changed Python
+compilation clean. Reference record: the in-tree `Makefile` asset-extraction
+boundary at `fc56b14a`; this inherited SM64 fork has no root license file at
+that revision, so existing project terms remain unchanged; files inspected were
+`Makefile` lines 239-252 and `extract_assets.py`; same-repository close-port
+reuse introduced no external source or new notice.
+Candidate A and all release gates remain open pending the exact rerun from the
+behavior commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

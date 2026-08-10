@@ -34,8 +34,13 @@ make -f Makefile.saturn.mk check
 
 The outer `sourceboot` target now has one fail-closed sequence:
 
-1. `assets` materializes the selected BOB content and stable generated source
-   inputs without reading or selecting a build identity.
+1. `assets` derives the complete US extraction set from `baserom.us.z64` under
+   candidate-local `build/saturn/sourceboot/generated/extracted-assets/`, then
+   materializes the selected BOB content and stable generated source inputs
+   without reading or selecting a build identity. The root extractor's normal
+   default output remains the checkout for non-sourceboot consumers; this
+   pipeline uses its explicit output root and never copies ignored source-tree
+   PNGs into a release candidate.
 2. `discover` freshly scans every real C, C++, and `.sx` source even when a
    prior depfile exists. C uses SH GCC, `SH_CFLAGS`, and `SH_SPECS`; C++ uses
    SH G++, `SH_CXXFLAGS`, `SH_SPECS`, and `SH_CXX_SPECS`; `.sx` uses SH GCC
@@ -93,6 +98,16 @@ files themselves are not identity inputs. This keeps the same closure contract
 below Windows/MSYS command-line limits even as the full-game source set grows;
 Windows Python converts only canonical `/d/...`-style MSYS drive paths from
 the transport back to native drive paths before reading them.
+
+Asset extraction also writes `extracted-assets-v1.txt` with the same strict
+path-list schema. Unlike the transport lists above, its 1,540 semantic rows
+(1,539 US assets plus the extractor manifest) are passed as generated inputs:
+their bytes are part of the canonical closure and are rehashed after link.
+The extractor script, `assets.json`, and the host extraction-tool sources are
+generator inputs. The recursive root Make invocation uses `NOEXTRACT=1`
+because the independently inventoried `build/us_pc` prerequisite already owns
+those generated includes; eventual full-game package classes use the same
+candidate-local extraction boundary.
 
 Do not copy or launch a release by selecting artifacts manually. Stage only a
 verified manifest into a missing or empty destination:
