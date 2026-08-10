@@ -1080,9 +1080,10 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** repair round 1 is `source-complete` in behavior
-commit `bb5a840d`, but scoped rereview left the namespace-race portion of
-Finding 1 `NOT ADDRESSED`; repair round 2 is active. The first `Needs fixes`
+**Live status (2026-08-10):** repair rounds 1–2 are `source-complete` in
+behavior commits `bb5a840d` and `00736856`. Round-2 scoped rereview marked the
+remaining namespace-race finding `ADDRESSED`, then found one new Important
+POSIX portability defect; repair round 3 is active. The first `Needs fixes`
 verdict is still effective. Fresh post-commit host
 verification passes all seven exact suites at
 24 + 9 + 41 + 12 + 4 + 9 + 7 = 106 tests and adjacent identity/bootstrap/boot-
@@ -1143,6 +1144,16 @@ release/stage GREEN is 26 + 14 = 40 tests; all seven exact suites pass
 26 + 14 + 41 + 12 + 4 + 9 + 7 = 113 host tests, adjacent suites pass
 21 + 15 + 16 + 1 = 53, and all six production scripts compile. Controller-owned
 rereview remains open, as do every target and release-evidence gate.
+
+Round-2 rereview confirmed the opened-snapshot and atomic/quarantine namespace
+protections with no regression to the already-cleared findings. Its new
+Important finding is platform scope: `_rename_noreplace()` treats every POSIX
+host as Linux `renameat2`, so macOS/BSD fail rather than publish atomically,
+while safe identity deletion of a proven preexisting-empty backup is
+Windows-only. Round 3 must provide an exclusive atomic rename adapter for
+supported non-Linux POSIX hosts and make retained empty-quarantine behavior
+explicit and tested wherever deletion by opened identity is unavailable. It
+must not reintroduce check-then-unlink cleanup.
 
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
