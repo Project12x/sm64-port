@@ -1080,9 +1080,10 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** repair round 1 is `source-complete` in the
-forthcoming behavior commit; controller-owned scoped rereview remains pending,
-so the first `Needs fixes` verdict is still effective. Fresh precommit host
+**Live status (2026-08-10):** repair round 1 is `source-complete` in behavior
+commit `bb5a840d`; source status is recorded by this documentation commit.
+Controller-owned scoped rereview remains pending, so the first `Needs fixes`
+verdict is still effective. Fresh post-commit host
 verification passes all seven exact suites at
 24 + 9 + 41 + 12 + 4 + 9 + 7 = 106 tests and adjacent identity/bootstrap/boot-
 trace/route-view suites at 21 + 15 + 16 + 1 = 53 tests, with zero skips or
@@ -1125,7 +1126,7 @@ surfacing only as a downstream digest mismatch, and the explicit v1 occupancy
 compatibility spec must reproduce the exact ELF identity bytes. No further
 source finding remained before independent review. One initial adjacent command named two tests
 incorrectly and was discarded; the corrected fail-fast rerun is the 53-test
-result above. Step 8 remains open for repair, scoped rereview, and review-closeout
+result above. Step 8 remains open for scoped rereview and review-closeout
 status update.
 
 - [x] **Step 1: Write failing release and staging tests**
