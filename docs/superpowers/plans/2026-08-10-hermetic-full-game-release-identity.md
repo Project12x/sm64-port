@@ -1347,7 +1347,8 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 explicitly unsealed measurement, one-shot sealing, focused tests, the full
 verifier run, Task 7 release-manifest adjacency, and Python compilation are
 implemented. Independent specification/code-quality reviews remain
-controller-owned and open, so Task 8 is not `complete`. No real measurement,
+controller-owned; the first verdict is `Needs fixes`, and repair round 1 is
+active, so Task 8 is not `complete`. No real measurement,
 v4 contract, or pinned digest was created; Task 9 still owns those exact-target
 steps. Historical v2/v3 bytes and every target/release-evidence gate remain
 open and unchanged.
@@ -1373,6 +1374,16 @@ failure. V2 remains 507 bytes at
 `87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`;
 v3 remains 416 bytes at
 `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
+
+First independent review found one Critical and two Important safety gaps.
+The sealer creates/writes the final contract pathname directly, exposing
+partial bytes and using a raceable path unlink on failure; it must privately
+stage/fsync and publish with an identity-safe exclusive primitive. Measurement
+output must reject aliases with every input before verification or subprocess
+execution. `--release-manifest` must be accepted only for v4/measurement and
+rejected in ordinary/object-reference/v2/v3 modes so historical semantics stay
+unchanged. Repair round 1 and scoped rereview remain open; no target gate is
+affected.
 
 - [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 
