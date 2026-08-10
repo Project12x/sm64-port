@@ -1342,16 +1342,17 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 - Produces measurement CLI `--measure-audit-report PATH`, valid only with `--audit-route-oracle` and without `--audit-contract`.
 - Produces `seal_v4_contract(measurement_path: Path, release_manifest_path: Path, output: Path) -> bytes`, refusing to overwrite an existing output.
 
-**Live status (2026-08-10):** `source-complete` in behavior commits `db4c620d`
+**Live status (2026-08-10):** `complete` in behavior commits `db4c620d`
 (`feat(saturn): add release-bound native math audit v4`), `9fcc9632`
 (`fix(saturn): harden audit v4 publication`), and round-2 repair `2277c3e2`
 (`fix(saturn): publish exact audit objects`). Parser/preflight,
 explicitly unsealed measurement, one-shot sealing, focused tests, the full
 verifier run, Task 7 release-manifest adjacency, and Python compilation are
-implemented. Independent specification/code-quality reviews remain
-controller-owned; repair round 2 is source-complete and scoped rereview remains
-open, so the first `Needs fixes` verdict remains effective and Task 8 is not
-`complete`. No real measurement,
+implemented. Independent review initially returned `Needs fixes`; repairs
+`9fcc9632` and `2277c3e2` closed all three findings. The final scoped rereview
+marked exact-object publication and late measurement-output aliasing
+`ADDRESSED`, confirmed release-manifest mode legality remained addressed, and
+found no new Critical or Important breakage. No real measurement,
 v4 contract, or pinned digest was created; Task 9 still owns those exact-target
 steps. Historical v2/v3 bytes and every target/release-evidence gate remain
 open and unchanged.
@@ -1393,7 +1394,8 @@ symlink, and hardlink aliases of every read input before release verification
 or tools. Release manifests are legal only for parsed v4 or measurement.
 Focused repair tests pass 11 sealer cases; the full verifier is 239/240 with
 only the preserved null-camera failure; Task 7 manifest/staging adjacency is
-46/46. Scoped rereview remains open; no target gate is affected.
+46/46. Round-1 rereview cleared mode legality but retained the two race
+findings; no target gate was affected.
 
 Round-1 scoped rereview marked release-manifest mode legality `ADDRESSED`, but
 kept exact-object publication and late alias safety open. Repair `2277c3e2`
@@ -1407,7 +1409,9 @@ path is unlinked. A preexisting or late symlink/hardlink output therefore makes
 publication fail while all inputs remain byte-identical. Focused race REDs
 proved both prior vulnerabilities; GREEN is 12/12 sealer, 241/242 full verifier
 with only the preserved null-camera failure, and 46/46 Task 7 adjacency.
-Scoped rereview remains open. No real measurement, contract, pin, target, or
+Final scoped rereview marked both residual findings `ADDRESSED`, confirmed the
+mode matrix and historical v2/v3 contracts did not regress, and found no new
+Critical or Important breakage. No real measurement, contract, pin, target, or
 emulator gate is implied by this host-side repair.
 
 - [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
@@ -1522,7 +1526,7 @@ print(hashlib.sha256(raw).hexdigest())
 
 Expected: every new/v2/v3 compatibility test passes. If the known unrelated null-camera proof remains the only failure, record the exact 228/229-style count rather than calling the full suite green.
 
-- [ ] **Step 7: Update docs, commit support code, and clear both reviews**
+- [x] **Step 7: Update docs, commit support code, and clear both reviews**
 
 ```powershell
 git add CHANGELOG.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md tools/saturn/seal_sh2_native_math_audit_v4.py tools/saturn/test_seal_sh2_native_math_audit_v4.py tools/saturn/verify_sh2_native_math.py tools/saturn/test_verify_sh2_native_math.py

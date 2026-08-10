@@ -661,11 +661,13 @@
 
 - Initial implementation base: `15265084` (`docs(saturn): start release-bound
   audit v4`), following Task 7 review closeout `a07ffbe1`.
-- Status: `source-complete` in behavior commits `db4c620d`
+- Status: `complete` in behavior commits `db4c620d`
   (`feat(saturn): add release-bound native math audit v4`) and `9fcc9632`
   (`fix(saturn): harden audit v4 publication`). The first independent review
-  returned `Needs fixes`; repair round 1 is source-complete and controller-owned
-  rereview remains open, so Task 8 is not `complete`.
+  returned `Needs fixes`; repairs `9fcc9632` and `2277c3e2` closed all three
+  findings. Final scoped rereview marked the two residual races `ADDRESSED`,
+  confirmed release-manifest mode legality remained addressed, and found no
+  new Critical or Important breakage.
 - Scope boundary: no real measurement, real v4 contract, or pinned digest in
   Task 8. Historical v2/v3 contract bytes and invocation behavior must remain
   unchanged. Task 9 owns target measurement and pinning.
@@ -700,8 +702,8 @@
   consume only the immutable verified snapshot through all digest and SH-tool
   activity. Identity v1 is rejected only for v4/measurement; historical v2/v3
   invocation behavior remains manifest-free and unchanged.
-- Open gates: Task 8 independent reviews, real target build, reproducibility, audit
-  v4 measurement/contract, complete-package inventory, release evidence,
+- Open gates: real target build, reproducibility, audit v4 measurement/contract,
+  complete-package inventory, release evidence,
   20,100-frame smoke, visual, and manual play.
 - First independent review: one Critical and two Important findings. The v4
   sealer exposes partial final bytes and raceably unlinks by path on failure;
@@ -756,11 +758,12 @@
 
 ## Task 8 review repair round 2
 
-- Status: `source-complete` in behavior commit `2277c3e2`
-  (`fix(saturn): publish exact audit objects`). Round-1 scoped rereview marked
-  release-manifest mode legality `ADDRESSED`; the first `Needs fixes` verdict
-  remains effective until controller-owned rereview clears exact-object
-  publication and late measurement-output aliasing.
+- Status: `complete` in behavior commit `2277c3e2`
+  (`fix(saturn): publish exact audit objects`) and source-status commit
+  `1ef1c99e`. Round-1 scoped rereview marked release-manifest mode legality
+  `ADDRESSED`; final scoped rereview marked exact-object publication and late
+  measurement-output aliasing `ADDRESSED` and found no new Critical or
+  Important breakage. The first `Needs fixes` verdict is cleared.
 - Round-1 sealer finding addressed in source: the checked private leaf could be replaced between its
   last identity check and the name-based no-clobber rename. A successful rename
   of that substituted leaf is not followed by a proof that the published object
@@ -792,8 +795,15 @@
   audit v3 remains 416 bytes /
   `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
   `GOAL_AUDIT_CONTRACT_V4_SHA256` remains `None`.
-- Open gates: scoped rereview after repair, real target build, reproducibility,
-  real audit-v4 measurement/contract/pin, complete-package inventory, release
+- Independent rereview: Windows publication is bound to the held handle; POSIX
+  publication is bound to the held descriptor and fails closed when exact-object
+  facilities are unavailable; post-publication identity/size proof remains
+  mandatory. Measurement rejects preexisting output before verification/tools
+  and has no `write_if_changed` fallback, so late aliases lose the exclusive
+  publication race without input mutation. Mode legality and v2/v3 immutability
+  remain addressed.
+- Open gates: real target build, reproducibility, real audit-v4
+  measurement/contract/pin, complete-package inventory, release
   evidence, 20,100-frame smoke, visual, and manual play. No target or emulator
   evidence is claimed.
 
