@@ -1679,6 +1679,16 @@ reuse introduced no external source or new notice.
 Candidate A and all release gates remain open pending the exact rerun from the
 behavior commit.
 
+The first run from that behavior commit successfully derived the candidate-local
+asset set, then stopped before identity discovery because
+`compile-bob-tiles` hard-coded `SATURN_REPO_ROOT` instead of honoring the
+caller-supplied `BOB_ASSET_ROOT`; the sibling fragment recipe already used the
+public override. A focused Make-contract assertion was RED at 8/9 with one
+observed use versus two required consumers, then GREEN at 9/9 after the tile
+recipe adopted the same override. This is a one-line consumer fix with no
+profile, output-root, inventory, toolchain, or serial-execution change.
+Candidate A and every downstream gate remain open pending a clean exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

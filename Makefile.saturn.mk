@@ -1670,7 +1670,7 @@ compile-bob-bsp-fragments: compile-bob-area
 compile-bob-tiles: compile-bob-area
 	@cd "$(SATURN_REPO_ROOT)" && "$(SATURN_TOOLS_PYTHON)" "tools/saturn/bake_bob_tiles.py" \
 	  --intake "$(BOB_TILES_GENERATED)/bob_area1_intake.json" \
-	  --asset-root "$(SATURN_REPO_ROOT)" \
+	  --asset-root "$(BOB_ASSET_ROOT)" \
 	  --bank "$(BOB_TILES_GENERATED)/bob_tiles_clut16.bin" \
 	  --clut "$(BOB_TILES_GENERATED)/bob_tiles_clut16.pal" \
 	  --manifest "$(BOB_TILES_GENERATED)/bob_tiles_manifest.json"

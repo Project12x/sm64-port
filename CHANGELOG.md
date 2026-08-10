@@ -92,6 +92,12 @@
 
 ### Fixed
 
+- Fixed the BOB tile compiler to honor its public `BOB_ASSET_ROOT` override,
+  matching the fragment compiler. The hermetic sourceboot caller can now read
+  the sealed candidate-local extraction tree; previously the recipe silently
+  replaced that input with the repository root and clean release candidates
+  still failed after successfully deriving all assets.
+
 - Fixed sourceboot closure discovery and post-link verification on Windows by
   replacing unbounded repeated path arguments with strict canonical path-list
   handoffs. The BOB closure currently exceeds 50 KiB across 228 depfile paths,

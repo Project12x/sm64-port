@@ -957,6 +957,16 @@
   `extract_assets.py`; same-repository close-port reuse introduced no external
   source or new notice obligation. Candidate A and every downstream gate remain
   open pending rerun from the behavior commit.
+- The first run from the asset-boundary behavior commit derived all
+  candidate-local assets, then stopped before identity discovery because
+  `compile-bob-tiles` hard-coded `SATURN_REPO_ROOT` and discarded the
+  caller-supplied `BOB_ASSET_ROOT`; the fragment sibling already honored that
+  public override. No closure or target/release gate is claimed.
+- Focused TDD RED: hermetic Make was 8/9 because only one of two BOB raw-asset
+  consumers used the override. GREEN: 9/9 after the tile recipe adopted the
+  same override. The one-line correction changes no bound profile, inventory,
+  output root, toolchain, or `-j1` requirement; candidate A remains open pending
+  a clean exact rerun.
 
 ## Task 5 review repair round 2
 
