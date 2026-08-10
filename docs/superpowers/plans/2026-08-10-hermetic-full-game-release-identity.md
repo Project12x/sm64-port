@@ -1076,7 +1076,7 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 **Interfaces:**
 - Produces: `ReleaseManifestVerification(document: dict[str, Any], manifest_sha256: str, outputs: dict[str, Path])`.
 - Produces: `build_release_manifest(root: Path, profile_path: Path, identity_json: Path, source_closure: Path, package_set: Path, toolchain_attestation: Path, outputs: Mapping[str, Path], mode: Literal['development', 'release']) -> bytes`.
-- Produces: `verify_release_manifest(path: Path, *, required_profile: str | None = None) -> ReleaseManifestVerification`.
+- Produces: `verify_release_manifest(path: Path, *, required_profile: str | None = None, exact_inventory: bool = False) -> ReleaseManifestVerification`; staging uses `exact_inventory=True` before and after publication while capture inputs retain sealed-sibling tolerance.
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
@@ -1129,6 +1129,20 @@ between check/read, and final verification does not reject an extra staged file.
 Round 2 must use race-resistant opened-file/directory identity or private-tree
 atomic publication, exact final inventory, and rollback that never deletes an
 unproven path. Host evidence cannot close any target gate.
+
+Repair round 2 is `source-complete` in behavior commit `00736856`. Canonical
+documents are now acquired through no-follow opened-file snapshots with
+opened-object and full-ancestor identity checks. Staging builds a complete
+manifest-last private sibling, verifies its exact inventory, publishes with an
+atomic no-replace rename, and re-verifies the exact published tree. Windows
+directory handles pin active namespaces; a proven preexisting empty backup is
+removed by handle, while any ambiguous replacement, extra, partial tree, or
+failed publication is retained as a uniquely named quarantine and the requested
+missing/empty state is restored for retry without path deletion. Focused
+release/stage GREEN is 26 + 14 = 40 tests; all seven exact suites pass
+26 + 14 + 41 + 12 + 4 + 9 + 7 = 113 host tests, adjacent suites pass
+21 + 15 + 16 + 1 = 53, and all six production scripts compile. Controller-owned
+rereview remains open, as do every target and release-evidence gate.
 
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
