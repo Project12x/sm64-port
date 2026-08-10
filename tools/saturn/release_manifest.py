@@ -6,14 +6,20 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
+import tempfile
+import unicodedata
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Mapping
 
 import gen_build_identity as identity
+from gen_source_closure import CLASS_PRECEDENCE
 from hermetic_manifest import canonical_json_bytes, write_if_changed
+from target_profile import PACKAGE_CLASSES
 
 
 SCHEMA = "sm64-saturn-release-manifest-v1"
@@ -25,6 +31,12 @@ _FILE_LINE = re.compile(
     r'^\s*FILE\s+"([^"]+)"\s+\S+\s*$', re.IGNORECASE | re.MULTILINE
 )
 _ANY_FILE_LINE = re.compile(r"^\s*FILE\b", re.IGNORECASE | re.MULTILINE)
+_WINDOWS_INVALID = frozenset('<>:"|?*')
+_WINDOWS_RESERVED = frozenset(
+    {"con", "prn", "aux", "nul"}
+    | {f"com{index}" for index in range(1, 10)}
+    | {f"lpt{index}" for index in range(1, 10)}
+)
 
 
 @dataclass(frozen=True)
@@ -32,6 +44,80 @@ class ReleaseManifestVerification:
     document: dict[str, Any]
     manifest_sha256: str
     outputs: dict[str, Path]
+    manifest_bytes: bytes
+    snapshot_outputs: dict[str, Path]
+    _snapshot_owner: "_SnapshotOwner"
+
+    @property
+    def snapshot_root(self) -> Path:
+        return self._snapshot_owner.path
+
+    def close(self) -> None:
+        self._snapshot_owner.cleanup()
+
+    def __enter__(self) -> "ReleaseManifestVerification":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+
+class _SnapshotOwner:
+    """Own one private verified snapshot without TemporaryDirectory warnings."""
+
+    def __init__(self) -> None:
+        self.path = Path(tempfile.mkdtemp(prefix="sm64-saturn-release-"))
+        self._closed = False
+
+    def cleanup(self) -> None:
+        if not self._closed:
+            shutil.rmtree(self.path, ignore_errors=True)
+            self._closed = True
+
+    def __del__(self) -> None:
+        self.cleanup()
+
+
+def _portable_identifier(value: Any, label: str) -> tuple[str, str]:
+    if (
+        not isinstance(value, str)
+        or not value
+        or value != value.strip()
+        or unicodedata.normalize("NFC", value) != value
+        or any(ord(character) < 32 for character in value)
+        or any(character in "/\\" for character in value)
+    ):
+        raise ValueError(f"{label} is invalid")
+    return value, value.casefold()
+
+
+def _portable_relative_path(value: Any, label: str) -> tuple[PurePosixPath, str]:
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise ValueError(f"{label} release path is invalid")
+    if unicodedata.normalize("NFC", value) != value:
+        raise ValueError(f"{label} release path is not Unicode-canonical")
+    path = PurePosixPath(value)
+    if path.is_absolute() or path.as_posix() != value:
+        raise ValueError(f"{label} release path is not canonical")
+    for part in path.parts:
+        stem = part.split(".", 1)[0].casefold()
+        if (
+            part in ("", ".", "..")
+            or part.endswith((" ", "."))
+            or stem in _WINDOWS_RESERVED
+            or any(character in _WINDOWS_INVALID or ord(character) < 32 for character in part)
+        ):
+            raise ValueError(f"{label} release path is not portable")
+    return path, value.casefold()
+
+
+def _reject_duplicate_casefold(values: list[tuple[str, str]], label: str) -> None:
+    spellings = [value for value, _key in values]
+    keys = [key for _value, key in values]
+    if len(spellings) != len(set(spellings)):
+        raise ValueError(f"duplicate {label}")
+    if len(keys) != len(set(keys)):
+        raise ValueError(f"case-colliding {label}")
 
 
 def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -44,7 +130,7 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _load_canonical(path: Path, label: str) -> tuple[bytes, dict[str, Any]]:
-    if not path.is_file():
+    if path.is_symlink() or not path.is_file():
         raise ValueError(f"{label} is not a file: {path}")
     raw = path.read_bytes()
     try:
@@ -85,23 +171,72 @@ def _release_relative(base: Path, path: Path, label: str) -> str:
     rendered = relative.as_posix()
     if not rendered or rendered == ".":
         raise ValueError(f"{label} path is empty")
+    _portable_relative_path(rendered, label)
     return rendered
 
 
 def _resolve_release_path(base: Path, value: Any, label: str) -> Path:
-    if not isinstance(value, str) or not value or "\\" in value:
-        raise ValueError(f"{label} release path is invalid")
-    requested = Path(value)
-    if requested.is_absolute() or any(part in ("", ".", "..") for part in requested.parts):
-        raise ValueError(f"{label} release path is invalid")
-    resolved = (base / requested).resolve()
+    if base.is_symlink():
+        raise ValueError("release manifest directory is a symlink")
+    portable, _key = _portable_relative_path(value, label)
+    requested = Path(*portable.parts)
+    candidate = base / requested
+    current = candidate
+    while current != base:
+        if current.is_symlink():
+            raise ValueError(f"{label} output path uses a symlink")
+        current = current.parent
+    resolved = candidate.resolve()
     try:
         resolved.relative_to(base.resolve())
     except ValueError as error:
         raise ValueError(f"{label} release path escapes manifest directory") from error
-    if requested.as_posix() != value:
-        raise ValueError(f"{label} release path is not canonical")
     return resolved
+
+
+def _reject_output_aliases(outputs: Mapping[str, Path]) -> None:
+    identities: dict[tuple[int, int], str] = {}
+    for name, path in outputs.items():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"{name} output is not a regular non-symlink file")
+        stat = path.stat()
+        key = (stat.st_dev, stat.st_ino)
+        if key in identities:
+            raise ValueError(f"output alias: {name} and {identities[key]}")
+        identities[key] = name
+
+
+def _copy_verified_snapshot(
+    source: Path, target: Path, record: Mapping[str, Any], label: str
+) -> tuple[int, int]:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256()
+    size = 0
+    with source.open("rb") as input_stream, target.open("xb") as output_stream:
+        opened = os.fstat(input_stream.fileno())
+        for chunk in iter(lambda: input_stream.read(1024 * 1024), b""):
+            output_stream.write(chunk)
+            size += len(chunk)
+            digest.update(chunk)
+        closed = os.fstat(input_stream.fileno())
+    source_metadata = source.stat()
+    if (
+        (opened.st_dev, opened.st_ino) != (closed.st_dev, closed.st_ino)
+        or source.is_symlink()
+        or not source.is_file()
+        or (source_metadata.st_dev, source_metadata.st_ino) != (opened.st_dev, opened.st_ino)
+    ):
+        raise ValueError(f"{label} output changed identity during verification")
+    if digest.hexdigest() != record["sha256"]:
+        raise ValueError(
+            f"{label} output SHA-256 mismatch: expected {record['sha256']}, "
+            f"got {digest.hexdigest()}"
+        )
+    if size != record["size"]:
+        raise ValueError(
+            f"{label} output size mismatch: expected {record['size']}, got {size}"
+        )
+    return opened.st_dev, opened.st_ino
 
 
 def _elf_sections(data: bytes) -> tuple[str, list[dict[str, int]]]:
@@ -225,6 +360,39 @@ def _validate_identity_binding(
         raise ValueError("effective config does not match ELF identity")
 
 
+def _effective_config_from_profile(
+    profile_config: Mapping[str, Any], values: Mapping[str, Any]
+) -> dict[str, Any]:
+    expected_profile_keys = {
+        *(f"features.{name}" for name in identity.FEATURE_BITS),
+        *identity.SCALAR_FIELDS,
+        *identity.COMPILER_CONFIG_FIELDS,
+    }
+    if set(profile_config) != expected_profile_keys:
+        raise ValueError("profile effective config keys are invalid")
+    document: dict[str, Any] = {
+        "schema": f"sm64-saturn-effective-config-v{values['version']}",
+        "features": {
+            name: profile_config[f"features.{name}"]
+            for name in identity.FEATURE_BITS
+        },
+        **{field: profile_config[field] for field in identity.SCALAR_FIELDS},
+        **{
+            field: profile_config[field]
+            for field in identity.COMPILER_CONFIG_FIELDS
+        },
+        "artifact_hashes": {
+            field: values[field] for field in identity.ARTIFACT_HASH_FIELDS
+        },
+    }
+    if values["version"] == identity.IDENTITY_V2_VERSION:
+        document["identity_version"] = identity.IDENTITY_V2_VERSION
+        document["root_hashes"] = {
+            field: values[field] for field in identity.V2_ROOT_HASH_FIELDS.values()
+        }
+    return document
+
+
 def _validate_input_documents(
     profile: Mapping[str, Any],
     source_closure: Mapping[str, Any],
@@ -241,7 +409,6 @@ def _validate_input_documents(
         raise ValueError("resolved target profile schema is invalid")
     if (
         not isinstance(profile.get("profile_id"), str)
-        or not profile["profile_id"]
         or type(profile.get("release_enabled")) is not bool
         or not isinstance(profile.get("effective_config"), dict)
         or not isinstance(profile.get("package_manifests"), list)
@@ -249,32 +416,47 @@ def _validate_input_documents(
         or set(profile["output_names"]) != set(OUTPUT_NAMES)
     ):
         raise ValueError("resolved target profile id is invalid")
+    _portable_identifier(profile["profile_id"], "resolved target profile id")
+    output_name_keys: list[tuple[str, str]] = []
+    for name in OUTPUT_NAMES:
+        value, key = _portable_identifier(
+            profile["output_names"].get(name), f"profile output name {name}"
+        )
+        if PurePosixPath(value).name != value:
+            raise ValueError(f"profile output name {name} is not a basename")
+        output_name_keys.append((value, key))
+    _reject_duplicate_casefold(output_name_keys, "profile output names")
     if (
         set(source_closure) != {"schema", "inputs"}
         or source_closure.get("schema") != "sm64-saturn-source-closure-v2"
         or not isinstance(source_closure.get("inputs"), list)
     ):
         raise ValueError("source closure schema is invalid")
-    closure_paths: set[str] = set()
+    closure_paths: list[tuple[str, str]] = []
     for row in source_closure["inputs"]:
         if (
             not isinstance(row, dict)
             or set(row) != {"path", "sha256", "class", "owners"}
-            or not isinstance(row.get("path"), str)
-            or not row["path"]
-            or "\\" in row["path"]
-            or Path(row["path"]).is_absolute()
-            or any(part in ("", ".", "..") for part in Path(row["path"]).parts)
             or _SHA256.fullmatch(str(row.get("sha256"))) is None
-            or not isinstance(row.get("class"), str)
+            or row.get("class") not in CLASS_PRECEDENCE
             or not isinstance(row.get("owners"), list)
             or not row["owners"]
-            or any(not isinstance(owner, str) or not owner for owner in row["owners"])
             or row["owners"] != sorted(row["owners"])
-            or row["path"] in closure_paths
         ):
             raise ValueError("source closure record schema is invalid")
-        closure_paths.add(row["path"])
+        path, key = _portable_relative_path(row.get("path"), "source closure")
+        closure_paths.append((path.as_posix(), key))
+        owners = [
+            _portable_identifier(owner, "source closure owner")
+            for owner in row["owners"]
+        ]
+        _reject_duplicate_casefold(owners, "source closure owners")
+    _reject_duplicate_casefold(closure_paths, "source closure paths")
+    if source_closure["inputs"] != sorted(
+        source_closure["inputs"],
+        key=lambda row: (row["path"].encode("utf-8"), row["class"].encode("ascii")),
+    ):
+        raise ValueError("source closure records are not sorted")
     if (
         set(package_set) != {
             "schema", "profile_id", "packages", "package_class_hashes"
@@ -284,17 +466,39 @@ def _validate_input_documents(
         or not isinstance(package_set.get("packages"), list)
         or package_set["packages"] != profile["package_manifests"]
         or not isinstance(package_set.get("package_class_hashes"), dict)
+        or set(package_set["package_class_hashes"]) != set(PACKAGE_CLASSES)
     ):
         raise ValueError("package set differs from resolved target profile")
+    package_keys: list[tuple[str, str]] = []
     for row in package_set["packages"]:
         if (
             not isinstance(row, dict)
             or set(row) != {"package_class", "package_id", "manifest_sha256"}
-            or not isinstance(row.get("package_class"), str)
-            or not isinstance(row.get("package_id"), str)
+            or row.get("package_class") not in PACKAGE_CLASSES
             or _SHA256.fullmatch(str(row.get("manifest_sha256"))) is None
         ):
             raise ValueError("package set record schema is invalid")
+        package_class = _portable_identifier(
+            row["package_class"], "package class"
+        )
+        package_id = _portable_identifier(row.get("package_id"), "package id")
+        package_keys.append((
+            f"{package_class[0]}/{package_id[0]}",
+            f"{package_class[1]}/{package_id[1]}",
+        ))
+    _reject_duplicate_casefold(package_keys, "package identities")
+    if package_set["packages"] != sorted(
+        package_set["packages"],
+        key=lambda row: (
+            row["package_class"].encode("utf-8"), row["package_id"].encode("utf-8")
+        ),
+    ):
+        raise ValueError("package set records are not sorted")
+    class_keys = [
+        _portable_identifier(name, "package class hash id")
+        for name in package_set["package_class_hashes"]
+    ]
+    _reject_duplicate_casefold(class_keys, "package class hash ids")
     if any(
         not isinstance(name, str) or _SHA256.fullmatch(str(digest)) is None
         for name, digest in package_set["package_class_hashes"].items()
@@ -305,8 +509,43 @@ def _validate_input_documents(
         or toolchain.get("schema") != "sm64-saturn-toolchain-attestation-v1"
         or not isinstance(toolchain.get("target_abi"), str)
         or not isinstance(toolchain.get("components"), list)
+        or not toolchain["components"]
     ):
         raise ValueError("toolchain attestation schema is invalid")
+    _portable_identifier(toolchain["target_abi"], "toolchain target ABI")
+    component_ids: list[tuple[str, str]] = []
+    toolchain_paths: list[tuple[str, str]] = []
+    for component in toolchain["components"]:
+        if (
+            not isinstance(component, dict)
+            or set(component) != {"id", "version", "binaries", "dependencies"}
+            or not isinstance(component.get("version"), str)
+            or not component["version"]
+            or not isinstance(component.get("binaries"), list)
+            or not isinstance(component.get("dependencies"), list)
+        ):
+            raise ValueError("toolchain component schema is invalid")
+        component_ids.append(
+            _portable_identifier(component.get("id"), "toolchain component id")
+        )
+        for records in (component["binaries"], component["dependencies"]):
+            for record in records:
+                if (
+                    not isinstance(record, dict)
+                    or set(record) != {"path", "sha256"}
+                    or _SHA256.fullmatch(str(record.get("sha256"))) is None
+                ):
+                    raise ValueError("toolchain path record schema is invalid")
+                path, key = _portable_relative_path(
+                    record.get("path"), "toolchain"
+                )
+                toolchain_paths.append((path.as_posix(), key))
+    _reject_duplicate_casefold(component_ids, "toolchain component ids")
+    _reject_duplicate_casefold(toolchain_paths, "toolchain paths")
+    if toolchain["components"] != sorted(
+        toolchain["components"], key=lambda row: row["id"].encode("utf-8")
+    ):
+        raise ValueError("toolchain components are not sorted")
 
 
 def _git_provenance(
@@ -369,12 +608,36 @@ def build_release_manifest(
         toolchain_attestation, "toolchain attestation"
     )
     _validate_input_documents(profile, closure, packages, toolchain)
-    effective_config = identity_document.get("effective_config")
-    if not isinstance(effective_config, dict):
-        raise ValueError("identity JSON effective config is missing")
-
-    resolved_outputs = {name: Path(outputs[name]).resolve() for name in OUTPUT_NAMES}
+    requested_outputs = {name: Path(outputs[name]).absolute() for name in OUTPUT_NAMES}
+    _reject_output_aliases(requested_outputs)
+    requested_release_dir = requested_outputs["cue"].parent
+    if requested_release_dir.is_symlink():
+        raise ValueError("release output directory is a symlink")
+    for name, path in requested_outputs.items():
+        current = path
+        while current != requested_release_dir:
+            if current.is_symlink():
+                raise ValueError(f"{name} output path uses a symlink")
+            parent = current.parent
+            if parent == current:
+                break
+            current = parent
+    resolved_outputs = {name: path.resolve() for name, path in requested_outputs.items()}
     release_dir = resolved_outputs["cue"].parent
+    relative_paths = [
+        (_release_relative(release_dir, resolved_outputs[name], name), "")
+        for name in OUTPUT_NAMES
+    ]
+    relative_paths = [
+        (value, _portable_relative_path(value, name)[1])
+        for name, (value, _unused) in zip(OUTPUT_NAMES, relative_paths)
+    ]
+    _reject_duplicate_casefold(relative_paths, "output release paths")
+    for name in OUTPUT_NAMES:
+        if profile["output_names"][name] != resolved_outputs[name].name:
+            raise ValueError(
+                f"profile output name for {name} differs from sealed artifact basename"
+            )
     records: dict[str, dict[str, Any]] = {}
     measurements: dict[str, tuple[int, str]] = {}
     for name in OUTPUT_NAMES:
@@ -386,6 +649,19 @@ def build_release_manifest(
             "sha256": digest,
         }
     raw_embedded, values = _extract_build_identity(resolved_outputs["elf"])
+    effective_config = _effective_config_from_profile(
+        profile["effective_config"], values
+    )
+    if values["version"] == identity.IDENTITY_V2_VERSION:
+        identity_config = identity_document.get("effective_config")
+        if not isinstance(identity_config, dict):
+            raise ValueError("identity JSON effective config is missing")
+        if identity.canonical_effective_config(identity_config) != (
+            identity.canonical_effective_config(effective_config)
+        ):
+            raise ValueError(
+                "profile effective config differs from identity effective config"
+            )
     _validate_identity_binding(
         raw_embedded, values, identity_document, effective_config
     )
@@ -395,12 +671,13 @@ def build_release_manifest(
     toolchain_sha = hashlib.sha256(toolchain_raw).hexdigest()
     if values["source_hash"] != closure_sha:
         raise ValueError("source closure SHA-256 differs from ELF identity")
-    if values.get("target_profile_hash") != profile_sha:
-        raise ValueError("target profile SHA-256 differs from ELF identity")
-    if values.get("package_set_root_hash") != package_sha:
-        raise ValueError("package set SHA-256 differs from ELF identity")
-    if values.get("toolchain_attestation_hash") != toolchain_sha:
-        raise ValueError("toolchain attestation SHA-256 differs from ELF identity")
+    if values["version"] == identity.IDENTITY_V2_VERSION:
+        if values.get("target_profile_hash") != profile_sha:
+            raise ValueError("target profile SHA-256 differs from ELF identity")
+        if values.get("package_set_root_hash") != package_sha:
+            raise ValueError("package set SHA-256 differs from ELF identity")
+        if values.get("toolchain_attestation_hash") != toolchain_sha:
+            raise ValueError("toolchain attestation SHA-256 differs from ELF identity")
     _validate_cue(resolved_outputs["cue"], resolved_outputs["iso"])
 
     provenance = _git_provenance(root, closure, mode)
@@ -478,6 +755,17 @@ def _validate_manifest_shape(document: Mapping[str, Any]) -> None:
         OUTPUT_NAMES
     ):
         raise ValueError("release manifest outputs are invalid")
+    output_paths: list[tuple[str, str]] = []
+    for name in OUTPUT_NAMES:
+        record = document["outputs"][name]
+        if not isinstance(record, dict) or set(record) != {"path", "size", "sha256"}:
+            raise ValueError(f"release manifest {name} output record is invalid")
+        if type(record["size"]) is not int or record["size"] <= 0:
+            raise ValueError(f"release manifest {name} output size is invalid")
+        _require_sha256(record["sha256"], f"{name} output")
+        portable, key = _portable_relative_path(record["path"], name)
+        output_paths.append((portable.as_posix(), key))
+    _reject_duplicate_casefold(output_paths, "output release paths")
 
 
 def verify_release_manifest(
@@ -491,60 +779,66 @@ def verify_release_manifest(
             f"release manifest required profile is {required_profile}, "
             f"got {document['profile_id']}"
         )
-    base = path.resolve().parent
+    base = path.absolute().parent
+    if base.is_symlink():
+        raise ValueError("release manifest directory is a symlink")
     outputs: dict[str, Path] = {}
-    seen: set[Path] = set()
     for name in OUTPUT_NAMES:
         record = document["outputs"][name]
-        if not isinstance(record, dict) or set(record) != {"path", "size", "sha256"}:
-            raise ValueError(f"release manifest {name} output record is invalid")
         output = _resolve_release_path(base, record["path"], name)
-        if output in seen:
-            raise ValueError("release manifest output paths are not unique")
-        seen.add(output)
-        if type(record["size"]) is not int or record["size"] <= 0:
-            raise ValueError(f"release manifest {name} output size is invalid")
-        expected_sha = _require_sha256(record["sha256"], f"{name} output")
-        size, digest = _measure(output, f"{name} output")
-        if digest != expected_sha:
-            raise ValueError(
-                f"{name} output SHA-256 mismatch: expected {expected_sha}, got {digest}"
-            )
-        if size != record["size"]:
-            raise ValueError(
-                f"{name} output size mismatch: expected {record['size']}, got {size}"
-            )
         outputs[name] = output
-
-    embedded, values = _extract_build_identity(outputs["elf"])
-    if hashlib.sha256(embedded).hexdigest() != document["identity_sha256"]:
-        raise ValueError("ELF identity SHA-256 differs from release manifest")
-    if values["version"] != document["identity_version"]:
-        raise ValueError("ELF identity version differs from release manifest")
-    if values["effective_config_hash"] != document["effective_config_sha256"]:
-        raise ValueError("ELF effective config digest differs from release manifest")
-    canonical_config = identity.canonical_effective_config(document["effective_config"])
-    if hashlib.sha256(canonical_config).hexdigest() != values["effective_config_hash"]:
-        raise ValueError("effective config does not match ELF identity")
-    if values["source_hash"] != document["source_closure_sha256"]:
-        raise ValueError("source closure digest differs from ELF identity")
-    if values["version"] == identity.IDENTITY_V2_VERSION:
-        bindings = {
-            "target_profile_hash": "target_profile_sha256",
-            "package_set_root_hash": "package_set_sha256",
-            "toolchain_attestation_hash": "toolchain_attestation_sha256",
-        }
-        for identity_field, manifest_field in bindings.items():
-            if values[identity_field] != document[manifest_field]:
+    _reject_output_aliases(outputs)
+    snapshot_owner = _SnapshotOwner()
+    snapshot_base = snapshot_owner.path
+    snapshot_outputs: dict[str, Path] = {}
+    source_identities: dict[tuple[int, int], str] = {}
+    try:
+        for name in OUTPUT_NAMES:
+            record = document["outputs"][name]
+            target = snapshot_base / Path(*PurePosixPath(record["path"]).parts)
+            source_identity = _copy_verified_snapshot(
+                outputs[name], target, record, name
+            )
+            if source_identity in source_identities:
                 raise ValueError(
-                    f"{manifest_field} differs from ELF identity"
+                    f"output alias: {name} and {source_identities[source_identity]}"
                 )
-    _validate_cue(outputs["cue"], outputs["iso"])
-    return ReleaseManifestVerification(
-        document=dict(document),
-        manifest_sha256=hashlib.sha256(raw).hexdigest(),
-        outputs=outputs,
-    )
+            source_identities[source_identity] = name
+            snapshot_outputs[name] = target.resolve()
+
+        embedded, values = _extract_build_identity(snapshot_outputs["elf"])
+        if hashlib.sha256(embedded).hexdigest() != document["identity_sha256"]:
+            raise ValueError("ELF identity SHA-256 differs from release manifest")
+        if values["version"] != document["identity_version"]:
+            raise ValueError("ELF identity version differs from release manifest")
+        if values["effective_config_hash"] != document["effective_config_sha256"]:
+            raise ValueError("ELF effective config digest differs from release manifest")
+        canonical_config = identity.canonical_effective_config(document["effective_config"])
+        if hashlib.sha256(canonical_config).hexdigest() != values["effective_config_hash"]:
+            raise ValueError("effective config does not match ELF identity")
+        if values["source_hash"] != document["source_closure_sha256"]:
+            raise ValueError("source closure digest differs from ELF identity")
+        if values["version"] == identity.IDENTITY_V2_VERSION:
+            bindings = {
+                "target_profile_hash": "target_profile_sha256",
+                "package_set_root_hash": "package_set_sha256",
+                "toolchain_attestation_hash": "toolchain_attestation_sha256",
+            }
+            for identity_field, manifest_field in bindings.items():
+                if values[identity_field] != document[manifest_field]:
+                    raise ValueError(f"{manifest_field} differs from ELF identity")
+        _validate_cue(snapshot_outputs["cue"], snapshot_outputs["iso"])
+        return ReleaseManifestVerification(
+            document=dict(document),
+            manifest_sha256=hashlib.sha256(raw).hexdigest(),
+            outputs=outputs,
+            manifest_bytes=raw,
+            snapshot_outputs=snapshot_outputs,
+            _snapshot_owner=snapshot_owner,
+        )
+    except BaseException:
+        snapshot_owner.cleanup()
+        raise
 
 
 def _differences(first: Any, second: Any, prefix: str = "") -> list[str]:
@@ -572,15 +866,41 @@ def _differences(first: Any, second: Any, prefix: str = "") -> list[str]:
 def compare_release_manifests(first: Path, second: Path) -> dict[str, Any]:
     """Compare verified canonical inputs and bytes, never their host locations."""
     first_verified = verify_release_manifest(first)
-    second_verified = verify_release_manifest(second)
-    differing = _differences(first_verified.document, second_verified.document)
-    return {
-        "schema": COMPARISON_SCHEMA,
-        "identical": not differing,
-        "differing_fields": differing,
-        "first_manifest_sha256": first_verified.manifest_sha256,
-        "second_manifest_sha256": second_verified.manifest_sha256,
-    }
+    try:
+        second_verified = verify_release_manifest(second)
+        try:
+            def semantic(document: Mapping[str, Any]) -> dict[str, Any]:
+                return {
+                    field: document[field]
+                    for field in (
+                        "profile_id", "target_profile_sha256", "identity_version",
+                        "identity_sha256", "effective_config_sha256", "effective_config",
+                        "source_closure_sha256", "package_set_sha256",
+                        "toolchain_attestation_sha256",
+                    )
+                } | {
+                    "outputs": {
+                        name: {
+                            "size": document["outputs"][name]["size"],
+                            "sha256": document["outputs"][name]["sha256"],
+                        }
+                        for name in OUTPUT_NAMES
+                    }
+                }
+            differing = _differences(
+                semantic(first_verified.document), semantic(second_verified.document)
+            )
+            return {
+                "schema": COMPARISON_SCHEMA,
+                "identical": not differing,
+                "differing_fields": differing,
+                "first_manifest_sha256": first_verified.manifest_sha256,
+                "second_manifest_sha256": second_verified.manifest_sha256,
+            }
+        finally:
+            second_verified.close()
+    finally:
+        first_verified.close()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -620,7 +940,10 @@ def main(argv: list[str] | None = None) -> int:
         verified = verify_release_manifest(
             args.manifest, required_profile=args.required_profile
         )
-        print(verified.manifest_sha256)
+        try:
+            print(verified.manifest_sha256)
+        finally:
+            verified.close()
         return 0
     comparison = compare_release_manifests(args.first, args.second)
     raw = canonical_json_bytes(comparison)

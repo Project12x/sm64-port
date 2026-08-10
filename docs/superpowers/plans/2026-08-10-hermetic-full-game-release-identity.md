@@ -1080,11 +1080,11 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** `source-complete` in behavior commit `7195fc48`;
-source status is recorded by this documentation commit, while controller-owned
-independent reviews remain pending. Fresh post-commit host verification passes
-all seven exact suites at
-9 + 4 + 40 + 10 + 3 + 7 + 7 = 80 tests and adjacent identity/bootstrap/boot-
+**Live status (2026-08-10):** repair round 1 is `source-complete` in the
+forthcoming behavior commit; controller-owned scoped rereview remains pending,
+so the first `Needs fixes` verdict is still effective. Fresh precommit host
+verification passes all seven exact suites at
+24 + 9 + 41 + 12 + 4 + 9 + 7 = 106 tests and adjacent identity/bootstrap/boot-
 trace/route-view suites at 21 + 15 + 16 + 1 = 53 tests, with zero skips or
 failures; all six changed production scripts also compile. Focused TDD covers
 canonical root-neutral artifact sealing, strict input/output/ELF/CUE
@@ -1106,16 +1106,18 @@ was checked against pinned `yaul-org/libyaul` commit
 `libyaul/build/build.post.iso-cue.mk` and `build.post.bin.mk`. No external
 source was copied.
 
-First independent review verdict: `Needs fixes`; repair round 1 is active.
-Five Important findings remain: verification must preserve immutable manifest
-and output snapshots through capture/staging and staging must roll back every
-partial new file; the resolved profile's effective config/output names must
-match the sealed identity/artifacts; closure/package/toolchain/output paths
-need strict duplicate/casefold/alias validation across hosts; the supported
-writer must create a real historical-v1-compatible manifest; and reproducibility
-comparison must compare canonical identity inputs/output bytes while ignoring
-host layout and non-identity metadata. Task 7 remains `active`; every target
-and release-evidence gate remains open.
+First independent review verdict: `Needs fixes`, with five Important findings.
+Repair round 1 addresses all five: verification owns immutable manifest/output
+snapshots through consumers; staging has ownership-checked transactional
+rollback and manifest-last publication; profile effective config/output names
+are semantically bound; closure/package/toolchain/output schemas reject empty,
+exact/case-fold/path/alias collisions using host-neutral rules; the writer and
+occupancy resolver exercise a real historical v1 ELF/identity; and comparison
+uses canonical identity inputs plus semantic output bytes while ignoring host
+layout/provenance. Desktop launch retains the private CUE/ISO snapshot through
+child exit when Ymir outlives the bounded monitor. Task 7 is `source-complete`
+but not `complete` until controller-owned rereview clears; every target and
+release-evidence gate remains open.
 
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than

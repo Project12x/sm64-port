@@ -280,8 +280,10 @@ def bind_release_manifest(
     """Verify the release before any capture process or SH tool can start."""
     verified = verify_release_manifest(manifest)
     if game.resolve() != verified.outputs["cue"]:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("game CUE differs from verified release manifest")
     if elf.resolve() != verified.outputs["elf"]:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("ELF differs from verified release manifest")
     return verified
 
@@ -912,24 +914,35 @@ def main(argv: list[str] | None = None) -> int:
         verified_release = bind_release_manifest(
             args.release_manifest, args.game, args.elf
         )
+        snapshot_outputs = getattr(
+            verified_release, "snapshot_outputs", {"cue": args.game, "elf": args.elf}
+        )
+        capture_game = snapshot_outputs["cue"]
+        capture_elf = snapshot_outputs["elf"]
         report["release_manifest_sha256"] = verified_release.manifest_sha256
         stage = "artifact-binding"
-        report["artifacts"] = {**bind_capture_artifacts(args.game, args.elf), "ymir": artifact_identity(args.ymir)}
+        report["artifacts"] = {
+            **bind_capture_artifacts(capture_game, capture_elf),
+            "ymir": artifact_identity(args.ymir),
+        }
+        for name in ("cue", "iso", "elf"):
+            if name in report["artifacts"] and hasattr(verified_release, "outputs"):
+                report["artifacts"][name]["path"] = str(verified_release.outputs[name])
         if report["artifacts"]["ymir"] is None:
             raise ValueError("Ymir identity could not be hashed")
         stage = "symbol-resolution"
-        symbols = resolve_required_symbols(args.elf)
+        symbols = resolve_required_symbols(capture_elf)
         report["symbols"] = symbols
-        identity_probe = build_elf_identity_probe(args.elf)
+        identity_probe = build_elf_identity_probe(capture_elf)
         report["identity_probe"] = {key: value for key, value in identity_probe.items() if key != "expected_bytes"}
-        build_identity_probe = build_elf_build_identity_probe(args.elf)
+        build_identity_probe = build_elf_build_identity_probe(capture_elf)
         validate_release_identity_probe(verified_release, build_identity_probe)
         report["elf_build_identity"] = {
             key: value for key, value in build_identity_probe.items()
             if key != "expected_bytes"
         }
         stage = "ymir-start"
-        client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
+        client = YmirClient(args.ymir, args.ipl, capture_game, args.timeout)
         stage = "bios-handoff"
         run_bios_handoff(client, lambda frames: client.call("exec.run_for", {"frames": frames}), lambda _label: None)
         stage = "target-identity"

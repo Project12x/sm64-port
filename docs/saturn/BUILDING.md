@@ -94,14 +94,32 @@ python tools/saturn/stage_saturn_release.py \
   --destination /path/to/new/staged-release
 ```
 
-The staging tool copies only the four verified outputs, writes the manifest
-last, refuses to overwrite a nonempty destination, and verifies the staged
-tree again. The throughput, object-pool, automated HUD, and desktop-Ymir entry
-points now require `--release-manifest`; a separately supplied `--game`,
-`--elf`, or desktop `--cue` must resolve to that manifest's verified output.
-Identity-v2 object-pool captures read `object_pool_capacity` from the manifest's
-hash-bound effective configuration. `--identity-spec` is retained only for an
-explicit historical identity-v1 occupancy capture.
+Verification copies the manifest-bound bytes into a private snapshot before
+returning. The staging tool consumes only that snapshot, copies the four
+outputs transactionally, writes the captured manifest bytes last, and verifies
+the staged tree again. A failed copy or final verification removes only paths
+whose filesystem identity still proves staging ownership; a missing
+destination is removed, a preexisting empty destination remains empty, and
+concurrent foreign replacements are preserved with rollback diagnostics.
+
+The throughput, object-pool, automated HUD, and desktop-Ymir entry points
+require `--release-manifest`; a separately supplied `--game`, `--elf`, or
+desktop `--cue` must resolve to the original manifest paths, while emulator and
+SH-tool reads use the private verified snapshot. If desktop Ymir remains alive
+after the bounded monitor window, a cleanup watcher retains the CUE/ISO
+snapshot until that child exits and records the snapshot root, PID, and cleanup
+state in the launch report. Identity-v2 object-pool captures read
+`object_pool_capacity` from the manifest's hash-bound effective configuration.
+`--identity-spec` is retained only for explicit historical identity-v1
+occupancy; the release writer also accepts a real v1 ELF/identity JSON only
+when the resolved profile derives the same canonical effective-config hash.
+
+Release schemas use forward-slash, Unicode-normalized, case-folded path
+uniqueness independent of the host filesystem and reject Windows-reserved,
+escaping, symlink, and filesystem-alias outputs. `release_manifest.py compare`
+compares canonical identity inputs and each output's size/SHA-256, ignoring
+manifest location, output relative layout, Git provenance, and other
+non-identity metadata.
 
 ## Host environment
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -19,6 +20,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import gen_build_identity as identity
+import target_profile
 from hermetic_manifest import canonical_json_bytes
 
 try:
@@ -33,7 +35,8 @@ BOOT_ADDRESS = 0x06010000
 def _elf32_with_identity(path: Path, raw_identity: bytes) -> None:
     """Create the smallest big-endian ELF32 needed to map one data symbol."""
     name = b"\x00saturn_build_identity\x00"
-    section_offset = 52
+    program_offset = 52
+    section_offset = 84
     text_offset = 0x200
     symtab_offset = (text_offset + len(raw_identity) + 15) & ~15
     strtab_offset = symtab_offset + 32
@@ -41,9 +44,22 @@ def _elf32_with_identity(path: Path, raw_identity: bytes) -> None:
     image[:4] = b"\x7fELF"
     image[4] = 1
     image[5] = 2
+    image[28:32] = program_offset.to_bytes(4, "big")
     image[32:36] = section_offset.to_bytes(4, "big")
+    image[42:44] = (32).to_bytes(2, "big")
+    image[44:46] = (1).to_bytes(2, "big")
     image[46:48] = (40).to_bytes(2, "big")
     image[48:50] = (4).to_bytes(2, "big")
+
+    program = memoryview(image)[program_offset : program_offset + 32]
+    program[0:4] = (1).to_bytes(4, "big")
+    program[4:8] = text_offset.to_bytes(4, "big")
+    program[8:12] = BOOT_ADDRESS.to_bytes(4, "big")
+    program[12:16] = BOOT_ADDRESS.to_bytes(4, "big")
+    program[16:20] = len(raw_identity).to_bytes(4, "big")
+    program[20:24] = len(raw_identity).to_bytes(4, "big")
+    program[24:28] = (4).to_bytes(4, "big")
+    program[28:32] = (4).to_bytes(4, "big")
 
     data_section = memoryview(image)[section_offset + 40 : section_offset + 80]
     data_section[4:8] = (1).to_bytes(4, "big")
@@ -95,7 +111,7 @@ class ReleaseFixture:
             "iso": self.release_dir / "game.iso",
             "cue": self.release_dir / "game.cue",
         }
-        effective_values = {
+        self.effective_values = {
             "features.complete_mario_animation": 1,
             "features.dynamic_actor_closure": 1,
             "features.semantic_audio": 0,
@@ -132,7 +148,7 @@ class ReleaseFixture:
             "schema": "sm64-saturn-resolved-target-profile-v1",
             "profile_id": profile_id,
             "release_enabled": True,
-            "effective_config": effective_values,
+            "effective_config": self.effective_values,
             "package_manifests": [],
             "output_names": {
                 "elf": "game.elf", "source_dat": "SOURCE.DAT",
@@ -146,29 +162,44 @@ class ReleaseFixture:
             "schema": "sm64-saturn-package-set-v2",
             "profile_id": profile_id,
             "packages": [],
-            "package_class_hashes": {},
+            "package_class_hashes": {
+                name: hashlib.sha256(f"empty-{name}".encode("ascii")).hexdigest()
+                for name in target_profile.PACKAGE_CLASSES
+            },
         })
         self._write_canonical(self.toolchain, {
             "schema": "sm64-saturn-toolchain-attestation-v1",
-            "target_abi": "sh2eb-unknown-elf",
-            "components": [],
+            "target_abi": "sh2eb-none-elf",
+            "components": [{
+                "id": "yaul-sh-sdk", "version": "fixture",
+                "binaries": [], "dependencies": [],
+            }],
         })
 
-        artifact_paths: dict[str, Path] = {}
+        self.artifact_paths: dict[str, Path] = {}
         for index, field in enumerate(identity.ARTIFACT_HASH_FIELDS):
             path = self.source_closure if field == "source_hash" else root / f"{field}.bin"
             if path != self.source_closure:
                 path.write_bytes(f"artifact-{index}\n".encode("ascii"))
-            artifact_paths[field] = path
+            self.artifact_paths[field] = path
+        self.rebuild_identity(2)
+        self.outputs["source_dat"].write_bytes(b"source-cart\n")
+        self.outputs["iso"].write_bytes(b"disc-image\n")
+        self.outputs["cue"].write_text('FILE "game.iso" BINARY\n', encoding="ascii")
+
+    def rebuild_identity(self, version: int) -> None:
         spec: dict[str, object] = {
-            "identity_version": 2,
+            "identity_version": version,
             "features": {
-                name: effective_values[f"features.{name}"]
+                name: self.effective_values[f"features.{name}"]
                 for name in identity.FEATURE_BITS
             },
-            **{field: effective_values[field] for field in identity.SCALAR_FIELDS},
             **{
-                field: effective_values[field]
+                field: self.effective_values[field]
+                for field in identity.SCALAR_FIELDS
+            },
+            **{
+                field: self.effective_values[field]
                 for field in identity.COMPILER_CONFIG_FIELDS
             },
             "artifacts": {
@@ -176,18 +207,19 @@ class ReleaseFixture:
                     "path": str(path),
                     "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 }
-                for field, path in artifact_paths.items()
+                for field, path in self.artifact_paths.items()
             },
-            "target_profile": self._descriptor(self.profile),
-            "package_set": self._descriptor(self.package_set),
-            "toolchain_attestation": self._descriptor(self.toolchain),
         }
+        if version == 2:
+            spec.update({
+                "target_profile": self._descriptor(self.profile),
+                "package_set": self._descriptor(self.package_set),
+                "toolchain_attestation": self._descriptor(self.toolchain),
+            })
+        self.identity_spec = spec
         built = identity.build_identity(spec)
         self._write_canonical(self.identity_json, identity.output_manifest(built))
         _elf32_with_identity(self.outputs["elf"], built.raw)
-        self.outputs["source_dat"].write_bytes(b"source-cart\n")
-        self.outputs["iso"].write_bytes(b"disc-image\n")
-        self.outputs["cue"].write_text('FILE "game.iso" BINARY\n', encoding="ascii")
 
     @staticmethod
     def _write_canonical(path: Path, document: dict[str, object]) -> None:
@@ -254,6 +286,23 @@ class ReleaseManifestTests(unittest.TestCase):
                     release_manifest.verify_release_manifest(manifest)
                 path.write_bytes(originals[name])
 
+    def test_verifier_owns_immutable_manifest_and_output_snapshots(self) -> None:
+        manifest = self.fixture.write()
+        manifest_bytes = manifest.read_bytes()
+        output_bytes = {
+            name: path.read_bytes() for name, path in self.fixture.outputs.items()
+        }
+        verified = release_manifest.verify_release_manifest(manifest)
+
+        manifest.write_bytes(b"mutated manifest")
+        for name, path in self.fixture.outputs.items():
+            path.write_bytes(f"mutated {name}".encode("ascii"))
+
+        self.assertEqual(verified.manifest_bytes, manifest_bytes)
+        for name, expected in output_bytes.items():
+            self.assertNotEqual(verified.snapshot_outputs[name], verified.outputs[name])
+            self.assertEqual(verified.snapshot_outputs[name].read_bytes(), expected)
+
     def test_verifier_rejects_effective_config_not_bound_to_embedded_identity(self) -> None:
         manifest = self.fixture.write()
         document = json.loads(manifest.read_text(encoding="ascii"))
@@ -301,6 +350,218 @@ class ReleaseManifestTests(unittest.TestCase):
                     self.fixture.toolchain, self.fixture.outputs, "development",
                 )
 
+    def test_builder_binds_profile_effective_config_to_identity(self) -> None:
+        profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))
+        profile["effective_config"]["object_pool_capacity"] += 1
+        self.fixture._write_canonical(self.fixture.profile, profile)
+        self.fixture.rebuild_identity(2)
+        with self.assertRaisesRegex(ValueError, "profile effective config.*identity"):
+            self.fixture.build()
+
+    def test_builder_binds_profile_output_names_to_artifact_basenames(self) -> None:
+        profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))
+        profile["output_names"]["elf"] = "different.elf"
+        self.fixture._write_canonical(self.fixture.profile, profile)
+        self.fixture.rebuild_identity(2)
+        with self.assertRaisesRegex(ValueError, "profile output name.*elf"):
+            self.fixture.build()
+
+    def test_builder_writes_and_verifies_real_historical_v1(self) -> None:
+        self.fixture.rebuild_identity(1)
+        manifest = self.fixture.write()
+        verified = release_manifest.verify_release_manifest(manifest)
+        self.assertEqual(verified.document["identity_version"], 1)
+        self.assertEqual(
+            verified.document["effective_config"]["object_pool_capacity"], 208
+        )
+        self.assertEqual(
+            verified.document["effective_config"]["features"],
+            {
+                "complete_mario_animation": 1,
+                "dynamic_actor_closure": 1,
+                "semantic_audio": 0,
+            },
+        )
+
+    def test_builder_rejects_case_colliding_closure_paths_and_owners(self) -> None:
+        rows = [
+            {
+                "path": "src/Mario.c", "sha256": "1" * 64,
+                "class": "compiled-source", "owners": ["Actor", "actor"],
+            },
+            {
+                "path": "src/mario.c", "sha256": "2" * 64,
+                "class": "compiled-source", "owners": ["actor"],
+            },
+        ]
+        self.fixture._write_canonical(self.fixture.source_closure, {
+            "schema": "sm64-saturn-source-closure-v2", "inputs": rows,
+        })
+        with self.assertRaisesRegex(ValueError, "case-colliding.*closure|closure.*case-colliding"):
+            self.fixture.build()
+
+    def test_builder_rejects_case_colliding_package_identities(self) -> None:
+        rows = [
+            {"package_class": "actor", "package_id": "Mario", "manifest_sha256": "1" * 64},
+            {"package_class": "actor", "package_id": "mario", "manifest_sha256": "2" * 64},
+        ]
+        profile = json.loads(self.fixture.profile.read_text(encoding="ascii"))
+        profile["package_manifests"] = rows
+        self.fixture._write_canonical(self.fixture.profile, profile)
+        package_set = json.loads(self.fixture.package_set.read_text(encoding="ascii"))
+        package_set["packages"] = rows
+        self.fixture._write_canonical(self.fixture.package_set, package_set)
+        with self.assertRaisesRegex(ValueError, "case-colliding.*package|package.*case-colliding"):
+            self.fixture.build()
+
+    def test_builder_rejects_case_colliding_toolchain_components_and_paths(self) -> None:
+        components = [
+            {
+                "id": "Yaul", "version": "1", "binaries": [
+                    {"path": "bin/sh-elf-gcc", "sha256": "1" * 64},
+                    {"path": "BIN/SH-ELF-GCC", "sha256": "1" * 64},
+                ], "dependencies": [],
+            },
+            {"id": "yaul", "version": "1", "binaries": [], "dependencies": []},
+        ]
+        self.fixture._write_canonical(self.fixture.toolchain, {
+            "schema": "sm64-saturn-toolchain-attestation-v1",
+            "target_abi": "sh2eb-unknown-elf", "components": components,
+        })
+        with self.assertRaisesRegex(ValueError, "case-colliding.*toolchain|toolchain.*case-colliding"):
+            self.fixture.build()
+
+    def test_builder_rejects_toolchain_path_collisions_across_components(self) -> None:
+        components = [
+            {
+                "id": "assembler", "version": "1", "binaries": [
+                    {"path": "bin/sh-elf-as", "sha256": "1" * 64},
+                ], "dependencies": [],
+            },
+            {
+                "id": "compiler", "version": "1", "binaries": [],
+                "dependencies": [
+                    {"path": "BIN/SH-ELF-AS", "sha256": "1" * 64},
+                ],
+            },
+        ]
+        self.fixture._write_canonical(self.fixture.toolchain, {
+            "schema": "sm64-saturn-toolchain-attestation-v1",
+            "target_abi": "sh2eb-unknown-elf", "components": components,
+        })
+        with self.assertRaisesRegex(
+            ValueError, "case-colliding.*toolchain|toolchain.*case-colliding"
+        ):
+            self.fixture.build()
+
+    def test_builder_rejects_empty_schema_identifiers_and_paths(self) -> None:
+        cases = ("closure-path", "closure-owner", "package-id", "component-id", "tool-path")
+        for case in cases:
+            with self.subTest(case=case):
+                fixture = ReleaseFixture(self.fixture.root / case)
+                if case in ("closure-path", "closure-owner"):
+                    row = {
+                        "path": "" if case == "closure-path" else "src/actor.c",
+                        "sha256": "1" * 64,
+                        "class": "compiled-source",
+                        "owners": ["" if case == "closure-owner" else "actor"],
+                    }
+                    fixture._write_canonical(fixture.source_closure, {
+                        "schema": "sm64-saturn-source-closure-v2", "inputs": [row],
+                    })
+                elif case == "package-id":
+                    rows = [{
+                        "package_class": "actor", "package_id": "",
+                        "manifest_sha256": "1" * 64,
+                    }]
+                    profile = json.loads(fixture.profile.read_text(encoding="ascii"))
+                    profile["package_manifests"] = rows
+                    fixture._write_canonical(fixture.profile, profile)
+                    package_set = json.loads(fixture.package_set.read_text(encoding="ascii"))
+                    package_set["packages"] = rows
+                    fixture._write_canonical(fixture.package_set, package_set)
+                else:
+                    component = {
+                        "id": "" if case == "component-id" else "compiler",
+                        "version": "1", "dependencies": [], "binaries": [],
+                    }
+                    if case == "tool-path":
+                        component["binaries"] = [{"path": "", "sha256": "1" * 64}]
+                    fixture._write_canonical(fixture.toolchain, {
+                        "schema": "sm64-saturn-toolchain-attestation-v1",
+                        "target_abi": "sh2eb-unknown-elf", "components": [component],
+                    })
+                with self.assertRaisesRegex(ValueError, "invalid"):
+                    fixture.build()
+
+    def test_verifier_rejects_portable_output_collisions_before_file_io(self) -> None:
+        manifest = self.fixture.write()
+        document = json.loads(manifest.read_text(encoding="ascii"))
+        document["outputs"]["source_dat"] = {
+            **document["outputs"]["elf"], "path": "OBJ/GAME.ELF",
+        }
+        manifest.write_bytes(canonical_json_bytes(document))
+        with (
+            mock.patch.object(
+                release_manifest, "_measure",
+                side_effect=AssertionError("output I/O must not precede schema validation"),
+            ),
+            self.assertRaisesRegex(ValueError, "case-colliding.*output|output.*case-colliding"),
+        ):
+            release_manifest.verify_release_manifest(manifest)
+
+    def test_verifier_rejects_windows_alias_and_escape_paths_before_file_io(self) -> None:
+        for unsafe_path in ("obj/CON", "obj/game.elf.", "../game.elf", ""):
+            with self.subTest(unsafe_path=unsafe_path):
+                fixture = ReleaseFixture(
+                    self.fixture.root / ("unsafe-" + str(len(unsafe_path))) / hashlib.sha256(
+                        unsafe_path.encode("ascii")
+                    ).hexdigest()[:8]
+                )
+                manifest = fixture.write()
+                document = json.loads(manifest.read_text(encoding="ascii"))
+                document["outputs"]["elf"]["path"] = unsafe_path
+                manifest.write_bytes(canonical_json_bytes(document))
+                with (
+                    mock.patch.object(
+                        release_manifest,
+                        "_resolve_release_path",
+                        side_effect=AssertionError("path I/O must follow portable validation"),
+                    ),
+                    self.assertRaisesRegex(ValueError, "path.*(invalid|portable|canonical)"),
+                ):
+                    release_manifest.verify_release_manifest(manifest)
+
+    def test_builder_rejects_hardlinked_output_aliases(self) -> None:
+        source_dat = self.fixture.outputs["source_dat"]
+        source_dat.unlink()
+        os.link(self.fixture.outputs["elf"], source_dat)
+        with self.assertRaisesRegex(ValueError, "output.*alias"):
+            self.fixture.build()
+
+    def test_verifier_rejects_an_injected_output_alias_race(self) -> None:
+        self.fixture.outputs["source_dat"].write_bytes(
+            self.fixture.outputs["iso"].read_bytes()
+        )
+        manifest = self.fixture.write()
+        real_copy = release_manifest._copy_verified_snapshot
+
+        def alias_before_copy(source: Path, target: Path, record, label: str):
+            if label == "source_dat":
+                source.unlink()
+                os.link(self.fixture.outputs["iso"], source)
+            return real_copy(source, target, record, label)
+
+        with (
+            mock.patch.object(
+                release_manifest,
+                "_copy_verified_snapshot",
+                side_effect=alias_before_copy,
+            ),
+            self.assertRaisesRegex(ValueError, "output alias"),
+        ):
+            release_manifest.verify_release_manifest(manifest)
+
     def test_compare_accepts_same_bytes_at_different_host_roots(self) -> None:
         first = self.fixture.write()
         relocated = self.fixture.root / "worktree-b"
@@ -310,6 +571,38 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertTrue(comparison["identical"])
         self.assertEqual(comparison["differing_fields"], [])
         self.assertNotIn(str(self.fixture.root), json.dumps(comparison))
+
+    def test_compare_ignores_relative_layout_and_provenance(self) -> None:
+        first = self.fixture.write()
+        second_root = self.fixture.root / "second-host"
+        nested = second_root / "different" / "layout"
+        (nested / "obj").mkdir(parents=True)
+        for name, relative in {
+            "elf": "different/layout/obj/game.elf",
+            "source_dat": "different/layout/obj/SOURCE.DAT",
+            "iso": "different/layout/game.iso",
+            "cue": "different/layout/game.cue",
+        }.items():
+            target = second_root / relative
+            shutil.copyfile(self.fixture.outputs[name], target)
+        document = json.loads(first.read_text(encoding="ascii"))
+        for name, relative in {
+            "elf": "different/layout/obj/game.elf",
+            "source_dat": "different/layout/obj/SOURCE.DAT",
+            "iso": "different/layout/game.iso",
+            "cue": "different/layout/game.cue",
+        }.items():
+            document["outputs"][name]["path"] = relative
+        document["provenance"] = {
+            "git_revision": "b" * 40, "closure_clean": False,
+        }
+        document["mode"] = "development"
+        second = second_root / first.name
+        second.write_bytes(canonical_json_bytes(document))
+
+        comparison = release_manifest.compare_release_manifests(first, second)
+        self.assertTrue(comparison["identical"])
+        self.assertEqual(comparison["differing_fields"], [])
 
     def test_compare_reports_exact_changed_output_field(self) -> None:
         first = self.fixture.write()
@@ -327,6 +620,43 @@ class ReleaseManifestTests(unittest.TestCase):
         comparison = release_manifest.compare_release_manifests(first, second)
         self.assertFalse(comparison["identical"])
         self.assertIn("outputs.iso.sha256", comparison["differing_fields"])
+
+    def test_compare_reports_identity_config_and_root_changes_deterministically(self) -> None:
+        first = self.fixture.write()
+        config_fixture = ReleaseFixture(self.fixture.root / "config-change")
+        config_fixture.effective_values["object_pool_capacity"] = 209
+        profile = json.loads(config_fixture.profile.read_text(encoding="ascii"))
+        profile["effective_config"] = config_fixture.effective_values
+        config_fixture._write_canonical(config_fixture.profile, profile)
+        config_fixture.rebuild_identity(2)
+        config_comparison = release_manifest.compare_release_manifests(
+            first, config_fixture.write()
+        )
+        self.assertFalse(config_comparison["identical"])
+        self.assertEqual(
+            config_comparison["differing_fields"],
+            sorted(config_comparison["differing_fields"]),
+        )
+        self.assertIn(
+            "effective_config.object_pool_capacity",
+            config_comparison["differing_fields"],
+        )
+
+        root_fixture = ReleaseFixture(self.fixture.root / "root-change")
+        package_set = json.loads(root_fixture.package_set.read_text(encoding="ascii"))
+        package_class = sorted(target_profile.PACKAGE_CLASSES)[0]
+        package_set["package_class_hashes"][package_class] = "f" * 64
+        root_fixture._write_canonical(root_fixture.package_set, package_set)
+        root_fixture.rebuild_identity(2)
+        root_comparison = release_manifest.compare_release_manifests(
+            first, root_fixture.write()
+        )
+        self.assertFalse(root_comparison["identical"])
+        self.assertEqual(
+            root_comparison["differing_fields"],
+            sorted(root_comparison["differing_fields"]),
+        )
+        self.assertIn("package_set_sha256", root_comparison["differing_fields"])
 
 
 class ReleaseManifestMissingImplementationTests(unittest.TestCase):

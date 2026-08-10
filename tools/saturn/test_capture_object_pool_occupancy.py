@@ -19,6 +19,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 import capture_object_pool_occupancy as capture
 import gen_build_identity as identity
+import test_release_manifest as release_fixtures
 
 
 def _spec(root: Path, capacity: int) -> dict[str, object]:
@@ -196,14 +197,19 @@ class ObjectPoolOccupancyTests(unittest.TestCase):
                     }
                     identity_spec = root / "v1.json" if version == 1 else None
                     if identity_spec is not None:
-                        identity_spec.write_text("{}", encoding="utf-8")
+                        identity_spec.write_text(
+                            '{"object_pool_capacity":208}', encoding="utf-8"
+                        )
                     with (
                         mock.patch.object(capture, "verify_release_manifest", return_value=verified),
                         mock.patch.object(capture, "build_elf_build_identity_probe", return_value=probe),
                         mock.patch.object(capture, "pool_capacity_from_sealed_artifact", return_value=208),
                         mock.patch.object(
                             capture, "build_identity",
-                            return_value=SimpleNamespace(raw=bytes(probe["expected_bytes"])),
+                            return_value=SimpleNamespace(
+                                raw=bytes(probe["expected_bytes"]),
+                                values={"object_pool_capacity": 208},
+                            ),
                         ),
                     ):
                         binding = resolver(root / "release.json", game, elf, identity_spec)
@@ -242,6 +248,39 @@ class ObjectPoolOccupancyTests(unittest.TestCase):
                 self.assertRaisesRegex(ValueError, "identity spec.*ELF identity symbol"),
             ):
                 resolver(root / "release.json", game, elf, spec)
+
+    def test_release_binding_exposes_only_snapshot_paths_to_capture_io(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = release_fixtures.ReleaseFixture(Path(directory))
+            manifest = fixture.write()
+            expected_elf = fixture.outputs["elf"].read_bytes()
+            binding = capture.resolve_release_binding(
+                manifest, fixture.outputs["cue"], fixture.outputs["elf"], None
+            )
+            for name, path in fixture.outputs.items():
+                path.write_bytes(f"mutated {name}".encode("ascii"))
+            self.assertNotEqual(binding["elf"], fixture.outputs["elf"].resolve())
+            self.assertNotEqual(binding["cue"], fixture.outputs["cue"].resolve())
+            self.assertEqual(binding["elf"].read_bytes(), expected_elf)
+
+    def test_real_v1_release_writer_and_occupancy_compatibility(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = release_fixtures.ReleaseFixture(Path(directory))
+            fixture.rebuild_identity(1)
+            manifest = fixture.write()
+            spec = fixture.root / "identity-v1-spec.json"
+            spec.write_text(
+                json.dumps(fixture.identity_spec, sort_keys=True), encoding="utf-8"
+            )
+            binding = capture.resolve_release_binding(
+                manifest, fixture.outputs["cue"], fixture.outputs["elf"], spec
+            )
+            self.assertEqual(binding["verified"].document["identity_version"], 1)
+            self.assertEqual(binding["pool_capacity"], 208)
+            self.assertEqual(
+                bytes(binding["probe"]["expected_bytes"]),
+                identity.build_identity(fixture.identity_spec).raw,
+            )
 
     def test_prove_sealed_target_identity_requires_elf_and_sealed_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

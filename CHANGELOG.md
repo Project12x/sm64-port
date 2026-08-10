@@ -71,6 +71,20 @@
 
 ### Fixed
 
+- Hardened exact Saturn release handling after review. Verification now
+  materializes private manifest-bound output snapshots, and capture, SH-tool,
+  staging, and desktop-Ymir consumers use only those verified bytes; a live
+  desktop process retains its snapshot until child exit. Staging is
+  transactional for missing or empty destinations, rolls back only paths it
+  can still prove it owns, preserves concurrent foreign replacements, and
+  publishes the manifest last. The writer now semantically binds resolved
+  profile configuration and output names, supports real historical identity
+  v1 inputs, and rejects host-neutral case/path/alias collisions. Comparison
+  now ignores host layout and provenance while deterministically comparing
+  canonical identity inputs and output bytes. These changes close TOCTOU,
+  partial-publication, cross-platform alias, v1 compatibility, and false
+  reproducibility failures without changing the four-artifact release format.
+
 - Corrected hermetic sourceboot dependency discovery after review. C, C++, and
   preprocessed assembly now use distinct scans matching Yaul's real compiler,
   flags, and language-specific specs; every discovery invocation rescans even

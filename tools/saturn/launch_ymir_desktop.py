@@ -12,12 +12,14 @@ import argparse
 import hashlib
 import json
 import subprocess
+import threading
 import time
 from datetime import UTC, datetime
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from release_manifest import verify_release_manifest
+from release_manifest import ReleaseManifestVerification, verify_release_manifest
 
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +29,17 @@ DEFAULT_YMIR = (
     PROJECT_ROOT.parent / "ymir-agent" / "build-agent" / "apps" / "ymir-sdl3"
     / "Release" / "ymir-sdl3.exe"
 )
+
+
+@dataclass(frozen=True)
+class DesktopReleaseBinding:
+    cue: Path
+    manifest_sha256: str
+    verification: ReleaseManifestVerification
+
+    def __iter__(self):
+        yield self.cue
+        yield self.manifest_sha256
 
 
 def parse_cue_file_reference(cue: Path) -> Path:
@@ -80,17 +93,33 @@ def build_launch_plan(executable: Path, profile: Path, cue: Path) -> dict[str, A
 
 def resolve_release_cue(
     release_manifest: Path, cue: Path | None
-) -> tuple[Path, str]:
+) -> DesktopReleaseBinding:
     """Select only the CUE whose bytes were verified by the release manifest."""
     verified = verify_release_manifest(release_manifest)
-    selected = verified.outputs["cue"]
-    if cue is not None and cue.resolve() != selected:
+    source = verified.outputs["cue"]
+    if cue is not None and cue.resolve() != source:
+        verified.close()
         raise ValueError("separate CUE differs from verified release manifest")
-    return selected, verified.manifest_sha256
+    selected = getattr(verified, "snapshot_outputs", verified.outputs)["cue"]
+    return DesktopReleaseBinding(selected, verified.manifest_sha256, verified)
+
+
+def _cleanup_snapshot_after_exit(
+    process: subprocess.Popen[str], cleanup: Callable[[], None]
+) -> None:
+    try:
+        process.wait()
+    finally:
+        cleanup()
 
 
 def launch_and_monitor(
-    plan: dict[str, Any], monitor_seconds: float, report_output: Path
+    plan: dict[str, Any],
+    monitor_seconds: float,
+    report_output: Path,
+    *,
+    snapshot_cleanup: Callable[[], None] | None = None,
+    snapshot_root: Path | None = None,
 ) -> dict[str, Any]:
     if monitor_seconds < 0:
         raise ValueError("monitor seconds must be non-negative")
@@ -115,7 +144,7 @@ def launch_and_monitor(
         while process.poll() is None and time.monotonic() < deadline:
             time.sleep(0.1)
         exit_code = process.poll()
-    return {
+    result = {
         "requested": True,
         "pid": process.pid,
         "started_utc": started.isoformat(),
@@ -125,6 +154,25 @@ def launch_and_monitor(
         "stdout_log": str(stdout_log),
         "stderr_log": str(stderr_log),
     }
+    if snapshot_cleanup is not None:
+        if exit_code is None:
+            watcher = threading.Thread(
+                target=_cleanup_snapshot_after_exit,
+                args=(process, snapshot_cleanup),
+                name=f"ymir-snapshot-cleanup-{process.pid}",
+                daemon=False,
+            )
+            watcher.start()
+            state = "scheduled-after-process-exit"
+        else:
+            snapshot_cleanup()
+            state = "removed-after-process-exit"
+        result["verified_snapshot"] = {
+            "root": str(snapshot_root.resolve()) if snapshot_root is not None else None,
+            "cleanup_state": state,
+            "owner_pid": process.pid,
+        }
+    return result
 
 
 def write_report(report: dict[str, Any], output: Path) -> None:
@@ -143,21 +191,37 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
 
-    cue, manifest_sha256 = resolve_release_cue(args.release_manifest, args.cue)
-    plan = build_launch_plan(args.ymir, args.profile, cue)
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    output = args.output or (WORKTREE_ROOT / "build" / "saturn" / "ymir-desktop-launches" / f"ymir-desktop-launch-{timestamp}.json")
-    report: dict[str, Any] = {
-        "created_utc": datetime.now(UTC).isoformat(),
-        "release_manifest_sha256": manifest_sha256,
-        "plan": plan,
-        "execution": {"requested": False, "reason": "dry-run; pass --launch to start GUI"},
-    }
-    if args.launch:
-        report["execution"] = launch_and_monitor(plan, args.monitor_seconds, output)
-    write_report(report, output)
-    print(output.resolve())
-    return 0
+    release_binding = resolve_release_cue(args.release_manifest, args.cue)
+    snapshot_transferred = False
+    try:
+        cue, manifest_sha256 = release_binding
+        plan = build_launch_plan(args.ymir, args.profile, cue)
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        output = args.output or (WORKTREE_ROOT / "build" / "saturn" / "ymir-desktop-launches" / f"ymir-desktop-launch-{timestamp}.json")
+        report: dict[str, Any] = {
+            "created_utc": datetime.now(UTC).isoformat(),
+            "release_manifest_sha256": manifest_sha256,
+            "plan": plan,
+            "execution": {"requested": False, "reason": "dry-run; pass --launch to start GUI"},
+        }
+        if args.launch:
+            report["execution"] = launch_and_monitor(
+                plan,
+                args.monitor_seconds,
+                output,
+                snapshot_cleanup=release_binding.verification.close,
+                snapshot_root=release_binding.verification.snapshot_root,
+            )
+            snapshot_transferred = (
+                report["execution"]["verified_snapshot"]["cleanup_state"]
+                == "scheduled-after-process-exit"
+            )
+        write_report(report, output)
+        print(output.resolve())
+        return 0
+    finally:
+        if not snapshot_transferred:
+            release_binding.verification.close()
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@ try:
 except ModuleNotFoundError as error:
     raise AssertionError("sourceboot throughput capture helper is missing") from error
 import gen_build_identity as identity
+import test_release_manifest as release_fixtures
 
 
 BOOT_ADDRESS = 0x06010000
@@ -1267,6 +1268,24 @@ class ThroughputCaptureTests(unittest.TestCase):
             with mock.patch.object(capture, "verify_release_manifest", return_value=verified):
                 with self.assertRaisesRegex(ValueError, "game CUE differs"):
                     binder(root / "release.json", game, elf)
+
+    def test_release_binding_retains_verified_snapshot_after_source_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = release_fixtures.ReleaseFixture(Path(directory))
+            manifest = fixture.write()
+            expected = fixture.outputs["elf"].read_bytes()
+            verified = capture.bind_release_manifest(
+                manifest, fixture.outputs["cue"], fixture.outputs["elf"]
+            )
+            for name, path in fixture.outputs.items():
+                path.write_bytes(f"mutated {name}".encode("ascii"))
+            self.assertEqual(
+                verified.snapshot_outputs["elf"].read_bytes(), expected
+            )
+            probe = capture.build_elf_build_identity_probe(
+                verified.snapshot_outputs["elf"]
+            )
+            capture.validate_release_identity_probe(verified, probe)
 
 
 if __name__ == "__main__":

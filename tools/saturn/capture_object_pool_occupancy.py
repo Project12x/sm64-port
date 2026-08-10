@@ -106,13 +106,19 @@ def resolve_release_binding(
     """Resolve capacity and identity only from a fully verified release."""
     verified = verify_release_manifest(manifest)
     if game.resolve() != verified.outputs["cue"]:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("game CUE differs from verified release manifest")
     if elf.resolve() != verified.outputs["elf"]:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("ELF differs from verified release manifest")
+    snapshot = getattr(verified, "snapshot_outputs", verified.outputs)
+    capture_elf = snapshot["elf"]
+    capture_cue = snapshot["cue"]
     version = verified.document["identity_version"]
     if version == 1 and identity_spec is None:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("identity spec is required for identity v1 compatibility (--identity-spec)")
-    probe = build_elf_build_identity_probe(verified.outputs["elf"])
+    probe = build_elf_build_identity_probe(capture_elf)
     validate_release_identity_probe(verified, probe)
     if version == 2:
         values = verified.document["effective_config"]
@@ -122,12 +128,13 @@ def resolve_release_binding(
     else:
         assert identity_spec is not None
         spec = json.loads(identity_spec.read_text(encoding="utf-8"))
-        expected = build_identity(spec).raw
+        built = build_identity(spec)
+        expected = built.raw
         if expected != bytes(probe["expected_bytes"]):
             raise ValueError("identity spec differs from release ELF identity symbol")
-        capacity = pool_capacity_from_sealed_artifact(
-            identity_spec, verified.outputs["elf"]
-        )
+        capacity = spec.get("object_pool_capacity")
+        if type(capacity) is not int:
+            raise ValueError("identity v1 spec has no integer object_pool_capacity")
         values = spec
     return {
         "verified": verified,
@@ -135,6 +142,8 @@ def resolve_release_binding(
         "sealed_identity": bytes(probe["expected_bytes"]),
         "identity_values": values,
         "pool_capacity": capacity,
+        "cue": capture_cue,
+        "elf": capture_elf,
         "release_manifest_sha256": verified.manifest_sha256,
     }
 
@@ -390,7 +399,11 @@ def main(argv: list[str] | None = None) -> int:
         release_binding = resolve_release_binding(
             args.release_manifest, args.game, args.elf, args.identity_spec
         )
-        artifacts = bind_capture_artifacts(args.game, args.elf)
+        capture_cue = release_binding.get("cue", args.game)
+        capture_elf = release_binding.get("elf", args.elf)
+        artifacts = bind_capture_artifacts(
+            capture_cue, capture_elf
+        )
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
@@ -398,11 +411,11 @@ def main(argv: list[str] | None = None) -> int:
         identity_values = release_binding["identity_values"]
         sealed_identity = release_binding["sealed_identity"]
         pool_capacity = release_binding["pool_capacity"]
-        target_identity_probe = build_elf_identity_probe(args.elf)
+        target_identity_probe = build_elf_identity_probe(capture_elf)
         build_identity_probe = release_binding["probe"]
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
-    smoke_addresses = resolve_smoke_addresses(args.elf)
+    smoke_addresses = resolve_smoke_addresses(capture_elf)
     probe_address = smoke_addresses[PROBE_SYMBOL]
 
     wall_start = time.perf_counter()
@@ -413,7 +426,9 @@ def main(argv: list[str] | None = None) -> int:
     target_identity: dict[str, Any] | None = None
     failure: BaseException | None = None
     try:
-        client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
+        client = YmirClient(
+            args.ymir, args.ipl, capture_cue, args.timeout
+        )
 
         def run_for(frames: int) -> None:
             nonlocal emulated_frames
@@ -479,8 +494,8 @@ def main(argv: list[str] | None = None) -> int:
         "route_note": route_note,
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
-        "game": artifact_identity(args.game),
-        "elf": artifact_identity(args.elf),
+        "game": artifact_identity(capture_cue),
+        "elf": artifact_identity(capture_elf),
         "artifacts": artifacts,
         "release_manifest_sha256": release_binding["release_manifest_sha256"],
         "build_identity_spec": (

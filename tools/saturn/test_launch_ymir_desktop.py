@@ -7,6 +7,8 @@ import hashlib
 import json
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +23,7 @@ try:
     import launch_ymir_desktop as desktop
 except ModuleNotFoundError as error:
     raise AssertionError("desktop Ymir launch helper is missing") from error
+import test_release_manifest as release_fixtures
 
 
 class DesktopYmirLaunchTests(unittest.TestCase):
@@ -43,8 +46,12 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             iso.write_bytes(b"disc")
             cue.write_text('FILE "game.iso" BINARY\n', encoding="ascii")
             manifest.write_bytes(b"manifest")
+            verification = mock.Mock()
+            binding = desktop.DesktopReleaseBinding(
+                cue.resolve(), "a" * 64, verification
+            )
             with mock.patch.object(
-                desktop, "resolve_release_cue", return_value=(cue.resolve(), "a" * 64)
+                desktop, "resolve_release_cue", return_value=binding
             ):
                 result = desktop.main([
                     "--release-manifest", str(manifest), "--ymir", str(executable),
@@ -53,6 +60,7 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(result, 0)
         self.assertEqual(report["release_manifest_sha256"], "a" * 64)
+        verification.close.assert_called_once_with()
 
     def test_release_manifest_selects_cue_and_rejects_a_separate_mismatch(self) -> None:
         resolver = getattr(desktop, "resolve_release_cue", None)
@@ -64,6 +72,7 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             verified = SimpleNamespace(
                 manifest_sha256="a" * 64,
                 outputs={"cue": cue.resolve()},
+                close=mock.Mock(),
             )
             with mock.patch.object(desktop, "verify_release_manifest", return_value=verified):
                 resolved, digest = resolver(root / "release.json", None)
@@ -73,6 +82,30 @@ class DesktopYmirLaunchTests(unittest.TestCase):
                 other.write_bytes(b"cue")
                 with self.assertRaisesRegex(ValueError, "CUE differs"):
                     resolver(root / "release.json", other)
+
+    def test_release_binding_keeps_snapshot_alive_through_launch_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = release_fixtures.ReleaseFixture(root / "release-source")
+            manifest = fixture.write()
+            expected_cue_sha256 = hashlib.sha256(
+                fixture.outputs["cue"].read_bytes()
+            ).hexdigest()
+            executable = root / "ymir.exe"
+            profile = root / "profile"
+            executable.write_bytes(b"ymir")
+            profile.mkdir()
+            binding = desktop.resolve_release_cue(manifest, fixture.outputs["cue"])
+            cue, _digest = binding
+            fixture.outputs["cue"].write_bytes(b"mutated cue")
+            fixture.outputs["iso"].write_bytes(b"mutated iso")
+            plan = desktop.build_launch_plan(executable, profile, cue)
+            self.assertNotEqual(cue, fixture.outputs["cue"].resolve())
+            self.assertEqual(
+                plan["cue"]["sha256"],
+                expected_cue_sha256,
+            )
+            self.assertIsNotNone(binding.verification)
 
     def test_build_plan_uses_project_profile_disc_and_executable_directory(self) -> None:
         builder = getattr(desktop, "build_launch_plan", None)
@@ -145,6 +178,51 @@ class DesktopYmirLaunchTests(unittest.TestCase):
             self.assertEqual(execution["stderr_log"], str(report.with_suffix(".stderr.log")))
             self.assertTrue(report.with_suffix(".stdout.log").is_file())
             self.assertTrue(report.with_suffix(".stderr.log").is_file())
+
+    def test_live_gui_keeps_verified_snapshot_until_child_exit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = release_fixtures.ReleaseFixture(root / "release-source")
+            manifest = fixture.write()
+            executable = root / "ymir.exe"
+            profile = root / "profile"
+            output = root / "launch.json"
+            executable.write_bytes(b"ymir")
+            profile.mkdir()
+            child_exited = threading.Event()
+            process = mock.Mock(pid=4321)
+            process.poll.return_value = None
+            process.wait.side_effect = lambda: child_exited.wait(timeout=2)
+
+            with mock.patch.object(desktop.subprocess, "Popen", return_value=process):
+                result = desktop.main([
+                    "--release-manifest", str(manifest),
+                    "--cue", str(fixture.outputs["cue"]),
+                    "--ymir", str(executable),
+                    "--profile", str(profile),
+                    "--output", str(output),
+                    "--launch", "--monitor-seconds", "0",
+                ])
+
+            report = json.loads(output.read_text(encoding="utf-8"))
+            snapshot_root = Path(report["execution"]["verified_snapshot"]["root"])
+            snapshot_cue = Path(report["plan"]["cue"]["path"])
+            snapshot_iso = Path(report["plan"]["iso"]["path"])
+            self.assertEqual(result, 0)
+            self.assertTrue(report["execution"]["alive_after_monitor"])
+            self.assertEqual(
+                report["execution"]["verified_snapshot"]["cleanup_state"],
+                "scheduled-after-process-exit",
+            )
+            self.assertTrue(snapshot_cue.is_file())
+            self.assertTrue(snapshot_iso.is_file())
+            self.assertTrue(snapshot_root.is_dir())
+
+            child_exited.set()
+            deadline = time.monotonic() + 2
+            while snapshot_root.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertFalse(snapshot_root.exists())
 
 
 if __name__ == "__main__":

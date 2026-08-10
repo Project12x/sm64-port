@@ -17,6 +17,7 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import capture_sourceboot_hud_state as capture
+import test_release_manifest as release_fixtures
 
 
 class HudReleaseBindingTests(unittest.TestCase):
@@ -93,6 +94,20 @@ class HudReleaseBindingTests(unittest.TestCase):
                 other.write_bytes(b"cue")
                 with self.assertRaisesRegex(ValueError, "game CUE differs"):
                     resolver(root / "release.json", other)
+
+    def test_release_binding_keeps_snapshot_cue_and_elf_alive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = release_fixtures.ReleaseFixture(Path(directory))
+            manifest = fixture.write()
+            expected = {
+                name: fixture.outputs[name].read_bytes() for name in ("cue", "elf")
+            }
+            binding = capture.resolve_release_binding(manifest, fixture.outputs["cue"])
+            fixture.outputs["cue"].write_bytes(b"mutated cue")
+            fixture.outputs["elf"].write_bytes(b"mutated elf")
+            for name in ("cue", "elf"):
+                self.assertNotEqual(binding[name], fixture.outputs[name].resolve())
+                self.assertEqual(binding[name].read_bytes(), expected[name])
 
 
 if __name__ == "__main__":

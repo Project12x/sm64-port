@@ -78,11 +78,15 @@ def resolve_release_binding(manifest: Path, game: Path) -> dict[str, Any]:
     """Verify the release and select its ELF before Ymir can start."""
     verified = verify_release_manifest(manifest)
     if game.resolve() != verified.outputs["cue"]:
+        getattr(verified, "close", lambda: None)()
         raise ValueError("game CUE differs from verified release manifest")
+    snapshot = getattr(verified, "snapshot_outputs", verified.outputs)
     return {
-        "elf": verified.outputs["elf"],
+        "cue": snapshot["cue"],
+        "elf": snapshot["elf"],
         "elf_sha256": verified.document["outputs"]["elf"]["sha256"],
         "release_manifest_sha256": verified.manifest_sha256,
+        "verified": verified,
     }
 
 
@@ -234,7 +238,9 @@ def main(argv: list[str] | None = None) -> int:
     raw_word: int | None = None
     screenshot_result: dict[str, Any] = {}
     try:
-        client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
+        client = YmirClient(
+            args.ymir, args.ipl, binding.get("cue", args.game), args.timeout
+        )
 
         def run_for(frames: int) -> None:
             remaining = frames
