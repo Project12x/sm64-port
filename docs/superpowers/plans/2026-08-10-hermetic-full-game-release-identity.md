@@ -1591,6 +1591,16 @@ interpreter launches as `D:/Code/.../python.exe`. The binding below therefore
 normalizes only that explicit assignment to forward slashes; the profile,
 release mode, toolchain, `-j1`, and all accepted BOB flags remain unchanged.
 
+The next restart completed assets and reached identity discovery, then was
+discarded before closure generation when the same POSIX-shell boundary consumed
+the backslashes in `YAUL_INSTALL_ROOT` before the first `sh-elf-gcc -MM` call.
+Direct wrapper execution proves the pinned GCC 14.3.0 launches from the
+forward-slash spelling. The exact binding below now normalizes both explicit
+Windows absolute inputs passed into MSYS Make. Candidate B must detach at the
+final source commit that produces successful candidate A, not historical Task
+8 head: these narrow Task 9 execution fixes are part of the candidate source
+identity and remain subject to controller-owned independent review.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -1606,7 +1616,7 @@ Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated d
 ```powershell
 $implementationRoot = (Get-Location).Path
 $projectRoot = Split-Path (Split-Path (Split-Path $implementationRoot -Parent) -Parent) -Parent
-$env:YAUL_INSTALL_ROOT = Join-Path $projectRoot 'work\yaul-install'
+$env:YAUL_INSTALL_ROOT = (Join-Path $projectRoot 'work\yaul-install').Replace('\', '/')
 $env:YAUL_PROG_SH_PREFIX = 'sh-elf'
 $env:YAUL_ARCH_SH_PREFIX = 'sh-elf'
 $env:YAUL_ARCH_M68K_PREFIX = 'm68keb-elf'
@@ -1676,7 +1686,10 @@ The report records canonical profile, closure, package-set, toolchain, identity,
 - [ ] **Step 4: Rebuild candidate B from a fresh identity-tagged output directory**
 
 Use `superpowers:using-git-worktrees` to create a clean detached sibling
-worktree named `hermetic-release-repro-b` at the reviewed Task 8 HEAD. Copy
+worktree named `hermetic-release-repro-b` at the exact source commit used by
+successful candidate A. That commit includes any separately reviewable Task 9
+execution correction required to produce A and remains subject to Task 9's
+independent reviews. Copy
 only ignored prerequisite inputs (`baserom.us.z64` and the verified
 `build/us_pc` generated-input tree) into the new worktree; do not copy any
 identity, object, package, sourceboot-generated, or final artifact output.
