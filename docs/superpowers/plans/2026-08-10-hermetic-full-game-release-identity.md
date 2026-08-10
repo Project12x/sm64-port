@@ -1614,6 +1614,17 @@ adaptation of the existing in-tree canonical-handoff pattern at `bc6d9441`;
 no external source was copied. Candidate A and closure cleanliness remain open
 until the exact release command succeeds from the resulting source commit.
 
+The first run from `21b79b1c` proved the bounded handoff works, then failed
+closed during semantic classification because implementation-worktree
+`build/us_pc` is a junction to the parent checkout. That allowed generated
+inputs to resolve outside the guarded repository root, so no cleanliness or
+target gate was claimed and the junction remains untouched. Candidate A is now
+moved to a fresh detached, fully owned sibling; candidate B is a second fresh
+detached sibling at the same exact source commit. Each independently receives
+only `baserom.us.z64` and an inventoried copy of `build/us_pc`, with relative
+path, length, and SHA-256 equality required before build. This material
+isolation correction preserves user state and strengthens reproducibility.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -1624,7 +1635,7 @@ git diff --check
 
 Confirm Tasks 1–8 and both reviews per task are recorded. Preserve unrelated dirt. Release mode may proceed only if every checked-in source-closure input is tracked and clean; if a relevant file is dirty, stop and reconcile ownership instead of hiding it.
 
-- [ ] **Step 2: Build release-mode candidate A with exact profile and serial execution**
+- [ ] **Step 2: Build owned release-mode candidate A with exact profile and serial execution**
 
 ```powershell
 $implementationRoot = (Get-Location).Path
@@ -1666,7 +1677,18 @@ function Invoke-HermeticBobBuild([string]$repoRoot) {
         Pop-Location
     }
 }
-Invoke-HermeticBobBuild $implementationRoot
+$sourceCommit = (git rev-parse HEAD).Trim()
+$candidateARoot = [IO.Path]::GetFullPath((Join-Path $implementationRoot '..\hermetic-release-repro-a'))
+git worktree add --detach $candidateARoot $sourceCommit
+Copy-Item -LiteralPath (Join-Path $implementationRoot 'baserom.us.z64') `
+  -Destination (Join-Path $candidateARoot 'baserom.us.z64')
+New-Item -ItemType Directory -Path (Join-Path $candidateARoot 'build') | Out-Null
+Copy-Item -LiteralPath (Join-Path $implementationRoot 'build\us_pc') `
+  -Destination (Join-Path $candidateARoot 'build\us_pc') -Recurse
+# Before build, require source/destination prerequisite inventories to match by
+# relative path, byte length, and SHA-256; the implementation junction itself
+# is never admitted to either candidate root.
+Invoke-HermeticBobBuild $candidateARoot
 ```
 
 Expected: ordinary sourceboot gates, post-link closure verification, and release-manifest verification pass. Audit v4 is not yet selected.
@@ -1689,7 +1711,7 @@ function Get-SealedCandidate([string]$repoRoot) {
         Manifest = Join-Path $directory 'saturn-release-manifest-v1.json'
     }
 }
-$candidateA = Get-SealedCandidate $implementationRoot
+$candidateA = Get-SealedCandidate $candidateARoot
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\release_manifest.py verify `
   --manifest $candidateA.Manifest
 ```
@@ -1709,7 +1731,7 @@ identity, object, package, sourceboot-generated, or final artifact output.
 
 ```powershell
 $reproRoot = [IO.Path]::GetFullPath((Join-Path $implementationRoot '..\hermetic-release-repro-b'))
-git worktree add --detach $reproRoot HEAD
+git worktree add --detach $reproRoot $sourceCommit
 Copy-Item -LiteralPath (Join-Path $implementationRoot 'baserom.us.z64') `
   -Destination (Join-Path $reproRoot 'baserom.us.z64')
 New-Item -ItemType Directory -Path (Join-Path $reproRoot 'build') | Out-Null
