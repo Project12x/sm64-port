@@ -1008,6 +1008,19 @@
   file rejected after deletion. Reference: same-repository close-port/pattern
   reuse of the collector/closure boundary at `fcfe8068`; no external source or
   license/notice change. Candidate A remains open pending the exact clean rerun.
+- Candidate A from `6781cb5f` passed the release prerequisite verifier and all
+  228 dependency scans, then failed closed in closure assembly because
+  sourceboot-local `main.c` was handed off relative and the closure consumer
+  resolved it as repository-root `main.c`. No closure or downstream gate is
+  claimed.
+- Compiled-source handoff correction: normalize every `SH_SRCS_UNIQ` entry with
+  Make `abspath` before excluding generated compiled inputs. This preserves the
+  exact file Yaul compiles for local and already-absolute sources and removes
+  candidate-root spelling from the semantic closure. TDD RED was 10/11; GREEN
+  is 11/11. Reference: pattern-only reuse of Yaul absolute build-path handling,
+  pinned MIT commit `6012f79f`, inspected `build.pre.mk` and
+  `build.post.iso-cue.mk`; no copied upstream bytes or notice change. Candidate
+  A and every target/release gate remain open pending the exact rerun.
 
 ## Task 5 review repair round 2
 

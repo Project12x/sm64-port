@@ -307,6 +307,13 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("$(call sourceboot-discover-sx-dependency", makefile)
         self.assertIn("--actual-depfile", makefile)
         self.assertIn("--assembly-scan-depfile", makefile)
+
+    def test_compiled_source_handoff_resolves_sourceboot_relative_paths(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertIn(
+            "$(foreach source,$(SH_SRCS_UNIQ),$(abspath $(source)))",
+            makefile,
+        )
         self.assertIn('--expected-external "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"', makefile)
         self.assertIn('--mode "$(SOURCEBOOT_RELEASE_MODE)"', makefile)
         self.assertIn('--verify "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)"', makefile)

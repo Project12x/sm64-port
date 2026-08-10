@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Normalized sourceboot-local translation units to absolute paths before the
+  bounded compiled-source handoff. Yaul intentionally accepts entries such as
+  `main.c` relative to the sourceboot Make directory, but the release closure
+  tool resolves its canonical lists from the repository root; passing the raw
+  spelling therefore misclassified a real source as missing at `<root>/main.c`
+  after all dependency scans. The handoff now preserves the exact file Yaul
+  compiled while remaining independent of candidate-worktree location.
+
 - Made hermetic release-mode sourceboot asset preparation verify the complete
   selected `build/us_pc` input set by candidate-local presence instead of Make
   timestamps. Fresh worktree source mtimes otherwise made byte-identical,

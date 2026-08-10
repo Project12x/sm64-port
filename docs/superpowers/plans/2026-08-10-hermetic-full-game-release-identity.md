@@ -1733,6 +1733,20 @@ release closure boundary at `fcfe8068`; no external source or new license/notice
 obligation. Candidate A and all target/release gates remain open pending the
 exact rerun from the superseding commit.
 
+Candidate A from `6781cb5f` passed release prerequisite verification and all
+228 compiler dependency scans, then failed closed during source-closure
+assembly because Yaul's valid sourceboot-local `main.c` spelling was written
+unchanged to a list whose consumer resolves paths from repository root. The
+compiled-source handoff now applies Make's `abspath` to each `SH_SRCS_UNIQ`
+entry before filtering generated inputs, so relative local entries identify
+the exact compiled files while absolute repository/generated entries remain
+unchanged. Focused TDD was RED at 10/11 and GREEN at 11/11. Reference record:
+pattern-only reuse of Yaul's existing absolute build-path normalization in the
+pinned MIT-licensed submodule at `6012f79f`, files inspected
+`libyaul/build/build.pre.mk` and `build.post.iso-cue.mk`; no upstream bytes were
+copied and no notice changed. Closure, compile, link, seal, and release gates
+remain open pending an exact rerun from this source commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
