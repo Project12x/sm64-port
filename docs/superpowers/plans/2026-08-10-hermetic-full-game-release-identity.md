@@ -56,7 +56,7 @@ descriptor-selected measured payloads; the BOB profile carries the accepted
 Task 5 flag tuple, while `sm64-saturn-full` declares every class but is
 intentionally non-release-enabled with no invented game-inventory assertion.
 The first independent combined specification/code-quality review returned
-`Needs fixes`; repair commit pending records closure-wide exact duplicate and
+`Needs fixes`; repair commit `b8f6f5e8` records closure-wide exact duplicate and
 case-fold-colliding payload rejection, pre-publication descriptor/payload
 remeasurement, and relative output-name escape rejection with focused tests.
 Those review gates remain uncleared pending rereview. Target build,
