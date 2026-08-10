@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import subprocess
@@ -10,7 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from hermetic_manifest import canonical_json_bytes, normalize_repo_path, reject_case_collisions, sha256_file
+from hermetic_manifest import (
+    canonical_json_bytes,
+    normalize_repo_path,
+    reject_case_collisions,
+    sha256_file,
+    write_if_changed,
+)
 
 
 CLASS_PRECEDENCE = {
@@ -22,6 +29,7 @@ CLASS_PRECEDENCE = {
 }
 
 _EXPLICIT_CLASSES = tuple(name for name in CLASS_PRECEDENCE if name != "header")
+EXTERNAL_DEPENDENCIES_SCHEMA = "sm64-saturn-external-dependencies-v1"
 
 
 @dataclass(frozen=True)
@@ -163,6 +171,92 @@ def verify_source_closure(
         if actual != row["sha256"]:
             raise ValueError(f"source closure input changed after discovery: {row['path']}")
     return actual_external_tuple
+
+
+def external_dependency_handoff_bytes(paths: Sequence[Path]) -> bytes:
+    """Encode the diagnostic absolute-path handoff excluded from identity."""
+    requested = [str(Path(path)) for path in paths]
+    if any(not Path(path).is_absolute() for path in paths):
+        raise ValueError("external dependency handoff paths must be absolute")
+    if len(set(requested)) != len(requested):
+        raise ValueError("duplicate external dependency handoff paths")
+    try:
+        reject_case_collisions(requested)
+    except ValueError as error:
+        raise ValueError(str(error).replace("repository paths", "external dependency paths")) from error
+    ordered = sorted(requested, key=lambda value: value.encode("utf-8"))
+    return canonical_json_bytes({"schema": EXTERNAL_DEPENDENCIES_SCHEMA, "paths": ordered})
+
+
+def load_external_dependency_handoff(path: Path) -> tuple[Path, ...]:
+    """Load one strict diagnostic handoff without admitting it to identity."""
+    _require_file(path, "external dependency handoff")
+    raw = path.read_bytes()
+    try:
+        document = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("external dependency handoff is invalid JSON") from error
+    if (not isinstance(document, dict) or set(document) != {"schema", "paths"}
+            or document.get("schema") != EXTERNAL_DEPENDENCIES_SCHEMA
+            or not isinstance(document.get("paths"), list)
+            or any(not isinstance(value, str) or not value for value in document["paths"])):
+        raise ValueError("external dependency handoff schema is invalid")
+    paths = tuple(Path(value) for value in document["paths"])
+    if any(not value.is_absolute() for value in paths):
+        raise ValueError("external dependency handoff paths must be absolute")
+    if raw != external_dependency_handoff_bytes(paths):
+        raise ValueError("external dependency handoff is not canonical and sorted")
+    return paths
+
+
+def _add_common_paths(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--derived-output", type=Path, action="append", default=[])
+    parser.add_argument("--external-root", type=Path, action="append", default=[])
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    build = subparsers.add_parser("build", help="discover and seal the pre-build closure")
+    _add_common_paths(build)
+    build.add_argument("--output", type=Path, required=True)
+    build.add_argument("--external-output", type=Path, required=True)
+    build.add_argument("--compiled-source", type=Path, action="append", default=[])
+    build.add_argument("--depfile", type=Path, action="append", default=[])
+    build.add_argument("--recipe-input", type=Path, action="append", default=[])
+    build.add_argument("--generator-input", type=Path, action="append", default=[])
+    build.add_argument("--generated-input", type=Path, action="append", default=[])
+
+    verify = subparsers.add_parser("verify", help="verify post-link dependency equality")
+    _add_common_paths(verify)
+    verify.add_argument("--sealed", type=Path, required=True)
+    verify.add_argument("--actual-depfile", type=Path, action="append", default=[])
+    verify.add_argument("--assembly-scan-depfile", type=Path, action="append", default=[])
+    verify.add_argument("--expected-external", type=Path, required=True)
+    verify.add_argument("--mode", choices=("development", "release"), required=True)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parse_args(argv)
+    if args.command == "build":
+        built = build_source_closure(
+            args.root, args.compiled_source, args.depfile, args.recipe_input,
+            args.generator_input, args.generated_input, args.derived_output,
+            args.external_root,
+        )
+        handoff = external_dependency_handoff_bytes(built.external_dependencies)
+        write_if_changed(args.output, built.canonical)
+        write_if_changed(args.external_output, handoff)
+    else:
+        verify_source_closure(
+            args.root, args.sealed, args.actual_depfile, args.assembly_scan_depfile,
+            args.derived_output, args.external_root,
+            load_external_dependency_handoff(args.expected_external),
+            release_mode=args.mode == "release",
+        )
+    return 0
 
 
 def _normalized_derived_outputs(root: Path, values: Sequence[Path]) -> set[str]:
@@ -423,3 +517,7 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
 
 def _path_sort_key(path: Path) -> tuple[bytes, ...]:
     return tuple(part.encode("utf-8") for part in path.as_posix().split("/"))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

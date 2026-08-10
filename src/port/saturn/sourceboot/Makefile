@@ -21,20 +21,38 @@ SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_v
 SOURCEBOOT_BUILD_IDENTITY_BIN := $(SOURCEBOOT_GENERATED)/saturn_build_identity.bin
 SOURCEBOOT_BUILD_IDENTITY_JSON := $(SOURCEBOOT_GENERATED)/saturn_build_identity.json
 SOURCEBOOT_BUILD_IDENTITY_LABEL := $(SOURCEBOOT_GENERATED)/saturn_build_identity.label
+SOURCEBOOT_TARGET_PROFILE ?= $(ROOT)/tools/saturn/profiles/sourceboot-bob-demo-v1.json
+SOURCEBOOT_RELEASE_MODE ?= development
+SOURCEBOOT_RESOLVED_PROFILE := $(SOURCEBOOT_GENERATED)/saturn-target-profile-v1.json
+SOURCEBOOT_PACKAGE_SET := $(SOURCEBOOT_GENERATED)/saturn-package-set-v1.json
+SOURCEBOOT_SOURCE_CLOSURE := $(SOURCEBOOT_GENERATED)/saturn-source-closure-v2.json
+SOURCEBOOT_TOOLCHAIN_ATTESTATION := $(SOURCEBOOT_GENERATED)/saturn-toolchain-attestation-v1.json
+SOURCEBOOT_EXTERNAL_DEPENDENCIES := $(SOURCEBOOT_GENERATED)/saturn-external-dependencies-v1.json
+SOURCEBOOT_DISCOVERY_DEPS := $(SOURCEBOOT_GENERATED)/closure-discovery
 SOURCEBOOT_GEO_DEPTH_TOOL := $(ROOT)/tools/saturn/geo_depth_manifest.py
 SOURCEBOOT_GEO_DEPTH_HEADER := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.h
 SOURCEBOOT_GEO_DEPTH_REPORT := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.json
 SOURCEBOOT_GEO_DEPTH_LINKER := $(SOURCEBOOT_GENERATED)/saturn_geo_depth_manifest.ld
 SOURCEBOOT_BUILD_IDENTITY_STAGE ?= seal
 ifneq ($(words $(SOURCEBOOT_BUILD_IDENTITY_STAGE)),1)
-  $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be exactly one token: seal or assets)
+  $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be exactly one token: assets, discover, or seal)
 endif
-ifneq ($(filter $(SOURCEBOOT_BUILD_IDENTITY_STAGE),seal assets),$(SOURCEBOOT_BUILD_IDENTITY_STAGE))
-  $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be seal or assets)
+ifneq ($(filter $(SOURCEBOOT_BUILD_IDENTITY_STAGE),assets discover seal),$(SOURCEBOOT_BUILD_IDENTITY_STAGE))
+  $(error SOURCEBOOT_BUILD_IDENTITY_STAGE must be assets, discover, or seal)
 endif
 ifeq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),assets)
   ifneq ($(MAKECMDGOALS),identity-assets)
     $(error SOURCEBOOT_BUILD_IDENTITY_STAGE=assets is only valid for the identity-assets target)
+  endif
+endif
+ifeq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),discover)
+  ifneq ($(MAKECMDGOALS),identity-discovery)
+    $(error SOURCEBOOT_BUILD_IDENTITY_STAGE=discover is only valid for the identity-discovery target)
+  endif
+endif
+ifeq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),seal)
+  ifneq ($(filter identity-assets identity-discovery,$(MAKECMDGOALS)),)
+    $(error identity asset/discovery targets require their matching SOURCEBOOT_BUILD_IDENTITY_STAGE)
   endif
 endif
 SOURCEBOOT_SH_OBJDUMP := $(YAUL_INSTALL_ROOT)/bin/$(YAUL_PROG_SH_PREFIX)-objdump
@@ -415,11 +433,15 @@ SOURCEBOOT_OUTPUT_TAG := $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENT_FLAT)),$(SOU
 # A clean tree has no checked-in identity spec. `identity-assets` invokes this
 # makefile with stage=assets to produce exact generated image inputs first;
 # only the subsequent seal-stage parse may select the identity output path.
-ifneq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),assets)
+ifeq ($(SOURCEBOOT_BUILD_IDENTITY_STAGE),seal)
 # Materialize it from canonical
 # source/package provenance before selecting an output directory; a bootstrap
 # failure is fatal so Make can never fall back to a stale label or old identity.
 SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS = \
+  --profile "$(SOURCEBOOT_TARGET_PROFILE)" \
+  --source-closure "$(SOURCEBOOT_SOURCE_CLOSURE)" \
+  --toolchain-attestation "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
+  --mode "$(SOURCEBOOT_RELEASE_MODE)" \
   --set features.complete_mario_animation=$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION) \
   --set features.dynamic_actor_closure=$(SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE) \
   --set features.semantic_audio=$(SATURN_FEATURE_SEMANTIC_AUDIO) \
@@ -498,9 +520,12 @@ endif
 SH_BUILD_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/obj
 SH_OUTPUT_DIR := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)
 IMAGE_DIRECTORY := $(ROOT)/build/saturn/sourceboot/e2-bob$(SOURCEBOOT_OUTPUT_TAG)/cd
-SOURCEBOOT_BOB_SKY_ASM := $(SH_BUILD_DIR)/bob_sky_bitmap.sx
-SOURCEBOOT_BOB_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_texture_bank.sx
-SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM := $(SH_BUILD_DIR)/bob_bsp_fragment_texture_bank.sx
+# These generated assembly inputs live outside the identity-tagged object tree.
+# Otherwise dependency discovery would need the identity before it could name
+# the closure input that determines that same identity.
+SOURCEBOOT_BOB_SKY_ASM := $(SOURCEBOOT_GENERATED)/bob_sky_bitmap.sx
+SOURCEBOOT_BOB_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_texture_bank.sx
+SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM := $(SOURCEBOOT_GENERATED)/bob_bsp_fragment_texture_bank.sx
 SH_SRCS += $(SOURCEBOOT_BOB_TEXTURE_ASM)
 ifeq ($(SATURN_DEMO_BSP_FRAGMENTS),1)
 SH_SRCS += $(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)
@@ -571,6 +596,11 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
   -I$(SOURCEBOOT_PC_BUILD) -I$(SOURCEBOOT_PC_BUILD)/include \
   -I$(SOURCEBOOT_GENERATED) -I$(SOURCEBOOT_MARIO_TEXTURE_DIR) \
   -DSATURN_DEMO_MARIO_TEXTURES=1
+# The exact same normalized repository spelling reaches both pre-seal
+# dependency discovery and Yaul's subsequently expanded real compile rules.
+# SDK paths stay absolute/external and are sealed by the toolchain attestation.
+SH_CFLAGS += -ffile-prefix-map=$(ROOT)=. -fdebug-prefix-map=$(ROOT)=. \
+  -fmacro-prefix-map=$(ROOT)=.
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections \
   -Wl,--defsym=sm64_saturn_camera_variant_marker=$(SATURN_CAMERA_VARIANT) \
   -Wl,--defsym=sm64_saturn_camera_route_marker=$(SATURN_SOURCEBOOT_CAMERA_ROUTE)
@@ -728,7 +758,7 @@ source-assets: source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp
 # seal-stage parse hashes. Do not make the parser depend on historical build
 # outputs or on the identity spec it is about to create.
 .PHONY: identity-assets
-identity-assets: source-assets $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
+identity-assets: source-assets source-geo-depth $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
   $(SOURCEBOOT_QUAD_MAP_C) $(SOURCEBOOT_ACTOR_BANK) \
   $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C))
 
@@ -906,6 +936,139 @@ $(SOURCEBOOT_BUILD_IDENTITY_JSON) $(SOURCEBOOT_BUILD_IDENTITY_LABEL) &: \
 	  $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)
 
 include $(YAUL_INSTALL_ROOT)/share/build.post.iso-cue.mk
+
+# Hermetic dependency discovery uses the exact source population and flags
+# that Yaul has now expanded. Generated compiled sources are classified as
+# generated inputs (not twice as compiled-source inputs), preserving Task 2's
+# one-class-per-explicit-path contract.
+SOURCEBOOT_GENERATED_COMPILED_INPUTS := \
+  $(SOURCEBOOT_WATER_SKYBOX) \
+  $(SOURCEBOOT_GENERATED)/mario_anim_data.c \
+  $(SOURCEBOOT_QUAD_MAP_C) \
+  $(if $(filter 1,$(SATURN_FEATURE_COMPLETE_MARIO_ANIMATION)),$(SOURCEBOOT_ACTOR_BANK_C)) \
+  $(SOURCEBOOT_BOB_TEXTURE_ASM) \
+  $(if $(filter 1,$(SATURN_DEMO_BSP_FRAGMENTS)),$(SOURCEBOOT_BOB_BSP_FRAGMENT_TEXTURE_ASM)) \
+  $(SOURCEBOOT_BOB_SKY_ASM)
+SOURCEBOOT_COMPILED_INPUTS := $(filter-out $(SOURCEBOOT_GENERATED_COMPILED_INPUTS),$(SH_SRCS_UNIQ))
+SOURCEBOOT_RECIPE_INPUTS := \
+  $(ROOT)/src/port/saturn/sourceboot/Makefile \
+  $(ROOT)/Makefile.saturn.mk \
+  $(ROOT)/src/port/saturn/sourceboot/sourceboot.specs \
+  $(ROOT)/src/port/saturn/sourceboot/sourceboot-cart.x \
+  $(ROOT)/third_party/libyaul/libyaul/build/build.pre.mk \
+  $(ROOT)/third_party/libyaul/libyaul/build/build.post.bin.mk \
+  $(ROOT)/third_party/libyaul/libyaul/build/build.post.iso-cue.mk
+SOURCEBOOT_GENERATOR_INPUTS := $(sort \
+  $(ROOT)/tools/saturn/gen_source_closure.py \
+  $(ROOT)/tools/saturn/gen_toolchain_attestation.py \
+  $(ROOT)/tools/saturn/bootstrap_sourceboot_identity_spec.py \
+  $(ROOT)/tools/saturn/target_profile.py \
+  $(ROOT)/tools/saturn/hermetic_manifest.py \
+  $(ROOT)/tools/saturn/gen_build_identity.py \
+  $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
+  $(ROOT)/tools/mario_anims_converter.py \
+  $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py \
+  $(ROOT)/tools/saturn/emit_actor_bank_c.py \
+  $(ROOT)/tools/saturn/extract_hud_glyphs.py \
+  $(ROOT)/tools/saturn/gen_sourceboot_sky_gradient.py \
+  $(SOURCEBOOT_GEO_DEPTH_TOOL) $(SOURCEBOOT_QUAD_MAP_TOOLS) \
+  $(SOURCEBOOT_BOB_TOOLS) $(SOURCEBOOT_BOB_TILE_TOOLS) $(SOURCEBOOT_BOB_SCENE_TOOL))
+SOURCEBOOT_GENERATED_INPUTS := $(sort \
+  $(SOURCEBOOT_GENERATED_COMPILED_INPUTS) \
+  $(SOURCEBOOT_QUAD_MAP_H) $(SOURCEBOOT_COLLISION_CATALOG) \
+  $(SOURCEBOOT_GEO_DEPTH_HEADER) $(SOURCEBOOT_GEO_DEPTH_LINKER) \
+  $(SOURCEBOOT_BOB_BSP_HEADER) $(SOURCEBOOT_BOB_BSP_FRAGMENT_HEADER) \
+  $(SOURCEBOOT_BOB_SCENE) $(SOURCEBOOT_MARIO_TEXTURE_HEADER) \
+  $(SOURCEBOOT_HUD_GLYPH_HEADER) $(SOURCEBOOT_SKY_GRADIENT_HEADER) \
+  $(SOURCEBOOT_BOB_TILES) $(SOURCEBOOT_BOB_CLUT) \
+  $(SOURCEBOOT_BOB_BSP_FRAGMENT_BANK) $(SOURCEBOOT_BOB_BSP_FRAGMENT_CLUT) \
+  $(SOURCEBOOT_BOB_SKY) $(SOURCEBOOT_ACTOR_BANK) \
+  $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS))
+SOURCEBOOT_RELEASE_MANIFEST := $(SH_OUTPUT_PATH)/saturn-release-manifest-v1.json
+SOURCEBOOT_DERIVED_OUTPUTS := \
+  $(SOURCEBOOT_BUILD_IDENTITY_SPEC) $(SOURCEBOOT_BUILD_IDENTITY_INC) \
+  $(SOURCEBOOT_BUILD_IDENTITY_BIN) $(SOURCEBOOT_BUILD_IDENTITY_JSON) \
+  $(SOURCEBOOT_BUILD_IDENTITY_LABEL) $(SOURCEBOOT_RESOLVED_PROFILE) \
+  $(SOURCEBOOT_PACKAGE_SET) $(SOURCEBOOT_SOURCE_CLOSURE) \
+  $(SOURCEBOOT_TOOLCHAIN_ATTESTATION) $(SOURCEBOOT_EXTERNAL_DEPENDENCIES) \
+  $(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(SH_BUILD_PATH)/$(SH_PROGRAM).map \
+  $(SH_BUILD_PATH)/$(SH_PROGRAM).sym $(SH_BUILD_PATH)/$(SH_PROGRAM).asm \
+  $(SOURCEBOOT_CART_IMAGE) $(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso \
+  $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue $(SOURCEBOOT_RELEASE_MANIFEST)
+SOURCEBOOT_TOOLCHAIN_ARGS = \
+  --yaul-root "$(YAUL_INSTALL_ROOT)" --yaul-version 0.3.1 \
+  --yaul-commit 6012f79f237773378c8014e70d8998ad95a38d98 \
+  --gcc "$(SH_CC)" --as "$(SH_AS)" --ld "$(SH_LD)" --nm "$(SH_NM)" \
+  --objcopy "$(SOURCEBOOT_RAW_OBJCOPY)" --objdump "$(SH_OBJDUMP)" \
+  --readelf "$(SOURCEBOOT_SH_READELF)" --addr2line "$(SOURCEBOOT_SH_ADDR2LINE)"
+
+sourceboot-dep-key = $(subst :,_,$(subst \,_,$(subst /,_,$(1))))
+sourceboot-discovery-dep = $(SOURCEBOOT_DISCOVERY_DEPS)/$(call sourceboot-dep-key,$(1)).d
+SOURCEBOOT_DISCOVERY_C_DEPS := $(foreach src,$(SH_SRCS_C),$(call sourceboot-discovery-dep,$(src)))
+SOURCEBOOT_DISCOVERY_S_DEPS := $(foreach src,$(SH_SRCS_S),$(call sourceboot-discovery-dep,$(src)))
+SOURCEBOOT_DISCOVERY_DEPFILES := $(SOURCEBOOT_DISCOVERY_C_DEPS) $(SOURCEBOOT_DISCOVERY_S_DEPS)
+
+define sourceboot-discover-dependency
+	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
+	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
+	  -MT "$(1)" -MF "$(2)" "$(1)"
+endef
+
+define sourceboot-discovery-rule
+$(call sourceboot-discovery-dep,$(1)): $(1)
+	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
+	$(call sourceboot-discover-dependency,$(1),$(call sourceboot-discovery-dep,$(1)))
+endef
+
+$(foreach src,$(SH_SRCS_C) $(SH_SRCS_S),$(eval $(call sourceboot-discovery-rule,$(src))))
+
+.PHONY: identity-discovery
+identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
+	@mkdir -p "$(SOURCEBOOT_GENERATED)"
+	@printf '%s\n' 'sourceboot discovery profile=$(SOURCEBOOT_TARGET_PROFILE) mode=$(SOURCEBOOT_RELEASE_MODE)'
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" build \
+	  --root "$(ROOT)" \
+	  --output "$(SOURCEBOOT_SOURCE_CLOSURE).tmp" \
+	  --external-output "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES).tmp" \
+	  $(foreach src,$(SOURCEBOOT_COMPILED_INPUTS),--compiled-source "$(src)") \
+	  $(foreach dep,$(SOURCEBOOT_DISCOVERY_DEPFILES),--depfile "$(dep)") \
+	  $(foreach input,$(SOURCEBOOT_RECIPE_INPUTS),--recipe-input "$(input)") \
+	  $(foreach input,$(SOURCEBOOT_GENERATOR_INPUTS),--generator-input "$(input)") \
+	  $(foreach input,$(SOURCEBOOT_GENERATED_INPUTS),--generated-input "$(input)") \
+	  $(foreach output,$(SOURCEBOOT_DERIVED_OUTPUTS),--derived-output "$(output)") \
+	  --external-root "$(YAUL_INSTALL_ROOT)"
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \
+	  $(SOURCEBOOT_TOOLCHAIN_ARGS) \
+	  --output "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION).tmp" \
+	  --external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES).tmp"
+	@mv -f "$(SOURCEBOOT_SOURCE_CLOSURE).tmp" "$(SOURCEBOOT_SOURCE_CLOSURE)" && \
+	  mv -f "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES).tmp" "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)" && \
+	  mv -f "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION).tmp" "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)"
+
+# Yaul emits dependency files for C/C++ but not preprocessed assembly. The
+# latter are always rescanned after link, rather than reusing discovery files.
+SOURCEBOOT_SX_BUILD_DEPS := $(foreach src,$(SH_SRCS_S),\
+  $(call macro-convert-build-path,$(addsuffix .d,$(basename $(src)))))
+SOURCEBOOT_C_AND_CXX_DEPS := $(filter-out $(SOURCEBOOT_SX_BUILD_DEPS),$(SH_DEPS))
+SOURCEBOOT_POSTLINK_SX_DEPS := $(foreach src,$(SH_SRCS_S),\
+  $(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d)
+
+.PHONY: verify-sealed-inputs
+verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
+	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
+	$(foreach src,$(SH_SRCS_S),$(call sourceboot-discover-dependency,$(src),$(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d))
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" verify \
+	  --root "$(ROOT)" --sealed "$(SOURCEBOOT_SOURCE_CLOSURE)" \
+	  $(foreach dep,$(SOURCEBOOT_C_AND_CXX_DEPS),--actual-depfile "$(dep)") \
+	  $(foreach dep,$(SOURCEBOOT_POSTLINK_SX_DEPS),--assembly-scan-depfile "$(dep)") \
+	  $(foreach output,$(SOURCEBOOT_DERIVED_OUTPUTS),--derived-output "$(output)") \
+	  --external-root "$(YAUL_INSTALL_ROOT)" \
+	  --expected-external "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)" \
+	  --mode "$(SOURCEBOOT_RELEASE_MODE)"
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \
+	  $(SOURCEBOOT_TOOLCHAIN_ARGS) \
+	  --verify "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
+	  --external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"
 
 # Yaul's bundled rule declares the CUE's ISO prerequisite order-only. That
 # leaves a stale CUE whenever the ISO/ELF is rebuilt in place, and capture's

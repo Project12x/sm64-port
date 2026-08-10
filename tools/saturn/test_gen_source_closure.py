@@ -17,6 +17,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 from gen_source_closure import (
     build_source_closure,
+    main,
     parse_make_depfile,
     verify_source_closure,
 )
@@ -237,6 +238,70 @@ class SourceClosureTests(unittest.TestCase):
         records = {row["path"] for row in self.build_closure().document["inputs"]}
         self.assertIn("include/main.h", records)
         self.assertNotIn("include/MAIN.h", records)
+
+    def test_cli_build_publishes_closure_and_sorted_external_handoff(self) -> None:
+        external = self.root.parent / "toolchain"
+        external.mkdir()
+        header = external / "sdk.h"
+        header.write_text("sdk\n", encoding="utf-8")
+        self.write("obj/external.d", f"obj/main.o: src/main.c include/main.h {header.as_posix()}\n")
+        closure = self.root / "build/closure.json"
+        handoff = self.root / "build/external.json"
+
+        self.assertEqual(main([
+            "build", "--root", str(self.root), "--output", str(closure),
+            "--external-output", str(handoff),
+            "--compiled-source", "src/main.c", "--depfile", "obj/external.d",
+            "--recipe-input", "Makefile.saturn.mk",
+            "--generator-input", "tools/saturn/gen_build_identity.py",
+            "--generated-input", "build/generated/scene.h",
+            "--derived-output", "build/generated/saturn_build_identity_values.inc",
+            "--external-root", str(external),
+        ]), 0)
+        self.assertEqual(json.loads(closure.read_text(encoding="utf-8"))["schema"],
+                         "sm64-saturn-source-closure-v2")
+        self.assertEqual(json.loads(handoff.read_text(encoding="utf-8")), {
+            "schema": "sm64-saturn-external-dependencies-v1",
+            "paths": [str(header.resolve())],
+        })
+        self.assertNotIn(str(header.resolve()), closure.read_text(encoding="utf-8"))
+
+    def test_cli_verify_consumes_exact_handoff_and_release_mode(self) -> None:
+        external = self.root.parent / "toolchain"
+        external.mkdir()
+        header = external / "sdk.h"
+        header.write_text("sdk\n", encoding="utf-8")
+        self.write(
+            "obj/main.d",
+            f"obj/main.o: src/main.c include/main.h build/generated/scene.h "
+            f"tools/saturn/gen_build_identity.py Makefile.saturn.mk {header.as_posix()}\n",
+        )
+        self.external_roots = (external,)
+        sealed = self.write_sealed_closure()
+        handoff = self.root / "build/external.json"
+        handoff.write_bytes(json.dumps({
+            "schema": "sm64-saturn-external-dependencies-v1",
+            "paths": [str(header.resolve())],
+        }, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n")
+        self.assertEqual(main([
+            "verify", "--root", str(self.root), "--sealed", str(sealed),
+            "--actual-depfile", "obj/main.d", "--assembly-scan-depfile", "obj/scan.d",
+            "--derived-output", "build/generated/saturn_build_identity_values.inc",
+            "--external-root", str(external), "--expected-external", str(handoff),
+            "--mode", "development",
+        ]), 0)
+
+        handoff.write_bytes(json.dumps({
+            "schema": "sm64-saturn-external-dependencies-v1", "paths": [],
+        }, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n")
+        with self.assertRaisesRegex(ValueError, "external dependency set differs"):
+            main([
+                "verify", "--root", str(self.root), "--sealed", str(sealed),
+                "--actual-depfile", "obj/main.d", "--assembly-scan-depfile", "obj/scan.d",
+                "--derived-output", "build/generated/saturn_build_identity_values.inc",
+                "--external-root", str(external), "--expected-external", str(handoff),
+                "--mode", "development",
+            ])
 
 
 if __name__ == "__main__":

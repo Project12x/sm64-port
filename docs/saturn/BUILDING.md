@@ -30,6 +30,50 @@ Verify the exact revision without requiring a cross toolchain:
 make -f Makefile.saturn.mk check
 ```
 
+## Hermetic sourceboot pipeline
+
+The outer `sourceboot` target now has one fail-closed sequence:
+
+1. `assets` materializes the selected BOB content and stable generated source
+   inputs without reading or selecting a build identity.
+2. `discover` runs SH GCC dependency scans over every real C and `.sx` source
+   with the real Yaul compile flags/specs (excluding only
+   `-save-temps=obj`). It writes the source closure, absolute-path diagnostic
+   external-dependency handoff, and portable toolchain attestation.
+3. `seal` resolves the selected profile/package manifests and composes identity
+   v2 from their exact bytes plus the closure and attestation. Only this stage
+   may read the identity label or select an identity-tagged output directory.
+4. `build` compiles and links into that sealed directory.
+5. `verify-sealed-inputs` compares the real C/C++ depfiles and freshly rescanned
+   `.sx` dependencies with discovery, rehashes the closure, enforces release
+   cleanliness when requested, and remeasures the live toolchain before a later
+   release-manifest stage may publish artifacts.
+
+The default profile is
+`tools/saturn/profiles/sourceboot-bob-demo-v1.json`. Override it with
+`SOURCEBOOT_TARGET_PROFILE=/absolute/or/repository/path.json`. The default
+`SOURCEBOOT_RELEASE_MODE=development` seals actual selected inputs but permits
+dirty checked-in closure files for local iteration. Set
+`SOURCEBOOT_RELEASE_MODE=release` for a release-enabled profile and clean,
+tracked closure inputs; any mismatch stops before release sealing. Both values
+are passed explicitly through every recursive Make stage.
+
+Discovery and seal outputs live under `build/saturn/sourceboot/generated/`:
+
+- `saturn-source-closure-v2.json` — canonical repository input closure;
+- `saturn-external-dependencies-v1.json` — diagnostic absolute SDK paths,
+  deliberately excluded from identity;
+- `saturn-toolchain-attestation-v1.json` — canonical component-relative SDK
+  measurements;
+- `saturn-target-profile-v1.json` and `saturn-package-set-v1.json` — resolved
+  selected-content manifests; and
+- `saturn_build_identity_spec.json` plus the generated identity include/blob/
+  JSON/label.
+
+The host Make-contract suites validate ordering and command expansion only.
+They do not build SH-2 code or close the real-target, reproducibility, audit,
+smoke, visual, or manual-play gates.
+
 ## Host environment
 
 Libyaul 0.3.1 expects a Unix-like shell and rejects paths containing spaces.

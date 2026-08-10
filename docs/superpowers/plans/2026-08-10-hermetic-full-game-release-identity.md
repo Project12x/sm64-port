@@ -864,7 +864,18 @@ Task 3 already exposed a reviewed flag-style CLI rather than subcommands. Task
 Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
 of inventing a second interface.
 
-- [ ] **Step 1: Write failing Make-contract tests**
+**Live status (2026-08-10):** `source-complete`; the behavior commit and
+controller-owned independent reviews remain pending. Host/dry-run TDD covers stage
+isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
+propagation, explicit closure classification and identity-cycle breaking,
+post-link dependency/external equality, release cleanliness dispatch, live
+toolchain verification, and stale closure/attestation failure. Generated `.sx`
+sources now live in the stable generated-input directory so discovery and build
+name identical inputs rather than requiring an identity to discover itself. No
+real SH-2 build was run; independent review and every target/release evidence
+gate remain open.
+
+- [x] **Step 1: Write failing Make-contract tests**
 
 ```python
 def test_outer_build_orders_assets_discovery_seal_build_and_verify(self) -> None:
@@ -895,13 +906,13 @@ def test_discovery_stage_cannot_build_or_reuse_identity(self) -> None:
 
 Add a dry-run fixture that provides a fake Yaul include and asserts development/release mode propagation, BOB profile selection, derived identity output exclusions, linker/build-recipe inputs, generator inputs, and one dependency-scan command per C and `.sx` source.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_hermetic_build_make.py
 ```
 
-- [ ] **Step 3: Add discovery variables and stage guards**
+- [x] **Step 3: Add discovery variables and stage guards**
 
 Define:
 
@@ -922,7 +933,7 @@ Append the three root-normalization flags to `SH_CFLAGS` before both discovery
 and real compile commands are expanded. Do not map `YAUL_INSTALL_ROOT` to the
 repository; external SDK paths belong to the toolchain attestation.
 
-- [ ] **Step 4: Generate pre-seal dependency metadata with the real flags**
+- [x] **Step 4: Generate pre-seal dependency metadata with the real flags**
 
 For every C input invoke SH GCC with `-MM -MG`, the exact `SH_CFLAGS` minus `-save-temps=obj`, and the same `-specs=` arguments as Yaul's real compile. Scan `.sx` inputs with the same preprocessor configuration. Permit `-MG` to discover the one absent derived identity include, then have `gen_source_closure.py` reject any other missing dependency.
 
@@ -947,7 +958,7 @@ Pass these explicit inputs to the closure generator:
 - generated headers, generated C/assembly sources, incbin payloads, and linker fragments as generated inputs; and
 - identity values/include/blob/spec, resolved manifests, closure/attestation outputs, ELF, map, sym, asm, `SOURCE.DAT`, ISO, CUE, and release manifest as derived outputs.
 
-- [ ] **Step 5: Generate toolchain attestation and identity spec during seal**
+- [x] **Step 5: Generate toolchain attestation and identity spec during seal**
 
 `identity-discovery` emits the canonical source closure, a noncanonical absolute-path external-dependency handoff, and the canonical toolchain attestation atomically. The handoff is a derived diagnostic input excluded from identity; the attestation canonicalizes the dependencies under component-relative paths. The seal-stage bootstrap receives the closure/attestation exact paths, target profile, and `SOURCEBOOT_RELEASE_MODE`; only then may `print-identity-tag` generate identity v2 and select the identity-tagged output directory.
 
@@ -965,7 +976,7 @@ SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS += \
   --mode "$(SOURCEBOOT_RELEASE_MODE)"
 ```
 
-- [ ] **Step 6: Verify real compile dependencies and rehash after link**
+- [x] **Step 6: Verify real compile dependencies and rehash after link**
 
 `verify-sealed-inputs` depends on the linked ELF. It passes Yaul's real `$(SH_DEPS)` for C/C++ and freshly rescanned `.sx` depfiles to `gen_source_closure.py verify`, requires the actual external paths to equal the discovery handoff, then calls `gen_toolchain_attestation.py verify` with that exact set. The outer `sourceboot` target invokes it immediately after the sealed build. A mismatch exits nonzero before artifact release sealing.
 
@@ -983,7 +994,7 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	  --external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"
 ```
 
-- [ ] **Step 7: Run host/dry-run Make tests**
+- [x] **Step 7: Run host/dry-run Make tests**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_hermetic_build_make.py

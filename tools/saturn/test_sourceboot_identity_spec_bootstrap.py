@@ -307,6 +307,16 @@ class SourcebootIdentitySpecBootstrapTests(unittest.TestCase):
             self.write_v2_spec()
         self.assertEqual(self.output.read_bytes(), preserved)
 
+    def test_bootstrap_rejects_stale_toolchain_attestation_without_overwriting_spec(self) -> None:
+        self.write_v2_spec()
+        preserved = self.output.read_bytes()
+        self.toolchain_attestation.write_bytes(
+            self.toolchain_attestation.read_bytes() + b"drift"
+        )
+        with self.assertRaisesRegex(ValueError, "toolchain attestation.*stale"):
+            self.write_v2_spec()
+        self.assertEqual(self.output.read_bytes(), preserved)
+
     def test_bootstrap_revalidates_generated_class_manifest_before_spec_replace(self) -> None:
         self.write_v2_spec()
         preserved = self._published_bytes()

@@ -4,6 +4,15 @@
 
 ### Added
 
+- Integrated Saturn sourceboot identity v2 into a guarded five-stage
+  assets/discovery/seal/build/post-link pipeline. Compiler dependency scans now
+  use the real Yaul C flags/specs with repository prefix normalization, class
+  generated and derived inputs without an identity cycle, seal exact source
+  closure and live toolchain roots, and recheck C/C++ plus freshly scanned
+  assembly dependencies before release sealing. Development remains the
+  default; release mode additionally rejects dirty or untracked checked-in
+  closure inputs, preventing stale build reuse from becoming a release.
+
 - Composed sourceboot build identity v2 exclusively from the validated target
   profile/package manifests, compiler-derived source closure, toolchain
   attestation, and exact Make configuration. The bootstrap no longer hashes

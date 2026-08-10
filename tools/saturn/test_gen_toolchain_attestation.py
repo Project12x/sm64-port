@@ -223,6 +223,35 @@ class ToolchainAttestationTests(unittest.TestCase):
             )
         self.assertEqual(output.read_bytes(), b"known-valid-prior-output\n")
 
+    def test_sourceboot_cli_consumes_external_dependency_handoff(self) -> None:
+        output = self.root / "toolchain.json"
+        handoff = self.root / "external.json"
+        handoff.write_bytes(canonical_json_bytes({
+            "schema": "sm64-saturn-external-dependencies-v1",
+            "paths": [str(self.dependencies()[0].resolve())],
+        }))
+        arguments = self.cli_arguments(output)
+        arguments.extend(("--external-dependencies", str(handoff)))
+        main(arguments, compiler_version_reader=lambda _path: "sh-elf-gcc (GCC) 14.3.0\n")
+        document = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(
+            document["components"][0]["dependencies"][0]["path"],
+            "sh-elf/include/stdint.h",
+        )
+
+    def test_sourceboot_cli_merges_repeated_and_handoff_dependencies_exactly(self) -> None:
+        output = self.root / "toolchain.json"
+        handoff = self.root / "external.json"
+        dependency = self.dependencies()[0].resolve()
+        handoff.write_bytes(canonical_json_bytes({
+            "schema": "sm64-saturn-external-dependencies-v1", "paths": [str(dependency)],
+        }))
+        arguments = self.cli_arguments(output)
+        arguments.extend(("--external-dependency", str(dependency)))
+        arguments.extend(("--external-dependencies", str(handoff)))
+        with self.assertRaisesRegex(ValueError, "duplicate external dependency"):
+            main(arguments, compiler_version_reader=lambda _path: "sh-elf-gcc (GCC) 14.3.0\n")
+
 
 if __name__ == "__main__":
     unittest.main()

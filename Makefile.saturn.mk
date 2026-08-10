@@ -6,6 +6,8 @@ INTROFACE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/introface
 MARIOTURNTABLE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/marioturntable
 CASTLEVIEWER_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/castleviewer
 SOURCEBOOT_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/sourceboot
+SOURCEBOOT_TARGET_PROFILE ?= $(SATURN_REPO_ROOT)/tools/saturn/profiles/sourceboot-bob-demo-v1.json
+SOURCEBOOT_RELEASE_MODE ?= development
 VDP2_PROBE_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/vdp2probe
 DUAL_TRANSFORM_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/dualtransform
 PCM68K_DIR := $(SATURN_REPO_ROOT)/src/port/saturn/audio68k
@@ -203,11 +205,23 @@ verify-castleviewer: castleviewer
 # meantime produced a different identity: pre-build-iso then staged SOURCE.DAT
 # into the wrong identity's directory and the shipped .iso silently lacked it.
 sourceboot: check-libyaul check-sdk
-	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets
-	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag)" && \
+	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets \
+	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
+	$(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_BUILD_IDENTITY_STAGE=discover identity-discovery \
+	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)"
+	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" \
+	  SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	  SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" print-identity-tag)" && \
 	  test -n "$$tag" && \
 	  printf 'sourceboot: sealed identity %s\n' "$$tag" && \
-	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag"
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
+	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" && \
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
+	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
+	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" verify-sealed-inputs
 
 # Read the sealed tag back from the frozen spec (no reseal) so verify runs
 # against the exact identity the build above produced.

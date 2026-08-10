@@ -19,6 +19,7 @@ from hermetic_manifest import (
     sha256_file,
     write_if_changed,
 )
+from gen_source_closure import load_external_dependency_handoff
 
 
 SCHEMA = "sm64-saturn-toolchain-attestation-v1"
@@ -336,6 +337,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     for argument, label in _TOOL_ARGUMENTS:
         parser.add_argument(f"--{argument}", type=Path, required=True, help=f"invoked {label} binary")
     parser.add_argument("--external-dependency", type=Path, action="append", default=[])
+    parser.add_argument("--external-dependencies", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--verify", type=Path)
     args = parser.parse_args(argv)
@@ -349,10 +351,13 @@ def main(
 ) -> None:
     args = _parse_args(argv)
     component = _sourceboot_component(args, compiler_version_reader)
+    external_dependencies = list(args.external_dependency)
+    if args.external_dependencies:
+        external_dependencies.extend(load_external_dependency_handoff(args.external_dependencies))
     if args.verify:
-        verify_toolchain_attestation(args.verify, [component], args.external_dependency)
+        verify_toolchain_attestation(args.verify, [component], external_dependencies)
     else:
-        write_toolchain_attestation(args.output, [component], args.external_dependency)
+        write_toolchain_attestation(args.output, [component], external_dependencies)
 
 
 if __name__ == "__main__":
