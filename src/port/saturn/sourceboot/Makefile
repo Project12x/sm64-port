@@ -677,7 +677,7 @@ SOFTFP_FUNCS := \
   fixdfdi fixunsdfdi floatdidf floatundidf \
   extendsfdf2 truncdfsf2
 SOFTFP_OBJS := $(patsubst %,$(SOFTFP_BUILD_DIR)/%.o,$(SOFTFP_FUNCS))
-SOFTFP_CFLAGS := -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
+SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2 -g -std=gnu11 -m2 -mb -fno-lto -ffreestanding \
   -fomit-frame-pointer -ffunction-sections -fdata-sections \
   -I$(SOFTFP_DIR)/soft-fp -I$(SOFTFP_DIR)/config/sh -I$(SOFTFP_DIR)/include
 SOFTFP_HEADERS := $(wildcard $(SOFTFP_DIR)/soft-fp/*.h) \

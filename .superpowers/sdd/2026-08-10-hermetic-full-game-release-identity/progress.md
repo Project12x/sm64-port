@@ -1139,6 +1139,22 @@
   before resealing. Reference: close-port of in-tree GCC `-B` usage and pinned
   Yaul helper naming at `7cee9a12`; no external source or notice change.
   Candidate A compile/link/seal/release gates remain open.
+- Candidate A from `d1699ab7` published identity v2 tag
+  `id-99f6dfa38dcc64f8`, passed canonical bootstrap and geo depth at 172/192
+  across 518 inputs, then compiled all 75 main sourceboot objects with exact
+  `sh-elf-as.exe`. The separate software-float recipe failed on
+  `softfp/addsf3.o` because its independent `SOFTFP_CFLAGS` lacked the GCC
+  helper prefix and therefore launched MSYS host `as.exe`, which rejected
+  `-big`. No link, post-link seal, release, or reproducibility gate is claimed.
+- Software-float boundary correction: `SOFTFP_CFLAGS` now begins with the same
+  `SOURCEBOOT_GCC_TOOL_PREFIX` used by main C/C++/assembly/link invocations, so
+  all GCC helper lookup remains bound to attested Yaul binaries. TDD RED was
+  hermetic Make 12/13; GREEN is Make 13/13, attestation 16/16, and wrapper 3/3.
+  Reference: same-repository close-port of the adjacent main sourceboot helper
+  binding and inspection of vendored `third_party/gcc-soft-fp/README.md`; no
+  external source, copied bytes, license, or notice change. Candidate A must
+  restart from the resulting common source commit; compile/link/seal/release/
+  reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

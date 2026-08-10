@@ -346,6 +346,10 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         for flags in ("SH_CFLAGS", "SH_CXXFLAGS", "SH_LDFLAGS"):
             self.assertIn(f"{flags} += $(SOURCEBOOT_GCC_TOOL_PREFIX)", makefile)
         self.assertIn(
+            "SOFTFP_CFLAGS := $(SOURCEBOOT_GCC_TOOL_PREFIX) -O2",
+            makefile,
+        )
+        self.assertIn(
             "SOURCEBOOT_SH_AS := $(YAUL_INSTALL_ROOT)/bin/"
             "$(YAUL_PROG_SH_PREFIX)-as$(SOURCEBOOT_SH_EXEEXT)",
             makefile,

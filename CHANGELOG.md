@@ -97,7 +97,11 @@
   `sh-elf-as` and `sh-elf-ld` files. Pinned Yaul prepends `/mingw64/bin` after
   the outer wrapper starts, so PATH order alone still selected host binutils.
   The binding now survives that nested Make boundary and applies equally to
-  dependency discovery, C/C++, preprocessed assembly, and final link.
+  dependency discovery, C/C++, preprocessed assembly, final link, and the
+  separately compiled software-float runtime. The latter owns an independent
+  flag set, so leaving it unbound allowed 75 main objects to compile before a
+  late host-assembler failure; every GCC invocation now selects the same
+  attested cross-tool helpers.
 
 - Put Yaul's selected cross-tool `bin` directory ahead of MSYS host programs
   in the Windows toolchain wrapper. The SH GCC driver locates its unprefixed

@@ -1879,6 +1879,23 @@ GCC's existing in-tree `-B` link-search pattern and pinned Yaul helper naming at
 commit `7cee9a12`; no external source, license, or notice change. Compile, link,
 seal, and release gates remain open pending the exact rerun.
 
+Candidate A from `d1699ab7` preserved the new sealed identity tag
+`id-99f6dfa38dcc64f8`, passed canonical bootstrap and geo-depth capacity, and
+compiled all 75 main sourceboot objects with the exact attested assembler. It
+then stopped in the separately compiled software-float runtime: `SOFTFP_CFLAGS`
+is an independent flag set and did not inherit the main C flags, so
+`softfp/addsf3.o` again launched MSYS host `as.exe` and rejected `-big`. No
+link, post-link seal, release manifest, or reproducibility gate is claimed.
+The software-float flag set now carries the same explicit GCC `-B` prefix.
+Focused TDD was RED at hermetic Make 12/13 and GREEN at 13/13; toolchain
+attestation remains GREEN at 16/16 and the Windows wrapper at 3/3. Reference
+record: same-repository close-port of the already-reviewed main sourceboot
+helper binding into the adjacent custom soft-float recipe, with the vendored
+runtime boundary documented by `third_party/gcc-soft-fp/README.md`; no external
+bytes, license, or notice changed. Candidate A must restart at the resulting
+common source commit; compile completion, link, seal, release, and
+reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
