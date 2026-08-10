@@ -556,6 +556,7 @@ object-pool capture regressions pass 13 more (7 + 6). Independent specification
 and code-quality reviews remain controller-owned and open. Target build,
 reproducibility, audit v4, complete-package, 20,100-frame smoke, visual, and
 manual-play gates remain open; host tests do not close them.
+Implementation commit: `09c30c23` (`feat(saturn): add build identity v2`).
 
 Design decision: the legacy `IDENTITY_STRUCT` and `HASH_FIELDS` aliases remain
 v1-compatible, while explicit v1/v2 structs select parsing from the immutable
