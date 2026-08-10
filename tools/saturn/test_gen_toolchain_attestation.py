@@ -213,6 +213,20 @@ class ToolchainAttestationTests(unittest.TestCase):
             tuple(self.install / "bin" / name for name in self.binary_names),
         )
 
+    def test_sourceboot_cli_measures_one_binary_used_for_multiple_roles_once(self) -> None:
+        arguments = self.cli_arguments(self.root / "toolchain.json")
+        gcc = arguments[arguments.index("--gcc") + 1]
+        arguments[arguments.index("--ld") + 1] = gcc
+        component = _sourceboot_component(
+            _parse_args(arguments), lambda _path: "sh-elf-gcc (GCC) 14.3.0\n"
+        )
+        built = build_toolchain_attestation([component], self.dependencies())
+        binaries = built.document["components"][0]["binaries"]
+        self.assertEqual(len(binaries), len(self.binary_names) - 1)
+        self.assertEqual(
+            sum(row["path"] == "bin/sh-elf-gcc.exe" for row in binaries), 1
+        )
+
     def test_sourceboot_cli_path_banner_preserves_prior_output(self) -> None:
         output = self.root / "toolchain.json"
         output.write_bytes(b"known-valid-prior-output\n")

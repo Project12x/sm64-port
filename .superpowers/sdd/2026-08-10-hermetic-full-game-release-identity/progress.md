@@ -1046,6 +1046,17 @@
   Make 11/11, including ambiguity rejection. Reference: clean-room extension
   of in-tree Task 2 derived classes/cwd semantics at `2bf05467`; no external
   source or license/notice change. Candidate A remains open pending exact rerun.
+- Candidate A from `f9b1345e` built the complete closure `.tmp` and reached
+  toolchain attestation, where atomic discovery publication stopped because
+  Yaul uses the same `sh-elf-gcc.exe` for compiler and linker-driver roles. No
+  closure seal was published and no downstream gate is claimed.
+- Attestation correction: sourceboot still requires all eight explicit role
+  arguments, then canonicalizes their exact path spellings to the schema's
+  unique measured-binary set. Exact compiler/linker-driver repetition is
+  measured once; direct component duplicates and case aliases retain existing
+  rejection. TDD RED was 15/16; GREEN is 16/16. Reference: clean-room use of
+  the in-tree Task 3 binary-set schema and pinned Yaul variables at `f9b1345e`;
+  no external source or license/notice change. Candidate A remains open.
 
 ## Task 5 review repair round 2
 

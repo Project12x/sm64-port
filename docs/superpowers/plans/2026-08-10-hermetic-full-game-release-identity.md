@@ -1780,6 +1780,21 @@ class and sourceboot Make working-directory semantics at `2bf05467`; no external
 source or license/notice change. Closure and downstream gates remain open until
 the exact rerun succeeds.
 
+Candidate A from `f9b1345e` successfully constructed the full source closure
+and reached toolchain attestation, but atomic discovery publication stopped
+because Yaul supplies `sh-elf-gcc.exe` for both the compiler and linker-driver
+roles. The v1 attestation schema records a canonical set of measured binary
+paths rather than role labels, so the sourceboot CLI composer now deduplicates
+only exact repeated path spellings after requiring every role argument. Direct
+component duplicates remain rejected, and case-variant paths remain distinct
+long enough for the existing collision check to reject them. TDD was RED at
+15/16 and GREEN at 16/16 with the real compiler/linker-driver topology.
+Reference record: clean-room correction against the in-tree Task 3 schema and
+pinned Yaul Make variables at `f9b1345e`; no external source or license/notice
+change. The closure bytes existed only as an uncommitted `.tmp`; the combined
+closure/attestation publication, compile, link, and release gates remain open
+pending the exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

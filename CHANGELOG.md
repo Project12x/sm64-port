@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Deduplicated exact CLI tool paths when composing the sourceboot toolchain's
+  canonical binary set. Yaul invokes `sh-elf-gcc.exe` as both compiler and
+  linker driver, so treating role repetition as two binary records rejected
+  the real pinned toolchain even though the attestation schema measures files,
+  not role labels. Every role remains a required explicit argument; identical
+  spellings are measured once, while direct duplicate component inputs and
+  differently cased aliases retain their existing fail-closed checks.
+
 - Bound compiler-dependency interpretation to the sourceboot Make working
   directory and added a unique, fail-closed alias for explicitly declared
   derived outputs. Real depfiles contain valid local rows such as `main.c`,

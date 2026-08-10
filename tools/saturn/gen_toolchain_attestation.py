@@ -323,7 +323,10 @@ def _sourceboot_component(
 ) -> ToolchainComponent:
     if args.yaul_version != YAUL_VERSION or args.yaul_commit != YAUL_COMMIT:
         raise ValueError("sourceboot toolchain must use Yaul 0.3.1 commit " + YAUL_COMMIT)
-    binaries = tuple(Path(getattr(args, argument)) for argument, _label in _TOOL_ARGUMENTS)
+    role_binaries = tuple(
+        Path(getattr(args, argument)) for argument, _label in _TOOL_ARGUMENTS
+    )
+    binaries = tuple({binary.as_posix(): binary for binary in role_binaries}.values())
     version = (f"yaul-{args.yaul_version} commit-{args.yaul_commit}; "
                f"gcc --version:\n{compiler_version_reader(binaries[0])}")
     return ToolchainComponent("yaul-sh-sdk", version, Path(args.yaul_root), binaries)
