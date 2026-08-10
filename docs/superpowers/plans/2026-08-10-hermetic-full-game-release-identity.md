@@ -1939,6 +1939,27 @@ Makefile; no external source, copied bytes, license, or notice change.
 Candidate A must restart at the resulting common source commit; post-link
 closure, release, and reproducibility gates remain open.
 
+Candidate A from `0dc7ede0` published identity tag
+`id-5125ad1b7f816a3b`, completed compile/link/package, and produced all four
+independent fresh assembly depfiles. Closure verification then stopped because
+the actual external dependency set differed from sealed discovery. Exact
+diagnosis found 4 sealed paths versus 103 actual paths (99 added, 0 missing):
+pre-seal discovery used GCC `-MM`, which excludes headers found through
+`-isystem`, while pinned Yaul's real compile recipe uses `-MD` and records
+those GCC and Yaul system headers. No post-link closure pass or release
+manifest is claimed. All C, C++, and preprocessed-assembly discovery plus
+post-link scans now use `-M -MG`, retaining missing-generated-header discovery
+while matching `-MD` system-header coverage. The complete 103-path external
+set will therefore be byte-attested before the next identity is formed rather
+than accepted only after compilation. TDD was RED at Make 15/16 and GREEN at
+16/16; combined Make, source-closure, and attestation coverage is 54/54 with
+the one existing case-filesystem skip. Reference record: close-port of pinned
+MIT libyaul commit `6012f79f...` dependency semantics, inspected
+`libyaul/build/build.post.bin.mk` (`macro-generate-sh-build-object` and its
+`-MD` flags); no copied upstream bytes or notice change. Candidate A must
+restart at the resulting common source commit; closure, release, and
+reproducibility gates remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

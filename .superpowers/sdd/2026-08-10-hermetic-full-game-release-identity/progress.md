@@ -1192,6 +1192,22 @@
   external source, copied bytes, license, or notice change. Candidate A must
   restart at the resulting common commit; post-link closure, release, and
   reproducibility gates remain open.
+- Candidate A from `0dc7ede0` published identity v2 tag
+  `id-5125ad1b7f816a3b`, completed compile/link/package, and produced all four
+  fresh assembly depfiles. Closure verification then rejected external-set
+  drift: sealed discovery had 4 paths while actual compile/post-link depfiles
+  had 103 (99 added, 0 missing). No post-link closure pass or release manifest
+  is claimed.
+- External-coverage correction: discovery used GCC `-MM`, excluding headers
+  reached through `-isystem`, while pinned Yaul's real recipes use `-MD` and
+  include them. C, C++, assembly discovery, and post-link assembly scans now
+  use `-M -MG`, so the complete GCC/Yaul system-header set enters the external
+  handoff and byte attestation before identity formation. TDD RED was Make
+  15/16; GREEN is Make 16/16, with source closure plus attestation yielding
+  54/54 and one existing case-filesystem skip. Reference: close-port of pinned
+  MIT libyaul `6012f79f...` `build.post.bin.mk` `-MD` semantics; no copied
+  bytes or notice change. Candidate A must restart at the resulting common
+  commit; closure/release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

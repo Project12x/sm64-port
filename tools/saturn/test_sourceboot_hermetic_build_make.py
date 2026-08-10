@@ -146,7 +146,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         normalized: list[str] = []
         skip_argument = False
         switches_with_arguments = {"-MT", "-MF", "-o"}
-        switches_without_arguments = {"-MM", "-MG"} if discovery else {"-MD", "-c"}
+        switches_without_arguments = {"-M", "-MG"} if discovery else {"-MD", "-c"}
         for token in tokens:
             if skip_argument:
                 skip_argument = False
@@ -176,7 +176,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
     def discovery_commands_by_source(output: str) -> dict[str, str]:
         commands: dict[str, str] = {}
         for line in output.splitlines():
-            if " -MM -MG " not in line or "postlink-parity-" in line:
+            if " -M -MG " not in line or "postlink-parity-" in line:
                 continue
             source = shlex.split(line)[-1].replace("\\", "/")
             if source in commands:
@@ -188,7 +188,7 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
     def postlink_commands_by_source(output: str) -> dict[str, str]:
         commands: dict[str, str] = {}
         for line in output.splitlines():
-            if " -MM -MG " not in line or "postlink-parity-" not in line:
+            if " -M -MG " not in line or "postlink-parity-" not in line:
                 continue
             source = shlex.split(line)[-1].replace("\\", "/")
             if source in commands:
@@ -461,6 +461,11 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf $(1) sourceboot-force-discovery-scan",
             makefile,
         )
+
+    def test_discovery_includes_same_system_headers_as_yaul_md_depfiles(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertEqual(makefile.count(" -M -MG "), 3)
+        self.assertNotIn(" -MM -MG ", makefile)
         self.assertIn(
             "verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf "
             "$(SOURCEBOOT_POSTLINK_SX_DEPS)",

@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Matched pre-seal and post-link dependency discovery to Yaul's real `-MD`
+  system-header coverage. The previous `-MM` scans excluded headers reached
+  through `-isystem`, sealing only four external inputs while actual compile
+  depfiles named 103; discovery now uses `-M -MG`, so all GCC and Yaul header
+  bytes actually consumed by the compiler enter the external handoff and
+  toolchain attestation before release identity is formed.
+
 - Made every post-link preprocessed-assembly dependency scan an independent
   Make target ordered after the linked ELF. A recipe-level `foreach` had joined
   all GCC invocations into one shell command, treating later compiler paths as

@@ -1084,20 +1084,20 @@ $(if $(findstring n,$(firstword $(MAKEFLAGS))),,$(file >$(1),sm64-saturn-path-li
 endef
 
 define sourceboot-discover-c-dependency
-	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
+	$(SH_CC) -M -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
 	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
 	  -MT "$(1)" -MF "$(2)" "$(1)"
 endef
 
 define sourceboot-discover-cxx-dependency
-	$(SH_CXX) -MM -MG $(filter-out -save-temps=obj,$(SH_CXXFLAGS)) \
+	$(SH_CXX) -M -MG $(filter-out -save-temps=obj,$(SH_CXXFLAGS)) \
 	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
 	  $(foreach specs,$(SH_CXX_SPECS),-specs=$(specs)) \
 	  -MT "$(1)" -MF "$(2)" "$(1)"
 endef
 
 define sourceboot-discover-sx-dependency
-	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
+	$(SH_CC) -M -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
 	  -MT "$(1)" -MF "$(2)" "$(1)"
 endef
 
