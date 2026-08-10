@@ -568,8 +568,8 @@ exact v2 root descriptor keys while retaining v1 programmatic compatibility,
 rejects duplicate/case-fold-colliding keys recursively at the CLI JSON
 boundary, and emits compact canonical manifest bytes. The focused suites now
 pass 67 tests (21 + 6 + 38 + 2), with 13 adjacent regressions (7 + 6) also
-passing. Repair commit: pending scoped commit. Review and all target evidence
-gates remain open.
+passing. Repair commit: `7aef88c4` (`fix(saturn): harden identity v2 inputs`).
+Review and all target evidence gates remain open.
 
 Design decision: the legacy `IDENTITY_STRUCT` and `HASH_FIELDS` aliases remain
 v1-compatible, while explicit v1/v2 structs select parsing from the immutable
