@@ -267,19 +267,8 @@ def _resolve_dependency(root: Path, dependency: str) -> Path:
 
 
 def _canonical_repo_path(root: Path, value: str | Path) -> str:
-    """Preserve supplied spelling while Task 1 validates repository containment."""
-    safe = normalize_repo_path(root, value)
-    raw = Path(value)
-    if raw.is_absolute():
-        try:
-            relative = raw.relative_to(root)
-        except ValueError:
-            return safe
-    else:
-        relative = raw
-    if not relative.parts or any(part in ("", ".", "..") for part in relative.parts):
-        return safe
-    return relative.as_posix()
+    """Return Task 1's one normalized canonical repository spelling."""
+    return normalize_repo_path(root, value)
 
 
 def _external_roots(root: Path, roots: Sequence[Path]) -> tuple[Path, ...]:
@@ -406,10 +395,21 @@ def _owners(row: Mapping[str, Any] | None) -> tuple[str, ...]:
 
 def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str], dict[str, Any]]) -> None:
     checked_in = sorted(
-        row["path"] for row in sealed_rows.values() if row["class"] != "generated-input"
+        row["path"] for row in sealed_rows.values()
+        if row["class"] != "generated-input" or not row["path"].startswith("build/")
     )
     if not checked_in:
         return
+    for path in checked_in:
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", path],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if tracked.returncode != 0:
+            raise ValueError(f"release closure input is not tracked: {path}")
     result = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *checked_in],
         cwd=root,

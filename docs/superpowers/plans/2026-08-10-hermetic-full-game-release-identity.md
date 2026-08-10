@@ -252,8 +252,19 @@ passes 11 closure contracts and the existing identity-bootstrap regression
 passes 7 tests. The implementation seals compiler-derived repository inputs,
 keeps attestation-bound external paths out of the document, and verifies exact
 post-build closure/class ownership plus byte and release-cleanliness drift.
-Independent specification and code-quality reviews remain open, as do all
-target/reproducibility/audit/package/smoke/visual/manual evidence gates.
+The first independent combined specification/code-quality review returned
+`Needs fixes`: release cleanliness must Git-check generated inputs outside
+`build/` and must reject ignored/untracked checked-in closure inputs. Focused
+repair/rereview is active; both review gates and all target/reproducibility/
+audit/package/smoke/visual/manual evidence gates remain open.
+
+**Repair status (2026-08-10):** source-complete after focused RED/GREEN repair
+of the first review findings. Release verification now proves every
+Git-checked path is tracked before the required scoped porcelain check, and
+only generated-input records beneath `build/` bypass Git. The focused suite
+passes 14 tests (one case-spelling test is host-capability skipped) and the
+bootstrap regression passes 7. Both independent review gates remain open
+pending rereview; no target evidence gate is closed.
 
 **Files:**
 - Create: `tools/saturn/gen_source_closure.py`

@@ -22,6 +22,13 @@
 
 ### Fixed
 
+- Hardened source-closure release cleanliness after review. Generated inputs
+  outside `build/` now receive the same Git tracking/dirty check as checked-in
+  source inputs, while deterministic ignored build outputs remain allowed.
+  Every Git-checked closure path is first proven tracked, so ignored or
+  untracked headers, sources, recipes, generators, and out-of-build generated
+  inputs fail closed instead of being hidden from porcelain status.
+
 - Hardened deterministic target-profile sealing after review: payload identity
   now preflights and rejects duplicate or case-fold-colliding paths across
   descriptors before a missing spelling can hide the collision,

@@ -50,14 +50,16 @@ class SourceClosureTests(unittest.TestCase):
         path.write_text(contents, encoding="utf-8")
         return path
 
-    def build_closure(self):
+    def build_closure(self, generated_inputs: tuple[Path, ...] | None = None):
+        if generated_inputs is None:
+            generated_inputs = (self.root / "build/generated/scene.h",)
         return build_source_closure(
             self.root,
             (self.root / "src/main.c",),
             self.depfiles,
             (self.root / "Makefile.saturn.mk",),
             (self.root / "tools/saturn/gen_build_identity.py",),
-            (self.root / "build/generated/scene.h",),
+            generated_inputs,
             self.derived,
             self.external_roots,
         )
@@ -102,6 +104,8 @@ class SourceClosureTests(unittest.TestCase):
             with self.subTest(message=message):
                 with self.assertRaisesRegex(ValueError, message):
                     build_source_closure(self.root, sources, self.depfiles, recipes, (), (), (), ())
+        if (self.root / "include/MAIN.h").is_file():
+            self.skipTest("host filesystem does not permit case-colliding files")
         self.write("include/MAIN.h", "case collision\n")
         self.write("obj/case.d", "obj/case.o: include/main.h include/MAIN.h\n")
         with self.assertRaisesRegex(ValueError, "case-colliding"):
@@ -140,11 +144,12 @@ class SourceClosureTests(unittest.TestCase):
         mutations = (
             ("missing", lambda: self.write("obj/main.d", "obj/main.o: src/main.c include/main.h\n"), "closure"),
             ("extra", lambda: (self.write("include/extra.h", "extra\n"), self.write("obj/main.d", "obj/main.o: src/main.c include/main.h Makefile.saturn.mk tools/saturn/gen_build_identity.py build/generated/scene.h include/extra.h\n")), "closure"),
-            ("stale", lambda: (self.write("include/stale.h", "stale\n"), self.write("obj/main.d", "obj/main.o: src/main.c include/main.h Makefile.saturn.mk tools/saturn/gen_build_identity.py build/generated/scene.h include/stale.h\n")), "closure"),
+            ("stale-removed", lambda: (self.root / "include/main.h").unlink(), "not a file"),
             ("toc-tou", lambda: self.write("include/main.h", "changed after seal\n"), "changed after discovery"),
         )
         for name, mutation, message in mutations:
             with self.subTest(mutation=name):
+                self.write("include/main.h", "#define MAIN 1\n")
                 self.write("obj/main.d", "obj/main.o: src/main.c include/main.h build/generated/scene.h \\\n tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
                 sealed = self.write_sealed_closure()
                 mutation()
@@ -182,7 +187,7 @@ class SourceClosureTests(unittest.TestCase):
         self.write("include/untracked.h", "untracked\n")
         self.write("obj/main.d", "obj/main.o: src/main.c include/main.h include/untracked.h build/generated/scene.h tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
         sealed = self.write_sealed_closure()
-        with self.assertRaisesRegex(ValueError, "release closure inputs are not clean"):
+        with self.assertRaisesRegex(ValueError, "release closure input is not tracked"):
             verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
 
     def test_release_mode_allows_clean_ignored_generated_input_without_git_status(self) -> None:
@@ -194,6 +199,44 @@ class SourceClosureTests(unittest.TestCase):
             cwd=self.root, check=True,
         )
         verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+    def test_release_mode_rejects_ignored_untracked_header(self) -> None:
+        self.git_init_with_tracked_closure()
+        self.write(".gitignore", "include/ignored.h\n")
+        subprocess.run(["git", "add", ".gitignore"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test", "commit", "-qm", "ignore-header"],
+            cwd=self.root, check=True,
+        )
+        self.write("include/ignored.h", "ignored and untracked\n")
+        self.write("obj/main.d", "obj/main.o: src/main.c include/main.h include/ignored.h build/generated/scene.h tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
+        sealed = self.write_sealed_closure()
+        with self.assertRaisesRegex(ValueError, "release closure input is not tracked"):
+            verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+    def test_release_mode_git_checks_generated_input_outside_build(self) -> None:
+        self.git_init_with_tracked_closure()
+        self.write(".gitignore", "generated/\n")
+        subprocess.run(["git", "add", ".gitignore"], cwd=self.root, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test", "commit", "-qm", "ignore-generated"],
+            cwd=self.root, check=True,
+        )
+        generated = self.write("generated/outside.h", "ignored generated input\n")
+        built = self.build_closure((self.root / "build/generated/scene.h", generated))
+        sealed = self.root / "build/sealed-source-closure.json"
+        sealed.write_bytes(built.canonical)
+        with self.assertRaisesRegex(ValueError, "release closure input is not tracked"):
+            verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+    def test_depfile_case_spelling_normalizes_to_the_repository_path_when_supported(self) -> None:
+        alternate = self.root / "include/MAIN.h"
+        if not alternate.is_file():
+            self.skipTest("host filesystem distinguishes case spellings")
+        self.write("obj/main.d", "obj/main.o: src/main.c include/MAIN.h build/generated/scene.h tools/saturn/gen_build_identity.py Makefile.saturn.mk\n")
+        records = {row["path"] for row in self.build_closure().document["inputs"]}
+        self.assertIn("include/main.h", records)
+        self.assertNotIn("include/MAIN.h", records)
 
 
 if __name__ == "__main__":
