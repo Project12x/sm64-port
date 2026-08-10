@@ -1342,13 +1342,39 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 - Produces measurement CLI `--measure-audit-report PATH`, valid only with `--audit-route-oracle` and without `--audit-contract`.
 - Produces `seal_v4_contract(measurement_path: Path, release_manifest_path: Path, output: Path) -> bytes`, refusing to overwrite an existing output.
 
-**Live status (2026-08-10):** `active` after Task 7 completed independent
-review. Task 8 owns only parser/preflight, explicitly unsealed measurement, and
-one-shot v4 sealing support. It must not create or pin the real v4 contract;
-Task 9 owns real measurement and immutable pinning. Historical v2/v3 bytes and
-all target/release-evidence gates remain open and unchanged.
+**Live status (2026-08-10):** `source-complete` in behavior commit `db4c620d`
+(`feat(saturn): add release-bound native math audit v4`). Parser/preflight,
+explicitly unsealed measurement, one-shot sealing, focused tests, the full
+verifier run, Task 7 release-manifest adjacency, and Python compilation are
+implemented. Independent specification/code-quality reviews remain
+controller-owned and open, so Task 8 is not `complete`. No real measurement,
+v4 contract, or pinned digest was created; Task 9 still owns those exact-target
+steps. Historical v2/v3 bytes and every target/release-evidence gate remain
+open and unchanged.
 
-- [ ] **Step 1: Write failing v4 parser, preflight, and measurement tests**
+Reference-code-first record: implementation used pattern-only/close-port reuse
+from the in-tree audit parser/integrity/preflight/main and tests at base
+`15265084`, plus Task 7's context-managed `release_manifest.py` snapshot API and
+`test_release_manifest.py` fixture at reviewed closeout `a07ffbe1`. The source
+and destination are this same deliberately GPL-compatible project, whose root
+has no repository-wide license declaration; no external source was copied or
+adapted and no new notice obligation was introduced.
+
+Execution evidence: the initial v4 parser test failed on the first unknown v4
+directive and the sealer suite failed because its module did not exist. The
+measurement tests then failed because both CLI flags were absent. A self-review
+RED proved public v4 preflight rehashed the mutable original after manifest
+verification; the correction now verifies the requested original path but
+hashes and consumes only Task 7's immutable snapshot. Final sealer and release
+adjacency suites pass 4 + 26 host tests; all four changed Python files compile.
+The full verifier ran 238 tests with 237 passes and only the documented unrelated
+`test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites`
+failure. V2 remains 507 bytes at
+`87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`;
+v3 remains 416 bytes at
+`80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
+
+- [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 
 ```python
 def test_v4_requires_all_release_identity_hashes(self) -> None:
@@ -1383,14 +1409,14 @@ def test_measurement_report_is_explicitly_unsealed(self) -> None:
 
 Add tests that v2 rejects every new directive, v3 still requires only exact ELF, v4 rejects uppercase/wrong-length hashes and duplicate directives, sealer rejects mismatched measurement/manifest ELF hashes, sealer refuses overwrite, and checked-in v2/v3 contract bytes/digests remain unchanged.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_verify_sh2_native_math.py NativeMathCensusTests.test_v4_requires_all_release_identity_hashes
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_seal_sh2_native_math_audit_v4.py
 ```
 
-- [ ] **Step 3: Extend parser and fail-fast target verification**
+- [x] **Step 3: Extend parser and fail-fast target verification**
 
 Audit v4 canonical directives are emitted directly from verified objects:
 
@@ -1417,7 +1443,7 @@ while no real v4 file exists. Synthetic parser/preflight tests pass an explicit
 fixture digest. Task 9 replaces `None` with the sealer's measured digest in the
 same commit that adds the immutable contract; no sentinel digest is accepted.
 
-- [ ] **Step 4: Add unsealed measurement mode**
+- [x] **Step 4: Add unsealed measurement mode**
 
 Measurement mode runs the existing source-derived audit route analysis and ordinary baseline/oracle integrity checks, writes root, measured total, forbidden-caller observations, exact ELF SHA-256, and release-manifest SHA-256, and labels the result `measured-unsealed`. It never prints PASS for an immutable audit contract.
 
@@ -1434,7 +1460,7 @@ measurement = {
 write_if_changed(args.measure_audit_report, canonical_json_bytes(measurement))
 ```
 
-- [ ] **Step 5: Implement one-shot contract sealing**
+- [x] **Step 5: Implement one-shot contract sealing**
 
 `seal_sh2_native_math_audit_v4.py` verifies the release manifest, measurement schema/status, matching ELF/manifest hashes, exact root `_game_loop_one_iteration`, and absence of both forbidden callers. It writes the canonical v4 text only when output does not exist. It prints the contract SHA-256 so Task 9 can pin that exact digest in `GOAL_AUDIT_CONTRACT_V4_SHA256` with a reviewed patch.
 
@@ -1451,7 +1477,7 @@ output.write_bytes(raw)
 print(hashlib.sha256(raw).hexdigest())
 ```
 
-- [ ] **Step 6: Run focused and full verifier suites**
+- [x] **Step 6: Run focused and full verifier suites**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_seal_sh2_native_math_audit_v4.py

@@ -390,9 +390,8 @@
 
 - Initial dispatch base: `48f5a61a` (`docs(saturn): start exact release
   sealing`), following Task 6 closeout `cad2e90d`.
-- Status: `source-complete`; behavior commit `7195fc48` is recorded. The first
-  independent specification/code-quality review returned `Needs fixes`, and
-  repair round 1 is active.
+- Status: `complete`; behavior and all three scoped repair rounds are committed,
+  and independent specification/code-quality review is approved.
 - Reconciliation: Tasks 1–6 are complete and independently approved. Task 7
   consumes the reviewed identity/profile/closure/toolchain outputs and must use
   one profile-agnostic path for the BOB demo and eventual full game.
@@ -616,11 +615,10 @@
 
 ## Task 7 review repair round 3
 
-- Status: `source-complete` in behavior commit `740a08bc`
-  (`fix(saturn): dispatch atomic release publication`); controller-owned
-  rereview remains open. The original namespace-race finding remains
-  `ADDRESSED`; this repair is the proposed closure for the new POSIX portability
-  finding.
+- Status: `complete` in behavior commit `740a08bc`
+  (`fix(saturn): dispatch atomic release publication`) after scoped rereview.
+  The original namespace-race finding and the POSIX portability finding are
+  both `ADDRESSED`.
 - TDD RED: the 20-case staging suite produced nine intended failures/errors:
   Linux/Darwin/FreeBSD adapter selection and exclusive flags (three),
   Linux/Darwin/OpenBSD `EEXIST` mapping (three), unsupported POSIX preflight,
@@ -653,6 +651,57 @@
 - Open gates: controller rereview, real target build, reproducibility, audit
   v4, complete-package inventory, release evidence, 20,100-frame smoke,
   visual, and manual-play. No target or emulator work was run or claimed.
+- Scoped rereview verdict: portability finding `ADDRESSED`; no new Critical or
+  Important breakage. Task 7 is `complete`. Real target build, non-Windows
+  platform execution, reproducibility, audit v4, complete-package inventory,
+  release evidence, 20,100-frame smoke, visual, and manual-play gates remain
+  open.
+
+## Task 8 execution ledger
+
+- Initial implementation base: `15265084` (`docs(saturn): start release-bound
+  audit v4`), following Task 7 review closeout `a07ffbe1`.
+- Status: `source-complete` in behavior commit `db4c620d`
+  (`feat(saturn): add release-bound native math audit v4`). Controller-owned
+  independent specification and code-quality reviews remain open, so Task 8
+  is not `complete`.
+- Scope boundary: no real measurement, real v4 contract, or pinned digest in
+  Task 8. Historical v2/v3 contract bytes and invocation behavior must remain
+  unchanged. Task 9 owns target measurement and pinning.
+- Reference record: pattern-only/close-port reuse from the in-tree audit
+  parser/integrity/preflight/main and tests at `15265084`, plus Task 7's
+  context-managed `release_manifest.py` snapshots and release fixture at
+  reviewed closeout `a07ffbe1`. Source and destination are the same deliberately
+  GPL-compatible project, with no root-wide license declaration; no external
+  source was copied and no new notice obligation was introduced.
+- TDD RED/GREEN: the first parser case exited 1 on an invalid new directive;
+  the sealer suite exited 1 on the absent module. Measurement then produced two
+  tests/four expected errors because both flags were unknown. Focused parser,
+  preflight, integrity, immutability, and snapshot cases passed after the
+  minimal implementation; measurement passes two CLI/report/lifetime cases;
+  and the sealer passes four cases. Self-review added a snapshot-consumption
+  mutation: RED showed public v4 preflight hashing the mutable original, GREEN
+  showed it hashing only the private snapshot and releasing it afterward.
+- Verification: the fresh full verifier ran 238 tests with 237 passes and only
+  the documented unrelated null-camera proof failure. The fresh one-shot
+  sealer passes 4/4. Task 7 release-manifest adjacency passes 26/26 with
+  worktree-local `TEMP`/`TMP`; the first adjacent attempt was discarded after
+  the sandbox denied traversal of global `C:\Users` temp paths. All four
+  changed scripts pass `py_compile`. `git diff --cached --check` and
+  `git show --check db4c620d` pass, and the behavior commit contains exactly
+  the five Task 8 behavior paths.
+- Historical immutability: audit v2 remains 507 bytes with SHA-256
+  `87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2`;
+  audit v3 remains 416 bytes with SHA-256
+  `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`.
+- Design correction: both CLI measurement and the public v4 preflight require
+  the requested ELF path to equal Task 7's verified original, then keep and
+  consume only the immutable verified snapshot through all digest and SH-tool
+  activity. Identity v1 is rejected only for v4/measurement; historical v2/v3
+  invocation behavior remains manifest-free and unchanged.
+- Open gates: Task 8 independent reviews, real target build, reproducibility, audit
+  v4 measurement/contract, complete-package inventory, release evidence,
+  20,100-frame smoke, visual, and manual play.
 
 ## Task 5 review repair round 2
 
