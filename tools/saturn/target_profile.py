@@ -89,12 +89,19 @@ def _profile(root: Path, profile_path: Path) -> tuple[dict[str, Any], str]:
     names = document["output_names"]
     if not isinstance(names, dict) or set(names) != {"elf", "source_dat", "iso", "cue"}:
         raise ValueError("target profile output_names must name elf, source_dat, iso, and cue")
-    if any(not isinstance(item, str) or not item or Path(item).is_absolute() for item in names.values()):
+    if any(not isinstance(item, str) for item in names.values()):
         raise ValueError("target profile output names must be relative non-empty strings")
+    normalized_names: dict[str, str] = {}
+    for name, value in names.items():
+        try:
+            normalized_names[name] = normalize_repo_path(root, value)
+        except ValueError as error:
+            raise ValueError("target profile output names must be relative repository paths") from error
+    document["output_names"] = normalized_names
     return document, relative_profile
 
 
-def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[str, Any], tuple[str, ...]]:
     path = root / descriptor_path
     document = _read_object(path, "package descriptor")
     _require_keys(document, {"schema", "package_class", "package_id", "inputs"}, "package descriptor")
@@ -109,6 +116,7 @@ def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[
         raise ValueError("package descriptor has missing payloads")
     rendered_inputs: list[dict[str, str]] = []
     paths: list[str] = []
+    requested_paths: list[str] = []
     for item in inputs:
         if not isinstance(item, dict) or set(item) != {"path"} or not isinstance(item["path"], str):
             raise ValueError("package descriptor input is invalid")
@@ -117,7 +125,9 @@ def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[
         if not payload.is_file():
             raise ValueError(f"package descriptor payload is missing: {relative}")
         paths.append(relative)
+        requested_paths.append(item["path"].replace("\\", "/"))
         rendered_inputs.append({"path": relative, "sha256": sha256_file(payload)})
+    reject_case_collisions(requested_paths)
     reject_case_collisions(paths)
     if len(set(paths)) != len(paths):
         raise ValueError("package descriptor has duplicate payload paths")
@@ -128,7 +138,15 @@ def _descriptor(root: Path, descriptor_path: str) -> tuple[dict[str, Any], dict[
         "source_descriptor_sha256": sha256_file(path),
         "inputs": sorted(rendered_inputs, key=lambda item: item["path"].encode("utf-8")),
     }
-    return document, manifest
+    return document, manifest, tuple(requested_paths)
+
+
+def _revalidate_measurements(root: Path, measurements: Mapping[str, str]) -> None:
+    """Fail before publication if any bytes changed after their first hash."""
+    for relative, expected in sorted(measurements.items(), key=lambda item: item[0].encode("utf-8")):
+        path = root / relative
+        if not path.is_file() or sha256_file(path) != expected:
+            raise ValueError(f"package descriptor or payload changed during resolution: {relative}")
 
 
 def resolve_target_profile(root: Path, profile_path: Path, effective_config: Mapping[str, int],
@@ -148,12 +166,20 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
     package_rows: list[dict[str, str]] = []
     per_class: dict[str, list[dict[str, Any]]] = {kind: [] for kind in PACKAGE_CLASSES}
     seen_tuples: set[tuple[str, str]] = set()
+    payload_paths: list[str] = []
+    requested_payload_paths: list[str] = []
+    measurements: dict[str, str] = {}
     for descriptor_path in profile["package_descriptors"]:
-        descriptor, manifest = _descriptor(root, descriptor_path)
+        descriptor, manifest, requested_paths = _descriptor(root, descriptor_path)
         package_key = (descriptor["package_class"], descriptor["package_id"])
         if package_key in seen_tuples:
             raise ValueError(f"duplicate package class/id tuple: {package_key}")
         seen_tuples.add(package_key)
+        measurements[descriptor_path] = manifest["source_descriptor_sha256"]
+        requested_payload_paths.extend(requested_paths)
+        for item in manifest["inputs"]:
+            payload_paths.append(item["path"])
+            measurements[item["path"]] = item["sha256"]
         manifest_canonical = canonical_json_bytes(manifest)
         manifest_sha256 = hashlib.sha256(manifest_canonical).hexdigest()
         package_rows.append({
@@ -161,6 +187,11 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
             "manifest_sha256": manifest_sha256,
         })
         per_class[descriptor["package_class"]].append(manifest)
+
+    reject_case_collisions(requested_payload_paths)
+    reject_case_collisions(payload_paths)
+    if len(set(payload_paths)) != len(payload_paths):
+        raise ValueError("target profile has duplicate payload paths")
 
     output_dir = output_dir.resolve()
     package_class_manifests: dict[str, Path] = {}
@@ -177,6 +208,7 @@ def resolve_target_profile(root: Path, profile_path: Path, effective_config: Map
         aggregate_canonical = canonical_json_bytes(aggregate)
         aggregate_sha256 = hashlib.sha256(aggregate_canonical).hexdigest()
         path = output_dir / f"{package_class}-packages.json"
+        _revalidate_measurements(root, measurements)
         write_if_changed(path, aggregate_canonical)
         package_class_manifests[package_class] = path
         package_class_hashes[package_class] = aggregate_sha256

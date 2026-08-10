@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -153,38 +154,85 @@ class TargetProfileTests(unittest.TestCase):
     def test_rejects_missing_duplicate_and_malformed_inputs(self) -> None:
         descriptor = self._descriptor("route", "one", "payload/route.bin")
         profile = self._profile([descriptor])
-        for bad in (
-            {"unknown": 1},
-            {"release_config": {"bootstrap_ticks": "600", "level_id": 9}},
-            {"package_descriptors": [descriptor, descriptor]},
+        for bad, error in (
+            ({"unknown": 1}, "target profile keys invalid"),
+            ({"release_config": {"bootstrap_ticks": "600", "level_id": 9}},
+             "release_config values must be integers"),
+            ({"package_descriptors": [descriptor, descriptor]}, "duplicate manifest paths"),
         ):
             document = json.loads(profile.read_text(encoding="utf-8"))
             document.update(bad)
             candidate = self._write_json("tools/saturn/profiles/bad.json", document)
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, error):
                 resolve_target_profile(self.root, candidate, self.config, self.output, mode="development")
 
     def test_rejects_descriptor_schema_path_and_case_failures(self) -> None:
         descriptor = self._descriptor("route", "one", "payload/route.bin")
         profile = self._profile([descriptor])
         cases = (
-            ({"inputs": []}, "missing payload"),
-            ({"unknown": 1}, "unknown descriptor key"),
-            ({"schema": "wrong"}, "invalid schema"),
-            ({"inputs": [{"path": "/absolute.bin"}]}, "absolute path"),
-            ({"inputs": [{"path": "../outside.bin"}]}, "escaping path"),
+            ({"inputs": []}, "missing payloads"),
+            ({"unknown": 1}, "package descriptor keys invalid"),
+            ({"schema": "wrong"}, "schema or package_class is invalid"),
+            ({"inputs": [{"path": "/absolute.bin"}]}, "escapes repository"),
+            ({"inputs": [{"path": "../outside.bin"}]}, "escapes repository"),
             ({"inputs": [{"path": "payload/route.bin"},
-                         {"path": "PAYLOAD/ROUTE.BIN"}]}, "case collision"),
+                         {"path": "PAYLOAD/ROUTE.BIN"}]}, "case-colliding"),
         )
         original = json.loads((self.root / descriptor).read_text(encoding="utf-8"))
-        for update, _ in cases:
+        for update, error in cases:
             altered = dict(original)
             altered.update(update)
             self._write_json(descriptor, altered)
-            with self.assertRaises(ValueError):
+            with self.assertRaisesRegex(ValueError, error):
                 resolve_target_profile(self.root, profile, self.config, self.output,
                                        mode="development")
         self._write_json(descriptor, original)
+
+    def test_rejects_cross_descriptor_duplicate_and_case_colliding_payloads(self) -> None:
+        first = self._descriptor("route", "first", "payload/shared.bin")
+        second = self._descriptor("input", "second", "payload/shared.bin")
+        with self.assertRaisesRegex(ValueError, "duplicate payload paths"):
+            resolve_target_profile(self.root, self._profile([first, second]), self.config,
+                                   self.output, mode="development")
+        second_document = json.loads((self.root / second).read_text(encoding="utf-8"))
+        second_document["inputs"] = [{"path": "PAYLOAD/SHARED.BIN"}]
+        self._write_json(second, second_document)
+        with self.assertRaisesRegex(ValueError, "case-colliding"):
+            resolve_target_profile(self.root, self._profile([first, second]), self.config,
+                                   self.output, mode="development")
+
+    def test_rejects_output_name_escapes_empty_and_dot_paths(self) -> None:
+        descriptor = self._descriptor("route", "one", "payload/route.bin")
+        profile = self._profile([descriptor])
+        for output_name in ("../outside.elf", "", ".", "folder/../"):
+            document = json.loads(profile.read_text(encoding="utf-8"))
+            document["output_names"]["elf"] = output_name
+            candidate = self._write_json("tools/saturn/profiles/bad-output.json", document)
+            with self.assertRaisesRegex(ValueError, "output names must be relative"):
+                resolve_target_profile(self.root, candidate, self.config, self.output,
+                                       mode="development")
+
+    def test_descriptor_mutation_before_publish_leaves_no_outputs(self) -> None:
+        descriptor = self._descriptor("route", "one", "payload/route.bin")
+        profile = self._profile([descriptor])
+        import target_profile
+
+        original_hash = target_profile.sha256_file
+        mutated = False
+
+        def mutate_after_measure(path: Path) -> str:
+            nonlocal mutated
+            digest = original_hash(path)
+            if not mutated and path == self.root / descriptor:
+                mutated = True
+                (self.root / descriptor).write_text("{}", encoding="utf-8")
+            return digest
+
+        with patch.object(target_profile, "sha256_file", side_effect=mutate_after_measure):
+            with self.assertRaisesRegex(ValueError, "changed during resolution"):
+                resolve_target_profile(self.root, profile, self.config, self.output,
+                                       mode="development")
+        self.assertFalse(self.output.exists())
 
     def test_incomplete_full_game_profile_cannot_release(self) -> None:
         with self.assertRaisesRegex(ValueError, "sm64-saturn-full.*release-enabled"):

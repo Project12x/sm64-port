@@ -11,6 +11,15 @@
   duplicate, escaping, case-colliding, or missing package inputs now fail
   closed instead of reusing a stale seal.
 
+### Fixed
+
+- Hardened deterministic target-profile sealing after review: payload identity
+  now rejects duplicate or case-fold-colliding paths across descriptors,
+  rehashes every measured descriptor and payload immediately before each
+  aggregate publication, and rejects relative output-name escapes. This closes
+  cross-package ambiguity and mutation windows that could otherwise publish a
+  manifest for bytes no longer present on disk.
+
 ### Docs
 
 - Wrote the memory residency campaign plan
