@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import tempfile
@@ -61,7 +62,9 @@ from verify_sh2_native_math import (
     source_locations,
     SIM_ROUTE_ORACLE_V1_SHA256,
     SIM_AUDIT_CONTRACT_V2_SHA256,
+    GOAL_AUDIT_CONTRACT_V3_SHA256,
     verify_audit_contract_integrity,
+    verify_audit_contract_target,
     verify_baseline_integrity,
     verify_route_oracle_integrity,
 )
@@ -111,6 +114,18 @@ class NativeMathCensusTests(unittest.TestCase):
     @staticmethod
     def indirect_owner(name: str, start: int) -> FunctionOwner:
         return FunctionOwner(name, start, start + 0x20, 1)
+
+    def test_analysis_candidates_seed_each_declared_indirect_edge_endpoint(self) -> None:
+        oracle = parse_route_oracle(
+            "ROUTE_ORACLE_VERSION 1\nROOT _root\n"
+            "INDIRECT_EDGE _dispatcher _callback\n"
+        )
+        self.assertEqual(
+            verifier.route_analysis_candidate_names(
+                {"_root": {"_direct_child"}}, (oracle,)
+            ),
+            {"_root", "_direct_child", "_dispatcher", "_callback"},
+        )
 
     def test_declared_graph_node_callback_extends_closure_and_covers_transfer(self) -> None:
         oracle = parse_route_oracle(
@@ -399,12 +414,17 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertTrue({
             "_level_cmd_load_model_from_dl", "_level_cmd_load_model_from_geo",
         } <= set(sourceboot_callbacks.values()))
-        required_edges = {
-            ("_geo_process_node_and_siblings", "_geo_skybox_main"),
-            ("_geo_process_node_and_siblings", "_geo_camera_fov"),
-            ("_geo_process_node_and_siblings", "_geo_camera_main"),
-            ("_geo_process_node_and_siblings", "_geo_envfx_main"),
-            ("_geo_process_node_and_siblings", "_geo_cannon_circle_base"),
+        required_geo_edges = {
+            ("_saturn_geo_enter_background", "_geo_skybox_main"),
+            ("_saturn_geo_enter_perspective", "_geo_camera_fov"),
+            ("_saturn_geo_enter_camera", "_geo_camera_main"),
+            ("_saturn_geo_enter_generated_list", "_geo_envfx_main"),
+            ("_saturn_geo_enter_generated_list", "_geo_cannon_circle_base"),
+        }
+        self.assertEqual(
+            {callback for _, callback in required_geo_edges}, bob_callbacks,
+        )
+        required_edges = required_geo_edges | {
             ("_level_script_execute", "_level_cmd_init_level"),
             ("_level_script_execute", "_level_cmd_get_or_set_var"),
             ("_level_script_execute", "_level_cmd_call"),
@@ -417,11 +437,19 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(oracle.static_manifest_edges, oracle.indirect_edges)
         self.assertEqual(
             {
-                callback
-                for dispatcher, callback in oracle.static_manifest_edges
-                if dispatcher == "_geo_process_node_and_siblings"
+                edge for edge in oracle.static_manifest_edges
+                if edge[0] in {"_play_cutscene", "_play_mode_change_level"}
             },
-            bob_callbacks,
+            set(),
+        )
+        self.assertEqual(
+            {
+                (dispatcher, callback)
+                for dispatcher, callback in oracle.static_manifest_edges
+                if dispatcher in {owner for owner, _ in required_geo_edges}
+                and callback in bob_callbacks
+            },
+            required_geo_edges,
         )
         self.assertEqual(
             {
@@ -446,8 +474,8 @@ class NativeMathCensusTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         omitted = oracle_text
         for line in (
-            "STATIC_MANIFEST_EDGE _init_graph_node_generated _geo_envfx_main\n",
-            "INDIRECT_EDGE _init_graph_node_generated _geo_envfx_main\n",
+            "STATIC_MANIFEST_EDGE _saturn_geo_enter_generated_list _geo_envfx_main\n",
+            "INDIRECT_EDGE _saturn_geo_enter_generated_list _geo_envfx_main\n",
         ):
             self.assertEqual(omitted.count(line), 1)
             omitted = omitted.replace(line, "", 1)
@@ -463,10 +491,10 @@ class NativeMathCensusTests(unittest.TestCase):
             "_controller_saturn_read\n"
         )
         underived_static = (
-            "STATIC_MANIFEST_EDGE _play_mode_change_level _geo_camera_main\n"
+            "STATIC_MANIFEST_EDGE _saturn_geo_enter_camera _geo_skybox_main\n"
         )
         underived_indirect = (
-            "INDIRECT_EDGE _play_mode_change_level _geo_camera_main\n"
+            "INDIRECT_EDGE _saturn_geo_enter_camera _geo_skybox_main\n"
         )
         mutations = (
             oracle_text.replace(
@@ -538,8 +566,15 @@ class NativeMathCensusTests(unittest.TestCase):
             ("_init_graph_node_generated", 60),
             ("_init_graph_node_background", 70),
             ("_init_graph_node_held_object", 78),
-            ("_play_cutscene", 186),
-            ("_play_mode_change_level", 14),
+            ("_saturn_geo_enter_perspective", 84),
+            ("_saturn_geo_enter_switch", 74),
+            ("_saturn_geo_enter_camera", 90),
+            ("_saturn_geo_enter_generated_list", 60),
+            ("_saturn_geo_enter_background", 70),
+            ("_saturn_geo_enter_held_object", 78),
+            ("_sm64_saturn_geo_walk_runtime_run", 164),
+            ("_sm64_saturn_geo_walk_runtime_run", 492),
+            ("_sm64_saturn_geo_walk_runtime_run", 524),
         )
         for index, (dispatcher, offset) in enumerate(sites):
             with self.subTest(dispatcher=dispatcher):
@@ -587,8 +622,13 @@ class NativeMathCensusTests(unittest.TestCase):
             "_init_graph_node_generated": 60,
             "_init_graph_node_background": 70,
             "_init_graph_node_held_object": 78,
-            "_play_cutscene": 186,
-            "_play_mode_change_level": 14,
+            "_saturn_geo_enter_perspective": 84,
+            "_saturn_geo_enter_switch": 74,
+            "_saturn_geo_enter_camera": 90,
+            "_saturn_geo_enter_generated_list": 60,
+            "_saturn_geo_enter_background": 70,
+            "_saturn_geo_enter_held_object": 78,
+            "_sm64_saturn_geo_walk_runtime_run": 164,
         }
         for index, (dispatcher, offset) in enumerate(sites.items()):
             with self.subTest(dispatcher=dispatcher):
@@ -624,7 +664,7 @@ class NativeMathCensusTests(unittest.TestCase):
         callback = "_geo_camera_main"
         dispatchers = (
             "_geo_call_global_function_nodes_helper",
-            "_init_graph_node_camera",
+            "_saturn_geo_enter_camera",
         )
         self.assertTrue(all(
             callback in BOB_DISPATCHER_TARGETS[dispatcher]
@@ -871,90 +911,6 @@ class NativeMathCensusTests(unittest.TestCase):
         self.assertEqual(result.direct_calls, [])
 
 
-CUTSCENE_SHOT_TARGETS = frozenset({
-    "_cutscene_bbh_death",
-    "_cutscene_bowser_arena",
-    "_cutscene_bowser_arena_dialog",
-    "_cutscene_bowser_arena_end",
-    "_cutscene_cap_switch_press",
-    "_cutscene_credits",
-    "_cutscene_dance_closeup",
-    "_cutscene_dance_default_rotate",
-    "_cutscene_dance_fly_away",
-    "_cutscene_death_standing",
-    "_cutscene_death_stomach",
-    "_cutscene_dialog",
-    "_cutscene_dialog_end",
-    "_cutscene_dialog_set_flag",
-    "_cutscene_door_end",
-    "_cutscene_door_fix_cam",
-    "_cutscene_door_follow_mario",
-    "_cutscene_door_loop",
-    "_cutscene_door_mode",
-    "_cutscene_door_move_behind_mario",
-    "_cutscene_door_start",
-    "_cutscene_double_doors_end",
-    "_cutscene_end_waving",
-    "_cutscene_ending_cake_for_mario",
-    "_cutscene_ending_dialog",
-    "_cutscene_ending_kiss",
-    "_cutscene_ending_mario_fall",
-    "_cutscene_ending_mario_land",
-    "_cutscene_ending_mario_land_closeup",
-    "_cutscene_ending_mario_to_peach",
-    "_cutscene_ending_peach_appears",
-    "_cutscene_ending_peach_descends",
-    "_cutscene_ending_peach_wakeup",
-    "_cutscene_ending_stars_free_peach",
-    "_cutscene_ending_stop",
-    "_cutscene_enter_cannon_end",
-    "_cutscene_enter_cannon_raise",
-    "_cutscene_enter_cannon_start",
-    "_cutscene_enter_painting",
-    "_cutscene_enter_pool",
-    "_cutscene_enter_pyramid_top",
-    "_cutscene_exit_bowser_death",
-    "_cutscene_exit_bowser_succ",
-    "_cutscene_exit_fall_to_castle_grounds",
-    "_cutscene_exit_non_painting_succ",
-    "_cutscene_exit_painting",
-    "_cutscene_exit_painting_end",
-    "_cutscene_exit_to_castle_grounds_end",
-    "_cutscene_exit_waterfall",
-    "_cutscene_grand_star",
-    "_cutscene_grand_star_fly",
-    "_cutscene_intro_peach_dialog",
-    "_cutscene_intro_peach_fly_to_pipe",
-    "_cutscene_intro_peach_letter",
-    "_cutscene_intro_peach_mario_appears",
-    "_cutscene_intro_peach_reset_fov",
-    "_cutscene_key_dance",
-    "_cutscene_mario_dialog",
-    "_cutscene_non_painting_death",
-    "_cutscene_non_painting_end",
-    "_cutscene_prepare_cannon",
-    "_cutscene_prepare_cannon_end",
-    "_cutscene_pyramid_top_explode",
-    "_cutscene_pyramid_top_explode_end",
-    "_cutscene_quicksand_death",
-    "_cutscene_read_message",
-    "_cutscene_read_message_end",
-    "_cutscene_read_message_set_flag",
-    "_cutscene_red_coin_star",
-    "_cutscene_red_coin_star_end",
-    "_cutscene_sliding_doors_open",
-    "_cutscene_star_spawn",
-    "_cutscene_star_spawn_back",
-    "_cutscene_star_spawn_end",
-    "_cutscene_suffocation",
-    "_cutscene_unlock_key_door",
-    "_cutscene_unused_exit_focus_mario",
-    "_cutscene_unused_exit_start",
-    "_cutscene_unused_loop",
-    "_cutscene_unused_start",
-})
-
-
 POST_MANIFEST_DISPATCHER_TARGETS = {
     "_init_graph_node_perspective": frozenset({"_geo_camera_fov"}),
     "_init_graph_node_switch_case": frozenset({
@@ -984,8 +940,39 @@ POST_MANIFEST_DISPATCHER_TARGETS = {
     "_init_graph_node_held_object": frozenset({
         "_geo_switch_mario_hand_grab_pos"
     }),
-    "_play_cutscene": CUTSCENE_SHOT_TARGETS,
-    "_play_mode_change_level": frozenset({"_basic_update"}),
+    "_saturn_geo_enter_perspective": frozenset({"_geo_camera_fov"}),
+    "_saturn_geo_enter_switch": frozenset({
+        "_geo_switch_anim_state",
+        "_geo_switch_mario_cap_effect",
+        "_geo_switch_mario_cap_on_off",
+        "_geo_switch_mario_eyes",
+        "_geo_switch_mario_hand",
+        "_geo_switch_mario_stand_run",
+    }),
+    "_saturn_geo_enter_camera": frozenset({"_geo_camera_main"}),
+    "_saturn_geo_enter_generated_list": frozenset({
+        "_geo_cannon_circle_base",
+        "_geo_envfx_main",
+        "_geo_mario_hand_foot_scaler",
+        "_geo_mario_head_rotation",
+        "_geo_mario_rotate_wing_cap_wings",
+        "_geo_mario_tilt_torso",
+        "_geo_mirror_mario_backface_culling",
+        "_geo_mirror_mario_set_alpha",
+        "_geo_move_mario_part_from_parent",
+        "_geo_scale_bowser_key",
+        "_geo_update_held_mario_pos",
+        "_geo_update_layer_transparency",
+    }),
+    "_saturn_geo_enter_background": frozenset({"_geo_skybox_main"}),
+    "_saturn_geo_enter_held_object": frozenset({
+        "_geo_switch_mario_hand_grab_pos"
+    }),
+    "_sm64_saturn_geo_walk_runtime_run": frozenset({
+        "_saturn_geo_walk_dispatch",
+        "_saturn_geo_walk_enter",
+        "_saturn_geo_walk_leave",
+    }),
 }
 
 
@@ -1314,81 +1301,86 @@ def _derive_bob_dispatcher_targets(repo_root: Path) -> dict[str, frozenset[str]]
             f"reached BOB GeoLayouts have no callbacks for {empty_initializers}"
         )
 
-    camera_source = _strip_c_comments(
-        (repo_root / "src/game/camera.c").read_text(encoding="utf-8")
-    )
-    play_cutscene = re.search(
-        r"void\s+play_cutscene\s*\([^)]*\)\s*\{(.*?)^\}",
-        camera_source,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    if play_cutscene is None:
-        raise ValueError("play_cutscene definition is missing")
-    selected_cutscene_arrays = frozenset(re.findall(
-        r"\bCUTSCENE\s*\(\s*[^,]+,\s*(sCutscene[A-Za-z0-9_]+)\s*\)",
-        play_cutscene.group(1),
-    ))
-    cutscene_definitions = {
-        match.group(1): match.group(2)
-        for match in re.finditer(
-            r"struct\s+Cutscene\s+(sCutscene[A-Za-z0-9_]+)\s*\[\]\s*="
-            r"\s*\{(.*?)^\s*\};",
-            camera_source,
-            flags=re.MULTILINE | re.DOTALL,
-        )
+    # GeoLayout construction stores callbacks in fnNode.func, and Task 14's
+    # iterative walk invokes them again during rendering. Both sites are real
+    # indirect-call owners and need declarations tied to their exact source
+    # callback sets.
+    callback_owner_by_initializer = {
+        "_init_graph_node_perspective": "_saturn_geo_enter_perspective",
+        "_init_graph_node_switch_case": "_saturn_geo_enter_switch",
+        "_init_graph_node_camera": "_saturn_geo_enter_camera",
+        "_init_graph_node_generated": "_saturn_geo_enter_generated_list",
+        "_init_graph_node_background": "_saturn_geo_enter_background",
+        "_init_graph_node_held_object": "_saturn_geo_enter_held_object",
     }
-    missing_cutscene_arrays = sorted(
-        selected_cutscene_arrays - cutscene_definitions.keys()
-    )
-    if missing_cutscene_arrays:
-        raise ValueError(
-            f"missing play_cutscene shot tables: {missing_cutscene_arrays}"
-        )
-    cutscene_targets = frozenset(
-        "_" + shot
-        for array in selected_cutscene_arrays
-        for shot in re.findall(
-            r"\{\s*(cutscene_[A-Za-z0-9_]+)\s*,",
-            cutscene_definitions[array],
+    rendering_graph = _strip_c_comments(
+        (repo_root / "src/game/rendering_graph_node.c").read_text(
+            encoding="utf-8"
         )
     )
-    if not cutscene_targets:
-        raise ValueError("play_cutscene has no statically selected shots")
+    graph_node = _strip_c_comments(
+        (repo_root / "src/engine/graph_node.c").read_text(encoding="utf-8")
+    )
+    creation_callback_names = {
+        "_init_graph_node_perspective": "nodeFunc",
+        "_init_graph_node_switch_case": "nodeFunc",
+        "_init_graph_node_camera": "func",
+        "_init_graph_node_generated": "gfxFunc",
+        "_init_graph_node_background": "backgroundFunc",
+        "_init_graph_node_held_object": "nodeFunc",
+    }
+    callback_targets: dict[str, frozenset[str]] = {}
+    for initializer, owner in callback_owner_by_initializer.items():
+        initializer_body = _single_braced_body(
+            graph_node,
+            r"\b" + re.escape(initializer[1:]) + r"\s*\(",
+            initializer,
+        )
+        callback_name = creation_callback_names[initializer]
+        if re.search(
+            r"\b" + re.escape(callback_name) + r"\s*\(\s*GEO_CONTEXT_CREATE\b",
+            initializer_body,
+        ) is None:
+            raise ValueError(f"{initializer} no longer creates a callback node")
+        callback_targets[initializer] = initializer_targets[initializer]
+        owner_body = _single_braced_body(
+            rendering_graph,
+            r"static\s+[^({;]*\b" + re.escape(owner[1:]) + r"\s*\(",
+            owner,
+        )
+        if re.search(r"\bnode\s*->\s*fnNode\s*\.\s*func\s*\(", owner_body) is None:
+            raise ValueError(f"{owner} no longer owns a fnNode.func callback")
+        callback_targets[owner] = initializer_targets[initializer]
 
-    transition_sources = "\n".join(
-        _strip_c_comments(path.read_text(encoding="utf-8"))
-        for path in sorted((repo_root / "src").rglob("*.c"))
+    runtime_ops = re.search(
+        r"static\s+const\s+sm64_saturn_geo_walk_runtime_ops_t\s+ops\s*=\s*"
+        r"\{(.*?)\};",
+        rendering_graph,
+        flags=re.DOTALL,
     )
-    transition_assignments = frozenset(
-        value.strip() for value in re.findall(
-            r"\bsTransitionUpdate\s*(?<![=!<>])=(?!=)\s*([^;]+);",
-            transition_sources,
+    if runtime_ops is None:
+        raise ValueError("saturn geo walk runtime ops table is missing")
+    runtime_callbacks = frozenset(
+        "_" + callback
+        for callback in re.findall(
+            r"\b(saturn_geo_walk_(?:enter|dispatch|leave))\b",
+            runtime_ops.group(1),
         )
     )
-    if transition_assignments != frozenset({"updateFunction", "NULL"}):
-        raise ValueError(
-            "unexpected direct sTransitionUpdate assignments: "
-            f"{sorted(transition_assignments)}"
-        )
-    transition_arguments = frozenset(re.findall(
-        r"\blevel_set_transition\s*\(\s*[^,]+,\s*"
-        r"([A-Za-z_]\w*|NULL)\s*\)",
-        transition_sources,
-    ))
-    transition_targets = frozenset(
-        "_" + target for target in transition_arguments if target != "NULL"
-    )
-    if not transition_targets:
-        raise ValueError("no non-null sTransitionUpdate target is reachable")
+    if runtime_callbacks != frozenset({
+        "_saturn_geo_walk_enter",
+        "_saturn_geo_walk_dispatch",
+        "_saturn_geo_walk_leave",
+    }):
+        raise ValueError("saturn geo walk runtime ops table changed")
+    callback_targets["_sm64_saturn_geo_walk_runtime_run"] = runtime_callbacks
 
     return {
         "_geo_call_global_function_nodes_helper": global_targets,
         "_level_cmd_call": call_targets,
         "_level_cmd_call_loop": call_loop_targets,
         "_process_geo_layout": process_targets,
-        **initializer_targets,
-        "_play_cutscene": cutscene_targets,
-        "_play_mode_change_level": transition_targets,
+        **callback_targets,
     }
 
 
@@ -2247,6 +2239,119 @@ static bool demo_detached_start_decoy(uint32_t generation)
         verify_audit_contract_integrity(
             contract_text, parse_audit_contract(contract_text), expected_digest=SIM_AUDIT_CONTRACT_V2_SHA256
         )
+
+    def _v3_contract_text(self, elf_sha256: str = "a" * 64) -> str:
+        return (
+            "AUDIT_CONTRACT_VERSION 3\n"
+            "EXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 700\n"
+            f"EXPECTED_ELF_SHA256 {elf_sha256}\n"
+            "FORBIDDEN_CALLER _atan2_lookup\n"
+            "FORBIDDEN_CALLER _atan2s\n"
+        )
+
+    def test_v3_audit_contract_requires_one_lowercase_exact_elf_sha256(self) -> None:
+        contract = parse_audit_contract(self._v3_contract_text())
+        self.assertEqual(contract.version, 3)
+        self.assertEqual(contract.expected_elf_sha256, "a" * 64)
+        for replacement in ("", "A" * 64, "a" * 63, "g" * 64):
+            text = self._v3_contract_text(replacement)
+            with self.subTest(replacement=replacement):
+                with self.assertRaises(ValueError):
+                    parse_audit_contract(text)
+        duplicate = self._v3_contract_text() + f"EXPECTED_ELF_SHA256 {'b' * 64}\n"
+        with self.assertRaisesRegex(ValueError, "duplicate expected ELF"):
+            parse_audit_contract(duplicate)
+
+    def test_v2_audit_contract_rejects_exact_elf_directive(self) -> None:
+        text = (
+            "AUDIT_CONTRACT_VERSION 2\n"
+            "EXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 582\n"
+            f"EXPECTED_ELF_SHA256 {'a' * 64}\n"
+            "FORBIDDEN_CALLER _atan2_lookup\n"
+        )
+        with self.assertRaisesRegex(ValueError, "v2.*EXPECTED_ELF_SHA256"):
+            parse_audit_contract(text)
+
+    def test_v3_target_binding_accepts_only_the_exact_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            elf = Path(temporary) / "target.elf"
+            elf.write_bytes(b"sealed target")
+            digest = hashlib.sha256(elf.read_bytes()).hexdigest()
+            contract = parse_audit_contract(self._v3_contract_text(digest))
+            verify_audit_contract_target(contract, elf)
+            elf.write_bytes(b"sealed target!")
+            with self.assertRaisesRegex(ValueError, "target ELF SHA-256 mismatch"):
+                verify_audit_contract_target(contract, elf)
+
+    def test_v2_target_binding_remains_artifact_agnostic(self) -> None:
+        contract = parse_audit_contract(
+            "AUDIT_CONTRACT_VERSION 2\n"
+            "EXPECTED_ROOT _game_loop_one_iteration\n"
+            "EXPECTED_TOTAL 582\n"
+            "FORBIDDEN_CALLER _atan2_lookup\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            elf = Path(temporary) / "any.elf"
+            elf.write_bytes(b"any historical artifact")
+            verify_audit_contract_target(contract, elf)
+
+    def test_main_rejects_wrong_v3_elf_before_invoking_sh_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            elf = root / "wrong.elf"
+            baseline = root / "baseline.txt"
+            route_oracle = root / "route.txt"
+            audit_oracle = root / "audit-route.txt"
+            audit_contract = root / "audit-v3.txt"
+            elf.write_bytes(b"wrong target")
+            baseline.write_text(
+                "BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8"
+            )
+            route_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            audit_oracle.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            audit_contract.write_text(
+                self._v3_contract_text("a" * 64), encoding="utf-8"
+            )
+            with patch.object(
+                bounded_verifier, "verify_baseline_integrity"
+            ), patch.object(
+                bounded_verifier, "verify_route_oracle_integrity"
+            ), patch.object(
+                bounded_verifier, "verify_audit_contract_integrity"
+            ), patch.object(
+                bounded_verifier, "run_command"
+            ) as run_command:
+                self.assertEqual(bounded_verifier.main([
+                    str(elf), str(baseline),
+                    "--route-oracle", str(route_oracle),
+                    "--audit-route-oracle", str(audit_oracle),
+                    "--audit-contract", str(audit_contract),
+                    "--objdump", "objdump",
+                    "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                ]), 2)
+                run_command.assert_not_called()
+
+    def test_checked_in_goal_audit_contract_v3_is_pinned(self) -> None:
+        path = Path(__file__).parent / "sh2_native_math_goal_audit_contract_v3.txt"
+        text = path.read_text(encoding="utf-8")
+        contract = parse_audit_contract(text)
+        verify_audit_contract_integrity(text, contract)
+        self.assertEqual(contract.expected_total, 700)
+        self.assertEqual(
+            contract.expected_elf_sha256,
+            "562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a",
+        )
+        with self.assertRaisesRegex(ValueError, "immutable audit contract digest mismatch"):
+            verify_audit_contract_integrity(text.replace("700", "701"), contract)
 
     def test_audit_fails_when_expected_root_is_missing(self) -> None:
         oracle = parse_route_oracle("ROUTE_ORACLE_VERSION 1\nROOT _wrong_root\n")

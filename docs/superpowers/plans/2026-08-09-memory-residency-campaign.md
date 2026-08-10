@@ -174,7 +174,62 @@ Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical p
 
 ### Task 5: Flags-on textured build — link gate + combined smoke
 
-**Files:** none modified — build + verify only. Evidence report + CHANGELOG only.
+**Status (2026-08-09):** active. The exact historical demo-path tuple was
+recovered from the sealed id-1335252b7f9383a6 ELF and its matching build
+directory; Task 5 changes only the three feature bits and the approved object
+pool capacity as specified below.
+
+**Audit correction (2026-08-09):** the flags-on link produced
+`id-735756402029c2f4`, but the first full native-math audit exposed stale
+callback-owner declarations: the renderer's feature-gated actor wrappers,
+unreachable cutscene tables, and callback paths introduced by Task 14's
+geo-walk. Source tracing corrected the ownership rule: each reached GeoLayout
+callback belongs to both its `init_graph_node_*` caller at `GEO_CONTEXT_CREATE`
+and its `saturn_geo_enter_*` caller at `GEO_CONTEXT_RENDER`; the sourceboot
+walker separately owns its three static runtime-ops callbacks. The verifier's
+legacy bootstrap scan also under-approximated literal JSR candidates, so
+code-only analysis now seeds both ends of every declared indirect edge before
+disassembly.
+
+The source-derived oracle test and 11 focused declaration/negative tests pass
+with the 25 newly derived callback edges. The fresh direct audit of the sealed
+flags-on ELF ran for 447.1 s: it reports `total 700` with no unlisted
+unresolved transfer or unresolved-effect failure, and fails only because the
+fixed-v2 total remains `582`. Configuration comparison establishes that v2
+pins a narrower historical baseline, whereas the goal artifact enables replay
+and live input, demo-path rendering, camera variant 3, hot promotion, tier 2,
+8-sector staging, and capacity 208. The 2026-07-29 procedure deliberately
+permits one historical v2 re-pin; it is not a safe per-configuration total
+edit. The selected resolution is a new, versioned, identity-bound goal-target
+audit contract. No map margin, ISO-size, smoke, capture, or target-evidence
+claim has been made.
+
+**Owner decisions (2026-08-09):** approved the audit-contract reconciliation
+with the linked BOB route as the authority for dynamic dispatcher inclusion,
+then approved the exact-identity v3 design. V2 stays frozen. V3 binds total 700
+to ELF SHA-256
+`562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a`
+and embedded identity `id-735756402029c2f4`; the detailed design is
+`docs/superpowers/specs/2026-08-09-goal-target-native-math-audit-v3-design.md`.
+
+**Task 1 audit-contract ledger (2026-08-10):** complete for the exact-artifact
+audit scope. The test-first v3 contract change preserves v2 byte-for-byte and
+adds a fail-closed SHA-256 binding before any SH tool invocation. Focused
+v3/source-derived tests: 13 pass. The full verifier suite is explicitly
+**open**, with 228/229 passing and the pre-existing unrelated pinned BOB
+null-camera-trigger proof failure still present. The direct DLL-safe audit of
+the sealed `id-735756402029c2f4` ELF completed in 391.7 s with exit 0 and
+audit total 700; it reported no unlisted unresolved transfer/effect and no
+forbidden `_atan2_lookup`/`_atan2s` caller. This is only the native-math audit
+gate: Task 5's build/package, combined smoke, visual inspection, and owner
+manual acceptance remain unchecked. Commit:
+`fix(saturn): bind goal native math audit to sealed target` (Task 1 commit).
+
+**Files:** runtime sources remain unmodified. The in-progress audit
+reconciliation modifies `tools/saturn/verify_sh2_native_math.py`, its two route
+oracles, and `tools/saturn/test_verify_sh2_native_math.py`; any accepted
+resolution must include its tests, this ledger, and `CHANGELOG.md` in the same
+commit. Task evidence report + CHANGELOG only for the actual build result.
 
 - [ ] **Step 1: Build the goal config**: the exact 18-flag demo-path tuple from the `id-1335252b7f9383a6` build but with `SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1 SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1`, plus `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. Link must pass both region asserts; record real margins from the map (expect roughly: old deficit −12,408 B + pool recovery ≥ +55 KB net HWRAM surplus).
 - [ ] **Step 2: ISO completeness** (SOURCE.DAT in ISO9660 listing, size == `.cart_rodata` SIZEOF).

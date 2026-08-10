@@ -65,6 +65,7 @@ class AuditContract:
     expected_root: str
     expected_total: int
     forbidden_callers: frozenset[str]
+    expected_elf_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -3960,10 +3961,13 @@ BOUNDED_SINGLE_REGISTER_WRITERS = frozenset({
 # Pinned digests deliberately make the route and helper ceilings append-only
 # contracts. Updating either requires an explicit v2 implementation change,
 # not a quiet edit to a text allowlist.
-ROUTE_ORACLE_V1_SHA256 = "b7187dea8859bce0275d05998187f0fac09fd9662ad9100d92677268e79e8b91"
+ROUTE_ORACLE_V1_SHA256 = "6eefa492f539f4c570c12ec413fff27942b6d40cd249f20b6f64d95145628c75"
 BASELINE_V1_SHA256 = "dfe6e5f494ad3ec103ce0024e5038174c9c18bf8ae42c2d65365cdc2c2fcf57a"
-SIM_ROUTE_ORACLE_V1_SHA256 = "084313eeeb16ace7a05b252a0519bfbc86cc2f43db1260292d1db77da388af44"
+SIM_ROUTE_ORACLE_V1_SHA256 = "29b3888b06a98e5776dc7c0683490ccab5ac11f2e0468ceab3c87966f096114c"
 SIM_AUDIT_CONTRACT_V2_SHA256 = "87dabb51adc1c1cb6b646a826977658de305df086d1cfb21fc2c97a0bd6127e2"
+GOAL_AUDIT_CONTRACT_V3_SHA256 = (
+    "80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5"
+)
 
 LIBM_NAMES = {
     "acos", "acosf", "asin", "asinf", "atan", "atan2", "atan2f", "atanf",
@@ -4381,6 +4385,7 @@ def parse_audit_contract(text: str) -> AuditContract:
     version: int | None = None
     expected_root: str | None = None
     expected_total: int | None = None
+    expected_elf_sha256: str | None = None
     forbidden_callers: set[str] = set()
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.split("#", 1)[0].strip()
@@ -4399,17 +4404,35 @@ def parse_audit_contract(text: str) -> AuditContract:
             if expected_total is not None:
                 raise ValueError(f"audit contract line {line_number}: duplicate expected total")
             expected_total = int(parts[1], 10)
+        elif parts[0] == "EXPECTED_ELF_SHA256":
+            if len(parts) != 2:
+                raise ValueError(
+                    f"audit contract line {line_number}: EXPECTED_ELF_SHA256 requires one value"
+                )
+            if expected_elf_sha256 is not None:
+                raise ValueError(f"audit contract line {line_number}: duplicate expected ELF SHA-256")
+            if re.fullmatch(r"[0-9a-f]{64}", parts[1]) is None:
+                raise ValueError(
+                    f"audit contract line {line_number}: invalid expected ELF SHA-256"
+                )
+            expected_elf_sha256 = parts[1]
         elif parts[0] == "FORBIDDEN_CALLER" and len(parts) == 2:
             if parts[1] in forbidden_callers:
                 raise ValueError(f"audit contract line {line_number}: duplicate forbidden caller")
             forbidden_callers.add(parts[1])
         else:
             raise ValueError(f"audit contract line {line_number}: invalid directive")
-    if version != 2 or expected_root is None or expected_total is None or expected_total < 0:
-        raise ValueError("audit contract requires v2 root and non-negative expected total")
+    if version not in {2, 3} or expected_root is None or expected_total is None or expected_total < 0:
+        raise ValueError("audit contract requires v2 or v3 root and non-negative expected total")
+    if version == 2 and expected_elf_sha256 is not None:
+        raise ValueError("v2 audit contract forbids EXPECTED_ELF_SHA256")
+    if version == 3 and expected_elf_sha256 is None:
+        raise ValueError("v3 audit contract requires EXPECTED_ELF_SHA256")
     if not forbidden_callers:
         raise ValueError("audit contract requires at least one forbidden caller")
-    return AuditContract(version, expected_root, expected_total, frozenset(forbidden_callers))
+    return AuditContract(
+        version, expected_root, expected_total, frozenset(forbidden_callers), expected_elf_sha256
+    )
 
 
 def baseline_digest(text: str) -> str:
@@ -4430,11 +4453,30 @@ def verify_route_oracle_integrity(text: str, oracle: RouteOracle, *, expected_di
         raise ValueError("immutable route oracle digest mismatch")
 
 
-def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expected_digest: str = SIM_AUDIT_CONTRACT_V2_SHA256) -> None:
-    if contract.version != 2:
+def verify_audit_contract_integrity(text: str, contract: AuditContract, *, expected_digest: str | None = None) -> None:
+    if expected_digest is None:
+        if contract.version == 2:
+            expected_digest = SIM_AUDIT_CONTRACT_V2_SHA256
+        elif contract.version == 3:
+            expected_digest = GOAL_AUDIT_CONTRACT_V3_SHA256
+        else:
+            raise ValueError(f"unsupported audit contract version {contract.version}")
+    if contract.version not in {2, 3}:
         raise ValueError(f"unsupported audit contract version {contract.version}")
     if expected_digest == "PENDING" or baseline_digest(text) != expected_digest:
         raise ValueError("immutable audit contract digest mismatch")
+
+
+def verify_audit_contract_target(contract: AuditContract, elf: Path) -> None:
+    if contract.version == 2:
+        return
+    assert contract.expected_elf_sha256 is not None
+    actual = file_digest(elf)
+    if actual != contract.expected_elf_sha256:
+        raise ValueError(
+            "audit contract target ELF SHA-256 mismatch: "
+            f"expected {contract.expected_elf_sha256}, found {actual}"
+        )
 
 
 def route_reachable_functions(
@@ -4455,6 +4497,29 @@ def route_reachable_functions(
                 reachable.add(target)
                 pending.append(target)
     return reachable
+
+
+def route_analysis_candidate_names(
+    graph: dict[str, set[str]],
+    oracles: Iterable[RouteOracle],
+) -> set[str]:
+    """Seed code analysis with each declared indirect-edge endpoint.
+
+    The legacy disassembly scan is only a bootstrap graph: it can miss a
+    direct literal call that the code-only dataflow later recovers.  An
+    indirect-edge dispatcher and its callback therefore must be analyzed even
+    when that bootstrap has not reached the dispatcher yet; otherwise the
+    subsequent edge audit can see the recovered dispatcher but not its dynamic
+    transfer or the callback's native-math calls.
+    """
+    candidates: set[str] = set()
+    for oracle in oracles:
+        candidates.update(route_reachable_functions(
+            graph, oracle.roots, oracle.indirect_edges
+        ))
+        for dispatcher, callback in oracle.indirect_edges:
+            candidates.update((dispatcher, callback))
+    return candidates
 
 
 def is_structurally_dynamic_callback_transfer(
@@ -6045,6 +6110,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.elf.is_file():
             raise ValueError("ELF is not readable")
         elf_path = args.elf.resolve()
+        if audit_contract is not None:
+            verify_audit_contract_target(audit_contract, elf_path)
         disassembly = run_command([args.objdump, "-d", str(elf_path)])
         sections_text = run_command([args.readelf, "-SW", str(elf_path)])
         symbols_text = run_command([args.readelf, "-sW", str(elf_path)])
@@ -6096,15 +6163,13 @@ def main(argv: list[str] | None = None) -> int:
                     lines_text, owners, owner_address_map
                 )
                 legacy_graph = scan_call_graph(disassembly)
-                candidate_names = route_reachable_functions(
-                    legacy_graph, oracle.roots, oracle.indirect_edges
+                candidate_names = route_analysis_candidate_names(
+                    legacy_graph,
+                    tuple(
+                        item for item in (oracle, audit_oracle)
+                        if item is not None
+                    ),
                 )
-                if audit_oracle is not None:
-                    candidate_names |= route_reachable_functions(
-                        legacy_graph,
-                        audit_oracle.roots,
-                        audit_oracle.indirect_edges,
-                    )
                 parsed_instructions = parse_instructions(disassembly)
             instruction_memory = build_instruction_memory(parsed_instructions)
             known_null_addresses = prove_sourceboot_null_task_submit(

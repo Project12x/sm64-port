@@ -49,6 +49,17 @@
 
 ### Fixed
 
+- Bound the goal native-math audit to the sealed flags-on ELF without
+  altering the historical v2 fixture or digest.  The first audit of the
+  integrated `id-735756402029c2f4` artifact found that stale callback owners
+  included unreachable cutscene tables and omitted the geo-walk render-time
+  callbacks; the legacy bootstrap graph also under-approximated literal-JSR
+  candidates.  The corrected source-derived v1 route declarations now seed
+  every declared dynamic-edge endpoint for analysis, while new audit-contract
+  v3 pins the exact ELF SHA-256 and fails before any SH tool runs on a wrong
+  artifact.  This preserves v2's historical 582-helper baseline and makes
+  the 700-helper goal result meaningful only for its approved artifact.
+
 - Sticky SH-2 DIVU overflow flag silently corrupted `atan2`/the shared 64/32
   divide primitive after the first divide overflow, target-confirmed as the
   mechanism behind BOB's permanent display blackout. The SH-2's on-chip DIVU

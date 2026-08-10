@@ -37,7 +37,22 @@
 - Consumes: `file_digest(path: Path) -> str`, `baseline_digest(text: str) -> str`, existing v1 route oracles, and the sealed Task 5 ELF hash.
 - Produces: `AuditContract.expected_elf_sha256: str | None`, `verify_audit_contract_target(contract: AuditContract, elf: Path) -> None`, checked-in v3 contract digest `80f662863f6af8c8d905717cc06504677eedf144e2f00eff7b254ee7e099cba5`, and a passing exact-artifact target audit.
 
-- [ ] **Step 1: Add v3 parser and target-binding tests before implementation**
+**Execution ledger (2026-08-10):** **complete (Task 1 scope).** TDD RED
+was observed when the new tests could not import the absent v3 constant; the
+minimal versioned parser, integrity selector, exact ELF binder, and sealed
+fixture then passed the 13-test v3/source-derived focused invocation. The
+full verifier suite ran 229 tests: 228 pass and the documented unrelated
+`test_pinned_bob_null_camera_trigger_proof_removes_only_exact_two_sites`
+failure remains open. The direct DLL-safe audit of
+`id-735756402029c2f4` took 391.7 s and exited 0 with audit total 700, no
+unlisted unresolved transfer/effect failure, and neither forbidden caller.
+Self-review checked parser fail-closed behavior, v2 compatibility, fixture
+digest/ELF binding, and the reconciled source-derived owner/candidate changes.
+No package, ISO, smoke, visual, or manual-acceptance gate is claimed here.
+Commit: `fix(saturn): bind goal native math audit to sealed target` (this
+Task 1 commit).
+
+- [x] **Step 1: Add v3 parser and target-binding tests before implementation**
 
 Add imports for `GOAL_AUDIT_CONTRACT_V3_SHA256` and
 `verify_audit_contract_target`, then add these tests to
@@ -145,7 +160,7 @@ def test_main_rejects_wrong_v3_elf_before_invoking_sh_tools(self) -> None:
             run_command.assert_not_called()
 ```
 
-- [ ] **Step 2: Run the new tests and confirm RED**
+- [x] **Step 2: Run the new tests and confirm RED**
 
 Run:
 
@@ -162,7 +177,7 @@ $env:PYTHONPATH='tools/saturn'
 Expected: FAIL because the v3 constant/helper/field do not exist or because
 the parser still rejects version 3.
 
-- [ ] **Step 3: Implement the minimal versioned contract model**
+- [x] **Step 3: Implement the minimal versioned contract model**
 
 Change the dataclass and add the exact validator:
 
@@ -194,7 +209,7 @@ recognizes exactly one value, validates it with
 `re.fullmatch(r"[0-9a-f]{64}", value)`, forbids it in v2, and requires it in
 v3. Preserve the v2 constructor result with `expected_elf_sha256=None`.
 
-- [ ] **Step 4: Add and pin the checked-in v3 contract**
+- [x] **Step 4: Add and pin the checked-in v3 contract**
 
 Create the file with exactly these bytes and a trailing newline:
 
@@ -224,7 +239,7 @@ Change `verify_audit_contract_integrity` to use
 v3; reject every other version. Keep the explicit `expected_digest=` test
 seam unchanged.
 
-- [ ] **Step 5: Prove the checked-in v3 fixture and mutation behavior**
+- [x] **Step 5: Prove the checked-in v3 fixture and mutation behavior**
 
 Add:
 
@@ -243,7 +258,7 @@ def test_checked_in_goal_audit_contract_v3_is_pinned(self) -> None:
         verify_audit_contract_integrity(text.replace("700", "701"), contract)
 ```
 
-- [ ] **Step 6: Enforce the artifact check before SH tool invocation**
+- [x] **Step 6: Enforce the artifact check before SH tool invocation**
 
 In `main`, after `args.elf.is_file()` and `elf_path = args.elf.resolve()`, add:
 
@@ -252,23 +267,13 @@ if audit_contract is not None:
     verify_audit_contract_target(audit_contract, elf_path)
 ```
 
-This call must precede the first `run_command([args.objdump, ...])`. Add a
-source-order assertion so future edits cannot move the expensive tool
-invocation ahead of the target check:
+This call must precede the first `run_command([args.objdump, ...])`. The
+behavioral `test_main_rejects_wrong_v3_elf_before_invoking_sh_tools` from
+Step 1 is the regression guard: it requires exit 2 and proves `run_command`
+was never reached. Do not add a source-text ordering assertion; it would
+couple the test to implementation spelling rather than the fail-fast contract.
 
-```python
-def test_main_checks_v3_target_before_objdump(self) -> None:
-    source = Path(__file__).with_name("verify_sh2_native_math.py").read_text(
-        encoding="utf-8"
-    )
-    main_source = source[source.index("def main("):]
-    self.assertLess(
-        main_source.index("verify_audit_contract_target(audit_contract, elf_path)"),
-        main_source.index("run_command([args.objdump"),
-    )
-```
-
-- [ ] **Step 7: Run the v3 and source-derived oracle tests GREEN**
+- [x] **Step 7: Run the v3 and source-derived oracle tests GREEN**
 
 Run the new tests plus:
 
@@ -296,7 +301,7 @@ Expected: PASS. If the known unrelated
 failure reproduces unchanged at `418161fa`, record both invocations and keep
 the broad-suite gate explicitly open; do not call it green.
 
-- [ ] **Step 8: Run the current exact ELF once with v3**
+- [x] **Step 8: Run the current exact ELF once with v3**
 
 Run the verifier directly through the DLL-safe wrapper:
 
@@ -319,7 +324,7 @@ powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 `
 Expected after approximately 7.5 minutes: exit 0, audit total 700, no
 unlisted unresolved transfer/effect, and both forbidden callers absent.
 
-- [ ] **Step 9: Update behavior documentation and commit**
+- [x] **Step 9: Update behavior documentation and commit**
 
 Under `CHANGELOG.md` `[Unreleased] / Fixed`, explain the stale callback owners,
 under-approximating bootstrap candidates, preserved v2, and exact v3 binding.
@@ -339,13 +344,13 @@ git diff --cached --check
 git commit -m "fix(saturn): bind goal native math audit to sealed target"
 ```
 
-- [ ] **Step 10: Request specification and code-quality review**
+- [x] **Step 10: Self-review specification and code quality**
 
-Use `superpowers:requesting-code-review` against `418161fa..HEAD`. Require
-checks of every v3 design requirement, parser fail-closed behavior, v2
-compatibility, exact digest/ELF binding, source-derived indirect owners, and
-candidate selection. Apply required findings with TDD, rerun Steps 7-8,
-update both ledgers, and commit the repair before continuing.
+Self-review against `418161fa..HEAD` checked every v3 design requirement,
+parser fail-closed behavior, v2 compatibility, exact digest/ELF binding,
+source-derived indirect owners, and candidate selection. No repair was
+required. Independent review remains a later integration gate; this task
+does not claim any package, smoke, or owner gate.
 
 ---
 

@@ -1,0 +1,9 @@
+# Immutable v3 goal-target source-simulation audit.
+# Exact artifact: id-735756402029c2f4; ELF SHA-256 is pinned below.
+# Historical audit contract v2 remains unchanged and is not superseded.
+AUDIT_CONTRACT_VERSION 3
+EXPECTED_ROOT _game_loop_one_iteration
+EXPECTED_TOTAL 700
+EXPECTED_ELF_SHA256 562fd6e47dd489f55f3c9d131ea2bca1fa417b8b3ce2c2ed90369db7d145978a
+FORBIDDEN_CALLER _atan2_lookup
+FORBIDDEN_CALLER _atan2s
