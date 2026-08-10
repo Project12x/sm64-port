@@ -1559,6 +1559,18 @@ Do not create or pin the real v4 contract in this task. Reviewers must verify me
 - Consumes: all Tasks 1–8 and the exact accepted BOB flag tuple.
 - Produces: two clean release-mode builds with byte-identical canonical manifests and artifacts, one exact release manifest, one generated/pinned v4 contract, a passing v4 audit, measured low-RAM/cart/package facts, and a deployment-staged manual candidate.
 
+**Live status (2026-08-10):** `active` from reviewed Task 8 closeout
+`038391a4`. Required local prerequisites are present: the Saturn-tools Python
+environment, `baserom.us.z64`, generated `build/us_pc` inputs, and pinned Yaul
+SH-2 toolchain. The v4 contract, measurement report, reproducibility report,
+and manual-candidate staging destination are absent, as required for exclusive
+one-shot publication. Existing unrelated dirty and untracked work remains out
+of scope and must be preserved. Candidate A may start only after checked-in
+source-closure inputs are proven tracked and clean; any relevant dirt,
+non-reproducible artifact, forbidden audit caller, capacity/package failure, or
+release-verification failure stops sealing and staging rather than weakening a
+gate.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

@@ -807,6 +807,29 @@
   evidence, 20,100-frame smoke, visual, and manual play. No target or emulator
   evidence is claimed.
 
+## Task 9 execution ledger
+
+- Start base: `038391a4` (`docs(saturn): close audit v4 support review`).
+- Status: `active`. Task 8 and its independent rereview are complete; Task 9
+  owns the first real identity-v2 release build, two-build reproducibility
+  comparison, audit-v4 measurement/seal/pin, capacity/package evidence, and
+  deployment staging.
+- Prerequisites observed before dispatch: `.venv-saturn-tools` Python,
+  `baserom.us.z64`, `build/us_pc`, and the pinned Yaul SH-2 compiler are present.
+  The one-shot v4 contract, measurement report, reproducibility report, and
+  manual staging destination are absent.
+- Fail-closed boundary: relevant source-closure dirt, a failed target gate,
+  non-identical candidate artifacts, forbidden audit callers, insufficient
+  capacity/package facts, or release-manifest mismatch stops sealing/staging.
+  The documented unrelated null-camera host-test failure is not target evidence
+  and is the only pre-approved baseline failure.
+- Preserved unrelated state: the existing modified prior-campaign plans/ledgers
+  and extensive untracked build, audit, evidence, and temporary artifacts remain
+  outside Task 9 scope.
+- Open gates: candidate A/B builds, reproducibility, measurement, v4 seal/pin
+  and audit, package/capacity evidence, release staging, independent reviews,
+  20,100-frame smoke, visual proof, desktop launch, and owner manual play.
+
 ## Task 5 review repair round 2
 
 - Status: `source-complete`; repair round 2 is implemented and controller-owned rereview remains open. The first `Needs fixes` verdict remains effective until both remaining findings clear.
