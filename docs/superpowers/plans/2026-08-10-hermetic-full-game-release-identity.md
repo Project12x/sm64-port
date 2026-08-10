@@ -1342,6 +1342,12 @@ Reviews must cover verify-before-I/O, CUE/ISO binding, no overwrite/delete behav
 - Produces measurement CLI `--measure-audit-report PATH`, valid only with `--audit-route-oracle` and without `--audit-contract`.
 - Produces `seal_v4_contract(measurement_path: Path, release_manifest_path: Path, output: Path) -> bytes`, refusing to overwrite an existing output.
 
+**Live status (2026-08-10):** `active` after Task 7 completed independent
+review. Task 8 owns only parser/preflight, explicitly unsealed measurement, and
+one-shot v4 sealing support. It must not create or pin the real v4 contract;
+Task 9 owns real measurement and immutable pinning. Historical v2/v3 bytes and
+all target/release-evidence gates remain open and unchanged.
+
 - [ ] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 
 ```python
