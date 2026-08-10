@@ -33,6 +33,20 @@
 
 ### Changed
 
+- Extended the Saturn object-pool occupancy capture into an artifact-bound
+  combined nonvisual smoke harness. Every paused sample now reads the pool,
+  signed camera yaw, cart copy probe, exception record, boot trace, and stable
+  cadence trace through cache-through SH-2 addresses resolved from one
+  DLL-safe `sh-elf-nm` listing. The JSON now reports strict acceptance booleans
+  and exits nonzero when any gate fails, so a future flags-on target run cannot
+  be mistaken for a passing smoke based on pool occupancy alone. Its route
+  description is derived from the sealed identity's replay/live-input modes
+  rather than a stale disabled-route assertion. Host decoder tests cover every
+  acceptance failure branch. Before post-BIOS sampling, the harness also
+  proves target code and its P2-loaded identity against the supplied ELF and
+  sealed spec; the required artifact-bound >=20,000-frame target run remains
+  open.
+
 - Cut the Saturn sourceboot object pool from its portable 240-slot default
   to the owner-approved 208 slots when SATURN_OBJECT_POOL_CAPACITY=208 is
   requested. The pool consumes 608 B per slot, so the fresh target map

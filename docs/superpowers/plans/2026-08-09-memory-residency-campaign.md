@@ -174,6 +174,22 @@ Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical p
 
 ### Task 5: Flags-on textured build — link gate + combined smoke
 
+**Combined-smoke harness ledger (2026-08-10):** Task 2's capture extension is
+**complete for host scope; independent review cleared.** Its TDD RED
+observed the requested absent decoder/acceptance entry points, then the
+focused 3-test GREEN and prescribed 6-test capture suite passed after the
+review repair. The harness
+now binds every paused sample to one ELF's DLL-safe symbol listing and P2
+cache-through reads for signed `sAreaYaw`, cart completion, exception magic,
+boot telemetry, and stable cadence telemetry, reporting a fail-closed
+nonvisual acceptance summary. It derives replay/live route information from
+the sealed identity instead of assuming disabled movement, and proves the
+target code plus P2-loaded build identity before post-BIOS sampling. The
+independent review's artifact-binding finding is repaired and cleared; no
+Critical, Important, or Minor findings remain. This is not target evidence:
+the exact-artifact >=20,000 post-handoff smoke, visual proof, and owner
+acceptance remain open.
+
 **Status (2026-08-09):** active. The exact historical demo-path tuple was
 recovered from the sealed id-1335252b7f9383a6 ELF and its matching build
 directory; Task 5 changes only the three feature bits and the approved object

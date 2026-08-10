@@ -11,15 +11,9 @@ observed ``current_allocated`` / ``peak_allocated`` / ``alloc_failures``
 time series so the owner's Task 3 capacity gate is decided from measured
 data, not an estimate.
 
-This runs on the standard BOB route as the canonical geo-walk build boots
-it: BIOS handoff into the level's default spawn point. The canonical
-config built for this measurement (SATURN_FEATURE_COMPLETE_MARIO_ANIMATION=1
-SATURN_FEATURE_DYNAMIC_ACTOR_CLOSURE=1 SATURN_FEATURE_SEMANTIC_AUDIO=0
-SATURN_RENDERER_PIPELINE=4 SATURN_DIAGNOSTIC_MODE=0) does not enable
-SATURN_SOURCEBOOT_LIVE_INPUT or SATURN_SOURCEBOOT_ROUTE_REPLAY, so Mario
-never leaves the spawn point during this capture -- report honestly
-whether the sampled window actually reached any macro-object-dense area,
-it almost certainly did not.
+This runs the route encoded by the supplied sealed identity after BIOS
+handoff. The report records its replay/live-input modes from that identity;
+it makes no movement or coverage claim without the matching target evidence.
 
 Pattern-copied from capture_sourceboot_boot_trace.py (BIOS handoff macro,
 sh-elf-nm symbol resolution through the DLL-safe MSYS wrapper, artifact
@@ -38,6 +32,16 @@ from typing import Any
 
 from capture_hwtest import artifact_identity
 from capture_route_views import YmirClient
+from capture_sourceboot_throughput import (
+    BOOT_TRACE_BYTES,
+    CADENCE_TRACE_BYTES,
+    build_elf_build_identity_probe,
+    build_elf_identity_probe,
+    decode_boot_trace,
+    decode_cadence_trace,
+    prove_loaded_build_identity,
+    prove_target_identity,
+)
 from gen_build_identity import build_identity
 from capture_sourceboot_boot_trace import (
     NM,
@@ -55,6 +59,13 @@ PROBE_SYMBOL = "g_sm64_saturn_object_pool_probe"
 PROBE_MAGIC = 0x4F504F4C
 PROBE_WORD_COUNT = 5
 PROBE_BYTES = PROBE_WORD_COUNT * 4
+SMOKE_SYMBOLS = {
+    "sAreaYaw": 2,
+    "sourceboot_exception_record": 4,
+    "g_sm64_saturn_source_cart_probe": 28,
+    "sourceboot_boot_trace": BOOT_TRACE_BYTES,
+    "sourceboot_cadence_trace": CADENCE_TRACE_BYTES,
+}
 
 # Session environment rule: chunk every exec.run_for call at <=600 frames.
 # 300 keeps every chunk boundary aligned with the plan's own 300-frame
@@ -87,7 +98,25 @@ def pool_capacity_from_sealed_artifact(identity_spec: Path, elf: Path) -> int:
     return capacity
 
 
+def resolve_smoke_addresses(
+    elf: Path, *, nm: Path = NM, run: Any = subprocess.run
+) -> dict[str, int]:
+    """Resolve every sampled ABI from one DLL-safe symbol-table listing."""
+    completed = run(
+        wrapped_nm_command(elf, nm=nm), check=False, capture_output=True, text=True
+    )
+    if completed.returncode != 0:
+        raise ValueError(
+            f"DLL-safe sh-elf-nm wrapper failed for {elf}: {completed.stderr.strip()}"
+        )
+    return {
+        symbol: resolve_probe_symbol(completed.stdout, symbol)
+        for symbol in (PROBE_SYMBOL, *SMOKE_SYMBOLS)
+    }
+
+
 def resolve_probe_address(elf: Path, *, nm: Path = NM, run: Any = subprocess.run) -> int:
+    """Backward-compatible single-probe resolver for existing callers."""
     completed = run(
         wrapped_nm_command(elf, nm=nm), check=False, capture_output=True, text=True
     )
@@ -136,6 +165,112 @@ def read_probe(client: YmirClient, address: int) -> dict[str, Any]:
     if not isinstance(data, list):
         raise ValueError("Ymir object-pool probe read has no byte data")
     return decode_probe(data)
+
+
+def read_smoke_bytes(client: YmirClient, address: int, count: int) -> bytes:
+    """Read one fixed target ABI window through the SH-2 cache-through alias."""
+    result = client.call("mem.peek", {"address": address, "count": count})
+    data = result.get("data")
+    if not isinstance(data, list) or len(data) != count:
+        raise ValueError(
+            f"Ymir smoke read at 0x{address:08x} returned "
+            f"{len(data) if isinstance(data, list) else 'no'} bytes, expected {count}"
+        )
+    if any(not isinstance(byte, int) or not 0 <= byte <= 0xFF for byte in data):
+        raise ValueError("Ymir smoke read contains a non-byte value")
+    return bytes(data)
+
+
+def decode_s16_be(data: list[int] | bytes) -> int:
+    raw = int.from_bytes(bytes(data), "big")
+    return raw - 0x10000 if raw & 0x8000 else raw
+
+
+def decode_cart_probe(raw: bytes) -> dict[str, Any]:
+    if len(raw) != 28:
+        raise ValueError("source cart probe has wrong size")
+    words = [int.from_bytes(raw[index:index + 4], "big") for index in range(0, 28, 4)]
+    result = dict(zip(
+        ("magic", "stage", "expected_size", "copied_size", "cart_id", "cart_size", "status"),
+        words,
+    ))
+    result["ready_complete_ok"] = (
+        result["magic"] == 0x53434152
+        and result["stage"] == 5
+        and result["expected_size"] == result["copied_size"]
+        and result["status"] == 0
+    )
+    return result
+
+
+def read_smoke_sample(client: YmirClient, addresses: dict[str, int]) -> dict[str, Any]:
+    """Read pool and nonvisual gates from one paused target instant."""
+    raw = {
+        symbol: read_smoke_bytes(
+            client, cpu_cache_through_alias(addresses[symbol]), size
+        )
+        for symbol, size in ((PROBE_SYMBOL, PROBE_BYTES), *SMOKE_SYMBOLS.items())
+    }
+    probe = decode_probe(list(raw[PROBE_SYMBOL]))
+    if not probe["magic_valid"]:
+        return {
+            **probe,
+            "area_yaw": None,
+            "exception_magic": None,
+            "cart": None,
+            "boot": None,
+            "cadence": None,
+        }
+    return {
+        **probe,
+        "area_yaw": decode_s16_be(raw["sAreaYaw"]),
+        "exception_magic": int.from_bytes(
+            raw["sourceboot_exception_record"][:4], "big"
+        ),
+        "cart": decode_cart_probe(raw["g_sm64_saturn_source_cart_probe"]),
+        "boot": decode_boot_trace(raw["sourceboot_boot_trace"]),
+        "cadence": decode_cadence_trace(raw["sourceboot_cadence_trace"]),
+    }
+
+
+def prove_sealed_target_identity(
+    client: YmirClient,
+    target_probe: dict[str, Any],
+    build_probe: dict[str, Any],
+    sealed_identity: bytes,
+) -> dict[str, Any]:
+    """Require target code and its embedded identity to match the sealed ELF."""
+    if bytes(build_probe["expected_bytes"]) != sealed_identity:
+        raise ValueError("sealed build identity does not match capture ELF")
+    target = prove_target_identity(client, target_probe)
+    loaded = prove_loaded_build_identity(client, build_probe)
+    return {"match": bool(target["match"] and loaded["match"]), "code": target, "build": loaded}
+
+
+def smoke_acceptance(samples: list[dict[str, Any]]) -> dict[str, bool]:
+    valid = [sample for sample in samples if sample.get("magic_valid")]
+    yaw_window = [
+        sample for sample in valid
+        if sample["label"] in ("post-bios-9600", "post-bios-9900")
+    ]
+    vdp = [sample["boot"]["vdp2_presentation_generation"] for sample in valid]
+    checks = {
+        "pool_alloc_failures_zero": bool(valid) and all(
+            sample["alloc_failures"] == 0 for sample in valid
+        ),
+        "cart_ready_complete_ok": bool(valid) and all(
+            sample["cart"]["ready_complete_ok"] for sample in valid[-2:]
+        ),
+        "exception_record_clear": bool(valid) and all(
+            sample["exception_magic"] == 0 for sample in valid
+        ),
+        "vdp_generations_climbing": len(vdp) >= 2 and vdp[-1] > vdp[0],
+        "area_yaw_changes_9500_10000": (
+            len(yaw_window) == 2
+            and len({sample["area_yaw"] for sample in yaw_window}) == 2
+        ),
+    }
+    return {**checks, "pass": all(checks.values())}
 
 
 def validate_post_bios_frames(frames: int) -> int:
@@ -211,18 +346,24 @@ def main() -> int:
         parser.error(str(error))
 
     try:
+        identity_values = json.loads(args.identity_spec.read_text(encoding="utf-8"))
+        sealed_identity = build_identity(identity_values).raw
         pool_capacity = pool_capacity_from_sealed_artifact(
             args.identity_spec, args.elf
         )
+        target_identity_probe = build_elf_identity_probe(args.elf)
+        build_identity_probe = build_elf_build_identity_probe(args.elf)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
-    probe_address = resolve_probe_address(args.elf)
+    smoke_addresses = resolve_smoke_addresses(args.elf)
+    probe_address = smoke_addresses[PROBE_SYMBOL]
 
     wall_start = time.perf_counter()
     emulated_frames = 0
     client: YmirClient | None = None
     samples: list[dict[str, Any]] = []
     final_probe: dict[str, Any] | None = None
+    target_identity: dict[str, Any] | None = None
     failure: BaseException | None = None
     try:
         client = YmirClient(args.ymir, args.ipl, args.game, args.timeout)
@@ -237,10 +378,13 @@ def main() -> int:
                 remaining -= chunk
 
         def sample(label: str) -> None:
-            probe = read_probe(client, probe_address)
-            samples.append({"label": label, "emulated_frames": emulated_frames, **probe})
+            smoke = read_smoke_sample(client, smoke_addresses)
+            samples.append({"label": label, "emulated_frames": emulated_frames, **smoke})
 
         run_bios_handoff(client, run_for, sample)
+        target_identity = prove_sealed_target_identity(
+            client, target_identity_probe, build_identity_probe, sealed_identity
+        )
 
         elapsed = 0
         while elapsed < args.post_bios_frames:
@@ -248,7 +392,7 @@ def main() -> int:
             elapsed += args.sample_interval
             sample(f"post-bios-{elapsed}")
 
-        final_probe = read_probe(client, probe_address)
+        final_probe = read_smoke_sample(client, smoke_addresses)
         client.shutdown()
     except BaseException as error:
         failure = error
@@ -271,6 +415,13 @@ def main() -> int:
     current_allocated_max = max(
         (s["current_allocated"] for s in valid_post_bios_samples), default=None
     )
+    acceptance = smoke_acceptance(samples)
+    route_note = (
+        "sealed identity route modes: "
+        f"route_replay_mode={identity_values['route_replay_mode']}, "
+        f"live_input_mode={identity_values['live_input_mode']}; "
+        "the matched target build determines capture movement."
+    )
 
     report: dict[str, Any] = {
         "evidence_kind": "ymir-object-pool-occupancy-capture",
@@ -278,22 +429,24 @@ def main() -> int:
         "manual_gui_launch": False,
         "target_build": False,
         "performance_measurement": False,
-        "route_note": (
-            "canonical geo-walk config: no SATURN_SOURCEBOOT_LIVE_INPUT / "
-            "SATURN_SOURCEBOOT_ROUTE_REPLAY -- Mario remains at BOB's "
-            "default spawn point for the whole capture window; this does "
-            "not exercise macro-object-dense areas of the level."
-        ),
+        "route_note": route_note,
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
         "game": artifact_identity(args.game),
         "elf": artifact_identity(args.elf),
         "artifacts": artifacts,
         "build_identity_spec": artifact_identity(args.identity_spec),
+        "target_identity": target_identity,
         "pool_capacity_binding": "sealed-identity-tuple-present-in-elf",
         "probe_symbol": PROBE_SYMBOL,
         "probe_address": probe_address,
         "probe_cache_through_address": cpu_cache_through_alias(probe_address),
+        "smoke_symbols": SMOKE_SYMBOLS,
+        "smoke_addresses": smoke_addresses,
+        "smoke_cache_through_addresses": {
+            symbol: cpu_cache_through_alias(address)
+            for symbol, address in smoke_addresses.items()
+        },
         "pool_capacity": pool_capacity,
         "sample_interval_frames": args.sample_interval,
         "requested_post_bios_frames": args.post_bios_frames,
@@ -307,6 +460,7 @@ def main() -> int:
         "alloc_failures_observed": alloc_failures_observed,
         "current_allocated_min_post_bios": current_allocated_min,
         "current_allocated_max_post_bios": current_allocated_max,
+        "smoke_acceptance": acceptance,
         "wall_seconds": time.perf_counter() - wall_start,
     }
     if client is not None:
@@ -317,7 +471,7 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2, sort_keys=True))
-    return 1 if failure is not None else 0
+    return 1 if failure is not None or not acceptance["pass"] else 0
 
 
 if __name__ == "__main__":

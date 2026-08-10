@@ -370,7 +370,21 @@ not claim any package, smoke, or owner gate.
 - Consumes: the existing pool probe, `capture_sourceboot_throughput.decode_boot_trace`, `capture_sourceboot_throughput.decode_cadence_trace`, and one DLL-safe `sh-elf-nm` listing.
 - Produces: every 300-frame sample's pool, signed `sAreaYaw`, cart probe, exception magic, boot trace, and stable cadence trace; final `smoke_acceptance` booleans.
 
-- [ ] **Step 1: Write decoder and acceptance tests RED**
+**Execution ledger (2026-08-10):** **complete for Task 2 host scope;
+independent review cleared.** TDD RED was observed with the three requested entry points
+absent (`AttributeError` for `decode_s16_be`, `decode_cart_probe`, and
+`smoke_acceptance`). The focused GREEN invocation then passed all 3 tests;
+the prescribed complete capture suite passed 6/6 after the review repair. The harness now resolves
+all sampled symbols from one DLL-safe listing, reads each through P2/cache-
+through while Ymir is paused, fails closed on a non-stable cadence seqlock,
+and derives its route note from the sealed identity modes. Before post-BIOS
+sampling it proves target code and its P2-loaded identity match the supplied
+ELF and sealed spec. Independent review found and then cleared this
+artifact-binding requirement; no Critical, Important, or Minor findings
+remain. No target build, artifact-bound 20,000-frame run, visual capture, or
+owner gate is claimed. The 20,000-frame floor remains open for Task 4.
+
+- [x] **Step 1: Write decoder and acceptance tests RED**
 
 Add tests for these pure functions:
 
@@ -411,7 +425,7 @@ def test_smoke_acceptance_requires_every_nonvisual_gate(self) -> None:
 Add negative subtests that independently freeze yaw, hold generations, set
 exception magic `0x53484258`, set cart failure, and set allocation failures.
 
-- [ ] **Step 2: Run the focused tests and confirm RED**
+- [x] **Step 2: Run the focused tests and confirm RED**
 
 ```powershell
 $env:PYTHONPATH='tools/saturn'
@@ -423,7 +437,7 @@ $env:PYTHONPATH='tools/saturn'
 
 Expected: FAIL because the decoders and `smoke_acceptance` do not exist.
 
-- [ ] **Step 3: Implement read-only smoke decoding**
+- [x] **Step 3: Implement read-only smoke decoding**
 
 Import the existing stable boot/cadence decoders and add fixed ABI sizes:
 
@@ -467,7 +481,7 @@ sample, read the cache-through address for each symbol while paused. Decode
 the exception record's first word only; zero means no target exception was
 recorded. Store the decoded fields beside the pool fields.
 
-- [ ] **Step 4: Implement strict summary acceptance**
+- [x] **Step 4: Implement strict summary acceptance**
 
 ```python
 def smoke_acceptance(samples: list[dict[str, Any]]) -> dict[str, bool]:
@@ -491,7 +505,7 @@ Derive `route_note` from the sealed identity spec's `route_replay_mode` and
 `live_input_mode`; remove the current hardcoded disabled-route claim. Include
 `smoke_acceptance` in the JSON and return exit 1 when it is false.
 
-- [ ] **Step 5: Run the complete capture suite GREEN**
+- [x] **Step 5: Run the complete capture suite GREEN**
 
 ```powershell
 $env:PYTHONPATH='tools/saturn'
@@ -500,7 +514,7 @@ $env:PYTHONPATH='tools/saturn'
 
 Expected: PASS, including all prior capacity/ELF identity tests.
 
-- [ ] **Step 6: Update docs, commit, and review**
+- [x] **Step 6: Update docs, commit, and review**
 
 Update the changelog and both ledgers with the capture correction and open
 target gates. Stage only the files listed by Task 2 and commit:

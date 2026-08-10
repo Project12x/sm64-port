@@ -91,5 +91,110 @@ class ObjectPoolCaptureArtifactBindingTests(unittest.TestCase):
             capture.pool_capacity_from_sealed_artifact(self.spec_path, self.elf)
 
 
+class ObjectPoolOccupancyTests(unittest.TestCase):
+    def test_prove_sealed_target_identity_requires_elf_and_sealed_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            sealed = identity.build_identity(_spec(Path(directory), 208)).raw
+            code_probe = {
+                "address": 0x06001000,
+                "size": 4,
+                "expected_bytes": [1, 2, 3, 4],
+                "expected_sha256": "unused-by-the-fake",
+            }
+            build_probe = {
+                "address": 0x06002000,
+                "size": len(sealed),
+                "expected_bytes": list(sealed),
+            }
+
+            class Client:
+                def __init__(self, code: bytes, loaded: bytes) -> None:
+                    self.code = code
+                    self.loaded = loaded
+
+                def call(self, method: str, params: dict[str, int]) -> dict[str, list[int]]:
+                    if method != "mem.peek":
+                        raise AssertionError(method)
+                    if params["address"] == 0x06001000:
+                        return {"data": list(self.code)}
+                    if params["address"] == 0x26002000:
+                        return {"data": list(self.loaded)}
+                    raise AssertionError(params)
+
+            self.assertTrue(capture.prove_sealed_target_identity(
+                Client(b"\x01\x02\x03\x04", sealed), code_probe, build_probe, sealed,
+            )["match"])
+            with self.assertRaisesRegex(ValueError, "running target"):
+                capture.prove_sealed_target_identity(
+                    Client(b"\x00\x02\x03\x04", sealed), code_probe, build_probe, sealed,
+                )
+            with self.assertRaisesRegex(ValueError, "sealed build identity"):
+                capture.prove_sealed_target_identity(
+                    Client(b"\x01\x02\x03\x04", sealed), code_probe, build_probe,
+                    b"not-the-elf-identity",
+                )
+
+    def test_decode_signed_camera_yaw(self) -> None:
+        self.assertEqual(capture.decode_s16_be([0x80, 0x00]), -32768)
+        self.assertEqual(capture.decode_s16_be([0x7F, 0xFF]), 32767)
+
+    def test_decode_cart_probe_requires_ready_complete_ok(self) -> None:
+        words = [0x53434152, 5, 3565776, 3565776, 0x5A, 4 << 20, 0]
+        raw = b"".join(x.to_bytes(4, "big") for x in words)
+        self.assertTrue(capture.decode_cart_probe(raw)["ready_complete_ok"])
+        words[3] -= 1
+        raw = b"".join(x.to_bytes(4, "big") for x in words)
+        self.assertFalse(capture.decode_cart_probe(raw)["ready_complete_ok"])
+
+    def test_smoke_acceptance_requires_every_nonvisual_gate(self) -> None:
+        samples = [
+            {"label": "post-bios-9600", "magic_valid": True,
+             "alloc_failures": 0, "area_yaw": 10, "exception_magic": 0,
+             "cart": {"ready_complete_ok": True},
+             "boot": {"vdp2_presentation_generation": 20}},
+            {"label": "post-bios-9900", "magic_valid": True,
+             "alloc_failures": 0, "area_yaw": 11, "exception_magic": 0,
+             "cart": {"ready_complete_ok": True},
+             "boot": {"vdp2_presentation_generation": 21}},
+        ]
+        expected = {
+            "pool_alloc_failures_zero": True,
+            "cart_ready_complete_ok": True,
+            "exception_record_clear": True,
+            "vdp_generations_climbing": True,
+            "area_yaw_changes_9500_10000": True,
+            "pass": True,
+        }
+        self.assertEqual(capture.smoke_acceptance(samples), expected)
+
+        mutations = {
+            "frozen yaw": lambda changed: changed[1].__setitem__("area_yaw", 10),
+            "held VDP generation": lambda changed: changed[1]["boot"].__setitem__(
+                "vdp2_presentation_generation", 20
+            ),
+            "exception record": lambda changed: changed[0].__setitem__(
+                "exception_magic", 0x53484258
+            ),
+            "cart failure": lambda changed: changed[1]["cart"].__setitem__(
+                "ready_complete_ok", False
+            ),
+            "allocation failure": lambda changed: changed[0].__setitem__(
+                "alloc_failures", 1
+            ),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                changed = [
+                    {
+                        **sample,
+                        "cart": dict(sample["cart"]),
+                        "boot": dict(sample["boot"]),
+                    }
+                    for sample in samples
+                ]
+                mutate(changed)
+                self.assertFalse(capture.smoke_acceptance(changed)["pass"])
+
+
 if __name__ == "__main__":
     unittest.main()
