@@ -864,8 +864,9 @@ Task 3 already exposed a reviewed flag-style CLI rather than subcommands. Task
 Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
 of inventing a second interface.
 
-**Live status (2026-08-10):** `source-complete`; the behavior commit and
-controller-owned independent reviews remain pending. Host/dry-run TDD covers stage
+**Live status (2026-08-10):** `source-complete` in behavior commit `b1d75772`
+(`feat(saturn): integrate hermetic sourceboot sealing`); controller-owned
+independent reviews remain pending. Host/dry-run TDD covers stage
 isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
 propagation, explicit closure classification and identity-cycle breaking,
 post-link dependency/external equality, release cleanliness dispatch, live
@@ -874,6 +875,14 @@ sources now live in the stable generated-input directory so discovery and build
 name identical inputs rather than requiring an identity to discover itself. No
 real SH-2 build was run; independent review and every target/release evidence
 gate remain open.
+
+Fresh post-commit verification passed all four exact suites: 5 Make + 15
+bootstrap + 16 closure + 15 attestation = 51 host tests, with one legitimate
+case-spelling skip on this Windows filesystem. Self-review of
+`57da18b7..b1d75772` found no defects in flag parity, stage isolation, `.sx`
+coverage, cycle breaking, post-link equality, release cleanliness, or stale-spec
+failure. The source/documentation portion of Step 8 is complete; its checkbox
+remains open pending the required independent reviews.
 
 - [x] **Step 1: Write failing Make-contract tests**
 
