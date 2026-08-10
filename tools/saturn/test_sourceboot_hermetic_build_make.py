@@ -245,6 +245,9 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             makefile.count('BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)"'),
             3,
         )
+        self.assertIn("NOEXTRACT=1 NOTOOLS=1", makefile)
+        root_makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("NOTOOLS ?= 0", root_makefile)
 
     def test_seal_and_post_link_verification_consume_exact_manifests(self) -> None:
         makefile = self.sourceboot_makefile()

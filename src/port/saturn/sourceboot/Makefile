@@ -759,7 +759,7 @@ source-assets: source-extracted-assets source-data-catalog source-bob-mesh sourc
 	if [ -z "$$targets" ]; then \
 	  printf '%s\n' 'sourceboot: no generated source assets were found' >&2; exit 1; \
 	fi; \
-	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 \
+	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 NOTOOLS=1 \
 	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets $(SOURCEBOOT_TEXT_STRINGS) \
 	  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'

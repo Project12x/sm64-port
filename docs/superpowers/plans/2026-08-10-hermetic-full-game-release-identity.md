@@ -1698,6 +1698,22 @@ GREEN is 9/9 after scene propagation. This does not change the extracted bytes
 or closure; it makes all nested consumers use the already-sealed root. Candidate
 A and every downstream gate remain open pending another clean exact rerun.
 
+That rerun derived the complete candidate-local asset inventory and completed
+all BOB consumers, then stopped before identity discovery when `source-assets`
+invoked root Make. Root Make unconditionally rebuilt every host tool, including
+obsolete `armips` sources that fail under the current host compiler, although
+the requested `build/us_pc` targets were already present in the independently
+inventoried prerequisite tree. The narrow correction adds `NOTOOLS ?= 0` at
+that existing boundary and passes `NOTOOLS=1` only from sourceboot's verified
+asset-target submake. Default root Make behavior is therefore unchanged;
+missing named generated targets still execute their normal recipes and fail
+closed. Focused TDD was RED at 8/9 before the boundary existed and GREEN at
+9/9 afterward. Reference record: same-repository pattern-only adaptation of
+the root `NOEXTRACT` opt-out and sourceboot recursive Make call at `9949e655`;
+this inherited fork has no root license file, no external source was copied,
+and no notice obligation changed. Candidate A, closure, target, and release
+gates remain open pending an exact clean rerun from this behavior commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
