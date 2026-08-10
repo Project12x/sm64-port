@@ -96,11 +96,37 @@ python tools/saturn/stage_saturn_release.py \
 
 Verification copies the manifest-bound bytes into a private snapshot before
 returning. The staging tool consumes only that snapshot, copies the four
-outputs transactionally, writes the captured manifest bytes last, and verifies
-the staged tree again. A failed copy or final verification removes only paths
-whose filesystem identity still proves staging ownership; a missing
-destination is removed, a preexisting empty destination remains empty, and
-concurrent foreign replacements are preserved with rollback diagnostics.
+outputs into a private sibling tree, writes the captured manifest bytes last,
+requires exact inventory, atomically publishes without replacement, and
+verifies the exact published tree again. No failure path uses `unlink`,
+`rmdir`, or recursive deletion after a namespace race. Ambiguous partial,
+published, or foreign content is retained beside the requested destination as
+`.sm64-saturn-quarantine-<destination>-<unique-id>` and its full path is added
+to the diagnostic; inspect ownership before removing a quarantine. A failed
+missing destination remains missing, a failed preexisting-empty destination is
+restored empty, and either can be retried.
+
+Atomic publication support is deliberately explicit:
+
+- Windows uses an exclusive rename while retained directory handles pin the
+  active namespace. A proven preexisting-empty backup is deleted only through
+  its identity-checked opened handle.
+- Linux requires libc `renameat2` with `RENAME_NOREPLACE` and a filesystem that
+  implements that flag.
+- macOS and BSD-family hosts are accepted only when libc exports the
+  directory-relative `renameatx_np` API with `RENAME_EXCL`. Path-only
+  `renamex_np` is not a fallback because it would abandon the guarded parent
+  descriptor. BSD variants without `renameatx_np`, and all other POSIX hosts,
+  fail capability preflight before any staging namespace is created.
+
+Platforms without identity-conditional opened-object directory deletion retain
+the proven empty preexisting-destination backup under the same sibling
+quarantine prefix after successful publication and emit a stable
+`RuntimeWarning` containing its path. The retained directory is empty; the
+published destination still has exact manifest inventory, and a destination
+that was initially missing never creates this backup. The host tests execute
+the Windows adapter and inject the documented POSIX libc contracts; they do not
+claim execution on Linux, macOS, or BSD.
 
 The throughput, object-pool, automated HUD, and desktop-Ymir entry points
 require `--release-manifest`; a separately supplied `--game`, `--elf`, or

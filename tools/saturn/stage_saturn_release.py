@@ -9,9 +9,12 @@ import errno
 import os
 import shutil
 import stat
+import sys
 import uuid
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from release_manifest import (
     DirectoryNamespaceGuard,
@@ -24,6 +27,19 @@ from release_manifest import (
 
 
 FileIdentity = tuple[int, int]
+_PLATFORM_SCOPE = (
+    "Atomic publication supports Windows exclusive rename, Linux "
+    "renameat2(RENAME_NOREPLACE), and macOS/BSD "
+    "renameatx_np(RENAME_EXCL) when libc exports that directory-relative API; "
+    "unsupported hosts fail before staging mutation."
+)
+
+
+@dataclass(frozen=True)
+class _AtomicRenameAdapter:
+    name: str
+    function: Any | None
+    flag: int
 
 
 def _exclusive_flags() -> int:
@@ -115,35 +131,70 @@ def _make_private_tree(namespace: DirectoryNamespaceGuard, destination_name: str
     raise RuntimeError("could not allocate a unique private staging directory")
 
 
-def _linux_rename_noreplace(
-    namespace: DirectoryNamespaceGuard, source: str, target: str
-) -> None:
-    libc = ctypes.CDLL(None, use_errno=True)
-    renameat2 = getattr(libc, "renameat2", None)
-    if renameat2 is None:
-        raise RuntimeError("atomic no-replace publication is unavailable")
-    result = renameat2(
-        namespace._fd,
-        os.fsencode(source),
-        namespace._fd,
-        os.fsencode(target),
-        1,  # RENAME_NOREPLACE
+def _resolve_atomic_rename_adapter(
+    platform_name: str | None = None, libc: Any | None = None
+) -> _AtomicRenameAdapter:
+    platform_name = sys.platform if platform_name is None else platform_name
+    if platform_name == "win32":
+        return _AtomicRenameAdapter("windows-exclusive-rename", None, 0)
+    if platform_name.startswith("linux"):
+        symbol = "renameat2"
+        flag = 1  # RENAME_NOREPLACE
+    elif platform_name.startswith(
+        ("darwin", "freebsd", "openbsd", "netbsd", "dragonfly")
+    ):
+        symbol = "renameatx_np"
+        flag = 4  # RENAME_EXCL
+    else:
+        raise RuntimeError(
+            f"atomic exclusive rename is unsupported on {platform_name}; "
+            "no staging namespace was mutated"
+        )
+    libc = ctypes.CDLL(None, use_errno=True) if libc is None else libc
+    function = getattr(libc, symbol, None)
+    if function is None:
+        raise RuntimeError(
+            f"atomic exclusive rename is unsupported on {platform_name}; "
+            f"libc does not export directory-relative {symbol}; "
+            "no staging namespace was mutated"
+        )
+    function.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
     )
-    if result:
-        error = ctypes.get_errno()
-        raise OSError(error, os.strerror(error), target)
+    function.restype = ctypes.c_int
+    return _AtomicRenameAdapter(f"{symbol}({flag})", function, flag)
 
 
 def _rename_noreplace(
-    namespace: DirectoryNamespaceGuard, source: str, target: str
+    namespace: DirectoryNamespaceGuard,
+    source: str,
+    target: str,
+    adapter: _AtomicRenameAdapter,
 ) -> None:
     namespace.require_current()
-    if os.name == "nt":
+    if adapter.function is None:
         namespace.rename_child(source, target)
-    elif os.name == "posix" and namespace._fd is not None:
-        _linux_rename_noreplace(namespace, source, target)
     else:
-        raise RuntimeError("atomic no-replace publication is unavailable")
+        if namespace._fd is None:
+            raise RuntimeError(
+                f"{adapter.name} requires a directory-relative namespace descriptor"
+            )
+        result = adapter.function(
+            namespace._fd,
+            os.fsencode(source),
+            namespace._fd,
+            os.fsencode(target),
+            adapter.flag,
+        )
+        if result:
+            error = ctypes.get_errno()
+            if error == errno.EEXIST:
+                raise FileExistsError(error, os.strerror(error), target)
+            raise OSError(error, os.strerror(error), target)
     namespace.require_current()
 
 
@@ -152,11 +203,12 @@ def _quarantine_child(
     child: str,
     destination_name: str,
     quarantines: list[Path],
+    adapter: _AtomicRenameAdapter,
 ) -> Path:
     for _attempt in range(32):
         quarantine_name = _unique_name("quarantine", destination_name)
         try:
-            _rename_noreplace(namespace, child, quarantine_name)
+            _rename_noreplace(namespace, child, quarantine_name, adapter)
             quarantine = namespace.path / quarantine_name
             quarantines.append(quarantine)
             return quarantine
@@ -188,10 +240,13 @@ def _restore_requested_state(
     destination_name: str,
     preexisted: bool,
     quarantines: list[Path],
+    adapter: _AtomicRenameAdapter,
 ) -> None:
     for _attempt in range(32):
         if _child_metadata(namespace, destination_name) is not None:
-            _quarantine_child(namespace, destination_name, destination_name, quarantines)
+            _quarantine_child(
+                namespace, destination_name, destination_name, quarantines, adapter
+            )
             continue
         if not preexisted:
             return
@@ -209,11 +264,12 @@ def _publish_private_tree(
     destination_name: str,
     initial_identity: FileIdentity | None,
     quarantines: list[Path],
+    adapter: _AtomicRenameAdapter,
 ) -> Path | None:
     initial_backup: Path | None = None
     if initial_identity is not None:
         moved = _quarantine_child(
-            namespace, destination_name, destination_name, quarantines
+            namespace, destination_name, destination_name, quarantines, adapter
         )
         initial_backup = moved
         moved_metadata = moved.lstat()
@@ -221,21 +277,27 @@ def _publish_private_tree(
             _file_identity(moved_metadata) != initial_identity
             or not _is_empty_real_directory(moved, moved_metadata)
         ):
-            _restore_requested_state(namespace, destination_name, True, quarantines)
+            _restore_requested_state(
+                namespace, destination_name, True, quarantines, adapter
+            )
             raise ValueError(
                 f"release destination was replaced or contaminated; retained at {moved}"
             )
     try:
-        _rename_noreplace(namespace, private_name, destination_name)
+        _rename_noreplace(namespace, private_name, destination_name, adapter)
     except OSError as error:
         if error.errno not in (errno.EEXIST, errno.EACCES, errno.ENOTEMPTY):
             raise
         if _child_metadata(namespace, destination_name) is not None:
             quarantine = _quarantine_child(
-                namespace, destination_name, destination_name, quarantines
+                namespace, destination_name, destination_name, quarantines, adapter
             )
             _restore_requested_state(
-                namespace, destination_name, initial_identity is not None, quarantines
+                namespace,
+                destination_name,
+                initial_identity is not None,
+                quarantines,
+                adapter,
             )
             raise ValueError(
                 f"release destination was concurrently contaminated; retained at {quarantine}"
@@ -260,6 +322,7 @@ def stage_release(manifest: Path, destination: Path) -> Path:
     private_name: str | None = None
     published = False
     try:
+        adapter = _resolve_atomic_rename_adapter()
         with DirectoryNamespaceGuard(destination.parent) as namespace:
             initial = _child_metadata(namespace, destination.name)
             if initial is None:
@@ -290,6 +353,7 @@ def stage_release(manifest: Path, destination: Path) -> Path:
                     destination.name,
                     initial_identity,
                     quarantines,
+                    adapter,
                 )
                 published = True
                 private_name = None
@@ -307,19 +371,29 @@ def stage_release(manifest: Path, destination: Path) -> Path:
                         quarantines.remove(initial_backup)
                     else:
                         warnings.warn(
-                            f"verified empty destination backup retained at {initial_backup}",
+                            "staging retained proven empty destination backup at "
+                            f"{initial_backup}; this platform lacks safe "
+                            "identity-conditional opened-object directory deletion",
                             RuntimeWarning,
                         )
                 return destination
             except BaseException as error:
                 if published and _child_metadata(namespace, destination.name) is not None:
                     _quarantine_child(
-                        namespace, destination.name, destination.name, quarantines
+                        namespace,
+                        destination.name,
+                        destination.name,
+                        quarantines,
+                        adapter,
                     )
                     published = False
                 elif private_name is not None and _child_metadata(namespace, private_name) is not None:
                     _quarantine_child(
-                        namespace, private_name, destination.name, quarantines
+                        namespace,
+                        private_name,
+                        destination.name,
+                        quarantines,
+                        adapter,
                     )
                     private_name = None
                 _restore_requested_state(
@@ -327,6 +401,7 @@ def stage_release(manifest: Path, destination: Path) -> Path:
                     destination.name,
                     initial_identity is not None,
                     quarantines,
+                    adapter,
                 )
                 _note_quarantines(error, quarantines)
                 raise
@@ -335,7 +410,7 @@ def stage_release(manifest: Path, destination: Path) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, epilog=_PLATFORM_SCOPE)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--destination", type=Path, required=True)
     args = parser.parse_args(argv)

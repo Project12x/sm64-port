@@ -71,6 +71,16 @@
 
 ### Fixed
 
+- Made atomic Saturn release publication platform-explicit. Linux now selects
+  only `renameat2(RENAME_NOREPLACE)`, while macOS and BSD-family hosts require
+  libc's directory-relative `renameatx_np(RENAME_EXCL)`; missing symbols and
+  other POSIX hosts fail before staging mutation instead of calling a
+  Linux-only ABI or degrading to check-then-rename. Windows still removes a
+  proven preexisting-empty backup by retained handle. Hosts without equivalent
+  identity-conditional deletion retain that empty sibling under the documented
+  quarantine prefix and emit its path, trading automatic cleanup for the
+  guarantee that staging never path-deletes a concurrently replaced object.
+
 - Closed the remaining exact-release namespace races. Canonical manifests are
   now parsed and hashed only from no-follow opened-file snapshots whose object
   and full ancestor identities are checked around the read. Staging assembles
