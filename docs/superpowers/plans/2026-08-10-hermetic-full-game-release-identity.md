@@ -839,6 +839,10 @@ Reviews must confirm the old closure is gone for v2, every consumed manifest is 
 **Files:**
 - Modify: `src/port/saturn/sourceboot/Makefile`
 - Modify: `Makefile.saturn.mk`
+- Modify: `tools/saturn/gen_source_closure.py`
+- Modify: `tools/saturn/test_gen_source_closure.py`
+- Modify: `tools/saturn/gen_toolchain_attestation.py`
+- Modify: `tools/saturn/test_gen_toolchain_attestation.py`
 - Create: `tools/saturn/test_sourceboot_hermetic_build_make.py`
 - Modify: `tools/saturn/test_sourceboot_identity_spec_bootstrap.py`
 - Modify: `docs/saturn/BUILDING.md`
@@ -850,6 +854,15 @@ Reviews must confirm the old closure is gone for v2, every consumed manifest is 
 - Consumes: Task 2 closure CLI, Task 3 attestation CLI, Task 5 bootstrap CLI.
 - Produces Make stages `assets`, `discover`, and `seal`; targets `identity-assets`, `identity-discovery`, `print-identity-tag`, and `verify-sealed-inputs`.
 - Produces generated paths `saturn-source-closure-v2.json`, `saturn-toolchain-attestation-v1.json`, resolved profile/package manifests, and identity-v2 spec.
+- Produces Task 2 CLI subcommands `build` and `verify`, plus diagnostic handoff schema `sm64-saturn-external-dependencies-v1` containing sorted absolute dependency paths outside identity.
+- Extends Task 3's existing flag-style CLI with `--external-dependencies <handoff>` while preserving `--output`, `--verify`, and repeated `--external-dependency` compatibility.
+
+**Reconciled interface correction (2026-08-10):** Task 2's review-cleared
+library lacked the CLI that this integration task was written to consume, and
+Task 3 already exposed a reviewed flag-style CLI rather than subcommands. Task
+6 owns the missing Task 2 CLI/handoff adapter and adds a handoff-file reader to
+Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
+of inventing a second interface.
 
 - [ ] **Step 1: Write failing Make-contract tests**
 
@@ -938,6 +951,12 @@ Pass these explicit inputs to the closure generator:
 
 `identity-discovery` emits the canonical source closure, a noncanonical absolute-path external-dependency handoff, and the canonical toolchain attestation atomically. The handoff is a derived diagnostic input excluded from identity; the attestation canonicalizes the dependencies under component-relative paths. The seal-stage bootstrap receives the closure/attestation exact paths, target profile, and `SOURCEBOOT_RELEASE_MODE`; only then may `print-identity-tag` generate identity v2 and select the identity-tagged output directory.
 
+Task 2 `build` writes the canonical closure and diagnostic handoff with atomic
+file replacement. Task 3 consumes the handoff through
+`--external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"` in addition to
+its existing repeated `--external-dependency` option, and writes the canonical
+attestation through its existing `--output` flag.
+
 ```make
 SOURCEBOOT_BUILD_IDENTITY_BOOTSTRAP_ARGS += \
   --profile "$(SOURCEBOOT_TARGET_PROFILE)" \
@@ -958,8 +977,9 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	  $(foreach dep,$(SH_DEPS),--actual-depfile "$(dep)") \
 	  --expected-external "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)" \
 	  --mode "$(SOURCEBOOT_RELEASE_MODE)"
-	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" verify \
-	  --attestation "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \
+	  $(SOURCEBOOT_TOOLCHAIN_ARGS) \
+	  --verify "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
 	  --external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"
 ```
 
@@ -969,6 +989,7 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_hermetic_build_make.py
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_identity_spec_bootstrap.py
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_source_closure.py
+.\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_toolchain_attestation.py
 ```
 
 Do not claim a real SH build in this task.
@@ -978,7 +999,7 @@ Do not claim a real SH build in this task.
 Document `SOURCEBOOT_TARGET_PROFILE`, development versus release mode, generated manifest locations, and the five-stage failure boundary in `docs/saturn/BUILDING.md`.
 
 ```powershell
-git add CHANGELOG.md Makefile.saturn.mk src/port/saturn/sourceboot/Makefile tools/saturn/test_sourceboot_hermetic_build_make.py tools/saturn/test_sourceboot_identity_spec_bootstrap.py docs/saturn/BUILDING.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md
+git add CHANGELOG.md Makefile.saturn.mk src/port/saturn/sourceboot/Makefile tools/saturn/gen_source_closure.py tools/saturn/test_gen_source_closure.py tools/saturn/gen_toolchain_attestation.py tools/saturn/test_gen_toolchain_attestation.py tools/saturn/test_sourceboot_hermetic_build_make.py tools/saturn/test_sourceboot_identity_spec_bootstrap.py docs/saturn/BUILDING.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md
 git commit -m "feat(saturn): integrate hermetic sourceboot sealing"
 ```
 
