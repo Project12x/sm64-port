@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from capture_route_views import YmirClient
+from release_manifest import verify_release_manifest
 
 # --- Real, current VDP2 HUD VRAM layout -------------------------------------
 #
@@ -71,6 +72,18 @@ HUD_CHAR_BYTES = HUD_CHAR_DIM * HUD_CHAR_DIM * 2
 # about for the CONFIG_1/CONFIG_3 PND-packing bug.
 DEFAULT_EXPECT_COL = 1
 DEFAULT_EXPECT_ROW = 0
+
+
+def resolve_release_binding(manifest: Path, game: Path) -> dict[str, Any]:
+    """Verify the release and select its ELF before Ymir can start."""
+    verified = verify_release_manifest(manifest)
+    if game.resolve() != verified.outputs["cue"]:
+        raise ValueError("game CUE differs from verified release manifest")
+    return {
+        "elf": verified.outputs["elf"],
+        "elf_sha256": verified.document["outputs"]["elf"]["sha256"],
+        "release_manifest_sha256": verified.manifest_sha256,
+    }
 
 
 def pnd_cell_address(col: int, row: int) -> int:
@@ -161,11 +174,12 @@ def save_screenshot(result: dict[str, Any], path: Path) -> dict[str, Any]:
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ymir", required=True, type=Path, help="path to ymir-headless.exe")
     parser.add_argument("--ipl", required=True, type=Path, help="Saturn BIOS/IPL image")
     parser.add_argument("--game", required=True, type=Path, help="built sourceboot .cue path")
+    parser.add_argument("--release-manifest", required=True, type=Path)
     parser.add_argument("--timeout", type=float, default=1700.0,
                         help="Ymir wall-clock budget in seconds (default: 1700)")
     parser.add_argument("--startup-frames", type=int, default=3600,
@@ -187,7 +201,7 @@ def main() -> int:
                         help="path for the JSON evidence report")
     parser.add_argument("--screenshot-output", type=Path, default=None,
                         help="optional PNG path (default: --output with .png suffix)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.timeout <= 0:
         parser.error("--timeout must be positive")
@@ -200,14 +214,16 @@ def main() -> int:
         )
     if not 0 <= args.expect_glyph_index <= 0x0FFF:
         parser.error("--expect-glyph-index must fit the 12-bit PND character-number field")
-    for label, path in (("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
+    for label, path in (("release manifest", args.release_manifest), ("Ymir executable", args.ymir), ("IPL", args.ipl), ("game", args.game)):
         if not path.is_file():
             parser.error(f"{label} not found: {path}")
 
     args.ymir = args.ymir.resolve()
     args.ipl = args.ipl.resolve()
     args.game = args.game.resolve()
+    args.release_manifest = args.release_manifest.resolve()
     args.output = args.output.resolve()
+    binding = resolve_release_binding(args.release_manifest, args.game)
     screenshot_path = (
         args.screenshot_output.resolve()
         if args.screenshot_output is not None
@@ -262,6 +278,8 @@ def main() -> int:
         "ymir": str(args.ymir),
         "ipl": str(args.ipl),
         "game": str(args.game),
+        "elf": {"path": str(binding["elf"]), "sha256": binding["elf_sha256"]},
+        "release_manifest_sha256": binding["release_manifest_sha256"],
         "startup_frames": args.startup_frames,
         "expect_col": args.expect_col,
         "expect_row": args.expect_row,

@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -1188,6 +1189,10 @@ class ThroughputCaptureTests(unittest.TestCase):
             with (
                 mock.patch.object(capture, "bind_capture_artifacts", return_value={"game": {}, "elf": {}}),
                 mock.patch.object(capture, "artifact_identity", return_value={"sha256": "ymir"}),
+                mock.patch.object(
+                    capture, "bind_release_manifest",
+                    return_value=SimpleNamespace(manifest_sha256="d" * 64),
+                ),
                 mock.patch.object(capture, "resolve_required_symbols", return_value={}),
                 mock.patch.object(capture, "build_elf_identity_probe", return_value={"expected_bytes": [1]}),
                 mock.patch.object(
@@ -1195,6 +1200,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                     "build_elf_build_identity_probe",
                     return_value={"expected_bytes": [2], "label": "compiled-label"},
                 ),
+                mock.patch.object(capture, "validate_release_identity_probe"),
                 mock.patch.object(capture, "YmirClient", return_value=FakeClient()),
                 mock.patch.object(capture, "run_bios_handoff"),
                 mock.patch.object(capture, "wait_for_target_identity", return_value={"matched": True}),
@@ -1214,6 +1220,7 @@ class ThroughputCaptureTests(unittest.TestCase):
                     "--ipl", str(paths["ipl.bin"]),
                     "--game", str(paths["game.cue"]),
                     "--elf", str(paths["game.elf"]),
+                    "--release-manifest", str(paths["game.cue"]),
                     "--output", str(output),
                     "--presentation-events", "10",
                 ])
@@ -1222,6 +1229,44 @@ class ThroughputCaptureTests(unittest.TestCase):
         self.assertEqual(report["status"], "failed")
         self.assertEqual(report["failure"]["stage"], "observation")
         self.assertEqual(report["observation_diagnostics"], diagnostics)
+        self.assertEqual(report["release_manifest_sha256"], "d" * 64)
+
+    def test_release_identity_binding_accepts_v1_and_v2_and_rejects_drift(self) -> None:
+        validator = getattr(capture, "validate_release_identity_probe", None)
+        self.assertTrue(callable(validator), "capture must bind its ELF identity to the release manifest")
+        for version in (1, 2):
+            with self.subTest(version=version):
+                verified = SimpleNamespace(document={
+                    "identity_sha256": "a" * 64,
+                    "identity_version": version,
+                    "effective_config_sha256": "b" * 64,
+                })
+                probe = {
+                    "sha256": "a" * 64,
+                    "identity": {"version": version, "effective_config_hash": "b" * 64},
+                }
+                validator(verified, probe)
+                changed = {**probe, "sha256": "c" * 64}
+                with self.assertRaisesRegex(ValueError, "identity.*release manifest"):
+                    validator(verified, changed)
+
+    def test_release_manifest_paths_are_checked_before_artifact_binding(self) -> None:
+        binder = getattr(capture, "bind_release_manifest", None)
+        self.assertTrue(callable(binder), "capture must verify a release manifest before capture I/O")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            game = root / "selected.cue"
+            elf = root / "selected.elf"
+            game.write_bytes(b"cue")
+            elf.write_bytes(b"elf")
+            verified = SimpleNamespace(
+                manifest_sha256="d" * 64,
+                document={},
+                outputs={"cue": root / "other.cue", "elf": elf.resolve()},
+            )
+            with mock.patch.object(capture, "verify_release_manifest", return_value=verified):
+                with self.assertRaisesRegex(ValueError, "game CUE differs"):
+                    binder(root / "release.json", game, elf)
 
 
 if __name__ == "__main__":

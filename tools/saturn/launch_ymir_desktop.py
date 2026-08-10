@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from release_manifest import verify_release_manifest
+
 
 WORKTREE_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ROOT = WORKTREE_ROOT.parent.parent
@@ -76,6 +78,17 @@ def build_launch_plan(executable: Path, profile: Path, cue: Path) -> dict[str, A
     }
 
 
+def resolve_release_cue(
+    release_manifest: Path, cue: Path | None
+) -> tuple[Path, str]:
+    """Select only the CUE whose bytes were verified by the release manifest."""
+    verified = verify_release_manifest(release_manifest)
+    selected = verified.outputs["cue"]
+    if cue is not None and cue.resolve() != selected:
+        raise ValueError("separate CUE differs from verified release manifest")
+    return selected, verified.manifest_sha256
+
+
 def launch_and_monitor(
     plan: dict[str, Any], monitor_seconds: float, report_output: Path
 ) -> dict[str, Any]:
@@ -119,21 +132,24 @@ def write_report(report: dict[str, Any], output: Path) -> None:
     output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cue", type=Path, required=True, help="explicit staged CUE")
+    parser.add_argument("--release-manifest", type=Path, required=True)
+    parser.add_argument("--cue", type=Path, help="optional matching staged CUE")
     parser.add_argument("--ymir", type=Path, default=DEFAULT_YMIR)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--launch", action="store_true", help="start the visible GUI after preflight")
     parser.add_argument("--monitor-seconds", type=float, default=20.0)
     parser.add_argument("--output", type=Path)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    plan = build_launch_plan(args.ymir, args.profile, args.cue)
+    cue, manifest_sha256 = resolve_release_cue(args.release_manifest, args.cue)
+    plan = build_launch_plan(args.ymir, args.profile, cue)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     output = args.output or (WORKTREE_ROOT / "build" / "saturn" / "ymir-desktop-launches" / f"ymir-desktop-launch-{timestamp}.json")
     report: dict[str, Any] = {
         "created_utc": datetime.now(UTC).isoformat(),
+        "release_manifest_sha256": manifest_sha256,
         "plan": plan,
         "execution": {"requested": False, "reason": "dry-run; pass --launch to start GUI"},
     }

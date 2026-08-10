@@ -41,8 +41,10 @@ from capture_sourceboot_throughput import (
     decode_cadence_trace,
     prove_loaded_build_identity,
     prove_target_identity,
+    validate_release_identity_probe,
 )
 from gen_build_identity import build_identity
+from release_manifest import verify_release_manifest
 from capture_sourceboot_boot_trace import (
     NM,
     bind_capture_artifacts,
@@ -96,6 +98,45 @@ def pool_capacity_from_sealed_artifact(identity_spec: Path, elf: Path) -> int:
     if type(capacity) is not int:
         raise ValueError("sealed identity spec has no integer object_pool_capacity")
     return capacity
+
+
+def resolve_release_binding(
+    manifest: Path, game: Path, elf: Path, identity_spec: Path | None
+) -> dict[str, Any]:
+    """Resolve capacity and identity only from a fully verified release."""
+    verified = verify_release_manifest(manifest)
+    if game.resolve() != verified.outputs["cue"]:
+        raise ValueError("game CUE differs from verified release manifest")
+    if elf.resolve() != verified.outputs["elf"]:
+        raise ValueError("ELF differs from verified release manifest")
+    version = verified.document["identity_version"]
+    if version == 1 and identity_spec is None:
+        raise ValueError("identity spec is required for identity v1 compatibility (--identity-spec)")
+    probe = build_elf_build_identity_probe(verified.outputs["elf"])
+    validate_release_identity_probe(verified, probe)
+    if version == 2:
+        values = verified.document["effective_config"]
+        capacity = values.get("object_pool_capacity")
+        if type(capacity) is not int:
+            raise ValueError("release manifest has no integer object_pool_capacity")
+    else:
+        assert identity_spec is not None
+        spec = json.loads(identity_spec.read_text(encoding="utf-8"))
+        expected = build_identity(spec).raw
+        if expected != bytes(probe["expected_bytes"]):
+            raise ValueError("identity spec differs from release ELF identity symbol")
+        capacity = pool_capacity_from_sealed_artifact(
+            identity_spec, verified.outputs["elf"]
+        )
+        values = spec
+    return {
+        "verified": verified,
+        "probe": probe,
+        "sealed_identity": bytes(probe["expected_bytes"]),
+        "identity_values": values,
+        "pool_capacity": capacity,
+        "release_manifest_sha256": verified.manifest_sha256,
+    }
 
 
 def resolve_smoke_addresses(
@@ -291,16 +332,17 @@ def validate_sample_interval(interval: int) -> int:
     return interval
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ymir", type=Path, required=True, help="ymir-headless executable")
     parser.add_argument("--ipl", type=Path, required=True, help="Saturn BIOS image")
     parser.add_argument("--game", type=Path, required=True, help="built sourceboot .cue path")
     parser.add_argument("--elf", type=Path, required=True, help="matching sourceboot ELF")
+    parser.add_argument("--release-manifest", type=Path, required=True)
     parser.add_argument(
         "--identity-spec",
         type=Path,
-        required=True,
+        required=False,
         help="sealed build identity spec generated for the matching ELF",
     )
     parser.add_argument("--output", type=Path, required=True, help="JSON evidence report")
@@ -313,14 +355,14 @@ def main() -> int:
         help=f"emulated-frame interval between probe samples (default: {DEFAULT_SAMPLE_INTERVAL_FRAMES})",
     )
     parser.add_argument("--timeout", type=float, default=1800.0)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     for label, path in (
         ("Ymir", args.ymir),
         ("IPL", args.ipl),
         ("game", args.game),
         ("ELF", args.elf),
-        ("identity spec", args.identity_spec),
+        ("release manifest", args.release_manifest),
     ):
         if not path.is_file():
             parser.error(f"{label} is not a file: {path}")
@@ -338,21 +380,26 @@ def main() -> int:
     args.ipl = args.ipl.resolve()
     args.game = args.game.resolve()
     args.elf = args.elf.resolve()
-    args.identity_spec = args.identity_spec.resolve()
+    args.release_manifest = args.release_manifest.resolve()
+    if args.identity_spec is not None:
+        if not args.identity_spec.is_file():
+            parser.error(f"identity spec is not a file: {args.identity_spec}")
+        args.identity_spec = args.identity_spec.resolve()
     args.output = args.output.resolve()
     try:
+        release_binding = resolve_release_binding(
+            args.release_manifest, args.game, args.elf, args.identity_spec
+        )
         artifacts = bind_capture_artifacts(args.game, args.elf)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
     try:
-        identity_values = json.loads(args.identity_spec.read_text(encoding="utf-8"))
-        sealed_identity = build_identity(identity_values).raw
-        pool_capacity = pool_capacity_from_sealed_artifact(
-            args.identity_spec, args.elf
-        )
+        identity_values = release_binding["identity_values"]
+        sealed_identity = release_binding["sealed_identity"]
+        pool_capacity = release_binding["pool_capacity"]
         target_identity_probe = build_elf_identity_probe(args.elf)
-        build_identity_probe = build_elf_build_identity_probe(args.elf)
+        build_identity_probe = release_binding["probe"]
     except (OSError, ValueError, json.JSONDecodeError) as error:
         parser.error(str(error))
     smoke_addresses = resolve_smoke_addresses(args.elf)
@@ -435,9 +482,16 @@ def main() -> int:
         "game": artifact_identity(args.game),
         "elf": artifact_identity(args.elf),
         "artifacts": artifacts,
-        "build_identity_spec": artifact_identity(args.identity_spec),
+        "release_manifest_sha256": release_binding["release_manifest_sha256"],
+        "build_identity_spec": (
+            artifact_identity(args.identity_spec) if args.identity_spec is not None else None
+        ),
         "target_identity": target_identity,
-        "pool_capacity_binding": "sealed-identity-tuple-present-in-elf",
+        "pool_capacity_binding": (
+            "release-manifest-effective-config-v2"
+            if release_binding["verified"].document["identity_version"] == 2
+            else "explicit-v1-identity-spec"
+        ),
         "probe_symbol": PROBE_SYMBOL,
         "probe_address": probe_address,
         "probe_cache_through_address": cpu_cache_through_alias(probe_address),

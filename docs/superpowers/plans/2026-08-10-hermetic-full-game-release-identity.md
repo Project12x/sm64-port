@@ -1080,13 +1080,28 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** `active` from controller base `cad2e90d` after
-Task 6 completed independent review. Task 7 owns exact artifact sealing,
-profile-neutral deployment staging, capture/manual-launch preflight, and Make
-ordering. All target, reproducibility, audit-v4, smoke, visual, and manual-play
-evidence gates remain open; host implementation/tests cannot close them.
+**Live status (2026-08-10):** `source-complete`; the behavior commit and
+controller-owned independent reviews remain pending. Focused TDD covers
+canonical root-neutral artifact sealing, strict input/output/ELF/CUE
+verification, relocated comparison, profile-neutral verify-before-copy staging,
+v1/v2 capture identity binding, v2 manifest-owned pool capacity, report
+digests, and exact Make ordering. The public `root` argument is the repository
+root for Git provenance, while release-relative output paths are derived from
+the CUE/output-manifest directory; the current Yaul layout places ELF and
+`SOURCE.DAT` under its `obj/` child, so no escaping path is needed. No real
+SH-2 build was run. Target build, reproducibility, audit-v4, complete-package,
+20,100-frame smoke, visual, and manual-play gates remain open.
 
-- [ ] **Step 1: Write failing release and staging tests**
+Reference-code-first record: in-tree close-port/pattern-only reuse at base
+`48f5a61a` from `hermetic_manifest.py`, `gen_build_identity.py`,
+`bootstrap_sourceboot_identity_spec.py`, the throughput/boot-trace capture
+preflights, both sourceboot Makefiles, and their focused tests. Make ordering
+was checked against pinned `yaul-org/libyaul` commit
+`6012f79f237773378c8014e70d8998ad95a38d98`, MIT license,
+`libyaul/build/build.post.iso-cue.mk` and `build.post.bin.mk`. No external
+source was copied.
+
+- [x] **Step 1: Write failing release and staging tests**
 
 ```python
 def test_release_manifest_binds_exact_outputs_without_timestamps(self) -> None:
@@ -1123,14 +1138,14 @@ def test_compare_accepts_same_bytes_at_different_host_roots(self) -> None:
 
 Add throughput, occupancy, HUD, and desktop-launch tests that require `--release-manifest` for new evidence, reject a manifest whose ELF/CUE differs from CLI paths, accept v1 and v2 embedded identities where historical parsing is permitted, and record the release-manifest SHA-256 in every report.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_release_manifest.py
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_stage_saturn_release.py
 ```
 
-- [ ] **Step 3: Implement exact artifact sealing and verification**
+- [x] **Step 3: Implement exact artifact sealing and verification**
 
 Canonical output records contain `path`, `size`, and lowercase `sha256`. Paths are relative to the release manifest's directory. Extract `saturn_build_identity` from the exact ELF, validate its version/size/bytes, require its digest and effective configuration to equal the identity JSON, and rehash the embedded `effective_config` object before writing or accepting the release manifest. Validate that the CUE has exactly one `FILE` directive, its referenced ISO basename equals the manifest's ISO path, and both files match their hashes independently. The CLI provides `write`, `verify`, and `compare` subcommands; `compare --output` writes the verified two-build comparison report.
 
@@ -1156,7 +1171,7 @@ document = {
 
 Git revision and closure cleanliness facts are included under `provenance`; no dirty file listing or absolute path enters canonical bytes.
 
-- [ ] **Step 4: Implement safe profile-agnostic deployment staging**
+- [x] **Step 4: Implement safe profile-agnostic deployment staging**
 
 Verify all source bytes before creating destination files. Require the destination to be absent or empty; never delete or overwrite an existing release. Copy each output under its release-relative path, copy the manifest last, then re-run `verify_release_manifest()` inside the destination.
 
@@ -1174,7 +1189,7 @@ shutil.copyfile(manifest, destination / "saturn-release-manifest-v1.json")
 verify_release_manifest(destination / "saturn-release-manifest-v1.json")
 ```
 
-- [ ] **Step 5: Bind capture and manual-launch entry points to the release manifest**
+- [x] **Step 5: Bind capture and manual-launch entry points to the release manifest**
 
 Throughput and occupancy require the manifest's resolved `elf` and `cue` paths to equal `--elf` and `--game`. HUD capture requires its `--game` CUE to match and reads the ELF from the verified manifest. Desktop launch accepts `--release-manifest`, resolves its CUE, and refuses a separate mismatching CUE. Before opening Ymir or invoking SH tools, every entry point verifies the manifest and stores `release_manifest_sha256` in its report. Throughput/occupancy additionally require identity bytes from the ELF to match manifest identity SHA-256/version/effective config. For identity v2, occupancy reads `object_pool_capacity` from the manifest's hash-verified `effective_config`; `--identity-spec` remains only as an explicit v1 compatibility input and is not required for the staged v2 target.
 
@@ -1186,7 +1201,7 @@ elf = verified.outputs["elf"]
 report["release_manifest_sha256"] = verified.manifest_sha256
 ```
 
-- [ ] **Step 6: Wire post-build sealing into Make**
+- [x] **Step 6: Wire post-build sealing into Make**
 
 Add `seal-release` after `verify-sealed-inputs`; it writes `saturn-release-manifest-v1.json` beside the CUE. Add `verify-release` to `verify-sourceboot`. The outer `sourceboot` target is successful only after closure verification and release-manifest creation.
 
@@ -1210,7 +1225,7 @@ verify-release: seal-release
 	  --manifest "$(SH_OUTPUT_PATH)/saturn-release-manifest-v1.json"
 ```
 
-- [ ] **Step 7: Run focused release/capture tests**
+- [x] **Step 7: Run focused release/capture tests**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_release_manifest.py

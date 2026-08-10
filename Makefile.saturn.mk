@@ -221,7 +221,7 @@ sourceboot: check-libyaul check-sdk
 	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" && \
 	  $(MAKE) -C "$(SOURCEBOOT_DIR)" SOURCEBOOT_SEALED_IDENTITY="$$tag" \
 	    SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)" \
-	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" verify-sealed-inputs
+	    SOURCEBOOT_RELEASE_MODE="$(SOURCEBOOT_RELEASE_MODE)" verify-sealed-inputs seal-release
 
 # Read the sealed tag back from the frozen spec (no reseal) so verify runs
 # against the exact identity the build above produced.
@@ -229,7 +229,7 @@ verify-sourceboot: sourceboot
 	@tag="$$($(MAKE) -s --no-print-directory -C "$(SOURCEBOOT_DIR)" print-identity-tag SOURCEBOOT_IDENTITY_FROZEN=1)" && \
 	  test -n "$$tag" && \
 	  printf 'verify-sourceboot: verifying sealed identity %s\n' "$$tag" && \
-	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify SOURCEBOOT_SEALED_IDENTITY="$$tag"
+	  $(MAKE) -C "$(SOURCEBOOT_DIR)" verify verify-release SOURCEBOOT_SEALED_IDENTITY="$$tag"
 
 verify-sourceboot-feature-identity:
 	"$(SATURN_TOOLS_PYTHON)" "$(SATURN_REPO_ROOT)/tools/saturn/test_gen_build_identity.py"

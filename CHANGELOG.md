@@ -4,6 +4,20 @@
 
 ### Added
 
+- Added deterministic post-link Saturn release sealing and profile-neutral
+  deployment staging. The canonical manifest binds the exact ELF,
+  `SOURCE.DAT`, ISO, CUE, identity-v2 effective configuration, resolved
+  profile, source closure, package set, toolchain attestation, Git revision,
+  and closure-clean fact without timestamps, dirty-path listings, or absolute
+  host paths. Verification rejects output, embedded-identity, CUE/ISO, or input
+  root drift before capture, launch, or staging; staging accepts only a missing
+  or empty destination and never copies unsealed siblings. Throughput,
+  occupancy, HUD, and desktop-Ymir evidence now require the release manifest
+  SHA-256, with occupancy deriving v2 pool capacity from the verified effective
+  config while retaining an explicit identity-v1 spec compatibility path. This
+  closes the gap where individually plausible artifacts from different builds
+  could be combined or published as one release.
+
 - Integrated Saturn sourceboot identity v2 into a guarded five-stage
   assets/discovery/seal/build/post-link pipeline. Compiler dependency scans now
   use the real Yaul C flags/specs with repository prefix normalization, class

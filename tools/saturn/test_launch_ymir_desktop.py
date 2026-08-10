@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -22,6 +24,56 @@ except ModuleNotFoundError as error:
 
 
 class DesktopYmirLaunchTests(unittest.TestCase):
+    def test_cli_requires_release_manifest(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            desktop.main([])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_dry_run_report_records_verified_release_manifest_sha256(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / "ymir.exe"
+            profile = root / "profile"
+            cue = root / "game.cue"
+            iso = root / "game.iso"
+            manifest = root / "release.json"
+            output = root / "launch.json"
+            executable.write_bytes(b"ymir")
+            profile.mkdir()
+            iso.write_bytes(b"disc")
+            cue.write_text('FILE "game.iso" BINARY\n', encoding="ascii")
+            manifest.write_bytes(b"manifest")
+            with mock.patch.object(
+                desktop, "resolve_release_cue", return_value=(cue.resolve(), "a" * 64)
+            ):
+                result = desktop.main([
+                    "--release-manifest", str(manifest), "--ymir", str(executable),
+                    "--profile", str(profile), "--output", str(output),
+                ])
+            report = json.loads(output.read_text(encoding="utf-8"))
+        self.assertEqual(result, 0)
+        self.assertEqual(report["release_manifest_sha256"], "a" * 64)
+
+    def test_release_manifest_selects_cue_and_rejects_a_separate_mismatch(self) -> None:
+        resolver = getattr(desktop, "resolve_release_cue", None)
+        self.assertTrue(callable(resolver), "desktop launch must verify its release manifest")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cue = root / "game.cue"
+            cue.write_bytes(b"cue")
+            verified = SimpleNamespace(
+                manifest_sha256="a" * 64,
+                outputs={"cue": cue.resolve()},
+            )
+            with mock.patch.object(desktop, "verify_release_manifest", return_value=verified):
+                resolved, digest = resolver(root / "release.json", None)
+                self.assertEqual(resolved, cue.resolve())
+                self.assertEqual(digest, "a" * 64)
+                other = root / "other.cue"
+                other.write_bytes(b"cue")
+                with self.assertRaisesRegex(ValueError, "CUE differs"):
+                    resolver(root / "release.json", other)
+
     def test_build_plan_uses_project_profile_disc_and_executable_directory(self) -> None:
         builder = getattr(desktop, "build_launch_plan", None)
         self.assertTrue(callable(builder), "helper must expose a deterministic launch plan")

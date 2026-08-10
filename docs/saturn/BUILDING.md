@@ -52,6 +52,13 @@ The outer `sourceboot` target now has one fail-closed sequence:
    `.sx` dependencies with discovery, rehashes the closure, enforces release
    cleanliness when requested, and remeasures the live toolchain before a later
    release-manifest stage may publish artifacts.
+6. `seal-release` verifies those inputs again, then writes
+   `saturn-release-manifest-v1.json` beside the CUE. The canonical manifest
+   binds the resolved profile, identity-v2 effective configuration, source
+   closure, package set, toolchain attestation, ELF, `SOURCE.DAT`, ISO, and CUE
+   without timestamps or absolute paths. `verify-release` independently
+   rehashes every output, extracts the exact identity symbol from the ELF, and
+   requires the CUE's single `FILE` directive to resolve to the hashed ISO.
 
 The default profile is
 `tools/saturn/profiles/sourceboot-bob-demo-v1.json`. Override it with
@@ -77,6 +84,24 @@ Discovery and seal outputs live under `build/saturn/sourceboot/generated/`:
 The host Make-contract suites validate ordering and command expansion only.
 They do not build SH-2 code or close the real-target, reproducibility, audit,
 smoke, visual, or manual-play gates.
+
+Do not copy or launch a release by selecting artifacts manually. Stage only a
+verified manifest into a missing or empty destination:
+
+```sh
+python tools/saturn/stage_saturn_release.py \
+  --manifest build/saturn/sourceboot/e2-bob-*/saturn-release-manifest-v1.json \
+  --destination /path/to/new/staged-release
+```
+
+The staging tool copies only the four verified outputs, writes the manifest
+last, refuses to overwrite a nonempty destination, and verifies the staged
+tree again. The throughput, object-pool, automated HUD, and desktop-Ymir entry
+points now require `--release-manifest`; a separately supplied `--game`,
+`--elf`, or desktop `--cue` must resolve to that manifest's verified output.
+Identity-v2 object-pool captures read `object_pool_capacity` from the manifest's
+hash-bound effective configuration. `--identity-spec` is retained only for an
+explicit historical identity-v1 occupancy capture.
 
 ## Host environment
 

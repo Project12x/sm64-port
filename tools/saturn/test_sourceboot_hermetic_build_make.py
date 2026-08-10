@@ -209,12 +209,15 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             "SOURCEBOOT_TARGET_PROFILE=custom-bob-profile.json",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
+        for token in ("verify-sealed-inputs", "seal-release"):
+            self.assertIn(token, result.stdout)
         positions = [result.stdout.index(token) for token in (
             "SOURCEBOOT_BUILD_IDENTITY_STAGE=assets identity-assets",
             "SOURCEBOOT_BUILD_IDENTITY_STAGE=discover identity-discovery",
             "print-identity-tag",
             "SOURCEBOOT_SEALED_IDENTITY=\"$tag\"",
             "verify-sealed-inputs",
+            "seal-release",
         )]
         self.assertEqual(positions, sorted(positions))
         self.assertGreaterEqual(result.stdout.count("SOURCEBOOT_RELEASE_MODE=\"release\""), 5)
@@ -234,6 +237,9 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn('--mode "$(SOURCEBOOT_RELEASE_MODE)"', makefile)
         self.assertIn('--verify "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)"', makefile)
         self.assertIn('--external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"', makefile)
+        self.assertIn("release_manifest.py", makefile)
+        self.assertIn("seal-release", makefile)
+        self.assertIn("verify-release", makefile)
 
     def test_discovery_stage_cannot_build_or_reuse_identity(self) -> None:
         self.assert_stage_rejected("discover", "all")

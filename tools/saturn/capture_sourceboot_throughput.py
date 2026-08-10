@@ -22,6 +22,7 @@ from capture_hwtest import artifact_identity, cap_stderr
 from capture_route_views import YmirClient
 from capture_sourceboot_boot_trace import bind_capture_artifacts, run_bios_handoff
 import gen_build_identity as build_identity
+from release_manifest import ReleaseManifestVerification, verify_release_manifest
 
 
 SCHEMA = "sm64-saturn-sourceboot-throughput-v1"
@@ -255,6 +256,34 @@ def build_elf_build_identity_probe(elf: Path) -> dict[str, Any]:
         "label": build_identity.identity_label(raw),
         "identity": parsed,
     }
+
+
+def validate_release_identity_probe(
+    verified: ReleaseManifestVerification, probe: dict[str, Any]
+) -> None:
+    """Require the ELF identity promised by the verified release manifest."""
+    document = verified.document
+    parsed = probe.get("identity")
+    if (
+        probe.get("sha256") != document.get("identity_sha256")
+        or not isinstance(parsed, dict)
+        or parsed.get("version") != document.get("identity_version")
+        or parsed.get("effective_config_hash")
+        != document.get("effective_config_sha256")
+    ):
+        raise ValueError("ELF build identity differs from verified release manifest")
+
+
+def bind_release_manifest(
+    manifest: Path, game: Path, elf: Path
+) -> ReleaseManifestVerification:
+    """Verify the release before any capture process or SH tool can start."""
+    verified = verify_release_manifest(manifest)
+    if game.resolve() != verified.outputs["cue"]:
+        raise ValueError("game CUE differs from verified release manifest")
+    if elf.resolve() != verified.outputs["elf"]:
+        raise ValueError("ELF differs from verified release manifest")
+    return verified
 
 
 def validate_build_identity(
@@ -829,6 +858,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--game", type=Path, required=True, help="exact matching sourceboot CUE")
     parser.add_argument("--elf", type=Path, required=True, help="exact matching sourceboot ELF")
     parser.add_argument(
+        "--release-manifest", type=Path,
+        help="exact release manifest required for new evidence",
+    )
+    parser.add_argument(
         "--expected-label",
         help="optional caller expectation checked against the compiled identity-derived label",
     )
@@ -867,12 +900,19 @@ def main(argv: list[str] | None = None) -> int:
         args.startup_vblanks = validate_startup_vblanks(args.startup_vblanks)
         if args.nominal_refresh_hz <= 0:
             raise ValueError("nominal refresh rate must be positive")
-        for label, path in (("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
+        if args.release_manifest is None:
+            raise ValueError("--release-manifest is required for new evidence")
+        for label, path in (("release manifest", args.release_manifest), ("Ymir", args.ymir), ("IPL", args.ipl), ("game", args.game), ("ELF", args.elf)):
             if not path.is_file():
                 raise ValueError(f"{label} is not a file: {path}")
-        args.ymir, args.ipl, args.game, args.elf, args.output = (
-            args.ymir.resolve(), args.ipl.resolve(), args.game.resolve(), args.elf.resolve(), args.output.resolve()
+        args.release_manifest, args.ymir, args.ipl, args.game, args.elf, args.output = (
+            args.release_manifest.resolve(), args.ymir.resolve(), args.ipl.resolve(), args.game.resolve(), args.elf.resolve(), args.output.resolve()
         )
+        stage = "release-manifest"
+        verified_release = bind_release_manifest(
+            args.release_manifest, args.game, args.elf
+        )
+        report["release_manifest_sha256"] = verified_release.manifest_sha256
         stage = "artifact-binding"
         report["artifacts"] = {**bind_capture_artifacts(args.game, args.elf), "ymir": artifact_identity(args.ymir)}
         if report["artifacts"]["ymir"] is None:
@@ -883,6 +923,7 @@ def main(argv: list[str] | None = None) -> int:
         identity_probe = build_elf_identity_probe(args.elf)
         report["identity_probe"] = {key: value for key, value in identity_probe.items() if key != "expected_bytes"}
         build_identity_probe = build_elf_build_identity_probe(args.elf)
+        validate_release_identity_probe(verified_release, build_identity_probe)
         report["elf_build_identity"] = {
             key: value for key, value in build_identity_probe.items()
             if key != "expected_bytes"

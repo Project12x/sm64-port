@@ -967,6 +967,7 @@ SOURCEBOOT_GENERATOR_INPUTS := $(sort \
   $(ROOT)/tools/saturn/target_profile.py \
   $(ROOT)/tools/saturn/hermetic_manifest.py \
   $(ROOT)/tools/saturn/gen_build_identity.py \
+  $(ROOT)/tools/saturn/release_manifest.py \
   $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
   $(ROOT)/tools/mario_anims_converter.py \
   $(ROOT)/tools/saturn/prepare_sourceboot_collision_catalog.py \
@@ -1090,6 +1091,26 @@ verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	  $(SOURCEBOOT_TOOLCHAIN_ARGS) \
 	  --verify "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
 	  --external-dependencies "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)"
+
+.PHONY: seal-release verify-release
+seal-release: verify-sealed-inputs $(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/release_manifest.py" write \
+	  --root "$(ROOT)" \
+	  --profile "$(SOURCEBOOT_RESOLVED_PROFILE)" \
+	  --source-closure "$(SOURCEBOOT_SOURCE_CLOSURE)" \
+	  --package-set "$(SOURCEBOOT_PACKAGE_SET)" \
+	  --toolchain-attestation "$(SOURCEBOOT_TOOLCHAIN_ATTESTATION)" \
+	  --mode "$(SOURCEBOOT_RELEASE_MODE)" \
+	  --identity-json "$(SOURCEBOOT_BUILD_IDENTITY_JSON)" \
+	  --elf "$(SH_BUILD_PATH)/$(SH_PROGRAM).elf" \
+	  --source-dat "$(SOURCEBOOT_CART_IMAGE)" \
+	  --iso "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).iso" \
+	  --cue "$(SH_OUTPUT_PATH)/$(SH_PROGRAM).cue" \
+	  --output "$(SOURCEBOOT_RELEASE_MANIFEST)"
+
+verify-release: seal-release
+	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/release_manifest.py" verify \
+	  --manifest "$(SOURCEBOOT_RELEASE_MANIFEST)"
 
 # Yaul's bundled rule declares the CUE's ISO prerequisite order-only. That
 # leaves a stale CUE whenever the ISO/ELF is rebuilt in place, and capture's
