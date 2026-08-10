@@ -1821,6 +1821,20 @@ checkouts must be refreshed at the resulting commit so the attribute takes
 effect; closure, compile, link, seal, and release gates remain open until the
 exact candidate rerun succeeds.
 
+The rerun from `e07d7ece` proved all selected JSON files were LF and again
+atomically published closure, external handoff, and attestation, but bootstrap
+still rejected the profile before compilation. Byte comparison isolated the
+remaining defect: `area_id`, added during Task 1 review repair, was appended at
+the end of `release_config` instead of its canonical sorted position. The
+profile's accepted values and meaning were correct; only its raw order was
+noncanonical. A real-file contract now requires the release profile and all ten
+selected descriptors to equal their canonical serialization. TDD was RED at
+12/13 target-profile tests with the release profile as the only failing file,
+then GREEN at 13/13; identity bootstrap remains GREEN at 15/15 and hermetic Make
+at 11/11. Discovery publication is distinguished from the still-open identity,
+compile, link, seal, and release gates pending the exact rerun from the resulting
+source commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

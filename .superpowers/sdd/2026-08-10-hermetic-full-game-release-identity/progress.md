@@ -1082,6 +1082,21 @@
   GREEN is 12/12 plus identity-bootstrap 15/15. Candidate worktrees must be
   refreshed at the behavior commit before the next exact run. Candidate A and
   all downstream target/release gates remain open.
+- Candidate A from `e07d7ece` had 422/422 tracked JSON paths confirmed LF and
+  blank tracked status. It completed dependency discovery and atomically
+  republished closure, external handoff, and attestation, but bootstrap still
+  rejected the target profile before compilation. The profile's raw LF digest
+  was `860049d357faf7cf8f7bf8d04f0494824d8c135495a59ec5c902b1d4ef153ddd`;
+  canonical serialization was
+  `0787d2a97015d7f99383b8bf2446f05420abb0672493a8583b27f4b1e6d3b94b`.
+- Remaining canonical-profile correction: Task 1's later `area_id` addition
+  preserved semantic configuration but appended the key after `slave_render`.
+  It now occupies its sorted canonical position. A real repository test binds
+  the release profile plus all ten selected descriptors to exact canonical
+  bytes. TDD RED was target-profile 12/13 with only that profile failing;
+  GREEN is target-profile 13/13, identity-bootstrap 15/15, and hermetic Make
+  11/11. Identity publication, compile, link, seal, and release gates remain
+  open pending the exact candidate rerun from the behavior commit.
 
 ## Task 5 review repair round 2
 

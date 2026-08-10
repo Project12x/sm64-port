@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Canonicalized the checked-in release profile's `release_config` key order.
+  The late-added `area_id` value was semantically correct but appended after
+  `slave_render`, so the byte-strict identity bootstrap correctly rejected the
+  profile even after LF checkout normalization. The accepted configuration is
+  unchanged; a repository fixture now verifies the real release profile and
+  every descriptor it selects are exact canonical JSON bytes.
+
 - Pinned every tracked JSON checkout to LF in `.gitattributes`. Git's Windows
   `core.autocrlf` conversion had changed otherwise-canonical target-profile
   bytes to CRLF in fresh Task 9 worktrees, so identity bootstrap correctly

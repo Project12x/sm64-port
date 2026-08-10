@@ -126,6 +126,18 @@ class TargetProfileTests(unittest.TestCase):
             [f"{path}: eol: lf" for path in paths],
         )
 
+    def test_release_profile_and_selected_descriptors_are_canonical_json(self) -> None:
+        profile = ROOT / "tools/saturn/profiles/sourceboot-bob-demo-v1.json"
+        profile_raw = profile.read_bytes()
+        profile_document = json.loads(profile_raw)
+        selected = [profile, *(
+            ROOT / relative for relative in profile_document["package_descriptors"]
+        )]
+        for path in selected:
+            with self.subTest(path=path.relative_to(ROOT).as_posix()):
+                raw = path.read_bytes()
+                self.assertEqual(raw, canonical_json_bytes(json.loads(raw)))
+
     def test_normalize_repo_path_rejects_escape_and_case_collision(self) -> None:
         with self.assertRaisesRegex(ValueError, "escapes repository"):
             normalize_repo_path(self.root, "../outside")
