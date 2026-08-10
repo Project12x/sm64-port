@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Made release cleanliness understand tracked Git submodule inputs without
+  exempting `third_party`. For every relevant nested path it now requires an
+  enclosing mode-160000 superproject index entry, an initialized checkout at
+  that exact pinned commit, and a tracked, clean nested file; it also rejects a
+  dirty/staged gitlink while ignoring unrelated submodule dirt outside the
+  closure. This lets pinned libyaul recipes pass the same tracked/clean gate as
+  superproject files instead of being misreported as untracked.
+
 - Distinguished generated-header children from compiler-search includes while
   sealing copied source assets. `water_skybox.c` legitimately quotes
   `types.h`, but that header lives on the repository include path rather than

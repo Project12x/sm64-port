@@ -578,6 +578,9 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
     )
     if not checked_in:
         return
+    gitlinks = _indexed_gitlinks(root)
+    direct_paths: list[str] = []
+    submodule_inputs: dict[str, list[str]] = {}
     for path in checked_in:
         tracked = subprocess.run(
             ["git", "ls-files", "--error-unmatch", "--", path],
@@ -586,10 +589,25 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
             capture_output=True,
             text=True,
         )
-        if tracked.returncode != 0:
+        if tracked.returncode == 0:
+            direct_paths.append(path)
+            continue
+        enclosing = max(
+            (gitlink for gitlink in gitlinks if path.startswith(f"{gitlink}/")),
+            key=len,
+            default=None,
+        )
+        if enclosing is None:
             raise ValueError(f"release closure input is not tracked: {path}")
+        submodule_inputs.setdefault(enclosing, []).append(
+            path.removeprefix(f"{enclosing}/")
+        )
+    for gitlink, paths in submodule_inputs.items():
+        _verify_submodule_inputs(root, gitlink, gitlinks[gitlink], paths)
+    status_paths = sorted(set(direct_paths) | set(submodule_inputs))
     result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all", "--", *checked_in],
+        ["git", "status", "--porcelain=v1", "--untracked-files=all",
+         "--ignore-submodules=dirty", "--", *status_paths],
         cwd=root,
         check=False,
         capture_output=True,
@@ -597,6 +615,62 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
     )
     if result.returncode != 0 or result.stdout:
         raise ValueError("release closure inputs are not clean")
+
+
+def _indexed_gitlinks(root: Path) -> dict[str, str]:
+    result = subprocess.run(
+        ["git", "ls-files", "--stage"], cwd=root, check=False,
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError("release closure Git index could not be read")
+    gitlinks: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        metadata, separator, path = line.partition("\t")
+        fields = metadata.split()
+        if not separator or len(fields) != 3:
+            raise ValueError("release closure Git index row is malformed")
+        mode, object_id, stage = fields
+        if mode == "160000" and stage == "0":
+            gitlinks[path] = object_id
+    return gitlinks
+
+
+def _verify_submodule_inputs(
+    root: Path, gitlink: str, expected_commit: str, paths: Sequence[str]
+) -> None:
+    submodule = (root / gitlink).resolve()
+    try:
+        submodule.relative_to(root.resolve())
+    except ValueError as error:
+        raise ValueError(f"release closure submodule escapes root: {gitlink}") from error
+    if not submodule.is_dir():
+        raise ValueError(f"release closure submodule is missing: {gitlink}")
+    command = [
+        "git", "-c", f"safe.directory={submodule.as_posix()}",
+        "-C", str(submodule),
+    ]
+    head = subprocess.run(
+        [*command, "rev-parse", "--verify", "HEAD"], check=False,
+        capture_output=True, text=True,
+    )
+    if head.returncode != 0 or head.stdout.strip() != expected_commit:
+        raise ValueError(f"release closure submodule is not at pinned commit: {gitlink}")
+    for path in paths:
+        tracked = subprocess.run(
+            [*command, "ls-files", "--error-unmatch", "--", path], check=False,
+            capture_output=True, text=True,
+        )
+        if tracked.returncode != 0:
+            raise ValueError(
+                f"release closure input is not tracked in submodule: {gitlink}/{path}"
+            )
+    status = subprocess.run(
+        [*command, "status", "--porcelain=v1", "--untracked-files=all", "--", *paths],
+        check=False, capture_output=True, text=True,
+    )
+    if status.returncode != 0 or status.stdout:
+        raise ValueError(f"release closure submodule inputs are not clean: {gitlink}")
 
 
 def _path_sort_key(path: Path) -> tuple[bytes, ...]:

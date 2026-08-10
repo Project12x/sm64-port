@@ -262,6 +262,58 @@ class SourceClosureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "release closure input is not tracked"):
             verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
 
+    def test_release_mode_requires_pinned_tracked_clean_submodule_inputs(self) -> None:
+        self.git_init_with_tracked_closure()
+        submodule = self.root / "third_party/sdk"
+        header = submodule / "include/sdk.h"
+        header.parent.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q"], cwd=submodule, check=True)
+        header.write_text("sdk-v1\n", encoding="utf-8")
+        subprocess.run(["git", "add", "include/sdk.h"], cwd=submodule, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test",
+             "commit", "-qm", "sdk-v1"],
+            cwd=submodule, check=True,
+        )
+        self.write(
+            "obj/main.d",
+            "obj/main.o: src/main.c include/main.h build/generated/scene.h "
+            "tools/saturn/gen_build_identity.py Makefile.saturn.mk "
+            "third_party/sdk/include/sdk.h\n",
+        )
+        subprocess.run(
+            ["git", "add", "obj/main.d", "third_party/sdk"], cwd=self.root, check=True
+        )
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test",
+             "commit", "-qm", "pin-sdk"],
+            cwd=self.root, check=True,
+        )
+
+        sealed = self.write_sealed_closure()
+        verify_source_closure(
+            self.root, sealed, self.depfiles, (), self.derived, (), (), True
+        )
+
+        header.write_text("dirty-sdk\n", encoding="utf-8")
+        sealed = self.write_sealed_closure()
+        with self.assertRaisesRegex(ValueError, "submodule inputs are not clean"):
+            verify_source_closure(
+                self.root, sealed, self.depfiles, (), self.derived, (), (), True
+            )
+
+        subprocess.run(["git", "add", "include/sdk.h"], cwd=submodule, check=True)
+        subprocess.run(
+            ["git", "-c", "user.email=test@example.invalid", "-c", "user.name=Test",
+             "commit", "-qm", "sdk-v2"],
+            cwd=submodule, check=True,
+        )
+        sealed = self.write_sealed_closure()
+        with self.assertRaisesRegex(ValueError, "submodule is not at pinned commit"):
+            verify_source_closure(
+                self.root, sealed, self.depfiles, (), self.derived, (), (), True
+            )
+
     def test_depfile_case_spelling_normalizes_to_the_repository_path_when_supported(self) -> None:
         alternate = self.root / "include/MAIN.h"
         if not alternate.is_file():

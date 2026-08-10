@@ -1270,6 +1270,23 @@
   0/1 and GREEN 1/1; combined Make/source-closure coverage remains GREEN 38/38
   with one existing case-filesystem skip. Candidate A must restart from the
   resulting common commit; release/reproducibility gates remain open.
+- Candidate A from `d816c3dc` published identity v2 tag
+  `id-0fe6b6cd91ccfeb5`, completed compile/link/package and external equality,
+  and classified all 1,022 PC generated inputs. Cleanliness then rejected
+  tracked libyaul recipe `third_party/libyaul/libyaul/build/build.post.bin.mk`
+  because the superproject indexes only its enclosing gitlink. No release
+  manifest or reproducibility gate is claimed.
+- Gitlink cleanliness correction: otherwise-untracked closure paths must map
+  to an indexed mode-160000 prefix; the initialized nested checkout must be at
+  that exact commit, and each relevant nested path must be tracked and clean
+  under exact scoped Git trust. The superproject gitlink also remains clean,
+  while unrelated nested dirt stays outside the closure. TDD was RED 0/1 and
+  GREEN 1/1 for clean, dirty-file, and unpinned-HEAD cases; combined closure,
+  Make, and attestation coverage is GREEN 55/55 with one existing case-
+  filesystem skip. Reference: clean-room integration of Git index/gitlink
+  semantics; no external source, copied bytes, license, or notice change.
+  Candidate A must restart from the resulting common commit; release and
+  reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

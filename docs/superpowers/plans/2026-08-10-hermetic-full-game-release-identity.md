@@ -2029,6 +2029,26 @@ pre-seal and post-link depfiles. A water-style regression was RED 0/1 and GREEN
 existing case-filesystem skip. Candidate A must restart from the resulting
 common source commit; all release/reproducibility gates remain open.
 
+Candidate A from `d816c3dc` published identity tag
+`id-0fe6b6cd91ccfeb5`, completed compile/link/package and external closure
+equality, and cleared the complete 1,022-row PC asset classification. Release
+cleanliness then rejected
+`third_party/libyaul/libyaul/build/build.post.bin.mk` because root
+`git ls-files` tracks the pinned libyaul checkout as a mode-160000 gitlink, not
+as individual superproject files. No release manifest or reproducibility gate
+is claimed. Cleanliness now maps only otherwise-untracked closure paths to an
+enclosing indexed gitlink, requires the initialized nested checkout HEAD to
+equal that exact index object, and requires each relevant nested path tracked
+and clean under an exact per-submodule `safe.directory`. The superproject
+gitlink must also be clean; unrelated nested dirt remains outside the closure.
+Focused TDD was RED 0/1 and GREEN 1/1 across clean, dirty relevant-file, and
+unpinned-HEAD cases; combined source-closure, hermetic-Make, and attestation
+coverage is GREEN 55/55 with one existing case-filesystem skip. Reference:
+clean-room integration of Git's existing indexed gitlink/checkout contract;
+no external source, copied bytes, license, or notice change. Candidate A must
+restart at the resulting common source commit; release/reproducibility remain
+open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
