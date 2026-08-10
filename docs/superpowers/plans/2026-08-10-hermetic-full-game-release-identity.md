@@ -422,20 +422,21 @@ Record tests and open gates, run specification review then code-quality review, 
 - Produces: `AttestationBuild(document: dict[str, Any], canonical: bytes, sha256: str, external_dependency_keys: frozenset[tuple[str, str]])`.
 - Produces: `build_toolchain_attestation(components: Sequence[ToolchainComponent], external_dependencies: Sequence[Path]) -> AttestationBuild` and `verify_toolchain_attestation(path: Path, components: Sequence[ToolchainComponent], external_dependencies: Sequence[Path]) -> dict[str, Any]`.
 
-Status: `source-complete`; the first independent combined specification/code-
+Status: `complete`; the first independent combined specification/code-
 quality review returned `Needs fixes` because an unchecked compiler-version
 string could serialize an absolute host path. The focused repair rejects
 absolute POSIX/Windows paths from programmatic component versions and GCC
 stdout before publication, but round 1 rereview found `file:///...` and
-`//host/path` bypasses. Repair round 2 rejects those forms while preserving
-ordinary relative version metadata; source-complete rereview is active and both
-review gates remain open. `external_dependency_keys` use
+`//host/path` bypasses. Repair commits `0b39b46d` and `f63e78d9` reject all
+reviewed forms while preserving ordinary relative version metadata; round 2
+rereview found the remaining finding addressed with no new breakage, clearing
+both review gates. `external_dependency_keys` use
 `(component_id, component-relative path)`,
 and the `yaul-sh-sdk` version string carries Yaul `0.3.1`, pinned commit
 `6012f79f237773378c8014e70d8998ad95a38d98`, and exact GCC `--version` stdout.
 This keeps component install roots diagnostic-only and out of canonical bytes.
 Source implementation commit: `1ab25c845b1a0c782db9e2aec0d27324763e6017`.
-Focused verification before repair: `test_gen_toolchain_attestation.py` passed 6 tests and
+Final focused verification: `test_gen_toolchain_attestation.py` passed 13 tests and
 the Task 2 closure regression passed 14 tests with one existing host-only skip.
 
 - [x] **Step 1: Write failing toolchain tests**
@@ -513,7 +514,7 @@ else:
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_source_closure.py
 ```
 
-- [ ] **Step 6: Update docs, commit, and clear both reviews**
+- [x] **Step 6: Update docs, commit, and clear both reviews**
 
 ```powershell
 git add CHANGELOG.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md tools/saturn/gen_toolchain_attestation.py tools/saturn/test_gen_toolchain_attestation.py
