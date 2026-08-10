@@ -1,4 +1,6 @@
+import os
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -29,6 +31,29 @@ class MsysToolchainEnvironmentTests(unittest.TestCase):
         makefile = (ROOT / "Makefile.saturn.mk").read_text()
         direct = re.findall(r"^\s*\$\(HOST_CC\)\s", makefile, re.MULTILINE)
         self.assertEqual(direct, [])
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell wrapper is Windows-only")
+    def test_mingw32_make_alias_selects_grouped_target_capable_msys_make(self) -> None:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(ROOT / "tools/saturn/with-msys-toolchain.ps1"),
+                "mingw32-make",
+                "--version",
+            ],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        match = re.search(r"GNU Make (\d+)\.(\d+)", result.stdout)
+        self.assertIsNotNone(match, result.stdout)
+        version = tuple(int(part) for part in match.groups())
+        self.assertGreaterEqual(version, (4, 3), result.stdout)
 
 
 if __name__ == "__main__":

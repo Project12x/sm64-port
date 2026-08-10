@@ -83,6 +83,14 @@
 
 ### Fixed
 
+- Fixed Windows target-build dispatch so the documented `mingw32-make`
+  wrapper spelling resolves to MSYS2 GNU Make and fails closed below 4.3.
+  Sourceboot requires grouped-target syntax, but an MSYS2 installation without
+  a same-named executable previously fell through to Qt Make 4.2.1, which
+  misparsed Yaul dependency discovery before any SH-2 compilation. Existing
+  build commands keep their spelling while now selecting the runtime they were
+  documented to require.
+
 - Hardened native-math audit-v4 publication and CLI preflight after review
   exposed three fail-closed gaps. The one-shot sealer now writes and fsyncs a
   privately owned same-directory file before atomically publishing the exact

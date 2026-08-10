@@ -1571,6 +1571,18 @@ non-reproducible artifact, forbidden audit caller, capacity/package failure, or
 release-verification failure stops sealing and staging rather than weakening a
 gate.
 
+The first exact candidate-A invocation was discarded before SH-2 compilation:
+the Windows wrapper resolved the documented `mingw32-make` spelling to inherited
+Qt GNU Make 4.2.1 because this MSYS2 installation names its installed Make
+`usr/bin/make.exe`. That compiler driver cannot parse sourceboot's documented
+GNU Make 4.3 grouped targets and misparsed Yaul dependency discovery. Task 9's
+narrow TDD correction maps only that public spelling to MSYS2 Make, checks the
+4.3 minimum, and otherwise preserves the exact command/flag tuple. Reference
+reuse is pattern-only from the in-tree full-path MSYS Make invocations and
+existing wrapper contract at controller base `8588d391`; no external source was
+copied. Candidate A must restart from the exact command after this separately
+reviewable behavior change, and all release gates remain open until then.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

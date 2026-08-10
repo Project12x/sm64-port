@@ -38,7 +38,26 @@ $pathParts = @($mingwBin, $usrBin) + @($env:PATH -split ';' | Where-Object { $_ 
 $env:PATH = ($pathParts | Select-Object -Unique) -join ';'
 
 $resolvedTool = $null
-if (Test-Path -LiteralPath $Tool) {
+if ($Tool -eq 'mingw32-make') {
+    # Sourceboot uses GNU Make grouped targets (`&:`), which require 4.3 or
+    # newer. MSYS2 names its compatible executable make.exe; do not fall
+    # through to an unrelated Qt mingw32-make from the inherited desktop PATH.
+    $resolvedTool = Join-Path $usrBin 'make.exe'
+    if (-not (Test-Path -LiteralPath $resolvedTool)) {
+        throw "MSYS2 GNU Make is missing: $resolvedTool"
+    }
+    $versionOutput = @(& $resolvedTool --version 2>&1)
+    $versionStatus = $LASTEXITCODE
+    $versionMatch = [regex]::Match(($versionOutput -join "`n"), 'GNU Make (\d+)\.(\d+)')
+    if ($versionStatus -ne 0 -or -not $versionMatch.Success) {
+        throw "Unable to determine MSYS2 GNU Make version: $resolvedTool"
+    }
+    $makeMajor = [int]$versionMatch.Groups[1].Value
+    $makeMinor = [int]$versionMatch.Groups[2].Value
+    if ($makeMajor -lt 4 -or ($makeMajor -eq 4 -and $makeMinor -lt 3)) {
+        throw "MSYS2 GNU Make 4.3 or newer is required: $resolvedTool"
+    }
+} elseif (Test-Path -LiteralPath $Tool) {
     $resolvedTool = (Resolve-Path -LiteralPath $Tool).Path
 } else {
     $command = Get-Command $Tool -ErrorAction SilentlyContinue

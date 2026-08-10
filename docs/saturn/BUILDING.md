@@ -321,8 +321,12 @@ and `C:\msys64\mingw64\bin` (or `MSYS2_ROOT`) before launching Make, GCC,
 objdump, or their helper processes. The verified user PATH should contain the
 same two directories for desktop tools launched outside Make; restart existing
 terminals/apps after changing PATH because Windows does not refresh an already
-running process. Do not copy DLLs beside individual executables or launch
-`sh-elf-*` tools from a bare PowerShell environment.
+running process. The wrapper treats the public `mingw32-make` spelling as the
+MSYS2 `usr\bin\make.exe` compatibility alias and requires GNU Make 4.3 or
+newer, because sourceboot uses grouped targets; it never falls through to an
+older Qt make from the inherited desktop PATH. Do not copy DLLs beside
+individual executables or launch `sh-elf-*` tools from a bare PowerShell
+environment.
 
 The command uses `python3` by default. If the MSYS2 shell does not expose a
 Python executable on `PATH`, set the repository's host Python explicitly, for
