@@ -699,7 +699,7 @@ rereview is active; both review gates remain open. The review's request to
 remeasure live compiler/header bytes here was withdrawn: Task 5 validates and
 rehashes the exact attestation document snapshot, while Task 6 owns the Task 3
 live verifier after link. Repair round 1 is `source-complete` with its commit
-pending below: 12 focused tests plus the 21 identity and 11 target-profile
+`ec546de2`: 12 focused tests plus the 21 identity and 11 target-profile
 regressions pass (44 total). TDD replaced the recursive repository-root
 contract with focused identity-v2 composition tests. The bootstrap now rehashes
 validated source closure, resolved-profile, package-class/package-set, and toolchain descriptors;
