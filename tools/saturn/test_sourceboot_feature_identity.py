@@ -46,10 +46,22 @@ class SourcebootFeatureIdentityTests(unittest.TestCase):
             "camera_idle_discovery": 0, "camera_range_capture": 0,
             "bsp_fragment_flat": 0, "fast3d_q16_trace": 0,
             "experimental_skip_geo_walk": 0,
+            "object_pool_capacity": 240,
             "artifacts": artifacts,
         }
         self.raw = identity.build_identity(self.spec).raw
         self.label = identity.identity_label(self.raw)
+        self.v2_spec = copy.deepcopy(self.spec)
+        self.v2_spec["identity_version"] = 2
+        for field in ("target_profile", "package_set", "toolchain_attestation"):
+            path = self.root / f"{field}.json"
+            path.write_bytes(f"{field}-descriptor\n".encode("ascii"))
+            self.v2_spec[field] = {
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        self.v2_raw = identity.build_identity(self.v2_spec).raw
+        self.v2_label = identity.identity_label(self.v2_raw)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -118,16 +130,45 @@ class SourcebootFeatureIdentityTests(unittest.TestCase):
     def test_resolver_rejects_absent_or_wrong_sized_elf_identity(self) -> None:
         with self.assertRaisesRegex(ValueError, "missing.*saturn_build_identity"):
             capture.resolve_build_identity_symbol({})
-        with self.assertRaisesRegex(ValueError, "wrong size"):
-            capture.resolve_build_identity_symbol(
-                {"saturn_build_identity": {"address": 0x06020000, "size": 403}}
-            )
-        self.assertEqual(
-            capture.resolve_build_identity_symbol(
-                {"saturn_build_identity": {"address": 0x06020000, "size": 404}}
-            )["address"],
-            0x06020000,
-        )
+        for unsupported_size in (403, 499, 501):
+            with self.subTest(size=unsupported_size):
+                with self.assertRaisesRegex(ValueError, "wrong size"):
+                    capture.resolve_build_identity_symbol(
+                        {"saturn_build_identity": {
+                            "address": 0x06020000,
+                            "size": unsupported_size,
+                        }}
+                    )
+        for supported_size in (404, 500):
+            with self.subTest(size=supported_size):
+                symbol = capture.resolve_build_identity_symbol(
+                    {"saturn_build_identity": {
+                        "address": 0x06020000,
+                        "size": supported_size,
+                    }}
+                )
+                self.assertEqual(symbol["address"], 0x06020000)
+                self.assertEqual(symbol["size"], supported_size)
+
+    def test_capture_rejects_every_mutated_v2_root(self) -> None:
+        self.assertEqual(identity.parse_identity(self.v2_raw)["version"], 2)
+        for field in (
+            "target_profile_hash",
+            "package_set_root_hash",
+            "toolchain_attestation_hash",
+        ):
+            with self.subTest(field=field):
+                mutant = identity.parse_identity(self.v2_raw)
+                mutant[field] = (
+                    ("00" if mutant[field][:2] != "00" else "ff")
+                    + mutant[field][2:]
+                )
+                with self.assertRaisesRegex(ValueError, "tuple"):
+                    capture.validate_build_identity(
+                        self.v2_raw,
+                        identity.pack_identity(mutant),
+                        expected_label=self.v2_label,
+                    )
 
     def test_make_wrapper_binds_every_additional_compiler_control(self) -> None:
         makefile = (

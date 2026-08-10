@@ -14,6 +14,8 @@ from typing import Any, Mapping
 
 MAGIC = 0x53424931  # SBI1
 VERSION = 1
+IDENTITY_V1_VERSION = 1
+IDENTITY_V2_VERSION = 2
 FEATURE_BITS = {
     "complete_mario_animation": 1 << 0,
     "dynamic_actor_closure": 1 << 1,
@@ -39,13 +41,22 @@ ARTIFACT_HASH_FIELDS = (
     "scene_dependency_set_hash", "actor_package_hash",
     "animation_package_hash", "audio_package_hash",
 )
-HASH_FIELDS = (
+V1_HASH_FIELDS = (
     "source_hash", "effective_config_hash", "route_artifact_hash",
     "input_artifact_hash", "camera_artifact_hash", "cart_profile_hash",
     "scene_package_hash", "scene_dependency_set_hash", "actor_package_hash",
     "animation_package_hash", "audio_package_hash",
 )
-IDENTITY_STRUCT = struct.Struct(
+HASH_FIELDS = V1_HASH_FIELDS  # Historical public alias.
+V2_ROOT_HASH_FIELDS = {
+    "target_profile": "target_profile_hash",
+    "package_set": "package_set_root_hash",
+    "toolchain_attestation": "toolchain_attestation_hash",
+}
+V2_ROOT_DESCRIPTOR_FIELDS = tuple(V2_ROOT_HASH_FIELDS)
+V2_APPENDED_HASH_FIELDS = tuple(V2_ROOT_HASH_FIELDS.values())
+V2_HASH_FIELDS = V1_HASH_FIELDS + V2_APPENDED_HASH_FIELDS
+V1_FORMAT = (
     ">IHHI"      # magic, version, size, features
     "HHHH"       # renderer, level, area, route
     "HH"         # replay, live input
@@ -53,9 +64,16 @@ IDENTITY_STRUCT = struct.Struct(
     "I"          # bootstrap ticks
     "HHHH"       # cart mbit/staging, hot promotion, near clip
     "HHHH"       # BSP order, polygon tier, fragmentation, reserved1
-    + "32s" * len(HASH_FIELDS)
+    + "32s" * len(V1_HASH_FIELDS)
 )
-IDENTITY_SIZE = IDENTITY_STRUCT.size
+IDENTITY_V1_STRUCT = struct.Struct(V1_FORMAT)
+IDENTITY_V2_STRUCT = struct.Struct(V1_FORMAT + "32s" * 3)
+IDENTITY_STRUCT = IDENTITY_V1_STRUCT  # Historical public alias.
+IDENTITY_V1_SIZE = IDENTITY_V1_STRUCT.size
+IDENTITY_V2_SIZE = IDENTITY_V2_STRUCT.size
+SUPPORTED_IDENTITY_SIZES = (IDENTITY_V1_SIZE, IDENTITY_V2_SIZE)
+IDENTITY_SIZE = IDENTITY_V2_SIZE
+COMMON_PREFIX_STRUCT = struct.Struct(">IHH")
 
 
 @dataclass(frozen=True)
@@ -183,8 +201,22 @@ def _sha256_file(field: str, descriptor: Any) -> str:
     return actual
 
 
+def canonical_effective_config(document: Mapping[str, Any]) -> bytes:
+    """Serialize the effective configuration exactly as its embedded digest."""
+    if not isinstance(document, Mapping):
+        raise ValueError("effective config must be an object")
+    return json.dumps(
+        document, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("ascii")
+
+
 def build_identity(spec: Mapping[str, Any]) -> BuiltIdentity:
     """Validate all inputs, hash their bytes, and create one canonical identity."""
+    identity_version = _choice(
+        "identity_version",
+        spec.get("identity_version", IDENTITY_V1_VERSION),
+        (IDENTITY_V1_VERSION, IDENTITY_V2_VERSION),
+    )
     scalars = _validate_scalars(spec)
     compiler_config = _validate_compiler_config(spec)
     features, feature_bits = _validate_features(spec.get("features"))
@@ -199,25 +231,38 @@ def build_identity(spec: Mapping[str, Any]) -> BuiltIdentity:
         field: _sha256_file(field, artifacts[field])
         for field in ARTIFACT_HASH_FIELDS
     }
+    root_hashes: dict[str, str] = {}
+    if identity_version == IDENTITY_V2_VERSION:
+        root_hashes = {
+            hash_field: _sha256_file(descriptor_field, spec.get(descriptor_field))
+            for descriptor_field, hash_field in V2_ROOT_HASH_FIELDS.items()
+        }
     canonical_object = {
-        "schema": "sm64-saturn-effective-config-v1",
+        "schema": f"sm64-saturn-effective-config-v{identity_version}",
         "features": features,
         **scalars,
         **compiler_config,
         "artifact_hashes": hashes,
     }
-    canonical = json.dumps(
-        canonical_object, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    ).encode("ascii")
+    if identity_version == IDENTITY_V2_VERSION:
+        canonical_object["identity_version"] = IDENTITY_V2_VERSION
+        canonical_object["root_hashes"] = root_hashes
+    canonical = canonical_effective_config(canonical_object)
+    identity_size = (
+        IDENTITY_V1_SIZE
+        if identity_version == IDENTITY_V1_VERSION
+        else IDENTITY_V2_SIZE
+    )
     values: dict[str, Any] = {
         "magic": MAGIC,
-        "version": VERSION,
-        "size": IDENTITY_SIZE,
+        "version": identity_version,
+        "size": identity_size,
         "feature_bits": feature_bits,
         **scalars,
         "reserved0": 0,
         "reserved1": 0,
         **hashes,
+        **root_hashes,
         "effective_config_hash": hashlib.sha256(canonical).hexdigest(),
     }
     raw = pack_identity(values)
@@ -262,6 +307,13 @@ def _parse_expectations(arguments: list[str]) -> dict[str, int]:
 
 
 def pack_identity(values: Mapping[str, Any]) -> bytes:
+    is_v2 = (
+        values.get("version") == IDENTITY_V2_VERSION
+        or values.get("size") == IDENTITY_V2_SIZE
+        or any(field in values for field in V2_APPENDED_HASH_FIELDS)
+    )
+    identity_struct = IDENTITY_V2_STRUCT if is_v2 else IDENTITY_V1_STRUCT
+    hash_fields = V2_HASH_FIELDS if is_v2 else V1_HASH_FIELDS
     ordered = (
         values["magic"], values["version"], values["size"],
         values["feature_bits"], values["renderer_pipeline"], values["level_id"],
@@ -272,15 +324,37 @@ def pack_identity(values: Mapping[str, Any]) -> bytes:
         values["cart_stage_sectors"], values["hot_promotion"],
         values["near_clip"], values["bsp_order"], values["polygon_tier"],
         values["fragment_mode"], values["reserved1"],
-        *(bytes.fromhex(str(values[field])) for field in HASH_FIELDS),
+        *(bytes.fromhex(str(values[field])) for field in hash_fields),
     )
-    return IDENTITY_STRUCT.pack(*ordered)
+    return identity_struct.pack(*ordered)
 
 
 def parse_identity(raw: bytes) -> dict[str, Any]:
-    if len(raw) != IDENTITY_SIZE:
-        raise ValueError(f"build identity has wrong size {len(raw)}, expected {IDENTITY_SIZE}")
-    unpacked = IDENTITY_STRUCT.unpack(raw)
+    if len(raw) < COMMON_PREFIX_STRUCT.size:
+        raise ValueError("build identity is shorter than its common prefix")
+    _magic, version, declared_size = COMMON_PREFIX_STRUCT.unpack_from(raw)
+    layouts = {
+        (IDENTITY_V1_VERSION, IDENTITY_V1_SIZE): (
+            IDENTITY_V1_STRUCT,
+            V1_HASH_FIELDS,
+        ),
+        (IDENTITY_V2_VERSION, IDENTITY_V2_SIZE): (
+            IDENTITY_V2_STRUCT,
+            V2_HASH_FIELDS,
+        ),
+    }
+    layout = layouts.get((version, declared_size))
+    if layout is None:
+        raise ValueError(
+            "build identity has unsupported version/size pair "
+            f"({version}, {declared_size})"
+        )
+    identity_struct, hash_fields = layout
+    if len(raw) != identity_struct.size:
+        raise ValueError(
+            f"build identity has wrong size {len(raw)}, expected {identity_struct.size}"
+        )
+    unpacked = identity_struct.unpack(raw)
     names = (
         "magic", "version", "size", "feature_bits", "renderer_pipeline",
         "level_id", "area_id", "route_id", "route_replay_mode",
@@ -290,7 +364,7 @@ def parse_identity(raw: bytes) -> dict[str, Any]:
         "fragment_mode", "reserved1",
     )
     values = dict(zip(names, unpacked[:len(names)]))
-    for field, value in zip(HASH_FIELDS, unpacked[len(names):]):
+    for field, value in zip(hash_fields, unpacked[len(names):]):
         values[field] = value.hex()
     return values
 
@@ -299,9 +373,11 @@ def validate_identity(raw: bytes, *, expected: bytes | None = None) -> dict[str,
     values = parse_identity(raw)
     if values["magic"] != MAGIC:
         raise ValueError("build identity has wrong magic")
-    if values["version"] != VERSION:
-        raise ValueError("build identity has wrong version")
-    if values["size"] != IDENTITY_SIZE:
+    expected_size = {
+        IDENTITY_V1_VERSION: IDENTITY_V1_SIZE,
+        IDENTITY_V2_VERSION: IDENTITY_V2_SIZE,
+    }[values["version"]]
+    if values["size"] != expected_size:
         raise ValueError("build identity declares wrong size")
     if values["feature_bits"] & ~KNOWN_FEATURE_BITS:
         raise ValueError("build identity has unknown feature bits")
@@ -319,7 +395,12 @@ def validate_identity(raw: bytes, *, expected: bytes | None = None) -> dict[str,
     _choice("polygon_tier", values["polygon_tier"], (0, 1, 2))
     if values["reserved0"] != 0 or values["reserved1"] != 0:
         raise ValueError("build identity reserved fields must be zero")
-    for field in HASH_FIELDS:
+    hash_fields = (
+        V1_HASH_FIELDS
+        if values["version"] == IDENTITY_V1_VERSION
+        else V2_HASH_FIELDS
+    )
+    for field in hash_fields:
         if values[field] == "00" * 32:
             raise ValueError(f"build identity {field} is absent")
     if expected is not None:
@@ -362,9 +443,14 @@ def identity_directory_tag(raw: bytes, *, expected: bytes | None = None) -> str:
 
 def emit_c_include(raw: bytes) -> str:
     values = validate_identity(raw)
+    hash_fields = (
+        V1_HASH_FIELDS
+        if values["version"] == IDENTITY_V1_VERSION
+        else V2_HASH_FIELDS
+    )
     hashes = {
         field: ", ".join(f"0x{byte:02x}" for byte in bytes.fromhex(values[field]))
-        for field in HASH_FIELDS
+        for field in hash_fields
     }
     return "\n".join((
         "/* Generated by tools/saturn/gen_build_identity.py; do not edit. */",
@@ -374,11 +460,33 @@ def emit_c_include(raw: bytes) -> str:
         f"  {values['route_replay_mode']}U, {values['live_input_mode']}U, {values['camera_route']}U, {values['camera_variant']}U, {values['diagnostic_mode']}U, 0U, \\",
         f"  {values['bootstrap_ticks']}U, {values['cart_mbit']}U, {values['cart_stage_sectors']}U, {values['hot_promotion']}U, {values['near_clip']}U, \\",
         f"  {values['bsp_order']}U, {values['polygon_tier']}U, {values['fragment_mode']}U, 0U, \\",
-        *(f"  {{ {hashes[field]} }}, \\" for field in HASH_FIELDS[:-1]),
-        f"  {{ {hashes[HASH_FIELDS[-1]]} }} \\",
+        *(f"  {{ {hashes[field]} }}, \\" for field in hash_fields[:-1]),
+        f"  {{ {hashes[hash_fields[-1]]} }} \\",
         "}",
         "",
     ))
+
+
+def output_manifest(built: BuiltIdentity) -> dict[str, Any]:
+    """Return JSON output only after binding config bytes to the embedded hash."""
+    values = validate_identity(built.raw)
+    try:
+        effective_config = json.loads(built.canonical_config.decode("ascii"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("effective config is not canonical JSON") from error
+    canonical = canonical_effective_config(effective_config)
+    digest = hashlib.sha256(canonical).hexdigest()
+    if canonical != built.canonical_config or digest != values["effective_config_hash"]:
+        raise ValueError("effective config canonical hash does not match identity")
+    manifest: dict[str, Any] = {
+        "schema": f"sm64-saturn-build-identity-v{values['version']}",
+        "label": identity_label(built.raw),
+        "identity_sha256": hashlib.sha256(built.raw).hexdigest(),
+        "identity": values,
+    }
+    if values["version"] == IDENTITY_V2_VERSION:
+        manifest["effective_config"] = effective_config
+    return manifest
 
 
 def _write(path: Path, data: str | bytes) -> None:
@@ -420,9 +528,7 @@ def main() -> int:
     if args.output_c_include:
         _write(args.output_c_include, emit_c_include(built.raw))
     if args.output_json:
-        manifest = {"schema": "sm64-saturn-build-identity-v1", "label": label,
-                    "identity_sha256": hashlib.sha256(built.raw).hexdigest(),
-                    "identity": parse_identity(built.raw)}
+        manifest = output_manifest(built)
         _write(args.output_json, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     if args.output_label:
         _write(args.output_label, label + "\n")

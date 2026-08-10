@@ -5,8 +5,8 @@
 #include <stdint.h>
 
 #define SM64_SATURN_BUILD_IDENTITY_MAGIC 0x53424931U
-#define SM64_SATURN_BUILD_IDENTITY_VERSION 1U
-#define SM64_SATURN_BUILD_IDENTITY_SIZE 404U
+#define SM64_SATURN_BUILD_IDENTITY_VERSION 2U
+#define SM64_SATURN_BUILD_IDENTITY_SIZE 500U
 
 enum sm64_saturn_feature_bits {
     SM64_SATURN_FEATURE_COMPLETE_MARIO_ANIMATION = 1U << 0,
@@ -31,6 +31,9 @@ typedef struct sm64_saturn_build_identity {
     uint8_t scene_package_hash[32], scene_dependency_set_hash[32];
     uint8_t actor_package_hash[32], animation_package_hash[32];
     uint8_t audio_package_hash[32];
+    uint8_t target_profile_hash[32];
+    uint8_t package_set_root_hash[32];
+    uint8_t toolchain_attestation_hash[32];
 } sm64_saturn_build_identity_t;
 
 extern const sm64_saturn_build_identity_t saturn_build_identity;

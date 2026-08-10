@@ -1,10 +1,15 @@
 #include "saturn_build_identity.h"
 
+#include <stddef.h>
+
 #include "saturn_build_identity_values.inc"
 
 _Static_assert(sizeof(sm64_saturn_build_identity_t) ==
                    SM64_SATURN_BUILD_IDENTITY_SIZE,
                "Saturn build identity ABI drift");
+_Static_assert(offsetof(sm64_saturn_build_identity_t, target_profile_hash) ==
+                   404U,
+               "Saturn build identity v1 prefix drift");
 
 const sm64_saturn_build_identity_t saturn_build_identity
     /* The guard runs before source_cart_load(), so this immutable tuple must

@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 TOOLS_DIR = Path(__file__).resolve().parent
@@ -69,9 +71,142 @@ class BuildIdentityGeneratorTests(unittest.TestCase):
             "object_pool_capacity": 240,
             "artifacts": self.artifacts,
         }
+        self.v1_spec = self.spec
+        self.v2_spec = copy.deepcopy(self.spec)
+        self.v2_spec["identity_version"] = 2
+        descriptor_bytes = {
+            "target_profile": b"canonical-target-profile-v1\n",
+            "package_set": b"canonical-package-set-v1\n",
+            "toolchain_attestation": b"canonical-toolchain-attestation-v1\n",
+        }
+        for field, payload in descriptor_bytes.items():
+            path = self.root / f"{field}.json"
+            path.write_bytes(payload)
+            digest = hashlib.sha256(payload).hexdigest()
+            self.v2_spec[field] = {"path": str(path), "sha256": digest}
+            setattr(self, f"{field}_sha256", digest)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
+
+    def mutate_descriptor(self, spec: dict[str, object], field: str) -> dict[str, object]:
+        changed = copy.deepcopy(spec)
+        path = self.root / f"{field}-mutated.json"
+        path.write_bytes(f"mutated-{field}\n".encode("ascii"))
+        changed[field] = {
+            "path": str(path),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+        return changed
+
+    def test_v1_fixture_remains_404_bytes_and_parses_identically(self) -> None:
+        built = identity.build_identity(self.v1_spec)
+        self.assertEqual(len(built.raw), 404)
+        self.assertEqual(identity.parse_identity(built.raw)["version"], 1)
+        self.assertEqual(
+            hashlib.sha256(built.raw).hexdigest(),
+            "faa7288b4c9fdf90ae14f01ab3af3752649b8e1ca78d77c47033425c9d68b23f",
+        )
+
+    def test_v2_extends_v1_layout_to_exactly_500_bytes(self) -> None:
+        built = identity.build_identity(self.v2_spec)
+        parsed = identity.parse_identity(built.raw)
+        self.assertEqual(identity.IDENTITY_V1_SIZE, 404)
+        self.assertEqual(identity.IDENTITY_V2_SIZE, 500)
+        self.assertEqual(identity.SUPPORTED_IDENTITY_SIZES, (404, 500))
+        self.assertEqual(identity.IDENTITY_SIZE, 500)
+        self.assertEqual(len(built.raw), 500)
+        self.assertEqual(parsed["version"], 2)
+        self.assertEqual(parsed["size"], 500)
+        self.assertEqual(parsed["target_profile_hash"], self.target_profile_sha256)
+        self.assertEqual(parsed["package_set_root_hash"], self.package_set_sha256)
+        self.assertEqual(
+            parsed["toolchain_attestation_hash"],
+            self.toolchain_attestation_sha256,
+        )
+        self.assertEqual(built.raw[404:436].hex(), self.target_profile_sha256)
+        self.assertEqual(built.raw[436:468].hex(), self.package_set_sha256)
+        self.assertEqual(built.raw[468:500].hex(), self.toolchain_attestation_sha256)
+
+    def test_v2_requires_every_root_descriptor(self) -> None:
+        for field in ("target_profile", "package_set", "toolchain_attestation"):
+            with self.subTest(field=field):
+                spec = copy.deepcopy(self.v2_spec)
+                del spec[field]
+                with self.assertRaisesRegex(ValueError, field):
+                    identity.build_identity(spec)
+
+    def test_v2_effective_config_covers_all_new_roots(self) -> None:
+        self.assertEqual(
+            identity.V2_ROOT_DESCRIPTOR_FIELDS,
+            ("target_profile", "package_set", "toolchain_attestation"),
+        )
+        baseline = identity.build_identity(self.v2_spec)
+        for field in identity.V2_ROOT_DESCRIPTOR_FIELDS:
+            changed = self.mutate_descriptor(self.v2_spec, field)
+            with self.subTest(field=field):
+                self.assertNotEqual(
+                    baseline.values["effective_config_hash"],
+                    identity.build_identity(changed).values["effective_config_hash"],
+                )
+
+    def test_v2_json_exposes_only_hash_verified_effective_config(self) -> None:
+        built = identity.build_identity(self.v2_spec)
+        manifest = identity.output_manifest(built)
+        canonical = identity.canonical_effective_config(
+            manifest["effective_config"]
+        )
+        self.assertEqual(
+            hashlib.sha256(canonical).hexdigest(),
+            manifest["identity"]["effective_config_hash"],
+        )
+        tampered = identity.BuiltIdentity(
+            raw=built.raw,
+            canonical_config=b'{"schema":"tampered"}',
+            values=built.values,
+        )
+        with self.assertRaisesRegex(ValueError, "effective config.*hash"):
+            identity.output_manifest(tampered)
+
+    def test_v2_c_initializer_appends_all_root_arrays_in_binary_order(self) -> None:
+        emitted = identity.emit_c_include(identity.build_identity(self.v2_spec).raw)
+        positions = []
+        for digest in (
+            self.target_profile_sha256,
+            self.package_set_sha256,
+            self.toolchain_attestation_sha256,
+        ):
+            rendered = ", ".join(
+                f"0x{byte:02x}" for byte in bytes.fromhex(digest)
+            )
+            positions.append(emitted.index(f"{{ {rendered} }}"))
+        self.assertEqual(positions, sorted(positions))
+
+    def test_cli_v2_json_uses_hash_verified_output_manifest(self) -> None:
+        spec_path = self.root / "identity-v2-spec.json"
+        output_path = self.root / "identity-v2.json"
+        spec_path.write_text(json.dumps(self.v2_spec), encoding="utf-8")
+        with mock.patch.object(
+            sys,
+            "argv",
+            [
+                "gen_build_identity.py",
+                "--spec",
+                str(spec_path),
+                "--output-json",
+                str(output_path),
+            ],
+        ):
+            self.assertEqual(identity.main(), 0)
+        manifest = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest["identity"]["version"], 2)
+        canonical = identity.canonical_effective_config(
+            manifest["effective_config"]
+        )
+        self.assertEqual(
+            hashlib.sha256(canonical).hexdigest(),
+            manifest["identity"]["effective_config_hash"],
+        )
 
     def test_emits_fixed_width_big_endian_versioned_identity(self) -> None:
         built = identity.build_identity(self.spec)

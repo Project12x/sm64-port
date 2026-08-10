@@ -547,7 +547,22 @@ Record exact tests, review verdicts, findings/fixes, and remaining target gates 
 - Produces: identity JSON containing the validated `effective_config` object whose canonical hash equals the embedded `effective_config_hash`, so staged v2 captures do not depend on a build-tree spec path.
 - Preserves: `build_identity(spec)`, `parse_identity(raw)`, `validate_identity(raw, expected=None)`, `identity_label(raw)`, `identity_directory_tag(raw)`, and historical v1 parsing.
 
-- [ ] **Step 1: Write failing v1/v2 layout and mutation tests**
+**Live status (2026-08-10): `source-complete`.** TDD preserves the exact
+404-byte v1 fixture (`faa7288b4c9fdf90ae14f01ab3af3752649b8e1ca78d77c47033425c9d68b23f`),
+proves the v2 size and root offsets at 500 bytes, compiles the C ABI contract,
+and exercises 404/500-byte ELF extraction and exact target reads. The four
+focused suites pass 61 tests (16 + 6 + 37 + 2); adjacent bootstrap and
+object-pool capture regressions pass 13 more (7 + 6). Independent specification
+and code-quality reviews remain controller-owned and open. Target build,
+reproducibility, audit v4, complete-package, 20,100-frame smoke, visual, and
+manual-play gates remain open; host tests do not close them.
+
+Design decision: the legacy `IDENTITY_STRUCT` and `HASH_FIELDS` aliases remain
+v1-compatible, while explicit v1/v2 structs select parsing from the immutable
+`>IHH` version/size prefix and the new-build `IDENTITY_SIZE` alias is 500. V2
+JSON is self-contained only after canonical effective-config rehash succeeds.
+
+- [x] **Step 1: Write failing v1/v2 layout and mutation tests**
 
 ```python
 def test_v1_fixture_remains_404_bytes_and_parses(self) -> None:
@@ -586,7 +601,7 @@ def test_v2_json_exposes_hash_verified_effective_config(self) -> None:
 
 Add capture tests that accept symbol sizes 404 and 500, read exactly the symbol's declared size, reject 403/499/501, and validate the correct version. Add C contract tests for version 2, size 500, and the three appended 32-byte arrays.
 
-- [ ] **Step 2: Run focused tests and observe RED**
+- [x] **Step 2: Run focused tests and observe RED**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py
@@ -597,7 +612,7 @@ Add capture tests that accept symbol sizes 404 and 500, read exactly the symbol'
 
 Expected: new v2 constants/fields are absent.
 
-- [ ] **Step 3: Split the binary layouts by version**
+- [x] **Step 3: Split the binary layouts by version**
 
 ```python
 IDENTITY_V1_STRUCT = struct.Struct(V1_FORMAT)
@@ -610,7 +625,7 @@ IDENTITY_SIZE = IDENTITY_V2_SIZE
 
 Read the common `>IHH` prefix first, require `(version, size)` to be `(1, 404)` or `(2, 500)`, then unpack with the matching struct. A spec without `identity_version` remains v1 for historical tests and tooling. A spec with `identity_version: 2` requires all three new descriptors and uses schema `sm64-saturn-effective-config-v2`. Factor `canonical_effective_config(document: Mapping[str, Any]) -> bytes` and `output_manifest(built: BuiltIdentity) -> dict[str, Any]`; the CLI JSON output uses the latter and includes the effective-config object only after rehashing it against the embedded digest.
 
-- [ ] **Step 4: Extend target C ABI and generated initializer**
+- [x] **Step 4: Extend target C ABI and generated initializer**
 
 Append exactly:
 
@@ -622,7 +637,7 @@ uint8_t toolchain_attestation_hash[32];
 
 Set target constants to version 2 and size 500. Preserve magic `SBI1`, field order, endianness, and the 404-byte prefix. Keep the static assert and add an offset assertion that `offsetof(sm64_saturn_build_identity_t, target_profile_hash) == 404U`.
 
-- [ ] **Step 5: Make capture probe size version-aware**
+- [x] **Step 5: Make capture probe size version-aware**
 
 Resolve `saturn_build_identity` with `{BUILD_IDENTITY_SYMBOL: build_identity.SUPPORTED_IDENTITY_SIZES}`, use `symbol['size']` for ELF extraction and target reads, then call `validate_identity(raw)`. Never truncate a v2 symbol to 404 bytes.
 
@@ -637,7 +652,7 @@ return {"address": symbol["address"], "size": symbol["size"],
         "expected_bytes": list(raw), "identity": parsed}
 ```
 
-- [ ] **Step 6: Run all focused identity/capture tests**
+- [x] **Step 6: Run all focused identity/capture tests**
 
 ```powershell
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_gen_build_identity.py

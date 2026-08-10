@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ try:
     import capture_sourceboot_throughput as capture
 except ModuleNotFoundError as error:
     raise AssertionError("sourceboot throughput capture helper is missing") from error
+import gen_build_identity as identity
 
 
 BOOT_ADDRESS = 0x06010000
@@ -117,6 +119,7 @@ def elf32_with_symbols(
     text_type: int = 1,
     text_flags: int = 0x6,
     loadable: bool = True,
+    text_payload: bytes | None = None,
 ) -> None:
     """Create a tiny big-endian ELF32 with one executable and one symbol table section."""
     names = b"\x00" + b"\x00".join(name.encode("ascii") for name, _, _ in symbols) + b"\x00"
@@ -132,7 +135,8 @@ def elf32_with_symbols(
     section_offset = 52
     section_count = 4
     text_offset = 0x200
-    symtab_offset = 0x240
+    text_payload = bytes(range(32)) if text_payload is None else text_payload
+    symtab_offset = (text_offset + len(text_payload) + 15) & ~15
     strtab_offset = symtab_offset + 16 * len(entries)
     image = bytearray(strtab_offset + len(names))
     image[:4] = b"\x7fELF"
@@ -150,15 +154,15 @@ def elf32_with_symbols(
     text[8:12] = text_flags.to_bytes(4, "big")
     text[12:16] = BOOT_ADDRESS.to_bytes(4, "big")
     text[16:20] = text_offset.to_bytes(4, "big")
-    text[20:24] = (32).to_bytes(4, "big")
-    image[text_offset : text_offset + 32] = bytes(range(32))
+    text[20:24] = len(text_payload).to_bytes(4, "big")
+    image[text_offset : text_offset + len(text_payload)] = text_payload
     if loadable:
         segment = memoryview(image)[0xE0 : 0xE0 + 32]
         segment[0:4] = (1).to_bytes(4, "big")  # PT_LOAD
         segment[4:8] = text_offset.to_bytes(4, "big")
         segment[8:12] = BOOT_ADDRESS.to_bytes(4, "big")
-        segment[16:20] = (32).to_bytes(4, "big")
-        segment[20:24] = (32).to_bytes(4, "big")
+        segment[16:20] = len(text_payload).to_bytes(4, "big")
+        segment[20:24] = len(text_payload).to_bytes(4, "big")
         segment[24:28] = (0x5).to_bytes(4, "big")
     # symtab
     symtab = memoryview(image)[section_offset + 80 : section_offset + 120]
@@ -183,7 +187,114 @@ def elf32_with_symbols(
     path.write_bytes(image)
 
 
+def build_identity_fixture(root: Path, version: int) -> bytes:
+    root.mkdir(parents=True, exist_ok=True)
+    artifacts: dict[str, dict[str, str]] = {}
+    for index, field in enumerate(identity.ARTIFACT_HASH_FIELDS):
+        path = root / f"{field}.bin"
+        path.write_bytes(f"capture-artifact-{index}\n".encode("ascii"))
+        artifacts[field] = {
+            "path": str(path),
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    spec: dict[str, object] = {
+        "features": {
+            "complete_mario_animation": 1,
+            "dynamic_actor_closure": 1,
+            "semantic_audio": 0,
+        },
+        "renderer_pipeline": 4,
+        "level_id": 9,
+        "area_id": 1,
+        "route_id": 7,
+        "route_replay_mode": 1,
+        "live_input_mode": 1,
+        "camera_route": 0,
+        "camera_variant": 3,
+        "diagnostic_mode": 0,
+        "bootstrap_ticks": 600,
+        "cart_mbit": 32,
+        "cart_stage_sectors": 8,
+        "hot_promotion": 1,
+        "near_clip": 1,
+        "bsp_order": 1,
+        "polygon_tier": 2,
+        "fragment_mode": 0,
+        "atan2_variant": 2,
+        "demo_path": 1,
+        "demo_view_radius": 6000,
+        "slave_render": 1,
+        "camera_idle_start_tick": 0,
+        "camera_idle_discovery": 0,
+        "camera_range_capture": 0,
+        "bsp_fragment_flat": 0,
+        "fast3d_q16_trace": 0,
+        "experimental_skip_geo_walk": 0,
+        "object_pool_capacity": 240,
+        "artifacts": artifacts,
+    }
+    if version == 2:
+        spec["identity_version"] = 2
+        for field in ("target_profile", "package_set", "toolchain_attestation"):
+            path = root / f"{field}.json"
+            path.write_bytes(f"{field}-capture-descriptor\n".encode("ascii"))
+            spec[field] = {
+                "path": str(path),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+    return identity.build_identity(spec).raw
+
+
 class ThroughputCaptureTests(unittest.TestCase):
+    def test_build_identity_probe_and_target_read_use_declared_v1_or_v2_size(self) -> None:
+        class ExactIdentityClient:
+            def __init__(self, raw: bytes) -> None:
+                self.raw = raw
+                self.requests: list[dict[str, int]] = []
+
+            def call(self, method: str, parameters: dict[str, int]):
+                self.requests.append({"method": method, **parameters})
+                return {"data": list(self.raw)}
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for version, expected_size in ((1, 404), (2, 500)):
+                with self.subTest(version=version):
+                    raw = build_identity_fixture(root / f"v{version}", version)
+                    elf = root / f"v{version}.elf"
+                    elf32_with_symbols(
+                        elf,
+                        [("saturn_build_identity", BOOT_ADDRESS, expected_size)],
+                        text_payload=raw,
+                    )
+                    probe = capture.build_elf_build_identity_probe(elf)
+                    self.assertEqual(probe["size"], expected_size)
+                    self.assertEqual(probe["expected_bytes"], list(raw))
+                    self.assertEqual(probe["identity"]["version"], version)
+                    client = ExactIdentityClient(raw)
+                    result = capture.prove_loaded_build_identity(client, probe)
+                    self.assertEqual(result["size"], expected_size)
+                    self.assertEqual(result["identity"]["version"], version)
+                    self.assertEqual(client.requests, [{
+                        "method": "mem.peek",
+                        "address": BOOT_ADDRESS | capture.P2_ALIAS_BIT,
+                        "count": expected_size,
+                    }])
+
+    def test_build_identity_probe_rejects_every_unsupported_symbol_size(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for unsupported_size in (403, 499, 501):
+                with self.subTest(size=unsupported_size):
+                    elf = root / f"identity-{unsupported_size}.elf"
+                    elf32_with_symbols(
+                        elf,
+                        [("saturn_build_identity", BOOT_ADDRESS, unsupported_size)],
+                        text_payload=bytes(unsupported_size),
+                    )
+                    with self.assertRaisesRegex(ValueError, "wrong size"):
+                        capture.build_elf_build_identity_probe(elf)
+
     def test_runtime_layouts_match_exact_reviewed_source_evolution(self) -> None:
         self.assertEqual(
             capture.RUNTIME_LAYOUTS,

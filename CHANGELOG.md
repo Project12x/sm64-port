@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added backward-compatible Saturn build identity v2. New target identities
+  preserve the exact 404-byte v1 binary layout as their prefix and append
+  target-profile, package-set, and toolchain-attestation roots for a 500-byte
+  ABI, while specs without `identity_version` still emit historical v1 bytes.
+  Capture tools now read exactly the ELF symbol's declared supported size and
+  reject all other sizes; v2 JSON exposes its effective configuration only
+  after its canonical SHA-256 matches the embedded digest, preventing truncated
+  target proofs or build-tree-path-dependent release evidence.
+
 - Added a deterministic Saturn toolchain-attestation v1 seal. It measures the
   exact invoked Yaul SH-ELF binaries and compiler version plus every
   compiler-discovered external dependency, while serializing only

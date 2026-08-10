@@ -208,10 +208,11 @@ def resolve_build_identity_symbol(
     symbol = symbols.get(BUILD_IDENTITY_SYMBOL)
     if symbol is None:
         raise ValueError(f"ELF is missing required symbol {BUILD_IDENTITY_SYMBOL}")
-    if symbol.get("size") != build_identity.IDENTITY_SIZE:
+    if symbol.get("size") not in build_identity.SUPPORTED_IDENTITY_SIZES:
         raise ValueError(
             f"ELF symbol {BUILD_IDENTITY_SYMBOL} has wrong size "
-            f"{symbol.get('size')}, expected {build_identity.IDENTITY_SIZE}"
+            f"{symbol.get('size')}, known sizes "
+            + ", ".join(str(size) for size in build_identity.SUPPORTED_IDENTITY_SIZES)
         )
     return symbol
 
@@ -231,14 +232,14 @@ def _elf_symbol_bytes(elf: Path, symbol: dict[str, int]) -> bytes:
 
 def build_elf_build_identity_probe(elf: Path) -> dict[str, Any]:
     symbols = _resolve_symbols(
-        elf, {BUILD_IDENTITY_SYMBOL: build_identity.IDENTITY_SIZE}
+        elf, {BUILD_IDENTITY_SYMBOL: build_identity.SUPPORTED_IDENTITY_SIZES}
     )
     symbol = resolve_build_identity_symbol(symbols)
     raw = _elf_symbol_bytes(elf, symbol)
     parsed = build_identity.validate_identity(raw)
     return {
         "address": int(symbol["address"]),
-        "size": build_identity.IDENTITY_SIZE,
+        "size": int(symbol["size"]),
         "expected_bytes": list(raw),
         "sha256": hashlib.sha256(raw).hexdigest(),
         "label": build_identity.identity_label(raw),
