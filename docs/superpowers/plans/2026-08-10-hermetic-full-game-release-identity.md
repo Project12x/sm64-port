@@ -1583,6 +1583,14 @@ existing wrapper contract at controller base `8588d391`; no external source was
 copied. Candidate A must restart from the exact command after this separately
 reviewable behavior change, and all release gates remain open until then.
 
+The first post-fix restart was also discarded before identity discovery: MSYS
+Make passed the plan's backslash-form `SOURCEBOOT_PYTHON` assignment into
+`/bin/sh`, where the backslashes became escapes and the interpreter path became
+`D:Code...python.exe`. Direct wrapper execution proved that the same exact
+interpreter launches as `D:/Code/.../python.exe`. The binding below therefore
+normalizes only that explicit assignment to forward slashes; the profile,
+release mode, toolchain, `-j1`, and all accepted BOB flags remain unchanged.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
@@ -1626,7 +1634,7 @@ $task9MakeArguments = @(
 function Invoke-HermeticBobBuild([string]$repoRoot) {
     Push-Location $repoRoot
     try {
-        $python = Join-Path $implementationRoot '.venv-saturn-tools\Scripts\python.exe'
+        $python = (Join-Path $implementationRoot '.venv-saturn-tools\Scripts\python.exe').Replace('\', '/')
         $arguments = @($task9MakeArguments) + @("SOURCEBOOT_PYTHON=$python")
         powershell -ExecutionPolicy Bypass -File tools\saturn\with-msys-toolchain.ps1 `
             mingw32-make @arguments
