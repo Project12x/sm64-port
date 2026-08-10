@@ -1228,6 +1228,19 @@
   boundary in `extract_assets.py`/`gen_source_closure.py`; no external source,
   copied bytes, license, or notice change. Candidate A must restart from the
   resulting common commit; release/reproducibility gates remain open.
+- Candidate A from `e943e2b0` emitted the strict 1,021-row PC asset inventory
+  and then stopped before closure publication on duplicate explicit ownership.
+  The exact normalized overlap was only `build/us_pc/bin/water_skybox.c` and
+  `build/us_pc/include/text_strings.h`: both were in the new authoritative
+  inventory and the legacy static generated list. No identity, compile,
+  release manifest, or reproducibility gate is claimed.
+- Duplicate-ownership correction: strict rejection remains unchanged; the PC
+  inventory is the sole explicit owner of those two verified rows, which are
+  filtered only from the static list. Compiled-source exclusion and semantic
+  byte hashing remain unchanged. TDD RED was 0/1 and GREEN 1/1; combined Make
+  and source-closure coverage remains GREEN 38/38 with one existing case-
+  filesystem skip. Candidate A must restart at the resulting common commit;
+  release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

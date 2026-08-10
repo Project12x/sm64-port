@@ -1982,6 +1982,21 @@ same-repository close-port of the strict path-list boundary already used by
 bytes, license, or notice change. Candidate A must restart from the resulting
 common source commit; release and reproducibility gates remain open.
 
+The first candidate restart from `e943e2b0` emitted a canonical 1,021-row PC
+asset inventory but stopped before closure publication on strict duplicate
+explicit ownership. Exactly two required rows, `build/us_pc/bin/water_skybox.c`
+and `build/us_pc/include/text_strings.h`, were present in both the new inventory
+and the legacy static generated-input list; Windows/MSYS transport spellings
+differed but canonical repository paths were equal. Duplicate rejection stays
+fail-closed. The PC inventory is now the sole explicit owner of those two rows
+by filtering them from only the static list; compiled-source exclusion remains
+unchanged, and the same bytes retain generated-input classification through
+the verified inventory. Focused TDD was RED 0/1 and GREEN 1/1; combined Make
+and source-closure coverage remains GREEN 38/38 with one existing case-
+filesystem skip. No identity, compile, release manifest, or reproducibility
+gate is claimed from the failed run. Candidate A must restart at the resulting
+common source commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

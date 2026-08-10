@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Made the canonical `build/us_pc` inventory the sole explicit owner of its
+  required `water_skybox.c` and `text_strings.h` rows. Those two paths had
+  remained in the legacy static generated-input list, so Windows/MSYS path
+  normalization correctly exposed duplicate ownership and stopped release
+  discovery; filtering them from the static list preserves strict duplicate
+  rejection while retaining the same hashed bytes and generated-input class.
+
 - Classified every verified candidate-local `build/us_pc` source asset as an
   explicit generated input before Saturn release sealing. Sourceboot now
   publishes the exact selected asset paths through a canonical, atomically

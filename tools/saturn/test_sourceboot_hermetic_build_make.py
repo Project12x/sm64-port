@@ -467,6 +467,16 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             '--path-list "$(SOURCEBOOT_PC_ASSET_LIST)"',
             self.sourceboot_makefile(),
         )
+        self.assertIn(
+            "SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS := "
+            "$(SOURCEBOOT_WATER_SKYBOX) $(ROOT)/$(SOURCEBOOT_TEXT_STRINGS)",
+            self.sourceboot_makefile(),
+        )
+        self.assertIn(
+            "SOURCEBOOT_GENERATED_INPUTS := $(filter-out "
+            "$(SOURCEBOOT_PC_ASSET_REQUIRED_INPUTS),$(sort",
+            self.sourceboot_makefile(),
+        )
         self.assertNotIn("--compiled-source \"", result.stdout)
         self.assertNotIn("--depfile \"", result.stdout)
 
