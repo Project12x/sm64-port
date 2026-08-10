@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import sys
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +73,21 @@ class StageSaturnReleaseTests(unittest.TestCase):
             "saturn-release-manifest-v1.json",
         ])
         self.assertFalse((destination / "notes.txt").exists())
+
+    def test_clean_preexisting_empty_destination_leaves_no_backup(self) -> None:
+        fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
+        manifest = fixture.write()
+        destination = self.root / "preexisting-empty"
+        destination.mkdir()
+        stage_saturn_release.stage_release(manifest, destination)
+        self.assertEqual(
+            list(
+                destination.parent.glob(
+                    f".sm64-saturn-quarantine-{destination.name}-*"
+                )
+            ),
+            [],
+        )
 
     def test_stage_copies_the_verified_snapshot_after_every_source_mutates(self) -> None:
         fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
@@ -154,12 +171,12 @@ class StageSaturnReleaseTests(unittest.TestCase):
                     destination.mkdir()
                 calls = 0
 
-                def fail_final_verify(path: Path):
+                def fail_final_verify(path: Path, **kwargs: object):
                     nonlocal calls
                     calls += 1
-                    if calls == 2:
+                    if calls == 3:
                         raise ValueError("injected final verification failure")
-                    return real_verify(path)
+                    return real_verify(path, **kwargs)
 
                 with (
                     mock.patch.object(
@@ -176,6 +193,9 @@ class StageSaturnReleaseTests(unittest.TestCase):
                     self.assertEqual(list(destination.iterdir()), [])
                 else:
                     self.assertFalse(destination.exists())
+
+                staged = stage_saturn_release.stage_release(manifest, destination)
+                self.assertTrue((staged / release_manifest.MANIFEST_NAME).is_file())
 
     def test_rollback_preserves_a_foreign_replacement_at_an_owned_path(self) -> None:
         fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
@@ -205,16 +225,20 @@ class StageSaturnReleaseTests(unittest.TestCase):
             stage_saturn_release.stage_release(manifest, destination)
 
         self.assertIsNotNone(foreign_target)
-        self.assertEqual(foreign_target.read_bytes(), b"foreign concurrent content")
+        preserved = [
+            path
+            for path in self.root.rglob(foreign_target.name)
+            if path.is_file() and path.read_bytes() == b"foreign concurrent content"
+        ]
+        self.assertTrue(preserved)
         self.assertTrue(
-            any("rollback failures" in note for note in getattr(caught.exception, "__notes__", []))
+            any("quarantine" in note for note in getattr(caught.exception, "__notes__", []))
         )
 
     def test_stage_rejects_destination_directory_replacement_without_deleting_foreign_data(self) -> None:
         fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
         manifest = fixture.write()
         destination = self.root / "replace-destination"
-        displaced = self.root / "displaced-owned-destination"
         real_copy = stage_saturn_release._copy_new
         replaced = False
 
@@ -222,22 +246,169 @@ class StageSaturnReleaseTests(unittest.TestCase):
             nonlocal replaced
             if not replaced:
                 replaced = True
-                destination.rename(displaced)
                 destination.mkdir()
                 (destination / "foreign.txt").write_bytes(b"foreign")
-                target.parent.mkdir(parents=True, exist_ok=True)
             return real_copy(source, target)
 
         with (
             mock.patch.object(
                 stage_saturn_release, "_copy_new", side_effect=replace_destination
             ),
-            self.assertRaisesRegex(ValueError, "directory was replaced"),
+            self.assertRaisesRegex(ValueError, "contaminated"),
         ):
             stage_saturn_release.stage_release(manifest, destination)
 
-        self.assertEqual((destination / "foreign.txt").read_bytes(), b"foreign")
-        self.assertTrue(displaced.is_dir())
+        self.assertFalse(destination.exists())
+        self.assertTrue(
+            any(
+                path.read_bytes() == b"foreign"
+                for path in self.root.rglob("foreign.txt")
+                if path.is_file()
+            )
+        )
+
+    def test_ancestor_swap_before_publication_cannot_redirect_writes(self) -> None:
+        fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
+        manifest = fixture.write()
+        ancestor = self.root / "publication-ancestor"
+        publication_parent = ancestor / "publication-parent"
+        publication_parent.mkdir(parents=True)
+        destination = publication_parent / "staged"
+        displaced_parent = self.root / "displaced-ancestor"
+        outside = self.root / "outside"
+        outside.mkdir()
+        real_publish = stage_saturn_release._publish_private_tree
+
+        def swap_ancestor_then_publish(*args: object, **kwargs: object):
+            try:
+                ancestor.rename(displaced_parent)
+                ancestor.symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                raise OSError("injected ancestor swap was blocked") from error
+            return real_publish(*args, **kwargs)
+
+        with (
+            mock.patch.object(
+                stage_saturn_release,
+                "_publish_private_tree",
+                side_effect=swap_ancestor_then_publish,
+            ),
+            self.assertRaises((OSError, ValueError)),
+        ):
+            stage_saturn_release.stage_release(manifest, destination)
+
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse((outside / "staged").exists())
+
+    def test_destination_rejects_a_junction_anywhere_in_ancestor_chain(self) -> None:
+        fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
+        manifest = fixture.write()
+        real_parent = self.root / "real-parent"
+        real_parent.mkdir()
+        alias = self.root / "ancestor-alias"
+        if os.name == "nt":
+            created = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(alias), str(real_parent)],
+                capture_output=True,
+                text=True,
+            )
+            if created.returncode:
+                self.skipTest(f"cannot create Windows junction: {created.stderr}")
+        else:
+            alias.symlink_to(real_parent, target_is_directory=True)
+
+        with self.assertRaisesRegex(ValueError, "symlink|junction|reparse"):
+            stage_saturn_release.stage_release(manifest, alias / "staged")
+        self.assertEqual(list(real_parent.iterdir()), [])
+
+    def test_concurrent_destination_extra_is_quarantined_and_retryable(self) -> None:
+        fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
+        manifest = fixture.write()
+        real_publish = stage_saturn_release._publish_private_tree
+        for destination_preexists in (False, True):
+            with self.subTest(destination_preexists=destination_preexists):
+                destination = self.root / f"contaminated-{destination_preexists}"
+                if destination_preexists:
+                    destination.mkdir()
+                injected = False
+
+                def contaminate_then_publish(*args: object, **kwargs: object):
+                    nonlocal injected
+                    if not injected:
+                        injected = True
+                        destination.mkdir(exist_ok=True)
+                        (destination / "foreign.txt").write_bytes(b"foreign")
+                    return real_publish(*args, **kwargs)
+
+                with (
+                    mock.patch.object(
+                        stage_saturn_release,
+                        "_publish_private_tree",
+                        side_effect=contaminate_then_publish,
+                    ),
+                    self.assertRaisesRegex(ValueError, "contaminated|not empty"),
+                ):
+                    stage_saturn_release.stage_release(manifest, destination)
+
+                if destination_preexists:
+                    self.assertTrue(destination.is_dir())
+                    self.assertEqual(list(destination.iterdir()), [])
+                else:
+                    self.assertFalse(destination.exists())
+                quarantines = list(
+                    destination.parent.glob(
+                        f".sm64-saturn-quarantine-{destination.name}-*"
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        (path / "foreign.txt").read_bytes() == b"foreign"
+                        for path in quarantines
+                        if (path / "foreign.txt").is_file()
+                    )
+                )
+                staged = stage_saturn_release.stage_release(manifest, destination)
+                self.assertTrue((staged / release_manifest.MANIFEST_NAME).is_file())
+
+    def test_extra_created_after_publish_fails_exactly_and_is_quarantined(self) -> None:
+        fixture = release_fixtures.ReleaseFixture(self.root / "release-source")
+        manifest = fixture.write()
+        destination = self.root / "post-publish-extra"
+        real_verify = stage_saturn_release.verify_release_manifest
+        calls = 0
+
+        def contaminate_final_verify(path: Path, **kwargs: object):
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                (destination / "foreign.txt").write_bytes(b"foreign")
+            return real_verify(path, **kwargs)
+
+        with (
+            mock.patch.object(
+                stage_saturn_release,
+                "verify_release_manifest",
+                side_effect=contaminate_final_verify,
+            ),
+            self.assertRaisesRegex(ValueError, "inventory"),
+        ):
+            stage_saturn_release.stage_release(manifest, destination)
+
+        self.assertFalse(destination.exists())
+        quarantines = list(
+            destination.parent.glob(
+                f".sm64-saturn-quarantine-{destination.name}-*"
+            )
+        )
+        self.assertTrue(
+            any(
+                (path / "foreign.txt").read_bytes() == b"foreign"
+                for path in quarantines
+                if (path / "foreign.txt").is_file()
+            )
+        )
+        staged = stage_saturn_release.stage_release(manifest, destination)
+        self.assertTrue((staged / release_manifest.MANIFEST_NAME).is_file())
 
 
 class StageSaturnReleaseMissingImplementationTests(unittest.TestCase):

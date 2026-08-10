@@ -71,6 +71,19 @@
 
 ### Fixed
 
+- Closed the remaining exact-release namespace races. Canonical manifests are
+  now parsed and hashed only from no-follow opened-file snapshots whose object
+  and full ancestor identities are checked around the read. Staging assembles
+  and exactly verifies a manifest-last private sibling tree before atomic
+  no-replace publication; Windows directory handles pin active namespaces and
+  handle-based cleanup removes only a proven empty backup. Concurrent extras,
+  replacements, or failed final verification quarantine the complete affected
+  namespace and restore the requested missing/empty state for retry instead of
+  unlinking a path that may now belong to another process. This prevents
+  symlink/junction swaps from redirecting release writes or rollback from
+  deleting foreign data; retained quarantines are named in failure diagnostics
+  for explicit operator inspection.
+
 - Hardened exact Saturn release handling after review. Verification now
   materializes private manifest-bound output snapshots, and capture, SH-tool,
   staging, and desktop-Ymir consumers use only those verified bytes; a live

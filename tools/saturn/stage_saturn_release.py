@@ -1,196 +1,335 @@
 #!/usr/bin/env python3
-"""Stage only the verified files from one exact Saturn release manifest."""
+"""Stage one exact Saturn release through a private atomic namespace."""
 
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import os
 import shutil
 import stat
+import uuid
+import warnings
 from pathlib import Path
 
-from release_manifest import MANIFEST_NAME, verify_release_manifest
+from release_manifest import (
+    DirectoryNamespaceGuard,
+    MANIFEST_NAME,
+    _file_identity,
+    _is_reparse,
+    remove_empty_directory_by_identity,
+    verify_release_manifest,
+)
 
 
 FileIdentity = tuple[int, int]
 
 
-def _path_identity(path: Path) -> FileIdentity:
-    metadata = path.lstat()
-    return metadata.st_dev, metadata.st_ino
-
-
-def _remove_owned_file(path: Path, identity: FileIdentity) -> None:
-    metadata = path.lstat()
-    if stat.S_ISLNK(metadata.st_mode) or (metadata.st_dev, metadata.st_ino) != identity:
-        raise ValueError("owned staging path was replaced")
-    path.unlink()
-
-
-def _require_owned_directory(path: Path, identity: FileIdentity) -> None:
-    if path.is_symlink() or _path_identity(path) != identity:
-        raise ValueError(f"staging directory was replaced: {path}")
+def _exclusive_flags() -> int:
+    return (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
 
 
 def _copy_new(source: Path, target: Path) -> FileIdentity:
-    identity: FileIdentity | None = None
-    try:
-        with source.open("rb") as input_stream, target.open("xb") as output_stream:
-            metadata = os.fstat(output_stream.fileno())
-            identity = metadata.st_dev, metadata.st_ino
-            shutil.copyfileobj(input_stream, output_stream, length=1024 * 1024)
-    except BaseException:
-        if identity is not None:
-            try:
-                _remove_owned_file(target, identity)
-            except (FileNotFoundError, ValueError):
-                pass
-        raise
-    if _path_identity(target) != identity or target.is_symlink():
-        raise ValueError(f"staging target was replaced while copying: {target}")
-    return identity
+    """Copy to a securely opened new leaf; retain partial state on failure."""
+    with DirectoryNamespaceGuard(target.parent) as namespace:
+        descriptor = namespace.open_child(target.name, _exclusive_flags())
+        try:
+            with source.open("rb") as input_stream, os.fdopen(
+                descriptor, "wb", closefd=False
+            ) as output_stream:
+                shutil.copyfileobj(input_stream, output_stream, length=1024 * 1024)
+                output_stream.flush()
+            opened = os.fstat(descriptor)
+            current = namespace.lstat_child(target.name)
+            namespace.require_current()
+            if (
+                _file_identity(opened) != _file_identity(current)
+                or not stat.S_ISREG(current.st_mode)
+                or _is_reparse(current)
+            ):
+                raise ValueError(f"staging target was replaced while copying: {target}")
+            return _file_identity(opened)
+        finally:
+            os.close(descriptor)
 
 
 def _write_new_bytes(data: bytes, target: Path) -> FileIdentity:
-    identity: FileIdentity | None = None
-    try:
-        with target.open("xb") as output_stream:
-            metadata = os.fstat(output_stream.fileno())
-            identity = metadata.st_dev, metadata.st_ino
-            output_stream.write(data)
-    except BaseException:
-        if identity is not None:
+    with DirectoryNamespaceGuard(target.parent) as namespace:
+        descriptor = namespace.open_child(target.name, _exclusive_flags())
+        try:
+            with os.fdopen(descriptor, "wb", closefd=False) as output_stream:
+                output_stream.write(data)
+                output_stream.flush()
+            opened = os.fstat(descriptor)
+            current = namespace.lstat_child(target.name)
+            namespace.require_current()
+            if (
+                _file_identity(opened) != _file_identity(current)
+                or not stat.S_ISREG(current.st_mode)
+                or _is_reparse(current)
+            ):
+                raise ValueError(f"staging target was replaced while writing: {target}")
+            return _file_identity(opened)
+        finally:
+            os.close(descriptor)
+
+
+def _ensure_private_parent(root: Path, parent: Path) -> None:
+    current = root
+    for part in parent.relative_to(root).parts:
+        with DirectoryNamespaceGuard(current) as namespace:
             try:
-                _remove_owned_file(target, identity)
-            except (FileNotFoundError, ValueError):
-                pass
-        raise
-    if _path_identity(target) != identity or target.is_symlink():
-        raise ValueError(f"staging target was replaced while writing: {target}")
-    return identity
+                metadata = namespace.lstat_child(part)
+            except FileNotFoundError:
+                namespace.mkdir_child(part)
+                metadata = namespace.lstat_child(part)
+            if (
+                not stat.S_ISDIR(metadata.st_mode)
+                or stat.S_ISLNK(metadata.st_mode)
+                or _is_reparse(metadata)
+            ):
+                raise ValueError(f"private staging parent is not a real directory: {current / part}")
+            namespace.require_current()
+        current /= part
 
 
-def _make_owned_parents(
-    destination: Path,
-    parent: Path,
-    created_directories: list[tuple[Path, FileIdentity]],
-    destination_identity: FileIdentity,
+def _unique_name(kind: str, destination_name: str) -> str:
+    return f".sm64-saturn-{kind}-{destination_name}-{uuid.uuid4().hex}"
+
+
+def _make_private_tree(namespace: DirectoryNamespaceGuard, destination_name: str) -> str:
+    for _attempt in range(32):
+        name = _unique_name("private", destination_name)
+        try:
+            namespace.mkdir_child(name)
+            return name
+        except FileExistsError:
+            continue
+    raise RuntimeError("could not allocate a unique private staging directory")
+
+
+def _linux_rename_noreplace(
+    namespace: DirectoryNamespaceGuard, source: str, target: str
 ) -> None:
-    _require_owned_directory(destination, destination_identity)
-    missing: list[Path] = []
-    current = parent
-    while current != destination:
-        if current.exists():
-            if current.is_symlink() or not current.is_dir():
-                raise ValueError(f"release destination path is not a directory: {current}")
-            break
-        if current.is_symlink():
-            raise ValueError(f"release destination path is a symlink: {current}")
-        missing.append(current)
-        current = current.parent
-    for directory in reversed(missing):
-        directory.mkdir()
-        created_directories.append((directory, _path_identity(directory)))
-    _require_owned_directory(destination, destination_identity)
-    for directory, identity in created_directories:
-        _require_owned_directory(directory, identity)
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise RuntimeError("atomic no-replace publication is unavailable")
+    result = renameat2(
+        namespace._fd,
+        os.fsencode(source),
+        namespace._fd,
+        os.fsencode(target),
+        1,  # RENAME_NOREPLACE
+    )
+    if result:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), target)
 
 
-def _rollback(
-    created_files: list[tuple[Path, FileIdentity]],
-    created_directories: list[tuple[Path, FileIdentity]],
-    destination: Path,
-    destination_identity: FileIdentity,
-    remove_destination: bool,
-) -> list[str]:
-    failures: list[str] = []
-    for path, identity in reversed(created_files):
+def _rename_noreplace(
+    namespace: DirectoryNamespaceGuard, source: str, target: str
+) -> None:
+    namespace.require_current()
+    if os.name == "nt":
+        namespace.rename_child(source, target)
+    elif os.name == "posix" and namespace._fd is not None:
+        _linux_rename_noreplace(namespace, source, target)
+    else:
+        raise RuntimeError("atomic no-replace publication is unavailable")
+    namespace.require_current()
+
+
+def _quarantine_child(
+    namespace: DirectoryNamespaceGuard,
+    child: str,
+    destination_name: str,
+    quarantines: list[Path],
+) -> Path:
+    for _attempt in range(32):
+        quarantine_name = _unique_name("quarantine", destination_name)
         try:
-            _remove_owned_file(path, identity)
-        except FileNotFoundError:
-            pass
-        except BaseException as error:
-            failures.append(f"remove {path}: {error}")
-    for path, identity in reversed(created_directories):
+            _rename_noreplace(namespace, child, quarantine_name)
+            quarantine = namespace.path / quarantine_name
+            quarantines.append(quarantine)
+            return quarantine
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"could not quarantine contaminated namespace: {child}")
+
+
+def _child_metadata(
+    namespace: DirectoryNamespaceGuard, name: str
+) -> os.stat_result | None:
+    try:
+        return namespace.lstat_child(name)
+    except FileNotFoundError:
+        return None
+
+
+def _is_empty_real_directory(path: Path, metadata: os.stat_result) -> bool:
+    return (
+        stat.S_ISDIR(metadata.st_mode)
+        and not stat.S_ISLNK(metadata.st_mode)
+        and not _is_reparse(metadata)
+        and not any(path.iterdir())
+    )
+
+
+def _restore_requested_state(
+    namespace: DirectoryNamespaceGuard,
+    destination_name: str,
+    preexisted: bool,
+    quarantines: list[Path],
+) -> None:
+    for _attempt in range(32):
+        if _child_metadata(namespace, destination_name) is not None:
+            _quarantine_child(namespace, destination_name, destination_name, quarantines)
+            continue
+        if not preexisted:
+            return
         try:
-            if path.is_symlink() or _path_identity(path) != identity:
-                raise ValueError("owned staging directory was replaced")
-            path.rmdir()
-        except FileNotFoundError:
-            pass
-        except BaseException as error:
-            failures.append(f"remove directory {path}: {error}")
-    if remove_destination:
-        try:
-            if destination.is_symlink() or _path_identity(destination) != destination_identity:
-                raise ValueError("owned staging destination was replaced")
-            destination.rmdir()
-        except FileNotFoundError:
-            pass
-        except BaseException as error:
-            failures.append(f"remove destination {destination}: {error}")
-    return failures
+            namespace.mkdir_child(destination_name)
+            return
+        except FileExistsError:
+            continue
+    raise RuntimeError("could not restore the requested destination namespace")
+
+
+def _publish_private_tree(
+    namespace: DirectoryNamespaceGuard,
+    private_name: str,
+    destination_name: str,
+    initial_identity: FileIdentity | None,
+    quarantines: list[Path],
+) -> Path | None:
+    initial_backup: Path | None = None
+    if initial_identity is not None:
+        moved = _quarantine_child(
+            namespace, destination_name, destination_name, quarantines
+        )
+        initial_backup = moved
+        moved_metadata = moved.lstat()
+        if (
+            _file_identity(moved_metadata) != initial_identity
+            or not _is_empty_real_directory(moved, moved_metadata)
+        ):
+            _restore_requested_state(namespace, destination_name, True, quarantines)
+            raise ValueError(
+                f"release destination was replaced or contaminated; retained at {moved}"
+            )
+    try:
+        _rename_noreplace(namespace, private_name, destination_name)
+    except OSError as error:
+        if error.errno not in (errno.EEXIST, errno.EACCES, errno.ENOTEMPTY):
+            raise
+        if _child_metadata(namespace, destination_name) is not None:
+            quarantine = _quarantine_child(
+                namespace, destination_name, destination_name, quarantines
+            )
+            _restore_requested_state(
+                namespace, destination_name, initial_identity is not None, quarantines
+            )
+            raise ValueError(
+                f"release destination was concurrently contaminated; retained at {quarantine}"
+            ) from error
+        raise
+    return initial_backup
+
+
+def _note_quarantines(error: BaseException, quarantines: list[Path]) -> None:
+    if quarantines:
+        error.add_note(
+            "staging quarantine retained: "
+            + "; ".join(str(path) for path in quarantines)
+        )
 
 
 def stage_release(manifest: Path, destination: Path) -> Path:
-    """Verify all sources, then copy into a missing or empty destination."""
+    """Verify, privately assemble, exactly check, then atomically publish."""
     verified = verify_release_manifest(manifest)
     destination = destination.absolute()
-    if destination.is_symlink():
-        verified.close()
-        raise ValueError(f"release destination is a symlink: {destination}")
-    destination_preexisted = destination.exists()
-    if destination.exists():
-        if not destination.is_dir() or any(destination.iterdir()):
-            verified.close()
-            raise ValueError(f"release destination is not empty: {destination}")
-    else:
-        if destination.parent.is_symlink() or not destination.parent.is_dir():
-            verified.close()
-            raise ValueError(
-                f"release destination parent is not a real directory: {destination.parent}"
-            )
-        destination.mkdir()
-    destination_identity = _path_identity(destination)
-    created_files: list[tuple[Path, FileIdentity]] = []
-    created_directories: list[tuple[Path, FileIdentity]] = []
+    quarantines: list[Path] = []
+    private_name: str | None = None
+    published = False
     try:
-        for name, source in verified.snapshot_outputs.items():
-            relative = Path(verified.document["outputs"][name]["path"])
-            target = destination / relative
-            _make_owned_parents(
-                destination, target.parent, created_directories, destination_identity
-            )
-            if target.exists() or target.is_symlink():
-                raise ValueError(f"release destination target already exists: {target}")
-            identity = _copy_new(source, target)
-            created_files.append((target, identity))
-            _require_owned_directory(destination, destination_identity)
-            for directory, owned_identity in created_directories:
-                _require_owned_directory(directory, owned_identity)
-        manifest_target = destination / MANIFEST_NAME
-        if manifest_target.exists() or manifest_target.is_symlink():
-            raise ValueError(
-                f"release destination target already exists: {manifest_target}"
-            )
-        manifest_identity = _write_new_bytes(verified.manifest_bytes, manifest_target)
-        created_files.append((manifest_target, manifest_identity))
-        _require_owned_directory(destination, destination_identity)
-        staged_verification = verify_release_manifest(manifest_target)
-        staged_verification.close()
-        _require_owned_directory(destination, destination_identity)
-        return destination
-    except BaseException as error:
-        failures = _rollback(
-            created_files,
-            created_directories,
-            destination,
-            destination_identity,
-            not destination_preexisted,
-        )
-        if failures:
-            error.add_note("staging rollback failures: " + "; ".join(failures))
-        raise
+        with DirectoryNamespaceGuard(destination.parent) as namespace:
+            initial = _child_metadata(namespace, destination.name)
+            if initial is None:
+                initial_identity = None
+            else:
+                if not _is_empty_real_directory(destination, initial):
+                    raise ValueError(f"release destination is not empty: {destination}")
+                initial_identity = _file_identity(initial)
+
+            private_name = _make_private_tree(namespace, destination.name)
+            private_root = namespace.path / private_name
+            try:
+                for name, source in verified.snapshot_outputs.items():
+                    relative = Path(verified.document["outputs"][name]["path"])
+                    target = private_root / relative
+                    _ensure_private_parent(private_root, target.parent)
+                    _copy_new(source, target)
+                _write_new_bytes(
+                    verified.manifest_bytes, private_root / MANIFEST_NAME
+                )
+                private_verification = verify_release_manifest(
+                    private_root / MANIFEST_NAME, exact_inventory=True
+                )
+                private_verification.close()
+                initial_backup = _publish_private_tree(
+                    namespace,
+                    private_name,
+                    destination.name,
+                    initial_identity,
+                    quarantines,
+                )
+                published = True
+                private_name = None
+                with DirectoryNamespaceGuard(destination) as published_namespace:
+                    staged_verification = verify_release_manifest(
+                        destination / MANIFEST_NAME, exact_inventory=True
+                    )
+                    staged_verification.close()
+                    published_namespace.require_current()
+                if initial_backup is not None:
+                    assert initial_identity is not None
+                    if remove_empty_directory_by_identity(
+                        initial_backup, initial_identity
+                    ):
+                        quarantines.remove(initial_backup)
+                    else:
+                        warnings.warn(
+                            f"verified empty destination backup retained at {initial_backup}",
+                            RuntimeWarning,
+                        )
+                return destination
+            except BaseException as error:
+                if published and _child_metadata(namespace, destination.name) is not None:
+                    _quarantine_child(
+                        namespace, destination.name, destination.name, quarantines
+                    )
+                    published = False
+                elif private_name is not None and _child_metadata(namespace, private_name) is not None:
+                    _quarantine_child(
+                        namespace, private_name, destination.name, quarantines
+                    )
+                    private_name = None
+                _restore_requested_state(
+                    namespace,
+                    destination.name,
+                    initial_identity is not None,
+                    quarantines,
+                )
+                _note_quarantines(error, quarantines)
+                raise
     finally:
         verified.close()
 

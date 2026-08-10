@@ -9,12 +9,17 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, Mapping
+
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
 
 import gen_build_identity as identity
 from gen_source_closure import CLASS_PRECEDENCE
@@ -78,6 +83,232 @@ class _SnapshotOwner:
         self.cleanup()
 
 
+FileIdentity = tuple[int, int]
+
+
+def _file_identity(metadata: os.stat_result) -> FileIdentity:
+    return metadata.st_dev, metadata.st_ino
+
+
+def _is_reparse(metadata: os.stat_result) -> bool:
+    attributes = getattr(metadata, "st_file_attributes", 0)
+    return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+
+
+if os.name == "nt":
+    class _ByHandleFileInformation(ctypes.Structure):
+        _fields_ = [
+            ("attributes", wintypes.DWORD),
+            ("creation_time", wintypes.FILETIME),
+            ("last_access_time", wintypes.FILETIME),
+            ("last_write_time", wintypes.FILETIME),
+            ("volume_serial", wintypes.DWORD),
+            ("file_size_high", wintypes.DWORD),
+            ("file_size_low", wintypes.DWORD),
+            ("number_of_links", wintypes.DWORD),
+            ("file_index_high", wintypes.DWORD),
+            ("file_index_low", wintypes.DWORD),
+        ]
+
+    _KERNEL32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _KERNEL32.CreateFileW.argtypes = (
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+        wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+    )
+    _KERNEL32.CreateFileW.restype = wintypes.HANDLE
+    _KERNEL32.GetFileInformationByHandle.argtypes = (
+        wintypes.HANDLE, ctypes.POINTER(_ByHandleFileInformation),
+    )
+    _KERNEL32.GetFileInformationByHandle.restype = wintypes.BOOL
+    _KERNEL32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    _KERNEL32.CloseHandle.restype = wintypes.BOOL
+    _KERNEL32.SetFileInformationByHandle.argtypes = (
+        wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+    )
+    _KERNEL32.SetFileInformationByHandle.restype = wintypes.BOOL
+    _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    class _FileDispositionInformation(ctypes.Structure):
+        _fields_ = [("delete_file", wintypes.BOOL)]
+
+
+class DirectoryNamespaceGuard:
+    """Pin one real directory namespace for no-follow child operations."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path.absolute()
+        self._fd: int | None = None
+        self._handles: list[int] = []
+        self.identity: FileIdentity
+        if os.name == "nt":
+            self._acquire_windows_chain()
+        else:
+            self._acquire_posix_chain()
+
+    def _acquire_windows_chain(self) -> None:
+        current = Path(self.path.anchor)
+        parts = self.path.parts[1:]
+        for index in range(len(parts) + 1):
+            if index:
+                current /= parts[index - 1]
+            before = current.lstat()
+            if (
+                not stat.S_ISDIR(before.st_mode)
+                or stat.S_ISLNK(before.st_mode)
+                or _is_reparse(before)
+                or (hasattr(current, "is_junction") and current.is_junction())
+            ):
+                self.close()
+                raise ValueError(f"directory ancestor is a symlink, junction, or reparse point: {current}")
+            handle = _KERNEL32.CreateFileW(
+                str(current),
+                0,  # metadata-only directory handle
+                0x1 | 0x2 | (0x4 if index < len(parts) else 0),
+                # Ancestors are fully identity-checked; the guarded directory
+                # itself deliberately denies delete/rename while in use.
+                None,
+                3,  # OPEN_EXISTING
+                0x02000000 | 0x00200000,  # BACKUP_SEMANTICS | OPEN_REPARSE_POINT
+                None,
+            )
+            if handle == _INVALID_HANDLE_VALUE:
+                error = ctypes.get_last_error()
+                self.close()
+                raise OSError(error, os.strerror(error), str(current))
+            information = _ByHandleFileInformation()
+            if not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information)):
+                error = ctypes.get_last_error()
+                _KERNEL32.CloseHandle(handle)
+                self.close()
+                raise OSError(error, os.strerror(error), str(current))
+            opened_file_index = (
+                information.file_index_high << 32
+            ) | information.file_index_low
+            if (
+                information.attributes & 0x400
+                or not information.attributes & 0x10
+                or before.st_ino != opened_file_index
+                or _file_identity(current.lstat()) != _file_identity(before)
+            ):
+                _KERNEL32.CloseHandle(handle)
+                self.close()
+                raise ValueError(f"directory ancestor changed identity: {current}")
+            self._handles.append(handle)
+        self.identity = _file_identity(self.path.lstat())
+
+    def _acquire_posix_chain(self) -> None:
+        flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+        nofollow = getattr(os, "O_NOFOLLOW", 0)
+        current_fd = os.open(self.path.anchor, flags)
+        try:
+            for part in self.path.parts[1:]:
+                before = os.stat(part, dir_fd=current_fd, follow_symlinks=False)
+                if not stat.S_ISDIR(before.st_mode) or stat.S_ISLNK(before.st_mode):
+                    raise ValueError(f"directory ancestor is a symlink: {self.path}")
+                next_fd = os.open(part, flags | nofollow, dir_fd=current_fd)
+                opened = os.fstat(next_fd)
+                if _file_identity(before) != _file_identity(opened):
+                    os.close(next_fd)
+                    raise ValueError(f"directory ancestor changed identity: {self.path}")
+                os.close(current_fd)
+                current_fd = next_fd
+            self._fd = current_fd
+            current_fd = -1
+            self.identity = _file_identity(os.fstat(self._fd))
+        finally:
+            if current_fd >= 0:
+                os.close(current_fd)
+
+    def close(self) -> None:
+        if self._fd is not None:
+            os.close(self._fd)
+            self._fd = None
+        while self._handles:
+            _KERNEL32.CloseHandle(self._handles.pop())
+
+    def __enter__(self) -> "DirectoryNamespaceGuard":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+    def require_current(self) -> None:
+        try:
+            current = self.path.lstat()
+        except OSError as error:
+            raise ValueError(f"guarded directory namespace disappeared: {self.path}") from error
+        if (
+            _file_identity(current) != self.identity
+            or stat.S_ISLNK(current.st_mode)
+            or _is_reparse(current)
+        ):
+            raise ValueError(f"guarded directory namespace was replaced: {self.path}")
+
+    def lstat_child(self, name: str) -> os.stat_result:
+        if self._fd is not None:
+            return os.stat(name, dir_fd=self._fd, follow_symlinks=False)
+        return (self.path / name).lstat()
+
+    def open_child(self, name: str, flags: int, mode: int = 0o666) -> int:
+        if self._fd is not None:
+            return os.open(
+                name, flags | getattr(os, "O_NOFOLLOW", 0), mode, dir_fd=self._fd
+            )
+        return os.open(self.path / name, flags, mode)
+
+    def mkdir_child(self, name: str) -> None:
+        if self._fd is not None:
+            os.mkdir(name, dir_fd=self._fd)
+        else:
+            (self.path / name).mkdir()
+
+    def rename_child(self, source: str, target: str) -> None:
+        if self._fd is not None:
+            os.rename(
+                source, target, src_dir_fd=self._fd, dst_dir_fd=self._fd
+            )
+        else:
+            (self.path / source).rename(self.path / target)
+
+
+def remove_empty_directory_by_identity(path: Path, identity: FileIdentity) -> bool:
+    """Delete only the opened Windows directory object with the expected identity."""
+    if os.name != "nt":
+        return False
+    handle = _KERNEL32.CreateFileW(
+        str(path),
+        0x00010000,  # DELETE
+        0x1 | 0x2 | 0x4,
+        None,
+        3,
+        0x02000000 | 0x00200000,
+        None,
+    )
+    if handle == _INVALID_HANDLE_VALUE:
+        return False
+    try:
+        information = _ByHandleFileInformation()
+        if not _KERNEL32.GetFileInformationByHandle(handle, ctypes.byref(information)):
+            return False
+        opened_file_index = (
+            information.file_index_high << 32
+        ) | information.file_index_low
+        if (
+            opened_file_index != identity[1]
+            or information.attributes & 0x400
+            or not information.attributes & 0x10
+        ):
+            return False
+        disposition = _FileDispositionInformation(True)
+        return bool(
+            _KERNEL32.SetFileInformationByHandle(
+                handle, 4, ctypes.byref(disposition), ctypes.sizeof(disposition)
+            )
+        )
+    finally:
+        _KERNEL32.CloseHandle(handle)
+
+
 def _portable_identifier(value: Any, label: str) -> tuple[str, str]:
     if (
         not isinstance(value, str)
@@ -130,9 +361,39 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _load_canonical(path: Path, label: str) -> tuple[bytes, dict[str, Any]]:
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"{label} is not a file: {path}")
-    raw = path.read_bytes()
+    path = path.absolute()
+    with DirectoryNamespaceGuard(path.parent) as namespace:
+        try:
+            before = namespace.lstat_child(path.name)
+        except OSError as error:
+            raise ValueError(f"{label} is not a file: {path}") from error
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or stat.S_ISLNK(before.st_mode)
+            or _is_reparse(before)
+        ):
+            raise ValueError(f"{label} is not a regular non-symlink file: {path}")
+        descriptor = namespace.open_child(path.name, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        try:
+            opened = os.fstat(descriptor)
+            if _file_identity(opened) != _file_identity(before):
+                raise ValueError(f"{label} changed identity before open: {path}")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                raw = stream.read()
+            closed = os.fstat(descriptor)
+            current = namespace.lstat_child(path.name)
+            namespace.require_current()
+            if (
+                _file_identity(opened) != _file_identity(closed)
+                or _file_identity(current) != _file_identity(opened)
+                or stat.S_ISLNK(current.st_mode)
+                or _is_reparse(current)
+                or opened.st_size != closed.st_size
+                or opened.st_mtime_ns != closed.st_mtime_ns
+            ):
+                raise ValueError(f"{label} changed identity or contents while reading: {path}")
+        finally:
+            os.close(descriptor)
     try:
         document = json.loads(raw.decode("ascii"), object_pairs_hook=_strict_object)
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
@@ -768,8 +1029,48 @@ def _validate_manifest_shape(document: Mapping[str, Any]) -> None:
     _reject_duplicate_casefold(output_paths, "output release paths")
 
 
+def _validate_exact_inventory(base: Path, document: Mapping[str, Any]) -> None:
+    expected_files = {MANIFEST_NAME}
+    expected_directories: set[str] = set()
+    for record in document["outputs"].values():
+        path = PurePosixPath(record["path"])
+        expected_files.add(path.as_posix())
+        parent = path.parent
+        while parent != PurePosixPath("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+    actual_files: set[str] = set()
+    actual_directories: set[str] = set()
+    with DirectoryNamespaceGuard(base) as namespace:
+        for root, directories, files in os.walk(base, followlinks=False):
+            root_path = Path(root)
+            for name in directories:
+                candidate = root_path / name
+                metadata = candidate.lstat()
+                if stat.S_ISLNK(metadata.st_mode) or _is_reparse(metadata):
+                    raise ValueError(f"release inventory contains a path alias: {candidate}")
+                actual_directories.add(candidate.relative_to(base).as_posix())
+            for name in files:
+                candidate = root_path / name
+                metadata = candidate.lstat()
+                if not stat.S_ISREG(metadata.st_mode) or _is_reparse(metadata):
+                    raise ValueError(f"release inventory contains a non-file: {candidate}")
+                actual_files.add(candidate.relative_to(base).as_posix())
+        namespace.require_current()
+    if actual_files != expected_files or actual_directories != expected_directories:
+        extras = sorted(
+            (actual_files - expected_files) | (actual_directories - expected_directories)
+        )
+        missing = sorted(
+            (expected_files - actual_files) | (expected_directories - actual_directories)
+        )
+        raise ValueError(
+            f"release inventory differs from manifest; extras={extras}, missing={missing}"
+        )
+
+
 def verify_release_manifest(
-    path: Path, *, required_profile: str | None = None
+    path: Path, *, required_profile: str | None = None, exact_inventory: bool = False
 ) -> ReleaseManifestVerification:
     """Verify canonical manifest bytes, every output, CUE binding, and identity."""
     raw, document = _load_canonical(path, "release manifest")
@@ -828,6 +1129,8 @@ def verify_release_manifest(
                 if values[identity_field] != document[manifest_field]:
                     raise ValueError(f"{manifest_field} differs from ELF identity")
         _validate_cue(snapshot_outputs["cue"], snapshot_outputs["iso"])
+        if exact_inventory:
+            _validate_exact_inventory(base, document)
         return ReleaseManifestVerification(
             document=dict(document),
             manifest_sha256=hashlib.sha256(raw).hexdigest(),

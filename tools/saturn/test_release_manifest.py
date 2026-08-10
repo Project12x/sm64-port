@@ -303,6 +303,38 @@ class ReleaseManifestTests(unittest.TestCase):
             self.assertNotEqual(verified.snapshot_outputs[name], verified.outputs[name])
             self.assertEqual(verified.snapshot_outputs[name].read_bytes(), expected)
 
+    def test_manifest_replacement_between_lookup_and_open_is_rejected(self) -> None:
+        manifest = self.fixture.write()
+        original = manifest.read_bytes()
+        alternate = json.loads(original.decode("ascii"))
+        alternate["provenance"]["git_revision"] = "1" * 40
+        alternate_bytes = canonical_json_bytes(alternate)
+        real_open = release_manifest.os.open
+        swapped = False
+
+        def swap_then_open(path: object, flags: int, *args: object, **kwargs: object):
+            nonlocal swapped
+            if Path(path) == manifest and not swapped:
+                swapped = True
+                manifest.rename(manifest.with_suffix(".original"))
+                manifest.write_bytes(alternate_bytes)
+            return real_open(path, flags, *args, **kwargs)
+
+        with (
+            mock.patch.object(release_manifest.os, "open", side_effect=swap_then_open),
+            self.assertRaisesRegex(ValueError, "changed identity|replaced"),
+        ):
+            release_manifest.verify_release_manifest(manifest)
+
+        self.assertTrue(swapped)
+        self.assertEqual(manifest.read_bytes(), alternate_bytes)
+
+    def test_exact_inventory_rejects_an_undeclared_release_file(self) -> None:
+        manifest = self.fixture.write()
+        (self.fixture.release_dir / "foreign.txt").write_bytes(b"foreign")
+        with self.assertRaisesRegex(ValueError, "inventory"):
+            release_manifest.verify_release_manifest(manifest, exact_inventory=True)
+
     def test_verifier_rejects_effective_config_not_bound_to_embedded_identity(self) -> None:
         manifest = self.fixture.write()
         document = json.loads(manifest.read_text(encoding="ascii"))
