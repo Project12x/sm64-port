@@ -1106,14 +1106,25 @@ was checked against pinned `yaul-org/libyaul` commit
 `libyaul/build/build.post.iso-cue.mk` and `build.post.bin.mk`. No external
 source was copied.
 
+First independent review verdict: `Needs fixes`; repair round 1 is active.
+Five Important findings remain: verification must preserve immutable manifest
+and output snapshots through capture/staging and staging must roll back every
+partial new file; the resolved profile's effective config/output names must
+match the sealed identity/artifacts; closure/package/toolchain/output paths
+need strict duplicate/casefold/alias validation across hosts; the supported
+writer must create a real historical-v1-compatible manifest; and reproducibility
+comparison must compare canonical identity inputs/output bytes while ignoring
+host layout and non-identity metadata. Task 7 remains `active`; every target
+and release-evidence gate remains open.
+
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
 surfacing only as a downstream digest mismatch, and the explicit v1 occupancy
 compatibility spec must reproduce the exact ELF identity bytes. No further
-source finding remains. One initial adjacent command named two tests
+source finding remained before independent review. One initial adjacent command named two tests
 incorrectly and was discarded; the corrected fail-fast rerun is the 53-test
-result above. Step 8 remains open only for the controller-owned specification
-and code-quality reviews and their review-closeout status update.
+result above. Step 8 remains open for repair, scoped rereview, and review-closeout
+status update.
 
 - [x] **Step 1: Write failing release and staging tests**
 
