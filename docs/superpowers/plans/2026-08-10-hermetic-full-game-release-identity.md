@@ -1747,6 +1747,20 @@ pinned MIT-licensed submodule at `6012f79f`, files inspected
 copied and no notice changed. Closure, compile, link, seal, and release gates
 remain open pending an exact rerun from this source commit.
 
+The next run passed explicit compiled-source classification but stopped at the
+same discovery stage when parsing GCC depfile contents: dependency rows use
+canonical MSYS `/d/...` spellings, while Windows Python's existing drive-path
+conversion covered only path-list transport rows. The unconverted dependency
+became `D:\d\...`, correctly rejected as an absent external path. Dependency
+resolution and canonical repository classification now both apply the same
+existing `_host_transport_path` conversion before filesystem semantics; output
+closure paths remain host-independent repository-relative values. Windows TDD
+reproduced the exact MSYS dependency spelling: RED 20/21 plus the existing
+case-filesystem skip, GREEN 21/21 plus that same skip. Reference record:
+same-file close-port reuse of `_host_transport_path` at `b7bdb347`; no external
+source, license, or notice change. No closure or downstream target/release gate
+is claimed pending the exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Applied the existing Windows/MSYS drive-path transport normalization to
+  compiler dependencies parsed inside depfiles, not only to canonical path-list
+  rows. Windows Python otherwise interpreted GCC's `/d/...` spelling as
+  `<current-drive>\d\...`, making an in-repository header look like an absent
+  external dependency after all discovery scans. Both dependency resolution
+  and canonical classification now share one host-path conversion boundary;
+  serialized closure paths remain repository-relative and host-independent.
+
 - Normalized sourceboot-local translation units to absolute paths before the
   bounded compiled-source handoff. Yaul intentionally accepts entries such as
   `main.c` relative to the sourceboot Make directory, but the release closure

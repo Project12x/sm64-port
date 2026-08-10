@@ -1021,6 +1021,17 @@
   pinned MIT commit `6012f79f`, inspected `build.pre.mk` and
   `build.post.iso-cue.mk`; no copied upstream bytes or notice change. Candidate
   A and every target/release gate remain open pending the exact rerun.
+- The next exact run passed the corrected compiled-source class, then stopped
+  in discovery while parsing GCC depfile contents. Those rows carry MSYS
+  `/d/...` paths; Windows Python converted only path-list rows and interpreted
+  the dependency as `D:\d\...`, which correctly failed as an absent external
+  path. No closure or downstream gate is claimed.
+- Transport correction: dependency resolution and canonical classification now
+  share the existing `_host_transport_path` conversion, while serialized
+  closure paths remain repository-relative. Exact Windows depfile fixture was
+  RED at 20/21 plus one existing case-fs skip and GREEN at 21/21 plus the same
+  skip. Reference: same-file close-port reuse at `b7bdb347`; no external source
+  or license/notice change. Candidate A remains open pending the exact rerun.
 
 ## Task 5 review repair round 2
 

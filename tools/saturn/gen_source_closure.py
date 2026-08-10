@@ -411,14 +411,14 @@ def _classify_dependencies(
     return records, external
 
 
-def _resolve_dependency(root: Path, dependency: str) -> Path:
-    candidate = Path(dependency)
+def _resolve_dependency(root: Path, dependency: str | Path) -> Path:
+    candidate = _host_transport_path(os.fspath(dependency))
     return candidate if candidate.is_absolute() else root / candidate
 
 
 def _canonical_repo_path(root: Path, value: str | Path) -> str:
     """Return Task 1's one normalized canonical repository spelling."""
-    return normalize_repo_path(root, value)
+    return normalize_repo_path(root, _host_transport_path(os.fspath(value)))
 
 
 def _external_roots(root: Path, roots: Sequence[Path]) -> tuple[Path, ...]:

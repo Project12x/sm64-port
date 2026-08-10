@@ -326,6 +326,26 @@ class SourceClosureTests(unittest.TestCase):
         path.write_bytes(b"sm64-saturn-path-list-v1\n/d/repo/src/main.c\n")
         self.assertEqual(load_path_list(path), (Path("D:/repo/src/main.c"),))
 
+    @unittest.skipUnless(os.name == "nt", "MSYS drive conversion is Windows-only")
+    def test_closure_converts_msys_drive_paths_inside_depfiles(self) -> None:
+        def msys(path: Path) -> str:
+            posix = path.resolve().as_posix()
+            return f"/{posix[0].lower()}/{posix[3:]}"
+
+        self.write(
+            "obj/main.d",
+            "obj/main.o: "
+            f"{msys(self.root / 'src/main.c')} "
+            f"{msys(self.root / 'include/main.h')} "
+            f"{msys(self.root / 'build/generated/scene.h')} "
+            f"{msys(self.root / 'tools/saturn/gen_build_identity.py')} "
+            f"{msys(self.root / 'Makefile.saturn.mk')}\n",
+        )
+        built = self.build_closure()
+        paths = {row["path"] for row in built.document["inputs"]}
+        self.assertIn("src/main.c", paths)
+        self.assertIn("include/main.h", paths)
+
     def test_cli_build_rejects_aliased_outputs_before_preserving_existing_bytes(self) -> None:
         shared = self.root / "build/shared.json"
         shared.parent.mkdir(parents=True, exist_ok=True)
