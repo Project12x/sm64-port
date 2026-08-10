@@ -262,14 +262,19 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn('SOURCEBOOT_TARGET_PROFILE="$(SOURCEBOOT_TARGET_PROFILE)"', outer)
         self.assertIn("tools/saturn/profiles/sourceboot-bob-demo-v1.json", outer)
         for token in (
-            "--recipe-input", "sourceboot.specs", "sourceboot-cart.x", "build.pre.mk",
-            "--generator-input", "bootstrap_sourceboot_identity_spec.py",
-            "--generated-input", "saturn_geo_depth_manifest.ld",
-            "--derived-output", "saturn_build_identity_spec.json",
+            "--recipe-input-list", "--generator-input-list",
+            "--generated-input-list", "--derived-output-list",
+        ):
+            self.assertIn(token, output)
+        makefile = self.sourceboot_makefile().replace("\\", "/")
+        for token in (
+            "sourceboot.specs", "sourceboot-cart.x", "build.pre.mk",
+            "bootstrap_sourceboot_identity_spec.py",
+            "saturn_geo_depth_manifest.ld", "saturn_build_identity_spec.json",
             "saturn-source-closure-v2.json", "saturn-toolchain-attestation-v1.json",
             "saturn-external-dependencies-v1.json", "SOURCE.DAT", ".elf", ".map", ".sym", ".asm",
         ):
-            self.assertIn(token, output)
+            self.assertIn(token, makefile)
 
     def test_dry_run_c_and_sx_inventory_and_normalized_argv_match_real_compile(self) -> None:
         result = self.run_make("discover", "identity-discovery")
@@ -302,6 +307,15 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertLess(scan_end, closure)
         self.assertLess(closure, attestation)
         self.assertLess(attestation, publication)
+
+    def test_closure_handoff_uses_bounded_path_list_argv(self) -> None:
+        result = self.run_make("discover", "identity-discovery")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--compiled-source-list", result.stdout)
+        self.assertIn("--depfile-list", result.stdout)
+        self.assertIn("--derived-output-list", result.stdout)
+        self.assertNotIn("--compiled-source \"", result.stdout)
+        self.assertNotIn("--depfile \"", result.stdout)
 
     def test_second_discovery_rescans_cached_depfile_after_flag_drift(self) -> None:
         dep_root = Path(self.temporary.name) / "discovery-deps"

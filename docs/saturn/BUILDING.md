@@ -85,6 +85,15 @@ The host Make-contract suites validate ordering and command expansion only.
 They do not build SH-2 code or close the real-target, reproducibility, audit,
 smoke, visual, or manual-play gates.
 
+Discovery and post-link verification pass their large path inventories through
+generated `sm64-saturn-path-list-v1` files rather than repeated command-line
+arguments. These LF-only, unique, byte-sorted lists are strict transport
+metadata: their semantic paths derive the canonical closure, but the list
+files themselves are not identity inputs. This keeps the same closure contract
+below Windows/MSYS command-line limits even as the full-game source set grows;
+Windows Python converts only canonical `/d/...`-style MSYS drive paths from
+the transport back to native drive paths before reading them.
+
 Do not copy or launch a release by selecting artifacts manually. Stage only a
 verified manifest into a missing or empty destination:
 

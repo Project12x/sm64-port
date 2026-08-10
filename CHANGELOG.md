@@ -83,6 +83,16 @@
 
 ### Fixed
 
+- Fixed sourceboot closure discovery and post-link verification on Windows by
+  replacing unbounded repeated path arguments with strict canonical path-list
+  handoffs. The BOB closure currently exceeds 50 KiB across 228 depfile paths,
+  so MSYS could finish every dependency scan and still fail before cleanliness
+  verification with `Argument list too long`. GNU Make now writes LF-only,
+  sorted list transports directly, and the verifier rejects malformed,
+  duplicate, or noncanonical rows before deriving the unchanged semantic
+  source closure. MSYS drive spellings are converted only at the Windows
+  Python boundary; the list transport itself is not release identity input.
+
 - Fixed Windows target-build dispatch so the documented `mingw32-make`
   wrapper spelling resolves to MSYS2 GNU Make and fails closed below 4.3.
   Sourceboot requires grouped-target syntax, but an MSYS2 installation without

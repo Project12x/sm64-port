@@ -1012,6 +1012,21 @@ SOURCEBOOT_DISCOVERY_CXX_DEPS := $(foreach src,$(SH_SRCS_CXX),$(call sourceboot-
 SOURCEBOOT_DISCOVERY_S_DEPS := $(foreach src,$(SH_SRCS_S),$(call sourceboot-discovery-dep,$(src)))
 SOURCEBOOT_DISCOVERY_DEPFILES := $(SOURCEBOOT_DISCOVERY_C_DEPS) \
   $(SOURCEBOOT_DISCOVERY_CXX_DEPS) $(SOURCEBOOT_DISCOVERY_S_DEPS)
+SOURCEBOOT_COMPILED_SOURCE_LIST := $(SOURCEBOOT_GENERATED)/closure-compiled-sources-v1.txt
+SOURCEBOOT_DISCOVERY_DEPFILE_LIST := $(SOURCEBOOT_GENERATED)/closure-discovery-depfiles-v1.txt
+SOURCEBOOT_RECIPE_INPUT_LIST := $(SOURCEBOOT_GENERATED)/closure-recipe-inputs-v1.txt
+SOURCEBOOT_GENERATOR_INPUT_LIST := $(SOURCEBOOT_GENERATED)/closure-generator-inputs-v1.txt
+SOURCEBOOT_GENERATED_INPUT_LIST := $(SOURCEBOOT_GENERATED)/closure-generated-inputs-v1.txt
+SOURCEBOOT_DERIVED_OUTPUT_LIST := $(SOURCEBOOT_GENERATED)/closure-derived-outputs-v1.txt
+SOURCEBOOT_ACTUAL_DEPFILE_LIST := $(SOURCEBOOT_GENERATED)/closure-actual-depfiles-v1.txt
+SOURCEBOOT_ASSEMBLY_DEPFILE_LIST := $(SOURCEBOOT_GENERATED)/closure-assembly-depfiles-v1.txt
+
+# GNU Make writes these canonical lists itself, so the Windows/MSYS shell never
+# receives the 50+ KiB closure inventory as one command line. Suppress the
+# write under `make -n`; dry-run contracts inspect the bounded CLI only.
+define sourceboot-write-path-list
+$(if $(findstring n,$(firstword $(MAKEFLAGS))),,$(file >$(1),sm64-saturn-path-list-v1)$(foreach value,$(sort $(strip $(2))),$(file >>$(1),$(value))))
+endef
 
 define sourceboot-discover-c-dependency
 	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
@@ -1048,16 +1063,22 @@ $(foreach src,$(SH_SRCS_S),$(eval $(call sourceboot-discovery-rule,$(src),source
 identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
 	@printf '%s\n' 'sourceboot discovery profile=$(SOURCEBOOT_TARGET_PROFILE) mode=$(SOURCEBOOT_RELEASE_MODE)'
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_COMPILED_SOURCE_LIST),$(SOURCEBOOT_COMPILED_INPUTS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_DISCOVERY_DEPFILE_LIST),$(SOURCEBOOT_DISCOVERY_DEPFILES))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_RECIPE_INPUT_LIST),$(SOURCEBOOT_RECIPE_INPUTS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_GENERATOR_INPUT_LIST),$(SOURCEBOOT_GENERATOR_INPUTS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_GENERATED_INPUT_LIST),$(SOURCEBOOT_GENERATED_INPUTS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_DERIVED_OUTPUT_LIST),$(SOURCEBOOT_DERIVED_OUTPUTS))
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" build \
 	  --root "$(ROOT)" \
 	  --output "$(SOURCEBOOT_SOURCE_CLOSURE).tmp" \
 	  --external-output "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES).tmp" \
-	  $(foreach src,$(SOURCEBOOT_COMPILED_INPUTS),--compiled-source "$(src)") \
-	  $(foreach dep,$(SOURCEBOOT_DISCOVERY_DEPFILES),--depfile "$(dep)") \
-	  $(foreach input,$(SOURCEBOOT_RECIPE_INPUTS),--recipe-input "$(input)") \
-	  $(foreach input,$(SOURCEBOOT_GENERATOR_INPUTS),--generator-input "$(input)") \
-	  $(foreach input,$(SOURCEBOOT_GENERATED_INPUTS),--generated-input "$(input)") \
-	  $(foreach output,$(SOURCEBOOT_DERIVED_OUTPUTS),--derived-output "$(output)") \
+	  --compiled-source-list "$(SOURCEBOOT_COMPILED_SOURCE_LIST)" \
+	  --depfile-list "$(SOURCEBOOT_DISCOVERY_DEPFILE_LIST)" \
+	  --recipe-input-list "$(SOURCEBOOT_RECIPE_INPUT_LIST)" \
+	  --generator-input-list "$(SOURCEBOOT_GENERATOR_INPUT_LIST)" \
+	  --generated-input-list "$(SOURCEBOOT_GENERATED_INPUT_LIST)" \
+	  --derived-output-list "$(SOURCEBOOT_DERIVED_OUTPUT_LIST)" \
 	  --external-root "$(YAUL_INSTALL_ROOT)"
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_toolchain_attestation.py" \
 	  $(SOURCEBOOT_TOOLCHAIN_ARGS) \
@@ -1079,11 +1100,14 @@ SOURCEBOOT_POSTLINK_SX_DEPS := $(foreach src,$(SH_SRCS_S),\
 verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
 	$(foreach src,$(SH_SRCS_S),$(call sourceboot-discover-sx-dependency,$(src),$(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_ACTUAL_DEPFILE_LIST),$(SOURCEBOOT_C_AND_CXX_DEPS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_ASSEMBLY_DEPFILE_LIST),$(SOURCEBOOT_POSTLINK_SX_DEPS))
+	$(call sourceboot-write-path-list,$(SOURCEBOOT_DERIVED_OUTPUT_LIST),$(SOURCEBOOT_DERIVED_OUTPUTS))
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" verify \
 	  --root "$(ROOT)" --sealed "$(SOURCEBOOT_SOURCE_CLOSURE)" \
-	  $(foreach dep,$(SOURCEBOOT_C_AND_CXX_DEPS),--actual-depfile "$(dep)") \
-	  $(foreach dep,$(SOURCEBOOT_POSTLINK_SX_DEPS),--assembly-scan-depfile "$(dep)") \
-	  $(foreach output,$(SOURCEBOOT_DERIVED_OUTPUTS),--derived-output "$(output)") \
+	  --actual-depfile-list "$(SOURCEBOOT_ACTUAL_DEPFILE_LIST)" \
+	  --assembly-scan-depfile-list "$(SOURCEBOOT_ASSEMBLY_DEPFILE_LIST)" \
+	  --derived-output-list "$(SOURCEBOOT_DERIVED_OUTPUT_LIST)" \
 	  --external-root "$(YAUL_INSTALL_ROOT)" \
 	  --expected-external "$(SOURCEBOOT_EXTERNAL_DEPENDENCIES)" \
 	  --mode "$(SOURCEBOOT_RELEASE_MODE)"

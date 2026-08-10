@@ -1601,6 +1601,19 @@ final source commit that produces successful candidate A, not historical Task
 8 head: these narrow Task 9 execution fixes are part of the candidate source
 identity and remain subject to controller-owned independent review.
 
+The following run completed all 228 dependency-only scans but was discarded at
+closure assembly before cleanliness evaluation: expanding every discovered
+path as repeated Python arguments exceeded the Windows/MSYS command-line limit
+(more than 50 KiB of depfile paths alone). TDD now carries every large build
+and post-link path family through strict `sm64-saturn-path-list-v1` transports.
+The LF-only lists reject blank, padded, NUL, duplicate, or byte-unsorted rows;
+their semantic paths derive the unchanged canonical source closure, while the
+transport files themselves stay outside identity. Windows Python converts the
+canonical MSYS drive spelling only at the transport boundary. This is a clean-room
+adaptation of the existing in-tree canonical-handoff pattern at `bc6d9441`;
+no external source was copied. Candidate A and closure cleanliness remain open
+until the exact release command succeeds from the resulting source commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

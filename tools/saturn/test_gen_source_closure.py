@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,7 @@ if str(TOOLS_DIR) not in sys.path:
 
 from gen_source_closure import (
     build_source_closure,
+    load_path_list,
     main,
     parse_make_depfile,
     verify_source_closure,
@@ -265,6 +267,64 @@ class SourceClosureTests(unittest.TestCase):
             "paths": [str(header.resolve())],
         })
         self.assertNotIn(str(header.resolve()), closure.read_text(encoding="utf-8"))
+
+    def test_cli_build_accepts_canonical_path_lists_without_repeated_argv(self) -> None:
+        def path_list(relative: str, values: tuple[str, ...]) -> Path:
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(
+                ("sm64-saturn-path-list-v1\n" + "".join(
+                    f"{value}\n" for value in values
+                )).encode("utf-8")
+            )
+            return path
+
+        closure = self.root / "build/closure-from-lists.json"
+        handoff = self.root / "build/external-from-lists.json"
+        lists = {
+            "compiled-source": path_list("lists/compiled.txt", ("src/main.c",)),
+            "depfile": path_list("lists/depfiles.txt", ("obj/main.d",)),
+            "recipe-input": path_list("lists/recipes.txt", ("Makefile.saturn.mk",)),
+            "generator-input": path_list(
+                "lists/generators.txt", ("tools/saturn/gen_build_identity.py",)
+            ),
+            "generated-input": path_list(
+                "lists/generated.txt", ("build/generated/scene.h",)
+            ),
+            "derived-output": path_list(
+                "lists/derived.txt", ("build/generated/saturn_build_identity_values.inc",)
+            ),
+        }
+        argv = [
+            "build", "--root", str(self.root), "--output", str(closure),
+            "--external-output", str(handoff),
+        ]
+        for option, path in lists.items():
+            argv.extend((f"--{option}-list", str(path)))
+        self.assertEqual(main(argv), 0)
+        self.assertEqual(closure.read_bytes(), self.build_closure().canonical)
+
+    def test_path_list_rejects_noncanonical_or_duplicate_rows(self) -> None:
+        for name, contents, message in (
+            ("header", "wrong\nobj/main.d\n", "schema"),
+            ("order", "sm64-saturn-path-list-v1\nz.d\na.d\n", "sorted"),
+            ("duplicate", "sm64-saturn-path-list-v1\na.d\na.d\n", "duplicate"),
+            ("blank", "sm64-saturn-path-list-v1\na.d\n\n", "blank"),
+            ("crlf", "sm64-saturn-path-list-v1\r\na.d\r\n", "canonical LF"),
+        ):
+            with self.subTest(name=name):
+                path = self.root / f"lists/{name}.txt"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(contents.encode("utf-8"))
+                with self.assertRaisesRegex(ValueError, message):
+                    load_path_list(path)
+
+    @unittest.skipUnless(os.name == "nt", "MSYS drive conversion is Windows-only")
+    def test_path_list_converts_msys_drive_paths_for_windows_python(self) -> None:
+        path = self.root / "lists/msys-drive.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"sm64-saturn-path-list-v1\n/d/repo/src/main.c\n")
+        self.assertEqual(load_path_list(path), (Path("D:/repo/src/main.c"),))
 
     def test_cli_build_rejects_aliased_outputs_before_preserving_existing_bytes(self) -> None:
         shared = self.root / "build/shared.json"

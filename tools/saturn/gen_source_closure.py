@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,7 @@ CLASS_PRECEDENCE = {
 
 _EXPLICIT_CLASSES = tuple(name for name in CLASS_PRECEDENCE if name != "header")
 EXTERNAL_DEPENDENCIES_SCHEMA = "sm64-saturn-external-dependencies-v1"
+PATH_LIST_SCHEMA = "sm64-saturn-path-list-v1"
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,39 @@ def external_dependency_handoff_bytes(paths: Sequence[Path]) -> bytes:
     return canonical_json_bytes({"schema": EXTERNAL_DEPENDENCIES_SCHEMA, "paths": ordered})
 
 
+def load_path_list(path: Path) -> tuple[Path, ...]:
+    """Load one canonical LF-delimited path list without broad argv expansion."""
+    _require_file(path, "path list")
+    raw = path.read_bytes()
+    if b"\r" in raw or not raw.endswith(b"\n"):
+        raise ValueError("path list must use canonical LF line endings")
+    try:
+        lines = raw.decode("utf-8").split("\n")[:-1]
+    except UnicodeDecodeError as error:
+        raise ValueError("path list is not valid UTF-8") from error
+    if not lines or lines[0] != PATH_LIST_SCHEMA:
+        raise ValueError("path list schema is invalid")
+    values = lines[1:]
+    if any(not value or value != value.strip() or "\x00" in value for value in values):
+        raise ValueError("path list contains a blank or noncanonical row")
+    if len(set(values)) != len(values):
+        raise ValueError("path list contains a duplicate row")
+    if values != sorted(values, key=lambda value: value.encode("utf-8")):
+        raise ValueError("path list rows are not sorted")
+    return tuple(_host_transport_path(value) for value in values)
+
+
+def _host_transport_path(value: str) -> Path:
+    if (os.name == "nt" and len(value) >= 3 and value[0] == "/"
+            and value[1].isalpha() and value[2] == "/"):
+        return Path(f"{value[1].upper()}:{value[2:]}")
+    return Path(value)
+
+
+def _merge_path_arguments(values: Sequence[Path], lists: Sequence[Path]) -> tuple[Path, ...]:
+    return tuple(values) + tuple(value for path in lists for value in load_path_list(path))
+
+
 def load_external_dependency_handoff(path: Path) -> tuple[Path, ...]:
     """Load one strict diagnostic handoff without admitting it to identity."""
     _require_file(path, "external dependency handoff")
@@ -223,16 +258,25 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     build.add_argument("--output", type=Path, required=True)
     build.add_argument("--external-output", type=Path, required=True)
     build.add_argument("--compiled-source", type=Path, action="append", default=[])
+    build.add_argument("--compiled-source-list", type=Path, action="append", default=[])
     build.add_argument("--depfile", type=Path, action="append", default=[])
+    build.add_argument("--depfile-list", type=Path, action="append", default=[])
     build.add_argument("--recipe-input", type=Path, action="append", default=[])
+    build.add_argument("--recipe-input-list", type=Path, action="append", default=[])
     build.add_argument("--generator-input", type=Path, action="append", default=[])
+    build.add_argument("--generator-input-list", type=Path, action="append", default=[])
     build.add_argument("--generated-input", type=Path, action="append", default=[])
+    build.add_argument("--generated-input-list", type=Path, action="append", default=[])
+    build.add_argument("--derived-output-list", type=Path, action="append", default=[])
 
     verify = subparsers.add_parser("verify", help="verify post-link dependency equality")
     _add_common_paths(verify)
     verify.add_argument("--sealed", type=Path, required=True)
     verify.add_argument("--actual-depfile", type=Path, action="append", default=[])
+    verify.add_argument("--actual-depfile-list", type=Path, action="append", default=[])
     verify.add_argument("--assembly-scan-depfile", type=Path, action="append", default=[])
+    verify.add_argument("--assembly-scan-depfile-list", type=Path, action="append", default=[])
+    verify.add_argument("--derived-output-list", type=Path, action="append", default=[])
     verify.add_argument("--expected-external", type=Path, required=True)
     verify.add_argument("--mode", choices=("development", "release"), required=True)
     return parser.parse_args(argv)
@@ -244,8 +288,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.output.resolve() == args.external_output.resolve():
             raise ValueError("closure and external-dependency output paths must differ")
         built = build_source_closure(
-            args.root, args.compiled_source, args.depfile, args.recipe_input,
-            args.generator_input, args.generated_input, args.derived_output,
+            args.root,
+            _merge_path_arguments(args.compiled_source, args.compiled_source_list),
+            _merge_path_arguments(args.depfile, args.depfile_list),
+            _merge_path_arguments(args.recipe_input, args.recipe_input_list),
+            _merge_path_arguments(args.generator_input, args.generator_input_list),
+            _merge_path_arguments(args.generated_input, args.generated_input_list),
+            _merge_path_arguments(args.derived_output, args.derived_output_list),
             args.external_root,
         )
         handoff = external_dependency_handoff_bytes(built.external_dependencies)
@@ -253,8 +302,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         write_if_changed(args.external_output, handoff)
     else:
         verify_source_closure(
-            args.root, args.sealed, args.actual_depfile, args.assembly_scan_depfile,
-            args.derived_output, args.external_root,
+            args.root, args.sealed,
+            _merge_path_arguments(args.actual_depfile, args.actual_depfile_list),
+            _merge_path_arguments(
+                args.assembly_scan_depfile, args.assembly_scan_depfile_list
+            ),
+            _merge_path_arguments(args.derived_output, args.derived_output_list),
+            args.external_root,
             load_external_dependency_handoff(args.expected_external),
             release_mode=args.mode == "release",
         )
