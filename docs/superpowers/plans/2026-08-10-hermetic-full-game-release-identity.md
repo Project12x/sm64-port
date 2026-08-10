@@ -690,9 +690,10 @@ Independent reviews must explicitly verify v1 byte compatibility, v2 offsets/siz
 ### Task 5: Compose the sourceboot identity-v2 spec from sealed inputs
 
 **Execution status (2026-08-10):** `source-complete` from dispatch base
-`b0c7fa03437e54019803581f5652d099e85029b4`; the behavior commit is pending
-below. TDD replaced the recursive repository-root contract with eight focused
-identity-v2 composition tests. The bootstrap now rehashes validated source
+`b0c7fa03437e54019803581f5652d099e85029b4`; behavior commit `992bfa7d`
+records the implementation below. TDD replaced the recursive repository-root
+contract with eight focused identity-v2 composition tests. The bootstrap now
+rehashes validated source
 closure, resolved-profile, package-class/package-set, and toolchain descriptors;
 requires Make configuration to equal the selected profile; maps the nine legacy
 package classes one-to-one while leaving texture aggregate-only; and validates
