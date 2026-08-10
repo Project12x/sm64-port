@@ -36,10 +36,14 @@ The outer `sourceboot` target now has one fail-closed sequence:
 
 1. `assets` materializes the selected BOB content and stable generated source
    inputs without reading or selecting a build identity.
-2. `discover` runs SH GCC dependency scans over every real C and `.sx` source
-   with the real Yaul compile flags/specs (excluding only
-   `-save-temps=obj`). It writes the source closure, absolute-path diagnostic
-   external-dependency handoff, and portable toolchain attestation.
+2. `discover` freshly scans every real C, C++, and `.sx` source even when a
+   prior depfile exists. C uses SH GCC, `SH_CFLAGS`, and `SH_SPECS`; C++ uses
+   SH G++, `SH_CXXFLAGS`, `SH_SPECS`, and `SH_CXX_SPECS`; `.sx` uses SH GCC
+   and `SH_CFLAGS` without specs, exactly like Yaul's assembly rule. Discovery
+   removes only `-save-temps=obj` from the real preprocessing flags, applies
+   all three repository prefix maps to C and C++, then writes the source
+   closure, absolute-path diagnostic external-dependency handoff, and portable
+   toolchain attestation.
 3. `seal` resolves the selected profile/package manifests and composes identity
    v2 from their exact bytes plus the closure and attestation. Only this stage
    may read the identity label or select an identity-tagged output directory.

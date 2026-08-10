@@ -266,6 +266,24 @@ class SourceClosureTests(unittest.TestCase):
         })
         self.assertNotIn(str(header.resolve()), closure.read_text(encoding="utf-8"))
 
+    def test_cli_build_rejects_aliased_outputs_before_preserving_existing_bytes(self) -> None:
+        shared = self.root / "build/shared.json"
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shared.write_bytes(b"prior output\n")
+
+        with self.assertRaisesRegex(ValueError, "output paths must differ"):
+            main([
+                "build", "--root", str(self.root), "--output", str(shared),
+                "--external-output", str(shared.parent / ".." / "build" / "shared.json"),
+                "--compiled-source", "src/main.c", "--depfile", "obj/main.d",
+                "--recipe-input", "Makefile.saturn.mk",
+                "--generator-input", "tools/saturn/gen_build_identity.py",
+                "--generated-input", "build/generated/scene.h",
+                "--derived-output", "build/generated/saturn_build_identity_values.inc",
+            ])
+
+        self.assertEqual(shared.read_bytes(), b"prior output\n")
+
     def test_cli_verify_consumes_exact_handoff_and_release_mode(self) -> None:
         external = self.root.parent / "toolchain"
         external.mkdir()

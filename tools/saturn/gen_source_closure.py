@@ -241,6 +241,8 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     if args.command == "build":
+        if args.output.resolve() == args.external_output.resolve():
+            raise ValueError("closure and external-dependency output paths must differ")
         built = build_source_closure(
             args.root, args.compiled_source, args.depfile, args.recipe_input,
             args.generator_input, args.generated_input, args.derived_output,

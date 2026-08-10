@@ -57,6 +57,14 @@
 
 ### Fixed
 
+- Corrected hermetic sourceboot dependency discovery after review. C, C++, and
+  preprocessed assembly now use distinct scans matching Yaul's real compiler,
+  flags, and language-specific specs; every discovery invocation rescans even
+  when old depfiles exist; and C++ receives all repository prefix maps. The
+  source-closure CLI also rejects aliased closure/handoff output paths before
+  writing, preventing configuration drift, eventual full-game C++ inputs, or
+  a path alias from producing a stale or self-overwritten identity seal.
+
 - Closed the remaining sourceboot identity publication review gaps. The staged
   target-profile copy is now digest-checked immediately around resolver use and
   again before publication, preventing an unchecked staging generation from

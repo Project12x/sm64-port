@@ -601,6 +601,8 @@ SH_CFLAGS += -Os -g -DDEBUG -DNON_MATCHING=1 -DAVOID_UB=1 -DVERSION_US=1 -DVERSI
 # SDK paths stay absolute/external and are sealed by the toolchain attestation.
 SH_CFLAGS += -ffile-prefix-map=$(ROOT)=. -fdebug-prefix-map=$(ROOT)=. \
   -fmacro-prefix-map=$(ROOT)=.
+SH_CXXFLAGS += -ffile-prefix-map=$(ROOT)=. -fdebug-prefix-map=$(ROOT)=. \
+  -fmacro-prefix-map=$(ROOT)=.
 SH_LDFLAGS += -fno-lto -Wl,--gc-sections \
   -Wl,--defsym=sm64_saturn_camera_variant_marker=$(SATURN_CAMERA_VARIANT) \
   -Wl,--defsym=sm64_saturn_camera_route_marker=$(SATURN_SOURCEBOOT_CAMERA_ROUTE)
@@ -1005,22 +1007,41 @@ SOURCEBOOT_TOOLCHAIN_ARGS = \
 sourceboot-dep-key = $(subst :,_,$(subst \,_,$(subst /,_,$(1))))
 sourceboot-discovery-dep = $(SOURCEBOOT_DISCOVERY_DEPS)/$(call sourceboot-dep-key,$(1)).d
 SOURCEBOOT_DISCOVERY_C_DEPS := $(foreach src,$(SH_SRCS_C),$(call sourceboot-discovery-dep,$(src)))
+SOURCEBOOT_DISCOVERY_CXX_DEPS := $(foreach src,$(SH_SRCS_CXX),$(call sourceboot-discovery-dep,$(src)))
 SOURCEBOOT_DISCOVERY_S_DEPS := $(foreach src,$(SH_SRCS_S),$(call sourceboot-discovery-dep,$(src)))
-SOURCEBOOT_DISCOVERY_DEPFILES := $(SOURCEBOOT_DISCOVERY_C_DEPS) $(SOURCEBOOT_DISCOVERY_S_DEPS)
+SOURCEBOOT_DISCOVERY_DEPFILES := $(SOURCEBOOT_DISCOVERY_C_DEPS) \
+  $(SOURCEBOOT_DISCOVERY_CXX_DEPS) $(SOURCEBOOT_DISCOVERY_S_DEPS)
 
-define sourceboot-discover-dependency
+define sourceboot-discover-c-dependency
 	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
 	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
 	  -MT "$(1)" -MF "$(2)" "$(1)"
 endef
 
-define sourceboot-discovery-rule
-$(call sourceboot-discovery-dep,$(1)): $(1)
-	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
-	$(call sourceboot-discover-dependency,$(1),$(call sourceboot-discovery-dep,$(1)))
+define sourceboot-discover-cxx-dependency
+	$(SH_CXX) -MM -MG $(filter-out -save-temps=obj,$(SH_CXXFLAGS)) \
+	  $(foreach specs,$(SH_SPECS),-specs=$(specs)) \
+	  $(foreach specs,$(SH_CXX_SPECS),-specs=$(specs)) \
+	  -MT "$(1)" -MF "$(2)" "$(1)"
 endef
 
-$(foreach src,$(SH_SRCS_C) $(SH_SRCS_S),$(eval $(call sourceboot-discovery-rule,$(src))))
+define sourceboot-discover-sx-dependency
+	$(SH_CC) -MM -MG $(filter-out -save-temps=obj,$(SH_CFLAGS)) \
+	  -MT "$(1)" -MF "$(2)" "$(1)"
+endef
+
+.PHONY: sourceboot-force-discovery-scan
+sourceboot-force-discovery-scan:
+
+define sourceboot-discovery-rule
+$(call sourceboot-discovery-dep,$(1)): $(1) sourceboot-force-discovery-scan
+	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
+	$(call $(2),$(1),$(call sourceboot-discovery-dep,$(1)))
+endef
+
+$(foreach src,$(SH_SRCS_C),$(eval $(call sourceboot-discovery-rule,$(src),sourceboot-discover-c-dependency)))
+$(foreach src,$(SH_SRCS_CXX),$(eval $(call sourceboot-discovery-rule,$(src),sourceboot-discover-cxx-dependency)))
+$(foreach src,$(SH_SRCS_S),$(eval $(call sourceboot-discovery-rule,$(src),sourceboot-discover-sx-dependency)))
 
 .PHONY: identity-discovery
 identity-discovery: $(SOURCEBOOT_DISCOVERY_DEPFILES)
@@ -1056,7 +1077,7 @@ SOURCEBOOT_POSTLINK_SX_DEPS := $(foreach src,$(SH_SRCS_S),\
 .PHONY: verify-sealed-inputs
 verify-sealed-inputs: $(SH_BUILD_PATH)/$(SH_PROGRAM).elf
 	@mkdir -p "$(SOURCEBOOT_DISCOVERY_DEPS)"
-	$(foreach src,$(SH_SRCS_S),$(call sourceboot-discover-dependency,$(src),$(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d))
+	$(foreach src,$(SH_SRCS_S),$(call sourceboot-discover-sx-dependency,$(src),$(SOURCEBOOT_DISCOVERY_DEPS)/postlink-$(call sourceboot-dep-key,$(src)).d))
 	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_source_closure.py" verify \
 	  --root "$(ROOT)" --sealed "$(SOURCEBOOT_SOURCE_CLOSURE)" \
 	  $(foreach dep,$(SOURCEBOOT_C_AND_CXX_DEPS),--actual-depfile "$(dep)") \
