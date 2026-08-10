@@ -241,6 +241,10 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertGreaterEqual(makefile.count("| source-extracted-assets"), 3)
         outer = (ROOT / "Makefile.saturn.mk").read_text(encoding="utf-8")
         self.assertEqual(outer.count('--asset-root "$(BOB_ASSET_ROOT)"'), 2)
+        self.assertEqual(
+            makefile.count('BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)"'),
+            3,
+        )
 
     def test_seal_and_post_link_verification_consume_exact_manifests(self) -> None:
         makefile = self.sourceboot_makefile()

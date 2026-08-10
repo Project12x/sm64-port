@@ -92,6 +92,11 @@
 
 ### Fixed
 
+- Fixed the sourceboot BOB scene delegation to forward its sealed asset root
+  through the scene target's nested tile/BSP prerequisites. The initial tile
+  bake could otherwise succeed from candidate-local assets and then be repeated
+  against the empty checkout root while emitting the scene header.
+
 - Fixed the BOB tile compiler to honor its public `BOB_ASSET_ROOT` override,
   matching the fragment compiler. The hermetic sourceboot caller can now read
   the sealed candidate-local extraction tree; previously the recipe silently

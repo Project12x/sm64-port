@@ -1689,6 +1689,15 @@ recipe adopted the same override. This is a one-line consumer fix with no
 profile, output-root, inventory, toolchain, or serial-execution change.
 Candidate A and every downstream gate remain open pending a clean exact rerun.
 
+The next restart got past the corrected initial tile bake but stopped before
+discovery while generating `bob_scene.h`: the scene delegation re-invokes the
+outer `compile-bob-scene` target, whose nested tile/BSP prerequisites require
+the same `BOB_ASSET_ROOT`, but that delegation did not forward it. The focused
+contract was RED at 8/9 with two of three sourceboot BOB delegations bound;
+GREEN is 9/9 after scene propagation. This does not change the extracted bytes
+or closure; it makes all nested consumers use the already-sealed root. Candidate
+A and every downstream gate remain open pending another clean exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell
