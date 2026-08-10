@@ -865,8 +865,8 @@ Task 3; Make must invoke Task 3's actual `--output` / `--verify` form instead
 of inventing a second interface.
 
 **Live status (2026-08-10):** `source-complete` in behavior commit `b1d75772`
-(`feat(saturn): integrate hermetic sourceboot sealing`); controller-owned
-independent reviews remain pending. Host/dry-run TDD covers stage
+(`feat(saturn): integrate hermetic sourceboot sealing`). The first independent
+review verdict is `Needs fixes`; repair round 1 is active. Host/dry-run TDD covers stage
 isolation, exact C/`.sx` scan expansion, flag/spec parity, profile/mode
 propagation, explicit closure classification and identity-cycle breaking,
 post-link dependency/external equality, release cleanliness dispatch, live
@@ -875,6 +875,16 @@ sources now live in the stable generated-input directory so discovery and build
 name identical inputs rather than requiring an identity to discover itself. No
 real SH-2 build was run; independent review and every target/release evidence
 gate remain open.
+
+**Review repair round 1 (2026-08-10):** the reviewer confirmed the staged
+architecture and failure ordering, but found one Critical command-parity defect:
+`.sx` discovery/post-link scans added `SH_SPECS` even though Yaul's real `.sx`
+rule does not. Important findings require discovery scans to be fresh when
+flags/specs change, full C++ discovery/prefix-map support for the eventual full
+game, fail-closed rejection of aliased closure/handoff output paths before I/O,
+and dry-run tests that prove exact expanded inventory/argv parity rather than
+source-token presence. Task 6 remains `active`; no target or release-evidence
+gate is closed by the repair.
 
 Fresh post-commit verification passed all four exact suites: 5 Make + 15
 bootstrap + 16 closure + 15 attestation = 51 host tests, with one legitimate
