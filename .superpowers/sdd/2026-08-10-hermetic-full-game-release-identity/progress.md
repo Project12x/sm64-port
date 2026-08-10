@@ -754,6 +754,29 @@
   release evidence, 20,100-frame smoke, visual, and manual-play gates remain
   open.
 
+## Task 8 review repair round 2
+
+- Status: `active`. Round-1 scoped rereview marked release-manifest mode
+  legality `ADDRESSED`; the first `Needs fixes` verdict remains effective
+  because exact-object publication and late measurement-output aliasing remain
+  open.
+- Sealer residual race: the checked private leaf can be replaced between its
+  last identity check and the name-based no-clobber rename. A successful rename
+  of that substituted leaf is not followed by a proof that the published object
+  is the exact held/staged object.
+- Measurement residual race: output alias rejection occurs only at preflight.
+  A late symlink or hardlink replacement before the eventual write can redirect
+  publication into an input after release verification or tool activity.
+- Required correction: publish the exact opened or namespace-immutable private
+  object with an atomic exclusive primitive, and publish measurement output
+  exclusively so a late alias can only fail. Deterministic race tests must prove
+  inputs and foreign state remain unchanged. Reuse the reviewed Task 7/shared
+  path-identity primitives and preserve cross-platform fail-closed behavior.
+- Open gates: scoped rereview after repair, real target build, reproducibility,
+  real audit-v4 measurement/contract/pin, complete-package inventory, release
+  evidence, 20,100-frame smoke, visual, and manual play. No target or emulator
+  evidence is claimed.
+
 ## Task 5 review repair round 2
 
 - Status: `source-complete`; repair round 2 is implemented and controller-owned rereview remains open. The first `Needs fixes` verdict remains effective until both remaining findings clear.

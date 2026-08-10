@@ -1394,6 +1394,17 @@ Focused repair tests pass 11 sealer cases; the full verifier is 239/240 with
 only the preserved null-camera failure; Task 7 manifest/staging adjacency is
 46/46. Scoped rereview remains open; no target gate is affected.
 
+Round-1 scoped rereview marked release-manifest mode legality `ADDRESSED`, but
+kept publication and alias safety open. A concurrent actor can replace the
+checked private contract leaf before its name-based no-clobber rename, and
+there is no post-publication identity proof. Measurement output is checked for
+aliases only once, so a late symlink or hardlink replacement can redirect the
+eventual write into an input. Repair round 2 is `active`: it must publish the
+exact opened or namespace-immutable private object atomically and make
+measurement output exclusive at publication so late aliases fail without
+mutating inputs. No real measurement, contract, pin, target, or emulator gate
+is implied by this host-side repair.
+
 - [x] **Step 1: Write failing v4 parser, preflight, and measurement tests**
 
 ```python
