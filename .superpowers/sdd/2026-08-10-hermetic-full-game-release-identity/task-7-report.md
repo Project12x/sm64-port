@@ -161,3 +161,50 @@ No real SH-2 build, emulator run, target capture, reproducibility comparison,
 audit-v4 seal, complete-package inventory, 20,100-frame smoke, visual, or
 manual-play evidence was run or claimed. All those gates and controller
 rereview remain open.
+
+## Repair round 3
+
+Status remains `source-complete`. Behavior repair commit `740a08bc`
+(`fix(saturn): dispatch atomic release publication`) addresses the new POSIX
+portability finding raised after round 2 cleared the original namespace race.
+This report, the execution ledger, and the active plan are updated in the
+follow-up source-status commit; controller rereview remains open.
+
+- Platform capability is resolved before any staging namespace is created and
+  the immutable adapter is reused for every publication, quarantine, and
+  restore rename. Windows uses exclusive native rename; Linux requires libc
+  `renameat2(RENAME_NOREPLACE=1)`; Darwin/BSD-family hosts require libc
+  `renameatx_np(RENAME_EXCL=4)`. A missing symbol or unsupported platform fails
+  closed, `EEXIST` becomes `FileExistsError`, and there is no path-based or
+  check-then-rename fallback.
+- Windows retains the round-2 identity-checked handle deletion for the proven
+  preexisting-empty backup. Where opened-object identity deletion is
+  unavailable, staging keeps the empty sibling at
+  `.sm64-saturn-quarantine-<destination>-<unique-id>` and emits a stable
+  `RuntimeWarning` with its path. The published destination still verifies with
+  exact inventory; retry after restoring the destination to empty succeeds;
+  an initially missing destination creates no backup.
+- TDD RED was nine intended failures/errors in the 20-case stage suite:
+  three adapter/flag dispatch cases, three collision mappings, unsupported
+  preflight, help scope, and retained-backup diagnostics. GREEN focused
+  release/stage is 26 + 20 = **46 host tests**.
+- All seven exact suites pass 26 + 20 + 41 + 12 + 4 + 9 + 7 = **119 host
+  tests**. Adjacent identity/bootstrap/boot-trace/route-view suites pass
+  21 + 15 + 16 + 1 = **53 host tests**. Six production scripts pass
+  `py_compile`; there are no failures, errors, or skips.
+- The behavior index contained exactly four Task 7 paths and passed
+  `git diff --cached --check`; `git show --check 740a08bc` passes. Unrelated
+  dirty and untracked work remains preserved.
+
+Reference inspection used Apple's APFS Tools and APIs declaration for
+`renameatx_np`, Apple's exclusive-renaming resource documentation for
+`RENAME_EXCL`, and the official OpenBSD/NetBSD `rename(2)` manuals to distinguish
+directory-relative exclusive APIs from replacing `renameat`. Reuse mode was
+API-contract/pattern-only; no external source was copied. POSIX adapter tests
+inject libc/platform seams on Windows, so they characterize call selection,
+flags, and error mapping without claiming actual Linux, macOS, or BSD execution.
+
+No real SH-2 build, emulator run, target capture, reproducibility comparison,
+audit-v4 seal, complete-package inventory, 20,100-frame smoke, visual, or
+manual-play evidence was run or claimed. All those gates and controller
+rereview remain open.

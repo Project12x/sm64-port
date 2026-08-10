@@ -1155,6 +1155,20 @@ supported non-Linux POSIX hosts and make retained empty-quarantine behavior
 explicit and tested wherever deletion by opened identity is unavailable. It
 must not reintroduce check-then-unlink cleanup.
 
+Repair round 3 is `source-complete` in behavior commit `740a08bc`. Atomic
+publication resolves its platform capability before creating any staging
+namespace: Windows uses its exclusive rename, Linux requires directory-relative
+`renameat2(RENAME_NOREPLACE)`, and Darwin/BSD-family platforms require libc's
+directory-relative `renameatx_np(RENAME_EXCL)`. A missing symbol or unsupported
+host fails closed; path-only `renamex_np` and check-then-rename are not
+fallbacks. Windows still deletes a proven empty backup by retained handle;
+platforms without identity-conditional opened-object deletion retain the empty
+`.sm64-saturn-quarantine-<destination>-<unique-id>` sibling and emit its path.
+Injected tests characterize POSIX API dispatch without claiming OS execution.
+All seven exact suites pass 26 + 20 + 41 + 12 + 4 + 9 + 7 = 119 host tests;
+adjacent suites pass 21 + 15 + 16 + 1 = 53, and six production scripts compile.
+Controller rereview and every target/release-evidence gate remain open.
+
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
 surfacing only as a downstream digest mismatch, and the explicit v1 occupancy

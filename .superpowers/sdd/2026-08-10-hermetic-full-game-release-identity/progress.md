@@ -614,6 +614,46 @@
   visual, and manual-play. No real SH-2 build or emulator evidence was run or
   claimed.
 
+## Task 7 review repair round 3
+
+- Status: `source-complete` in behavior commit `740a08bc`
+  (`fix(saturn): dispatch atomic release publication`); controller-owned
+  rereview remains open. The original namespace-race finding remains
+  `ADDRESSED`; this repair is the proposed closure for the new POSIX portability
+  finding.
+- TDD RED: the 20-case staging suite produced nine intended failures/errors:
+  Linux/Darwin/FreeBSD adapter selection and exclusive flags (three),
+  Linux/Darwin/OpenBSD `EEXIST` mapping (three), unsupported POSIX preflight,
+  platform help, and the stable retained-empty-backup warning.
+- GREEN: focused release/stage passes 26 + 20 = **46 host tests**. All seven
+  exact suites pass 26 + 20 + 41 + 12 + 4 + 9 + 7 = **119**; adjacent
+  identity/bootstrap/boot-trace/route-view suites pass 21 + 15 + 16 + 1 =
+  **53**; all six production scripts pass `py_compile`, with zero failures,
+  errors, or skips.
+- Design correction: an immutable atomic-rename adapter is resolved before any
+  staging namespace mutation and reused through publish/quarantine/restore.
+  Windows uses exclusive rename; Linux requires directory-relative
+  `renameat2` flag `RENAME_NOREPLACE=1`; Darwin/BSD-family hosts require libc
+  `renameatx_np` flag `RENAME_EXCL=4`. Missing symbols and other platforms fail
+  closed. Path-only `renamex_np` is deliberately rejected because it abandons
+  the guarded parent descriptor. `EEXIST` is normalized to `FileExistsError`.
+- Backup ownership: Windows removes the proven preexisting-empty backup only by
+  its identity-checked retained handle. Other platforms retain the empty sibling
+  at `.sm64-saturn-quarantine-<destination>-<unique-id>` with a stable warning;
+  missing-destination success creates no backup. Exact destination inventory
+  and repeat staging after restoration to empty are tested.
+- Platform reference inspection: Apple Developer's APFS Tools and APIs page
+  documents the directory-relative `renameatx_np` signature, while Apple's
+  exclusive-renaming resource documentation binds `RENAME_EXCL`; official
+  OpenBSD and NetBSD `rename(2)` manuals show only replacing `renameat` on those
+  documented versions. Reuse mode is API-contract/pattern-only; no external
+  source was copied, and no Linux/macOS/BSD execution is claimed.
+- The behavior index contained exactly four Task 7 paths (implementation, test,
+  BUILDING, and CHANGELOG) and passed `git diff --cached --check`.
+- Open gates: controller rereview, real target build, reproducibility, audit
+  v4, complete-package inventory, release evidence, 20,100-frame smoke,
+  visual, and manual-play. No target or emulator work was run or claimed.
+
 ## Task 5 review repair round 2
 
 - Status: `source-complete`; repair round 2 is implemented and controller-owned rereview remains open. The first `Needs fixes` verdict remains effective until both remaining findings clear.
