@@ -21,6 +21,7 @@ SOURCEBOOT_BUILD_IDENTITY_INC := $(SOURCEBOOT_GENERATED)/saturn_build_identity_v
 SOURCEBOOT_BUILD_IDENTITY_BIN := $(SOURCEBOOT_GENERATED)/saturn_build_identity.bin
 SOURCEBOOT_BUILD_IDENTITY_JSON := $(SOURCEBOOT_GENERATED)/saturn_build_identity.json
 SOURCEBOOT_BUILD_IDENTITY_LABEL := $(SOURCEBOOT_GENERATED)/saturn_build_identity.label
+SOURCEBOOT_IDENTITY_GENERATOR = cd "$(ROOT)" && "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py"
 SOURCEBOOT_TARGET_PROFILE ?= $(ROOT)/tools/saturn/profiles/sourceboot-bob-demo-v1.json
 SOURCEBOOT_RELEASE_MODE ?= development
 SOURCEBOOT_RESOLVED_PROFILE := $(SOURCEBOOT_GENERATED)/saturn-target-profile-v1.json
@@ -509,11 +510,11 @@ endif
 endif
 # The generator validates every artifact, constructs the exact ABI bytes, and
 # the staging label comes back from those bytes rather than a handwritten tag.
-SOURCEBOOT_IDENTITY_LABEL_VALUE := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
+SOURCEBOOT_IDENTITY_LABEL_VALUE := $(strip $(shell $(SOURCEBOOT_IDENTITY_GENERATOR) --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
 ifeq ($(SOURCEBOOT_IDENTITY_LABEL_VALUE),)
   $(error sourceboot build identity spec did not produce a compiled identity label)
 endif
-SOURCEBOOT_IDENTITY_DIRECTORY_TAG := $(strip $(shell "$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" --print-directory-tag $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
+SOURCEBOOT_IDENTITY_DIRECTORY_TAG := $(strip $(shell $(SOURCEBOOT_IDENTITY_GENERATOR) --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" --print-directory-tag $(SOURCEBOOT_BUILD_IDENTITY_EXPECTATIONS)))
 ifeq ($(SOURCEBOOT_IDENTITY_DIRECTORY_TAG),)
   $(error sourceboot build identity spec did not produce an object-directory tag)
 endif
@@ -952,7 +953,7 @@ $(SOURCEBOOT_BUILD_IDENTITY_INC) $(SOURCEBOOT_BUILD_IDENTITY_BIN) \
 $(SOURCEBOOT_BUILD_IDENTITY_JSON) $(SOURCEBOOT_BUILD_IDENTITY_LABEL) &: \
     $(SOURCEBOOT_BUILD_IDENTITY_SPEC) $(ROOT)/tools/saturn/gen_build_identity.py
 	@mkdir -p "$(SOURCEBOOT_GENERATED)"
-	"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py" \
+	$(SOURCEBOOT_IDENTITY_GENERATOR) \
 	  --spec "$(SOURCEBOOT_BUILD_IDENTITY_SPEC)" \
 	  --output-c-include "$(SOURCEBOOT_BUILD_IDENTITY_INC)" \
 	  --output-binary "$(SOURCEBOOT_BUILD_IDENTITY_BIN)" \

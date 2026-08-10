@@ -1097,6 +1097,19 @@
   GREEN is target-profile 13/13, identity-bootstrap 15/15, and hermetic Make
   11/11. Identity publication, compile, link, seal, and release gates remain
   open pending the exact candidate rerun from the behavior commit.
+- Candidate A from `a18f612e` passed the canonical profile and identity
+  bootstrap, then failed before identity label/publication or target compile:
+  `gen_build_identity.py` resolved the spec's repository-relative
+  `build/saturn/...` artifact paths from sourceboot's nested cwd. The spec and
+  artifact hashes were valid; no downstream gate is claimed.
+- Invocation-base correction: the sourceboot Makefile now uses one generator
+  command rooted with `cd "$(ROOT)"` for label, directory tag, and output
+  generation. The identity CLI's established caller-relative semantics remain
+  unchanged. TDD RED was hermetic Make 11/12; GREEN is Make 12/12,
+  build-identity 21/21, and bootstrap 15/15. Reference: same-repository
+  close-port of Task 5's explicit-root/repository-relative spec contract at
+  `a18f612e`; no external source or notice change. Candidate A and every
+  target/release gate remain open pending exact rerun from the behavior commit.
 
 ## Task 5 review repair round 2
 

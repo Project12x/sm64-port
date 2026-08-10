@@ -1835,6 +1835,20 @@ at 11/11. Discovery publication is distinguished from the still-open identity,
 compile, link, seal, and release gates pending the exact rerun from the resulting
 source commit.
 
+Candidate A from `a18f612e` passed canonical-profile validation and identity
+bootstrap, then stopped before identity-label publication or target compilation.
+The Task 5 spec correctly names sealed artifacts with repository-relative paths,
+but all three generator invocations ran from sourceboot's nested working
+directory and therefore looked for `src/port/saturn/sourceboot/build/...`.
+Sourceboot now centralizes those invocations behind a root-bound command for
+label lookup, directory-tag lookup, and generated identity outputs; the public
+identity CLI retains its existing caller-relative behavior. Make TDD was RED at
+11/12 and GREEN at 12/12; build-identity remains GREEN at 21/21 and bootstrap at
+15/15. Reference record: same-repository close-port of bootstrap's explicit
+`--root` invocation/base contract and Task 5's reviewed repository-relative
+spec at `a18f612e`; no external source, license, or notice change. Identity,
+compile, link, seal, and release gates remain open pending the exact rerun.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

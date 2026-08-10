@@ -327,6 +327,15 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
         self.assertIn("seal-release", makefile)
         self.assertIn("verify-release", makefile)
 
+    def test_identity_generator_resolves_repository_relative_spec_paths(self) -> None:
+        makefile = self.sourceboot_makefile()
+        self.assertIn(
+            'SOURCEBOOT_IDENTITY_GENERATOR = cd "$(ROOT)" && '
+            '"$(SOURCEBOOT_PYTHON)" "$(ROOT)/tools/saturn/gen_build_identity.py"',
+            makefile,
+        )
+        self.assertEqual(makefile.count("$(SOURCEBOOT_IDENTITY_GENERATOR)"), 3)
+
     def test_discovery_stage_cannot_build_or_reuse_identity(self) -> None:
         self.assert_stage_rejected("discover", "all")
         self.assert_stage_rejected("assets", "identity-discovery")

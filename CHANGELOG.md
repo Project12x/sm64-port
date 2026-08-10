@@ -92,6 +92,13 @@
 
 ### Fixed
 
+- Made sourceboot invoke the build-identity generator from the repository root.
+  Identity-v2 specs intentionally carry repository-relative sealed-artifact
+  paths, but the sourceboot Makefile previously consumed them from its nested
+  directory and failed immediately after bootstrap. Label discovery, directory
+  tagging, and output generation now share one root-bound invocation while the
+  identity CLI's existing relative-path behavior remains compatible.
+
 - Canonicalized the checked-in release profile's `release_config` key order.
   The late-added `area_id` value was semantically correct but appended after
   `slave_render`, so the byte-strict identity bootstrap correctly rejected the
