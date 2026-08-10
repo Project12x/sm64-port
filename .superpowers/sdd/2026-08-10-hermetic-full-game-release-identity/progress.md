@@ -1302,6 +1302,22 @@
   remain GREEN. Combined closure/Make/attestation coverage remains 55/55 with
   one existing case-filesystem skip. Candidate A must restart from the common
   resulting commit; release/reproducibility gates remain open.
+- Candidate A from `4dbf515f` published identity v2 tag
+  `id-6d6ecbaa8345b28f`, completed compile/link/package and external equality,
+  and passed nested libyaul cleanliness. Root cleanliness then raised
+  `FileNotFoundError: [WinError 206]` before release-manifest sealing because
+  the full checked-in closure was expanded into one `git status` argv. No
+  release manifest or reproducibility gate is claimed.
+- Windows command-boundary correction: root and nested cleanliness now batch
+  the exact ordered status path set into deterministic commands whose rendered
+  Windows command lines are at most 16,000 characters. Every path is checked
+  exactly once; any dirty batch or individually overlong path fails closed.
+  Focused TDD was RED 0/1 and GREEN 1/1; full source-closure coverage is GREEN
+  24/24 with one existing case-filesystem skip, and combined closure, Make,
+  and attestation coverage is GREEN 56/56. Reference: clean-room use of Git's
+  existing path-limited status interface; no external source, copied bytes,
+  license, or notice change. Candidate A must restart from the resulting
+  common commit; release/reproducibility gates remain open.
 
 ## Task 5 review repair round 2
 

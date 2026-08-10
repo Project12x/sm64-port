@@ -17,6 +17,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+import gen_source_closure
 from gen_source_closure import (
     build_source_closure,
     load_path_list,
@@ -223,6 +224,43 @@ class SourceClosureTests(unittest.TestCase):
         sealed = self.write_sealed_closure()
         with self.assertRaisesRegex(ValueError, "release closure input is not tracked"):
             verify_source_closure(self.root, sealed, self.depfiles, (), self.derived, (), (), True)
+
+    def test_release_cleanliness_batches_large_git_status_path_sets(self) -> None:
+        paths = tuple(
+            f"include/{index:04d}-{'long-component-' * 18}.h"
+            for index in range(160)
+        )
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(
+            gen_source_closure.subprocess, "run", return_value=completed
+        ) as run:
+            gen_source_closure._verify_clean_git_paths(
+                ["git"], self.root, paths, ignore_submodules=True
+            )
+
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertGreater(len(commands), 1)
+        self.assertEqual(
+            [path for command in commands for path in command[command.index("--") + 1 :]],
+            list(paths),
+        )
+        self.assertTrue(all(
+            len(subprocess.list2cmdline(command))
+            <= gen_source_closure._GIT_COMMAND_LINE_CHARACTER_LIMIT
+            for command in commands
+        ))
+        self.assertTrue(all("--ignore-submodules=dirty" in command for command in commands))
+
+        dirty = subprocess.CompletedProcess([], 0, " M include/dirty.h\n", "")
+        with mock.patch.object(
+            gen_source_closure.subprocess, "run",
+            side_effect=[*[completed] * (len(commands) - 1), dirty],
+        ) as dirty_run:
+            with self.assertRaisesRegex(ValueError, "release closure inputs are not clean"):
+                gen_source_closure._verify_clean_git_paths(
+                    ["git"], self.root, paths, ignore_submodules=True
+                )
+        self.assertEqual(dirty_run.call_count, len(commands))
 
     def test_release_mode_allows_clean_ignored_generated_input_without_git_status(self) -> None:
         sealed = self.git_init_with_tracked_closure()

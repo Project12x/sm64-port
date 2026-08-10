@@ -32,6 +32,7 @@ CLASS_PRECEDENCE = {
 _EXPLICIT_CLASSES = tuple(name for name in CLASS_PRECEDENCE if name != "header")
 EXTERNAL_DEPENDENCIES_SCHEMA = "sm64-saturn-external-dependencies-v1"
 PATH_LIST_SCHEMA = "sm64-saturn-path-list-v1"
+_GIT_COMMAND_LINE_CHARACTER_LIMIT = 16_000
 
 
 @dataclass(frozen=True)
@@ -605,13 +606,43 @@ def _verify_release_cleanliness(root: Path, sealed_rows: Mapping[tuple[str, str]
     for gitlink, paths in submodule_inputs.items():
         _verify_submodule_inputs(root, gitlink, gitlinks[gitlink], paths)
     status_paths = sorted(set(direct_paths) | set(submodule_inputs))
+    _verify_clean_git_paths(
+        _git_cleanliness_command(), root, status_paths, ignore_submodules=True
+    )
+
+
+def _verify_clean_git_paths(
+    command: Sequence[str], root: Path, paths: Sequence[str], *, ignore_submodules: bool
+) -> None:
+    prefix = [
+        *command, "status", "--porcelain=v1", "--untracked-files=all",
+    ]
+    if ignore_submodules:
+        prefix.append("--ignore-submodules=dirty")
+    prefix.append("--")
+    batch: list[str] = []
+    for path in paths:
+        candidate = [*prefix, *batch, path]
+        if len(subprocess.list2cmdline(candidate)) > _GIT_COMMAND_LINE_CHARACTER_LIMIT:
+            if not batch:
+                raise ValueError(
+                    f"release closure input path exceeds Git command-line limit: {path}"
+                )
+            _require_clean_git_status(prefix, batch, root)
+            batch = [path]
+            if len(subprocess.list2cmdline([*prefix, path])) > _GIT_COMMAND_LINE_CHARACTER_LIMIT:
+                raise ValueError(
+                    f"release closure input path exceeds Git command-line limit: {path}"
+                )
+        else:
+            batch.append(path)
+    if batch:
+        _require_clean_git_status(prefix, batch, root)
+
+
+def _require_clean_git_status(prefix: Sequence[str], paths: Sequence[str], root: Path) -> None:
     result = subprocess.run(
-        [*_git_cleanliness_command(), "status", "--porcelain=v1", "--untracked-files=all",
-         "--ignore-submodules=dirty", "--", *status_paths],
-        cwd=root,
-        check=False,
-        capture_output=True,
-        text=True,
+        [*prefix, *paths], cwd=root, check=False, capture_output=True, text=True,
     )
     if result.returncode != 0 or result.stdout:
         raise ValueError("release closure inputs are not clean")
@@ -678,12 +709,12 @@ def _verify_submodule_inputs(
             raise ValueError(
                 f"release closure input is not tracked in submodule: {gitlink}/{path}"
             )
-    status = subprocess.run(
-        [*command, "status", "--porcelain=v1", "--untracked-files=all", "--", *paths],
-        check=False, capture_output=True, text=True,
-    )
-    if status.returncode != 0 or status.stdout:
-        raise ValueError(f"release closure submodule inputs are not clean: {gitlink}")
+    try:
+        _verify_clean_git_paths(command, submodule, paths, ignore_submodules=False)
+    except ValueError as error:
+        raise ValueError(
+            f"release closure submodule inputs are not clean: {gitlink}"
+        ) from error
 
 
 def _path_sort_key(path: Path) -> tuple[bytes, ...]:

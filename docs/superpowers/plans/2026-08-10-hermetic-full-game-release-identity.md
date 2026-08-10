@@ -2067,6 +2067,21 @@ coverage remains 55/55 with one existing case-filesystem skip. Candidate A
 must restart from the resulting common source commit; release/reproducibility
 remain open.
 
+Candidate A from `4dbf515f` published identity tag
+`id-6d6ecbaa8345b28f`, completed compile/link/package and external equality,
+and cleared nested libyaul cleanliness. Root cleanliness then raised Windows
+`WinError 206` before manifest sealing because it expanded the complete
+checked-in closure into one `git status` argv. No release manifest or
+reproducibility gate is claimed. Root and nested status checks now partition
+the exact ordered path set into deterministic commands whose rendered Windows
+command lines are at most 16,000 characters; each path remains checked once,
+and any dirty batch or individually overlong path fails closed. Focused TDD
+was RED 0/1 and GREEN 1/1; combined source-closure, Make, and attestation
+coverage is GREEN 56/56 with one existing case-filesystem skip. Reference:
+clean-room use of Git's existing path-limited status interface; no external
+source, copied bytes, license, or notice change. Candidate A must restart from
+the resulting common source commit; release/reproducibility remain open.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

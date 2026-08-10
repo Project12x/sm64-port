@@ -92,6 +92,14 @@
 
 ### Fixed
 
+- Bounded release-cleanliness Git status checks into deterministic commands
+  below Windows' process command-line limit. The complete checked-in closure
+  had previously been expanded into one argv after a successful target build,
+  causing `WinError 206` before the release manifest could be sealed; every
+  path is still checked exactly once, in closure order, and any dirty batch or
+  individually overlong path fails closed. The same bounded check now covers
+  relevant pinned-submodule paths for eventual full-game-sized closures.
+
 - Bound Windows release-cleanliness checks to the checkout's CRLF
   normalization instead of whichever Git happens to lead the target-build
   `PATH`. MSYS Git lacks Windows Git's system `core.autocrlf=true` setting and
