@@ -17,7 +17,10 @@ if str(TOOLS_DIR) not in sys.path:
 from hermetic_manifest import canonical_json_bytes  # noqa: E402
 from gen_toolchain_attestation import (  # noqa: E402
     ToolchainComponent,
+    _parse_args,
+    _sourceboot_component,
     build_toolchain_attestation,
+    main,
     verify_toolchain_attestation,
     write_toolchain_attestation,
 )
@@ -52,11 +55,12 @@ class ToolchainAttestationTests(unittest.TestCase):
         path.write_bytes(data)
 
     def component(self, root: Path | None = None, *, component_id: str = "yaul-sh-sdk",
-                  binaries: tuple[Path, ...] | None = None) -> ToolchainComponent:
+                  binaries: tuple[Path, ...] | None = None,
+                  version: str | None = None) -> ToolchainComponent:
         root = root or self.install
         return ToolchainComponent(
             component_id=component_id,
-            version="yaul-0.3.1 commit-6012f79f237773378c8014e70d8998ad95a38d98; gcc-version",
+            version=version or "yaul-0.3.1 commit-6012f79f237773378c8014e70d8998ad95a38d98; gcc-version",
             root=root,
             binaries=binaries or tuple(root / "bin" / name for name in self.binary_names),
         )
@@ -67,6 +71,17 @@ class ToolchainAttestationTests(unittest.TestCase):
 
     def build(self):
         return build_toolchain_attestation([self.component()], self.dependencies())
+
+    def cli_arguments(self, output: Path, *, yaul_version: str = "0.3.1",
+                      yaul_commit: str = "6012f79f237773378c8014e70d8998ad95a38d98") -> list[str]:
+        arguments = [
+            "--yaul-root", str(self.install), "--yaul-version", yaul_version,
+            "--yaul-commit", yaul_commit,
+        ]
+        for name in self.binary_names:
+            arguments.extend((f"--{name.removeprefix('sh-elf-').removesuffix('.exe')}",
+                              str(self.install / "bin" / name)))
+        return arguments + ["--output", str(output)]
 
     def test_install_root_does_not_enter_canonical_attestation(self) -> None:
         first_root = self.root / "install-a"
@@ -146,6 +161,42 @@ class ToolchainAttestationTests(unittest.TestCase):
         self.write(outside, b"outside\n")
         with self.assertRaisesRegex(ValueError, "unclassified external dependency"):
             write_toolchain_attestation(output, [self.component()], [outside])
+        self.assertEqual(output.read_bytes(), b"known-valid-prior-output\n")
+
+    def test_component_version_rejects_posix_and_windows_absolute_paths(self) -> None:
+        for version in ("gcc configured --prefix=/opt/yaul", "gcc from C:\\Yaul\\bin"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "version.*absolute path"):
+                    build_toolchain_attestation([self.component(version=version)], self.dependencies())
+
+    def test_sourceboot_cli_rejects_unpinned_yaul_metadata(self) -> None:
+        output = self.root / "toolchain.json"
+        for arguments in (
+            self.cli_arguments(output, yaul_version="0.3.2"),
+            self.cli_arguments(output, yaul_commit="0" * 40),
+        ):
+            with self.subTest(arguments=arguments[3:5]):
+                with self.assertRaisesRegex(ValueError, "must use Yaul 0.3.1 commit"):
+                    _sourceboot_component(_parse_args(arguments), lambda _path: "gcc 14.3.0\n")
+
+    def test_sourceboot_cli_parses_and_uses_each_explicit_tool_path(self) -> None:
+        arguments = self.cli_arguments(self.root / "toolchain.json")
+        component = _sourceboot_component(
+            _parse_args(arguments), lambda _path: "sh-elf-gcc (GCC) 14.3.0\n"
+        )
+        self.assertEqual(
+            component.binaries,
+            tuple(self.install / "bin" / name for name in self.binary_names),
+        )
+
+    def test_sourceboot_cli_path_banner_preserves_prior_output(self) -> None:
+        output = self.root / "toolchain.json"
+        output.write_bytes(b"known-valid-prior-output\n")
+        with self.assertRaisesRegex(ValueError, "version.*absolute path"):
+            main(
+                self.cli_arguments(output),
+                compiler_version_reader=lambda _path: "gcc configured at /opt/yaul/bin\n",
+            )
         self.assertEqual(output.read_bytes(), b"known-valid-prior-output\n")
 
 

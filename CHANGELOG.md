@@ -30,6 +30,12 @@
 
 ### Fixed
 
+- Hardened Saturn toolchain attestation after review: component version strings
+  and GCC `--version` output now reject embedded POSIX or Windows absolute
+  paths before canonical serialization or atomic publication. This prevents a
+  host-specific compiler banner from changing a portable release identity; the
+  pinned Yaul metadata and every explicit tool path remain required.
+
 - Hardened source-closure release cleanliness after review. Generated inputs
   outside `build/` now receive the same Git tracking/dirty check as checked-in
   source inputs, while deterministic ignored build outputs remain allowed.

@@ -6,10 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from hermetic_manifest import (
     canonical_json_bytes,
@@ -29,6 +30,8 @@ _TOOL_ARGUMENTS = (
     ("nm", "nm"), ("objcopy", "objcopy"), ("objdump", "objdump"),
     ("readelf", "readelf"), ("addr2line", "addr2line"),
 )
+_POSIX_ABSOLUTE_PATH = re.compile(r"(?<![:/])/(?!/)")
+_WINDOWS_ABSOLUTE_PATH = re.compile(r"(?<![A-Za-z0-9])(?:[A-Za-z]:[\\/]|\\\\)")
 
 
 @dataclass(frozen=True)
@@ -145,8 +148,7 @@ def _validate_components(components: Sequence[ToolchainComponent]) -> tuple[Tool
             raise ValueError("toolchain component is invalid")
         if not isinstance(component.component_id, str) or not component.component_id:
             raise ValueError("toolchain component id is invalid")
-        if not isinstance(component.version, str) or not component.version:
-            raise ValueError("toolchain component version is invalid")
+        _validate_component_version(component.version)
         if not Path(component.root).is_dir():
             raise ValueError(f"toolchain component root is not a directory: {component.root}")
         component_ids.append(component.component_id)
@@ -260,8 +262,9 @@ def _validate_attestation_document(document: Mapping[str, Any]) -> None:
         if not isinstance(component, dict) or set(component) != {"id", "version", "binaries", "dependencies"}:
             raise ValueError("toolchain attestation component is invalid")
         component_id, version = component["id"], component["version"]
-        if not isinstance(component_id, str) or not component_id or not isinstance(version, str) or not version:
+        if not isinstance(component_id, str) or not component_id:
             raise ValueError("toolchain attestation component is invalid")
+        _validate_component_version(version)
         ids.append(component_id)
         _validate_records(component["binaries"], "binary")
         _validate_records(component["dependencies"], "dependency")
@@ -292,6 +295,14 @@ def _is_lowercase_sha256(value: Any) -> bool:
             and all(character in "0123456789abcdef" for character in value))
 
 
+def _validate_component_version(value: Any) -> None:
+    """Keep component metadata portable rather than sealing host install paths."""
+    if not isinstance(value, str) or not value:
+        raise ValueError("toolchain component version is invalid")
+    if _POSIX_ABSOLUTE_PATH.search(value) or _WINDOWS_ABSOLUTE_PATH.search(value):
+        raise ValueError("toolchain component version contains an absolute path")
+
+
 def _path_sort_key(path: Path) -> tuple[bytes, ...]:
     return tuple(part.encode("utf-8") for part in path.as_posix().split("/"))
 
@@ -303,12 +314,14 @@ def _gcc_version(path: Path) -> str:
     return result.stdout
 
 
-def _sourceboot_component(args: argparse.Namespace) -> ToolchainComponent:
+def _sourceboot_component(
+    args: argparse.Namespace, compiler_version_reader: Callable[[Path], str] = _gcc_version,
+) -> ToolchainComponent:
     if args.yaul_version != YAUL_VERSION or args.yaul_commit != YAUL_COMMIT:
         raise ValueError("sourceboot toolchain must use Yaul 0.3.1 commit " + YAUL_COMMIT)
     binaries = tuple(Path(getattr(args, argument)) for argument, _label in _TOOL_ARGUMENTS)
     version = (f"yaul-{args.yaul_version} commit-{args.yaul_commit}; "
-               f"gcc --version:\n{_gcc_version(binaries[0])}")
+               f"gcc --version:\n{compiler_version_reader(binaries[0])}")
     return ToolchainComponent("yaul-sh-sdk", version, Path(args.yaul_root), binaries)
 
 
@@ -328,9 +341,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def main(argv: Sequence[str] | None = None) -> None:
+def main(
+    argv: Sequence[str] | None = None, *, compiler_version_reader: Callable[[Path], str] = _gcc_version,
+) -> None:
     args = _parse_args(argv)
-    component = _sourceboot_component(args)
+    component = _sourceboot_component(args, compiler_version_reader)
     if args.verify:
         verify_toolchain_attestation(args.verify, [component], args.external_dependency)
     else:
