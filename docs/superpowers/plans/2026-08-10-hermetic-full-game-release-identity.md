@@ -547,29 +547,30 @@ Record exact tests, review verdicts, findings/fixes, and remaining target gates 
 - Produces: identity JSON containing the validated `effective_config` object whose canonical hash equals the embedded `effective_config_hash`, so staged v2 captures do not depend on a build-tree spec path.
 - Preserves: `build_identity(spec)`, `parse_identity(raw)`, `validate_identity(raw, expected=None)`, `identity_label(raw)`, `identity_directory_tag(raw)`, and historical v1 parsing.
 
-**Live status (2026-08-10): `source-complete`.** The first independent combined
+**Live status (2026-08-10): `complete`.** The first independent combined
 specification/code-quality review returned `Needs fixes`: snapshot ELF bytes
 once for symbol resolution/extraction, reject ambiguous/unknown v2 descriptor
-JSON, and emit canonical CLI manifest bytes. Focused repair/rereview is active
-and both review gates remain open. TDD preserves the exact
+JSON, and emit canonical CLI manifest bytes. Repair commits `7aef88c4` and
+`1582467c` addressed every finding; scoped rereview found no new breakage and
+cleared both review gates. TDD preserves the exact
 404-byte v1 fixture (`faa7288b4c9fdf90ae14f01ab3af3752649b8e1ca78d77c47033425c9d68b23f`),
 proves the v2 size and root offsets at 500 bytes, compiles the C ABI contract,
-and exercises 404/500-byte ELF extraction and exact target reads. The four
-focused suites pass 61 tests (16 + 6 + 37 + 2); adjacent bootstrap and
+and exercises 404/500-byte ELF extraction and exact target reads. The final
+four focused suites pass 67 tests (21 + 6 + 38 + 2); adjacent bootstrap and
 object-pool capture regressions pass 13 more (7 + 6). Independent specification
-and code-quality reviews remain controller-owned and open. Target build,
+and code-quality reviews are approved. Target build,
 reproducibility, audit v4, complete-package, 20,100-frame smoke, visual, and
 manual-play gates remain open; host tests do not close them.
 Implementation commit: `09c30c23` (`feat(saturn): add build identity v2`).
 
-Repair round 1 is `source-complete`; independent rereview remains open. The
+Repair round 1 is review-cleared. The
 repair snapshots the ELF once for both symbol and PT_LOAD parsing, requires
 exact v2 root descriptor keys while retaining v1 programmatic compatibility,
 rejects duplicate/case-fold-colliding keys recursively at the CLI JSON
 boundary, and emits compact canonical manifest bytes. The focused suites now
 pass 67 tests (21 + 6 + 38 + 2), with 13 adjacent regressions (7 + 6) also
 passing. Repair commit: `7aef88c4` (`fix(saturn): harden identity v2 inputs`).
-Review and all target evidence gates remain open.
+All target evidence gates remain open.
 
 Design decision: the legacy `IDENTITY_STRUCT` and `HASH_FIELDS` aliases remain
 v1-compatible, while explicit v1/v2 structs select parsing from the immutable
@@ -675,7 +676,7 @@ return {"address": symbol["address"], "size": symbol["size"],
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_identity_residency.py
 ```
 
-- [ ] **Step 7: Update docs, commit, and obtain both reviews**
+- [x] **Step 7: Update docs, commit, and obtain both reviews**
 
 ```powershell
 git add CHANGELOG.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md tools/saturn/gen_build_identity.py tools/saturn/test_gen_build_identity.py tools/saturn/capture_sourceboot_throughput.py tools/saturn/test_sourceboot_feature_identity.py tools/saturn/test_capture_sourceboot_throughput.py src/port/saturn/platform/saturn_build_identity.h src/port/saturn/platform/saturn_build_identity.c tools/saturn/test_sourceboot_identity_residency.py
