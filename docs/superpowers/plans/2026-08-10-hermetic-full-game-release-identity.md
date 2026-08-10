@@ -1643,6 +1643,19 @@ through inherited `GIT_CONFIG_*` variables; it does not change global Git
 configuration. Candidate A has not restarted yet, and both candidates must
 detach at the final common source commit before either build begins.
 
+The first owned-candidate invocation stopped at `check-libyaul`, before source
+discovery or SH-2 compilation, because `git worktree add` does not materialize
+submodule contents. Both candidates now materialize the superproject's pinned
+`third_party/libyaul` gitlink at
+`6012f79f237773378c8014e70d8998ad95a38d98`, with clean tracked state. This is
+tracked source-checkout completion, not an additional ignored prerequisite.
+The clone used a one-shot local `file://` transport from the implementation
+worktree's clean checkout after restricted networking rejected the upstream
+URL; no repository URL or global Git configuration changed. Reference record:
+`yaul-org/libyaul`, commit `6012f79f237773378c8014e70d8998ad95a38d98`,
+MIT license, full pinned submodule checkout, dependency/materialization reuse.
+Candidate A remains unbuilt after this preflight-only stop.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

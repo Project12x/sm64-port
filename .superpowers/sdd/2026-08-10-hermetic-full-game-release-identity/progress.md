@@ -920,6 +920,20 @@
   `GIT_CONFIG_VALUE_0`; global Git configuration remains untouched. Candidate
   A has not restarted, and both candidates must detach at the next common
   tracked commit before the exact build begins.
+- The first owned-candidate-A invocation stopped immediately at
+  `check-libyaul`, before discovery or SH-2 compilation, because a fresh Git
+  worktree does not materialize submodule contents. No release output or target
+  evidence was produced. An initial upstream submodule clone was rejected by
+  restricted networking; no partial checkout was admitted.
+- Both candidates now materialize the superproject's pinned, tracked
+  `third_party/libyaul` gitlink at
+  `6012f79f237773378c8014e70d8998ad95a38d98`; each checkout is tracked-clean.
+  A one-shot local `file://` transport used the implementation worktree's clean
+  pinned checkout and changed neither repository URL nor global Git config.
+  This completes tracked source checkout and is not an added ignored
+  prerequisite. Reference: `yaul-org/libyaul`, pinned commit above, MIT
+  license, full submodule checkout, dependency/materialization reuse. Candidate
+  A remains open pending the exact rerun.
 
 ## Task 5 review repair round 2
 
