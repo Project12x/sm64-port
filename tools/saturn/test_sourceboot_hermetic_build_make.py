@@ -245,9 +245,57 @@ class SourcebootHermeticBuildMakeTests(unittest.TestCase):
             makefile.count('BOB_ASSET_ROOT="$(SOURCEBOOT_EXTRACTED_ASSET_ROOT)"'),
             3,
         )
-        self.assertIn("NOEXTRACT=1 NOTOOLS=1", makefile)
-        root_makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("NOTOOLS ?= 0", root_makefile)
+        release = self.run_make(
+            "assets", "identity-assets", "SOURCEBOOT_RELEASE_MODE=release"
+        )
+        self.assertEqual(release.returncode, 0, release.stderr)
+        self.assertIn("--verify-existing", release.stdout)
+        self.assertNotIn("NOEXTRACT=1", release.stdout)
+        self.assertIn("NOEXTRACT=1", result.stdout)
+
+    def test_release_asset_verifier_ignores_mtime_and_rejects_missing(self) -> None:
+        root = Path(self.temporary.name) / "asset-root"
+        target = root / "build/us_pc/actors/test/texture.rgba16.inc.c"
+        required = root / "build/us_pc/include/text_strings.h"
+        target.parent.mkdir(parents=True)
+        required.parent.mkdir(parents=True)
+        target.write_text("texture-bytes\n", encoding="utf-8")
+        required.write_text("text-bytes\n", encoding="utf-8")
+        source = root / "actor.c"
+        source.write_text(
+            '#include "actors/test/texture.rgba16.inc.c"\n', encoding="utf-8"
+        )
+        os.utime(source, ns=(target.stat().st_mtime_ns + 1_000_000_000,) * 2)
+        command = [
+            os.fspath(ROOT / "tools/saturn/prepare_sourceboot_assets.py"),
+            "--root", os.fspath(root),
+            "--build-prefix", "build/us_pc",
+            "--source", "actor.c",
+            "--required", "build/us_pc/include/text_strings.h",
+            "--verify-existing",
+        ]
+        verified = subprocess.run(
+            [os.sys.executable, *command], check=False, capture_output=True, text=True
+        )
+        self.assertEqual(verified.returncode, 0, verified.stderr)
+        self.assertEqual(
+            verified.stdout.split(),
+            [
+                "build/us_pc/actors/test/texture.rgba16.inc.c",
+                "build/us_pc/include/text_strings.h",
+            ],
+        )
+
+        required.unlink()
+        missing = subprocess.run(
+            [os.sys.executable, *command], check=False, capture_output=True, text=True
+        )
+        self.assertNotEqual(missing.returncode, 0, missing.stdout)
+        self.assertIn(
+            "required generated source asset is missing: "
+            "build/us_pc/include/text_strings.h",
+            missing.stderr,
+        )
 
     def test_seal_and_post_link_verification_consume_exact_manifests(self) -> None:
         makefile = self.sourceboot_makefile()

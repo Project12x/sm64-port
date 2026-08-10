@@ -991,6 +991,23 @@
   the same-repository `NOEXTRACT`/recursive-Make boundary at `9949e655`; no
   external source, license, or notice change. Candidate A and all downstream
   gates remain open pending the exact clean rerun from the behavior commit.
+- Candidate-A run from `fcfe8068` derived the 1,540-row extracted inventory and
+  completed all BOB consumers, then stopped before discovery. Fresh-worktree
+  source mtimes made the independently copied, byte-identical
+  `build/us_pc/text/us/define_text.inc.c` look stale, so its normal recipe ran
+  and failed on absent `tools/textconv`. This proves the narrow missing/stale
+  path still failed closed, but also proves Make timestamps cannot define the
+  identity of allowed copied prerequisites. No target/release gate is claimed.
+- Superseding boundary correction: release mode uses the existing bounded
+  target collector's new `--verify-existing` mode, includes explicit text and
+  water-sky inputs, rejects missing or root-escaping files, and relies on
+  closure build/post-link rediscovery for exact byte hashes. Development mode
+  retains root Make materialization and its legacy all-tools behavior. TDD RED
+  was 8/10 (release contract and CLI fixture); GREEN is 10/10, including an
+  older generated file accepted despite a newer source and the same required
+  file rejected after deletion. Reference: same-repository close-port/pattern
+  reuse of the collector/closure boundary at `fcfe8068`; no external source or
+  license/notice change. Candidate A remains open pending the exact clean rerun.
 
 ## Task 5 review repair round 2
 

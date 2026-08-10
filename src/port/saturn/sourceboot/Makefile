@@ -321,6 +321,12 @@ SOURCEBOOT_MATH_SRCS := $(ROOT)/lib/src/math/sinf.c $(ROOT)/lib/src/math/cosf.c
 SOURCEBOOT_ASSET_SOURCES := \
   $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_BIN_SRCS)) src/goddard/renderer.c \
   $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_ACTOR_SRCS) $(SOURCEBOOT_LEVEL_SRCS))
+SOURCEBOOT_ASSET_PREPARE_ARGS := \
+  --root $(ROOT) --build-prefix build/us_pc \
+  --define VERSION_US --define VERSION_JP_US \
+  $(foreach source,$(SOURCEBOOT_ASSET_SOURCES),--source $(source)) \
+  --required $(SOURCEBOOT_TEXT_STRINGS) \
+  --required $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
 SOURCEBOOT_GAME_SRCS := $(filter-out $(ROOT)/src/game/crash_screen.c,$(wildcard $(ROOT)/src/game/*.c))
 SOURCEBOOT_ENGINE_SRCS := $(wildcard $(ROOT)/src/engine/*.c)
 SOURCEBOOT_MENU_SRCS := $(wildcard $(ROOT)/src/menu/*.c)
@@ -752,16 +758,18 @@ source-extracted-assets:
 
 .PHONY: source-assets
 source-assets: source-extracted-assets source-data-catalog source-bob-mesh source-bob-bsp source-bob-bsp-fragments source-bob-tiles source-bob-scene source-bob-sky source-mario-textures source-hud-glyphs source-sky-gradient
+ifeq ($(SOURCEBOOT_RELEASE_MODE),release)
+	@$(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
+	  $(SOURCEBOOT_ASSET_PREPARE_ARGS) --verify-existing >/dev/null
+else
 	@targets="$$($(SOURCEBOOT_PYTHON) $(ROOT)/tools/saturn/prepare_sourceboot_assets.py \
-	  --root $(ROOT) --build-prefix build/us_pc \
-	  --define VERSION_US --define VERSION_JP_US \
-	  $(foreach source,$(SOURCEBOOT_ASSET_SOURCES),--source $(source)))"; \
+	  $(SOURCEBOOT_ASSET_PREPARE_ARGS))"; \
 	if [ -z "$$targets" ]; then \
 	  printf '%s\n' 'sourceboot: no generated source assets were found' >&2; exit 1; \
 	fi; \
-	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 NOTOOLS=1 \
-	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets $(SOURCEBOOT_TEXT_STRINGS) \
-	  $(patsubst $(ROOT)/%,%,$(SOURCEBOOT_WATER_SKYBOX))
+	$(MAKE) -C "$(ROOT)" TARGET_N64=0 VERSION=us NOEXTRACT=1 \
+	  PYTHON="$(SOURCEBOOT_PYTHON)" $$targets
+endif
 	@printf '%s\n' 'sourceboot: local source asset includes are ready'
 
 # This target is intentionally usable while `SOURCEBOOT_BUILD_IDENTITY_STAGE`

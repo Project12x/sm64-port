@@ -1714,6 +1714,25 @@ this inherited fork has no root license file, no external source was copied,
 and no notice obligation changed. Candidate A, closure, target, and release
 gates remain open pending an exact clean rerun from this behavior commit.
 
+The run from `fcfe8068` confirmed the broad all-tools pass was gone and that a
+missing target still failed, but exposed a second distinction: fresh-worktree
+source mtimes were newer than the independently copied, byte-identical
+`build/us_pc` files. Root Make therefore treated
+`build/us_pc/text/us/define_text.inc.c` as stale and attempted its recipe,
+which stopped on absent `tools/textconv`. No discovery or downstream gate was
+claimed. The corrected release boundary no longer interprets mtimes as input
+identity: `prepare_sourceboot_assets.py --verify-existing` computes the same
+bounded selected target set, adds the explicit text and water-sky inputs,
+rejects missing or root-escaping files, and leaves exact byte hashing to source
+closure construction and rediscovery. Development mode retains the unmodified
+legacy root Make materialization path, including normal tool rebuilding.
+Focused TDD was RED at 8/10 (missing mode and CLI) and GREEN at 10/10, including
+a newer-source/older-generated fixture and missing-file rejection. Reference
+record: close-port/pattern-only reuse of the same in-tree target collector and
+release closure boundary at `fcfe8068`; no external source or new license/notice
+obligation. Candidate A and all target/release gates remain open pending the
+exact rerun from the superseding commit.
+
 - [ ] **Step 1: Reconcile HEAD, ledgers, toolchain, and dirty closure state**
 
 ```powershell

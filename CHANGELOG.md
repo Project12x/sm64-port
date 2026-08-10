@@ -92,14 +92,14 @@
 
 ### Fixed
 
-- Kept hermetic sourceboot asset verification from rebuilding every unrelated
-  host tool before checking the already-inventoried `build/us_pc` targets.
-  Fresh release candidates reached the recursive root Make boundary and failed
-  in obsolete `armips` sources under the current host compiler even though no
-  requested asset depended on that tool. The sourceboot-only submake now opts
-  out of the broad all-tools pass while named missing targets still execute
-  their normal recipes and fail closed. Root Make retains its legacy behavior
-  by default, so ordinary callers still rebuild host tools as before.
+- Made hermetic release-mode sourceboot asset preparation verify the complete
+  selected `build/us_pc` input set by candidate-local presence instead of Make
+  timestamps. Fresh worktree source mtimes otherwise made byte-identical,
+  independently inventoried prerequisites appear stale, first rebuilding every
+  unrelated host tool and then trying a missing `textconv`. Release candidates
+  now reject a missing or root-escaping selected input and let source-closure
+  hashing bind its bytes; development builds retain the legacy root Make path
+  that materializes stale/missing targets and rebuilds host tools as before.
 
 - Fixed the sourceboot BOB scene delegation to forward its sealed asset root
   through the scene target's nested tile/BSP prerequisites. The initial tile

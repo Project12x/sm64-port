@@ -138,18 +138,40 @@ def collect_targets(root: Path, sources: list[Path], build_prefix: str,
     return sorted(targets)
 
 
+def verify_existing_targets(root: Path, targets: list[str]) -> None:
+    """Require candidate-local generated inputs without consulting mtimes."""
+    for target in targets:
+        path = root / target
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"required generated source asset is missing: {target}"
+            )
+        try:
+            path.resolve(strict=True).relative_to(root)
+        except ValueError as exc:
+            raise ValueError(
+                f"required generated source asset escapes root: {target}"
+            ) from exc
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--build-prefix", default="build/us_pc")
     parser.add_argument("--source", action="append", required=True)
     parser.add_argument("--define", action="append", default=[])
+    parser.add_argument("--required", action="append", default=[])
+    parser.add_argument("--verify-existing", action="store_true")
     args = parser.parse_args()
 
     root = args.root.resolve()
     sources = [root / source for source in args.source]
-    targets = collect_targets(root, sources, args.build_prefix.rstrip("/"),
-                              set(args.define))
+    targets = sorted(set(
+        collect_targets(root, sources, args.build_prefix.rstrip("/"),
+                        set(args.define)) + args.required
+    ))
+    if args.verify_existing:
+        verify_existing_targets(root, targets)
     print(" ".join(targets))
     return 0
 
