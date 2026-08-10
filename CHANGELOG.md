@@ -83,6 +83,17 @@
 
 ### Fixed
 
+- Hardened native-math audit-v4 publication and CLI preflight after review
+  exposed three fail-closed gaps. The one-shot sealer now writes and fsyncs a
+  privately owned same-directory file before using Task 7's atomic no-clobber
+  namespace publication, so readers can observe only an absent or complete
+  contract; ambiguous crash/race state is retained with diagnostics instead
+  of unlinking a potentially replaced path. Measurement output now rejects
+  lexical, Windows-casefold, symlink, and hardlink aliases of every read input
+  before release verification or SH tools, and `--release-manifest` is accepted
+  only for parsed audit v4 or explicitly unsealed measurement mode. Historical
+  v2/v3 contracts and their manifest-free CLI behavior are unchanged.
+
 - Made atomic Saturn release publication platform-explicit. Linux now selects
   only `renameat2(RENAME_NOREPLACE)`, while macOS and BSD-family hosts require
   libc's directory-relative `renameatx_np(RENAME_EXCL)`; missing symbols and

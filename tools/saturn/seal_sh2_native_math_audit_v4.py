@@ -7,11 +7,19 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 from typing import Any
 
 from hermetic_manifest import canonical_json_bytes
-from release_manifest import verify_release_manifest
+from path_identity import reject_output_input_aliases
+from release_manifest import (
+    DirectoryNamespaceGuard,
+    _file_identity,
+    _is_reparse,
+    verify_release_manifest,
+)
+import stage_saturn_release as staging
 
 
 MEASUREMENT_SCHEMA = "sm64-saturn-native-math-measurement-v1"
@@ -73,21 +81,72 @@ def _render_contract(
     ).encode("ascii")
 
 
+def _fsync_directory(namespace: DirectoryNamespaceGuard) -> None:
+    if namespace._fd is not None:
+        os.fsync(namespace._fd)
+
+
 def _write_exclusive(path: Path, raw: bytes) -> None:
+    """Privately write, durably flush, then atomically publish one new file."""
+    path = path.absolute()
+    adapter = staging._resolve_atomic_rename_adapter()
+    private_name: str | None = None
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    except FileExistsError as error:
-        raise ValueError(f"refusing to overwrite audit contract: {path}") from error
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
-    except BaseException:
-        try:
-            path.unlink()
-        except OSError:
-            pass
+        with DirectoryNamespaceGuard(path.parent) as namespace:
+            try:
+                namespace.lstat_child(path.name)
+            except FileNotFoundError:
+                pass
+            else:
+                raise ValueError(f"refusing to overwrite audit contract: {path}")
+            for _attempt in range(32):
+                candidate = staging._unique_name("private", path.name)
+                try:
+                    descriptor = namespace.open_child(
+                        candidate, staging._exclusive_flags(), 0o644
+                    )
+                except FileExistsError:
+                    continue
+                private_name = candidate
+                break
+            else:
+                raise RuntimeError("could not allocate private audit contract")
+            try:
+                with os.fdopen(descriptor, "wb") as stream:
+                    written = stream.write(raw)
+                    if written != len(raw):
+                        raise OSError(
+                            f"short private audit contract write: {written}/{len(raw)}"
+                        )
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                    opened = os.fstat(stream.fileno())
+                current = namespace.lstat_child(private_name)
+                namespace.require_current()
+                if (
+                    _file_identity(opened) != _file_identity(current)
+                    or not stat.S_ISREG(current.st_mode)
+                    or stat.S_ISLNK(current.st_mode)
+                    or _is_reparse(current)
+                    or current.st_nlink != 1
+                    or current.st_size != len(raw)
+                ):
+                    raise ValueError(
+                        "private audit contract was replaced, aliased, or truncated"
+                    )
+                staging._rename_noreplace(
+                    namespace, private_name, path.name, adapter
+                )
+                private_name = None
+                _fsync_directory(namespace)
+            except BaseException as error:
+                if private_name is not None:
+                    error.add_note(
+                        "private audit publication state retained without cleanup: "
+                        f"{namespace.path / private_name}"
+                    )
+                raise
+    except FileExistsError:
         raise
 
 
@@ -95,8 +154,10 @@ def seal_v4_contract(
     measurement_path: Path, release_manifest_path: Path, output: Path
 ) -> bytes:
     """Verify unsealed evidence and publish a new canonical v4 contract once."""
-    if output.exists():
-        raise ValueError(f"refusing to overwrite audit contract: {output}")
+    reject_output_input_aliases(
+        output,
+        (("measurement", measurement_path), ("release manifest", release_manifest_path)),
+    )
     measurement = _load_measurement(measurement_path)
     with verify_release_manifest(release_manifest_path) as verified:
         release = verified.document

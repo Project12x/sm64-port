@@ -28,6 +28,7 @@ from typing import Any, Callable, Iterable
 
 import release_manifest as release_manifest_module
 from hermetic_manifest import canonical_json_bytes, write_if_changed
+from path_identity import reject_output_input_aliases
 
 
 @dataclass(frozen=True)
@@ -6165,6 +6166,30 @@ def main(argv: list[str] | None = None) -> int:
     verified_release: release_manifest_module.ReleaseManifestVerification | None = None
     measurement_document: dict[str, Any] | None = None
     try:
+        if args.measure_audit_report is not None:
+            read_inputs = [
+                ("ELF", args.elf),
+                ("baseline", args.baseline),
+                ("route oracle", args.route_oracle),
+            ]
+            read_inputs.extend(
+                (label, path)
+                for label, path in (
+                    ("audit route oracle", args.audit_route_oracle),
+                    ("audit contract", args.audit_contract),
+                    ("release manifest", args.release_manifest),
+                )
+                if path is not None
+            )
+            reject_output_input_aliases(args.measure_audit_report, read_inputs)
+        if (
+            args.release_manifest is not None
+            and args.measure_audit_report is None
+            and args.audit_contract is None
+        ):
+            raise ValueError(
+                "--release-manifest is only valid for audit v4 or measurement"
+            )
         if args.object_reference_only:
             if args.readelf is not None:
                 raise ValueError("--readelf is forbidden with --object-reference-only")
@@ -6218,6 +6243,14 @@ def main(argv: list[str] | None = None) -> int:
             if args.audit_contract is not None:
                 audit_contract_text = args.audit_contract.read_text(encoding="utf-8")
                 audit_contract = parse_audit_contract(audit_contract_text)
+                if (
+                    args.release_manifest is not None
+                    and args.measure_audit_report is None
+                    and audit_contract.version != 4
+                ):
+                    raise ValueError(
+                        "--release-manifest is only valid for audit v4 or measurement"
+                    )
                 if audit_contract.version == 4 and args.release_manifest is None:
                     raise ValueError("--release-manifest is required for audit v4")
                 verify_audit_contract_integrity(audit_contract_text, audit_contract)

@@ -10,7 +10,7 @@ import os
 import re
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2546,6 +2546,155 @@ static bool demo_detached_start_decoy(uint32_t generation)
                 for argv in cases:
                     with self.subTest(argv=argv[-4:]):
                         self.assertEqual(verifier.main(argv), 2)
+                run_command.assert_not_called()
+
+    def test_measurement_output_rejects_every_input_alias_before_verification_or_tools(self) -> None:
+        from test_release_manifest import ReleaseFixture
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            fixture = ReleaseFixture(root)
+            manifest = fixture.write()
+            baseline = root / "baseline.txt"
+            route = root / "route.txt"
+            audit = root / "audit.txt"
+            contract = root / "contract.txt"
+            baseline.write_text("BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8")
+            route.write_text("ROUTE_ORACLE_VERSION 1\nROOT _root\n", encoding="utf-8")
+            audit.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            contract.write_text(self._v3_contract_text(), encoding="utf-8")
+            inputs = {
+                "ELF": fixture.outputs["elf"],
+                "baseline": baseline,
+                "route oracle": route,
+                "audit route oracle": audit,
+                "release manifest": manifest,
+                "audit contract": contract,
+            }
+
+            def argv(report: Path, *, include_contract: bool = False) -> list[str]:
+                result = [
+                    str(fixture.outputs["elf"]), str(baseline),
+                    "--route-oracle", str(route),
+                    "--audit-route-oracle", str(audit),
+                    "--measure-audit-report", str(report),
+                    "--release-manifest", str(manifest),
+                    "--objdump", "objdump", "--readelf", "readelf",
+                    "--addr2line", "addr2line",
+                ]
+                if include_contract:
+                    result.extend(("--audit-contract", str(contract)))
+                return result
+
+            originals = {name: path.read_bytes() for name, path in inputs.items()}
+            with patch.object(verifier, "verify_baseline_integrity"), patch.object(
+                verifier, "verify_route_oracle_integrity"
+            ), patch.object(
+                verifier, "verify_audit_contract_integrity"
+            ), patch.object(
+                verifier.release_manifest_module,
+                "verify_release_manifest",
+                side_effect=AssertionError("release verification called"),
+            ) as verify_release, patch.object(
+                verifier, "run_command", side_effect=AssertionError("tool called")
+            ) as run_command:
+                for name, source in inputs.items():
+                    with self.subTest(kind="exact", source=name):
+                        self.assertEqual(
+                            verifier.main(argv(source, include_contract=name == "audit contract")),
+                            2,
+                        )
+                nested = root / "nested"
+                nested.mkdir()
+                dotdot = nested / ".." / baseline.name
+                with self.subTest(kind="dotdot"):
+                    self.assertEqual(verifier.main(argv(dotdot)), 2)
+                if os.name == "nt":
+                    with self.subTest(kind="casefold"):
+                        self.assertEqual(verifier.main(argv(Path(str(baseline).swapcase()))), 2)
+                hardlink = root / "baseline-hardlink.json"
+                os.link(baseline, hardlink)
+                with self.subTest(kind="hardlink"):
+                    self.assertEqual(verifier.main(argv(hardlink)), 2)
+                symlink = root / "baseline-symlink.json"
+                try:
+                    symlink.symlink_to(baseline)
+                except (OSError, NotImplementedError):
+                    pass
+                else:
+                    with self.subTest(kind="symlink"):
+                        self.assertEqual(verifier.main(argv(symlink)), 2)
+                verify_release.assert_not_called()
+                run_command.assert_not_called()
+            for name, path in inputs.items():
+                self.assertEqual(path.read_bytes(), originals[name])
+
+    def test_release_manifest_is_only_legal_for_v4_or_measurement(self) -> None:
+        from test_release_manifest import ReleaseFixture
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as temporary:
+            root = Path(temporary)
+            fixture = ReleaseFixture(root)
+            manifest = fixture.write()
+            baseline = root / "baseline.txt"
+            route = root / "route.txt"
+            audit = root / "audit.txt"
+            v2 = root / "contract-v2.txt"
+            v3 = root / "contract-v3.txt"
+            baseline.write_text("BASELINE_VERSION 1\nHOT_CEILING 0\n", encoding="utf-8")
+            route.write_text("ROUTE_ORACLE_VERSION 1\nROOT _root\n", encoding="utf-8")
+            audit.write_text(
+                "ROUTE_ORACLE_VERSION 1\nROOT _game_loop_one_iteration\n",
+                encoding="utf-8",
+            )
+            v2.write_text(
+                "AUDIT_CONTRACT_VERSION 2\n"
+                "EXPECTED_ROOT _game_loop_one_iteration\n"
+                "EXPECTED_TOTAL 582\nFORBIDDEN_CALLER _atan2_lookup\n",
+                encoding="utf-8",
+            )
+            v3.write_text(self._v3_contract_text(), encoding="utf-8")
+            common = [
+                str(fixture.outputs["elf"]), str(baseline),
+                "--route-oracle", str(route),
+                "--release-manifest", str(manifest),
+                "--objdump", "objdump", "--readelf", "readelf",
+                "--addr2line", "addr2line",
+            ]
+            cases = {
+                "ordinary": common,
+                "object-reference-only": [*common, "--object-reference-only"],
+                "v2": [
+                    *common, "--audit-route-oracle", str(audit),
+                    "--audit-contract", str(v2),
+                ],
+                "v3": [
+                    *common, "--audit-route-oracle", str(audit),
+                    "--audit-contract", str(v3),
+                ],
+            }
+            with patch.object(verifier, "verify_baseline_integrity"), patch.object(
+                verifier, "verify_route_oracle_integrity"
+            ), patch.object(verifier, "verify_audit_contract_integrity"), patch.object(
+                verifier.release_manifest_module,
+                "verify_release_manifest",
+                side_effect=AssertionError("release verification called"),
+            ) as verify_release, patch.object(
+                verifier, "run_command", side_effect=AssertionError("tool called")
+            ) as run_command:
+                for name, case in cases.items():
+                    with self.subTest(name=name):
+                        errors = io.StringIO()
+                        with redirect_stderr(errors):
+                            self.assertEqual(verifier.main(case), 2)
+                        self.assertIn(
+                            "--release-manifest is only valid for audit v4 or measurement",
+                            errors.getvalue(),
+                        )
+                verify_release.assert_not_called()
                 run_command.assert_not_called()
 
     def test_v4_cli_requires_release_manifest_before_tools_or_pin_lookup(self) -> None:
