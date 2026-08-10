@@ -107,7 +107,7 @@ on any allocation failure.
 
 ### Task 4: Pool capacity cut + overflow latch
 
-**Status (2026-08-09):** review-cleared; commit pending. Task 4
+**Status (2026-08-09):** complete. Task 4
 additionally owns the two Task 2 review hardenings: an artifact-bound capacity
 reader for the remeasurement harness and function-local source-contract checks
 for the three probe hooks.
@@ -126,13 +126,19 @@ eb1fc628ef2cf523c59d3789645561d044463109cde41176f4348b52a7a582d7.
 The idle-boot coverage gap remains: this is not pickup/hold or
 action-particle target evidence. The Task 4 specification and differential
 reviews passed after correcting two stale target-header comments; remaining
-gates are this commit, then Task 5.
+gate is Task 5.
 Final pre-commit verification reran all 30 focused host contracts, both
 Make-level contracts, the geo-walk runtime canary, and the canonical flags-on
 208 target build. That target build passed verify-sourceboot as
 id-999bd5f4943c0267; its sealed generated spec records capacity 208, its map
 records gObjectPool at 0x1ee00 (126,464 B), and its ELF SHA-256 is
 5a4315a0205b786eca06ecbca9b9b4e13b6e7c8b44f13bb5227c6e16f84602b6.
+Task 4 was committed as `2b765df6` (`feat(saturn): cut object pool residency
+to owner-approved measured capacity`), including PASS specification and
+differential reviews at `audits/audit-20260809-task4-object-pool-spec.md` and
+`audits/sm64-port_task4_differential_review_20260809.md`. Task 2's two
+post-implementation reviews are also preserved in that commit; its remaining
+G1 action was resolved by the recorded 208-slot owner decision above.
 TDD RED was observed before implementation: the real host preprocessor kept
 an override at 240; the identity/bootstrap contracts did not seal
 `object_pool_capacity`; and the capture harness had no sealed-artifact
@@ -164,7 +170,7 @@ Engine `a8986591557b6e680550d3c23970284d3b38ff8f`, GPL-3.0, `OBJECT.C:9-89`
 Makefile: `SATURN_OBJECT_POOL_CAPACITY ?=` empty → no define (byte-identical passthrough, feature-off-rollback convention); non-empty → `-DSATURN_OBJECT_POOL_CAPACITY_OVERRIDE=$(value)`. Wire it into the build-identity typed parameters exactly like `polygon_tier` (`gen_build_identity.py` `COMPILER_CONFIG_FIELDS` + bootstrap `--set`), so identity changes when capacity does.
 - [x] **Step 3: GREEN + passthrough proof.** Contract test passes. Build the canonical config once with the override unset — the sealed identity must match a pre-change build at the same HEAD (byte-identical passthrough), same discipline as the audio closure flag.
 - [x] **Step 4: Cut + re-measure.** Build canonical flags-on with `SATURN_OBJECT_POOL_CAPACITY=<G1 value>`. From the fresh map: confirm `gObjectPool` shrank by exactly 608 × (240 − N) bytes. Re-run the Task 2 harness to ≥20,000 frames: `alloc_failures == 0` REQUIRED. Any failure = STOP, report, return to G1.
-- [ ] **Step 5: Commit** with the G1 decision, map delta, and re-measurement numbers in the CHANGELOG: `feat(saturn): cut object pool residency to owner-approved measured capacity`.
+- [x] **Step 5: Commit** with the G1 decision, map delta, and re-measurement numbers in the CHANGELOG: `feat(saturn): cut object pool residency to owner-approved measured capacity`.
 
 ### Task 5: Flags-on textured build — link gate + combined smoke
 

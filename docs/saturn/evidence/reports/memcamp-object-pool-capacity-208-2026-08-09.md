@@ -74,6 +74,6 @@ fail-closed result and returns capacity selection to G1.
 ## Remaining gates
 
 Task 4's specification and differential code-quality reviews passed after
-correcting two stale target-header comments. Task 5 remains blocked on this
-commit and its broader interaction/particle-pressure evidence, not merely on
-this idle-boot result.
+correcting two stale target-header comments. Task 4 was committed as
+`2b765df6`. Task 5 remains blocked on its broader interaction/particle-pressure
+evidence, not merely on this idle-boot result.
