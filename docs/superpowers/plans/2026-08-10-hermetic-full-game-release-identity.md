@@ -1080,11 +1080,10 @@ Independent reviewers must inspect exact flag parity, stage isolation, `.sx` cov
 - Produces: `compare_release_manifests(first: Path, second: Path) -> dict[str, Any]`, which verifies both manifests and requires identical canonical identity inputs and output bytes while ignoring their host locations.
 - Produces: `stage_release(manifest: Path, destination: Path) -> Path`, which requires a missing or empty destination and copies only verified outputs plus the manifest.
 
-**Live status (2026-08-10):** repair rounds 1–2 are `source-complete` in
-behavior commits `bb5a840d` and `00736856`. Round-2 scoped rereview marked the
-remaining namespace-race finding `ADDRESSED`, then found one new Important
-POSIX portability defect; repair round 3 is active. The first `Needs fixes`
-verdict is still effective. Fresh post-commit host
+**Live status (2026-08-10):** Task 7 is `complete` after behavior commits
+`7195fc48`, `bb5a840d`, `00736856`, and `740a08bc`. Three scoped repair rounds
+cleared every independent-review finding with no new Critical or Important
+breakage. Fresh post-commit host
 verification passes all seven exact suites at
 24 + 9 + 41 + 12 + 4 + 9 + 7 = 106 tests and adjacent identity/bootstrap/boot-
 trace/route-view suites at 21 + 15 + 16 + 1 = 53 tests, with zero skips or
@@ -1117,9 +1116,8 @@ exact/case-fold/path/alias collisions using host-neutral rules; the writer and
 occupancy resolver exercise a real historical v1 ELF/identity; and comparison
 uses canonical identity inputs plus semantic output bytes while ignoring host
 layout/provenance. Desktop launch retains the private CUE/ISO snapshot through
-child exit when Ymir outlives the bounded monitor. Task 7 is `source-complete`
-but not `complete` until controller-owned rereview clears; every target and
-release-evidence gate remains open.
+child exit when Ymir outlives the bounded monitor. Task 7 is `complete`; every
+target and release-evidence gate remains open.
 
 Repair-round-1 rereview marked profile binding, host-neutral schema validation,
 real v1 compatibility, and semantic comparison `ADDRESSED`. Immutable consumer
@@ -1167,7 +1165,9 @@ platforms without identity-conditional opened-object deletion retain the empty
 Injected tests characterize POSIX API dispatch without claiming OS execution.
 All seven exact suites pass 26 + 20 + 41 + 12 + 4 + 9 + 7 = 119 host tests;
 adjacent suites pass 21 + 15 + 16 + 1 = 53, and six production scripts compile.
-Controller rereview and every target/release-evidence gate remain open.
+Round-3 scoped rereview marked the POSIX portability finding `ADDRESSED` and
+found no new Critical or Important breakage. No Linux/macOS/BSD execution or
+target evidence is claimed; those gates remain open in their owning tasks.
 
 Final self-review found and TDD-corrected two fail-closed gaps before commit:
 malformed canonical source-closure rows now fail schema validation rather than
@@ -1175,8 +1175,7 @@ surfacing only as a downstream digest mismatch, and the explicit v1 occupancy
 compatibility spec must reproduce the exact ELF identity bytes. No further
 source finding remained before independent review. One initial adjacent command named two tests
 incorrectly and was discarded; the corrected fail-fast rerun is the 53-test
-result above. Step 8 remains open for repair round 2, scoped rereview, and review-closeout
-status update.
+result above. Step 8 is complete; all target-only evidence remains open.
 
 - [x] **Step 1: Write failing release and staging tests**
 
@@ -1314,7 +1313,7 @@ verify-release: seal-release
 .\.venv-saturn-tools\Scripts\python.exe tools\saturn\test_sourceboot_hermetic_build_make.py
 ```
 
-- [ ] **Step 8: Update docs, commit, and clear both reviews**
+- [x] **Step 8: Update docs, commit, and clear both reviews**
 
 ```powershell
 git add CHANGELOG.md Makefile.saturn.mk src/port/saturn/sourceboot/Makefile tools/saturn/release_manifest.py tools/saturn/test_release_manifest.py tools/saturn/stage_saturn_release.py tools/saturn/test_stage_saturn_release.py tools/saturn/capture_sourceboot_throughput.py tools/saturn/capture_object_pool_occupancy.py tools/saturn/capture_sourceboot_hud_state.py tools/saturn/launch_ymir_desktop.py tools/saturn/test_capture_sourceboot_throughput.py tools/saturn/test_capture_object_pool_occupancy.py tools/saturn/test_capture_sourceboot_hud_state.py tools/saturn/test_launch_ymir_desktop.py docs/saturn/BUILDING.md docs/superpowers/plans/2026-08-10-hermetic-full-game-release-identity.md
